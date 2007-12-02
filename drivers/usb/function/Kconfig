@@ -30,4 +30,8 @@ config USB_FUNCTION_LOOPBACK
 	boolean "Loopback Function -- returns packets"
 	depends on USB_FUNCTION
 
+config USB_FUNCTION_ADB
+	boolean "ADB Transport Function"
+	depends on USB_FUNCTION
+
 endmenu
