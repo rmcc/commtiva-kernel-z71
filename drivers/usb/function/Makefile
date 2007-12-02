@@ -1,0 +1,5 @@
+
+obj-$(CONFIG_USB_FUNCTION_MSM_HSUSB)	+= msm_hsusb.o
+obj-$(CONFIG_USB_FUNCTION_NULL)		+= null.o
+obj-$(CONFIG_USB_FUNCTION_NULL)		+= zero.o
+obj-$(CONFIG_USB_FUNCTION_LOOPBACK)	+= loopback.o
