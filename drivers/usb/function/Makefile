@@ -5,3 +5,4 @@ obj-$(CONFIG_USB_FUNCTION_NULL)		+= zero.o
 obj-$(CONFIG_USB_FUNCTION_LOOPBACK)	+= loopback.o
 obj-$(CONFIG_USB_FUNCTION_ADB)		+= adb.o
 obj-$(CONFIG_USB_FUNCTION_UMS)		+= ums.o
+obj-$(CONFIG_USB_FUNCTION_DIAG)		+= diag.o
