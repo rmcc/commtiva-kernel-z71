@@ -33,6 +33,7 @@
 static unsigned int debug_port_base;
 static int debug_signal_irq;
 static struct clk *debug_clk;
+static int debug_enable;
 
 static inline void msm_write(unsigned int val, unsigned int off)
 {
@@ -85,6 +86,11 @@ static inline void debug_putc(unsigned int c)
 {
 	while (!(msm_read(UART_SR) & UART_SR_TX_READY)) ;
 	msm_write(c, UART_TF);
+}
+
+static inline void debug_flush(void)
+{
+	while (!(msm_read(UART_SR) & UART_SR_TX_EMPTY)) ;
 }
 
 static void debug_puts(char *s)
@@ -159,6 +165,24 @@ static int debug_printf(void *cookie, const char *fmt, ...)
 	return debug_abort;
 }
 
+/* Safe outside fiq context */
+static int debug_printf_nfiq(void *cookie, const char *fmt, ...)
+{
+	char buf[256];
+	va_list ap;
+	unsigned long irq_flags;
+
+	va_start(ap, fmt);
+	vsnprintf(buf, 128, fmt, ap);
+	va_end(ap);
+
+	local_irq_save(irq_flags);
+	debug_puts(buf);
+	debug_flush();
+	local_irq_restore(irq_flags);
+	return debug_abort;
+}
+
 #define dprintf(fmt...) debug_printf(0, fmt)
 
 static void debug_exec(const char *cmd, unsigned *regs)
@@ -201,9 +225,11 @@ static irqreturn_t debug_irq(int irq, void *dev)
 {
 	if (debug_busy) {
 		struct kdbg_ctxt ctxt;
-		ctxt.printf = debug_printf;
+
+		ctxt.printf = debug_printf_nfiq;
 		kernel_debugger(&ctxt, debug_cmd);
 		debug_prompt();
+
 		debug_busy = 0;
 	}
 	return IRQ_HANDLED;
@@ -218,7 +244,13 @@ static void debug_fiq(void *data, void *regs)
 	static int last_c;
 
 	while ((c = debug_getc()) != -1) {
-		if ((c >= ' ') && (c < 127)) {
+		if (!debug_enable) {
+			if ((c == 13) || (c == 10)) {
+				debug_enable = true;
+				debug_count = 0;
+				debug_prompt();
+			}
+		} else if ((c >= ' ') && (c < 127)) {
 			if (debug_count < (DEBUG_MAX - 1)) {
 				debug_buf[debug_count++] = c;
 				debug_putc(c);
@@ -245,17 +277,24 @@ static void debug_fiq(void *data, void *regs)
 		}
 		last_c = c;
 	}
+	debug_flush();
 }
 
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER_CONSOLE)
 static void debug_console_write(struct console *co,
 				const char *s, unsigned int count)
 {
+	unsigned long irq_flags;
+
+	/* disable irq's while TXing outside of FIQ context */
+	local_irq_save(irq_flags);
 	while (count--) {
 		if (*s == '\n')
 			debug_putc('\r');
 		debug_putc(*s++);
 	}
+	debug_flush();
+	local_irq_restore(irq_flags);
 }
 
 static struct console msm_serial_debug_console = {
@@ -264,6 +303,10 @@ static struct console msm_serial_debug_console = {
 	.flags = CON_PRINTBUFFER | CON_ANYTIME | CON_ENABLED,
 };
 #endif
+
+void msm_serial_debug_enable(int enable) {
+	debug_enable = enable;
+}
 
 void msm_serial_debug_init(unsigned int base, int irq,
 			   struct device *clk_device, int signal_irq)
