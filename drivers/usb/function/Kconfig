@@ -35,7 +35,11 @@ config USB_FUNCTION_ADB
 	depends on USB_FUNCTION
 
 config USB_FUNCTION_UMS
-	boolean "USB Mass Storage Function"
+	boolean "USB Mass Storage Function (userspace)"
+	depends on USB_FUNCTION
+
+config USB_FUNCTION_MASS_STORAGE
+	boolean "USB Mass Storage Function (kernel based)"
 	depends on USB_FUNCTION
 
 config USB_FUNCTION_DIAG
