@@ -849,17 +849,27 @@ static void msm_console_write(struct console *co, const char *s,
 {
 	struct uart_port *port;
 	struct msm_port *msm_port;
+	int locked;
 
 	BUG_ON(co->index < 0 || co->index >= UART_NR);
 
 	port = get_port_from_line(co->index);
 	msm_port = UART_TO_MSM(port);
 
-	spin_lock(&port->lock);
+	/* not pretty, but we can end up here via various convoluted paths */
+	if (port->sysrq || oops_in_progress)
+		locked = spin_trylock(&port->lock);
+	else {
+		locked = 1;
+		spin_lock(&port->lock);
+	}
+
 	clk_enable(msm_port->clk);
 	uart_console_write(port, s, count, msm_console_putchar);
 	clk_disable(msm_port->clk);
-	spin_unlock(&port->lock);
+
+	if (locked)
+		spin_unlock(&port->lock);
 }
 
 static int __init msm_console_setup(struct console *co, char *options)
