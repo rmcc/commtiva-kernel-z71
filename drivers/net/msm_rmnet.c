@@ -39,6 +39,19 @@ struct rmnet_private
 	const char *chname;
 };
 
+static int count_this_packet(void *_hdr, int len)
+{
+	struct ethhdr *hdr = _hdr;
+
+	if (len < ETH_HLEN)
+		return 1;
+
+	if (hdr->h_proto == htons(ETH_P_ARP))
+		return 0;
+
+	return 1;
+}
+
 /* Called in soft-irq context */
 static void smd_net_data_handler(unsigned long arg)
 {
@@ -70,8 +83,10 @@ static void smd_net_data_handler(unsigned long arg)
 					dev_kfree_skb_irq(skb);
 				} else {
 					skb->protocol = eth_type_trans(skb, dev);
-					p->stats.rx_packets++;
-					p->stats.rx_bytes += skb->len;
+					if (count_this_packet(ptr, skb->len)) {
+						p->stats.rx_packets++;
+						p->stats.rx_bytes += skb->len;
+					}
 					netif_rx(skb);
 				}
 				continue;
@@ -126,8 +141,10 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (smd_write(ch, skb->data, skb->len) != skb->len) {
 		pr_err("rmnet fifo full, dropping packet\n");
 	} else {
-		p->stats.tx_packets++;
-		p->stats.tx_bytes += skb->len;
+		if (count_this_packet(skb->data, skb->len)) {
+			p->stats.tx_packets++;
+			p->stats.tx_bytes += skb->len;
+		}
 	}
 
 	dev_kfree_skb_irq(skb);
