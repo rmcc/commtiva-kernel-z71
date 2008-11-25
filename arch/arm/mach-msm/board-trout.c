@@ -60,9 +60,7 @@
 #include "gpio_chip.h"
 
 #include <mach/board.h>
-#ifdef CONFIG_USB_FUNCTION
 #include <mach/msm_hsusb.h>
-#endif
 
 #include <mach/trout_pwrsink.h>
 
@@ -423,8 +421,6 @@ static struct platform_device sd_door_switch = {
 	},
 };
 
-#ifdef CONFIG_USB_FUNCTION
-
 /* adjust eye diagram, disable vbusvalid interrupts */
 static int trout_phy_init_seq[] = { 0x40, 0x31, 0x1D, 0x0D, 0x1D, 0x10, -1 };
 
@@ -436,6 +432,7 @@ static void trout_phy_reset(void)
 	mdelay(10);
 }
 
+#ifdef CONFIG_USB_FUNCTION
 static char *trout_usb_functions[] = {
 #if defined(CONFIG_USB_FUNCTION_MASS_STORAGE) || defined(CONFIG_USB_FUNCTION_UMS)
 	"usb_mass_storage",
@@ -455,10 +452,12 @@ static struct msm_hsusb_product trout_usb_products[] = {
 		.functions      = 0x00000003, /* "usb_mass_storage" and "adb" */
 	},
 };
+#endif
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.phy_reset	= trout_phy_reset,
 	.phy_init_seq	= trout_phy_init_seq,
+#ifdef CONFIG_USB_FUNCTION
 	.vendor_id	= 0x0bb4,
 	.product_id	= 0x0c02,
 	.version	= 0x0100,
@@ -469,8 +468,10 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions = ARRAY_SIZE(trout_usb_functions),
 	.products  = trout_usb_products,
 	.num_products = ARRAY_SIZE(trout_usb_products),
+#endif
 };
 
+#ifdef CONFIG_USB_FUNCTION_MASS_STORAGE
 static struct usb_mass_storage_platform_data mass_storage_pdata = {
 	.nluns		= 1,
 	.buf_size	= 16384,
@@ -593,8 +594,8 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SERIAL_MSM_HS
 	&msm_device_uart_dm1,
 #endif
-#ifdef CONFIG_USB_FUNCTION
 	&msm_device_hsusb,
+#ifdef CONFIG_USB_FUNCTION_MASS_STORAGE
 	&usb_mass_storage_device,
 #endif
 	&trout_nav_device,
