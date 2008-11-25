@@ -691,6 +691,15 @@ static int msmfb_probe(struct platform_device *pdev)
 	struct msm_panel_data *panel = pdev->dev.platform_data;
 	int ret;
 
+	if (!panel) {
+		pr_err("msmfb_probe: no platform data\n");
+		return -EINVAL;
+	}
+	if (!panel->fb_data) {
+		pr_err("msmfb_probe: no fb_data\n");
+		return -EINVAL;
+	}
+
 	fb = framebuffer_alloc(sizeof(struct msmfb_info), &pdev->dev);
 	if (!fb)
 		return -ENOMEM;
