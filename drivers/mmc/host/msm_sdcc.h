@@ -167,7 +167,6 @@ struct msmsdcc_dma_data {
 
 	struct scatterlist		*sg;
 	int				num_ents;
-	int				user_pages;
 
 	int				channel;
 	struct msmsdcc_host		*host;
@@ -189,6 +188,7 @@ struct msmsdcc_curr_req {
 	unsigned int		data_xfered;	/* Bytes acked by BLKEND irq */
 	int			got_dataend;
 	int			got_datablkend;
+	int			user_pages;
 };
 
 struct msmsdcc_host {

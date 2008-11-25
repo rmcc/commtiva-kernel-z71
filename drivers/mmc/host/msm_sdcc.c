@@ -183,7 +183,7 @@ msmsdcc_dma_complete_func(struct msm_dmov_cmd *cmd,
 	dma_unmap_sg(mmc_dev(host->mmc), host->dma.sg, host->dma.num_ents,
 		     host->dma.dir);
 
-	if (host->dma.user_pages) {
+	if (host->curr.user_pages) {
 		struct scatterlist *sg = host->dma.sg;
 		int i;
 
@@ -270,8 +270,8 @@ static int msmsdcc_config_dma(struct msmsdcc_host *host, struct mmc_data *data)
 	else
 		host->dma.dir = DMA_TO_DEVICE;
 
-//	host->dma.user_pages = (data->flags & MMC_DATA_USERPAGE);
-	host->dma.user_pages = 0;
+//	host->curr.user_pages = (data->flags & MMC_DATA_USERPAGE);
+	host->curr.user_pages = 0;
 
 	n = dma_map_sg(mmc_dev(host->mmc), host->dma.sg,
 			host->dma.num_ents, host->dma.dir);
@@ -542,7 +542,7 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 		if (remain) /* Done with this page? */
 			break; /* Nope */
 
-		if (status & MCI_RXACTIVE)
+		if (status & MCI_RXACTIVE && host->curr.user_pages )
 			flush_dcache_page(sg_page(host->pio.sg));
 
 		if (!--host->pio.sg_len) {
