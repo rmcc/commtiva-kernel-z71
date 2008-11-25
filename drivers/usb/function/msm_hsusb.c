@@ -150,6 +150,8 @@ struct usb_info
 	unsigned running;
 	unsigned bound;
 
+	enum usb_device_speed speed;
+
 	struct dma_pool *pool;
 
 	/* dma page to back the queue heads and items */
@@ -409,6 +411,13 @@ static void usb_ept_enable(struct usb_endpoint *ept, int yes)
 	struct usb_info *ui = ept->ui;
 	int in = ept->flags & EPT_FLAG_IN;
 	unsigned n;
+
+	if (yes) {
+		if (ui->speed == USB_SPEED_HIGH)
+			ept->max_pkt = 512;
+		else
+			ept->max_pkt = 64;
+	}
 
 	n = readl(USB_ENDPTCTRL(ept->num));
 
@@ -890,8 +899,22 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	if (ui->running == 0)
 		return IRQ_HANDLED;
 
-	if (n & STS_PCI)
-		printk(KERN_INFO "usb: portchange\n");
+	if (n & STS_PCI) {
+		switch (readl(USB_PORTSC) & PORTSC_PSPD_MASK) {
+		case PORTSC_PSPD_FS:
+			printk(KERN_INFO "usb: portchange USB_SPEED_FULL\n");
+			ui->speed = USB_SPEED_FULL;
+			break;
+		case PORTSC_PSPD_LS:
+			printk(KERN_INFO "usb: portchange USB_SPEED_LOW\n");
+			ui->speed = USB_SPEED_LOW;
+			break;
+		case PORTSC_PSPD_HS:
+			printk(KERN_INFO "usb: portchange USB_SPEED_HIGH\n");
+			ui->speed = USB_SPEED_HIGH;
+			break;
+		}
+	}
 
 	if (n & STS_URI) {
 		printk(KERN_INFO "usb: reset\n");
@@ -1005,7 +1028,6 @@ static void usb_bind_driver(struct usb_info *ui, struct usb_function_info *fi)
 		ed->bDescriptorType = USB_DT_ENDPOINT;
 		ed->bEndpointAddress = ept->num | ((ept->flags & EPT_FLAG_IN) ? 0x80 : 0);
 		ed->bmAttributes = 0x02; /* XXX hardcoded bulk */
-		ed->wMaxPacketSize = ept->max_pkt;
 		ed->bInterval = 0; /* XXX hardcoded bulk */
 
 		elist[n] = ept;
@@ -1612,7 +1634,12 @@ static int usb_find_descriptor(struct usb_info *ui, unsigned id, struct usb_requ
 		unsigned ifc_count = 0;
 		unsigned n;
 		char *ptr, *start;
+		int max_packet;
 
+		if (ui->speed == USB_SPEED_HIGH)
+			max_packet = 512;
+		else
+			max_packet = 64;
 		start = req->buf;
 		ptr = start + USB_DT_CONFIG_SIZE;
 
@@ -1631,6 +1658,8 @@ static int usb_find_descriptor(struct usb_info *ui, unsigned id, struct usb_requ
 				ptr += fi->ifc.bLength;
 
 				for (n = 0; n < fi->endpoints; n++) {
+					/* XXX hardcoded bulk */
+					fi->ept[n].desc.wMaxPacketSize = max_packet;
 					memcpy(ptr, &(fi->ept[n].desc), fi->ept[n].desc.bLength);
 					ptr += fi->ept[n].desc.bLength;
 				}
