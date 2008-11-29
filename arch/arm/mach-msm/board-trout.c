@@ -31,6 +31,9 @@
 #ifdef CONFIG_USB_FUNCTION
 #include <linux/usb/mass_storage_function.h>
 #endif
+#ifdef CONFIG_USB_ANDROID
+#include <linux/usb/android.h>
+#endif
 
 #include <linux/delay.h>
 
@@ -489,6 +492,26 @@ static struct platform_device usb_mass_storage_device = {
 };
 #endif
 
+#ifdef CONFIG_USB_ANDROID
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x0bb4,
+	.product_id	= 0x0c01,
+	.adb_product_id	= 0x0c02,
+	.version	= 0x0100,
+	.product_name	= "Android Phone",
+	.manufacturer_name = "HTC",
+	.nluns = 1,
+};
+
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+#endif
+
 static struct resource trout_ram_console_resource[] = {
 	{
 		.start	= MSM_RAM_CONSOLE_BASE,
@@ -598,6 +621,9 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_USB_FUNCTION_MASS_STORAGE
 	&usb_mass_storage_device,
 #endif
+#ifdef CONFIG_USB_ANDROID
+	&android_usb_device,
+#endif
 	&trout_nav_device,
 	&trout_reset_keys_device,
 	&android_leds,
@@ -632,6 +658,9 @@ static int __init trout_serialno_setup(char *str)
 {
 #ifdef CONFIG_USB_FUNCTION
 	msm_hsusb_pdata.serial_number = str;
+#endif
+#ifdef CONFIG_USB_ANDROID
+	android_usb_pdata.serial_number = str;
 #endif
 	return 1;
 }
