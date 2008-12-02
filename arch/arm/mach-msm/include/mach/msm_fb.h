@@ -56,12 +56,6 @@ struct msm_panel_data {
 	struct msm_fb_data *fb_data;
 };
 
-struct msm_mddi_panel_info {
-	struct msm_mddi_client_data *client_data;
-	struct msm_panel_data panel_data;
-	struct msmfb_callback *toshiba_callback;
-};
-
 struct msm_mddi_client_data {
 	void (*suspend)(struct msm_mddi_client_data *);
 	void (*resume)(struct msm_mddi_client_data *);
@@ -76,8 +70,6 @@ struct msm_mddi_client_data {
 	struct resource *fb_resource;
 	/* from the list above */
 	unsigned interface_type;
-	/* back pointer to the panel_info struct that holds the client_data */
-	struct msm_mddi_panel_info *panel;
 };
 
 struct msm_mddi_platform_data {
@@ -126,13 +118,17 @@ int register_mdp_client(struct class_interface *class_intf);
 
 /**** private client data structs go below this line ***/
 
-struct msm_mddi_toshiba_client_data {
+struct msm_mddi_bridge_platform_data {
 	/* from board file */
-	int (*init)(struct msm_mddi_client_data *);
-	int (*uninit)(struct msm_mddi_client_data *);
+	int (*init)(struct msm_mddi_bridge_platform_data *,
+		    struct msm_mddi_client_data *);
+	int (*uninit)(struct msm_mddi_bridge_platform_data *,
+		      struct msm_mddi_client_data *);
 	/* passed to panel for use by the fb driver */
-	int (*blank)(struct msm_panel_data *);
-	int (*unblank)(struct msm_panel_data *);
+	int (*blank)(struct msm_mddi_bridge_platform_data *,
+		     struct msm_mddi_client_data *);
+	int (*unblank)(struct msm_mddi_bridge_platform_data *,
+		       struct msm_mddi_client_data *);
 	struct msm_fb_data fb_data;
 };
 

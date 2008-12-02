@@ -22,8 +22,6 @@
 #include <linux/gpio.h>
 #include <mach/msm_fb.h>
 
-static DECLARE_WAIT_QUEUE_HEAD(toshiba_vsync_wait);
-static volatile int toshiba_got_int;
 
 #define LCD_CONTROL_BLOCK_BASE 0x110000
 #define CMN         (LCD_CONTROL_BLOCK_BASE|0x10)
@@ -52,71 +50,112 @@ static volatile int toshiba_got_int;
 #define GPIOSEL     (BASE7 + 0x00)
 #define GPIOSEL_VWAKEINT (1U << 0)
 
-#define get_panel_info(data) \
-	container_of(data, struct msm_mddi_panel_info, panel_data)
+static DECLARE_WAIT_QUEUE_HEAD(toshiba_vsync_wait);
 
-#define get_client_data(data) \
-	(get_panel_info(data)->client_data)
+struct panel_info {
+	struct msm_mddi_client_data *client_data;
+	struct platform_device pdev;
+	struct msm_panel_data panel_data;
+	struct msmfb_callback *toshiba_callback;
+	int toshiba_got_int;
+};
 
-#define get_toshiba_client_data(data) \
-	(get_client_data(data)->private_client_data)
 
 static void toshiba_request_vsync(struct msm_panel_data *panel_data,
 				  struct msmfb_callback *callback)
 {
-	struct msm_mddi_panel_info *panel = get_panel_info(panel_data);
-	struct msm_mddi_client_data *cdata = get_client_data(panel_data);
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
 
 	panel->toshiba_callback = callback;
-	if (toshiba_got_int) {
-		toshiba_got_int = 0;
-		cdata->activate_link(cdata);
+	if (panel->toshiba_got_int) {
+		panel->toshiba_got_int = 0;
+		client_data->activate_link(client_data);
 	}
 }
 
 static void toshiba_wait_vsync(struct msm_panel_data *panel_data)
 {
-	struct msm_mddi_client_data *cdata = get_client_data(panel_data);
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
 
-	if (toshiba_got_int) {
-		toshiba_got_int = 0;
-		cdata->activate_link(cdata); /* clears interrupt */
+	if (panel->toshiba_got_int) {
+		panel->toshiba_got_int = 0;
+		client_data->activate_link(client_data); /* clears interrupt */
 	}
-	if (wait_event_timeout(toshiba_vsync_wait, toshiba_got_int, HZ/2) == 0)
+	if (wait_event_timeout(toshiba_vsync_wait, panel->toshiba_got_int,
+				HZ/2) == 0)
 		printk(KERN_ERR "timeout waiting for VSYNC\n");
-	toshiba_got_int = 0;
+	panel->toshiba_got_int = 0;
 	/* interrupt clears when screen dma starts */
 }
 
 static int toshiba_suspend(struct msm_panel_data *panel_data)
 {
-	struct msm_mddi_client_data *cdata = get_client_data(panel_data);
-	struct msm_mddi_toshiba_client_data *toshiba_data =
-		get_toshiba_client_data(panel_data);
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
 
-	if (toshiba_data->uninit(cdata))
-		return -1;
-	cdata->suspend(cdata);
+	struct msm_mddi_bridge_platform_data *bridge_data =
+		client_data->private_client_data;
+	int ret;
+
+	ret = bridge_data->uninit(bridge_data, client_data);
+	if (ret) {
+		printk(KERN_INFO "mddi toshiba client: non zero return from "
+			"uninit\n");
+		return ret;
+	}
+	client_data->suspend(client_data);
 	return 0;
 }
 
 static int toshiba_resume(struct msm_panel_data *panel_data)
 {
-	struct msm_mddi_client_data *cdata = get_client_data(panel_data);
-	struct msm_mddi_toshiba_client_data *toshiba_data =
-		get_toshiba_client_data(panel_data);
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
 
-	cdata->resume(cdata);
-	if (toshiba_data->init(cdata))
-		return -1;
+	struct msm_mddi_bridge_platform_data *bridge_data =
+		client_data->private_client_data;
+	int ret;
+
+	client_data->resume(client_data);
+	ret = bridge_data->init(bridge_data, client_data);
+	if (ret)
+		return ret;
 	return 0;
+}
+
+static int toshiba_blank(struct msm_panel_data *panel_data)
+{
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
+	struct msm_mddi_bridge_platform_data *bridge_data =
+		client_data->private_client_data;
+
+	return bridge_data->blank(bridge_data, client_data);
+}
+
+static int toshiba_unblank(struct msm_panel_data *panel_data)
+{
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
+	struct msm_mddi_bridge_platform_data *bridge_data =
+		client_data->private_client_data;
+
+	return bridge_data->unblank(bridge_data, client_data);
 }
 
 irqreturn_t toshiba_vsync_interrupt(int irq, void *data)
 {
-	struct msm_mddi_panel_info *panel = data;
+	struct panel_info *panel = data;
 
-	toshiba_got_int = 1;
+	panel->toshiba_got_int = 1;
 	if (panel->toshiba_callback) {
 		panel->toshiba_callback->func(panel->toshiba_callback);
 		panel->toshiba_callback = 0;
@@ -125,8 +164,8 @@ irqreturn_t toshiba_vsync_interrupt(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int setup_vsync(struct msm_mddi_panel_info *panel,
-				    int init)
+static int setup_vsync(struct panel_info *panel,
+		       int init)
 {
 	int ret;
 	int gpio = 97;
@@ -157,7 +196,7 @@ static int setup_vsync(struct msm_mddi_panel_info *panel,
 	return 0;
 
 uninit:
-	free_irq(gpio_to_irq(gpio), panel->client_data);
+	free_irq(gpio_to_irq(gpio), panel);
 err_request_irq_failed:
 err_get_irq_num_failed:
 err_gpio_direction_input_failed:
@@ -169,55 +208,51 @@ err_request_gpio_failed:
 static int mddi_toshiba_probe(struct platform_device *pdev)
 {
 	int ret;
-	struct msm_mddi_client_data *pdata = pdev->dev.platform_data;
-	struct msm_mddi_toshiba_client_data *toshiba_data =
-		pdata->private_client_data;
-	struct msm_mddi_panel_info *panel =
-		kzalloc(sizeof(struct msm_mddi_panel_info), GFP_KERNEL);
-	struct platform_device *panel_pdev;
+	struct msm_mddi_client_data *client_data = pdev->dev.platform_data;
+	struct msm_mddi_bridge_platform_data *bridge_data =
+		client_data->private_client_data;
+	struct panel_info *panel =
+		kzalloc(sizeof(struct panel_info), GFP_KERNEL);
+	if (!panel)
+		return -ENOMEM;
+	platform_set_drvdata(pdev, panel);
 
 	/* mddi_remote_write(mddi, 0, WAKEUP); */
-	pdata->remote_write(pdata, GPIOSEL_VWAKEINT, GPIOSEL);
-	pdata->remote_write(pdata, INTMASK_VWAKEOUT, INTMASK);
+	client_data->remote_write(client_data, GPIOSEL_VWAKEINT, GPIOSEL);
+	client_data->remote_write(client_data, INTMASK_VWAKEOUT, INTMASK);
 
 	ret = setup_vsync(panel, 1);
 	if (ret) {
-		dev_err(&pdev->dev, "mddi_toshiba_setup_vsync failed\n");
+		dev_err(&pdev->dev, "mddi_bridge_setup_vsync failed\n");
 		return ret;
 	}
 
-	panel->client_data = pdata;
-	panel->client_data->panel = panel;
+	panel->client_data = client_data;
 	panel->panel_data.suspend = toshiba_suspend;
 	panel->panel_data.resume = toshiba_resume;
 	panel->panel_data.wait_vsync = toshiba_wait_vsync;
 	panel->panel_data.request_vsync = toshiba_request_vsync;
-	panel->panel_data.blank = toshiba_data->blank;
-	panel->panel_data.unblank = toshiba_data->unblank;
-	panel->panel_data.fb_data =  &toshiba_data->fb_data;
+	panel->panel_data.blank = toshiba_blank;
+	panel->panel_data.unblank = toshiba_unblank;
+	panel->panel_data.fb_data =  &bridge_data->fb_data;
 
-	panel_pdev = kzalloc(sizeof(struct platform_device), GFP_KERNEL);
-	if (!panel_pdev) {
-		printk(KERN_ERR "mddi_toshiba_panel: could not allocate"
-			"device for mddi_toshiba_panel\n");
-		return -ENOMEM;
-	}
-	panel_pdev->name = "msm_panel";
-	panel_pdev->id = pdev->id;
-	panel_pdev->resource = pdata->fb_resource;
-	panel_pdev->num_resources = 1;
-	panel_pdev->dev.platform_data = &panel->panel_data;
-	toshiba_data->init(panel->client_data);
-	platform_device_register(panel_pdev);
+	panel->pdev.name = "msm_panel";
+	panel->pdev.id = pdev->id;
+	panel->pdev.resource = client_data->fb_resource;
+	panel->pdev.num_resources = 1;
+	panel->pdev.dev.platform_data = &panel->panel_data;
+	bridge_data->init(bridge_data, client_data);
+	platform_device_register(&panel->pdev);
 
 	return 0;
 }
 
 static int mddi_toshiba_remove(struct platform_device *pdev)
 {
-	struct msm_mddi_client_data *pdata = pdev->dev.platform_data;
-	setup_vsync(pdata->panel, 0);
-	kfree(pdata->panel);
+	struct panel_info *panel = platform_get_drvdata(pdev);
+
+	setup_vsync(panel, 0);
+	kfree(panel);
 	return 0;
 }
 
