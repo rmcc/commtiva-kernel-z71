@@ -223,7 +223,6 @@ struct msmsdcc_host {
 	struct msmsdcc_pio_data	pio;
 
 	struct work_struct	resume_task;
-	int			suspended;
 };
 
 #endif

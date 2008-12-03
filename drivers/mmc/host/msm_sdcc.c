@@ -92,7 +92,8 @@ msmsdcc_print_status(struct msmsdcc_host *host, char *hdr, uint32_t status)
 #endif
 
 static void
-msmsdcc_start_command(struct msmsdcc_host *host, struct mmc_command *cmd, u32 c);
+msmsdcc_start_command(struct msmsdcc_host *host, struct mmc_command *cmd,
+		      u32 c);
 
 static void
 msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
@@ -270,7 +271,7 @@ static int msmsdcc_config_dma(struct msmsdcc_host *host, struct mmc_data *data)
 	else
 		host->dma.dir = DMA_TO_DEVICE;
 
-//	host->curr.user_pages = (data->flags & MMC_DATA_USERPAGE);
+	/* host->curr.user_pages = (data->flags & MMC_DATA_USERPAGE); */
 	host->curr.user_pages = 0;
 
 	n = dma_map_sg(mmc_dev(host->mmc), host->dma.sg,
@@ -291,7 +292,7 @@ static int msmsdcc_config_dma(struct msmsdcc_host *host, struct mmc_data *data)
 		if (i == (host->dma.num_ents - 1))
 			box->cmd |= CMD_LC;
 		rows = (sg_dma_len(sg) % MCI_FIFOSIZE) ?
-			(sg_dma_len(sg) / MCI_FIFOSIZE) + 1:
+			(sg_dma_len(sg) / MCI_FIFOSIZE) + 1 :
 			(sg_dma_len(sg) / MCI_FIFOSIZE) ;
 
 		if (data->flags & MMC_DATA_READ) {
@@ -542,7 +543,7 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 		if (remain) /* Done with this page? */
 			break; /* Nope */
 
-		if (status & MCI_RXACTIVE && host->curr.user_pages )
+		if (status & MCI_RXACTIVE && host->curr.user_pages)
 			flush_dcache_page(sg_page(host->pio.sg));
 
 		if (!--host->pio.sg_len) {
@@ -724,15 +725,6 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		} else
 			mrq->cmd->error = -ENOMEDIUM;
 
-		spin_unlock_irq(&host->lock);
-		mmc_request_done(mmc, mrq);
-		return;
-	}
-
-	if (host->suspended) {
-		printk("%s: Warning - use while suspended!\n", 
-		       mmc_hostname(mmc));
-		mrq->cmd->error = -EBUSY;
 		spin_unlock_irq(&host->lock);
 		mmc_request_done(mmc, mrq);
 		return;
@@ -938,26 +930,9 @@ do_resume_work(struct work_struct *work)
 	struct msmsdcc_host *host =
 		container_of(work, struct msmsdcc_host, resume_task);
 	struct mmc_host	*mmc = host->mmc;
-	unsigned long flags;
 
-	spin_lock_irqsave(&host->lock, flags);
 	if (mmc) {
-		struct msmsdcc_host *host = mmc_priv(mmc);
-
-		if (!host->clks_on) {
-			clk_enable(host->pclk);
-			clk_enable(host->clk);
-			host->clks_on = 1;
-		}
-
-		writel(MCI_IRQENABLE, host->base + MMCIMASK0);
-
-		host->suspended = 0;
-		spin_unlock_irqrestore(&host->lock, flags);
-
-		if (mmc->card && mmc->card->type != MMC_TYPE_SDIO)
-			mmc_resume_host(mmc);
-
+		mmc_resume_host(mmc);
 		if (host->plat->status_irq)
 			enable_irq(host->plat->status_irq);
 	}
@@ -1228,7 +1203,7 @@ msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 	if (mmc) {
 		if (host->plat->status_irq)
 			disable_irq(host->plat->status_irq);
-		
+
 		if (mmc->card && mmc->card->type != MMC_TYPE_SDIO)
 			rc = mmc_suspend_host(mmc, state);
 		if (!rc) {
@@ -1240,7 +1215,6 @@ msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 				host->clks_on = 0;
 			}
 		}
-		host->suspended = 1;
 	}
 	return rc;
 }
@@ -1250,7 +1224,27 @@ msmsdcc_resume(struct platform_device *dev)
 {
 	struct mmc_host *mmc = mmc_get_drvdata(dev);
 	struct msmsdcc_host *host = mmc_priv(mmc);
-	schedule_work(&host->resume_task);
+	unsigned long flags;
+
+	spin_lock_irqsave(&host->lock, flags);
+	if (mmc) {
+		struct msmsdcc_host *host = mmc_priv(mmc);
+
+		if (!host->clks_on) {
+			clk_enable(host->pclk);
+			clk_enable(host->clk);
+			host->clks_on = 1;
+		}
+
+		writel(MCI_IRQENABLE, host->base + MMCIMASK0);
+
+		spin_unlock_irqrestore(&host->lock, flags);
+
+		if (mmc->card && mmc->card->type != MMC_TYPE_SDIO)
+			schedule_work(&host->resume_task);
+		else if (host->plat->status_irq)
+			enable_irq(host->plat->status_irq);
+	}
 	return 0;
 }
 
