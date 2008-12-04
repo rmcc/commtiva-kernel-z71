@@ -222,7 +222,9 @@ struct msmsdcc_host {
 	struct msmsdcc_dma_data	dma;
 	struct msmsdcc_pio_data	pio;
 
+#ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 	struct work_struct	resume_task;
+#endif
 };
 
 #endif

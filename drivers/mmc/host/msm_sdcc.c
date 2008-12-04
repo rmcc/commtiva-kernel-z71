@@ -63,7 +63,7 @@ static unsigned int msmsdcc_fmax = 50000000;
 static unsigned int msmsdcc_4bit = 1;
 static unsigned int msmsdcc_pwrsave = 0;
 
-#define VERBOSE_COMMAND_TIMEOUTS	0
+#define VERBOSE_COMMAND_TIMEOUTS	1
 
 #if IRQ_DEBUG == 1
 static char *irq_status_bits[] = { "cmdcrcfail", "datcrcfail", "cmdtimeout",
@@ -715,6 +715,8 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	WARN_ON(host->curr.mrq != NULL);
 
+        WARN_ON(host->pwr == 0);
+
 	spin_lock_irq(&host->lock);
 
 	if (host->eject) {
@@ -736,7 +738,7 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		msmsdcc_start_data(host, mrq->data);
 
 	msmsdcc_start_command(host, mrq->cmd, 0);
-	mod_timer(&host->command_timer, jiffies + (HZ / 2));
+	mod_timer(&host->command_timer, jiffies + HZ);
 	spin_unlock_irq(&host->lock);
 }
 
@@ -924,6 +926,7 @@ msmsdcc_init_dma(struct msmsdcc_host *host)
 	return 0;
 }
 
+#ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 static void
 do_resume_work(struct work_struct *work)
 {
@@ -937,6 +940,7 @@ do_resume_work(struct work_struct *work)
 			enable_irq(host->plat->status_irq);
 	}
 }
+#endif
 
 static int
 msmsdcc_probe(struct platform_device *pdev)
@@ -1013,7 +1017,9 @@ msmsdcc_probe(struct platform_device *pdev)
 					   plat->embedded_sdio->num_funcs);
 #endif
 
+#ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 	INIT_WORK(&host->resume_task, do_resume_work);
+#endif
 
 	/*
 	 * Setup DMA
@@ -1241,7 +1247,13 @@ msmsdcc_resume(struct platform_device *dev)
 		spin_unlock_irqrestore(&host->lock, flags);
 
 		if (mmc->card && mmc->card->type != MMC_TYPE_SDIO)
+#ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 			schedule_work(&host->resume_task);
+#else
+			mmc_resume_host(mmc);
+			if (host->plat->status_irq)
+				enable_irq(host->plat->status_irq);
+#endif
 		else if (host->plat->status_irq)
 			enable_irq(host->plat->status_irq);
 	}
