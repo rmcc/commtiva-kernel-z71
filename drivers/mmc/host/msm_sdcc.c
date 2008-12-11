@@ -712,12 +712,13 @@ static void
 msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 {
 	struct msmsdcc_host *host = mmc_priv(mmc);
+	unsigned long		flags;
 
 	WARN_ON(host->curr.mrq != NULL);
 
         WARN_ON(host->pwr == 0);
 
-	spin_lock_irq(&host->lock);
+	spin_lock_irqsave(&host->lock, flags);
 
 	if (host->eject) {
 		if (mrq->data && !(mrq->data->flags & MMC_DATA_READ)) {
@@ -727,7 +728,7 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 		} else
 			mrq->cmd->error = -ENOMEDIUM;
 
-		spin_unlock_irq(&host->lock);
+		spin_unlock_irqrestore(&host->lock, flags);
 		mmc_request_done(mmc, mrq);
 		return;
 	}
@@ -739,7 +740,7 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	msmsdcc_start_command(host, mrq->cmd, 0);
 	mod_timer(&host->command_timer, jiffies + HZ);
-	spin_unlock_irq(&host->lock);
+	spin_unlock_irqrestore(&host->lock, flags);
 }
 
 static void
