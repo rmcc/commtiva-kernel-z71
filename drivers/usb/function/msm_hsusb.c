@@ -1332,10 +1332,11 @@ static void usb_do_work(struct work_struct *w)
 
 void msm_hsusb_set_vbus_state(int online)
 {
-	unsigned long flags;
+	unsigned long flags = 0;
 	struct usb_info *ui = the_usb_info;
-
-	spin_lock_irqsave(&ui->lock, flags);
+	
+	if (ui)
+		spin_lock_irqsave(&ui->lock, flags);
 	if (vbus != online) {
 		vbus = online;
 		if (ui) {
@@ -1347,7 +1348,8 @@ void msm_hsusb_set_vbus_state(int online)
 			schedule_work(&ui->work);
 		}
 	}
-	spin_unlock_irqrestore(&ui->lock, flags);
+	if (ui)
+		spin_unlock_irqrestore(&ui->lock, flags);
 }
 
 void usb_function_reenumerate(void)
@@ -1491,6 +1493,7 @@ static int usb_probe(struct platform_device *pdev)
 	if (!ui)
 		return -ENOMEM;
 
+	spin_lock_init(&ui->lock);
 	ui->pdev = pdev;
 
 	if (pdev->dev.platform_data) {
