@@ -192,14 +192,16 @@ unsigned int last_irqs[NR_IRQS];
 static void dump_irqs(void)
 {
 	int n;
-	dprintf("irqnr  total      since last\n");
+	dprintf("irqnr       total  since-last   status  name\n");
 	for (n = 1; n < NR_IRQS; n++) {
 		struct irqaction *act = irq_desc[n].action;
-		if (!act)
+		if (!act && !kstat_cpu(0).irqs[n])
 			continue;
-		dprintf("%5d: %10u %10u %s\n", n, 
-			kstat_cpu(0).irqs[n], kstat_cpu(0).irqs[n] - last_irqs[n],
-			act->name ? act->name : "???");
+		dprintf("%5d: %10u %11u %8x  %s\n", n,
+			kstat_cpu(0).irqs[n],
+			kstat_cpu(0).irqs[n] - last_irqs[n],
+			irq_desc[n].status,
+			(act && act->name) ? act->name : "???");
 		last_irqs[n] = kstat_cpu(0).irqs[n];
 	}
 }
