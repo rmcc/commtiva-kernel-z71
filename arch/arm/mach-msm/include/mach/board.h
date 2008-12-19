@@ -20,8 +20,7 @@
 #include <linux/types.h>
 
 /* platform device data structures */
-struct msm_acpu_clock_platform_data
-{
+struct msm_acpu_clock_platform_data {
 	uint32_t acpu_switch_time_us;
 	uint32_t max_speed_delta_khz;
 	uint32_t vdd_switch_time_us;
@@ -29,10 +28,20 @@ struct msm_acpu_clock_platform_data
 	unsigned long wait_for_irq_khz;
 };
 
-struct msm_camera_device_platform_data{
+struct msm_camera_device_platform_data {
 	int sensor_reset;
 	int sensor_pwd;
 	int vcm_pwd;
+};
+
+struct snd_endpoint {
+	int id;
+	const char *name;
+};
+
+struct msm_snd_endpoints {
+	struct snd_endpoint *endpoints;
+	unsigned num;
 };
 
 /* common init routines for use by arch/arm/mach-msm/board-*.c */
