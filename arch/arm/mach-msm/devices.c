@@ -451,12 +451,13 @@ struct platform_device msm_device_mdp = {
 		CLOCK(name, id, dev, flags, CLKFLAG_ARCH_MSM7X00A)
 
 #define OFF CLKFLAG_AUTO_OFF
-#define MINMAX CLKFLAG_USE_MIN_MAX_TO_SET
+#define MINMAX (CLKFLAG_USE_MIN_TO_SET | CLKFLAG_USE_MAX_TO_SET)
+#define USE_MIN CLKFLAG_USE_MIN_TO_SET
 
 struct clk msm_clocks[] = {
 	CLK_ALL("adm_clk", ADM_CLK, NULL, 0),
 	CLK_ALL("adsp_clk", ADSP_CLK, NULL, 0),
-	CLK_ALL("ebi1_clk", EBI1_CLK, NULL, 0),
+	CLK_ALL("ebi1_clk", EBI1_CLK, NULL, USE_MIN),
 	CLK_ALL("ebi2_clk", EBI2_CLK, NULL, 0),
 	CLK_ALL("ecodec_clk", ECODEC_CLK, NULL, 0),
 	CLK_ALL("mddi_clk", EMDH_CLK, &msm_device_mddi1.dev, OFF),
