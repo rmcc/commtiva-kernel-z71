@@ -3078,6 +3078,14 @@ config MSM_RMNET
 	help
 	  Virtual ethernet interface for MSM RMNET transport.
 
+config MSM_RMNET_DEBUG
+	bool "MSM RMNET debug interface"
+	depends on MSM_RMNET
+	default n
+	help
+	  Debug stats on wakeup counts.
+
+
 config NETCONSOLE_DYNAMIC
 	bool "Dynamic reconfiguration of logging targets (EXPERIMENTAL)"
 	depends on NETCONSOLE && SYSFS && EXPERIMENTAL
