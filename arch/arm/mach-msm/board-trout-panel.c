@@ -570,6 +570,8 @@ struct msm_mddi_bridge_platform_data toshiba_client_data = {
 	.fb_data = {
 		.xres = 320,
 		.yres = 480,
+		.width = 45,
+		.height = 67,
 		.output_format = 0,
 	},
 };
