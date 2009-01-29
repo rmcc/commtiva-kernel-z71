@@ -50,6 +50,7 @@ struct msm_panel_data {
 	int (*unblank)(struct msm_panel_data *);
 	void (*wait_vsync)(struct msm_panel_data *);
 	void (*request_vsync)(struct msm_panel_data *, struct msmfb_callback *);
+	void (*clear_vsync)(struct msm_panel_data *);
 	/* from the enum above */
 	unsigned interface_type;
 	/* data to be passed to the fb driver */

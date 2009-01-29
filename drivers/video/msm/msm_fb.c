@@ -197,11 +197,10 @@ static int msmfb_start_dma(struct msmfb_info *msmfb)
 	return 0;
 error:
 	spin_unlock_irqrestore(&msmfb->update_lock, irq_flags);
-	/* some clients clear their vsync interrupt
-	 * when the link activates */
-	/* XXX: fIX ME rschultz
-	mddi_activate_link(panel->mddi);
-	*/
+	/* some clients need to clear their vsync interrupt */
+	if (panel->clear_vsync)
+		panel->clear_vsync(panel);
+	wake_up(&msmfb->frame_wq);
 	return 0;
 }
 

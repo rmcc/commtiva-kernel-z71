@@ -75,6 +75,15 @@ static void toshiba_request_vsync(struct msm_panel_data *panel_data,
 	}
 }
 
+static void toshiba_clear_vsync(struct msm_panel_data *panel_data)
+{
+	struct panel_info *panel = container_of(panel_data, struct panel_info,
+						panel_data);
+	struct msm_mddi_client_data *client_data = panel->client_data;
+
+	client_data->activate_link(client_data);
+}
+
 static void toshiba_wait_vsync(struct msm_panel_data *panel_data)
 {
 	struct panel_info *panel = container_of(panel_data, struct panel_info,
@@ -232,6 +241,7 @@ static int mddi_toshiba_probe(struct platform_device *pdev)
 	panel->panel_data.resume = toshiba_resume;
 	panel->panel_data.wait_vsync = toshiba_wait_vsync;
 	panel->panel_data.request_vsync = toshiba_request_vsync;
+	panel->panel_data.clear_vsync = toshiba_clear_vsync;
 	panel->panel_data.blank = toshiba_blank;
 	panel->panel_data.unblank = toshiba_unblank;
 	panel->panel_data.fb_data =  &bridge_data->fb_data;
