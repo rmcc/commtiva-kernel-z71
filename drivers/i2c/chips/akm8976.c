@@ -65,6 +65,50 @@ static short akmd_delay = 0;
 static atomic_t suspend_flag = ATOMIC_INIT(0);
 
 static struct akm8976_platform_data *pdata;
+static int revision = -1;
+/* AKM HW info */
+static ssize_t gsensor_vendor_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	ssize_t ret = 0;
+
+	sprintf(buf, "AK8976A_%#x\n", revision);
+	ret = strlen(buf) + 1;
+
+	return ret;
+}
+
+static DEVICE_ATTR(vendor, 0444, gsensor_vendor_show, NULL);
+
+static struct kobject *android_gsensor_kobj;
+
+static int gsensor_sysfs_init(void)
+{
+	int ret ;
+
+	android_gsensor_kobj = kobject_create_and_add("android_gsensor", NULL);
+	if (android_gsensor_kobj == NULL) {
+		printk(KERN_ERR
+		       "AKM8976 gsensor_sysfs_init:"\
+		       "subsystem_register failed\n");
+		ret = -ENOMEM;
+		goto err;
+	}
+
+	ret = sysfs_create_file(android_gsensor_kobj, &dev_attr_vendor.attr);
+	if (ret) {
+		printk(KERN_ERR
+		       "AKM8976 gsensor_sysfs_init:"\
+		       "sysfs_create_group failed\n");
+		goto err4;
+	}
+
+	return 0 ;
+err4:
+	kobject_del(android_gsensor_kobj);
+err:
+	return ret ;
+}
 
 /* following are the sysfs callback functions */
 
@@ -109,7 +153,7 @@ static int AKI2C_RxData(char *rxData, int length)
 	};
 
 	if (i2c_transfer(this_client->adapter, msgs, 2) < 0) {
-		printk(KERN_ERR "AKI2C_RxData: transfer error\n");
+		printk(KERN_ERR "AKM8976 AKI2C_RxData: transfer error\n");
 		return -EIO;
 	} else
 		return 0;
@@ -128,7 +172,7 @@ static int AKI2C_TxData(char *txData, int length)
 	};
 
 	if (i2c_transfer(this_client->adapter, msg, 1) < 0) {
-		printk(KERN_ERR "AKI2C_TxData: transfer error\n");
+		printk(KERN_ERR "AKM8976 AKI2C_TxData: transfer error\n");
 		return -EIO;
 	} else
 		return 0;
@@ -272,14 +316,16 @@ static int AKECS_SetMode(char mode)
 		status = gpio_get_value(pdata->intr);
 		if (status) {
 			printk(KERN_INFO
-			       "AKECS_SetMode: dummy read to reset INT pin \n");
+			       "AKM8976 AKECS_SetMode:"\
+			       "dummy read to reset INT pin \n");
 			buffer[0] = AKECS_REG_TMPS;
 			ret = AKI2C_RxData(buffer, 1);
 			if (ret < 0)
 				return ret;
 			status = gpio_get_value(pdata->intr);
 			printk(KERN_INFO
-			       "AKECS_SetMode: after dummy read, status = %d \n",
+			       "AKM8976 AKECS_SetMode:"\
+			       "after dummy read, status = %d \n",
 			       status);
 		}
 	}
@@ -318,11 +364,13 @@ static int AKECS_TransRBuff(char *rbuf, int size)
 
 	if (!atomic_read(&data_ready)) {
 		if (!atomic_read(&suspend_flag)) {
-			printk(KERN_ERR "AKECS_TransRBUFF: Data not ready\n");
+			printk(KERN_ERR
+			       "AKM8976 AKECS_TransRBUFF: Data not ready\n");
 			failure_count++;
 			if (failure_count >= MAX_FAILURE_COUNT) {
 				printk(KERN_ERR
-				       "AKECS_TransRBUFF: successive %d failure.\n",
+				       "AKM8976 AKECS_TransRBUFF:"\
+				       "successive %d failure.\n",
 				       failure_count);
 				atomic_set(&open_flag, -1);
 				wake_up(&open_wq);
@@ -333,7 +381,7 @@ static int AKECS_TransRBuff(char *rbuf, int size)
 	}
 
 	if ((sense_data[0] & 0x02) == 0x02) {
-		printk(KERN_ERR "AKECS_TransRBUFF: Data error\n");
+		printk(KERN_ERR "AKM8976 AKECS_TransRBUFF: Data error\n");
 		return -1;
 	}
 
@@ -373,11 +421,14 @@ static void AKECS_Report_Value(short *rbuf)
 {
 	struct akm8976_data *data = i2c_get_clientdata(this_client);
 #if DEBUG
-	printk("AKECS_Report_Value: yaw = %d, pitch = %d, roll = %d\n", rbuf[0],
-	       rbuf[1], rbuf[2]);
-	printk("                    tmp = %d, m_stat= %d, g_stat=%d\n", rbuf[3],
-	       rbuf[4], rbuf[5]);
-	printk("          G_Sensor:   x = %d LSB, y = %d LSB, z = %d LSB\n",
+	printk(KERN_INFO
+	       "AKECS_Report_Value: yaw = %d, pitch = %d, roll = %d\n",
+	       rbuf[0], rbuf[1], rbuf[2]);
+	printk(KERN_INFO
+	       "                    tmp = %d, m_stat= %d, g_stat=%d\n",
+	       rbuf[3], rbuf[4], rbuf[5]);
+	printk(KERN_INFO
+	       "          G_Sensor:   x = %d LSB, y = %d LSB, z = %d LSB\n",
 	       rbuf[6], rbuf[7], rbuf[8]);
 #endif
 	/* Report magnetic sensor information */
@@ -414,7 +465,7 @@ static void AKECS_Report_StepCount(short count)
 {
 	struct akm8976_data *data = i2c_get_clientdata(this_client);
 #if DEBUG
-	printk("AKECS_Report_StepCount: %d \n", count);
+	printk(KERN_INFO"AKECS_Report_StepCount: %d \n", count);
 #endif
 
 	/* Report pedometer information */
@@ -757,7 +808,7 @@ akmd_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 static void akm_work_func(struct work_struct *work)
 {
 	if (AKECS_GetData() < 0)
-		printk(KERN_ERR "akm_work_func: Get data failed\n");
+		printk(KERN_ERR "AKM8976 akm_work_func: Get data failed\n");
 	enable_irq(this_client->irq);
 }
 
@@ -892,6 +943,7 @@ static int akm8976_probe(
 {
 	struct akm8976_data *akm;
 	int err;
+	char rxData[2];
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		err = -ENODEV;
@@ -908,6 +960,22 @@ static int akm8976_probe(
 	i2c_set_clientdata(client, akm);
 	akm8976_init_client(client);
 	this_client = client;
+
+	/* Set EEPROM access mode */
+	err = AKECS_StartE2PRead();
+	if (err < 0)
+		goto exit_input_dev_alloc_failed;
+	/* Read ETS from EEPROM */
+	rxData[0] = 0x42;
+	err = AKI2C_RxData(rxData, 1);
+	if (err < 0)
+		goto exit_input_dev_alloc_failed;
+	revision = (0x03 & (rxData[0] >> 6));
+
+	/* Set Power down mode */
+	err = AKECS_PowerDown();
+	if (err < 0)
+		goto exit_input_dev_alloc_failed;
 
 	akm->input_dev = input_allocate_device();
 
@@ -959,7 +1027,8 @@ static int akm8976_probe(
 
 	err = misc_register(&akmd_device);
 	if (err) {
-		printk(KERN_ERR "akm8976_probe: akmd_device register failed\n");
+		printk(KERN_ERR
+		       "akm8976_probe: akmd_device register failed\n");
 		goto exit_misc_device_register_failed;
 	}
 
@@ -980,6 +1049,8 @@ static int akm8976_probe(
 	err = device_create_file(&client->dev, &dev_attr_ms1);
 	err = device_create_file(&client->dev, &dev_attr_ms2);
 	err = device_create_file(&client->dev, &dev_attr_ms3);
+
+	gsensor_sysfs_init();
 
 	return 0;
 
