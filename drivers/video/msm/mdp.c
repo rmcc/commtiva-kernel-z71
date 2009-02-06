@@ -255,34 +255,39 @@ void mdp_dma(struct mdp_device *mdp_dev, uint32_t addr, uint32_t stride,
 }
 
 int get_img(struct mdp_img *img, struct fb_info *info,
-	    unsigned long *start, unsigned long *len)
+	    unsigned long *start, unsigned long *len,
+	    struct file** filep)
 {
-	int put_needed, ret = -1;
-	struct file *file = fget_light(img->memory_id, &put_needed);
+	int put_needed, ret = 0;
+	struct file *file;
+	unsigned long vstart;
 
+#ifdef CONFIG_ANDROID_PMEM
+	if (!get_pmem_file(img->memory_id, start, &vstart, len, filep))
+		return 0;
+#endif
+
+	file = fget_light(img->memory_id, &put_needed);
 	if (file == NULL)
 		return -1;
 
 	if (MAJOR(file->f_dentry->d_inode->i_rdev) == FB_MAJOR) {
 		*start = info->fix.smem_start;
 		*len = info->fix.smem_len;
-		ret = 0;
-		goto end;
-	}
-#ifdef CONFIG_ANDROID_PMEM
-	if (!get_pmem_fd(img->memory_id, start, len))
-		ret = 0;
-#endif
-end:
+	} else
+		ret = -1;
 	fput_light(file, put_needed);
+
 	return ret;
 }
 
-void put_img(struct mdp_blit_req *req)
+void put_img(struct file *src_file, struct file *dst_file)
 {
 #ifdef CONFIG_ANDROID_PMEM
-	put_pmem_fd(req->src.memory_id);
-	put_pmem_fd(req->dst.memory_id);
+	if (src_file)
+		put_pmem_file(src_file);
+	if (dst_file)
+		put_pmem_file(dst_file);
 #endif
 }
 
@@ -292,6 +297,7 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 	int ret;
 	unsigned long src_start = 0, src_len = 0, dst_start = 0, dst_len = 0;
 	struct mdp_info *mdp = container_of(mdp_dev, struct mdp_info, mdp_dev);
+	struct file *src_file = 0, *dst_file = 0;
 
 	/* WORKAROUND FOR HARDWARE BUG IN BG TILE FETCH */
 	if (unlikely(req->src_rect.h == 0 ||
@@ -305,16 +311,18 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 
 	/* do this first so that if this fails, the caller can always
 	 * safely call put_img */
-	if (unlikely(get_img(&req->src, fb, &src_start, &src_len))) {
+	if (unlikely(get_img(&req->src, fb, &src_start, &src_len, &src_file))) {
 		printk(KERN_ERR "mpd_ppp: could not retrieve src image from "
 				"memory\n");
 		return -EINVAL;
 	}
 
-	if (unlikely(get_img(&req->dst, fb, &dst_start, &dst_len))) {
+	if (unlikely(get_img(&req->dst, fb, &dst_start, &dst_len, &dst_file))) {
 		printk(KERN_ERR "mpd_ppp: could not retrieve dst image from "
 				"memory\n");
-		put_pmem_fd(req->src.memory_id);
+#ifdef CONFIG_ANDROID_PMEM
+		put_pmem_file(src_file);
+#endif
 		return -EINVAL;
 	}
 	mutex_lock(&mdp_mutex);
@@ -334,8 +342,9 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 		req->dst_rect.h = 16;
 		for (i = 0; i < tiles; i++) {
 			enable_mdp_irq(mdp, DL0_ROI_DONE);
-			ret = mdp_ppp_blit(mdp, req, src_start,
-					   src_len, dst_start, dst_len);
+			ret = mdp_ppp_blit(mdp, req, src_file, src_start,
+					   src_len, dst_file, dst_start,
+					   dst_len);
 			if (ret)
 				goto err_bad_blit;
 			ret = mdp_ppp_wait(mdp);
@@ -350,7 +359,8 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 		req->dst_rect.h = remainder;
 	}
 	enable_mdp_irq(mdp, DL0_ROI_DONE);
-	ret = mdp_ppp_blit(mdp, req, src_start, src_len, dst_start,
+	ret = mdp_ppp_blit(mdp, req, src_file, src_start, src_len, dst_file,
+			   dst_start,
 			   dst_len);
 	if (ret)
 		goto err_bad_blit;
@@ -358,13 +368,13 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 	if (ret)
 		goto err_wait_failed;
 end:
-	put_img(req);
+	put_img(src_file, dst_file);
 	mutex_unlock(&mdp_mutex);
 	return 0;
 err_bad_blit:
 	disable_mdp_irq(mdp, DL0_ROI_DONE);
 err_wait_failed:
-	put_img(req);
+	put_img(src_file, dst_file);
 	mutex_unlock(&mdp_mutex);
 	return ret;
 }

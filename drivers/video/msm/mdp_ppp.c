@@ -605,7 +605,8 @@ void put_img(struct mdp_blit_req *req)
 
 #endif
 
-static void flush_imgs(struct mdp_blit_req *req, struct mdp_regs *regs)
+static void flush_imgs(struct mdp_blit_req *req, struct mdp_regs *regs,
+		       struct file *src_file, struct file *dst_file)
 {
 #ifdef CONFIG_ANDROID_PMEM
 	uint32_t src0_len, src1_len, dst0_len, dst1_len;
@@ -613,18 +614,18 @@ static void flush_imgs(struct mdp_blit_req *req, struct mdp_regs *regs)
 	/* flush src images to memory before dma to mdp */
 	get_len(&req->src, &req->src_rect, regs->src_bpp, &src0_len,
 		&src1_len);
-	flush_pmem_fd(req->src.memory_id, req->src.offset, src0_len);
+	flush_pmem_file(src_file, req->src.offset, src0_len);
 	if (IS_PSEUDOPLNR(req->src.format))
-		flush_pmem_fd(req->src.memory_id, req->src.offset + src0_len,
-			      src1_len);
+		flush_pmem_file(src_file, req->src.offset + src0_len,
+				src1_len);
 
 	/* flush dst images */
 	get_len(&req->dst, &req->dst_rect, regs->dst_bpp, &dst0_len,
 		&dst1_len);
-	flush_pmem_fd(req->dst.memory_id, req->dst.offset, dst0_len);
+	flush_pmem_file(dst_file, req->dst.offset, dst0_len);
 	if (IS_PSEUDOPLNR(req->dst.format))
-		flush_pmem_fd(req->dst.memory_id, req->dst.offset + dst0_len,
-			      dst1_len);
+		flush_pmem_file(dst_file, req->dst.offset + dst0_len,
+				dst1_len);
 #endif
 }
 
@@ -649,7 +650,8 @@ static void get_chroma_addr(struct mdp_img *img, struct mdp_rect *rect,
 }
 
 static int send_blit(const struct mdp_info *mdp, struct mdp_blit_req *req,
-		     struct mdp_regs *regs)
+		     struct mdp_regs *regs, struct file *src_file,
+		     struct file *dst_file)
 {
 	mdp_writel(mdp, 1, 0x060);
 	mdp_writel(mdp, regs->src_rect, PPP_ADDR_SRC_ROI);
@@ -684,14 +686,14 @@ static int send_blit(const struct mdp_info *mdp, struct mdp_blit_req *req,
 		mdp_writel(mdp, pack_pattern[req->dst.format],
 			   PPP_ADDR_BG_PACK_PATTERN);
 	}
-	flush_imgs(req, regs);
+	flush_imgs(req, regs, src_file, dst_file);
 	mdp_writel(mdp, 0x1000, MDP_DISPLAY0_START);
 	return 0;
 }
 
 int mdp_ppp_blit(const struct mdp_info *mdp, struct mdp_blit_req *req,
-		 unsigned long src_start, unsigned long src_len,
-		 unsigned long dst_start, unsigned long dst_len)
+		 struct file *src_file, unsigned long src_start, unsigned long src_len,
+		 struct file *dst_file, unsigned long dst_start, unsigned long dst_len)
 {
 	struct mdp_regs regs = {0};
 
@@ -771,6 +773,6 @@ int mdp_ppp_blit(const struct mdp_info *mdp, struct mdp_blit_req *req,
 	if (get_edge_cond(req, &regs))
 		return -EINVAL;
 
-	send_blit(mdp, req, &regs);
+	send_blit(mdp, req, &regs, src_file, dst_file);
 	return 0;
 }

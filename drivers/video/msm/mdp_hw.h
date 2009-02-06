@@ -19,15 +19,16 @@
 #include <mach/msm_fb.h>
 
 struct mdp_info {
-        struct mdp_device mdp_dev;
-        char* __iomem base;
+	struct mdp_device mdp_dev;
+	char* __iomem base;
 	int irq;
 };
 struct mdp_blit_req;
 struct mdp_device;
 int mdp_ppp_blit(const struct mdp_info *mdp, struct mdp_blit_req *req,
-                 unsigned long src_start, unsigned long src_len,
-                 unsigned long dst_start, unsigned long dst_len);
+		 struct file *src_file, unsigned long src_start,
+		 unsigned long src_len, struct file *dst_file,
+		 unsigned long dst_start, unsigned long dst_len);
 #define mdp_writel(mdp, value, offset) writel(value, mdp->base + offset)
 #define mdp_readl(mdp, offset) readl(mdp->base + offset)
 
