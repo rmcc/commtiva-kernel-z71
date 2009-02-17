@@ -284,6 +284,12 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		timeout = wait_for_completion_timeout(&complete, HZ);
 		if (!timeout) {
 			dev_err(dev->dev, "Transaction timed out\n");
+			writel(I2C_WRITE_DATA_LAST_BYTE,
+				dev->base + I2C_WRITE_DATA);
+			msleep(100);
+			/* FLUSH */
+			readl(dev->base + I2C_READ_DATA);
+			readl(dev->base + I2C_STATUS);
 			ret = -ETIMEDOUT;
 			goto out_err;
 		}
