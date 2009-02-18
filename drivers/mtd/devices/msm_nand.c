@@ -40,7 +40,7 @@
 
 #define VERBOSE 0
 
-static struct nand_hw_info * nand_info;
+static struct nand_hw_info *nand_info;
 struct nand_hw_info {
 	uint32_t flash_id;
 	uint8_t maker_id;
@@ -620,8 +620,10 @@ static int msm_nand_read_oob(struct mtd_info *mtd, loff_t from,
 		}
 		if (pageerr) {
 			for (n = start_sector; n < 4; n++) {
-				if (dma_buffer->data.result[n].buffer_status & 0x8) {
-					mtd->ecc_stats.failed++; /* not thread safe */
+				if (dma_buffer->data.result[n].buffer_status &
+								0x8) {
+					/* not thread safe */
+					mtd->ecc_stats.failed++;
 					pageerr = -EBADMSG;
 					break;
 				}
@@ -633,7 +635,8 @@ static int msm_nand_read_oob(struct mtd_info *mtd, loff_t from,
 					result[n].buffer_status & 0x7;
 				if (ecc_errors) {
 					total_ecc_errors += ecc_errors;
-					mtd->ecc_stats.corrected += ecc_errors; /* not thread safe */
+					/* not thread safe */
+					mtd->ecc_stats.corrected += ecc_errors;
 					if (ecc_errors > 1)
 						pageerr = -EUCLEAN;
 				}
@@ -1129,20 +1132,28 @@ static void msm_nand_resume(struct mtd_info *mtd)
 /*
  * Export two attributes for HTC SSD HW INFO tool
  */
-static int param_get_vendor_name(char *buffer, struct kernel_param *kp) {
+static int param_get_vendor_name(char *buffer, struct kernel_param *kp)
+{
 	return sprintf(buffer, "%s", nand_info->maker_name);
 }
 module_param_call(vendor, NULL, param_get_vendor_name, NULL, S_IRUGO);
 
-static int param_get_nand_info(char *buffer, struct kernel_param *kp) {
+static int param_get_nand_info(char *buffer, struct kernel_param *kp)
+{
 	int result = 0;
 	result += sprintf(buffer, "<<  NAND INFO  >>\n");
-	result += sprintf(buffer + result, "flash id\t =%X\n", nand_info->flash_id);
-	result += sprintf(buffer + result, "vendor\t\t =%s\n", nand_info->maker_name);
-	result += sprintf(buffer + result, "width\t\t =%d bits\n", nand_info->width);
-	result += sprintf(buffer + result, "size\t\t =%d MB\n", nand_info->size>>20);
-	result += sprintf(buffer + result, "block count\t =%d\n", nand_info->block_count);
-	result += sprintf(buffer + result, "page count\t =%d", nand_info->page_count);
+	result += sprintf(buffer + result, "flash id\t =%X\n",
+			  nand_info->flash_id);
+	result += sprintf(buffer + result, "vendor\t\t =%s\n",
+			  nand_info->maker_name);
+	result += sprintf(buffer + result, "width\t\t =%d bits\n",
+			  nand_info->width);
+	result += sprintf(buffer + result, "size\t\t =%d MB\n",
+			  nand_info->size>>20);
+	result += sprintf(buffer + result, "block count\t =%d\n",
+			  nand_info->block_count);
+	result += sprintf(buffer + result, "page count\t =%d",
+			  nand_info->page_count);
 	return result;
 }
 module_param_call(info, NULL, param_get_nand_info, NULL, S_IRUGO);
@@ -1207,10 +1218,10 @@ int msm_nand_scan(struct mtd_info *mtd, int maxchips)
 	else if (flash_id == 0x5510bcad) 	/* 4Gbit Hynix chip */
 		mtd->size = 512 << 20;		/* * num_chips */
 	else if ((flash_id & 0xffff) == 0xbcec)	/* 4Gbit Samsung chip */
-		mtd->size = 512 << 20;		/* * num_chips */	
+		mtd->size = 512 << 20;		/* * num_chips */
 	else if (flash_id == 0x5590bc2c)	/* 4Gbit Micron chip */
 		mtd->size = 512 << 20;		/* * num_chips */
-	
+
 	pr_info("flash_id: %x size %llx\n", flash_id, mtd->size);
 
 	mtd->writesize = 2048;
@@ -1239,30 +1250,31 @@ int msm_nand_scan(struct mtd_info *mtd, int maxchips)
 	mtd->block_markbad = msm_nand_block_markbad;
 	mtd->owner = THIS_MODULE;
 
-        /* Information provides to HTC SSD HW Info tool */
+	/* Information provides to HTC SSD HW Info tool */
 	nand_info = &chip->dev_info;
 	nand_info->flash_id = flash_id;
 	nand_info->maker_id = (flash_id & 0xff);
-	switch(nand_info->maker_id) {
-		case 0xec:
-			strcpy(nand_info->maker_name, "Samsung");
-			break;
-		case 0xad:
-			strcpy(nand_info->maker_name, "Hynix");
-			break;
-		case 0x2c:
-			strcpy(nand_info->maker_name, "Micron");
-			break;
-		default:
-			strcpy(nand_info->maker_name, "Unknown");
-			break;
+	switch (nand_info->maker_id) {
+	case 0xec:
+		strcpy(nand_info->maker_name, "Samsung");
+		break;
+	case 0xad:
+		strcpy(nand_info->maker_name, "Hynix");
+		break;
+	case 0x2c:
+		strcpy(nand_info->maker_name, "Micron");
+		break;
+	default:
+		strcpy(nand_info->maker_name, "Unknown");
+		break;
 	}
 	nand_info->width = ((chip->CFG1 & CFG1_WIDE_FLASH) ? 16 : 8);
 	nand_info->size = mtd->size;
 	nand_info->page_size = 2048;
 	nand_info->page_count = 64;
-	nand_info->block_count = mtd->size/(nand_info->page_size * nand_info->page_count);
-	
+	nand_info->block_count = mtd->size/
+				(nand_info->page_size * nand_info->page_count);
+
 	/* Unlock whole block */
 	/* msm_nand_unlock_all(mtd); */
 
