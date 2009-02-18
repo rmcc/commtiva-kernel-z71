@@ -41,7 +41,7 @@
 #include <asm/mach/mmc.h>
 #include <mach/msm_iomap.h>
 #include <mach/dma.h>
-#include <mach/trout_pwrsink.h>
+#include <mach/htc_pwrsink.h>
 
 
 #include "msm_sdcc.h"
@@ -790,13 +790,13 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 	switch (ios->power_mode) {
 	case MMC_POWER_OFF:
-		trout_pwrsink_set(PWRSINK_SDCARD, 0);
+		htc_pwrsink_set(PWRSINK_SDCARD, 0);
 		break;
 	case MMC_POWER_UP:
 		pwr |= MCI_PWR_UP;
 		break;
 	case MMC_POWER_ON:
-		trout_pwrsink_set(PWRSINK_SDCARD, 100);
+		htc_pwrsink_set(PWRSINK_SDCARD, 100);
 		pwr |= MCI_PWR_ON;
 		break;
 	}
