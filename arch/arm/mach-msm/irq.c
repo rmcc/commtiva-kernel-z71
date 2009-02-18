@@ -484,6 +484,18 @@ void msm_fiq_select(int irq)
 	local_irq_restore(flags);
 }
 
+void msm_fiq_unselect(int irq)
+{
+	void __iomem *reg = VIC_INT_SELECT0 + ((irq & 32) ? 4 : 0);
+	unsigned index = (irq >> 5) & 1;
+	uint32_t mask = 1UL << (irq & 31);
+	unsigned long flags;
+
+	local_irq_save(flags);
+	msm_irq_shadow_reg[index].int_select &= (!mask);
+	writel(msm_irq_shadow_reg[index].int_select, reg);
+	local_irq_restore(flags);
+}
 /* set_fiq_handler originally from arch/arm/kernel/fiq.c */
 static void set_fiq_handler(void *start, unsigned int length)
 {

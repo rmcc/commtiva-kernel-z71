@@ -18,6 +18,7 @@
 
 /* cause an interrupt to be an FIQ instead of a regular IRQ */
 void msm_fiq_select(int number);
+void msm_fiq_unselect(int number);
 
 /* enable/disable an interrupt that is an FIQ (not safe from FIQ context) */
 void msm_fiq_enable(int number);
