@@ -331,8 +331,7 @@ int mdp_blit(struct mdp_device *mdp_dev, struct fb_info *fb,
 	req->transp_mask = MDP_TRANSP_NOP;
 	if (unlikely((req->transp_mask != MDP_TRANSP_NOP ||
 		      req->alpha != MDP_ALPHA_NOP ||
-		      req->src.format == MDP_ARGB_8888 ||
-		      req->src.format == MDP_RGBA_8888) &&
+		      HAS_ALPHA(req->src.format)) &&
 		     (req->flags & MDP_ROT_90 &&
 		      req->dst_rect.w <= 16 && req->dst_rect.h >= 16))) {
 		int i;
