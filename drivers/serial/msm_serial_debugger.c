@@ -36,6 +36,13 @@ static unsigned int debug_port_base;
 static int debug_signal_irq;
 static struct clk *debug_clk;
 static int debug_enable;
+static int debugger_enable;
+static struct {
+	unsigned int	base;
+	int		irq;
+	struct device	*clk_device;
+	int		signal_irq;
+} init_data;
 
 static inline void msm_write(unsigned int val, unsigned int off)
 {
@@ -345,6 +352,10 @@ void msm_serial_debug_init(unsigned int base, int irq,
 	if (!port)
 		return;
 
+	init_data.base = base;
+	init_data.irq = irq;
+	init_data.clk_device = clk_device;
+	init_data.signal_irq = signal_irq;
 	debug_port_base = (unsigned int) port;
 	debug_signal_irq = signal_irq;
 	debug_port_init();
@@ -364,4 +375,38 @@ void msm_serial_debug_init(unsigned int base, int irq,
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER_CONSOLE)
 	register_console(&msm_serial_debug_console);
 #endif
+	debugger_enable = 1;
 }
+static int msm_serial_debug_remove(const char *val, struct kernel_param *kp)
+{
+	int ret;
+	static int pre_stat = 1;
+	ret = param_set_bool(val, kp);
+	if (ret)
+		return ret;
+
+	if (pre_stat == *(int *)kp->arg)
+		return 0;
+
+	pre_stat = *(int *)kp->arg;
+
+	if (*(int *)kp->arg) {
+		msm_serial_debug_init(init_data.base, init_data.irq,
+				init_data.clk_device, init_data.signal_irq);
+		printk(KERN_INFO "enable FIQ serial debugger\n");
+		return 0;
+	}
+
+#if defined(CONFIG_MSM_SERIAL_DEBUGGER_CONSOLE)
+	unregister_console(&msm_serial_debug_console);
+#endif
+	free_irq(init_data.signal_irq, 0);
+	msm_fiq_set_handler(NULL, 0);
+	msm_fiq_disable(init_data.irq);
+	msm_fiq_unselect(init_data.irq);
+	clk_disable(debug_clk);
+	printk(KERN_INFO "disable FIQ serial debugger\n");
+	return 0;
+}
+module_param_call(enable, msm_serial_debug_remove, param_get_bool,
+		&debugger_enable, S_IWUSR | S_IRUGO);
