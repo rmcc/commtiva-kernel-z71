@@ -28,12 +28,6 @@
 #include <linux/akm8976.h>
 #include <linux/sysdev.h>
 #include <linux/android_pmem.h>
-#ifdef CONFIG_USB_FUNCTION
-#include <linux/usb/mass_storage_function.h>
-#endif
-#ifdef CONFIG_USB_ANDROID
-#include <linux/usb/android.h>
-#endif
 
 #include <linux/delay.h>
 
@@ -64,7 +58,7 @@
 #include "gpio_chip.h"
 
 #include <mach/board.h>
-#include <mach/msm_hsusb.h>
+#include <mach/board_htc.h>
 #include <mach/msm_serial_hs.h>
 #include <mach/htc_pwrsink.h>
 #ifdef CONFIG_HTC_HEADSET
@@ -479,9 +473,6 @@ static struct platform_device trout_h2w = {
 };
 #endif
 
-/* adjust eye diagram, disable vbusvalid interrupts */
-static int trout_phy_init_seq[] = { 0x40, 0x31, 0x1D, 0x0D, 0x1D, 0x10, -1 };
-
 static void trout_phy_reset(void)
 {
 	gpio_set_value(TROUT_GPIO_USB_PHY_RST_N, 0);
@@ -489,83 +480,6 @@ static void trout_phy_reset(void)
 	gpio_set_value(TROUT_GPIO_USB_PHY_RST_N, 1);
 	mdelay(10);
 }
-
-#ifdef CONFIG_USB_FUNCTION
-static char *trout_usb_functions[] = {
-#if defined(CONFIG_USB_FUNCTION_MASS_STORAGE) || defined(CONFIG_USB_FUNCTION_UMS)
-	"usb_mass_storage",
-#endif
-#ifdef CONFIG_USB_FUNCTION_ADB
-	"adb",
-#endif
-};
-
-static struct msm_hsusb_product trout_usb_products[] = {
-	{
-		.product_id     = 0x0c01,
-		.functions      = 0x00000001, /* "usb_mass_storage" only */
-	},
-	{
-		.product_id     = 0x0c02,
-		.functions      = 0x00000003, /* "usb_mass_storage" and "adb" */
-	},
-};
-#endif
-
-static struct msm_hsusb_platform_data msm_hsusb_pdata = {
-	.phy_reset	= trout_phy_reset,
-	.phy_init_seq	= trout_phy_init_seq,
-#ifdef CONFIG_USB_FUNCTION
-	.vendor_id	= 0x0bb4,
-	.product_id	= 0x0c02,
-	.version	= 0x0100,
-	.product_name	= "Android Phone",
-	.manufacturer_name = "HTC",
-
-	.functions = trout_usb_functions,
-	.num_functions = ARRAY_SIZE(trout_usb_functions),
-	.products  = trout_usb_products,
-	.num_products = ARRAY_SIZE(trout_usb_products),
-#endif
-};
-
-#ifdef CONFIG_USB_FUNCTION_MASS_STORAGE
-static struct usb_mass_storage_platform_data mass_storage_pdata = {
-	.nluns		= 1,
-	.buf_size	= 16384,
-	.vendor		= "HTC     ",
-	.product	= "Android Phone   ",
-	.release	= 0x0100,
-};
-
-static struct platform_device usb_mass_storage_device = {
-	.name	= "usb_mass_storage",
-	.id		= -1,
-	.dev		= {
-		.platform_data = &mass_storage_pdata,
-	},
-};
-#endif
-
-#ifdef CONFIG_USB_ANDROID
-static struct android_usb_platform_data android_usb_pdata = {
-	.vendor_id	= 0x0bb4,
-	.product_id	= 0x0c01,
-	.adb_product_id	= 0x0c02,
-	.version	= 0x0100,
-	.product_name	= "Android Phone",
-	.manufacturer_name = "HTC",
-	.nluns = 1,
-};
-
-static struct platform_device android_usb_device = {
-	.name	= "android_usb",
-	.id		= -1,
-	.dev		= {
-		.platform_data = &android_usb_pdata,
-	},
-};
-#endif
 
 static struct resource trout_ram_console_resource[] = {
 	{
@@ -752,13 +666,6 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SERIAL_MSM_HS
 	&msm_device_uart_dm1,
 #endif
-	&msm_device_hsusb,
-#ifdef CONFIG_USB_FUNCTION_MASS_STORAGE
-	&usb_mass_storage_device,
-#endif
-#ifdef CONFIG_USB_ANDROID
-	&android_usb_device,
-#endif
 	&trout_nav_device,
 	&trout_reset_keys_device,
 	&android_leds,
@@ -795,19 +702,6 @@ static void __init trout_init_irq(void)
 static uint opt_disable_uart3;
 
 module_param_named(disable_uart3, opt_disable_uart3, uint, 0);
-
-static int __init trout_serialno_setup(char *str)
-{
-#ifdef CONFIG_USB_FUNCTION
-	msm_hsusb_pdata.serial_number = str;
-#endif
-#ifdef CONFIG_USB_ANDROID
-	android_usb_pdata.serial_number = str;
-#endif
-	return 1;
-}
-
-__setup("androidboot.serialno=", trout_serialno_setup);
 
 static void trout_reset(void)
 {
@@ -948,11 +842,10 @@ static void __init trout_init(void)
 		trout_y_axis.info.gpio = trout_4_y_axis_gpios;
 	}
 
-	msm_device_hsusb.dev.platform_data = &msm_hsusb_pdata;
-
 #ifdef CONFIG_SERIAL_MSM_HS
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 #endif
+	msm_add_usb_devices(trout_phy_reset);
 
 	rc = trout_init_mmc(system_rev);
 	if (rc)
