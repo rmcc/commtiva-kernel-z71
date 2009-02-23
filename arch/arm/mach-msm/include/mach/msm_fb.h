@@ -39,6 +39,8 @@ enum {
 	MSM_EBI2_INTERFACE,
 };
 
+#define MSMFB_CAP_PARTIAL_UPDATES	(1 << 0)
+
 struct msm_panel_data {
 	/* turns off the fb memory */
 	int (*suspend)(struct msm_panel_data *);
@@ -55,6 +57,9 @@ struct msm_panel_data {
 	unsigned interface_type;
 	/* data to be passed to the fb driver */
 	struct msm_fb_data *fb_data;
+
+	/* capabilities supported by the panel */
+	uint32_t caps;
 };
 
 struct msm_mddi_client_data {

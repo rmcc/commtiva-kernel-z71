@@ -59,6 +59,7 @@ static int mddi_dummy_probe(struct platform_device *pdev)
 	panel->panel_data.resume = mddi_dummy_resume;
 	panel->panel_data.blank = mddi_dummy_blank;
 	panel->panel_data.unblank = mddi_dummy_unblank;
+	panel->panel_data.caps = MSMFB_CAP_PARTIAL_UPDATES;
 	panel->pdev.name = "msm_panel";
 	panel->pdev.id = pdev->id;
 	platform_device_add_resources(&panel->pdev,

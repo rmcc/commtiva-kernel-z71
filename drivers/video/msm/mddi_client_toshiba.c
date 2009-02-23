@@ -245,6 +245,7 @@ static int mddi_toshiba_probe(struct platform_device *pdev)
 	panel->panel_data.blank = toshiba_blank;
 	panel->panel_data.unblank = toshiba_unblank;
 	panel->panel_data.fb_data =  &bridge_data->fb_data;
+	panel->panel_data.caps = MSMFB_CAP_PARTIAL_UPDATES;
 
 	panel->pdev.name = "msm_panel";
 	panel->pdev.id = pdev->id;

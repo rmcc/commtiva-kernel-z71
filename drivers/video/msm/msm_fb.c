@@ -447,8 +447,12 @@ static int msmfb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 
 int msmfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 {
+	struct msmfb_info *msmfb = info->par;
+	struct msm_panel_data *panel = msmfb->panel;
+
 	/* "UPDT" */
-	if (var->reserved[0] == 0x54445055) {
+	if ((panel->caps & MSMFB_CAP_PARTIAL_UPDATES) &&
+	    (var->reserved[0] == 0x54445055)) {
 #if 0
 		printk(KERN_INFO "pan frame %d-%d, rect %d %d %d %d\n",
 		       msmfb->frame_requested, msmfb->frame_done,
@@ -462,7 +466,7 @@ int msmfb_pan_display(struct fb_var_screeninfo *var, struct fb_info *info)
 				 var->reserved[2] >> 16, var->yoffset, 1);
 	} else {
 		msmfb_pan_update(info, 0, 0, info->var.xres, info->var.yres,
-		var->yoffset, 1);
+				 var->yoffset, 1);
 	}
 	return 0;
 }
@@ -629,10 +633,13 @@ static void setup_fb_info(struct msmfb_info *msmfb)
 	fb_info->var.accel_flags = 0;
 
 	fb_info->var.yoffset = 0;
-	fb_info->var.reserved[0] = 0x54445055;
-	fb_info->var.reserved[1] = 0;
-	fb_info->var.reserved[2] = (uint16_t)msmfb->xres |
-				   ((uint32_t)msmfb->yres << 16);
+
+	if (msmfb->panel->caps & MSMFB_CAP_PARTIAL_UPDATES) {
+		fb_info->var.reserved[0] = 0x54445055;
+		fb_info->var.reserved[1] = 0;
+		fb_info->var.reserved[2] = (uint16_t)msmfb->xres |
+					   ((uint32_t)msmfb->yres << 16);
+	}
 
 	fb_info->var.red.offset = 11;
 	fb_info->var.red.length = 5;
