@@ -39,35 +39,78 @@ struct rmnet_private
 	const char *chname;
 #ifdef CONFIG_MSM_RMNET_DEBUG
 	ktime_t last_packet;
-	unsigned long rmnet_wakeups;
+	unsigned long wakeups_xmit;
+	unsigned long wakeups_rcv;
 	unsigned long timeout_us;
 #endif
 };
 
-static int count_this_packet(void *_hdr, int len, struct rmnet_private *p)
+static int count_this_packet(void *_hdr, int len)
 {
 	struct ethhdr *hdr = _hdr;
-#ifdef CONFIG_MSM_RMNET_DEBUG
-	ktime_t now;
-#endif
 
 	if (len >= ETH_HLEN && hdr->h_proto == htons(ETH_P_ARP))
 		return 0;
 
+	return 1;
+}
+
 #ifdef CONFIG_MSM_RMNET_DEBUG
-	if (p->timeout_us == 0)
-		return 1;
+/* Returns 1 if packet caused rmnet to wakeup, 0 otherwise. */
+static int rmnet_cause_wakeup(struct rmnet_private *p) {
+	int ret = 0;
+	ktime_t now;
+	if (p->timeout_us == 0) /* Check if disabled */
+		return 0;
 
 	/* Use real (wall) time. */
 	now = ktime_get_real();
 
 	if (ktime_us_delta(now, p->last_packet) > p->timeout_us) {
-		p->rmnet_wakeups++;
+		ret = 1;
 	}
 	p->last_packet = now;
-#endif
-	return 1;
+	return ret;
 }
+
+static ssize_t wakeups_xmit_show(struct device *d,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct rmnet_private *p = netdev_priv(to_net_dev(d));
+	return sprintf(buf, "%lu\n", p->wakeups_xmit);
+}
+
+DEVICE_ATTR(wakeups_xmit, 0444, wakeups_xmit_show, NULL);
+
+static ssize_t wakeups_rcv_show(struct device *d, struct device_attribute *attr,
+		char *buf)
+{
+	struct rmnet_private *p = netdev_priv(to_net_dev(d));
+	return sprintf(buf, "%lu\n", p->wakeups_rcv);
+}
+
+DEVICE_ATTR(wakeups_rcv, 0444, wakeups_rcv_show, NULL);
+
+/* Set timeout in us. */
+static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
+		const char *buf, size_t n)
+{
+	struct rmnet_private *p = netdev_priv(to_net_dev(d));
+	p->timeout_us = simple_strtoul(buf, NULL, 10);
+	return n;
+}
+
+static ssize_t timeout_show(struct device *d, struct device_attribute *attr,
+		const char *buf, size_t n)
+{
+	struct rmnet_private *p = netdev_priv(to_net_dev(d));
+	p = netdev_priv(to_net_dev(d));
+	return sprintf(buf, "%lu\n", p->timeout_us);
+}
+
+DEVICE_ATTR(timeout, 0664, timeout_show, timeout_store);
+#endif
 
 /* Called in soft-irq context */
 static void smd_net_data_handler(unsigned long arg)
@@ -100,7 +143,11 @@ static void smd_net_data_handler(unsigned long arg)
 					dev_kfree_skb_irq(skb);
 				} else {
 					skb->protocol = eth_type_trans(skb, dev);
-					if (count_this_packet(ptr, skb->len, p)) {
+					if (count_this_packet(ptr, skb->len)) {
+#ifdef CONFIG_MSM_RMNET_DEBUG
+						p->wakeups_rcv +=
+							rmnet_cause_wakeup(p);
+#endif
 						p->stats.rx_packets++;
 						p->stats.rx_bytes += skb->len;
 					}
@@ -158,9 +205,12 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	if (smd_write(ch, skb->data, skb->len) != skb->len) {
 		pr_err("rmnet fifo full, dropping packet\n");
 	} else {
-		if (count_this_packet(skb->data, skb->len, p)) {
+		if (count_this_packet(skb->data, skb->len)) {
 			p->stats.tx_packets++;
 			p->stats.tx_bytes += skb->len;
+#ifdef CONFIG_MSM_RMNET_DEBUG
+			p->wakeups_xmit += rmnet_cause_wakeup(p);
+#endif
 		}
 	}
 
@@ -208,36 +258,6 @@ static const char *ch_name[3] = {
 	"SMD_DATA7",
 };
 
-#ifdef CONFIG_MSM_RMNET_DEBUG
-static ssize_t wakeups_show(struct device *d, struct device_attribute *attr,
-		char *buf)
-{
-	struct rmnet_private *p = netdev_priv(to_net_dev(d));
-	return sprintf(buf, "%lu\n", p->rmnet_wakeups);
-}
-
-DEVICE_ATTR(wakeups, 0444, wakeups_show, NULL);
-
-/* Set timeout in us. */
-static ssize_t timeout_store(struct device *d, struct device_attribute *attr,
-		const char *buf, size_t n)
-{
-	struct rmnet_private *p = netdev_priv(to_net_dev(d));
-	p->timeout_us = simple_strtoul(buf, NULL, 10);
-	return n;
-}
-
-static ssize_t timeout_show(struct device *d, struct device_attribute *attr,
-		const char *buf, size_t n)
-{
-	struct rmnet_private *p = netdev_priv(to_net_dev(d));
-	p = netdev_priv(to_net_dev(d));
-	return sprintf(buf, "%lu\n", p->timeout_us);
-}
-
-DEVICE_ATTR(timeout, 0664, timeout_show, timeout_store);
-#endif
-
 static int __init rmnet_init(void)
 {
 	int ret;
@@ -257,7 +277,8 @@ static int __init rmnet_init(void)
 		p = netdev_priv(dev);
 		p->chname = ch_name[n];
 #ifdef CONFIG_MSM_RMNET_DEBUG
-		p->timeout_us = p->rmnet_wakeups = 0;
+		p->timeout_us = 0;
+		p->wakeups_xmit = p->wakeups_rcv = 0;
 #endif
 
 		ret = register_netdev(dev);
@@ -268,7 +289,8 @@ static int __init rmnet_init(void)
 
 #ifdef CONFIG_MSM_RMNET_DEBUG
 		device_create_file(d, &dev_attr_timeout);
-		device_create_file(d, &dev_attr_wakeups);
+		device_create_file(d, &dev_attr_wakeups_xmit);
+		device_create_file(d, &dev_attr_wakeups_rcv);
 #endif
 	}
 	return 0;
