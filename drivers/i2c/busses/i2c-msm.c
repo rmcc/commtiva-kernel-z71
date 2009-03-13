@@ -66,9 +66,10 @@ struct msm_i2c_dev {
 	spinlock_t          lock;
 
 	struct i2c_msg      *msg;
+	int                 rem;
 	int                 pos;
 	int                 cnt;
-	int                 err;
+	int                 ret;
 	int                 write_last_done;
 	int                 flush_cnt;
 	void                *complete;
@@ -101,34 +102,25 @@ dump_status(uint32_t status)
 }
 #endif
 
-static irqreturn_t
-msm_i2c_interrupt(int irq, void *devid)
+static bool msm_i2c_fill_write_buffer(struct msm_i2c_dev *dev)
 {
-	struct msm_i2c_dev *dev = devid;
-	uint32_t status = readl(dev->base + I2C_STATUS);
-	int err = 0;
-
-#if DEBUG
-	dump_status(status);
-#endif
-
-	spin_lock(&dev->lock);
-	if (!dev->msg) {
-		printk(KERN_ERR "%s: IRQ but nothing to do!\n", __func__);
-		spin_unlock(&dev->lock);
-		return IRQ_HANDLED;
-	}
-
-	if (status & I2C_STATUS_ERROR_MASK) {
-		err = -EIO;
-		goto out_err;
+	uint16_t val;
+	if (dev->pos < 0) {
+		val = I2C_WRITE_DATA_ADDR_BYTE | dev->msg->addr << 1;
+		if (dev->msg->flags & I2C_M_RD)
+			val |= 1;
+		if (dev->rem == 1 && dev->msg->len == 0)
+			val |= I2C_WRITE_DATA_LAST_BYTE;
+		writel(val, dev->base + I2C_WRITE_DATA);
+		dev->pos++;
+		return true;
 	}
 
 	if (dev->msg->flags & I2C_M_RD) {
-		if (!(status & I2C_STATUS_WR_BUFFER_FULL) &&
-		    dev->pos == 0 && dev->cnt == 1 && !dev->write_last_done) {
-			writel(I2C_WRITE_DATA_LAST_BYTE,
-				dev->base + I2C_WRITE_DATA);
+		if (dev->pos == 0 && dev->cnt == 1 && !dev->write_last_done) {
+			uint32_t status;
+			val = I2C_WRITE_DATA_LAST_BYTE;
+			writel(val, dev->base + I2C_WRITE_DATA);
 			dev->write_last_done = 1;
 			status = readl(dev->base + I2C_STATUS);
 			if (status & I2C_STATUS_RD_BUFFER_FULL) {
@@ -136,78 +128,94 @@ msm_i2c_interrupt(int irq, void *devid)
 				dev_err(dev->dev,
 					"Did not stop read in time\n");
 			}
+			return true;
 		}
-		if (status & I2C_STATUS_RD_BUFFER_FULL) {
-
-			/*
-			 * Theres something in the FIFO.
-			 * Are we expecting data or flush crap?
-			 */
-			if (dev->cnt) { /* DATA */
-				uint8_t *data = &dev->msg->buf[dev->pos];
-
-				if (dev->cnt == 2)
-					writel(I2C_WRITE_DATA_LAST_BYTE,
-					       dev->base + I2C_WRITE_DATA);
-
-				*data = readl(dev->base + I2C_READ_DATA);
-				dev->cnt--;
-				dev->pos++;
-				if (!dev->cnt)
-					goto out_complete;
-			} else { /* FLUSH */
-				readl(dev->base + I2C_READ_DATA);
-				dev->flush_cnt++;
-			}
-		}
-	} else {
-		uint16_t data;
-
-		if (status & I2C_STATUS_WR_BUFFER_FULL) {
-			dev_err(dev->dev,
-				"Write buffer full in ISR on write?\n");
-			err = -EIO;
-			goto out_err;
-		}
-
-		if (dev->cnt) {
-			/* Ready to take a byte */
-			data = dev->msg->buf[dev->pos];
-			if (dev->cnt == 1)
-				data |= I2C_WRITE_DATA_LAST_BYTE;
-
-			writel(data, dev->base + I2C_WRITE_DATA);
-			dev->pos++;
-			dev->cnt--;
-		} else
-			goto out_complete;
+		return false;
 	}
 
-	spin_unlock(&dev->lock);
-	return IRQ_HANDLED;
+	if (!dev->cnt)
+		return false;
 
- out_err:
-	dev->err = err;
- out_complete:
-	complete(dev->complete);
-	spin_unlock(&dev->lock);
-	return IRQ_HANDLED;
+	/* Ready to take a byte */
+	val = dev->msg->buf[dev->pos];
+	if (dev->cnt == 1)
+		val |= I2C_WRITE_DATA_LAST_BYTE;
+
+	writel(val, dev->base + I2C_WRITE_DATA);
+	dev->pos++;
+	dev->cnt--;
+	return true;
 }
 
-static int
-msm_i2c_poll_writeready(struct msm_i2c_dev *dev)
+static void msm_i2c_read_buffer(struct msm_i2c_dev *dev)
 {
-	uint32_t retries = 0;
-
-	while (retries != 2000) {
-		uint32_t status = readl(dev->base + I2C_STATUS);
-
-		if (!(status & I2C_STATUS_WR_BUFFER_FULL))
-			return 0;
-		if (retries++ > 1000)
-			msleep(1);
+	/*
+	 * Theres something in the FIFO.
+	 * Are we expecting data or flush crap?
+	 */
+	if ((dev->msg->flags & I2C_M_RD) && dev->pos >= 0 && dev->cnt) {
+		if (dev->cnt == 2)
+			writel(I2C_WRITE_DATA_LAST_BYTE,
+			       dev->base + I2C_WRITE_DATA);
+		dev->msg->buf[dev->pos] = readl(dev->base + I2C_READ_DATA);
+		dev->cnt--;
+		dev->pos++;
+	} else { /* FLUSH */
+		readl(dev->base + I2C_READ_DATA);
+		dev->flush_cnt++;
 	}
-	return -ETIMEDOUT;
+}
+
+static void msm_i2c_interrupt_locked(struct msm_i2c_dev *dev)
+{
+	uint32_t status	= readl(dev->base + I2C_STATUS);
+	bool not_done = true;
+
+#if DEBUG
+	dump_status(status);
+#endif
+	if (!dev->msg) {
+		dev_err(dev->dev,
+			"IRQ but nothing to do!, status %x\n", status);
+		return;
+	}
+	if (status & I2C_STATUS_ERROR_MASK)
+		goto out_err;
+
+	if (!(status & I2C_STATUS_WR_BUFFER_FULL))
+		not_done = msm_i2c_fill_write_buffer(dev);
+	if (status & I2C_STATUS_RD_BUFFER_FULL)
+		msm_i2c_read_buffer(dev);
+
+	if (dev->pos >= 0 && dev->cnt == 0) {
+		if (dev->rem > 1) {
+			dev->rem--;
+			dev->msg++;
+			dev->pos = -1;
+			dev->cnt = dev->msg->len;
+			dev->write_last_done = 0;
+		} else if (!not_done)
+			goto out_complete;
+	}
+	return;
+
+out_err:
+	dev_err(dev->dev, "error, status %x\n", status);
+	dev->ret = -EIO;
+out_complete:
+	complete(dev->complete);
+}
+
+static irqreturn_t
+msm_i2c_interrupt(int irq, void *devid)
+{
+	struct msm_i2c_dev *dev = devid;
+
+	spin_lock(&dev->lock);
+	msm_i2c_interrupt_locked(dev);
+	spin_unlock(&dev->lock);
+
+	return IRQ_HANDLED;
 }
 
 static int
@@ -277,105 +285,72 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	DECLARE_COMPLETION_ONSTACK(complete);
 	struct msm_i2c_dev *dev = i2c_get_adapdata(adap);
 	int ret;
-	int rem = num;
-	uint16_t addr;
 	long timeout;
 	unsigned long flags;
 
-	while (rem) {
-		addr = msgs->addr << 1;
-		if (msgs->flags & I2C_M_RD)
-			addr |= 1;
-
-		ret = msm_i2c_poll_notbusy(dev);
-		if (ret) {
-			dev_err(dev->dev, "Error waiting for notbusy\n");
-			goto out_err;
-		}
-
-		if (rem == 1 && msgs->len == 0)
-			addr |= I2C_WRITE_DATA_LAST_BYTE;
-
-		/* Wait for WR buffer not full */
-		ret = msm_i2c_poll_writeready(dev);
-		if (ret) {
-			dev_err(dev->dev,
-				"Error waiting for write ready before addr\n");
-			goto out_err;
-		}
-
-		spin_lock_irqsave(&dev->lock, flags);
-		if (dev->flush_cnt) {
-			dev_warn(dev->dev, "%d unrequested bytes read\n",
-				 dev->flush_cnt);
-		}
-		dev->msg = msgs;
-		dev->pos = 0;
-		dev->err = 0;
-		dev->write_last_done = 0;
-		dev->flush_cnt = 0;
-		dev->cnt = msgs->len;
-		dev->complete = &complete;
-
-		writel(I2C_WRITE_DATA_ADDR_BYTE | addr,
-		       dev->base + I2C_WRITE_DATA);
-
-		spin_unlock_irqrestore(&dev->lock, flags);
-
-		ret = msm_i2c_poll_writeready(dev);
-		if (ret) {
-			dev_err(dev->dev,
-				"Error waiting for write ready after addr\n");
-			goto out_err;
-		}
-
-		/*
-		 * Now that we've setup the xfer, the ISR will transfer the data
-		 * and wake us up with dev->err set if there was an error
-		 */
-
-		timeout = wait_for_completion_timeout(&complete, HZ);
-		if (!timeout) {
-			dev_err(dev->dev, "Transaction timed out\n");
-			writel(I2C_WRITE_DATA_LAST_BYTE,
-				dev->base + I2C_WRITE_DATA);
-			msleep(100);
-			/* FLUSH */
-			readl(dev->base + I2C_READ_DATA);
-			readl(dev->base + I2C_STATUS);
-			ret = -ETIMEDOUT;
-			goto out_err;
-		}
-		if (dev->write_last_done == 2)
-			msleep(10); /* Read may not have stopped in time */
-		if (dev->err) {
-			dev_err(dev->dev,
-				"Error during data xfer (%d)\n",
-				dev->err);
-			ret = dev->err;
-			goto out_err;
-		}
-
-		msgs++;
-		rem--;
+	ret = msm_i2c_poll_notbusy(dev);
+	if (ret) {
+		dev_err(dev->dev, "Error waiting for notbusy\n");
+		return ret;
 	}
 
-	ret = num;
-out_err:
-	if (ret < 0)
-		msm_i2c_recover_bus_busy(dev);
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->flush_cnt) {
 		dev_warn(dev->dev, "%d unrequested bytes read\n",
 			 dev->flush_cnt);
 	}
+	dev->msg = msgs;
+	dev->rem = num;
+	dev->pos = -1;
+	dev->ret = num;
+	dev->write_last_done = 0;
+	dev->flush_cnt = 0;
+	dev->cnt = msgs->len;
+	dev->complete = &complete;
+
+	msm_i2c_interrupt_locked(dev);
+	spin_unlock_irqrestore(&dev->lock, flags);
+
+	/*
+	 * Now that we've setup the xfer, the ISR will transfer the data
+	 * and wake us up with dev->err set if there was an error
+	 */
+
+	timeout = wait_for_completion_timeout(&complete, HZ);
+
+	if (dev->write_last_done == 2)
+		msleep(10); /* Read may not have stopped in time */
+
+	spin_lock_irqsave(&dev->lock, flags);
+	if (dev->flush_cnt) {
+		dev_warn(dev->dev, "%d unrequested bytes read\n",
+			 dev->flush_cnt);
+	}
+	ret = dev->ret;
 	dev->complete = NULL;
 	dev->msg = NULL;
+	dev->rem = 0;
 	dev->pos = 0;
-	dev->err = 0;
+	dev->ret = 0;
 	dev->flush_cnt = 0;
 	dev->cnt = 0;
 	spin_unlock_irqrestore(&dev->lock, flags);
+
+	if (!timeout) {
+		dev_err(dev->dev, "Transaction timed out\n");
+		writel(I2C_WRITE_DATA_LAST_BYTE,
+			dev->base + I2C_WRITE_DATA);
+		msleep(100);
+		/* FLUSH */
+		readl(dev->base + I2C_READ_DATA);
+		readl(dev->base + I2C_STATUS);
+		ret = -ETIMEDOUT;
+	}
+
+	if (ret < 0) {
+		dev_err(dev->dev, "Error during data xfer (%d)\n", ret);
+		msm_i2c_recover_bus_busy(dev);
+	}
 	return ret;
 }
 
