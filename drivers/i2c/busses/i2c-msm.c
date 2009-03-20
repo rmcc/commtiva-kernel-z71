@@ -70,7 +70,7 @@ struct msm_i2c_dev {
 	int                 pos;
 	int                 cnt;
 	int                 ret;
-	int                 write_last_done;
+	bool                need_flush;
 	int                 flush_cnt;
 	void                *complete;
 };
@@ -116,22 +116,8 @@ static bool msm_i2c_fill_write_buffer(struct msm_i2c_dev *dev)
 		return true;
 	}
 
-	if (dev->msg->flags & I2C_M_RD) {
-		if (dev->pos == 0 && dev->cnt == 1 && !dev->write_last_done) {
-			uint32_t status;
-			val = I2C_WRITE_DATA_LAST_BYTE;
-			writel(val, dev->base + I2C_WRITE_DATA);
-			dev->write_last_done = 1;
-			status = readl(dev->base + I2C_STATUS);
-			if (status & I2C_STATUS_RD_BUFFER_FULL) {
-				dev->write_last_done = 2;
-				dev_err(dev->dev,
-					"Did not stop read in time\n");
-			}
-			return true;
-		}
+	if (dev->msg->flags & I2C_M_RD)
 		return false;
-	}
 
 	if (!dev->cnt)
 		return false;
@@ -154,9 +140,16 @@ static void msm_i2c_read_buffer(struct msm_i2c_dev *dev)
 	 * Are we expecting data or flush crap?
 	 */
 	if ((dev->msg->flags & I2C_M_RD) && dev->pos >= 0 && dev->cnt) {
-		if (dev->cnt == 2)
+		switch (dev->cnt) {
+		case 1:
+			if (dev->pos != 0)
+				break;
+			dev->need_flush = true;
+			/* fall-trough */
+		case 2:
 			writel(I2C_WRITE_DATA_LAST_BYTE,
 			       dev->base + I2C_WRITE_DATA);
+		}
 		dev->msg->buf[dev->pos] = readl(dev->base + I2C_READ_DATA);
 		dev->cnt--;
 		dev->pos++;
@@ -170,7 +163,10 @@ static void msm_i2c_read_buffer(struct msm_i2c_dev *dev)
 				dev->base + I2C_WRITE_DATA);
 		}
 		readl(dev->base + I2C_READ_DATA);
-		dev->flush_cnt++;
+		if (dev->need_flush)
+			dev->need_flush = false;
+		else
+			dev->flush_cnt++;
 	}
 }
 
@@ -201,8 +197,7 @@ static void msm_i2c_interrupt_locked(struct msm_i2c_dev *dev)
 			dev->msg++;
 			dev->pos = -1;
 			dev->cnt = dev->msg->len;
-			dev->write_last_done = 0;
-		} else if (!not_done)
+		} else if (!not_done && !dev->need_flush)
 			goto out_complete;
 	}
 	return;
@@ -326,7 +321,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	dev->rem = num;
 	dev->pos = -1;
 	dev->ret = num;
-	dev->write_last_done = 0;
+	dev->need_flush = false;
 	dev->flush_cnt = 0;
 	dev->cnt = msgs->len;
 	dev->complete = &complete;
