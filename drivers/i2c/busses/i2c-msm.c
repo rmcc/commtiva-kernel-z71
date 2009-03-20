@@ -161,6 +161,14 @@ static void msm_i2c_read_buffer(struct msm_i2c_dev *dev)
 		dev->cnt--;
 		dev->pos++;
 	} else { /* FLUSH */
+		if (dev->flush_cnt & 1) {
+			/*
+			* Stop requests are sometimes ignored, but writing
+			* more than one request generates a write error.
+			*/
+			writel(I2C_WRITE_DATA_LAST_BYTE,
+				dev->base + I2C_WRITE_DATA);
+		}
 		readl(dev->base + I2C_READ_DATA);
 		dev->flush_cnt++;
 	}
