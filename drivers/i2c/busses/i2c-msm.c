@@ -231,18 +231,23 @@ msm_i2c_poll_notbusy(struct msm_i2c_dev *dev)
 {
 	uint32_t retries = 0;
 
-	while (retries != 2000) {
+	while (retries != 200) {
 		uint32_t status = readl(dev->base + I2C_STATUS);
 
-		if (!(status & I2C_STATUS_BUS_ACTIVE))
+		if (!(status & I2C_STATUS_BUS_ACTIVE)) {
+			if (retries)
+				dev_warn(dev->dev,
+					"Warning bus was busy (%d)\n", retries);
 			return 0;
-		if (retries++ > 1000)
-			msleep(1);
+		}
+		if (retries++ > 100)
+			msleep(10);
 	}
+	dev_err(dev->dev, "Error waiting for notbusy\n");
 	return -ETIMEDOUT;
 }
 
-static void
+static int
 msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev)
 {
 	int i;
@@ -250,10 +255,18 @@ msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev)
 	int gpio_clk, gpio_dat;
 	bool gpio_clk_status = false;
 
-	if (!(status & I2C_STATUS_BUS_ACTIVE))
-		return;
+	if (!(status & (I2C_STATUS_BUS_ACTIVE | I2C_STATUS_WR_BUFFER_FULL)))
+		return 0;
 
 	msm_set_i2c_mux(true, &gpio_clk, &gpio_dat);
+
+	if (status & I2C_STATUS_RD_BUFFER_FULL) {
+		dev_warn(dev->dev, "Read buffer full, status %x, intf %x\n",
+			 status, readl(dev->base + I2C_INTERFACE_SELECT));
+		writel(I2C_WRITE_DATA_LAST_BYTE, dev->base + I2C_WRITE_DATA);
+		readl(dev->base + I2C_READ_DATA);
+	}
+
 	for (i = 0; i < 9; i++) {
 		if (gpio_get_value(gpio_dat) && gpio_clk_status)
 			break;
@@ -279,11 +292,12 @@ msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev)
 		dev_info(dev->dev, "Bus busy cleared after %d clock cycles, "
 			 "status %x, intf %x\n",
 			 i, status, readl(dev->base + I2C_INTERFACE_SELECT));
-		return;
+		return 0;
 	}
 
 	dev_warn(dev->dev, "Bus still busy, status %x, intf %x\n",
 		 status, readl(dev->base + I2C_INTERFACE_SELECT));
+	return -EBUSY;
 }
 
 
@@ -298,8 +312,9 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	ret = msm_i2c_poll_notbusy(dev);
 	if (ret) {
-		dev_err(dev->dev, "Error waiting for notbusy\n");
-		return ret;
+		ret = msm_i2c_recover_bus_busy(dev);
+		if (ret)
+			return ret;
 	}
 
 	spin_lock_irqsave(&dev->lock, flags);
@@ -325,9 +340,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	 */
 
 	timeout = wait_for_completion_timeout(&complete, HZ);
-
-	if (dev->write_last_done == 2)
-		msleep(10); /* Read may not have stopped in time */
+	msm_i2c_poll_notbusy(dev); /* Read may not have stopped in time */
 
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->flush_cnt) {
@@ -346,12 +359,6 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 	if (!timeout) {
 		dev_err(dev->dev, "Transaction timed out\n");
-		writel(I2C_WRITE_DATA_LAST_BYTE,
-			dev->base + I2C_WRITE_DATA);
-		msleep(100);
-		/* FLUSH */
-		readl(dev->base + I2C_READ_DATA);
-		readl(dev->base + I2C_STATUS);
 		ret = -ETIMEDOUT;
 	}
 
