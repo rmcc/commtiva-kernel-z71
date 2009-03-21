@@ -124,7 +124,7 @@ static bool msm_i2c_fill_write_buffer(struct msm_i2c_dev *dev)
 
 	/* Ready to take a byte */
 	val = dev->msg->buf[dev->pos];
-	if (dev->cnt == 1)
+	if (dev->cnt == 1 && dev->rem == 1)
 		val |= I2C_WRITE_DATA_LAST_BYTE;
 
 	writel(val, dev->base + I2C_WRITE_DATA);
