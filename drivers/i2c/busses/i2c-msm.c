@@ -261,6 +261,12 @@ msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev)
 		writel(I2C_WRITE_DATA_LAST_BYTE, dev->base + I2C_WRITE_DATA);
 		readl(dev->base + I2C_READ_DATA);
 	}
+	else if (status & I2C_STATUS_BUS_MASTER) {
+		dev_warn(dev->dev, "Still the bus master, status %x, intf %x\n",
+			 status, readl(dev->base + I2C_INTERFACE_SELECT));
+		writel(I2C_WRITE_DATA_LAST_BYTE | 0xff,
+		       dev->base + I2C_WRITE_DATA);
+	}
 
 	for (i = 0; i < 9; i++) {
 		if (gpio_get_value(gpio_dat) && gpio_clk_status)
