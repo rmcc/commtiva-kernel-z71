@@ -26,6 +26,7 @@
 #include <linux/netdevice.h>
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
+#include <linux/wakelock.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
@@ -41,6 +42,7 @@ struct rmnet_private
 	smd_channel_t *ch;
 	struct net_device_stats stats;
 	const char *chname;
+	struct wake_lock wake_lock;
 #ifdef CONFIG_MSM_RMNET_DEBUG
 	ktime_t last_packet;
 	unsigned long wakeups_xmit;
@@ -200,6 +202,7 @@ static void smd_net_data_handler(unsigned long arg)
 				skb->dev = dev;
 				skb_reserve(skb, NET_IP_ALIGN);
 				ptr = skb_put(skb, sz);
+				wake_lock_timeout(&p->wake_lock, HZ / 2);
 				if (smd_read(p->ch, ptr, sz) != sz) {
 					pr_err("rmnet_recv() smd lied about avail?!");
 					ptr = 0;
@@ -346,6 +349,7 @@ static int __init rmnet_init(void)
 		d = &(dev->dev);
 		p = netdev_priv(dev);
 		p->chname = ch_name[n];
+		wake_lock_init(&p->wake_lock, WAKE_LOCK_SUSPEND, ch_name[n]);
 #ifdef CONFIG_MSM_RMNET_DEBUG
 		p->timeout_us = timeout_us;
 		p->wakeups_xmit = p->wakeups_rcv = 0;
