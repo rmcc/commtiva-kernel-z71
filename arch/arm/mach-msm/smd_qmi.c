@@ -24,6 +24,7 @@
 #include <linux/wait.h>
 #include <linux/miscdevice.h>
 #include <linux/workqueue.h>
+#include <linux/wakelock.h>
 
 #include <asm/uaccess.h>
 #include <mach/msm_smd.h>
@@ -73,6 +74,7 @@ struct qmi_ctxt {
 
 	smd_channel_t *ch;
 	const char *ch_name;
+	struct wake_lock wake_lock;
 
 	struct work_struct open_work;
 	struct work_struct read_work;
@@ -88,6 +90,7 @@ void qmi_ctxt_init(struct qmi_ctxt *ctxt, unsigned n)
 	mutex_init(&ctxt->lock);
 	INIT_WORK(&ctxt->read_work, qmi_read_work);
 	INIT_WORK(&ctxt->open_work, qmi_open_work);
+	wake_lock_init(&ctxt->wake_lock, WAKE_LOCK_SUSPEND, ctxt->misc.name);
 	ctxt->ctl_txn_id = 1;
 	ctxt->wds_txn_id = 1;
 	ctxt->wds_busy = 1;
@@ -505,8 +508,10 @@ static void qmi_notify(void *priv, unsigned event)
 	case SMD_EVENT_DATA: {
 		int sz;
 		sz = smd_cur_packet_size(ctxt->ch);
-		if ((sz > 0) && (sz <= smd_read_avail(ctxt->ch)))
+		if ((sz > 0) && (sz <= smd_read_avail(ctxt->ch))) {
+			wake_lock_timeout(&ctxt->wake_lock, HZ / 2);
 			queue_work(qmi_wq, &ctxt->read_work);
+		}
 		break;
 	}
 	case SMD_EVENT_OPEN:
