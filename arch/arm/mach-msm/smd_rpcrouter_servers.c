@@ -99,6 +99,7 @@ int msm_rpc_create_server(struct msm_rpc_server *server)
 
 	return 0;
 }
+EXPORT_SYMBOL(msm_rpc_create_server);
 
 static int rpc_send_accepted_void_reply(struct msm_rpc_endpoint *client,
 					uint32_t xid, uint32_t accept_status)
