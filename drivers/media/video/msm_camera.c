@@ -1596,7 +1596,7 @@ static int msm_release(struct inode *node, struct file *filep)
 		};
 
 		pmsm->sctrl.s_release();
-
+		wake_unlock(&pmsm->wake_lock);
 		CDBG("msm_release completed!\n");
 	}
 
@@ -1779,6 +1779,8 @@ static int __msm_open(struct msm_device_t *msm)
 		return -EFAULT;
 	}
 	msm->opencnt++;
+	if (msm->opencnt == 1)
+		wake_lock(&msm->wake_lock);
 	mutex_unlock(&msm->msm_lock);
 
 	if (msm->opencnt == 1) {
@@ -2065,6 +2067,8 @@ int msm_camera_drv_start(struct platform_device *dev,
 	INIT_LIST_HEAD(&pmsm->sync.ctrl_status_queue);
 	init_waitqueue_head(&pmsm->sync.ctrl_status_wait);
 
+	wake_lock_init(&pmsm->wake_lock, WAKE_LOCK_IDLE, "msm_camera");
+
 	mutex_init(&pmsm->msm_lock);
 	mutex_init(&pmsm->pict_pp_lock);
 	mutex_init(&pmsm->msm_sem);
@@ -2103,6 +2107,7 @@ sensor_probe_fail:
 probe_on_fail:
 	msm_tear_down_cdevs(pmsm, MKDEV(MAJOR(msm_devno), --dev_num));
 cdevs_fail:
+	wake_lock_destroy(&pmsm->wake_lock);
 	kfree(pmsm);
 kalloc_fail:
 start_class_fail:

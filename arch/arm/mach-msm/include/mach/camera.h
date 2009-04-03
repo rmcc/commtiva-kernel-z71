@@ -23,6 +23,7 @@
 #include <linux/poll.h>
 #include <linux/cdev.h>
 #include <linux/platform_device.h>
+#include <linux/wakelock.h>
 #include "linux/types.h"
 
 #include <mach/board.h>
@@ -135,6 +136,7 @@ struct msm_device_t {
 	struct mutex msm_sem;
 
 	struct list_head list;
+	struct wake_lock wake_lock;
 };
 
 /* this structure is used in kernel */
