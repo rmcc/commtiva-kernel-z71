@@ -27,8 +27,6 @@
 #include <mach/camera.h>
 #include "mt9t013.h"
 
-#define CDBG(fmt, args...) printk(KERN_INFO "msm_camera mt9t013: " fmt, ##args)
-
 /*=============================================================
 	SENSOR REGISTER DEFINES
 ==============================================================*/
@@ -172,7 +170,7 @@ static int mt9t013_i2c_rxdata(unsigned short saddr,
 	};
 
 	if (i2c_transfer(mt9t013_client->adapter, msgs, 2) < 0) {
-		CDBG("mt9t013_i2c_rxdata failed!\n");
+		pr_err("mt9t013_i2c_rxdata failed!\n");
 		return -EIO;
 	}
 
@@ -200,7 +198,7 @@ static int32_t mt9t013_i2c_read_w(unsigned short saddr,
 	*rdata = buf[0] << 8 | buf[1];
 
 	if (rc < 0)
-		CDBG("mt9t013_i2c_read failed!\n");
+		pr_err("mt9t013_i2c_read failed!\n");
 
 	return rc;
 }
@@ -218,7 +216,7 @@ static int32_t mt9t013_i2c_txdata(unsigned short saddr,
 	};
 
 	if (i2c_transfer(mt9t013_client->adapter, msg, 1) < 0) {
-		CDBG("mt9t013_i2c_txdata failed\n");
+		pr_err("mt9t013_i2c_txdata failed\n");
 		return -EIO;
 	}
 
@@ -237,7 +235,7 @@ static int32_t mt9t013_i2c_write_b(unsigned short saddr,
 	rc = mt9t013_i2c_txdata(saddr, buf, 2);
 
 	if (rc < 0)
-		CDBG("i2c_write failed, addr = 0x%x, val = 0x%x!\n",
+		pr_err("i2c_write failed, addr = 0x%x, val = 0x%x!\n",
 		waddr, wdata);
 
 	return rc;
@@ -258,7 +256,7 @@ static int32_t mt9t013_i2c_write_w(unsigned short saddr,
 	rc = mt9t013_i2c_txdata(saddr, buf, 4);
 
 	if (rc < 0)
-		CDBG("i2c_write_w failed, addr = 0x%x, val = 0x%x!\n",
+		pr_err("i2c_write_w failed, addr = 0x%x, val = 0x%x!\n",
 		waddr, wdata);
 
 	return rc;
@@ -961,8 +959,8 @@ static int32_t mt9t013_setting(enum mt9t013_reg_update_t rupdate,
 		mdelay(5);
 		return rc;
 		}
-		} /* case CAMSENSOR_REG_INIT: */
-		break;
+	} /* case CAMSENSOR_REG_INIT: */
+	break;
 
 	/*CAMSENSOR_REG_INIT */
 	default:
@@ -1191,7 +1189,7 @@ int mt9t013_sensor_open_init(const struct msm_camera_sensor_info *data)
 
 	mt9t013_ctrl = kzalloc(sizeof(struct mt9t013_ctrl_t), GFP_KERNEL);
 	if (!mt9t013_ctrl) {
-		CDBG("mt9t013_init failed!\n");
+		pr_err("mt9t013_init failed!\n");
 		rc = -ENOMEM;
 		goto init_done;
 	}
@@ -1451,7 +1449,7 @@ static int mt9t013_i2c_probe(struct i2c_client *client,
 probe_failure:
 	kfree(mt9t013_sensorw);
 	mt9t013_sensorw = NULL;
-	CDBG("i2c probe failure %d\n", rc);
+	pr_err("i2c probe failure %d\n", rc);
 	return rc;
 }
 
