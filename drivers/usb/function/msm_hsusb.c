@@ -290,52 +290,15 @@ static int usb_chg_detect_type(struct usb_info *ui)
 		break;
 	case USB_PHY_INTEGRATED:
 	{
-		unsigned int i;
-		unsigned int extchgctrl = 0;
-		unsigned int chgtype = 0;
+		unsigned running = readl(USB_USBCMD) & USBCMD_RS;
 
-		switch (PHY_MODEL(ui->phy_info)) {
-		case USB_PHY_MODEL_65NM:
-			extchgctrl = ULPI_EXTCHGCTRL_65NM;
-			chgtype = ULPI_CHGTYPE_65NM;
-			break;
-		case USB_PHY_MODEL_180NM:
-			extchgctrl = ULPI_EXTCHGCTRL_180NM;
-			chgtype = ULPI_CHGTYPE_180NM;
-			break;
-		default:
-			pr_err("%s: undefined phy model\n", __func__);
-			break;
-		}
+		if (!running)
+			return CHG_UNDEFINED;
 
-		/* control charging detection through ULPI */
-		i = ulpi_read(ui, ULPI_CHG_DETECT_REG);
-		i &= ~extchgctrl;
-		ulpi_write(ui, i, ULPI_CHG_DETECT_REG);
-
-		/* power on charger detection circuit */
-		i = ulpi_read(ui, ULPI_CHG_DETECT_REG);
-		i &= ~ULPI_CHGDETON;
-		ulpi_write(ui, i, ULPI_CHG_DETECT_REG);
-
-		msleep(10);
-		/* enable charger detection */
-		i = ulpi_read(ui, ULPI_CHG_DETECT_REG);
-		i &= ~ULPI_CHGDETEN;
-		ulpi_write(ui, i, ULPI_CHG_DETECT_REG);
-
-		msleep(10);
-		/* read charger type */
-		i = ulpi_read(ui, ULPI_CHG_DETECT_REG);
-		if (i & chgtype)
+		if ((readl(USB_PORTSC) & PORTSC_LS) == PORTSC_LS)
 			ret = CHG_WALL;
 		else
 			ret = CHG_HOST_PC;
-
-		/* disable charger circuit */
-		i = ulpi_read(ui, ULPI_CHG_DETECT_REG);
-		i |= (ULPI_CHGDETEN | ULPI_CHGDETON);
-		ulpi_write(ui, i, ULPI_CHG_DETECT_REG);
 		break;
 	}
 	default:
@@ -2273,7 +2236,9 @@ static void usb_do_work(struct work_struct *w)
 					ui->state = USB_STATE_ONLINE;
 					usb_enable_pullup(ui);
 					usb_chg_set_type(ui);
-					if (ui->chg_type == CHG_WALL) {
+					if ((ui->chg_type == CHG_WALL) &&
+						(PHY_TYPE(ui->phy_info) ==
+							USB_PHY_EXTERNAL)) {
 						usb_disable_pullup(ui);
 						msleep(500);
 						usb_lpm_enter(ui);
@@ -2299,7 +2264,9 @@ static void usb_do_work(struct work_struct *w)
 				usb_enable_pullup(ui);
 				enable_irq(ui->irq);
 				usb_chg_set_type(ui);
-				if (ui->chg_type == CHG_WALL) {
+				if ((ui->chg_type == CHG_WALL) &&
+					(PHY_TYPE(ui->phy_info) ==
+						USB_PHY_EXTERNAL)) {
 					usb_disable_pullup(ui);
 					msleep(500);
 					usb_lpm_enter(ui);
@@ -2368,7 +2335,9 @@ static void usb_do_work(struct work_struct *w)
 				usb_enable_pullup(ui);
 				enable_irq(ui->irq);
 				usb_chg_set_type(ui);
-				if (ui->chg_type == CHG_WALL) {
+				if ((ui->chg_type == CHG_WALL) &&
+					(PHY_TYPE(ui->phy_info) ==
+						USB_PHY_EXTERNAL)) {
 					usb_disable_pullup(ui);
 					msleep(500);
 					usb_lpm_enter(ui);
