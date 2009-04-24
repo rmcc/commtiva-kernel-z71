@@ -1411,7 +1411,7 @@ static void flush_all_endpoints(struct usb_info *ui)
 }
 
 #define HW_DELAY_FOR_LPM msecs_to_jiffies(1000)
-#define DELAY_FOR_USB_VBUS_STABILIZE msecs_to_jiffies(100)
+#define DELAY_FOR_USB_VBUS_STABILIZE msecs_to_jiffies(500)
 static irqreturn_t usb_interrupt(int irq, void *data)
 {
 	struct usb_info *ui = data;
