@@ -131,7 +131,7 @@ struct msm_device_t {
 	int opened_config;
 	struct platform_device *pdev;
 
-	struct mutex msm_lock;
+	struct mutex lock;
 	uint8_t opencnt;
 
 	const char *apps_id;
@@ -142,8 +142,6 @@ struct msm_device_t {
 	unsigned pict_pp;
 
 	struct msm_sensor_ctrl_t sctrl;
-
-	struct mutex msm_sem;
 
 	struct list_head list;
 	struct wake_lock wake_lock;
@@ -223,7 +221,7 @@ int msm_unregister(struct msm_driver *, const char *);
 
 void msm_camvfe_init(void);
 int msm_camvfe_check(void *);
-void msm_camvfe_fn_init(struct msm_camvfe_fn_t *);
+void msm_camvfe_fn_init(struct msm_camvfe_fn_t *, void *);
 int msm_camera_drv_start(struct platform_device *dev,
 		int (*sensor_probe)(const struct msm_camera_sensor_info *,
 					struct msm_sensor_ctrl_t *));
