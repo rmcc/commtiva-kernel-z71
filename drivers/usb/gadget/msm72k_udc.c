@@ -1481,6 +1481,12 @@ static int msm72k_udc_vbus_session(struct usb_gadget *_gadget, int is_active)
 	return 0;
 }
 
+/* SW workarounds
+Issue #1	- USB Spoof Disconnect Failure
+Symptom	- Writing 0 to run/stop bit of USBCMD doesn't cause disconnect
+SW workaround	- Making opmode non-driving and SuspendM set in function
+		register of SMSC phy
+*/
 /* drivers may have software control over D+ pullup */
 static int msm72k_pullup(struct usb_gadget *_gadget, int is_active)
 {
@@ -1489,8 +1495,11 @@ static int msm72k_pullup(struct usb_gadget *_gadget, int is_active)
 	if (is_active) {
 		if (vbus && ui->driver)
 			writel(0x00080001, USB_USBCMD);
-	} else
+	} else {
 		writel(0x00080000, USB_USBCMD);
+		/* S/W workaround, Issue#1 */
+		ulpi_write(ui, 0x48, 0x04);
+	}
 
 	return 0;
 }
