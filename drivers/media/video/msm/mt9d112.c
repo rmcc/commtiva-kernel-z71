@@ -284,7 +284,7 @@ static long mt9d112_reg_init(void)
 	return 0;
 }
 
-static long mt9d112_set_sensor_mode(enum sensor_mode_t mode)
+static long mt9d112_set_sensor_mode(int mode)
 {
 	uint16_t clock;
 	long rc = 0;
@@ -392,10 +392,7 @@ static long mt9d112_set_sensor_mode(enum sensor_mode_t mode)
 	return 0;
 }
 
-static long mt9d112_set_effect(
-	enum sensor_mode_t mode,
-	int8_t effect
-)
+static long mt9d112_set_effect(int mode, int effect)
 {
 	uint16_t reg_addr;
 	uint16_t reg_val;
@@ -417,7 +414,7 @@ static long mt9d112_set_effect(
 		break;
 	}
 
-	switch ((enum camera_effect_t)effect) {
+	switch (effect) {
 	case CAMERA_EFFECT_OFF: {
 		reg_val = 0x6440;
 

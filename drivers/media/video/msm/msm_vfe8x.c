@@ -54,7 +54,7 @@ static void vfe_release(struct platform_device *dev)
 	mutex_unlock(&vfe_lock);
 }
 
-static void vfe_config_axi(enum vfeoutput_mode_t mode,
+static void vfe_config_axi(int32_t mode,
 	struct axidata_t *ad, struct vfe_cmd_axi_output_config *ao)
 {
 	struct msm_pmem_region *regptr;
