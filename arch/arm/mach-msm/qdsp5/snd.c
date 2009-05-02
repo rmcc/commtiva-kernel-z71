@@ -3,6 +3,7 @@
  * interface to "snd" service on the baseband cpu
  *
  * Copyright (C) 2008 HTC Corporation
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -39,11 +40,8 @@ static struct snd_ctxt the_snd;
 
 #define RPC_SND_PROG	0x30000002
 #define RPC_SND_CB_PROG	0x31000002
-#if CONFIG_MSM_AMSS_VERSION == 6210
-#define RPC_SND_VERS                    0x94756085 /* 2490720389 */
-#elif (CONFIG_MSM_AMSS_VERSION == 6220) || (CONFIG_MSM_AMSS_VERSION == 6225)
-#define RPC_SND_VERS                    0xaa2b1a44 /* 2854951492 */
-#endif
+
+#define RPC_SND_VERS                    0x00020001
 
 #define SND_SET_DEVICE_PROC 2
 #define SND_SET_VOLUME_PROC 3
@@ -203,8 +201,13 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int snd_release(struct inode *inode, struct file *file)
 {
 	struct snd_ctxt *snd = file->private_data;
+	int rc;
 
 	mutex_lock(&snd->lock);
+	rc = msm_rpc_close(snd->ept);
+	if (rc < 0)
+		pr_err("snd_release: msm_rpc_close failed\n");
+	snd->ept = NULL;
 	snd->opened = 0;
 	mutex_unlock(&snd->lock);
 	return 0;
@@ -218,8 +221,8 @@ static int snd_open(struct inode *inode, struct file *file)
 	mutex_lock(&snd->lock);
 	if (snd->opened == 0) {
 		if (snd->ept == NULL) {
-			snd->ept = msm_rpc_connect(RPC_SND_PROG, RPC_SND_VERS,
-						MSM_RPC_UNINTERRUPTIBLE);
+			snd->ept = msm_rpc_connect_compatible(RPC_SND_PROG,
+					RPC_SND_VERS, 0);
 			if (IS_ERR(snd->ept)) {
 				rc = PTR_ERR(snd->ept);
 				snd->ept = NULL;

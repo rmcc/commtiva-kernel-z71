@@ -3,6 +3,7 @@
  * Function Driver for USB Mass Storage
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *
  * Based heavily on the file_storage gadget driver in
@@ -238,8 +239,12 @@ static struct lun *dev_to_lun(struct device *dev)
 #define EP0_BUFSIZE	256
 #define DELAYED_STATUS	(EP0_BUFSIZE + 999)	/* An impossibly large value */
 
-/* Number of buffers we will use.  2 is enough for double-buffering */
+/* Number of buffers for CBW, DATA and CSW */
+#ifdef CONFIG_USB_CSW_HACK
+#define NUM_BUFFERS	4
+#else
 #define NUM_BUFFERS	2
+#endif
 
 enum fsg_buffer_state {
 	BUF_STATE_EMPTY = 0,
@@ -284,6 +289,7 @@ enum data_direction {
 	DATA_DIR_TO_HOST,
 	DATA_DIR_NONE
 };
+int can_stall = 1;
 
 struct fsg_dev {
 	/* lock protects: state and all the req_busy's */
@@ -342,8 +348,10 @@ struct fsg_dev {
 
 	struct platform_device *pdev;
 	struct switch_dev sdev;
-	struct wake_lock wake_lock;
+	int	bound;
+	struct wake_lock wake_lock, wake_lock_idle;
 };
+static int send_status(struct fsg_dev *fsg);
 
 static int exception_in_progress(struct fsg_dev *fsg)
 {
@@ -369,6 +377,7 @@ static void	close_backing_file(struct fsg_dev *fsg, struct lun *curlun);
 static void	close_all_backing_files(struct fsg_dev *fsg);
 
 
+static struct usb_function		fsg_function;
 /*-------------------------------------------------------------------------*/
 
 #ifdef DUMP_MSGS
@@ -408,6 +417,20 @@ static void dump_cdb(struct fsg_dev *fsg)
 #endif /* VERBOSE_DEBUG */
 #endif /* DUMP_MSGS */
 
+static int fsg_set_halt(struct fsg_dev *fsg, struct usb_endpoint *ep)
+{
+	const char  *name;
+
+	if (ep == fsg->bulk_in)
+		name = "bulk-in";
+	else if (ep == fsg->bulk_out)
+		name = "bulk-out";
+	else
+		return -1;
+
+	DBG(fsg, "%s set halt\n", name);
+	return usb_ept_set_halt(ep);
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -438,6 +461,74 @@ static void put_be32(u8 *buf, u32 val)
 	buf[3] = val & 0xff;
 }
 
+/*-------------------------------------------------------------------------*/
+
+
+/* There is only one interface. */
+#define USB_SC_SCSI     0x06            /* Transparent SCSI */
+#define USB_PR_BULK     0x50            /* Bulk-only */
+static struct usb_interface_descriptor
+intf_desc = {
+	.bLength 		= sizeof intf_desc,
+	.bDescriptorType 	= USB_DT_INTERFACE,
+	.bNumEndpoints 		= 2,
+	.bInterfaceClass 	= USB_CLASS_MASS_STORAGE,
+	.bInterfaceSubClass 	= USB_SC_SCSI,
+	.bInterfaceProtocol 	= USB_PR_BULK,
+};
+
+
+static struct usb_endpoint_descriptor
+hs_bulk_in_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(512),
+};
+
+static struct usb_endpoint_descriptor
+hs_bulk_out_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_OUT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(512),
+	.bInterval =		0,
+};
+
+static struct usb_endpoint_descriptor
+fs_bulk_in_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(64),
+};
+
+static struct usb_endpoint_descriptor
+fs_bulk_out_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_OUT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(64),
+	.bInterval =		0,
+};
+
+
+static struct usb_descriptor_header *hs_function[] = {
+	(struct usb_descriptor_header *) &intf_desc,
+	(struct usb_descriptor_header *) &hs_bulk_in_desc,
+	(struct usb_descriptor_header *) &hs_bulk_out_desc,
+	NULL,
+};
+static struct usb_descriptor_header *fs_function[] = {
+	(struct usb_descriptor_header *) &intf_desc,
+	(struct usb_descriptor_header *) &fs_bulk_in_desc,
+	(struct usb_descriptor_header *) &fs_bulk_out_desc,
+	NULL,
+};
 /*-------------------------------------------------------------------------*/
 
 /* These routines may be called in process context or in_irq */
@@ -487,12 +578,15 @@ static void bulk_in_complete(struct usb_endpoint *ep, struct usb_request *req)
 				req->status, req->actual, req->length);
 
 	/* Hold the lock while we update the request and buffer states */
-	smp_wmb();
-	spin_lock_irqsave(&fsg->lock, flags);
-	bh->inreq_busy = 0;
-	bh->state = BUF_STATE_EMPTY;
-	wakeup_thread(fsg);
-	spin_unlock_irqrestore(&fsg->lock, flags);
+	if (req->status == 0) {
+		smp_wmb();
+		spin_lock_irqsave(&fsg->lock, flags);
+		bh->inreq_busy = 0;
+		bh->state = BUF_STATE_EMPTY;
+		wakeup_thread(fsg);
+		spin_unlock_irqrestore(&fsg->lock, flags);
+	} else
+		bh->inreq_busy = 0;
 }
 
 static void bulk_out_complete(struct usb_endpoint *ep, struct usb_request *req)
@@ -508,12 +602,15 @@ static void bulk_out_complete(struct usb_endpoint *ep, struct usb_request *req)
 				bh->bulk_out_intended_length);
 
 	/* Hold the lock while we update the request and buffer states */
-	smp_wmb();
-	spin_lock_irqsave(&fsg->lock, flags);
-	bh->outreq_busy = 0;
-	bh->state = BUF_STATE_FULL;
-	wakeup_thread(fsg);
-	spin_unlock_irqrestore(&fsg->lock, flags);
+	if (req->status == 0) {
+		smp_wmb();
+		spin_lock_irqsave(&fsg->lock, flags);
+		bh->outreq_busy = 0;
+		bh->state = BUF_STATE_FULL;
+		wakeup_thread(fsg);
+		spin_unlock_irqrestore(&fsg->lock, flags);
+	} else
+		bh->outreq_busy = 0;
 }
 
 static int fsg_setup(struct usb_ctrlrequest *ctrl, void *buf,
@@ -528,6 +625,9 @@ static int fsg_setup(struct usb_ctrlrequest *ctrl, void *buf,
 	if (!fsg->config)
 		return value;
 
+	if (w_index != intf_desc.bInterfaceNumber)
+		return value;
+
 	/* Handle Bulk-only class-specific requests */
 	if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_CLASS) {
 		switch (ctrl->bRequest) {
@@ -535,7 +635,7 @@ static int fsg_setup(struct usb_ctrlrequest *ctrl, void *buf,
 			if (ctrl->bRequestType != (USB_DIR_OUT |
 					USB_TYPE_CLASS | USB_RECIP_INTERFACE))
 				break;
-			if (w_index != 0 || w_value != 0) {
+			if (w_value != 0) {
 				value = -EDOM;
 				break;
 			}
@@ -543,15 +643,14 @@ static int fsg_setup(struct usb_ctrlrequest *ctrl, void *buf,
 			/* Raise an exception to stop the current operation
 			 * and reinitialize our state. */
 			DBG(fsg, "bulk reset request\n");
-			raise_exception(fsg, FSG_STATE_RESET);
-			value = DELAYED_STATUS;
+			value = 0;
 			break;
 
 		case USB_BULK_GET_MAX_LUN_REQUEST:
 			if (ctrl->bRequestType != (USB_DIR_IN |
 					USB_TYPE_CLASS | USB_RECIP_INTERFACE))
 				break;
-			if (w_index != 0 || w_value != 0) {
+			if (w_value != 0) {
 				value = -EDOM;
 				break;
 			}
@@ -772,6 +871,10 @@ static int do_write(struct fsg_dev *fsg)
 	ssize_t			nwritten;
 	int			rc;
 
+#ifdef CONFIG_USB_CSW_HACK
+	int			csw_hack_sent = 0;
+	int			i;
+#endif
 	if (curlun->ro) {
 		curlun->sense_data = SS_WRITE_PROTECTED;
 		return -EINVAL;
@@ -867,7 +970,17 @@ static int do_write(struct fsg_dev *fsg)
 		bh = fsg->next_buffhd_to_drain;
 		if (bh->state == BUF_STATE_EMPTY && !get_some_more)
 			break;			/* We stopped early */
+#ifdef CONFIG_USB_CSW_HACK
+		/*
+		 * If the csw packet is already submmitted to the DCD,
+		 * by marking the state of buffer as full, then by checking
+		 * the residue, we make sure that this csw packet is not
+		 * written on to the storage media.
+		 */
+		if (bh->state == BUF_STATE_FULL && fsg->residue) {
+#else
 		if (bh->state == BUF_STATE_FULL) {
+#endif
 			smp_rmb();
 			fsg->next_buffhd_to_drain = bh->next;
 			bh->state = BUF_STATE_EMPTY;
@@ -916,12 +1029,48 @@ static int do_write(struct fsg_dev *fsg)
 
 			/* If an error occurred, report it and its position */
 			if (nwritten < amount) {
+#ifdef CONFIG_USB_CSW_HACK
+				/*
+				 * If csw is already sent & write failure
+				 * occured, then detach the storage media
+				 * from the corresponding lun, and cable must
+				 * be disconnected to recover fom this error.
+				 */
+				if (csw_hack_sent) {
+					if (backing_file_is_open(curlun)) {
+						close_backing_file(fsg, curlun);
+						curlun->unit_attention_data =
+							SS_MEDIUM_NOT_PRESENT;
+					}
+					break;
+				}
+#endif
 				curlun->sense_data = SS_WRITE_ERROR;
 				curlun->sense_data_info = file_offset >> 9;
 				curlun->info_valid = 1;
 				break;
 			}
 
+#ifdef CONFIG_USB_CSW_HACK
+			if ((nwritten == amount) && !csw_hack_sent) {
+				/*
+				 * Check if any of the buffer is in the
+				 * busy state, if any buffer is in busy state,
+				 * means the complete data is not received
+				 * yet from the host. So there is no point in
+				 * csw right away without the complete data.
+				 */
+				for (i = 0; i < NUM_BUFFERS; i++) {
+					if (fsg->buffhds[i].state ==
+							BUF_STATE_BUSY)
+						break;
+				}
+				if (i == NUM_BUFFERS) {
+					csw_hack_sent = 1;
+					send_status(fsg);
+				}
+			}
+#endif
 			/* Did the host decide to stop early? */
 			if (bh->outreq->actual != bh->outreq->length) {
 				fsg->short_packet_received = 1;
@@ -1349,6 +1498,26 @@ static int do_mode_select(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 }
 
 
+static int halt_bulk_in_endpoint(struct fsg_dev *fsg)
+{
+	int     rc;
+
+	rc = fsg_set_halt(fsg, fsg->bulk_in);
+	if (rc == -EAGAIN)
+		DBG(fsg, "delayed bulk-in endpoint halt\n");
+	while (rc != 0) {
+		if (rc != -EAGAIN) {
+			DBG(fsg, "usb_ep_set_halt -> %d\n", rc);
+			rc = 0;
+			break;
+		}
+		/* Wait for a short time and then try again */
+		if (msleep_interruptible(100) != 0)
+			return -EINTR;
+		rc = usb_ept_set_halt(fsg->bulk_in);
+	}
+	return rc;
+}
 /*-------------------------------------------------------------------------*/
 #if 0
 static int write_zero(struct fsg_dev *fsg)
@@ -1428,6 +1597,7 @@ static int finish_reply(struct fsg_dev *fsg)
 {
 	struct fsg_buffhd	*bh = fsg->next_buffhd_to_fill;
 	int			rc = 0;
+	int			i;
 
 	switch (fsg->data_dir) {
 	case DATA_DIR_NONE:
@@ -1448,12 +1618,25 @@ static int finish_reply(struct fsg_dev *fsg)
 					&bh->inreq_busy, &bh->state);
 			fsg->next_buffhd_to_fill = bh->next;
 		} else {
-			int length = bh->inreq->length;
+			if (can_stall) {
+				bh->state = BUF_STATE_EMPTY;
+				for (i = 0; i < NUM_BUFFERS; ++i) {
+					struct fsg_buffhd
+							*bh = &fsg->buffhds[i];
+					while (bh->state != BUF_STATE_EMPTY) {
+						rc = sleep_thread(fsg);
+						if (rc)
+							return rc;
+					}
+				}
+				rc = halt_bulk_in_endpoint(fsg);
+			} else {
 			start_transfer(fsg, fsg->bulk_in, bh->inreq,
 					&bh->inreq_busy, &bh->state);
 			fsg->next_buffhd_to_fill = bh->next;
+			}
 #if 0
-            /* this is unnecessary, and was causing problems with MacOS */
+	/* this is unnecessary, and was causing problems with MacOS */
 			if (length > 0)
 				write_zero(fsg);
 #endif
@@ -1537,7 +1720,15 @@ static int send_status(struct fsg_dev *fsg)
 	/* Store and send the Bulk-only CSW */
 	csw->Signature = __constant_cpu_to_le32(USB_BULK_CS_SIG);
 	csw->Tag = fsg->tag;
+#ifdef CONFIG_USB_CSW_HACK
+	/* Since csw is being sent early, before
+	 * writing on to storage media, need to set
+	 * residue to zero,assuming that write will succeed.
+	 */
+	csw->Residue = 0;
+#else
 	csw->Residue = cpu_to_le32(fsg->residue);
+#endif
 	csw->Status = status;
 
 	bh->inreq->length = USB_BULK_CS_WRAP_LEN;
@@ -2005,10 +2196,12 @@ reset:
 		struct fsg_buffhd *bh = &fsg->buffhds[i];
 
 		if (bh->inreq) {
+			usb_ept_cancel_xfer(bh->inreq);
 			usb_ept_free_req(fsg->bulk_in, bh->inreq);
 			bh->inreq = NULL;
 		}
 		if (bh->outreq) {
+			usb_ept_cancel_xfer(bh->outreq);
 			usb_ept_free_req(fsg->bulk_out, bh->outreq);
 			bh->outreq = NULL;
 		}
@@ -2183,7 +2376,8 @@ static void handle_exception(struct fsg_dev *fsg)
 	case FSG_STATE_CONFIG_CHANGE:
 		rc = do_set_config(fsg, new_config);
 		if (new_config == 0) {
-			down_read(&fsg->filesem);	/* We're using the backing file */
+			/* We're using the backing file */
+			down_read(&fsg->filesem);
 			fsync_all(fsg);
 			up_read(&fsg->filesem);
 		}
@@ -2250,6 +2444,15 @@ static int fsg_main_thread(void *fsg_)
 			fsg->state = FSG_STATE_STATUS_PHASE;
 		spin_unlock_irqrestore(&fsg->lock, flags);
 
+#ifdef CONFIG_USB_CSW_HACK
+		/* Since status is already sent for write scsi command,
+		 * need to skip sending status once again if it is a
+		 * write scsi command.
+		 */
+		if (fsg->cmnd[0] == SC_WRITE_6  || fsg->cmnd[0] == SC_WRITE_10
+					|| fsg->cmnd[0] == SC_WRITE_12)
+			continue;
+#endif
 		if (send_status(fsg))
 			continue;
 
@@ -2475,7 +2678,13 @@ static void /* __init_or_exit */ fsg_unbind(void *_ctxt)
 	int			i;
 	struct lun		*curlun;
 
-	DBG(fsg, "unbind\n");
+	pr_debug("%s ()\n", __func__);
+	if (!fsg)
+		return;
+	if (!fsg->bound)
+		return;
+
+	fsg->running = 0;
 	clear_bit(REGISTERED, &fsg->atomic_bitflags);
 
 	/* Unregister the sysfs attribute files and the LUNs */
@@ -2500,20 +2709,34 @@ static void /* __init_or_exit */ fsg_unbind(void *_ctxt)
 	/* Free the data buffers */
 	for (i = 0; i < NUM_BUFFERS; ++i)
 		kfree(fsg->buffhds[i].buf);
+
+	if (fsg->bulk_in) {
+		usb_ept_fifo_flush(fsg->bulk_in);
+		usb_ept_enable(fsg->bulk_in,  0);
+		usb_free_endpoint(fsg->bulk_in);
+	}
+	if (fsg->bulk_out) {
+		usb_ept_fifo_flush(fsg->bulk_out);
+		usb_ept_enable(fsg->bulk_out,  0);
+		usb_free_endpoint(fsg->bulk_out);
+	}
+	fsg->bound = 0;
 }
 
-static void fsg_bind(struct usb_endpoint **ept, void *_ctxt)
+static void fsg_bind(void *_ctxt)
 {
 	struct fsg_dev		*fsg = the_fsg;
 	int			rc;
 	int			i;
+	unsigned int 		ret;
 	struct lun		*curlun;
 	char			*pathbuf, *p;
+	struct usb_function	*usb_func = &fsg_function;
+	struct usb_endpoint *ep;
 
-	fsg->bulk_out = ept[0];
-	fsg->bulk_in = ept[1];
 
 	dev_attr_file.attr.mode = 0644;
+	fsg->running = 0;
 
 	/* Find out how many LUNs there should be */
 	i = fsg->nluns;
@@ -2557,8 +2780,21 @@ static void fsg_bind(struct usb_endpoint **ept, void *_ctxt)
 		curlun->registered = 1;
 		kref_get(&fsg->ref);
 	}
+	ret = usb_msm_get_next_ifc_number(usb_func);
+	intf_desc.bInterfaceNumber = ret;
+	pr_debug("%s: interface number = %d\n", __func__, ret);
 
-	rc = -ENOMEM;
+	ep = fsg->bulk_in = usb_alloc_endpoint(USB_DIR_IN);
+	hs_bulk_in_desc.bEndpointAddress = USB_DIR_IN | ep->num;
+	fs_bulk_in_desc.bEndpointAddress = USB_DIR_IN | ep->num;
+	pr_debug("%s: bulk in endpoint number = %d\n",
+						__func__, ep->num);
+
+	ep = fsg->bulk_out = usb_alloc_endpoint(USB_DIR_OUT);
+	hs_bulk_out_desc.bEndpointAddress = USB_DIR_OUT | ep->num;
+	fs_bulk_out_desc.bEndpointAddress = USB_DIR_OUT | ep->num;
+	pr_debug("%s: bulk out endpoint number = %d\n",
+						__func__, ep->num);
 
 	/* Allocate the data buffers */
 	for (i = 0; i < NUM_BUFFERS; ++i) {
@@ -2574,6 +2810,7 @@ static void fsg_bind(struct usb_endpoint **ept, void *_ctxt)
 	}
 	fsg->buffhds[NUM_BUFFERS - 1].next = &fsg->buffhds[0];
 
+	fsg->state = FSG_STATE_IDLE;
 	fsg->thread_task = kthread_create(fsg_main_thread, fsg,
 			"USB mass_storage");
 	if (IS_ERR(fsg->thread_task)) {
@@ -2582,7 +2819,7 @@ static void fsg_bind(struct usb_endpoint **ept, void *_ctxt)
 		goto out;
 	}
 
-	INFO(fsg, "Number of LUNs=%d\n", fsg->nluns);
+	DBG(fsg, "Number of LUNs=%d\n", fsg->nluns);
 
 	pathbuf = kmalloc(PATH_MAX, GFP_KERNEL);
 	for (i = 0; i < fsg->nluns; ++i) {
@@ -2605,10 +2842,12 @@ static void fsg_bind(struct usb_endpoint **ept, void *_ctxt)
 
 	/* Tell the thread to start working */
 	wake_up_process(fsg->thread_task);
+	fsg->bound = 1;
 	return;
 
 out:
 	fsg->state = FSG_STATE_TERMINATED;	/* The thread is dead */
+	fsg->bound = 1;
 	fsg_unbind(fsg);
 	close_all_backing_files(fsg);
 }
@@ -2616,6 +2855,35 @@ out:
 static void fsg_configure(int configured, void *_ctxt)
 {
 	struct fsg_dev *fsg = _ctxt;
+
+	if (!fsg)
+		return;
+	if (!fsg->bound)
+		return;
+
+	/* Clear out the controller's fifos */
+	if ((fsg->new_config) && (fsg->bulk_in))
+		usb_ept_fifo_flush(fsg->bulk_in);
+	if ((fsg->new_config) && (fsg->bulk_out))
+		usb_ept_fifo_flush(fsg->bulk_out);
+
+	if (configured) {
+		if (usb_msm_get_speed() == USB_SPEED_HIGH) {
+			usb_configure_endpoint(fsg->bulk_in, &hs_bulk_in_desc);
+			usb_configure_endpoint(fsg->bulk_out,
+						&hs_bulk_out_desc);
+		} else {
+			usb_configure_endpoint(fsg->bulk_in, &fs_bulk_in_desc);
+			usb_configure_endpoint(fsg->bulk_out,
+						&fs_bulk_out_desc);
+		}
+
+		usb_ept_enable(fsg->bulk_in, 1);
+		usb_ept_enable(fsg->bulk_out, 1);
+		wake_lock(&fsg->wake_lock_idle);
+	} else
+		wake_unlock(&fsg->wake_lock_idle);
+
 	fsg->new_config = configured;
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 }
@@ -2628,16 +2896,8 @@ static struct usb_function		fsg_function = {
 	.configure  = fsg_configure,
 	.setup		= fsg_setup,
 
-	.name = DRIVER_NAME,
+	.name = "mass_storage",
 
-	.ifc_class = USB_CLASS_MASS_STORAGE,
-	.ifc_subclass = US_SC_SCSI,
-	.ifc_protocol = US_PR_BULK,
-
-	.ifc_name = DRIVER_NAME,
-
-	.ifc_ept_count = 2,
-	.ifc_ept_type = { EPT_BULK_OUT, EPT_BULK_IN },
 };
 
 
@@ -2667,8 +2927,22 @@ static ssize_t print_switch_state(struct switch_dev *sdev, char *buf)
 	struct fsg_dev	*fsg = container_of(sdev, struct fsg_dev, sdev);
 	return sprintf(buf, "%s\n", (fsg->config ? "online" : "offline"));
 }
+static int __exit fsg_remove(struct platform_device *pdev)
+{
+	struct fsg_dev  *fsg = the_fsg;
 
-static int fsg_probe(struct platform_device *pdev)
+	usb_function_unregister(&fsg_function);
+	wake_lock_destroy(&fsg->wake_lock_idle);
+	switch_dev_unregister(&fsg->sdev);
+	test_and_clear_bit(REGISTERED, &fsg->atomic_bitflags);
+	wait_for_completion(&fsg->thread_notifier);
+	close_all_backing_files(fsg);
+	kref_put(&fsg->ref, fsg_release);
+
+	return 0;
+}
+
+static int __init fsg_probe(struct platform_device *pdev)
 {
 	struct usb_mass_storage_platform_data *pdata = pdev->dev.platform_data;
 	int		rc;
@@ -2692,6 +2966,11 @@ static int fsg_probe(struct platform_device *pdev)
 
 	wake_lock_init(&the_fsg->wake_lock, WAKE_LOCK_SUSPEND,
 		       "usb_mass_storage");
+	wake_lock_init(&the_fsg->wake_lock_idle, WAKE_LOCK_IDLE,
+		       "mass_storage_hold_idle");
+
+	fsg_function.hs_descriptors = hs_function;
+	fsg_function.fs_descriptors = fs_function;
 	fsg_function.context = the_fsg;
 	rc = usb_function_register(&fsg_function);
 	if (rc != 0)
@@ -2709,6 +2988,7 @@ err_switch_dev_register:
 
 static struct platform_driver fsg_driver = {
 	.probe = fsg_probe,
+	.remove = __exit_p(fsg_remove),
 	.driver = { .name = DRIVER_NAME, },
 };
 
@@ -2717,3 +2997,11 @@ static int __init fsg_init(void)
 	return platform_driver_register(&fsg_driver);
 }
 module_init(fsg_init);
+
+static void __exit fsg_cleanup(void)
+{
+	platform_driver_unregister(&fsg_driver);
+
+}
+module_exit(fsg_cleanup);
+MODULE_LICENSE("GPL v2");

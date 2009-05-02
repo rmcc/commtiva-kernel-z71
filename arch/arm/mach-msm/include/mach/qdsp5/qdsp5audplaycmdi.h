@@ -17,7 +17,7 @@ EXTERNALIZED FUNCTIONS
     Send buffer to AUDPLAY task
 	
   
-Copyright(c) 1992 - 2009 by QUALCOMM, Incorporated.
+Copyright (c) 1992-2009, Code Aurora Forum. All rights reserved.
 
 This software is licensed under the terms of the GNU General Public
 License version 2, as published by the Free Software Foundation, and
@@ -68,4 +68,30 @@ typedef struct {
 
 } __attribute__((packed)) audplay_cmd_bitstream_data_avail;
 
+#define AUDPLAY_CMD_HPCM_BUF_CFG 0x0003
+#define AUDPLAY_CMD_HPCM_BUF_CFG_LEN \
+  sizeof(struct audplay_cmd_hpcm_buf_cfg)
+
+struct audplay_cmd_hpcm_buf_cfg {
+  unsigned int cmd_id;
+  unsigned int hostpcm_config;
+  unsigned int feedback_frequency;
+  unsigned int byte_swap;
+  unsigned int max_buffers;
+  unsigned int partition_number;
+} __attribute__((packed));
+
+#define AUDPLAY_CMD_BUFFER_REFRESH 0x0004
+#define AUDPLAY_CMD_BUFFER_REFRESH_LEN \
+  sizeof(struct audplay_cmd_buffer_update)
+
+struct audplay_cmd_buffer_refresh {
+  unsigned int cmd_id;
+  unsigned int num_buffers;
+  unsigned int buf_read_count;
+  unsigned int buf0_address;
+  unsigned int buf0_length;
+  unsigned int buf1_address;
+  unsigned int buf1_length;
+} __attribute__((packed));
 #endif /* QDSP5AUDPLAYCMD_H */

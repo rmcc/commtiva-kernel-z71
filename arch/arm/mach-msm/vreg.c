@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/vreg.c
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -22,45 +23,55 @@
 
 #include "proc_comm.h"
 
+#if defined(CONFIG_MSM_VREG_SWITCH_INVERTED)
+#define VREG_SWITCH_ENABLE 0
+#define VREG_SWITCH_DISABLE 1
+#else
+#define VREG_SWITCH_ENABLE 1
+#define VREG_SWITCH_DISABLE 0
+#endif
+
 struct vreg {
 	const char *name;
 	unsigned id;
+	int status;
 };
 
-#define VREG(_name, _id) { .name = _name, .id = _id, }
+#define VREG(_name, _id, _status) \
+	{ .name = _name, .id = _id, .status = _status }
 
 static struct vreg vregs[] = {
-	VREG("msma",	0),
-	VREG("msmp",	1),
-	VREG("msme1",	2),
-	VREG("msmc1",	3),
-	VREG("msmc2",	4),
-	VREG("gp3",	5),
-	VREG("msme2",	6),
-	VREG("gp4",	7),
-	VREG("gp1",	8),
-	VREG("tcxo",	9),
-	VREG("pa",	10),
-	VREG("rftx",	11),
-	VREG("rfrx1",	12),
-	VREG("rfrx2",	13),
-	VREG("synt",	14),
-	VREG("wlan",	15),
-	VREG("usb",	16),
-	VREG("boost",	17),
-	VREG("mmc",	18),
-	VREG("ruim",	19),
-	VREG("msmc0",	20),
-	VREG("gp2",	21),
-	VREG("gp5",	22),
-	VREG("gp6",	23),
-	VREG("rf",	24),
-	VREG("rf_vco",	26),
-	VREG("mpll",	27),
-	VREG("s2",	28),
-	VREG("s3",	29),
-	VREG("rfubm",	30),
-	VREG("ncp",	31),
+	VREG("msma",	0, 0),
+	VREG("msmp",	1, 0),
+	VREG("msme1",	2, 0),
+	VREG("msmc1",	3, 0),
+	VREG("msmc2",	4, 0),
+	VREG("gp3",	5, 0),
+	VREG("msme2",	6, 0),
+	VREG("gp4",	7, 0),
+	VREG("gp1",	8, 0),
+	VREG("tcxo",	9, 0),
+	VREG("pa",	10, 0),
+	VREG("rftx",	11, 0),
+	VREG("rfrx1",	12, 0),
+	VREG("rfrx2",	13, 0),
+	VREG("synt",	14, 0),
+	VREG("wlan",	15, 0),
+	VREG("usb",	16, 0),
+	VREG("boost",	17, 0),
+	VREG("mmc",	18, 0),
+	VREG("ruim",	19, 0),
+	VREG("msmc0",	20, 0),
+	VREG("gp2",	21, 0),
+	VREG("gp5",	22, 0),
+	VREG("gp6",	23, 0),
+	VREG("rf",	24, 0),
+	VREG("rf_vco",	26, 0),
+	VREG("mpll",	27, 0),
+	VREG("s2",	28, 0),
+	VREG("s3",	29, 0),
+	VREG("rfubm",	30, 0),
+	VREG("ncp",	31, 0),
 };
 
 struct vreg *vreg_get(struct device *dev, const char *id)
@@ -70,8 +81,9 @@ struct vreg *vreg_get(struct device *dev, const char *id)
 		if (!strcmp(vregs[n].name, id))
 			return vregs + n;
 	}
-	return 0;
+	return ERR_PTR(-ENOENT);
 }
+EXPORT_SYMBOL(vreg_get);
 
 void vreg_put(struct vreg *vreg)
 {
@@ -80,22 +92,31 @@ void vreg_put(struct vreg *vreg)
 int vreg_enable(struct vreg *vreg)
 {
 	unsigned id = vreg->id;
-	unsigned enable = 1;
-	return msm_proc_comm(PCOM_VREG_SWITCH, &id, &enable);
-}
+	int enable = VREG_SWITCH_ENABLE;
 
-void vreg_disable(struct vreg *vreg)
+	vreg->status = msm_proc_comm(PCOM_VREG_SWITCH, &id, &enable);
+	return vreg->status;
+}
+EXPORT_SYMBOL(vreg_enable);
+
+int vreg_disable(struct vreg *vreg)
 {
 	unsigned id = vreg->id;
-	unsigned enable = 0;
-	msm_proc_comm(PCOM_VREG_SWITCH, &id, &enable);
+	int disable = VREG_SWITCH_DISABLE;
+
+	vreg->status = msm_proc_comm(PCOM_VREG_SWITCH, &id, &disable);
+	return vreg->status;
 }
+EXPORT_SYMBOL(vreg_disable);
 
 int vreg_set_level(struct vreg *vreg, unsigned mv)
 {
 	unsigned id = vreg->id;
-	return msm_proc_comm(PCOM_VREG_SET_LEVEL, &id, &mv);
+
+	vreg->status = msm_proc_comm(PCOM_VREG_SET_LEVEL, &id, &mv);
+	return vreg->status;
 }
+EXPORT_SYMBOL(vreg_set_level);
 
 #if defined(CONFIG_DEBUG_FS)
 
@@ -118,7 +139,14 @@ static int vreg_debug_set(void *data, u64 val)
 
 static int vreg_debug_get(void *data, u64 *val)
 {
-	return -ENOSYS;
+	struct vreg *vreg = data;
+
+	if (!vreg->status)
+		*val = 0;
+	else
+		*val = 1;
+
+	return 0;
 }
 
 DEFINE_SIMPLE_ATTRIBUTE(vreg_fops, vreg_debug_get, vreg_debug_set, "%llu\n");

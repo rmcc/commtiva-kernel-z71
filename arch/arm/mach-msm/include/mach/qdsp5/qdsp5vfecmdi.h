@@ -15,7 +15,7 @@ REFERENCES
 EXTERNALIZED FUNCTIONS
   None
 
-Copyright(c) 1992 - 2008 by QUALCOMM, Incorporated.
+Copyright (c) 1992-2009, Code Aurora Forum. All rights reserved.
 
 This software is licensed under the terms of the GNU General Public
 License version 2, as published by the Free Software Foundation, and

@@ -76,11 +76,13 @@ int hci_register_notifier(struct notifier_block *nb)
 {
 	return atomic_notifier_chain_register(&hci_notifier, nb);
 }
+EXPORT_SYMBOL(hci_register_notifier);
 
 int hci_unregister_notifier(struct notifier_block *nb)
 {
 	return atomic_notifier_chain_unregister(&hci_notifier, nb);
 }
+EXPORT_SYMBOL(hci_unregister_notifier);
 
 static void hci_notify(struct hci_dev *hdev, int event)
 {
@@ -1125,6 +1127,7 @@ static int hci_send_frame(struct sk_buff *skb)
 	/* Get rid of skb owner, prior to sending to the driver. */
 	skb_orphan(skb);
 
+	hci_notify(hdev, HCI_DEV_WRITE);
 	return hdev->send(skb);
 }
 

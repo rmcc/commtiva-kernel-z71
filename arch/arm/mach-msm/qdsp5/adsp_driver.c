@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/qdsp5/adsp_driver.c
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Iliyan Malchev <ibm@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -392,9 +393,18 @@ static long adsp_get_event(struct adsp_device *adev, void __user *arg)
 		rc = -ETOOSMALL;
 		goto end;
 	}
-	if (copy_to_user((void *)(evt.data), data->data.msg16, data->size)) {
-		rc = -EFAULT;
-		goto end;
+	if (data->msg_id != EVENT_MSG_ID) {
+		if (copy_to_user((void *)(evt.data), data->data.msg16,
+					data->size)) {
+			rc = -EFAULT;
+			goto end;
+	}
+	} else {
+		if (copy_to_user((void *)(evt.data), data->data.msg32,
+					data->size)) {
+			rc = -EFAULT;
+			goto end;
+		}
 	}
 
 	evt.type = data->type; /* 0 --> from aDSP, 1 --> from ARM9 */
@@ -406,6 +416,24 @@ static long adsp_get_event(struct adsp_device *adev, void __user *arg)
 end:
 	kfree(data);
 	return rc;
+}
+
+static int adsp_pmem_del(struct msm_adsp_module *module)
+{
+	struct hlist_node *node, *tmp;
+	struct adsp_pmem_region *region;
+
+	mutex_lock(&module->pmem_regions_lock);
+	hlist_for_each_safe(node, tmp, &module->pmem_regions) {
+		region = hlist_entry(node, struct adsp_pmem_region, list);
+		hlist_del(node);
+		put_pmem_file(region->file);
+		kfree(region);
+	}
+	mutex_unlock(&module->pmem_regions_lock);
+	BUG_ON(!hlist_empty(&module->pmem_regions));
+
+	return 0;
 }
 
 static long adsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -432,6 +460,13 @@ static long adsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	case ADSP_IOCTL_GET_EVENT:
 		return adsp_get_event(adev, (void __user *) arg);
 
+	case ADSP_IOCTL_SET_CLKRATE: {
+		unsigned long clk_rate;
+		if (copy_from_user(&clk_rate, (void *) arg, sizeof(clk_rate)))
+			return -EFAULT;
+		return adsp_set_clkrate(adev->module, clk_rate);
+	}
+
 	case ADSP_IOCTL_REGISTER_PMEM: {
 		struct adsp_pmem_info info;
 		if (copy_from_user(&info, (void *) arg, sizeof(info)))
@@ -444,6 +479,9 @@ static long adsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		wake_up(&adev->event_wait);
 		break;
 
+	case ADSP_IOCTL_UNREGISTER_PMEM:
+		return adsp_pmem_del(adev->module);
+
 	default:
 		break;
 	}
@@ -454,26 +492,17 @@ static int adsp_release(struct inode *inode, struct file *filp)
 {
 	struct adsp_device *adev = filp->private_data;
 	struct msm_adsp_module *module = adev->module;
-	struct hlist_node *node, *tmp;
-	struct adsp_pmem_region *region;
+	int rc = 0;
 
 	pr_info("adsp_release() '%s'\n", adev->name);
 
 	/* clear module before putting it to avoid race with open() */
 	adev->module = NULL;
 
-	mutex_lock(&module->pmem_regions_lock);
-	hlist_for_each_safe(node, tmp, &module->pmem_regions) {
-		region = hlist_entry(node, struct adsp_pmem_region, list);
-		hlist_del(node);
-		put_pmem_file(region->file);
-		kfree(region);
-	}
-	mutex_unlock(&module->pmem_regions_lock);
-	BUG_ON(!hlist_empty(&module->pmem_regions));
+	rc = adsp_pmem_del(module);
 
 	msm_adsp_put(module);
-	return 0;
+	return rc;
 }
 
 static void adsp_event(void *driver_data, unsigned id, size_t len,
@@ -494,12 +523,20 @@ static void adsp_event(void *driver_data, unsigned id, size_t len,
 		return;
 	}
 
-	event->type = 0;
-	event->is16 = 0;
-	event->msg_id = id;
-	event->size = len;
+	if (id != EVENT_MSG_ID) {
+		event->type = 0;
+		event->is16 = 0;
+		event->msg_id = id;
+		event->size = len;
 
-	getevent(event->data.msg16, len);
+		getevent(event->data.msg16, len);
+	} else {
+		event->type = 1;
+		event->is16 = 1;
+		event->msg_id = id;
+		event->size = len;
+		getevent(event->data.msg32, len);
+	}
 
 	spin_lock_irqsave(&adev->event_queue_lock, flags);
 	list_add_tail(&event->list, &adev->event_queue);

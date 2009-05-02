@@ -1,6 +1,7 @@
 /* linux/arch/arm/mach-msm/irq.c
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -56,9 +57,17 @@ module_param_named(debug_mask, msm_irq_debug_mask, int, S_IRUGO | S_IWUSR | S_IW
 #define VIC_INT_POLARITY0   VIC_REG(0x0050)  /* 1: NEG, 0: POS */
 #define VIC_INT_POLARITY1   VIC_REG(0x0054)  /* 1: NEG, 0: POS */
 #define VIC_NO_PEND_VAL     VIC_REG(0x0060)
+
+#if defined(CONFIG_ARCH_QSD)
+#define VIC_NO_PEND_VAL_FIQ VIC_REG(0x0064)
+#define VIC_INT_MASTEREN    VIC_REG(0x0068)  /* 1: IRQ, 2: FIQ     */
+#define VIC_CONFIG          VIC_REG(0x006C)  /* 1: USE SC VIC */
+#else
 #define VIC_INT_MASTEREN    VIC_REG(0x0064)  /* 1: IRQ, 2: FIQ     */
 #define VIC_PROTECTION      VIC_REG(0x006C)  /* 1: ENABLE          */
 #define VIC_CONFIG          VIC_REG(0x0068)  /* 1: USE ARM1136 VIC */
+#endif
+
 #define VIC_IRQ_STATUS0     VIC_REG(0x0080)
 #define VIC_IRQ_STATUS1     VIC_REG(0x0084)
 #define VIC_FIQ_STATUS0     VIC_REG(0x0090)
@@ -72,9 +81,22 @@ module_param_named(debug_mask, msm_irq_debug_mask, int, S_IRUGO | S_IWUSR | S_IW
 #define VIC_IRQ_VEC_RD      VIC_REG(0x00D0)  /* pending int # */
 #define VIC_IRQ_VEC_PEND_RD VIC_REG(0x00D4)  /* pending vector addr */
 #define VIC_IRQ_VEC_WR      VIC_REG(0x00D8)
+
+#if defined(CONFIG_ARCH_QSD)
+#define VIC_FIQ_VEC_RD      VIC_REG(0x00DC)
+#define VIC_FIQ_VEC_PEND_RD VIC_REG(0x00E0)
+#define VIC_FIQ_VEC_WR      VIC_REG(0x00E4)
+#define VIC_IRQ_IN_SERVICE  VIC_REG(0x00E8)
+#define VIC_IRQ_IN_STACK    VIC_REG(0x00EC)
+#define VIC_FIQ_IN_SERVICE  VIC_REG(0x00F0)
+#define VIC_FIQ_IN_STACK    VIC_REG(0x00F4)
+#define VIC_TEST_BUS_SEL    VIC_REG(0x00F8)
+#define VIC_IRQ_CTRL_CONFIG VIC_REG(0x00FC)
+#else
 #define VIC_IRQ_IN_SERVICE  VIC_REG(0x00E0)
 #define VIC_IRQ_IN_STACK    VIC_REG(0x00E4)
 #define VIC_TEST_BUS_SEL    VIC_REG(0x00E8)
+#endif
 
 #define VIC_VECTPRIORITY(n) VIC_REG(0x0200+((n) * 4))
 #define VIC_VECTADDR(n)     VIC_REG(0x0400+((n) * 4))
@@ -89,7 +111,7 @@ static struct {
 static uint32_t msm_irq_idle_disable[2];
 
 #define SMSM_FAKE_IRQ (0xff)
-static uint8_t msm_irq_to_smsm[NR_MSM_IRQS] = {
+static uint8_t msm_irq_to_smsm[NR_IRQS] = {
 	[INT_MDDI_EXT] = 1,
 	[INT_MDDI_PRI] = 2,
 	[INT_MDDI_CLIENT] = 3,
@@ -138,6 +160,11 @@ static uint8_t msm_irq_to_smsm[NR_MSM_IRQS] = {
 	[INT_A9_M2A_5] = SMSM_FAKE_IRQ,
 	[INT_GP_TIMER_EXP] = SMSM_FAKE_IRQ,
 	[INT_DEBUG_TIMER_EXP] = SMSM_FAKE_IRQ,
+	[INT_ADSP_A11] = SMSM_FAKE_IRQ,
+#if defined(CONFIG_ARCH_QSD)
+	[INT_SIRC_0] = SMSM_FAKE_IRQ,
+	[INT_SIRC_1] = SMSM_FAKE_IRQ,
+#endif
 };
 
 static void msm_irq_ack(unsigned int irq)
@@ -252,19 +279,29 @@ int msm_irq_idle_sleep_allowed(void)
 	return !(msm_irq_idle_disable[0] || msm_irq_idle_disable[1]);
 }
 
-/* If arm9_wake is set: pass control to the other core.
- * If from_idle is not set: disable non-wakeup interrupts.
+/*
+ * Prepare interrupt subsystem for entering sleep -- phase 1.
+ * If arm9_wake is true, return currently enabled interrupts in *irq_mask.
  */
-void msm_irq_enter_sleep1(bool arm9_wake, int from_idle)
+void msm_irq_enter_sleep1(bool arm9_wake, int from_idle, uint32_t *irq_mask)
 {
-	struct smsm_interrupt_info int_info;
 	if (arm9_wake) {
-		int_info.aArm_en_mask = msm_irq_smsm_wake_enable[!from_idle];
-		int_info.aArm_interrupts_pending = 0;
-		smsm_set_interrupt_info(&int_info);
+		*irq_mask = msm_irq_smsm_wake_enable[!from_idle];
+		if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP)
+			printk(KERN_INFO
+				"%s irq_mask %x\n", __func__, *irq_mask);
 	}
 }
 
+/*
+ * Prepare interrupt subsystem for entering sleep -- phase 2.
+ * Detect any pending interrupts and configure interrupt hardware.
+ *
+ * Return value:
+ * -EAGAIN: there are pending interrupt(s); interrupt configuration
+ *          is not changed.
+ *       0: success
+ */
 int msm_irq_enter_sleep2(bool arm9_wake, int from_idle)
 {
 	int limit = 10;
@@ -277,21 +314,23 @@ int msm_irq_enter_sleep2(bool arm9_wake, int from_idle)
 	WARN_ON_ONCE(!arm9_wake && !from_idle);
 
 	if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP)
-		printk(KERN_INFO "msm_irq_enter_sleep change irq, pend %x %x\n",
-		       readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+		printk(KERN_INFO "%s change irq, pend %x %x\n", __func__,
+			readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+
 	pending0 = readl(VIC_IRQ_STATUS0);
 	pending1 = readl(VIC_IRQ_STATUS1);
 	pending0 &= msm_irq_shadow_reg[0].int_en[!from_idle];
 	/* Clear INT_A9_M2A_5 since requesting sleep triggers it */
 	pending0 &= ~(1U << INT_A9_M2A_5);
 	pending1 &= msm_irq_shadow_reg[1].int_en[!from_idle];
+
 	if (pending0 || pending1) {
 		if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_ABORT)
-			printk(KERN_INFO "msm_irq_enter_sleep2 abort %x %x\n",
-			      pending0, pending1);
+			printk(KERN_INFO "%s abort %x %x\n", __func__,
+				pending0, pending1);
 		return -EAGAIN;
 	}
-	    
+
 	writel(0, VIC_INT_EN0);
 	writel(0, VIC_INT_EN1);
 
@@ -302,8 +341,8 @@ int msm_irq_enter_sleep2(bool arm9_wake, int from_idle)
 			break;
 		pend_irq = readl(VIC_IRQ_VEC_PEND_RD);
 		if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_INT)
-			printk(KERN_INFO "msm_irq_enter_sleep cleared "
-			       "int %d (%d)\n", irq, pend_irq);
+			printk(KERN_INFO "%s cleared int %d (%d)\n",
+				__func__, irq, pend_irq);
 	}
 
 	if (arm9_wake) {
@@ -313,95 +352,104 @@ int msm_irq_enter_sleep2(bool arm9_wake, int from_idle)
 		writel(msm_irq_shadow_reg[0].int_en[1], VIC_INT_ENSET0);
 		writel(msm_irq_shadow_reg[1].int_en[1], VIC_INT_ENSET1);
 	}
+
 	return 0;
 }
 
-void msm_irq_exit_sleep1(void)
+/*
+ * Restore interrupt subsystem from sleep -- phase 1.
+ * Configure interrupt hardware.
+ */
+void msm_irq_exit_sleep1(uint32_t irq_mask, uint32_t wakeup_reason,
+	uint32_t pending_irqs)
 {
-	struct smsm_interrupt_info *int_info;
 	int i;
 
 	msm_irq_ack(INT_A9_M2A_6);
+
 	for (i = 0; i < 2; i++) {
-		writel(msm_irq_shadow_reg[i].int_type, VIC_INT_TYPE0 + i * 4);
-		writel(msm_irq_shadow_reg[i].int_polarity, VIC_INT_POLARITY0 + i * 4);
-		writel(msm_irq_shadow_reg[i].int_en[0], VIC_INT_EN0 + i * 4);
-		writel(msm_irq_shadow_reg[i].int_select, VIC_INT_SELECT0 + i * 4);
+		writel(msm_irq_shadow_reg[i].int_type,
+			VIC_INT_TYPE0 + i * 4);
+		writel(msm_irq_shadow_reg[i].int_polarity,
+			VIC_INT_POLARITY0 + i * 4);
+		writel(msm_irq_shadow_reg[i].int_en[0],
+			VIC_INT_EN0 + i * 4);
+		writel(msm_irq_shadow_reg[i].int_select,
+			VIC_INT_SELECT0 + i * 4);
 	}
+
 	writel(3, VIC_INT_MASTEREN);
-	int_info = smem_alloc(SMEM_SMSM_INT_INFO, sizeof(*int_info));
-	if (int_info == NULL) {
-		printk(KERN_ERR "msm_irq_exit_sleep <SM NO INT_INFO>\n");
-		return;
-	}
+
 	if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP)
-		printk(KERN_INFO "msm_irq_exit_sleep1 %x %x %x now %x %x\n",
-		       int_info->aArm_en_mask,
-		       int_info->aArm_interrupts_pending,
-		       int_info->aArm_wakeup_reason,
-		       readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+		printk(KERN_INFO "%s %x %x %x now %x %x\n",
+			__func__, irq_mask, pending_irqs, wakeup_reason,
+			readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
 }
 
-void msm_irq_exit_sleep2(void)
+/*
+ * Restore interrupt subsystem from sleep -- phase 2.
+ * Poke the specified pending interrupts into interrupt hardware.
+ */
+void msm_irq_exit_sleep2(uint32_t irq_mask, uint32_t wakeup_reason,
+	uint32_t pending)
 {
 	int i;
-	uint32_t pending;
-	struct smsm_interrupt_info *int_info;
-	int_info = smem_alloc(SMEM_SMSM_INT_INFO, sizeof(*int_info));
-	if (int_info == NULL) {
-		printk(KERN_ERR "msm_irq_exit_sleep <SM NO INT_INFO>\n");
-		return;
-	}
+
 	if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP)
-		printk(KERN_INFO "msm_irq_exit_sleep2 %x %x %x now %x %x\n",
-		       int_info->aArm_en_mask,
-		       int_info->aArm_interrupts_pending,
-		       int_info->aArm_wakeup_reason,
-		       readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
-	pending = int_info->aArm_interrupts_pending;
+		printk(KERN_INFO "%s %x %x %x now %x %x\n",
+			__func__, irq_mask, pending, wakeup_reason,
+			readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+
 	for (i = 0; pending && i < ARRAY_SIZE(msm_irq_to_smsm); i++) {
 		unsigned reg_offset = (i & 32) ? 4 : 0;
 		uint32_t reg_mask = 1UL << (i & 31);
 		int smsm_irq = msm_irq_to_smsm[i];
 		uint32_t smsm_mask;
+
 		if (smsm_irq == 0)
 			continue;
+
 		smsm_mask = 1U << (smsm_irq - 1);
 		if (!(pending & smsm_mask))
 			continue;
+
 		pending &= ~smsm_mask;
 		if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_INT)
-			printk(KERN_INFO "msm_irq_exit_sleep2: irq %d "
-			       "still pending %x now %x %x\n", i, pending,
-			       readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+			printk(KERN_INFO
+				"%s: irq %d still pending %x now %x %x\n",
+				__func__, i, pending,
+				readl(VIC_IRQ_STATUS0),
+				readl(VIC_IRQ_STATUS1));
 #if 0 /* debug intetrrupt trigger */
 		if (readl(VIC_IRQ_STATUS0 + reg_offset) & reg_mask)
 			writel(reg_mask, VIC_INT_CLEAR0 + reg_offset);
 #endif
 		if (readl(VIC_IRQ_STATUS0 + reg_offset) & reg_mask)
 			continue;
+
 		writel(reg_mask, VIC_SOFTINT0 + reg_offset);
+
 		if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_INT_TRIGGER)
-			printk(KERN_INFO "msm_irq_exit_sleep2: irq %d need "
-			       "trigger, now %x %x\n", i,
-			       readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1));
+			printk(KERN_INFO
+				"%s: irq %d need trigger, now %x %x\n",
+				__func__, i,
+				readl(VIC_IRQ_STATUS0),
+				readl(VIC_IRQ_STATUS1));
 	}
 }
 
-void msm_irq_exit_sleep3(void)
+/*
+ * Restore interrupt subsystem from sleep -- phase 3.
+ * Print debug information.
+ */
+void msm_irq_exit_sleep3(uint32_t irq_mask, uint32_t wakeup_reason,
+	uint32_t pending_irqs)
 {
-	struct smsm_interrupt_info *int_info;
-	int_info = smem_alloc(SMEM_SMSM_INT_INFO, sizeof(*int_info));
-	if (int_info == NULL) {
-		printk(KERN_ERR "msm_irq_exit_sleep <SM NO INT_INFO>\n");
-		return;
-	}
 	if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP)
-		printk(KERN_INFO "msm_irq_exit_sleep3 %x %x %x now %x %x "
-		       "state %x\n", int_info->aArm_en_mask,
-		       int_info->aArm_interrupts_pending,
-		       int_info->aArm_wakeup_reason, readl(VIC_IRQ_STATUS0),
-		       readl(VIC_IRQ_STATUS1), smsm_get_state());
+		printk(KERN_INFO "%s %x %x %x now %x %x state %x\n",
+			__func__, irq_mask, pending_irqs, wakeup_reason,
+			readl(VIC_IRQ_STATUS0), readl(VIC_IRQ_STATUS1),
+			smsm_get_state(SMSM_MODEM_STATE));
 }
 
 static struct irq_chip msm_irq_chip = {

@@ -1,7 +1,7 @@
 /* include/linux/msm_adsp.h
  *
- * Copyright (c) QUALCOMM Incorporated
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Iliyan Malchev <ibm@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -19,7 +19,6 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
-#include <asm/sizes.h>
 
 #define ADSP_IOCTL_MAGIC 'q'
 
@@ -54,6 +53,9 @@ struct adsp_event_t {
 
 #define ADSP_IOCTL_GET_EVENT \
 	_IOWR(ADSP_IOCTL_MAGIC, 5, struct adsp_event_data_t *)
+
+#define ADSP_IOCTL_SET_CLKRATE \
+	_IOR(ADSP_IOCTL_MAGIC, 6, unsigned)
 
 #define ADSP_IOCTL_DISABLE_EVENT_RSP \
 	_IOR(ADSP_IOCTL_MAGIC, 10, unsigned)

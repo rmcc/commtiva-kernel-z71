@@ -1,6 +1,7 @@
 /* linux/arch/arm/mach-msm/gpio.c
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -17,8 +18,10 @@
 #include <asm/gpio.h>
 #include <linux/irq.h>
 #include <linux/module.h>
+#include <linux/debugfs.h>
 #include "gpio_chip.h"
 #include "gpio_hw.h"
+#include "proc_comm.h"
 
 #include "smd_private.h"
 
@@ -167,7 +170,11 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 		},
 		.chip = {
 			.start = 95,
+#if defined(CONFIG_ARCH_QSD)
+			.end = 103,
+#else
 			.end = 106,
+#endif
 			.configure = msm_gpio_configure,
 			.get_irq_num = msm_gpio_get_irq_num,
 			.read = msm_gpio_read,
@@ -188,8 +195,13 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 			.oe =          GPIO_OE_5,
 		},
 		.chip = {
-			.start = 107,
+#if defined(CONFIG_ARCH_QSD)
+			.start = 104,
 			.end = 121,
+#else
+			.start = 107,
+			.end = 132,
+#endif
 			.configure = msm_gpio_configure,
 			.get_irq_num = msm_gpio_get_irq_num,
 			.read = msm_gpio_read,
@@ -197,7 +209,53 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 			.read_detect_status = msm_gpio_read_detect_status,
 			.clear_detect_status = msm_gpio_clear_detect_status
 		}
-	}
+	},
+#if defined(CONFIG_ARCH_QSD)
+	{
+		.regs = {
+			.out =         GPIO_OUT_6,
+			.in =          GPIO_IN_6,
+			.int_status =  GPIO_INT_STATUS_6,
+			.int_clear =   GPIO_INT_CLEAR_6,
+			.int_en =      GPIO_INT_EN_6,
+			.int_edge =    GPIO_INT_EDGE_6,
+			.int_pos =     GPIO_INT_POS_6,
+			.oe =          GPIO_OE_6,
+		},
+		.chip = {
+			.start = 122,
+			.end = 152,
+			.configure = msm_gpio_configure,
+			.get_irq_num = msm_gpio_get_irq_num,
+			.read = msm_gpio_read,
+			.write = msm_gpio_write,
+			.read_detect_status = msm_gpio_read_detect_status,
+			.clear_detect_status = msm_gpio_clear_detect_status
+		}
+	},
+	{
+		.regs = {
+			.out =         GPIO_OUT_7,
+			.in =          GPIO_IN_7,
+			.int_status =  GPIO_INT_STATUS_7,
+			.int_clear =   GPIO_INT_CLEAR_7,
+			.int_en =      GPIO_INT_EN_7,
+			.int_edge =    GPIO_INT_EDGE_7,
+			.int_pos =     GPIO_INT_POS_7,
+			.oe =          GPIO_OE_7,
+		},
+		.chip = {
+			.start = 153,
+			.end = 164,
+			.configure = msm_gpio_configure,
+			.get_irq_num = msm_gpio_get_irq_num,
+			.read = msm_gpio_read,
+			.write = msm_gpio_write,
+			.read_detect_status = msm_gpio_read_detect_status,
+			.clear_detect_status = msm_gpio_clear_detect_status
+		}
+	},
+#endif
 };
 
 static void msm_gpio_update_both_edge_detect(struct msm_gpio_chip *msm_chip)
@@ -399,16 +457,16 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.set_type  = msm_gpio_irq_set_type,
 };
 
-#define NUM_GPIO_INT_REGISTERS 6
+#define NUM_GPIO_SMEM_BANKS 6
 #define GPIO_SMEM_NUM_GROUPS 2
 #define GPIO_SMEM_MAX_PC_INTERRUPTS 8
 struct tramp_gpio_smem
 {
 	uint16_t num_fired[GPIO_SMEM_NUM_GROUPS];
 	uint16_t fired[GPIO_SMEM_NUM_GROUPS][GPIO_SMEM_MAX_PC_INTERRUPTS];
-	uint32_t enabled[NUM_GPIO_INT_REGISTERS];
-	uint32_t detection[NUM_GPIO_INT_REGISTERS];
-	uint32_t polarity[NUM_GPIO_INT_REGISTERS];
+	uint32_t enabled[NUM_GPIO_SMEM_BANKS];
+	uint32_t detection[NUM_GPIO_SMEM_BANKS];
+	uint32_t polarity[NUM_GPIO_SMEM_BANKS];
 };
 
 static void msm_gpio_sleep_int(unsigned long arg)
@@ -416,7 +474,7 @@ static void msm_gpio_sleep_int(unsigned long arg)
 	int i, j;
 	struct tramp_gpio_smem *smem_gpio;
 
-	BUILD_BUG_ON(ARRAY_SIZE(msm_gpio_chips) != ARRAY_SIZE(smem_gpio->enabled));
+	BUILD_BUG_ON(NR_GPIO_IRQS > NUM_GPIO_SMEM_BANKS * 32);
 
 	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio)); 
 	if (smem_gpio == NULL)
@@ -439,8 +497,6 @@ void msm_gpio_enter_sleep(int from_idle)
 {
 	int i;
 	struct tramp_gpio_smem *smem_gpio;
-
-	BUILD_BUG_ON(ARRAY_SIZE(msm_gpio_chips) != ARRAY_SIZE(smem_gpio->enabled));
 
 	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio)); 
 
@@ -491,8 +547,6 @@ void msm_gpio_exit_sleep(void)
 	int i;
 	struct tramp_gpio_smem *smem_gpio;
 
-	BUILD_BUG_ON(ARRAY_SIZE(msm_gpio_chips) != ARRAY_SIZE(smem_gpio->enabled));
-
 	smem_gpio = smem_alloc(SMEM_GPIO_INT, sizeof(*smem_gpio)); 
 
 	for (i = 0; i < ARRAY_SIZE(msm_gpio_chips); i++) {
@@ -530,3 +584,56 @@ static int __init msm_init_gpio(void)
 }
 
 postcore_initcall(msm_init_gpio);
+
+int gpio_tlmm_config(unsigned config, unsigned disable)
+{
+	return msm_proc_comm(PCOM_RPC_GPIO_TLMM_CONFIG_EX, &config, &disable);
+}
+EXPORT_SYMBOL(gpio_tlmm_config);
+
+#if defined(CONFIG_DEBUG_FS)
+
+static int msm_gpio_debug_result = 1;
+
+static int gpio_enable_set(void *data, u64 val)
+{
+	msm_gpio_debug_result = gpio_tlmm_config(val, 0);
+	return 0;
+}
+static int gpio_disable_set(void *data, u64 val)
+{
+	msm_gpio_debug_result = gpio_tlmm_config(val, 1);
+	return 0;
+}
+
+static int gpio_debug_get(void *data, u64 *val)
+{
+	unsigned int result = msm_gpio_debug_result;
+	msm_gpio_debug_result = 1;
+	if (result)
+		*val = 1;
+	else
+		*val = 0;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(gpio_enable_fops, gpio_debug_get,
+						gpio_enable_set, "%llu\n");
+DEFINE_SIMPLE_ATTRIBUTE(gpio_disable_fops, gpio_debug_get,
+						gpio_disable_set, "%llu\n");
+
+static int __init gpio_debug_init(void)
+{
+	struct dentry *dent;
+	dent = debugfs_create_dir("gpio", 0);
+	if (IS_ERR(dent))
+		return 0;
+
+	debugfs_create_file("enable", 0644, dent, 0, &gpio_enable_fops);
+	debugfs_create_file("disable", 0644, dent, 0, &gpio_disable_fops);
+	return 0;
+}
+
+device_initcall(gpio_debug_init);
+#endif
+

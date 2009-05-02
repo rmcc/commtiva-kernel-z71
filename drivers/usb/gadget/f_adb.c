@@ -234,7 +234,7 @@ static void adb_complete_out(struct usb_ep *ep, struct usb_request *req)
 	wake_up(&dev->read_wq);
 }
 
-static int __init create_bulk_endpoints(struct adb_dev *dev,
+static int create_bulk_endpoints(struct adb_dev *dev,
 				struct usb_endpoint_descriptor *in_desc,
 				struct usb_endpoint_descriptor *out_desc)
 {
@@ -489,7 +489,7 @@ static struct miscdevice adb_device = {
 	.fops = &adb_fops,
 };
 
-static int __init
+static int
 adb_function_bind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usb_composite_dev *cdev = c->cdev;
@@ -512,6 +512,9 @@ adb_function_bind(struct usb_configuration *c, struct usb_function *f)
 	if (ret)
 		return ret;
 
+	dev->ep_in->driver_data = cdev;
+	dev->ep_out->driver_data = cdev;
+
 	/* support high speed hardware */
 	if (gadget_is_dualspeed(c->cdev->gadget)) {
 		adb_highspeed_in_desc.bEndpointAddress =
@@ -532,13 +535,13 @@ adb_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	struct adb_dev	*dev = func_to_dev(f);
 	struct usb_request *req;
 
-	spin_lock_irq(&dev->lock);
 
 	while ((req = req_get(dev, &dev->rx_idle)))
 		adb_request_free(req, dev->ep_out);
 	while ((req = req_get(dev, &dev->tx_idle)))
 		adb_request_free(req, dev->ep_in);
 
+	spin_lock_irq(&dev->lock);
 	dev->online = 0;
 	dev->error = 1;
 	spin_unlock_irq(&dev->lock);
@@ -594,7 +597,7 @@ static void adb_function_disable(struct usb_function *f)
 	VDBG(cdev, "%s disabled\n", dev->function.name);
 }
 
-int __init adb_function_add(struct usb_composite_dev *cdev,
+int adb_function_add(struct usb_composite_dev *cdev,
 	struct usb_configuration *c)
 {
 	struct adb_dev *dev;
@@ -621,8 +624,8 @@ int __init adb_function_add(struct usb_composite_dev *cdev,
 
 	dev->cdev = cdev;
 	dev->function.name = "adb";
-	dev->function.descriptors = null_adb_descs;
-	dev->function.hs_descriptors = null_adb_descs;
+	dev->function.descriptors = fs_adb_descs;
+	dev->function.hs_descriptors = hs_adb_descs;
 	dev->function.bind = adb_function_bind;
 	dev->function.unbind = adb_function_unbind;
 	dev->function.set_alt = adb_function_set_alt;

@@ -2,6 +2,7 @@
  *  linux/arch/arm/mm/fault.c
  *
  *  Copyright (C) 1995  Linus Torvalds
+ *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *  Modifications for ARM processor (c) 1995-2004 Russell King
  *
  * This program is free software; you can redistribute it and/or modify
@@ -399,6 +400,39 @@ do_bad(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	return 1;
 }
 
+static int
+do_imprecise_ext(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
+{
+#ifdef CONFIG_ARCH_QSD
+	unsigned int regval;
+	static unsigned char flush_toggle;
+
+	asm("mrc p15, 0, %0, c5, c1, 0\n" /* read adfsr for fault status */
+	    : "=r" (regval));
+	if (regval == 0x2) {
+		/* Fault was caused by icache parity error. Alternate
+		 * simply retrying the access and flushing the icache. */
+		flush_toggle ^= 1;
+		if (flush_toggle)
+			asm("mcr p15, 0, %0, c7, c5, 0\n"
+			    :
+			    : "r" (regval)); /* input value is ignored */
+		/* Clear fault in EFSR. */
+		asm("mcr p15, 7, %0, c15, c0, 1\n"
+		    :
+		    : "r" (regval));
+		/* Clear fault in ADFSR. */
+		regval = 0;
+		asm("mcr p15, 0, %0, c5, c1, 0\n"
+		    :
+		    : "r" (regval));
+		return 0;
+	}
+#endif
+
+	return 1;
+}
+
 static struct fsr_info {
 	int	(*fn)(unsigned long addr, unsigned int fsr, struct pt_regs *regs);
 	int	sig;
@@ -436,7 +470,7 @@ static struct fsr_info {
 	{ do_bad,		SIGBUS,  0,		"unknown 19"			   },
 	{ do_bad,		SIGBUS,  0,		"lock abort"			   }, /* xscale */
 	{ do_bad,		SIGBUS,  0,		"unknown 21"			   },
-	{ do_bad,		SIGBUS,  BUS_OBJERR,	"imprecise external abort"	   }, /* xscale */
+	{ do_imprecise_ext,	SIGBUS,  BUS_OBJERR,	"imprecise external abort"	   }, /* xscale */
 	{ do_bad,		SIGBUS,  0,		"unknown 23"			   },
 	{ do_bad,		SIGBUS,  0,		"dcache parity error"		   }, /* xscale */
 	{ do_bad,		SIGBUS,  0,		"unknown 25"			   },

@@ -12,7 +12,7 @@ REFERENCES
   None
 
   
-Copyright(c) 1992 - 2009 by QUALCOMM, Incorporated.
+Copyright (c) 1992-2009, Code Aurora Forum. All rights reserved.
 
 This software is licensed under the terms of the GNU General Public
 License version 2, as published by the Free Software Foundation, and
@@ -54,4 +54,17 @@ typedef struct{
   unsigned int	bitstarem_buf_start;
   unsigned int	bitstream_buf_len;
 } __attribute__((packed)) audplay_msg_dec_needs_data;
+
+#define AUDPLAY_MSG_BUFFER_UPDATE 0x0004
+#define AUDPLAY_MSG_BUFFER_UPDATE_LEN \
+  sizeof(struct audplay_msg_buffer_update)
+
+struct audplay_msg_buffer_update {
+  unsigned int buffer_write_count;
+  unsigned int num_of_buffer;
+  unsigned int buf0_address;
+  unsigned int buf0_length;
+  unsigned int buf1_address;
+  unsigned int buf1_length;
+} __attribute__((packed));
 #endif /* QDSP5AUDPLAYMSG_H */

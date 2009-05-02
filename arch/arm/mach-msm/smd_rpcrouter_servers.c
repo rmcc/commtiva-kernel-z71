@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/rpc_servers.c
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Iliyan Malchev <ibm@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -24,12 +25,13 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/kthread.h>
-#include <asm/uaccess.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
 #include <linux/wakelock.h>
 
 #include <linux/msm_rpcrouter.h>
+#include <linux/uaccess.h>
+
 #include <mach/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
 
@@ -57,7 +59,8 @@ static struct msm_rpc_server *rpc_server_find(uint32_t prog, uint32_t vers)
 
 	mutex_lock(&rpc_server_list_lock);
 	list_for_each_entry(server, &rpc_server_list, list) {
-		if ((server->prog == prog) && (server->vers == vers)) {
+		if ((server->prog == prog) &&
+		    msm_rpc_is_compatible_version(server->vers, vers)) {
 			mutex_unlock(&rpc_server_list_lock);
 			return server;
 		}
@@ -112,7 +115,11 @@ static int rpc_send_accepted_void_reply(struct msm_rpc_endpoint *client,
 	reply->data.acc_hdr.verf_flavor = 0;
 	reply->data.acc_hdr.verf_length = 0;
 
-	rc = msm_rpc_write(endpoint, reply_buf, sizeof(reply_buf));
+	rc = msm_rpc_write(client, reply_buf, sizeof(reply_buf));
+	if (rc ==  -ENETRESET) {
+		/* Modem restarted, drop reply, clear state */
+		msm_rpc_clear_netreset(client);
+	}
 	if (rc < 0)
 		printk(KERN_ERR
 		       "%s: could not write response: %d\n",
@@ -184,6 +191,8 @@ static int rpc_servers_thread(void *data)
 
 static int rpcservers_probe(struct platform_device *pdev)
 {
+	struct task_struct *server_thread;
+
 	endpoint = msm_rpc_open();
 	if (IS_ERR(endpoint))
 		return PTR_ERR(endpoint);
@@ -193,7 +202,9 @@ static int rpcservers_probe(struct platform_device *pdev)
 	rpc_server_register_all();
 
 	/* start the kernel thread */
-	kthread_run(rpc_servers_thread, NULL, "krpcserversd");
+	server_thread = kthread_run(rpc_servers_thread, NULL, "krpcserversd");
+	if (IS_ERR(server_thread))
+		return PTR_ERR(server_thread);
 
 	return 0;
 }

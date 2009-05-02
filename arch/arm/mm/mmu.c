@@ -191,6 +191,12 @@ static struct mem_type mem_types[] = {
 		.prot_sect	= PROT_SECT_DEVICE | PMD_SECT_S,
 		.domain		= DOMAIN_IO,
 	},
+	[MT_DEVICE_STRONGLY_ORDERED] = {  /* Guaranteed strongly ordered */
+		.prot_pte       = PROT_PTE_DEVICE,
+		.prot_l1        = PMD_TYPE_TABLE,
+		.prot_sect      = PROT_SECT_DEVICE | PMD_SECT_UNCACHED,
+		.domain         = DOMAIN_IO,
+	},
 	[MT_DEVICE_NONSHARED] = { /* ARMv6 non-shared device */
 		.prot_pte	= PROT_PTE_DEVICE | L_PTE_MT_DEV_NONSHARED,
 		.prot_l1	= PMD_TYPE_TABLE,

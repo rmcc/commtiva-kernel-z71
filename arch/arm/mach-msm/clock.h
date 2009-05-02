@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/clock.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007 QUALCOMM Incorporated
+ * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -19,18 +19,24 @@
 
 #include <linux/list.h>
 
-#define CLKFLAG_USE_MAX_TO_SET		(0x00000001)
-#define CLKFLAG_AUTO_OFF		(0x00000002)
-#define CLKFLAG_USE_MIN_TO_SET		(0x00000004)
+#define CLKFLAG_INVERT			0x00000001
+#define CLKFLAG_NOINVERT		0x00000002
+#define CLKFLAG_NONEST			0x00000004
+#define CLKFLAG_NORESET			0x00000008
 
-#define CLKFLAG_ARCH_MSM7X00A		(0x00010000)
-#define CLKFLAG_ARCH_ALL		(0xffff0000)
+#define CLK_FIRST_AVAILABLE_FLAG	0x00000100
+#define CLKFLAG_AUTO_OFF		0x00000200
+#define CLKFLAG_MIN			0x00000400
+#define CLKFLAG_MAX			0x00000800
 
 struct clk {
 	uint32_t id;
 	uint32_t count;
 	uint32_t flags;
 	const char *name;
+#ifdef CONFIG_DEBUG_FS
+	const char *dbg_name;
+#endif
 	struct list_head list;
 	struct device *dev;
 };
@@ -81,12 +87,40 @@ struct clk {
 #define USB_HS_PCLK	37  /* High speed USB pbus clock */
 #define USB_OTG_CLK	38  /* Full speed USB clock */
 #define VDC_CLK		39  /* Video controller clock */
-#define VFE_CLK		40  /* Camera / Video Front End clock */
-#define VFE_MDC_CLK	41  /* VFE MDDI client clock */
+#define VFE_MDC_CLK	40  /* Camera / Video Front End clock */
+#define VFE_CLK		41  /* VFE MDDI client clock */
 
-#define NR_CLKS		42
+#define MDP_LCDC_PCLK_CLK 42
+#define MDP_LCDC_PAD_PCLK_CLK 43
+#define MDP_VSYNC_CLK	44
 
-extern struct clk msm_clocks[];
+#define SPI_CLK		45
+#define VFE_AXI_CLK	46
+
+#define NR_CLKS		47
+
+#ifdef CONFIG_DEBUG_FS
+#define CLOCK_DBG_NAME(x) .dbg_name = x,
+#else
+#define CLOCK_DBG_NAME(x)
+#endif
+
+#define CLOCK(clk_name, clk_id, clk_dev, clk_flags) {	\
+	.name = clk_name, \
+	.id = clk_id, \
+	.flags = clk_flags, \
+	.dev = clk_dev, \
+	 CLOCK_DBG_NAME(#clk_id) \
+	}
+
+#define OFF CLKFLAG_AUTO_OFF
+#define CLK_MIN CLKFLAG_MIN
+#define CLK_MAX CLKFLAG_MAX
+#define CLK_MINMAX (CLK_MIN | CLK_MAX)
+
+int msm_clock_require_tcxo(unsigned long *reason, int nbits);
+int msm_clock_get_name(uint32_t id, char *name, uint32_t size);
+int pc_clk_set_min_rate(unsigned id, unsigned rate);
 
 #endif
 

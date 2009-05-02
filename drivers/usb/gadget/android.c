@@ -2,6 +2,7 @@
  * Gadget Driver for Android
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -35,6 +36,7 @@
 
 #include "f_mass_storage.h"
 #include "f_adb.h"
+#include "u_serial.h"
 
 #include "gadget_chips.h"
 
@@ -72,10 +74,14 @@ struct android_dev {
 
 	int adb_enabled;
 	int nluns;
+	struct android_usb_platform_data *pdata;
+	unsigned long functions;
 };
 
+static int acm_func_cnt;
 static atomic_t adb_enable_excl;
 static struct android_dev *_android_dev;
+static void android_switch_composition(unsigned short pid);
 
 /* string IDs are assigned dynamically */
 
@@ -113,10 +119,14 @@ static struct usb_device_descriptor device_desc = {
 	.bNumConfigurations   = 1,
 };
 
-static int __init android_bind_config(struct usb_configuration *c)
+static void enable_adb(struct android_dev *dev, int enable);
+
+static int  android_bind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = _android_dev;
-	int ret;
+	int ret = -EINVAL;
+	unsigned long n;
+	acm_func_cnt = 0;
 	printk(KERN_DEBUG "android_bind_config\n");
 
 	ret = mass_storage_function_add(dev->cdev, c, dev->nluns);
@@ -129,11 +139,22 @@ static struct usb_configuration android_config_driver = {
 	.label		= "android",
 	.bind		= android_bind_config,
 	.bConfigurationValue = 1,
-	.bmAttributes	= USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER,
+	.bmAttributes	= (USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER |
+				USB_CONFIG_ATT_WAKEUP),
 	.bMaxPower	= 0x80, /* 250ma */
 };
 
-static int __init android_bind(struct usb_composite_dev *cdev)
+static void android_unbind(struct usb_composite_dev *cdev)
+{
+	struct android_dev *dev = _android_dev;
+
+	if (dev->adb_enabled)
+		dev->adb_enabled = 0;
+	if (acm_func_cnt)
+		gserial_cleanup();
+
+}
+static int  android_bind(struct usb_composite_dev *cdev)
 {
 	struct android_dev *dev = _android_dev;
 	struct usb_gadget	*gadget = cdev->gadget;
@@ -192,6 +213,21 @@ static int __init android_bind(struct usb_composite_dev *cdev)
 
 	usb_gadget_set_selfpowered(gadget);
 	dev->cdev = cdev;
+	device_desc.idProduct = dev->product_id;
+	if (acm_func_cnt) {
+		ret = gserial_setup(cdev->gadget, acm_func_cnt);
+		if (ret < 0)
+			return ret;
+	}
+	if (acm_func_cnt) {
+		device_desc.bDeviceClass         = USB_CLASS_MISC;
+		device_desc.bDeviceSubClass      = USB_SUB_CLASS_COMMON;
+		device_desc.bDeviceProtocol      = USB_PROTOCOL_IAD;
+	} else {
+		device_desc.bDeviceClass         = USB_CLASS_PER_INTERFACE;
+		device_desc.bDeviceSubClass      = 0;
+		device_desc.bDeviceProtocol      = 0;
+	}
 
 	return 0;
 }
@@ -201,6 +237,69 @@ static struct usb_composite_driver android_usb_driver = {
 	.dev		= &device_desc,
 	.strings	= dev_strings,
 	.bind		= android_bind,
+	.unbind		= android_unbind,
+};
+static ssize_t android_show_compswitch(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+	struct android_dev *device = _android_dev;
+	int i;
+
+	i = scnprintf(buf, PAGE_SIZE,
+			"composition product id = %x\n",
+				device->product_id);
+	return i;
+}
+
+static ssize_t android_store_compswitch(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t size)
+{
+	unsigned long pid;
+	if (!strict_strtoul(buf, 16, &pid)) {
+		pr_info("%s: Requested New Product id = %lx\n", __func__, pid);
+		android_switch_composition((unsigned short)pid);
+	} else
+		pr_info("%s: strict_strtoul conversion failed\n", __func__);
+
+	return size;
+}
+
+static unsigned int android_validate_product_id(unsigned short pid)
+{
+	struct android_dev *dev = _android_dev;
+	int i;
+
+	if (!dev->pdata)
+		return 0;
+
+	for (i = 0; i < dev->pdata->num_compositions; i++) {
+		if (dev->pdata->compositions[i].product_id == pid) {
+			dev->product_id = pid;
+			dev->functions = dev->pdata->compositions[i].functions;
+			return dev->functions;
+		}
+	}
+	return 0;
+}
+static void android_switch_composition(unsigned short pid)
+{
+	if (!android_validate_product_id(pid))
+		return;
+	usb_composite_unregister(&android_usb_driver);
+	usb_composite_register(&android_usb_driver);
+}
+static DEVICE_ATTR(composition, 0664,
+		android_show_compswitch, android_store_compswitch);
+
+static struct attribute *android_attrs[] = {
+	&dev_attr_composition.attr,
+	NULL,
+};
+
+static struct attribute_group android_attr_grp = {
+	.attrs = android_attrs,
 };
 
 static void enable_adb(struct android_dev *dev, int enable)
@@ -275,6 +374,7 @@ static int __init android_probe(struct platform_device *pdev)
 				__constant_cpu_to_le16(pdata->vendor_id);
 		if (pdata->product_id) {
 			dev->product_id = pdata->product_id;
+			dev->functions  = pdata->functions;
 			device_desc.idProduct =
 				__constant_cpu_to_le16(pdata->product_id);
 		}
@@ -291,7 +391,10 @@ static int __init android_probe(struct platform_device *pdev)
 		if (pdata->serial_number)
 			strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
 		dev->nluns = pdata->nluns;
+		dev->pdata     = pdata;
 	}
+	if (sysfs_create_group(&pdev->dev.kobj, &android_attr_grp))
+		pr_err("%s: Failed to create the sysfs entry \n", __func__);
 
 	return 0;
 }

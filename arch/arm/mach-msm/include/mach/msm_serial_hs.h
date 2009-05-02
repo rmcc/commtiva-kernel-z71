@@ -15,6 +15,8 @@
 #ifndef __ASM_ARCH_MSM_SERIAL_HS_H
 #define __ASM_ARCH_MSM_SERIAL_HS_H
 
+#include<linux/serial_core.h>
+
 /* Optional platform device data for msm_serial_hs driver.
  * Used to configure low power wakeup */
 struct msm_serial_hs_platform_data {
@@ -24,4 +26,9 @@ struct msm_serial_hs_platform_data {
 	char rx_to_inject;
 };
 
+unsigned int msm_hs_tx_empty(struct uart_port *uport);
+void msm_hs_request_clock_off(struct uart_port *uport);
+void msm_hs_request_clock_on(struct uart_port *uport);
+void msm_hs_set_mctrl_locked(struct uart_port *uport,
+				    unsigned int mctrl);
 #endif

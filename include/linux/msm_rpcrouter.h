@@ -1,6 +1,6 @@
 /* include/linux/msm_rpcrouter.h
  *
- * Copyright (c) QUALCOMM Incorporated
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Copyright (C) 2007 Google, Inc.
  * Author: San Mehat <san@android.com>
  *
@@ -40,5 +40,8 @@ struct rpcrouter_ioctl_server_args {
 
 #define RPC_ROUTER_IOCTL_UNREGISTER_SERVER \
 	_IOWR(RPC_ROUTER_IOCTL_MAGIC, 3, unsigned int)
+
+#define RPC_ROUTER_IOCTL_CLEAR_NETRESET \
+	_IOWR(RPC_ROUTER_IOCTL_MAGIC, 4, unsigned int)
 
 #endif

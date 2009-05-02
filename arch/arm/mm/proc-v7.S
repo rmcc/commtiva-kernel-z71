@@ -2,6 +2,7 @@
  *  linux/arch/arm/mm/proc-v7.S
  *
  *  Copyright (C) 2001 Deep Blue Solutions Ltd.
+ *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -192,6 +193,18 @@ __v7_setup:
 	mcr	p15, 0, r4, c2, c0, 1		@ load TTB1
 	mov	r10, #0x1f			@ domains 0, 1 = manager
 	mcr	p15, 0, r10, c3, c0, 0		@ load domain access register
+#endif
+#ifdef CONFIG_ARCH_QSD
+	mov     r0, #0x77
+	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
+
+	mrc     p15, 0, r0, c1, c0, 1           @ read ACTLR
+#ifdef CONFIG_CPU_CACHE_ERR_REPORT
+	orr     r0, r0, #0x37                   @ turn on L1/L2 error reporting
+#else
+	bic     r0, r0, #0x37
+#endif
+	mcr     p15, 0, r0, c1, c0, 1           @ write ACTLR
 #endif
 	ldr	r5, =0xff0aa1a8
 	ldr	r6, =0x40e040e0

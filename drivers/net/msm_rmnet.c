@@ -319,9 +319,9 @@ static void __init rmnet_setup(struct net_device *dev)
 
 
 static const char *ch_name[3] = {
-	"SMD_DATA5",
-	"SMD_DATA6",
-	"SMD_DATA7",
+	"DATA5",
+	"DATA6",
+	"DATA7",
 };
 
 static int __init rmnet_init(void)

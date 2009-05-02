@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/board-trout.c
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -23,7 +24,7 @@
 #include <linux/keyreset.h>
 #include <linux/leds.h>
 #include <linux/switch.h>
-#include <../../../drivers/staging/android/timed_gpio.h>
+#include <linux/../../../drivers/staging/android/timed_gpio.h>
 #include <linux/synaptics_i2c_rmi.h>
 #include <linux/akm8976.h>
 #include <linux/sysdev.h>
@@ -56,6 +57,7 @@
 #include "board-trout.h"
 
 #include "gpio_chip.h"
+#include "pm.h"
 
 #include <mach/board.h>
 #include <mach/board_htc.h>
@@ -729,6 +731,12 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 };
 #endif
 
+static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].latency = 12000,
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency = 2000,
+};
+
 static void __init trout_init(void)
 {
 	int rc;
@@ -783,6 +791,7 @@ static void __init trout_init(void)
 
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
+	msm_pm_set_platform_data(msm_pm_data);
 
 	/* SD card door should wake the device */
 	set_irq_wake(TROUT_GPIO_TO_INT(TROUT_GPIO_SD_DOOR_N), 1);
@@ -808,9 +817,11 @@ static void __init trout_fixup(struct machine_desc *desc, struct tag *tags,
 
 static void __init trout_map_io(void)
 {
+	msm_shared_ram_phys = 0x01F00000;
+
 	msm_map_common_io();
 	iotable_init(trout_io_desc, ARRAY_SIZE(trout_io_desc));
-	msm_clock_init();
+	msm_clock_init(msm_clocks_7x01a, msm_num_clocks_7x01a);
 }
 
 MACHINE_START(TROUT, "trout")

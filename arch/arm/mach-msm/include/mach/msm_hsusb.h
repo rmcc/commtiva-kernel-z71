@@ -1,6 +1,7 @@
-/* linux/include/asm-arm/arch-msm/hsusb.h
+/* linux/include/mach/hsusb.h
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -19,53 +20,56 @@
 
 #include <linux/types.h>
 
-/* platform device data for msm_hsusb driver */
+#define PHY_TYPE_MASK		0xFF
+#define PHY_MODEL_MASK		0xFF00
+#define PHY_TYPE(x)		((x) & PHY_TYPE_MASK)
+#define PHY_MODEL(x)		((x) & PHY_MODEL_MASK)
 
-#ifdef CONFIG_USB_FUNCTION
-/* matches a product ID to a list of enabled functions */
-struct msm_hsusb_product {
-	/* product ID for usb_device_descriptor.idProduct */
-	__u16 product_id;
+#define USB_PHY_MODEL_65NM	0x100
+#define USB_PHY_MODEL_180NM	0x200
+#define USB_PHY_UNDEFINED	0x00
+#define USB_PHY_INTEGRATED	0x01
+#define USB_PHY_EXTERNAL	0x02
 
-	/* bit mask of enabled usb_functions, matching ordering
-	** in msm_hsusb_platform_data.functions
-	*/
-	__u32 functions;
+enum hsusb_phy_type {
+	UNDEFINED,
+	INTEGRATED,
+	EXTERNAL,
 };
-#endif
+
+struct usb_function_map {
+	char name[20];
+	unsigned bit_pos;
+};
+
+/* platform device data for msm_hsusb driver */
+struct usb_composition {
+	__u16   product_id;
+	unsigned long functions;
+};
 
 struct msm_hsusb_platform_data {
-	/* hard reset the ULPI PHY */
-	void (*phy_reset)(void);
-
-	/* val, reg pairs terminated by -1 */
+	__u16   version;
+#ifdef CONFIG_USB_ANDROID
 	int *phy_init_seq;
-
-#ifdef CONFIG_USB_FUNCTION
-	/* USB device descriptor fields */
-	__u16 vendor_id;
-
-	/* Default product ID.
-	** This can be overridden dynamically based on the disabled
-	** state of the functions using the product_table.
-	*/
-	__u16 product_id;
-
-	__u16 version;
-	char *serial_number;
-	char *product_name;
-	char *manufacturer_name;
-
-	/* list of function drivers to bind to this configuration */
-	int num_functions;
-	char **functions;
-
-	/* if num_products is zero, then the default value in product_id
-	** is used for the configuration descriptor.
-	*/
-	int num_products;
-	struct msm_hsusb_product *products;
+	void (*phy_reset)(void);
 #endif
+	unsigned phy_info;
+	__u16   vendor_id;
+	char   	*product_name;
+	char   	*serial_number;
+	char   	*manufacturer_name;
+	struct usb_composition *compositions;
+	int num_compositions;
+	struct usb_function_map *function_map;
+	int num_functions;
+	/* ULPI data pins used for LPM */
+	unsigned ulpi_data_1_pin;
+	unsigned ulpi_data_3_pin;
+	/* gpio mux function used for LPM */
+	int (*config_gpio)(int config);
+	/* ROC info for AHB Mode */
+	unsigned int soc_version;
 };
 
 #endif

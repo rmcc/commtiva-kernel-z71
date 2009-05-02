@@ -25,6 +25,8 @@
  * pointer or exits the pm_qos_object will get an opportunity to clean up.
  *
  * Mark Gross <mgross@linux.intel.com>
+ *
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  */
 
 #include <linux/pm_qos_params.h>
@@ -70,7 +72,11 @@ struct pm_qos_object {
 	s32 (*comparitor)(s32, s32);
 };
 
-static struct pm_qos_object null_pm_qos;
+struct pm_qos_power_user {
+	int pm_qos_class;
+	char name[sizeof("user_01234567")];
+};
+
 static BLOCKING_NOTIFIER_HEAD(cpu_dma_lat_notifier);
 static struct pm_qos_object cpu_dma_pm_qos = {
 	.requirements = {LIST_HEAD_INIT(cpu_dma_pm_qos.requirements.list)},
@@ -104,14 +110,15 @@ static struct pm_qos_object network_throughput_pm_qos = {
 };
 
 
-static struct pm_qos_object *pm_qos_array[] = {
-	&null_pm_qos,
-	&cpu_dma_pm_qos,
-	&network_lat_pm_qos,
-	&network_throughput_pm_qos
+static struct pm_qos_object *pm_qos_array[PM_QOS_NUM_CLASSES] = {
+	[PM_QOS_RESERVED] = NULL,
+	[PM_QOS_CPU_DMA_LATENCY] = &cpu_dma_pm_qos,
+	[PM_QOS_NETWORK_LATENCY] = &network_lat_pm_qos,
+	[PM_QOS_NETWORK_THROUGHPUT] = &network_throughput_pm_qos,
 };
 
 static DEFINE_SPINLOCK(pm_qos_lock);
+static atomic_t pm_qos_user_id = ATOMIC_INIT(0);
 
 static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos);
@@ -136,7 +143,7 @@ static s32 min_compare(s32 v1, s32 v2)
 }
 
 
-static void update_target(int target)
+static void update_target(int pm_qos_class)
 {
 	s32 extreme_value;
 	struct requirement_list *node;
@@ -144,22 +151,26 @@ static void update_target(int target)
 	int call_notifier = 0;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
-	extreme_value = pm_qos_array[target]->default_value;
+	extreme_value = pm_qos_array[pm_qos_class]->default_value;
 	list_for_each_entry(node,
-			&pm_qos_array[target]->requirements.list, list) {
-		extreme_value = pm_qos_array[target]->comparitor(
+			&pm_qos_array[pm_qos_class]->requirements.list, list) {
+		extreme_value = pm_qos_array[pm_qos_class]->comparitor(
 				extreme_value, node->value);
 	}
-	if (atomic_read(&pm_qos_array[target]->target_value) != extreme_value) {
+	if (atomic_read(&pm_qos_array[pm_qos_class]->target_value) !=
+		extreme_value) {
 		call_notifier = 1;
-		atomic_set(&pm_qos_array[target]->target_value, extreme_value);
-		pr_debug(KERN_ERR "new target for qos %d is %d\n", target,
-			atomic_read(&pm_qos_array[target]->target_value));
+		atomic_set(&pm_qos_array[pm_qos_class]->target_value,
+			extreme_value);
+		pr_debug(KERN_ERR "new target for qos %d is %d\n",
+			pm_qos_class, atomic_read(
+				&pm_qos_array[pm_qos_class]->target_value));
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
 	if (call_notifier)
-		blocking_notifier_call_chain(pm_qos_array[target]->notifiers,
+		blocking_notifier_call_chain(
+			pm_qos_array[pm_qos_class]->notifiers,
 			(unsigned long) extreme_value, NULL);
 }
 
@@ -178,6 +189,8 @@ static int find_pm_qos_object_by_minor(int minor)
 
 	for (pm_qos_class = 0;
 		pm_qos_class < PM_QOS_NUM_CLASSES; pm_qos_class++) {
+		if (!pm_qos_array[pm_qos_class])
+			continue;
 		if (minor ==
 			pm_qos_array[pm_qos_class]->pm_qos_power_miscdev.minor)
 			return pm_qos_class;
@@ -344,56 +357,69 @@ int pm_qos_remove_notifier(int pm_qos_class, struct notifier_block *notifier)
 }
 EXPORT_SYMBOL_GPL(pm_qos_remove_notifier);
 
-#define PID_NAME_LEN sizeof("process_1234567890")
-static char name[PID_NAME_LEN];
 
 static int pm_qos_power_open(struct inode *inode, struct file *filp)
 {
 	int ret;
-	long pm_qos_class;
+	int pm_qos_class;
+	struct pm_qos_power_user *usr;
+
+	usr = kzalloc(sizeof(struct pm_qos_power_user), GFP_KERNEL);
+	if (!usr)
+		return -ENOMEM;
 
 	lock_kernel();
 	pm_qos_class = find_pm_qos_object_by_minor(iminor(inode));
-	if (pm_qos_class >= 0) {
-		filp->private_data = (void *)pm_qos_class;
-		sprintf(name, "process_%d", current->pid);
-		ret = pm_qos_add_requirement(pm_qos_class, name,
-					PM_QOS_DEFAULT_VALUE);
-		if (ret >= 0) {
-			unlock_kernel();
-			return 0;
-		}
+	if (pm_qos_class < 0) {
+		unlock_kernel();
+		kfree(usr);
+		return -EPERM;
 	}
+
+	usr->pm_qos_class = pm_qos_class;
+	snprintf(usr->name, sizeof(usr->name),
+		"user_%08x", (unsigned)atomic_inc_return(&pm_qos_user_id));
+
+	ret = pm_qos_add_requirement(usr->pm_qos_class, usr->name,
+			PM_QOS_DEFAULT_VALUE);
 	unlock_kernel();
 
-	return -EPERM;
+	if (ret < 0) {
+		kfree(usr);
+		return ret;
+	}
+
+	filp->private_data = usr;
+	return 0;
 }
 
 static int pm_qos_power_release(struct inode *inode, struct file *filp)
 {
-	int pm_qos_class;
+	struct pm_qos_power_user *usr;
 
-	pm_qos_class = (long)filp->private_data;
-	sprintf(name, "process_%d", current->pid);
-	pm_qos_remove_requirement(pm_qos_class, name);
+	usr = (struct pm_qos_power_user *)filp->private_data;
+	pm_qos_remove_requirement(usr->pm_qos_class, usr->name);
 
+	filp->private_data = NULL;
+	kfree(usr);
 	return 0;
 }
 
 static ssize_t pm_qos_power_write(struct file *filp, const char __user *buf,
 		size_t count, loff_t *f_pos)
 {
+	struct pm_qos_power_user *usr;
 	s32 value;
-	int pm_qos_class;
 
-	pm_qos_class = (long)filp->private_data;
+	usr = (struct pm_qos_power_user *)filp->private_data;
+
 	if (count != sizeof(s32))
 		return -EINVAL;
-	if (copy_from_user(&value, buf, sizeof(s32)))
-		return -EFAULT;
-	sprintf(name, "process_%d", current->pid);
-	pm_qos_update_requirement(pm_qos_class, name, value);
 
+	if (get_user(value, (s32 *)buf))
+		return -EFAULT;
+
+	pm_qos_update_requirement(usr->pm_qos_class, usr->name, value);
 	return  sizeof(s32);
 }
 

@@ -2,6 +2,7 @@
  *  linux/drivers/mmc/host/msmsdcc.h - QCT MSM7K SDC Controller
  *
  *  Copyright (C) 2008 Google, All Rights Reserved.
+ *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -27,10 +28,11 @@
 #define MMCICLOCK		0x004
 #define MCI_CLK_ENABLE		(1 << 8)
 #define MCI_CLK_PWRSAVE		(1 << 9)
-#define MCI_CLK_WIDEBUS		(1 << 10)
+#define MCI_CLK_WIDEBUS_1	(1 << 10)
+#define MCI_CLK_WIDEBUS_4	(2 << 10)
 #define MCI_CLK_FLOWENA		(1 << 12)
 #define MCI_CLK_INVERTOUT	(1 << 13)
-#define MCI_CLK_SELECTIN	(1 << 14)
+#define MCI_CLK_SELECTIN	(1 << 15)
 
 #define MMCIARGUMENT		0x008
 #define MMCICOMMAND		0x00c
@@ -99,7 +101,20 @@
 #define MCI_CMDRESPENDCLR	(1 << 6)
 #define MCI_CMDSENTCLR		(1 << 7)
 #define MCI_DATAENDCLR		(1 << 8)
+#define MCI_STARTBITERRCLR	(1 << 9)
 #define MCI_DATABLOCKENDCLR	(1 << 10)
+
+#define MCI_SDIOINTRCLR		(1 << 22)
+#define MCI_PROGDONECLR		(1 << 23)
+#define MCI_ATACMDCOMPLCLR	(1 << 24)
+#define MCI_CCSTIMEOUTCLR 	(1 << 26)
+
+#define MCI_CLEAR_STATIC_MASK	\
+	(MCI_CMDCRCFAILCLR|MCI_DATACRCFAILCLR|MCI_CMDTIMEOUTCLR|\
+	MCI_DATATIMEOUTCLR|MCI_TXUNDERRUNCLR|MCI_RXOVERRUNCLR|  \
+	MCI_CMDRESPENDCLR|MCI_CMDSENTCLR|MCI_DATAENDCLR|	\
+	MCI_STARTBITERRCLR|MCI_DATABLOCKENDCLR|MCI_SDIOINTRCLR| \
+	MCI_PROGDONECLR|MCI_ATACMDCOMPLCLR|MCI_CCSTIMEOUTCLR)
 
 #define MMCIMASK0		0x03c
 #define MCI_CMDCRCFAILMASK	(1 << 0)
@@ -216,7 +231,6 @@ struct msmsdcc_host {
 	u32			pwr;
 	struct mmc_platform_data *plat;
 
-	struct timer_list	timer;
 	unsigned int		oldstat;
 
 	struct msmsdcc_dma_data	dma;

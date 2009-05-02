@@ -14,7 +14,7 @@ REFERENCES
 EXTERNALIZED FUNCTIONS
   None  
   
-Copyright(c) 1992 - 2009 by QUALCOMM, Incorporated.
+Copyright (c) 1992-2009, Code Aurora Forum. All rights reserved.
 
 This software is licensed under the terms of the GNU General Public
 License version 2, as published by the Free Software Foundation, and
@@ -304,5 +304,15 @@ typedef struct {
 	unsigned short	hpcm_obj_volume;
 } __attribute__((packed)) audpp_msg_qreverb_volume;
 
+#define AUDPP_MSG_ROUTING_ACK 0x0009
+#define AUDPP_MSG_ROUTING_ACK_LEN \
+  sizeof(struct audpp_msg_routing_ack)
+
+struct audpp_msg_routing_ack {
+  unsigned short dec_id;
+  unsigned short routing_mode;
+} __attribute__((packed));
+
+#define AUDPP_MSG_FLUSH_ACK 0x000A
 
 #endif /* QDSP5AUDPPMSG_H */

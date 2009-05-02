@@ -455,22 +455,22 @@ static void mt9t013_sensor_init(void)
 	
 	/*pull hi reset*/
 	printk(KERN_INFO "mt9t013: mt9t013_register_init\n");
-	ret = gpio_request(cam->sensor_reset, "mt9t013");
+	ret = gpio_request(cam->sinfo->sensor_reset, "mt9t013");
 	if (!ret) {
-		gpio_direction_output(cam->sensor_reset, 1);
+		gpio_direction_output(cam->sinfo->sensor_reset, 1);
 		printk(KERN_INFO "mt9t013: camera sensor_reset set as 1\n");
 	} else
 		printk(KERN_ERR "mt9t013 error: request gpio %d failed: "
-				"%d\n", cam->sensor_reset, ret);
+				"%d\n", cam->sinfo->sensor_reset, ret);
 	mdelay(2);
 
 	/* pull down power down */
-	ret = gpio_request(cam->sensor_pwd, "mt9t013");
+	ret = gpio_request(cam->sinfo->sensor_pwd, "mt9t013");
 	if (!ret || ret == -EBUSY)
-		gpio_direction_output(cam->sensor_pwd, 0);
+		gpio_direction_output(cam->sinfo->sensor_pwd, 0);
 	else printk(KERN_ERR "mt913t013 error: request gpio %d failed: "
-			"%d\n", cam->sensor_pwd, ret);
-	gpio_free(cam->sensor_pwd);
+			"%d\n", cam->sinfo->sensor_pwd, ret);
+	gpio_free(cam->sinfo->sensor_pwd);
 
 	/* enable clk */
 	msm_camio_clk_enable(CAMIO_VFE_MDC_CLK);
@@ -491,10 +491,10 @@ static void mt9t013_sensor_init(void)
 	mdelay(2);
 
 	/* reset sensor sequency */
-	gpio_direction_output(cam->sensor_reset, 0);
+	gpio_direction_output(cam->sinfo->sensor_reset, 0);
 	mdelay(2);
-	gpio_direction_output(cam->sensor_reset, 1);
-	gpio_free(cam->sensor_reset);
+	gpio_direction_output(cam->sinfo->sensor_reset, 1);
+	gpio_free(cam->sinfo->sensor_reset);
 	mdelay(2);
 
 	printk(KERN_INFO "mt9t013: camera sensor init sequence done\n");
@@ -817,12 +817,12 @@ static int mt9t013_lens_power(int on)
 {
 	int rc;
 	printk(KERN_INFO "mt9t013: lens power %d\n", on);
-	rc = gpio_request(cam->vcm_pwd, "mt9t013");
+	rc = gpio_request(cam->sinfo->vcm_pwd, "mt9t013");
 	if (!rc)
-		gpio_direction_output(cam->vcm_pwd, !on);
+		gpio_direction_output(cam->sinfo->vcm_pwd, !on);
 	else printk(KERN_ERR "mt9t013 error: request gpio %d failed:"
-		" %d\n", cam->vcm_pwd, rc);
-	gpio_free(cam->vcm_pwd);
+		" %d\n", cam->sinfo->vcm_pwd, rc);
+	gpio_free(cam->sinfo->vcm_pwd);
 	return rc;
 }
 
@@ -1292,7 +1292,6 @@ static int mt9t013_remove(struct i2c_client *client)
 	struct mt9t013_data *mt = i2c_get_clientdata(client);
 	free_irq(client->irq, mt);
 	deinit_suspend();
-	i2c_detach_client(client);
 	pclient = NULL;
 	misc_deregister(&mt9t013_device);
 	kfree(mt);

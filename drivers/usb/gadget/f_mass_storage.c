@@ -595,6 +595,7 @@ static void bulk_in_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct fsg_dev		*fsg = ep->driver_data;
 	struct fsg_buffhd	*bh = req->context;
+	unsigned long flags;
 
 	if (req->status || req->actual != req->length)
 		DBG(fsg, "%s --> %d, %u/%u\n", __func__,
@@ -602,17 +603,18 @@ static void bulk_in_complete(struct usb_ep *ep, struct usb_request *req)
 
 	/* Hold the lock while we update the request and buffer states */
 	smp_wmb();
-	spin_lock(&fsg->lock);
+	spin_lock_irqsave(&fsg->lock, flags);
 	bh->inreq_busy = 0;
 	bh->state = BUF_STATE_EMPTY;
 	wakeup_thread(fsg);
-	spin_unlock(&fsg->lock);
+	spin_unlock_irqrestore(&fsg->lock, flags);
 }
 
 static void bulk_out_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct fsg_dev		*fsg = ep->driver_data;
 	struct fsg_buffhd	*bh = req->context;
+	unsigned long flags;
 
 	dump_msg(fsg, "bulk-out", req->buf, req->actual);
 	if (req->status || req->actual != bh->bulk_out_intended_length)
@@ -622,11 +624,11 @@ static void bulk_out_complete(struct usb_ep *ep, struct usb_request *req)
 
 	/* Hold the lock while we update the request and buffer states */
 	smp_wmb();
-	spin_lock(&fsg->lock);
+	spin_lock_irqsave(&fsg->lock, flags);
 	bh->outreq_busy = 0;
 	bh->state = BUF_STATE_FULL;
 	wakeup_thread(fsg);
-	spin_unlock(&fsg->lock);
+	spin_unlock_irqrestore(&fsg->lock, flags);
 }
 
 static int fsg_function_setup(struct usb_function *f,
@@ -2625,7 +2627,7 @@ static void lun_release(struct device *dev)
 
 /*-------------------------------------------------------------------------*/
 
-static int __init fsg_alloc(void)
+static int fsg_alloc(void)
 {
 	struct fsg_dev		*fsg;
 
@@ -2684,9 +2686,10 @@ fsg_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	/* Free the data buffers */
 	for (i = 0; i < NUM_BUFFERS; ++i)
 		kfree(fsg->buffhds[i].buf);
+	switch_dev_unregister(&the_fsg->sdev);
 }
 
-static int __init
+static int
 fsg_function_bind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct usb_composite_dev *cdev = c->cdev;
@@ -2853,7 +2856,7 @@ static void fsg_function_disable(struct usb_function *f)
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 }
 
-int __init mass_storage_function_add(struct usb_composite_dev *cdev,
+int mass_storage_function_add(struct usb_composite_dev *cdev,
 	struct usb_configuration *c, int nluns)
 {
 	int		rc;

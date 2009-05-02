@@ -15,7 +15,7 @@ REFERENCES
 EXTERNALIZED FUNCTIONS
   None
 
-Copyright(c) 2008 by QUALCOMM, Incorporated.
+Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
 *====*====*====*====*====*====*====*====*====*====*====*====*====*====*====*/
 /*===========================================================================
 

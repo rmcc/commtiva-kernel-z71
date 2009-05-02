@@ -16,6 +16,8 @@
 #ifndef _ANDROID_PMEM_H_
 #define _ANDROID_PMEM_H_
 
+#include <linux/fs.h>
+
 #define PMEM_IOCTL_MAGIC 'p'
 #define PMEM_GET_PHYS		_IOW(PMEM_IOCTL_MAGIC, 1, unsigned int)
 #define PMEM_MAP		_IOW(PMEM_IOCTL_MAGIC, 2, unsigned int)
@@ -40,11 +42,14 @@
 #define HW3D_GRANT_GPU		_IOW(PMEM_IOCTL_MAGIC, 9, unsigned int)
 #define HW3D_WAIT_FOR_INTERRUPT	_IOW(PMEM_IOCTL_MAGIC, 10, unsigned int)
 
-int get_pmem_file(int fd, unsigned long *start, unsigned long *vstart,
+int get_pmem_file(unsigned int fd, unsigned long *start, unsigned long *vstart,
 		  unsigned long *end, struct file **filp);
+int get_pmem_fd(int fd, unsigned long *start, unsigned long *end);
 int get_pmem_user_addr(struct file *file, unsigned long *start,
 		       unsigned long *end);
 void put_pmem_file(struct file* file);
+void put_pmem_fd(int fd);
+void flush_pmem_fd(int fd, unsigned long start, unsigned long len);
 void flush_pmem_file(struct file *file, unsigned long start, unsigned long len);
 
 struct android_pmem_platform_data

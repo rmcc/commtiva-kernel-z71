@@ -3,7 +3,7 @@
  * MSM architecture clock driver header
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007 QUALCOMM Incorporated
+ * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -27,17 +27,29 @@
 #define A11S_CLK_SEL_ADDR (MSM_CSR_BASE + 0x104)
 #define A11S_VDD_SVS_PLEVEL_ADDR (MSM_CSR_BASE + 0x124)
 
+#define PLLn_MODE(n)	(MSM_CLK_CTL_BASE + 0x300 + 28 * (n))
+#define PLLn_L_VAL(n)	(MSM_CLK_CTL_BASE + 0x304 + 28 * (n))
+
 /*
  * ARM11 clock configuration for specific ACPU speeds
  */
 
-#define ACPU_PLL_TCXO	-1
-#define ACPU_PLL_0	0
-#define ACPU_PLL_1	1
-#define ACPU_PLL_2	2
-#define ACPU_PLL_3	3
+enum {
+	ACPU_PLL_TCXO	= -1,
+	ACPU_PLL_0	= 0,
+	ACPU_PLL_1,
+	ACPU_PLL_2,
+	ACPU_PLL_3,
+	ACPU_PLL_END,
+};
 
-int acpuclk_set_rate(unsigned long rate, int for_power_collapse);
+enum setrate_reason {
+	SETRATE_CPUFREQ = 0,
+	SETRATE_SWFI,
+	SETRATE_PC,
+};
+
+int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason);
 unsigned long acpuclk_get_rate(void);
 uint32_t acpuclk_get_switch_time(void);
 unsigned long acpuclk_wait_for_irq(void);

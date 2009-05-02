@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/rpc_server_time_remote.c
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Iliyan Malchev <ibm@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -17,13 +18,11 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <mach/msm_rpcrouter.h>
+#include "rpc_server_time_remote.h"
 
 /* time_remote_mtoa server definitions. */
 
 #define TIME_REMOTE_MTOA_PROG 0x3000005d
-#define RPC_TIME_REMOTE_MTOA_NULL   0
-#define RPC_TIME_TOD_SET_APPS_BASES 2
-
 #if CONFIG_MSM_AMSS_VERSION==6210
 #define TIME_REMOTE_MTOA_VERS 0
 #elif (CONFIG_MSM_AMSS_VERSION==6220) || (CONFIG_MSM_AMSS_VERSION==6225)
@@ -31,6 +30,9 @@
 #else
 #error "Unknown AMSS version"
 #endif
+#define TIME_REMOTE_MTOA_VERS_COMP 0x00010001
+#define RPC_TIME_REMOTE_MTOA_NULL   0
+#define RPC_TIME_TOD_SET_APPS_BASES 2
 
 struct rpc_time_tod_set_apps_bases_args {
 	uint32_t tick;
@@ -53,6 +55,7 @@ static int handle_rpc_call(struct msm_rpc_server *server,
 		       "\ttick = %d\n"
 		       "\tstamp = %lld\n",
 		       args->tick, args->stamp);
+		rtc_hctosys();
 		return 0;
 	}
 	default:
@@ -60,15 +63,27 @@ static int handle_rpc_call(struct msm_rpc_server *server,
 	}
 }
 
-static struct msm_rpc_server rpc_server = {
-	.prog = TIME_REMOTE_MTOA_PROG,
-	.vers = TIME_REMOTE_MTOA_VERS,
-	.rpc_call = handle_rpc_call,
+static struct msm_rpc_server rpc_server[] = {
+	{
+		.prog = TIME_REMOTE_MTOA_PROG,
+		.vers = TIME_REMOTE_MTOA_VERS,
+		.rpc_call = handle_rpc_call,
+	},
+	{
+		.prog = TIME_REMOTE_MTOA_PROG,
+		.vers = TIME_REMOTE_MTOA_VERS_COMP,
+		.rpc_call = handle_rpc_call,
+	},
 };
 
 static int __init rpc_server_init(void)
 {
-	return msm_rpc_create_server(&rpc_server);
+	/* Dual server registration to support backwards compatibility vers */
+	int ret;
+	ret = msm_rpc_create_server(&rpc_server[1]);
+	if (ret < 0)
+		return ret;
+	return msm_rpc_create_server(&rpc_server[0]);
 }
 
 

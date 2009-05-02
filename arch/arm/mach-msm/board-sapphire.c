@@ -55,6 +55,7 @@
 
 #include "gpio_chip.h"
 #include "board-sapphire.h"
+#include "pm.h"
 
 #include <mach/board.h>
 #include <mach/board_htc.h>
@@ -990,6 +991,12 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 };
 #endif
 
+static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].latency = 12000,
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency = 2000,
+};
+
 static void __init sapphire_init(void)
 {
 	int rc;
@@ -1052,6 +1059,7 @@ static void __init sapphire_init(void)
 
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
+	msm_pm_set_platform_data(msm_pm_data);
 }
 
 static struct map_desc sapphire_io_desc[] __initdata = {

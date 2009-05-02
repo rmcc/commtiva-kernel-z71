@@ -2,8 +2,8 @@
  *
  * Verificion code for aDSP VDEC packets from userspace.
  *
- * Copyright (c) 2008 QUALCOMM Incorporated
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -79,8 +79,8 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 	viddec_cmd_subframe_pkt *pkt;
 	unsigned long subframe_pkt_addr;
 	unsigned long subframe_pkt_size;
-	viddec_cmd_frame_header_packet *frame_header_pkt;
-	int i, num_addr, skip;
+	unsigned short *frame_header_pkt;
+	int i, num_addr, skip, start_pos = 0, xdim_pos = 1, ydim_pos = 2;
 	unsigned short *frame_buffer_high, *frame_buffer_low;
 	unsigned long frame_buffer_size;
 	unsigned short frame_buffer_size_high, frame_buffer_size_low;
@@ -106,24 +106,40 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 		return -1;
 
 	/* deref those ptrs and check if they are a frame header packet */
-	frame_header_pkt = (viddec_cmd_frame_header_packet *)subframe_pkt_addr;
+	frame_header_pkt = (unsigned short *)subframe_pkt_addr;
 	
-	switch (frame_header_pkt->packet_id) {
-	case 0xB201: /* h.264 */
+	switch (frame_header_pkt[0]) {
+	case 0xB201: /* h.264 vld in dsp */
 		num_addr = skip = 8;
+		start_pos = 5;
 		break;
-	case 0x4D01: /* mpeg-4 and h.263 */
+	case 0x8201: /* h.264 vld in arm */
+		num_addr = skip = 8;
+		start_pos = 6;
+		break;
+	case 0x4D01: /* mpeg-4 and h.263 vld in arm */
 		num_addr = 3;
 		skip = 0;
+		start_pos = 5;
+		break;
+	case 0xBD01: /* mpeg-4 and h.263 vld in dsp */
+		num_addr = 3;
+		skip = 0;
+		start_pos = 6;
+		break;
+	case 0x0001: /* wmv */
+		num_addr = 2;
+		skip = 0;
+		start_pos = 5;
 		break;
 	default:
 		return 0;
 	}
 
-	frame_buffer_high = &frame_header_pkt->frame_buffer_0_high;
-	frame_buffer_low = &frame_header_pkt->frame_buffer_0_low;
-	frame_buffer_size = (frame_header_pkt->x_dimension *
-			     frame_header_pkt->y_dimension * 3) / 2;
+	frame_buffer_high = &frame_header_pkt[start_pos];
+	frame_buffer_low = &frame_header_pkt[start_pos + 1];
+	frame_buffer_size = (frame_header_pkt[xdim_pos] *
+			     frame_header_pkt[ydim_pos] * 3) / 2;
 	ptr_to_high_low_short((void *)frame_buffer_size,
 			      &frame_buffer_size_high,
 			      &frame_buffer_size_low);

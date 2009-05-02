@@ -15,7 +15,7 @@ REFERENCES
 EXTERNALIZED FUNCTIONS
   None
 
-Copyright(c) 1992 - 2008 by QUALCOMM, Incorporated.
+Copyright (c) 1992-2009, Code Aurora Forum. All rights reserved.
 
 This software is licensed under the terms of the GNU General Public
 License version 2, as published by the Free Software Foundation, and
@@ -127,55 +127,9 @@ typedef struct {
  */
 
 #define	VIDDEC_CMD_FRAME_HEADER_PACKET	0x0002
-#define	VIDDEC_CMD_FRAME_HEADER_PACKET_LEN	\
-	sizeof(viddec_cmd_frame_header_packet)
 
 #define	VIDDEC_CMD_FRAME_INFO_0_ERROR_SKIP	0x0000
 #define	VIDDEC_CMD_FRAME_INFO_0_ERROR_BLACK	0x0800
-
-typedef struct {
-	unsigned short	packet_id;
-	unsigned short	x_dimension;
-	unsigned short	y_dimension;
-	unsigned short	line_width;
-	unsigned short	frame_info_0;
-	unsigned short	frame_buffer_0_high;
-	unsigned short	frame_buffer_0_low;
-	unsigned short	frame_buffer_1_high;
-	unsigned short	frame_buffer_1_low;
-	unsigned short	frame_buffer_2_high;
-	unsigned short	frame_buffer_2_low;
-	unsigned short	frame_buffer_3_high;
-	unsigned short	frame_buffer_3_low;
-	unsigned short	frame_buffer_4_high;
-	unsigned short	frame_buffer_4_low;
-	unsigned short	frame_buffer_5_high;
-	unsigned short	frame_buffer_5_low;
-	unsigned short	frame_buffer_6_high;
-	unsigned short	frame_buffer_6_low;
-	unsigned short	frame_buffer_7_high;
-	unsigned short	frame_buffer_7_low;
-	unsigned short	frame_buffer_8_high;
-	unsigned short	frame_buffer_8_low;
-	unsigned short	frame_buffer_9_high;
-	unsigned short	frame_buffer_9_low;
-	unsigned short	frame_buffer_10_high;
-	unsigned short	frame_buffer_10_low;
-	unsigned short	frame_buffer_11_high;
-	unsigned short	frame_buffer_11_low;
-	unsigned short	frame_buffer_12_high;
-	unsigned short	frame_buffer_12_low;
-	unsigned short	frame_buffer_13_high;
-	unsigned short	frame_buffer_13_low;
-	unsigned short	frame_buffer_14_high;
-	unsigned short	frame_buffer_14_low;
-	unsigned short	frame_buffer_15_high;
-	unsigned short	frame_buffer_15_low;
-	unsigned short	output_frame_buffer_high;
-	unsigned short	output_frame_buffer_low;
-	unsigned short	end_of_packet_marker;
-} __attribute__((packed)) viddec_cmd_frame_header_packet;
-
 
 /*
  * SLICE HEADER PACKET 

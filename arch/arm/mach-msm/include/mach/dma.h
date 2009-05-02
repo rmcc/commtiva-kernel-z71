@@ -1,8 +1,7 @@
 /* linux/include/asm-arm/arch-msm/dma.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008 QUALCOMM Incorporated.
- * Copyright (c) 2008 QUALCOMM USA, INC.
+ * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -84,6 +83,8 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr);
 #define DMOV_CONFIG_IRQ_EN             (1 << 0)
 
 /* channel assignments */
+
+#define DMOV_GP_CHAN	      4
 
 #define DMOV_NAND_CHAN        7
 #define DMOV_NAND_CRCI_CMD    5

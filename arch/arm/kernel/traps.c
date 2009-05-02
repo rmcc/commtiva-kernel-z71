@@ -2,6 +2,7 @@
  *  linux/arch/arm/kernel/traps.c
  *
  *  Copyright (C) 1995-2002 Russell King
+ *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *  Fragments that appear the same as linux/arch/i386/kernel/traps.c (C) Linus Torvalds
  *
  * This program is free software; you can redistribute it and/or modify
@@ -401,13 +402,44 @@ static int bad_syscall(int n, struct pt_regs *regs)
 	return regs->ARM_r0;
 }
 
+#ifdef CONFIG_ARCH_MSM
+#define CACHE_LINE_SIZE 32
+void flush_axi_bus_buffer(void);
+
+static inline void
+clean_and_invalidate_user_range(unsigned long start, unsigned long end)
+{
+	unsigned long addr;
+
+	for (addr = start; addr < end; addr += CACHE_LINE_SIZE)
+		asm ("mcr p15, 0, %0, c7, c14, 1" : : "r" (addr));
+	asm ("mcr p15, 0, %0, c7, c10, 4" : : "r" (0));
+	asm ("mcr p15, 0, %0, c7, c5, 0" : : "r" (0));
+
+	flush_axi_bus_buffer();
+}
+#endif
+
+
 static inline void
 do_cache_op(unsigned long start, unsigned long end, int flags)
 {
 	struct vm_area_struct *vma;
 
+#ifdef CONFIG_ARCH_MSM
+	if (end < start)
+#else
 	if (end < start || flags)
+#endif
 		return;
+
+#ifdef CONFIG_ARCH_MSM
+	if (flags == 1) {
+		clean_and_invalidate_user_range(start & PAGE_MASK,
+						PAGE_ALIGN(end));
+		return;
+	}
+#endif
 
 	vma = find_vma(current->active_mm, start);
 	if (vma && vma->vm_start < end) {

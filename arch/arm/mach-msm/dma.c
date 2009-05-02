@@ -1,8 +1,7 @@
 /* linux/arch/arm/mach-msm/dma.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008 QUALCOMM Incorporated.
- * Copyright (c) 2008 QUALCOMM USA, INC.
+ * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -141,6 +140,7 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr)
 	PRINT_FLOW("dmov_exec_cmdptr(%d, %x) done\n", id, cmdptr);
 	return 0;
 }
+EXPORT_SYMBOL_GPL(msm_dmov_exec_cmd);
 
 
 static irqreturn_t msm_datamover_irq_handler(int irq, void *dev_id)

@@ -2,6 +2,7 @@
  * drivers/serial/msm_serial.c - driver for msm7k serial device and console
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Robert Love <rlove@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -24,11 +25,13 @@
 #include <linux/ioport.h>
 #include <linux/irq.h>
 #include <linux/init.h>
+#include <linux/delay.h>
 #include <linux/console.h>
 #include <linux/tty.h>
 #include <linux/tty_flip.h>
 #include <linux/serial_core.h>
 #include <linux/serial.h>
+#include <linux/nmi.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 
@@ -487,6 +490,19 @@ static void msm_init_clock(struct uart_port *port)
 	msm_write(port, 0x1C, UART_MNDREG);
 }
 
+static void msm_deinit_clock(struct uart_port *port)
+{
+	struct msm_port *msm_port = UART_TO_MSM(port);
+
+#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
+	if (msm_port->clk_state != MSM_CLK_OFF)
+		clk_disable(msm_port->clk);
+	msm_port->clk_state = MSM_CLK_PORT_OFF;
+#else
+	clk_disable(msm_port->clk);
+#endif
+
+}
 static int msm_startup(struct uart_port *port)
 {
 	struct msm_port *msm_port = UART_TO_MSM(port);
@@ -564,14 +580,8 @@ static void msm_shutdown(struct uart_port *port)
 	if (port->line == 0)
 		free_irq(MSM_GPIO_TO_INT(45), port);
 #endif
+	msm_deinit_clock(port);
 
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	if (msm_port->clk_state != MSM_CLK_OFF)
-		clk_disable(msm_port->clk);
-	msm_port->clk_state = MSM_CLK_PORT_OFF;
-#else
-	clk_disable(msm_port->clk);
-#endif
 }
 
 static void msm_set_termios(struct uart_port *port, struct ktermios *termios,
@@ -789,10 +799,48 @@ static inline struct uart_port * get_port_from_line(unsigned int line)
 
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 
+/*
+ *  Wait for transmitter & holding register to empty
+ *  Derived from wait_for_xmitr in 8250 serial driver by Russell King
+ */
+static inline void wait_for_xmitr(struct uart_port *port, int bits)
+{
+	unsigned int status, mr, tmout = 10000;
+
+	/* Wait up to 10ms for the character(s) to be sent. */
+	do {
+		status = msm_read(port, UART_SR);
+
+		if (--tmout == 0)
+			break;
+		udelay(1);
+	} while ((status & bits) != bits);
+
+	mr = msm_read(port, UART_MR1);
+
+	/* Wait up to 1s for flow control if necessary */
+	if (mr & UART_MR1_CTS_CTL) {
+		unsigned int tmout;
+		for (tmout = 1000000; tmout; tmout--) {
+			unsigned int isr = msm_read(port, UART_ISR);
+
+			/* CTS input is active lo */
+			if (!(isr & UART_IMR_CURRENT_CTS))
+				break;
+			udelay(1);
+			touch_nmi_watchdog();
+		}
+	}
+}
+
+
 static void msm_console_putchar(struct uart_port *port, int c)
 {
-	while (!(msm_read(port, UART_SR) & UART_SR_TX_READY))
-		;
+	/* This call can incur significant delay if CTS flowcontrol is enabled
+	 * on port and no serial cable is attached.
+	 */
+	wait_for_xmitr(port, UART_SR_TX_READY);
+
 	msm_write(port, c, UART_TF);
 }
 
@@ -845,6 +893,8 @@ static int __init msm_console_setup(struct console *co, char *options)
 	msm_set_baud_rate(port, baud);
 
 	msm_reset(port);
+
+	msm_deinit_clock(port);
 
 	printk(KERN_INFO "msm_serial: console setup on port #%d\n", port->line);
 
@@ -936,9 +986,38 @@ static int __devexit msm_serial_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int msm_serial_suspend(struct platform_device *pdev, pm_message_t state)
+{
+	struct uart_port *port;
+	port = get_port_from_line(pdev->id);
+
+	if (port)
+		uart_suspend_port(&msm_uart_driver, port);
+
+	return 0;
+}
+
+static int msm_serial_resume(struct platform_device *pdev)
+{
+	struct uart_port *port;
+	port = get_port_from_line(pdev->id);
+
+	if (port)
+		uart_resume_port(&msm_uart_driver, port);
+
+	return 0;
+}
+#else
+#define msm_serial_suspend NULL
+#define msm_serial_resume NULL
+#endif
+
 static struct platform_driver msm_platform_driver = {
 	.probe = msm_serial_probe,
 	.remove = msm_serial_remove,
+	.suspend = msm_serial_suspend,
+	.resume = msm_serial_resume,
 	.driver = {
 		.name = "msm_serial",
 		.owner = THIS_MODULE,
@@ -976,4 +1055,4 @@ module_exit(msm_serial_exit);
 
 MODULE_AUTHOR("Robert Love <rlove@google.com>");
 MODULE_DESCRIPTION("Driver for msm7x serial device");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("GPL v2");

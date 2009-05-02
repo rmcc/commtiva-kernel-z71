@@ -1,7 +1,7 @@
 /** arch/arm/mach-msm/smd_rpcrouter.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007 QUALCOMM Incorporated
+ * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -22,18 +22,18 @@
 #include <linux/list.h>
 #include <linux/cdev.h>
 #include <linux/platform_device.h>
+#include <linux/msm_rpcrouter.h>
 #include <linux/wakelock.h>
 
 #include <mach/msm_smd.h>
 #include <mach/msm_rpcrouter.h>
-
-#include <linux/msm_rpcrouter.h>
 
 /* definitions for the R2R wire protcol */
 
 #define RPCROUTER_VERSION			1
 #define RPCROUTER_PROCESSORS_MAX		4
 #define RPCROUTER_MSGSIZE_MAX			512
+#define RPCROUTER_PEND_REPLIES_MAX		32
 
 #define RPCROUTER_CLIENT_BCAST_ID		0xffffffff
 #define RPCROUTER_ROUTER_ADDRESS		0xfffffffe
@@ -102,9 +102,13 @@ struct rr_packet {
 #define PACMARK_MID(n)  (((n) >> 16) & 0xFF)
 #define PACMARK_LEN(n)  ((n) & 0xFFFF)
 
-static inline uint32_t PACMARK(uint32_t len, uint32_t mid, uint32_t last)
+static inline uint32_t PACMARK(uint32_t len, uint32_t mid, uint32_t first,
+			       uint32_t last)
 {
-	return (len & 0xFFFF) | ((mid & 0xFF) << 16) | ((!!last) << 31);
+	return (len & 0xFFFF) |
+	  ((mid & 0xFF) << 16) |
+	  ((!!first) << 30) |
+	  ((!!last) << 31);
 }
 
 struct rr_server {
@@ -127,10 +131,18 @@ struct rr_remote_endpoint {
 	uint32_t cid;
 
 	int tx_quota_cntr;
+	int quota_restart_state;
 	spinlock_t quota_lock;
 	wait_queue_head_t quota_wait;
 
 	struct list_head list;
+};
+
+struct msm_rpc_reply {
+	struct list_head list;
+	uint32_t pid;
+	uint32_t cid;
+	uint32_t xid; /* be32 */
 };
 
 struct msm_rpc_endpoint {
@@ -138,6 +150,7 @@ struct msm_rpc_endpoint {
 
 	/* incomplete packets waiting for assembly */
 	struct list_head incomplete;
+	spinlock_t incomplete_lock;
 
 	/* complete packets waiting to be read */
 	struct list_head read_q;
@@ -145,6 +158,11 @@ struct msm_rpc_endpoint {
 	struct wake_lock read_q_wake_lock;
 	wait_queue_head_t wait_q;
 	unsigned flags;
+
+	/* restart handling */
+	int restart_state;
+	spinlock_t restart_lock;
+	wait_queue_head_t restart_wait;
 
 	/* endpoint address */
 	uint32_t pid;
@@ -159,14 +177,12 @@ struct msm_rpc_endpoint {
 	uint32_t dst_prog; /* be32 */
 	uint32_t dst_vers; /* be32 */
 
-	/* reply remote address
-	 * if reply_pid == 0xffffffff, none available
-	 * RPC_REPLY writes may only go to the pid/cid/xid of the
-	 * last RPC_CALL we received.
-	 */
-	uint32_t reply_pid;
-	uint32_t reply_cid;
-	uint32_t reply_xid; /* be32 */
+	/* reply queue for inbound messages */
+	struct list_head reply_pend_q;
+	struct list_head reply_avail_q;
+	spinlock_t reply_q_lock;
+	uint32_t reply_cnt;
+	uint32_t next_pm;   /* Pacmark sequence */
 
 	/* device node if this endpoint is accessed via userspace */
 	dev_t dev;

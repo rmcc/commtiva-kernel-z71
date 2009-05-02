@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_rpcrouter_device.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007 QUALCOMM Incorporated
+ * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -27,12 +27,15 @@
 #include <linux/err.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
+#include <linux/platform_device.h>
+#include <linux/msm_rpcrouter.h>
+
 #include <asm/uaccess.h>
 #include <asm/byteorder.h>
-#include <linux/platform_device.h>
 
-#include <linux/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
+
+#define SAFETY_MEM_SIZE 65536
 
 /* Next minor # available for a remote server */
 static int next_minor = 1;
@@ -63,7 +66,18 @@ static int rpcrouter_open(struct inode *inode, struct file *filp)
 static int rpcrouter_release(struct inode *inode, struct file *filp)
 {
 	struct msm_rpc_endpoint *ept;
+	static unsigned int rpcrouter_release_cnt;
+
 	ept = (struct msm_rpc_endpoint *) filp->private_data;
+
+	/* A user program with many files open when ends abruptly,
+	 * will cause a flood of REMOVE_CLIENT messages to the
+	 * remote processor.  This will cause remote processors
+	 * internal queue to overflow. Inserting a sleep here
+	 * regularly is the effecient option.
+	 */
+	if (rpcrouter_release_cnt++ % 2)
+		msleep(1);
 
 	return msm_rpcrouter_destroy_local_endpoint(ept);
 }
@@ -107,7 +121,8 @@ static ssize_t rpcrouter_write(struct file *filp, const char __user *buf,
 
 	ept = (struct msm_rpc_endpoint *) filp->private_data;
 
-	if (count > RPCROUTER_MSGSIZE_MAX)
+	/* A check for safety, this seems non-standard */
+	if (count > SAFETY_MEM_SIZE)
 		return -EINVAL;
 
 	k_buffer = kmalloc(count, GFP_KERNEL);
@@ -139,13 +154,18 @@ static unsigned int rpcrouter_poll(struct file *filp,
 	/* If there's data already in the read queue, return POLLIN.
 	 * Else, wait for the requested amount of time, and check again.
 	 */
+
 	if (!list_empty(&ept->read_q))
 		mask |= POLLIN;
+	if (ept->restart_state != 0)
+		mask |= POLLERR;
 
 	if (!mask) {
 		poll_wait(filp, &ept->wait_q, wait);
 		if (!list_empty(&ept->read_q))
 			mask |= POLLIN;
+		if (ept->restart_state != 0)
+			mask |= POLLERR;
 	}
 
 	return mask;
@@ -156,7 +176,7 @@ static long rpcrouter_ioctl(struct file *filp, unsigned int cmd,
 {
 	struct msm_rpc_endpoint *ept;
 	struct rpcrouter_ioctl_server_args server_args;
-	int rc;
+	int rc = 0;
 	uint32_t n;
 
 	ept = (struct msm_rpc_endpoint *) filp->private_data;
@@ -196,6 +216,10 @@ static long rpcrouter_ioctl(struct file *filp, unsigned int cmd,
 					  server_args.vers);
 		break;
 
+	case RPC_ROUTER_IOCTL_CLEAR_NETRESET:
+		msm_rpc_clear_netreset(ept);
+		break;
+
 	default:
 		rc = -EINVAL;
 		break;
@@ -227,6 +251,7 @@ static struct file_operations rpcrouter_router_fops = {
 int msm_rpcrouter_create_server_cdev(struct rr_server *server)
 {
 	int rc;
+	uint32_t dev_vers;
 
 	if (next_minor == RPCROUTER_MAX_REMOTE_SERVERS) {
 		printk(KERN_ERR
@@ -234,13 +259,25 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
 		       "RPCROUTER_MAX_REMOTE_SERVERS\n");
 		return -ENOBUFS;
 	}
+
+	/* Servers with bit 31 set are remote msm servers with hashkey version.
+	 * Servers with bit 31 not set are remote msm servers with
+	 * backwards compatible version type in which case the minor number
+	 * (lower 16 bits) is set to zero.
+	 *
+	 */
+	if ((server->vers & 0x80000000))
+		dev_vers = server->vers;
+	else
+		dev_vers = server->vers & 0xffff0000;
+
 	server->device_number =
 		MKDEV(MAJOR(msm_rpcrouter_devno), next_minor++);
 
 	server->device =
 		device_create(msm_rpcrouter_class, rpcrouter_device,
 			      server->device_number, NULL, "%.8x:%.8x",
-			      server->prog, server->vers);
+			      server->prog, dev_vers);
 	if (IS_ERR(server->device)) {
 		printk(KERN_ERR
 		       "rpcrouter: Unable to create device (%ld)\n",
@@ -261,10 +298,16 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
 	return 0;
 }
 
+/* for backward compatible version type (31st bit cleared)
+ * clearing minor number (lower 16 bits) in device name
+ * is neccessary for driver binding
+ */
 int msm_rpcrouter_create_server_pdev(struct rr_server *server)
 {
 	sprintf(server->pdev_name, "rs%.8x:%.8x",
-		server->prog, server->vers);
+		server->prog,
+		(server->vers & RPC_VERSION_MODE_MASK) ? server->vers :
+		(server->vers & RPC_VERSION_MAJOR_MASK));
 
 	server->p_device.base.id = -1;
 	server->p_device.base.name = server->pdev_name;

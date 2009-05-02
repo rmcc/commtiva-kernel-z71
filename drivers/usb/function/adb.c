@@ -3,6 +3,7 @@
  * Function Device for the Android ADB Protocol
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -70,9 +71,56 @@ struct adb_context
 	struct usb_request *read_req;
 	unsigned char *read_buf;
 	unsigned read_count;
+	unsigned bound;
 };
 
 static struct adb_context _context;
+
+static struct usb_interface_descriptor intf_desc = {
+	.bLength =		sizeof intf_desc,
+	.bDescriptorType =	USB_DT_INTERFACE,
+	.bNumEndpoints =	2,
+	.bInterfaceClass =	0xff,
+	.bInterfaceSubClass =	0x42,
+	.bInterfaceProtocol =	0x01,
+};
+
+static struct usb_endpoint_descriptor hs_bulk_in_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(512),
+	.bInterval =		0,
+};
+static struct usb_endpoint_descriptor fs_bulk_in_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_IN,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(64),
+	.bInterval =		0,
+};
+
+static struct usb_endpoint_descriptor hs_bulk_out_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_OUT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(512),
+	.bInterval =		0,
+};
+
+static struct usb_endpoint_descriptor fs_bulk_out_desc = {
+	.bLength =		USB_DT_ENDPOINT_SIZE,
+	.bDescriptorType =	USB_DT_ENDPOINT,
+	.bEndpointAddress =	USB_DIR_OUT,
+	.bmAttributes =		USB_ENDPOINT_XFER_BULK,
+	.wMaxPacketSize =	__constant_cpu_to_le16(64),
+	.bInterval =		0,
+};
+
+static struct usb_function usb_func_adb;
 
 static inline int _lock(atomic_t *excl)
 {
@@ -376,7 +424,8 @@ static void adb_unbind(void *_ctxt)
 	struct adb_context *ctxt = _ctxt;
 	struct usb_request *req;
 
-	printk(KERN_INFO "abd_unbind()\n");
+	if (!ctxt->bound)
+		return;
 
 	while ((req = req_get(ctxt, &ctxt->rx_idle))) {
 		usb_ept_free_req(ctxt->out, req);
@@ -384,28 +433,52 @@ static void adb_unbind(void *_ctxt)
 	while ((req = req_get(ctxt, &ctxt->tx_idle))) {
 		usb_ept_free_req(ctxt->in, req);
 	}
+	if (ctxt->in) {
+		usb_ept_fifo_flush(ctxt->in);
+		usb_ept_enable(ctxt->in,  0);
+		usb_free_endpoint(ctxt->in);
+	}
+	if (ctxt->out) {
+		usb_ept_fifo_flush(ctxt->out);
+		usb_ept_enable(ctxt->out,  0);
+		usb_free_endpoint(ctxt->out);
+	}
 
 	ctxt->online = 0;
 	ctxt->error = 1;
 
 	/* readers may be blocked waiting for us to go online */
 	wake_up(&ctxt->read_wq);
+	ctxt->bound = 0;
 }
 
-static void adb_bind(struct usb_endpoint **ept, void *_ctxt)
+static void adb_bind(void *_ctxt)
 {
 	struct adb_context *ctxt = _ctxt;
 	struct usb_request *req;
 	int n;
 
-	ctxt->out = ept[0];
-	ctxt->in = ept[1];
+	intf_desc.bInterfaceNumber =
+		usb_msm_get_next_ifc_number(&usb_func_adb);
 
-	printk(KERN_INFO "adb_bind() %p, %p\n", ctxt->out, ctxt->in);
+	ctxt->in = usb_alloc_endpoint(USB_DIR_IN);
+	if (ctxt->in) {
+		hs_bulk_in_desc.bEndpointAddress = USB_DIR_IN | ctxt->in->num;
+		fs_bulk_in_desc.bEndpointAddress = USB_DIR_IN | ctxt->in->num;
+	}
+
+	ctxt->out = usb_alloc_endpoint(USB_DIR_OUT);
+	if (ctxt->out) {
+		hs_bulk_out_desc.bEndpointAddress = USB_DIR_OUT|ctxt->out->num;
+		fs_bulk_out_desc.bEndpointAddress = USB_DIR_OUT|ctxt->out->num;
+	}
 
 	for (n = 0; n < RX_REQ_MAX; n++) {
 		req = usb_ept_alloc_req(ctxt->out, 4096);
-		if (req == 0) goto fail;
+		if (req == 0) {
+			ctxt->bound = 1;
+			goto fail;
+		}
 		req->context = ctxt;
 		req->complete = adb_complete_out;
 		req_put(ctxt, &ctxt->rx_idle, req);
@@ -413,18 +486,15 @@ static void adb_bind(struct usb_endpoint **ept, void *_ctxt)
 
 	for (n = 0; n < TX_REQ_MAX; n++) {
 		req = usb_ept_alloc_req(ctxt->in, 4096);
-		if (req == 0) goto fail;
+		if (req == 0) {
+			ctxt->bound = 1;
+			goto fail;
+		}
 		req->context = ctxt;
 		req->complete = adb_complete_in;
 		req_put(ctxt, &ctxt->tx_idle, req);
 	}
-
-	printk(KERN_INFO
-	       "adb_bind() allocated %d rx and %d tx requests\n",
-	       RX_REQ_MAX, TX_REQ_MAX);
-
-	misc_register(&adb_device);
-	misc_register(&adb_enable_device);
+	ctxt->bound = 1;
 	return;
 
 fail:
@@ -437,10 +507,18 @@ static void adb_configure(int configured, void *_ctxt)
 	struct adb_context *ctxt = _ctxt;
 	struct usb_request *req;
 
-	DBG("adb_configure() %d\n", configured);
-
 	if (configured) {
 		ctxt->online = 1;
+
+		if (usb_msm_get_speed() == USB_SPEED_HIGH) {
+			usb_configure_endpoint(ctxt->in, &hs_bulk_in_desc);
+			usb_configure_endpoint(ctxt->out, &hs_bulk_out_desc);
+		} else {
+			usb_configure_endpoint(ctxt->in, &fs_bulk_in_desc);
+			usb_configure_endpoint(ctxt->out, &fs_bulk_out_desc);
+		}
+		usb_ept_enable(ctxt->in,  1);
+		usb_ept_enable(ctxt->out, 1);
 
 		/* if we have a stale request being read, recycle it */
 		ctxt->read_buf = 0;
@@ -471,21 +549,13 @@ static struct usb_function usb_func_adb = {
 	.name = ADB_FUNCTION_NAME,
 	.context = &_context,
 
-	.ifc_class = 0xff,
-	.ifc_subclass = 0x42,
-	.ifc_protocol = 0x01,
-
-	.ifc_name = "adb",
-
-	.ifc_ept_count = 2,
-	.ifc_ept_type = { EPT_BULK_OUT, EPT_BULK_IN },
-
-	/* the adb function is only enabled when its driver file is open */
-	.disabled = 1,
 };
 
+struct usb_descriptor_header *adb_hs_descriptors[4];
+struct usb_descriptor_header *adb_fs_descriptors[4];
 static int __init adb_init(void)
 {
+	int ret = 0;
 	struct adb_context *ctxt = &_context;
 	DBG("adb_init()\n");
 
@@ -503,7 +573,52 @@ static int __init adb_init(void)
 	INIT_LIST_HEAD(&ctxt->rx_done);
 	INIT_LIST_HEAD(&ctxt->tx_idle);
 
-	return usb_function_register(&usb_func_adb);
+	adb_hs_descriptors[0] = (struct usb_descriptor_header *)&intf_desc;
+	adb_hs_descriptors[1] =
+		(struct usb_descriptor_header *)&hs_bulk_in_desc;
+	adb_hs_descriptors[2] =
+		(struct usb_descriptor_header *)&hs_bulk_out_desc;
+	adb_hs_descriptors[3] = NULL;
+
+	adb_fs_descriptors[0] = (struct usb_descriptor_header *)&intf_desc;
+	adb_fs_descriptors[1] =
+		(struct usb_descriptor_header *)&fs_bulk_in_desc;
+	adb_fs_descriptors[2] =
+		(struct usb_descriptor_header *)&fs_bulk_out_desc;
+	adb_fs_descriptors[3] = NULL;
+
+	usb_func_adb.hs_descriptors = adb_hs_descriptors;
+	usb_func_adb.fs_descriptors = adb_fs_descriptors;
+
+	ret = misc_register(&adb_device);
+	if (ret) {
+		printk(KERN_ERR "adb Can't register misc device  %d \n",
+						MISC_DYNAMIC_MINOR);
+		return ret;
+	}
+	ret = misc_register(&adb_enable_device);
+	if (ret) {
+		printk(KERN_ERR "adb Can't register misc enable device  %d \n",
+						MISC_DYNAMIC_MINOR);
+		misc_deregister(&adb_device);
+		return ret;
+	}
+
+	ret = usb_function_register(&usb_func_adb);
+	if (ret) {
+		misc_deregister(&adb_device);
+		misc_deregister(&adb_enable_device);
+	}
+	return ret;
 }
 
 module_init(adb_init);
+
+static void __exit adb_exit(void)
+{
+	misc_deregister(&adb_device);
+	misc_deregister(&adb_enable_device);
+
+	usb_function_unregister(&usb_func_adb);
+}
+module_exit(adb_exit);

@@ -12,6 +12,13 @@ omap2cam-objs	:=	omap24xxcam.o omap24xxcam-dma.o
 
 videodev-objs	:=	v4l2-dev.o v4l2-ioctl.o v4l2-device.o v4l2-subdev.o
 
+ifeq ($(CONFIG_ARM),y)
+# Remove the -Werror until i2c deprecated functions are fixed
+ifeq ($(CONFIG_VIDEO_V4L2_COMMON),y)
+CFLAGS_REMOVE_v4l2-common.o = -Werror
+endif
+endif
+
 obj-$(CONFIG_VIDEO_DEV) += videodev.o v4l2-int-device.o
 ifeq ($(CONFIG_COMPAT),y)
   obj-$(CONFIG_VIDEO_DEV) += v4l2-compat-ioctl32.o
@@ -133,6 +140,11 @@ obj-$(CONFIG_VIDEO_CX18) += cx18/
 
 obj-$(CONFIG_VIDEO_VIVI) += vivi.o
 obj-$(CONFIG_VIDEO_CX23885) += cx23885/
+
+obj-$(CONFIG_MSM_CAMERA) += msm_camera.o
+obj-$(CONFIG_MSM_CAMERA) += msm_camera_probe.o
+obj-$(CONFIG_MSM_CAMERA) += msm_v4l2.o
+obj-$(CONFIG_MSM_CAMERA) += msm/
 
 obj-$(CONFIG_VIDEO_PXA27x)	+= pxa_camera.o
 obj-$(CONFIG_VIDEO_SH_MOBILE_CEU)	+= sh_mobile_ceu_camera.o

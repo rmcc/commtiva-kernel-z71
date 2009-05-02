@@ -1,6 +1,7 @@
 /* include/linux/msm_audio.h
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -35,10 +36,51 @@
 #define AUDIO_SET_EQ       _IOW(AUDIO_IOCTL_MAGIC, 8, unsigned)
 #define AUDIO_SET_RX_IIR   _IOW(AUDIO_IOCTL_MAGIC, 9, unsigned)
 #define AUDIO_SET_VOLUME   _IOW(AUDIO_IOCTL_MAGIC, 10, unsigned)
+#define AUDIO_PAUSE        _IOW(AUDIO_IOCTL_MAGIC, 11, unsigned)
+#define AUDIO_PLAY_DTMF    _IOW(AUDIO_IOCTL_MAGIC, 12, unsigned)
+#define AUDIO_GET_EVENT    _IOR(AUDIO_IOCTL_MAGIC, 13, unsigned)
+#define AUDIO_ABORT_GET_EVENT _IOW(AUDIO_IOCTL_MAGIC, 14, unsigned)
+#define AUDIO_GET_PCM_CONFIG _IOR(AUDIO_IOCTL_MAGIC, 30, unsigned)
+#define AUDIO_SET_PCM_CONFIG _IOW(AUDIO_IOCTL_MAGIC, 31, unsigned)
+#define AUDIO_SWITCH_DEVICE  _IOW(AUDIO_IOCTL_MAGIC, 32, unsigned)
+#define AUDIO_SET_MUTE     _IOW(AUDIO_IOCTL_MAGIC, 33, unsigned)
+
+
+#define	AUDIO_MAX_COMMON_IOCTL_NUM	100
+
+/* CONFLICTING ioctls added by Google. */
 #define AUDIO_ENABLE_AUDPRE  _IOW(AUDIO_IOCTL_MAGIC, 11, unsigned)
 #define AUDIO_SET_AGC        _IOW(AUDIO_IOCTL_MAGIC, 12, unsigned)
 #define AUDIO_SET_NS         _IOW(AUDIO_IOCTL_MAGIC, 13, unsigned)
 #define AUDIO_SET_TX_IIR     _IOW(AUDIO_IOCTL_MAGIC, 14, unsigned)
+/* End conflicts. */
+
+
+#define HANDSET_MIC			0x01
+#define HANDSET_SPKR			0x02
+#define HEADSET_MIC			0x03
+#define HEADSET_SPKR_MONO		0x04
+#define HEADSET_SPKR_STEREO		0x05
+#define SPKR_PHONE_MIC			0x06
+#define SPKR_PHONE_MONO			0x07
+#define SPKR_PHONE_STEREO		0x08
+#define BT_SCO_MIC			0x09
+#define BT_SCO_SPKR			0x0A
+#define BT_A2DP_SPKR			0x0B
+#define TTY_HEADSET_MIC			0x0C
+#define TTY_HEADSET_SPKR		0x0D
+
+/* Default devices are not supported in a */
+/* device switching context. Only supported */
+/* for stream devices. */
+/* DO NOT USE */
+#define DEFAULT_TX			0x0E
+#define DEFAULT_RX			0x0F
+
+#define BT_A2DP_TX			0x10
+#define I2S_RX				0x20
+#define I2S_TX				0x21
+
 
 struct msm_audio_config {
 	uint32_t buffer_size;
@@ -98,4 +140,23 @@ struct msm_snd_endpoint {
 
 #define SND_GET_ENDPOINT _IOWR(SND_IOCTL_MAGIC, 5, struct msm_snd_endpoint *)
 
-#endif /* __LINUX_MSM_AUDIO_H */
+struct msm_audio_pcm_config {
+	uint32_t pcm_feedback;	/* 0 - disable > 0 - enable */
+	uint32_t buffer_count;	/* Number of buffers to allocate */
+	uint32_t buffer_size;	/* Size of buffer for capturing of
+				   PCM samples */
+};
+
+#define AUDIO_EVENT_SUSPEND 0
+#define AUDIO_EVENT_RESUME 1
+
+union msm_audio_event_payload {
+	int reserved;
+};
+
+struct msm_audio_event {
+	int event_type;
+	int timeout_ms;
+	union msm_audio_event_payload event_payload;
+};
+#endif

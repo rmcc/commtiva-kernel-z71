@@ -1,6 +1,7 @@
 /* arch/arm/mach-msm/include/mach/msm_iomap.h
  *
  * Copyright (C) 2007 Google, Inc.
+ * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -44,11 +45,19 @@
 #endif
 
 #define MSM_VIC_BASE          IOMEM(0xE0000000)
+#if defined(CONFIG_ARCH_QSD)
+#define MSM_VIC_PHYS          0xAC000000
+#else
 #define MSM_VIC_PHYS          0xC0000000
+#endif
 #define MSM_VIC_SIZE          SZ_4K
 
 #define MSM_CSR_BASE          IOMEM(0xE0001000)
+#if defined(CONFIG_ARCH_QSD)
+#define MSM_CSR_PHYS          0xAC100000
+#else
 #define MSM_CSR_PHYS          0xC0100000
+#endif
 #define MSM_CSR_SIZE          SZ_4K
 
 #define MSM_GPT_PHYS          MSM_CSR_PHYS
@@ -60,19 +69,38 @@
 #define MSM_DMOV_SIZE         SZ_4K
 
 #define MSM_GPIO1_BASE        IOMEM(0xE0003000)
+#if defined(CONFIG_ARCH_QSD)
+#define MSM_GPIO1_PHYS        0xA9000000
+#else
 #define MSM_GPIO1_PHYS        0xA9200000
+#endif
 #define MSM_GPIO1_SIZE        SZ_4K
 
 #define MSM_GPIO2_BASE        IOMEM(0xE0004000)
+#if defined(CONFIG_ARCH_QSD)
+#define MSM_GPIO2_PHYS        0xA9100000
+#else
 #define MSM_GPIO2_PHYS        0xA9300000
+#endif
 #define MSM_GPIO2_SIZE        SZ_4K
 
 #define MSM_CLK_CTL_BASE      IOMEM(0xE0005000)
 #define MSM_CLK_CTL_PHYS      0xA8600000
 #define MSM_CLK_CTL_SIZE      SZ_4K
 
+#define MSM_L2CC_BASE         IOMEM(0xE0006000)
+#define MSM_L2CC_PHYS         0xC0400000
+#define MSM_L2CC_SIZE         SZ_4K
+
+#define MSM_SIRC_BASE         IOMEM(0xE1006000)
+#define MSM_SIRC_PHYS         0xAC200000
+#define MSM_SIRC_SIZE         SZ_4K
+
+#define MSM_SCPLL_BASE        IOMEM(0xE1007000)
+#define MSM_SCPLL_PHYS        0xA8800000
+#define MSM_SCPLL_SIZE        SZ_4K
+
 #define MSM_SHARED_RAM_BASE   IOMEM(0xE0100000)
-#define MSM_SHARED_RAM_PHYS   0x01F00000
 #define MSM_SHARED_RAM_SIZE   SZ_1M
 
 #define MSM_UART1_PHYS        0xA9A00000
@@ -96,34 +124,12 @@
 #define MSM_DEBUG_UART_SIZE   SZ_4K
 #endif
 
-
-#define MSM_SDC1_PHYS         0xA0400000
-#define MSM_SDC1_SIZE         SZ_4K
-
-#define MSM_SDC2_PHYS         0xA0500000
-#define MSM_SDC2_SIZE         SZ_4K
-
-#define MSM_SDC3_PHYS         0xA0600000
-#define MSM_SDC3_SIZE         SZ_4K
-
-#define MSM_SDC4_PHYS         0xA0700000
-#define MSM_SDC4_SIZE         SZ_4K
-
 #define MSM_I2C_PHYS          0xA9900000
 #define MSM_I2C_SIZE          SZ_4K
 
 #define MSM_HSUSB_PHYS        0xA0800000
 #define MSM_HSUSB_BASE        IOMEM(0xE0009000)
 #define MSM_HSUSB_SIZE        SZ_4K
-
-#define MSM_PMDH_PHYS         0xAA600000
-#define MSM_PMDH_SIZE         SZ_4K
-
-#define MSM_EMDH_PHYS         0xAA700000
-#define MSM_EMDH_SIZE         SZ_4K
-
-#define MSM_MDP_PHYS          0xAA200000
-#define MSM_MDP_SIZE          0x000F0000
 
 #define MSM_MDC_BASE	      IOMEM(0xE0200000)
 #define MSM_MDC_PHYS	      0xAA500000
@@ -132,9 +138,6 @@
 #define MSM_AD5_BASE          IOMEM(0xE0300000)
 #define MSM_AD5_PHYS          0xAC000000
 #define MSM_AD5_SIZE          (SZ_1M*13)
-
-#define MSM_UART1DM_PHYS      0xA0200000
-#define MSM_UART2DM_PHYS      0xA0300000
 
 #define MSM_SSBI_BASE         IOMEM(0xE1004000)
 #define MSM_SSBI_PHYS         0xA8100000

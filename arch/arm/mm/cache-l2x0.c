@@ -2,6 +2,7 @@
  * arch/arm/mm/cache-l2x0.c - L210/L220 cache controller support
  *
  * Copyright (C) 2007 ARM Limited
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -26,6 +27,7 @@
 #define CACHE_LINE_SIZE		32
 
 static void __iomem *l2x0_base;
+static uint32_t aux_ctrl_save;
 static DEFINE_SPINLOCK(l2x0_lock);
 
 static inline void sync_writel(unsigned long val, unsigned long reg,
@@ -50,6 +52,13 @@ static inline void l2x0_inv_all(void)
 {
 	/* invalidate all ways */
 	sync_writel(0xff, L2X0_INV_WAY, 0xff);
+	cache_sync();
+}
+
+static inline void l2x0_flush_all(void)
+{
+	/* clean and invalidate all ways */
+	sync_writel(0xff, L2X0_CLEAN_INV_WAY, 0xff);
 	cache_sync();
 }
 
@@ -117,4 +126,24 @@ void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 	outer_cache.flush_range = l2x0_flush_range;
 
 	printk(KERN_INFO "L2X0 cache controller enabled\n");
+}
+
+void l2x0_suspend(void)
+{
+	/* Save aux control register value */
+	aux_ctrl_save = readl(l2x0_base + L2X0_AUX_CTRL);
+	/* Flush all cache */
+	l2x0_flush_all();
+	/* Disable the cache */
+	writel(0, l2x0_base + L2X0_CTRL);
+}
+
+void l2x0_resume(int collapsed)
+{
+	if (collapsed)
+		/* Restore aux control register value */
+		writel(aux_ctrl_save, l2x0_base + L2X0_AUX_CTRL);
+
+	/* Enable the cache */
+	writel(1, l2x0_base + L2X0_CTRL);
 }
