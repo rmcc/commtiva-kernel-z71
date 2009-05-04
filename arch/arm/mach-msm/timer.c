@@ -417,7 +417,6 @@ static void msm_timer_sync_smem_clock_update(
 {
 	struct msm_clock *clocks[2];
 	uint32_t timer_counts[2];
-	uint32_t new_offset;
 	int i;
 
 	clocks[0] = data->clock;
@@ -435,12 +434,18 @@ static void msm_timer_sync_smem_clock_update(
 	}
 
 	for (i = 0; i < ARRAY_SIZE(clocks); i++) {
+		uint32_t new_offset;
+		uint64_t temp;
+
 		if (clocks[i] == NULL)
 			continue;
 
-		new_offset = clock_value *
-			((clocks[i]->freq << clocks[i]->shift) / SCLK_HZ) -
-			timer_counts[i];
+		/* separate multiplication and division steps to reduce
+		   rounding error */
+		temp = clock_value;
+		temp *= clocks[i]->freq << clocks[i]->shift;
+		temp /= SCLK_HZ;
+		new_offset = (uint32_t)(temp) - timer_counts[i];
 
 		if (clocks[i]->offset + clocks[i]->smem_offset != new_offset) {
 			if (data->exit_sleep)
