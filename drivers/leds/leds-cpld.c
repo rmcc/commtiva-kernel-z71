@@ -388,8 +388,6 @@ static struct platform_driver CPLD_LED_driver = {
 
 static int __init CPLD_LED_init(void)
 {
-	int rc = -1;
-
 	return platform_driver_register(&CPLD_LED_driver);
 }
 

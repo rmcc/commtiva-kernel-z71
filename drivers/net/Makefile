@@ -2,6 +2,16 @@
 # Makefile for the Linux network (ethercard) device drivers.
 #
 
+ifeq ($(CONFIG_ARM),y)
+# Warnings are produced by the current arm cross compiler (v4.2.1) causing
+# build abort. Version 4.3.1 of the compiler does not create this warning.
+# So, remove the -Werror until the compiler can be updated for all build
+# platforms to v4.3.1
+ifeq ($(CONFIG_NET),y)
+CFLAGS_REMOVE_loopback.o = -Werror
+endif
+endif
+
 obj-$(CONFIG_E1000) += e1000/
 obj-$(CONFIG_E1000E) += e1000e/
 obj-$(CONFIG_IBM_NEW_EMAC) += ibm_newemac/
