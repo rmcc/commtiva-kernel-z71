@@ -556,7 +556,6 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 		(struct rpc_adsp_rtos_modem_to_app_args_t *)req;
 	uint32_t event;
 	uint32_t proc_id;
-	uint32_t desc_field;
 	uint32_t module_id;
 	uint32_t image;
 	struct msm_adsp_module *module;
@@ -576,9 +575,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 
 	event = be32_to_cpu(args->mtoa_pkt.mp_mtoa_header.event);
 	proc_id = be32_to_cpu(args->mtoa_pkt.mp_mtoa_header.proc_id);
-	desc_field = be32_to_cpu(args->mtoa_pkt.desc_field);
 
-	if (desc_field == RPC_ADSP_RTOS_INIT_INFO) {
+	if (event == RPC_ADSP_RTOS_INIT_INFO) {
 		pr_info("adsp:INIT_INFO Event\n");
 		sptr = &args->mtoa_pkt.adsp_rtos_mp_mtoa_data.mp_mtoa_init_packet;
 
@@ -698,7 +696,8 @@ static int handle_adsp_rtos_mtoa(struct rpc_request_hdr *req)
 					     req->xid,
 					     RPC_ACCEPTSTAT_SUCCESS);
 		break;
-	case RPC_ADSP_RTOS_MODEM_TO_APP_PROC:
+	case RPC_ADSP_RTOS_MTOA_INIT_INFO_PROC:
+	case RPC_ADSP_RTOS_MTOA_EVENT_INFO_PROC:
 		handle_adsp_rtos_mtoa_app(req);
 		break;
 	default:
@@ -1142,8 +1141,8 @@ static int __init adsp_init(void)
 	rpc_adsp_rtos_atom_vers = 0x10001;
 	rpc_adsp_rtos_atom_vers_comp = 0x00010001;
 	rpc_adsp_rtos_mtoa_prog = 0x3000000b;
-	rpc_adsp_rtos_mtoa_vers = 0x30001;
-	rpc_adsp_rtos_mtoa_vers_comp = 0x00030001;
+	rpc_adsp_rtos_mtoa_vers = 0x30002;
+	rpc_adsp_rtos_mtoa_vers_comp = 0x00030002;
 
 	snprintf(msm_adsp_driver_name, sizeof(msm_adsp_driver_name),
 		"rs%08x:%08x",
