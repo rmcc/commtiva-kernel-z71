@@ -368,8 +368,15 @@ static void msm_pm_config_hw_before_power_down(void)
  */
 static void msm_pm_config_hw_after_power_up(void)
 {
-	writel(0x00, APPS_CLK_SLEEP_EN);
 	writel(0, APPS_PWRDOWN);
+}
+
+/*
+ * Configure hardware registers in preparation for SWFI.
+ */
+static void msm_pm_config_hw_before_swfi(void)
+{
+	writel(0x1f, APPS_CLK_SLEEP_EN);
 }
 
 
@@ -1166,6 +1173,7 @@ static int msm_pm_swfi(bool ramp_acpu)
 			return -EIO;
 	}
 
+	msm_pm_config_hw_before_swfi();
 	msm_arch_idle();
 
 	if (ramp_acpu) {
