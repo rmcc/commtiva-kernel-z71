@@ -992,6 +992,20 @@ int msm_adsp_enable(struct msm_adsp_module *module)
 }
 EXPORT_SYMBOL(msm_adsp_enable);
 
+int msm_adsp_disable_event_rsp(struct msm_adsp_module *module)
+{
+	int rc = 0;
+
+	mutex_lock(&module->lock);
+
+	rc = rpc_adsp_rtos_app_to_modem(RPC_ADSP_RTOS_CMD_DISABLE_EVENT_RSP,
+							module->id, module);
+	mutex_unlock(&module->lock);
+
+	return rc;
+}
+EXPORT_SYMBOL(msm_adsp_disable_event_rsp);
+
 static int msm_adsp_disable_locked(struct msm_adsp_module *module)
 {
 	int rc = 0;

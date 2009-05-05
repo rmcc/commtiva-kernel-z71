@@ -448,7 +448,7 @@ static long adsp_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return msm_adsp_disable(adev->module);
 
 	case ADSP_IOCTL_DISABLE_EVENT_RSP:
-		return 0;
+		return msm_adsp_disable_event_rsp(adev->module);
 
 	case ADSP_IOCTL_DISABLE_ACK:
 		pr_err("adsp: ADSP_IOCTL_DISABLE_ACK is not implemented.\n");
