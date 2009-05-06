@@ -508,7 +508,7 @@ static int32_t mt9t013_write_exp_gain(uint16_t gain, uint32_t line)
 		mt9t013_ctrl->my_reg_line_count = (uint16_t) line;
 	}
 
-	if (gain > 0x00000400)
+	if (gain > max_legal_gain)
 		gain = max_legal_gain;
 
 	/* Verify no overflow */
