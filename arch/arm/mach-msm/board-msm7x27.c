@@ -518,6 +518,9 @@ static struct i2c_board_info i2c_devices[] = {
 	{
 		I2C_BOARD_INFO("mt9t013", 0x6C),
 	},
+	{
+		I2C_BOARD_INFO("vb6801", 0x20),
+	},
 };
 
 static uint32_t camera_off_gpio_table[] = {
@@ -625,6 +628,16 @@ static struct msm_camera_sensor_info msm_camera_sensor[] = {
 		.flash_type		= MSM_CAMERA_FLASH_NONE,
 #ifdef CONFIG_MSM_CAMERA
 		.sensor_probe = MSM_PROBE_INIT(mt9t013),
+#endif
+	},
+	{
+		.sensor_reset   = 89,
+		.sensor_pwd	  = 88,
+		.vcm_pwd      = 0,
+		.sensor_name  = "vb6801",
+		.flash_type		= MSM_CAMERA_FLASH_NONE,
+#ifdef CONFIG_MSM_CAMERA
+		.sensor_probe = MSM_PROBE_INIT(vb6801),
 #endif
 	},
 };

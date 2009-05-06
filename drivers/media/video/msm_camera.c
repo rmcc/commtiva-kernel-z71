@@ -1550,6 +1550,8 @@ static int msm_release_proc(struct file *filep, struct msm_device_t *pmsm)
 	if (!pmsm->opencnt) {
 		/* need to clean up
 		 * system resource */
+		pmsm->sctrl.s_release();
+
 		if (pmsm->vfefn.vfe_release)
 			pmsm->vfefn.vfe_release(pmsm->pdev);
 
@@ -1638,7 +1640,6 @@ static int msm_release_proc(struct file *filep, struct msm_device_t *pmsm)
 			}
 		};
 
-		pmsm->sctrl.s_release();
 
 		CDBG("msm_release completed!\n");
 	}

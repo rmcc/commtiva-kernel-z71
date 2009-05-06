@@ -223,6 +223,7 @@ int32_t mt9d112_probe_init(void *, void *);
 int32_t mt9t013_probe_init(void *, void *);
 int32_t mt9p012_probe_init(void *, void *);
 int32_t s5k3e2fx_probe_init(void *, void *);
+int32_t vb6801_probe_init(void *, void *);
 
 int32_t flash_set_led_state(enum msm_camera_led_state_t led_state);
 
