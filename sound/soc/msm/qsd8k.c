@@ -410,6 +410,7 @@ static int __init qsd_audio_init(void)
 		return ret;
 	}
 	mutex_init(&the_locks.lock);
+	mutex_init(&the_locks.mixer_lock);
 
 	return ret;
 }
