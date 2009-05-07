@@ -326,9 +326,9 @@ static int mddi_resume(struct platform_device *pdev)
 	if (mddi_pdata && mddi_pdata->mddi_power_save)
 		mddi_pdata->mddi_power_save(1);
 
-	mddi_host_reg_out(PAD_CTL, mddi_pad_ctrl);
 	enable_irq(INT_MDDI_PRI);
 	clk_enable(mddi_clk);
+	mddi_host_reg_out(PAD_CTL, mddi_pad_ctrl);
 
 	return 0;
 }
