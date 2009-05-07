@@ -247,6 +247,7 @@ struct msm_driver {
 
 	unsigned int (*drv_poll) (struct file *, struct poll_table_struct *,
 		struct msm_device_t *msm);
+	int (*release)(struct file *, struct msm_device_t *);
 };
 
 unsigned int msm_poll(struct file *, struct poll_table_struct *);

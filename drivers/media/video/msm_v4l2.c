@@ -109,6 +109,7 @@ struct msm_v4l2_device_t {
 };
 
 static struct msm_v4l2_device_t *g_pmsm_v4l2_dev;
+static int cnt;
 
 
 static DEFINE_MUTEX(msm_v4l2_opencnt_lock);
@@ -156,6 +157,14 @@ static unsigned int msm_v4l2_poll(struct file *f, struct poll_table_struct *w)
 static int msm_v4l2_release(struct file *f)
 {
 	struct msm_ctrl_cmd_t *ctrlcmd;
+
+	g_pmsm_v4l2_dev->opencnt--;
+	if (!g_pmsm_v4l2_dev->opencnt) {
+		msm_unregister(g_pmsm_v4l2_dev->drv, MSM_V4L2_DRIVER_NAME);
+		cnt = 0;
+		return 0;
+	}
+
 	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd_t), GFP_ATOMIC);
 	if (!ctrlcmd) {
 		CDBG("msm_v4l2_ioctl: cannot allocate buffer\n");
@@ -166,7 +175,10 @@ static int msm_v4l2_release(struct file *f)
 	ctrlcmd->timeout_ms = 10000;
 
 	ctrlcmd->type = (unsigned short)CAMERA_EXIT;
-	return g_pmsm_v4l2_dev->drv->ctrl(ctrlcmd, g_pmsm_v4l2_dev->drv->vmsm);
+	g_pmsm_v4l2_dev->drv->ctrl(ctrlcmd, g_pmsm_v4l2_dev->drv->vmsm);
+	g_pmsm_v4l2_dev->drv->release(f, g_pmsm_v4l2_dev->drv->vmsm);
+
+	return 0;
 }
 
 static long msm_v4l2_ioctl(struct file *filep,
@@ -367,7 +379,6 @@ static int msm_v4l2_qbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 
 	struct msm_pmem_info_t meminfo;
 	struct msm_frame_t frame;
-	static int cnt;
 
 	if ((pb->flags >> 16) & 0x0001) {
 		/* this is for previwe */

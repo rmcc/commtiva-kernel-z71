@@ -1535,14 +1535,13 @@ static int msm_frame_pending(struct msm_device_t *msm)
 	return yes;
 }
 
-static int msm_release(struct inode *node, struct file *filep)
+static int msm_release_proc(struct file *filep, struct msm_device_t *pmsm)
 {
 	struct msm_pmem_region *region;
 	struct hlist_node *hnode;
 	struct hlist_node *n;
 	struct msm_queue_cmd_t *qcmd = NULL;
 	unsigned long flags;
-	struct msm_device_t *pmsm = filep->private_data;
 
 	mutex_lock(&pmsm->msm_lock);
 	pmsm->opencnt -= 1;
@@ -1556,6 +1555,7 @@ static int msm_release(struct inode *node, struct file *filep)
 
 		if (pmsm->croplen) {
 			kfree(pmsm->cropinfo);
+			pmsm->cropinfo = NULL;
 			pmsm->croplen = 0;
 		}
 
@@ -1644,6 +1644,11 @@ static int msm_release(struct inode *node, struct file *filep)
 	}
 
 	return 0;
+}
+
+static int msm_release(struct inode *node, struct file *filep)
+{
+	return msm_release_proc(filep, filep->private_data);
 }
 
 static ssize_t msm_read(struct file *filep, char __user *arg,
@@ -2081,6 +2086,7 @@ long msm_register(struct msm_driver *drv, const char *id)
 		drv->put_frame = msm_put_frame_buf_proc;
 		drv->get_pict  = msm_get_pict_proc;
 		drv->drv_poll  = msm_apps_poll;
+		drv->release   = msm_release_proc;
 		rc = 0;
 	} else
 		rc = -EFAULT;
