@@ -98,6 +98,11 @@ s32 cad_ard_init(struct cad_func_tbl_type **func_ptr_tbl)
 	*func_ptr_tbl = &ard_func;
 	local_ard_state = &ard_state;
 
+	/* Initialize the sessions. */
+	for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++)
+		memset(&ard_session[i], 0,
+			sizeof(struct ard_session_info_struct_type));
+
 	for (i = 0; i < MAX_NUM_DEVICES; i++) {
 		mutex_init(&local_ard_state->ard_device[i].device_mutex);
 
@@ -121,6 +126,10 @@ s32 cad_ard_init(struct cad_func_tbl_type **func_ptr_tbl)
 
 	/* Device 1 is TX Internal Codec */
 	local_ard_state->ard_device[1].device_type = CAD_TX_DEVICE;
+
+	local_ard_state->ard_device[2].device_type = CAD_RX_DEVICE;
+
+	local_ard_state->ard_device[3].device_type = CAD_TX_DEVICE;
 
 	local_ard_state->def_tx_device = CAD_HW_DEVICE_ID_HANDSET_MIC;
 	local_ard_state->def_rx_device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
@@ -169,11 +178,14 @@ s32 cad_ard_dinit(void)
 
 	local_ard_state = &ard_state;
 
+	mutex_destroy(&local_ard_state->ard_state_machine_mutex);
+
 	for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++)
 		mutex_unlock(&ard_session[i].session_mutex);
 
 	for (i = 0; i < MAX_NUM_DEVICES; i++) {
 		mutex_unlock(&local_ard_state->ard_device[i].device_mutex);
+		mutex_destroy(&local_ard_state->ard_device[i].device_mutex);
 		local_ard_state->ard_device[i].state = ARD_STATE_RESET;
 		local_ard_state->ard_device[i].afe_enabled = ARD_FALSE;
 		local_ard_state->ard_device[i].device_configured = ARD_FALSE;
@@ -329,7 +341,11 @@ s32 ard_close(s32 session_id)
 	ardsession[session_id]->enabled = ARD_FALSE;
 
 
-	if (ardsession[session_id]->session_type != DEVICE_CTRL_TYPE) {
+	if (ardsession[session_id]->session_type != DEVICE_CTRL_TYPE
+		&& ardsession[session_id]->active == ARD_TRUE) {
+
+		mutex_lock(&local_ard_state->ard_state_machine_mutex);
+
 		for (i = 0; i < strm_dev->device_len; i++) {
 			if (strm_dev->device[i] == CAD_HW_DEVICE_ID_DEFAULT_TX)
 				cad_device = local_ard_state->def_tx_device;
@@ -353,8 +369,6 @@ s32 ard_close(s32 session_id)
 			if (local_ard_state->ard_device[dev_id].stream_count
 				== 0) {
 
-				mutex_lock(&local_ard_state->
-					ard_state_machine_mutex);
 
 				/* No more streams, so teardown device */
 				local_ard_state->ard_device[dev_id].
@@ -376,6 +390,8 @@ s32 ard_close(s32 session_id)
 				device_mutex);
 		}
 
+		mutex_unlock(&local_ard_state->ard_state_machine_mutex);
+
 		/* If device was torn down, session would've been removed */
 		if (ardsession[session_id]->qdsp6_opened == ARD_TRUE) {
 			/* No Device teardown, so close the QDSP6 session */
@@ -384,19 +400,19 @@ s32 ard_close(s32 session_id)
 				pr_err("ARD DAL RPC CLOSE FAILED %d\n",
 				session_id);
 		}
-	} else {
+	} else if (ardsession[session_id]->session_type == DEVICE_CTRL_TYPE) {
 		rc = qdsp6_close(session_id);
 		if (rc != CAD_RES_SUCCESS)
 			pr_err("ARD DAL RPC OPEN FAILED %d\n", session_id);
 	}
+
+	ardsession[session_id]->active = ARD_FALSE;
 
 	/* Start Freeing up allocated session resources */
 	/* Free the session open buffer and internal buffers */
 	cadr_strm_device = &cadr->cad_device;
 	cadr_config = &cadr->cad_config;
 	cadr_stream = &cadr->cad_stream;
-
-	cadr_strm_device->device = NULL;
 
 	D("ARD Session %d, App Type = %d, Strm Ptr = %p\n",
 		session_id, cadr_stream->app_type, cadr_stream);
@@ -492,19 +508,20 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		old_dev_stream_count = local_ard_state->
 			ard_device[dev_id].stream_count;
 
-		/* Teardown the current default device */
-		local_ard_state->ard_device[dev_id].
-			device_change_request = ARD_TRUE;
-		local_ard_state->ard_device[dev_id].
-			device_config_request = ARD_TRUE;
+		if (old_dev_stream_count != 0) {
+			/* Teardown the current default device */
+			local_ard_state->ard_device[dev_id].
+				device_change_request = ARD_TRUE;
+			local_ard_state->ard_device[dev_id].
+				device_config_request = ARD_TRUE;
 
-		/* Check if device needs setup/teardown */
-		rc = ard_state_control(session_id, dev_id);
+			/* Check if device needs setup/teardown */
+			rc = ard_state_control(session_id, dev_id);
 
-
-		/* Device Torn Down, clear stream count */
-		local_ard_state->ard_device[dev_id].
-			stream_count = 0;
+			/* Device Torn Down, clear stream count */
+			local_ard_state->ard_device[dev_id].
+				stream_count = 0;
+		}
 
 		/* Release mutex */
 		mutex_unlock(&local_ard_state->
@@ -525,11 +542,13 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			mutex_lock(&local_ard_state->ard_device
 				[dev_id].device_mutex);
 
+			local_ard_state->ard_device[dev_id].device_type
+				= CAD_RX_DEVICE;
 			/* set the stream device to the */
 			/* requested device */
 			local_ard_state->ard_device[dev_id].
 				device_inuse =
-				local_ard_state->def_rx_device;
+				local_ard_state->new_rx_device;
 		} else {
 			local_ard_state->def_tx_device =
 				def_device->device;
@@ -542,18 +561,20 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			mutex_lock(&local_ard_state->ard_device
 				[dev_id].device_mutex);
 
+			local_ard_state->ard_device[dev_id].device_type
+				= CAD_TX_DEVICE;
 			/* set the stream device to the */
 			/* requested device */
 			local_ard_state->ard_device[dev_id].
 				device_inuse =
-				local_ard_state->def_tx_device;
+				local_ard_state->new_tx_device;
 		}
 
 		/* Begin new device setup */
 		if ((device_needs_setup(local_ard_state->
 			ard_device[dev_id].device_inuse)
 			== ARD_TRUE) &&
-			(valid_session_present() == ARD_TRUE)) {
+			(valid_session_present(dev_id) == ARD_TRUE)) {
 			/* Setup for the new device */
 			rc = ard_state_control(session_id,
 				dev_id);
@@ -614,6 +635,16 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			}
 		}
 
+		/* New devices setup, so update def device. */
+		if (def_device->reserved == CAD_RX_DEVICE)
+			local_ard_state->def_rx_device =
+					local_ard_state->new_rx_device;
+		else
+			local_ard_state->def_tx_device =
+					local_ard_state->new_tx_device;
+
+
+
 		/* Release mutex */
 		mutex_unlock(&local_ard_state->
 			ard_device[dev_id].device_mutex);
@@ -650,22 +681,18 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		D("ARD STREAM START IOCTL, sess %d, num devices = %d\n",
 			session_id, strm_dev->device_len);
 
+		mutex_lock(&local_ard_state->ard_state_machine_mutex);
+
 		for (i = 0; i < strm_dev->device_len; i++) {
-			if (strm_dev->device[i]
-				== CAD_HW_DEVICE_ID_DEFAULT_TX){
+			if (strm_dev->device[i] == CAD_HW_DEVICE_ID_DEFAULT_TX)
+				cad_device = local_ard_state->def_tx_device;
 
-				cad_device = local_ard_state->
-					def_tx_device;
-
-			} else if (strm_dev->device[i]
-				== CAD_HW_DEVICE_ID_DEFAULT_RX){
-
-				cad_device = local_ard_state->
-					def_rx_device;
-			} else {
+			else if (strm_dev->device[i]
+					== CAD_HW_DEVICE_ID_DEFAULT_RX)
+				cad_device = local_ard_state->def_rx_device;
+			else
 				/* not asking for default devices */
 				cad_device = strm_dev->device[i];
-			}
 
 			dev_id = get_device_id(cad_device);
 
@@ -674,20 +701,13 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			mutex_lock(&local_ard_state->ard_device[dev_id].
 				device_mutex);
 
-			/* Increment stream counts for this device */
-			local_ard_state->ard_device[dev_id].
-				stream_count++;
-
 			if ((check_sampling_rate() == ARD_TRUE) ||
-				(device_needs_setup(cad_device)
-				== ARD_TRUE)) {
+				(device_needs_setup(cad_device) == ARD_TRUE)) {
 				/* Session has a new sampling rate */
 				/* requirement or has new device(s) */
 				/* that need to be setup, so go */
 				/* ahead and grab the Device Mutex */
 				/* and setup Device requested */
-				mutex_lock(&local_ard_state->
-					ard_state_machine_mutex);
 
 				/* set the stream device to the */
 				/* requested device */
@@ -697,9 +717,6 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				rc = ard_state_control(session_id,
 					dev_id);
 
-				/* Release mutex */
-				mutex_unlock(&local_ard_state->
-					ard_state_machine_mutex);
 			}
 
 			/* Release the device mutex */
@@ -707,6 +724,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				device_mutex);
 
 		}
+
+		/* Release mutex */
+		mutex_unlock(&local_ard_state->ard_state_machine_mutex);
+
 		/* If Device needed setup, the Q6 would've been */
 		/* Opened for this session if not, then go  */
 		/* ahead and open & send the Q6 info */
@@ -739,6 +760,33 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				goto done;
 			}
 		}
+
+		/* We don't know which of the devices are default device.
+		   Also, the stream can request more than one device */
+		for (i = 0; i < strm_dev->device_len; i++) {
+			if (strm_dev->device[i] == CAD_HW_DEVICE_ID_DEFAULT_TX)
+				cad_device = local_ard_state->def_tx_device;
+			else if (strm_dev->device[i] ==
+					CAD_HW_DEVICE_ID_DEFAULT_RX)
+				cad_device = local_ard_state->def_rx_device;
+			else
+				/* not asking for default devices */
+				cad_device = strm_dev->device[i];
+
+			dev_id = get_device_id(cad_device);
+
+			/* Grab the route mutex so that no updates are allowed
+			   to the route data. */
+			mutex_lock(&local_ard_state->ard_device[dev_id].
+				device_mutex);
+
+			ardsession[session_id]->active = ARD_TRUE;
+			local_ard_state->ard_device[dev_id].stream_count++;
+
+			mutex_unlock(&local_ard_state->ard_device[dev_id].
+				device_mutex);
+		}
+
 
 		D("ard_ioctl STARTED ses %d, cadr = %p, strm_dev = %p\n",
 			session_id, cadr, strm_dev);
@@ -890,7 +938,7 @@ enum ard_state_ret_enum_type ard_state_reset(s32 session_id, u32 dev_id)
 
 	local_ard_state = &ard_state;
 
-	if (valid_session_present()) {
+	if (valid_session_present(dev_id)) {
 		local_ard_state->ard_device[dev_id].state
 			= ARD_STATE_CLK_ACTIVE;
 
@@ -929,9 +977,9 @@ enum ard_state_ret_enum_type ard_state_clk_active(s32 session_id, u32 dev_id)
 	codec_type = get_codec_type((u32)local_ard_state->ard_device[dev_id].
 		device_inuse);
 
-	if ((!valid_session_present()) ||
+	if ((!valid_session_present(dev_id)) ||
 		(local_ard_state->ard_device[dev_id].clk_configured
-		!= ARD_TRUE)) {
+			!= ARD_TRUE)) {
 
 		D("ARD - Teardown: Disabling clocks, ses %d\n", session_id);
 		ard_clk_disable(dev_id);
@@ -986,7 +1034,7 @@ enum ard_state_ret_enum_type ard_state_afe_active(s32 session_id, u32 dev_id)
 
 	local_ard_state = &ard_state;
 
-	if ((!valid_session_present()) || (local_ard_state->
+	if ((!valid_session_present(dev_id)) || (local_ard_state->
 		ard_device[dev_id].afe_enabled != ARD_TRUE)) {
 
 		D("ARD - Teardown: Disabling Q6\n");
@@ -1043,7 +1091,7 @@ enum ard_state_ret_enum_type ard_state_active(s32 session_id, u32 dev_id)
 	codec_type = get_codec_type(local_ard_state->ard_device[dev_id].
 		device_inuse);
 
-	if ((!valid_session_present()) ||
+	if ((!valid_session_present(dev_id)) ||
 		(local_ard_state->ard_device[dev_id].device_configured
 		!= ARD_TRUE)) {
 
@@ -1142,20 +1190,47 @@ done:
 	return rc;
 }
 
-enum ard_ret_enum_type valid_session_present(void)
+enum ard_ret_enum_type valid_session_present(u32 dev_id)
 {
 	u8 i = 0;
 	enum ard_ret_enum_type rc;
 
 	rc = ARD_FALSE;
 
-	for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++) {
-		if (ard_session[i].enabled == ARD_TRUE) {
-			if (ard_session[i].session_type != DEVICE_CTRL_TYPE) {
+	/* Check if there are any valid stream sessions. */
+	switch (dev_id) {
+	case 0:
+	case 2:
+	case 4:	/* A2DP */
+	case 6:	/* I2S */
+		for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++) {
+			if ((ard_session[i].enabled == ARD_TRUE)
+				&& (ard_session[i].sess_open_info->
+					cad_open.op_code
+						== CAD_OPEN_OP_WRITE)) {
+				/* Valid RX stream exists. */
 				rc = ARD_TRUE;
 				break;
 			}
 		}
+		break;
+	case 1:
+	case 3:
+	case 5:	/* A2DP */
+	case 7:	/* I2S */
+		for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++) {
+			if ((ard_session[i].enabled == ARD_TRUE)
+				&& (ard_session[i].sess_open_info->
+					cad_open.op_code
+						== CAD_OPEN_OP_READ)) {
+				/* Valid TX stream exists. */
+				rc = ARD_TRUE;
+				break;
+			}
+		}
+		break;
+	default:
+		pr_err("valid_session_present(): bad device_id %d\n", dev_id);
 	}
 
 	if (i == ARD_AUDIO_MAX_CLIENT) {

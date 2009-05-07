@@ -111,6 +111,7 @@ struct ard_session_info_struct_type {
 	enum sample_rate_type		tx;
 	u8				enabled;
 	u8				available;
+	u8				active;
 	u8				qdsp6_opened;
 	u8				qdsp6_started;
 	void				*local_format_block;
@@ -141,7 +142,7 @@ struct ard_state_struct_type {
 };
 
 
-enum ard_ret_enum_type valid_session_present(void);
+enum ard_ret_enum_type valid_session_present(u32 dev_id);
 
 s32 qdsp6_enable(s32 session_id);
 s32 qdsp6_disable(s32 session_id);
