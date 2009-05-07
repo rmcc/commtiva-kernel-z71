@@ -44,15 +44,16 @@ struct msm_hc_device {
 	unsigned phy_info;
 	unsigned in_lpm;
 	struct work_struct lpm_exit_work;
-	struct work_struct xceiv_work;
 	struct completion suspend_done;
 	spinlock_t lock;
 	unsigned int soc_version;
 	unsigned active;
 	struct msm_otg_transceiver *xceiv;
+	unsigned otg_registered;
 };
 
 static struct msm_hc_device msm_hc_dev;
+static void usb_xceiv_register(void);
 
 static void msm_vbus_online(void)
 {
@@ -326,6 +327,11 @@ static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 	int rc;
 
 	rc = ehci_bus_suspend(hcd);
+	if (!msm_hc_dev.otg_registered && msm_hc_dev.xceiv) {
+		msm_hc_dev.otg_registered = 1;
+		usb_xceiv_register();
+		return rc;
+	}
 	if (!msm_hc_dev.active) {
 		complete(&msm_hc_dev.suspend_done);
 		return rc;
@@ -568,7 +574,7 @@ static struct msm_otg_ops hcd_ops = {
 	.status_change = ehci_msm_enable,
 };
 
-void usb_xceiv_work(struct work_struct *work)
+static void usb_xceiv_register(void)
 {
 	int retval;
 
@@ -578,6 +584,7 @@ void usb_xceiv_work(struct work_struct *work)
 		pr_err("%s: Can't register Host driver with OTG",
 				__func__);
 }
+
 static int __init ehci_msm_probe(struct platform_device *pdev)
 {
 	struct usb_hcd *hcd;
@@ -703,7 +710,6 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	msm_hc_dev.in_lpm = 0;
 	spin_lock_init(&msm_hc_dev.lock);
 	INIT_WORK(&(msm_hc_dev.lpm_exit_work), usb_lpm_exit_w);
-	INIT_WORK(&(msm_hc_dev.xceiv_work), usb_xceiv_work);
 	init_completion(&msm_hc_dev.suspend_done);
 	device_init_wakeup(&pdev->dev, 1);
 	msm_hc_dev.active = 1;
@@ -721,12 +727,10 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	msm_hc_dev.msm_hcd_data = hcd;
 
 	msm_hc_dev.xceiv = msm_otg_get_transceiver();
-	if (msm_hc_dev.xceiv) {
+	if (msm_hc_dev.xceiv)
 		msm_hc_dev.active = 0;
-		schedule_work(&(msm_hc_dev.xceiv_work));
-	} else {
+	else
 		msm_hsusb_vbus_powerup();
-	}
 
 	return retval;
 
