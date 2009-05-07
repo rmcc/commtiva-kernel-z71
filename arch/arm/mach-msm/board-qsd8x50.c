@@ -451,7 +451,6 @@ static void msm_fb_mddi_power_save(int on)
 	}
 
 	msm_fb_vreg_config("gp5", flag_on);
-	msm_fb_vreg_config("msme2", !flag_on);
 	msm_fb_vreg_config("boost", flag_on);
 
 	if (flag_on && machine_is_qsd8x50_ffa()) {
