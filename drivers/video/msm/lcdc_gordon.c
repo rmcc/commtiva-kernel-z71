@@ -427,7 +427,7 @@ static int __init lcdc_gordon_panel_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 
-#ifdef FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
+#ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
 	if (msm_fb_detect_client("lcdc_gordon_vga"))
 		return 0;
 #endif
