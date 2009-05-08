@@ -39,6 +39,7 @@
 #include <mach/board.h>
 #include <mach/msm_hsusb.h>
 #include <mach/rpc_hsusb.h>
+#include <mach/rpc_pmapp.h>
 #include <mach/gpio.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_otg.h>
@@ -66,7 +67,6 @@
 #define FALSE			0
 #define USB_LINK_RESET_TIMEOUT	(msecs_to_jiffies(10))
 
-static int vbus;
 static int pid = 0x9018;
 static int usb_init_err;
 
@@ -117,7 +117,7 @@ int (*usb_lpm_config_gpio)(int);
 static void usb_enable_pullup(struct usb_info *ui);
 static void usb_disable_pullup(struct usb_info *ui);
 
-static struct workqueue_struct *usb_work;;
+static struct workqueue_struct *usb_work;
 static void usb_chg_stop(struct work_struct *w);
 static int usb_chg_detect_type(struct usb_info *ui);
 static void usb_chg_set_type(struct usb_info *ui);
@@ -232,6 +232,7 @@ struct usb_info {
 	struct msm_otg_transceiver *xceiv;
 	int active;
 	enum usb_device_state usb_state;
+	int vbus_sn_notif;
 };
 static struct usb_info *the_usb_info;
 
@@ -1627,8 +1628,16 @@ static int usb_suspend_phy(struct usb_info *ui)
 		/* clearing latch register, keeping phy comparators ON and
 		   turning off PLL are done because of h/w bugs */
 		ulpi_read(ui, 0x14);/* clear PHY interrupt latch register */
-		ulpi_write(ui, 0x01, 0x30);/* PHY comparators on in LPM */
-		ulpi_write(ui, 0x08, 0x09);/* turn off PLL on integrated phy */
+		if (ui->vbus_sn_notif &&
+			ui->usb_state == USB_STATE_NOTATTACHED)
+			/* turn off OTG PHY comparators */
+			ulpi_write(ui, 0x00, 0x30);
+		else
+			/* turn on the PHY comparators */
+			ulpi_write(ui, 0x01, 0x30);
+
+		/* turn off PLL on integrated phy */
+		ulpi_write(ui, 0x08, 0x09);
 		break;
 
 	case USB_PHY_UNDEFINED:
@@ -1691,7 +1700,6 @@ static int usb_hw_reset(struct usb_info *ui)
 	/* reset the phy before resetting link */
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
-
 	/* rpc call for phy_reset */
 	msm_hsusb_phy_reset();
 	/* Give some delay to settle phy after reset */
@@ -1844,6 +1852,26 @@ void usb_start(struct usb_info *ui)
 		ui->flags = USB_FLAG_REG_OTG;
 		queue_delayed_work(usb_work, &ui->work, 0);
 	} else {
+		/*Initialize pm app RPC */
+		if (msm_pm_app_rpc_init() == 0) {
+			pr_info("%s: pm_app_rpc connect success\n", __func__);
+			if (msm_pm_app_register_vbus_sn() == 0) {
+				pr_info("%s:PMIC VBUS SN notif supported\n",
+								__func__);
+				ui->vbus_sn_notif = 1;
+				msm_pm_app_enable_usb_ldo(1);
+			} else {
+				pr_info("%s:PMIC VBUS SN notif not supported\n"
+								, __func__);
+				ui->vbus_sn_notif = 0;
+				msm_pm_app_unregister_vbus_sn();
+				msm_pm_app_rpc_deinit();
+			}
+		} else {
+			pr_info("%s: pm_app_rpc connect failed\n", __func__);
+			msm_pm_app_rpc_deinit();
+		}
+
 		ui->active = 1;
 		ui->flags |= (USB_FLAG_START | USB_FLAG_RESET);
 		queue_delayed_work(usb_work, &ui->work, 0);
@@ -2034,6 +2062,7 @@ static void usb_switch_composition(unsigned short pid)
 	int i;
 	unsigned long flags;
 
+
 	if (!ui->active)
 		return;
 	if (!usb_validate_product_id(pid))
@@ -2054,6 +2083,11 @@ static void usb_switch_composition(unsigned short pid)
 				disable_irq(ui->gpio_irq[0]);
 				disable_irq(ui->gpio_irq[1]);
 			}
+
+			if (ui->usb_state == USB_STATE_NOTATTACHED
+						&& ui->vbus_sn_notif)
+				msm_pm_app_enable_usb_ldo(1);
+
 			usb_lpm_exit(ui);
 			if (cancel_work_sync(&ui->li.wakeup_phy))
 				usb_lpm_wakeup_phy(NULL);
@@ -2195,13 +2229,12 @@ static void usb_do_work(struct work_struct *w)
 {
 	struct usb_info *ui = container_of(w, struct usb_info, work.work);
 	unsigned long iflags;
-	unsigned long flags, _vbus, ret;
+	unsigned long flags, ret;
 
 	for (;;) {
 		spin_lock_irqsave(&ui->lock, iflags);
 		flags = ui->flags;
 		ui->flags = 0;
-		_vbus = vbus;
 		spin_unlock_irqrestore(&ui->lock, iflags);
 
 		/* give up if we have nothing to do */
@@ -2247,9 +2280,12 @@ static void usb_do_work(struct work_struct *w)
 				} else {
 					ui->usb_state = USB_STATE_NOTATTACHED;
 					ui->state = USB_STATE_OFFLINE;
+
 					msleep(500);
 					usb_lpm_enter(ui);
 					pr_info("hsusb: IDLE -> OFFLINE\n");
+					if (ui->vbus_sn_notif)
+						msm_pm_app_enable_usb_ldo(0);
 				}
 			}
 			break;
@@ -2290,6 +2326,8 @@ static void usb_do_work(struct work_struct *w)
 				ui->state = USB_STATE_OFFLINE;
 				enable_irq(ui->irq);
 				pr_info("hsusb: ONLINE -> OFFLINE\n");
+				if (ui->vbus_sn_notif)
+					msm_pm_app_enable_usb_ldo(0);
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -2326,7 +2364,7 @@ static void usb_do_work(struct work_struct *w)
 			/* If we were signaled to go online and vbus is still
 			 * present when we received the signal, go online.
 			 */
-			if ((flags & USB_FLAG_VBUS_ONLINE) && _vbus) {
+			if ((flags & USB_FLAG_VBUS_ONLINE)) {
 				disable_irq(ui->irq);
 				ui->state = USB_STATE_ONLINE;
 				if (ui->in_lpm)
@@ -2364,26 +2402,16 @@ static void usb_do_work(struct work_struct *w)
 	}
 }
 
-
 void msm_hsusb_set_vbus_state(int online)
 {
-	unsigned long flags = 0;
 	struct usb_info *ui = the_usb_info;
-	
-	if (ui)
-		spin_lock_irqsave(&ui->lock, flags);
-	if (vbus != online) {
-		vbus = online;
-		if (ui) {
-			if (online)
-				ui->flags |= USB_FLAG_VBUS_ONLINE;
-			else
-				ui->flags |= USB_FLAG_VBUS_OFFLINE;
-			queue_delayed_work(usb_work, &ui->work, 0);
-		}
+
+	if (ui && online) {
+		usb_lpm_exit(ui);
+		/* Turn on PHY comparators */
+		if (!(ulpi_read(ui, 0x30) & 0x01))
+				ulpi_write(ui, 0x01, 0x30);
 	}
-	if (ui)
-		spin_unlock_irqrestore(&ui->lock, flags);
 }
 
 static irqreturn_t usb_lpm_gpio_isr(int irq, void *data)
@@ -2613,6 +2641,7 @@ static void usb_vbus_offline(struct usb_info *ui)
 	 */
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
+
 	msm_hsusb_phy_reset();
 	/* Give some delay to settle phy after reset */
 	msleep(100);
@@ -3193,7 +3222,6 @@ no_gpios:
 		return -ENOMEM;
 
 	usb_prepare(ui);
-	msm_hsusb_set_vbus_state(1);
 
 	return 0;
 }
@@ -3249,6 +3277,7 @@ static int __init usb_module_init(void)
 	msm_hsusb_rpc_connect();
 	/* rpc connect for charging */
 	msm_chg_rpc_connect();
+
 	ret = platform_driver_register(&usb_driver);
 
 	if (ret != 0 || usb_init_err != 0) {
@@ -3309,6 +3338,8 @@ static void usb_exit(void)
 	platform_driver_unregister(&usb_driver);
 	msm_hsusb_rpc_close();
 	msm_chg_rpc_close();
+	msm_pm_app_unregister_vbus_sn();
+	msm_pm_app_rpc_deinit();
 }
 
 static void __exit usb_module_exit(void)
