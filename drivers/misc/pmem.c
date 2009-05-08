@@ -31,7 +31,11 @@
 #define PMEM_MAX_ORDER 128
 #define PMEM_MIN_ALLOC PAGE_SIZE
 
+#ifdef CONFIG_ANDROID_PMEM_DEBUG
 #define PMEM_DEBUG 1
+#else
+#define PMEM_DEBUG 0
+#endif
 
 /* indicates that a refernce to this file has been taken via get_pmem_file,
  * the file should not be released until put_pmem_file is called */
