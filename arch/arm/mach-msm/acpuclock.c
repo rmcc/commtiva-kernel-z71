@@ -72,13 +72,6 @@ struct shared_pll_control {
 	} pll[PLL_BASE + ACPU_PLL_END];
 };
 
-static remote_spinlock_t pll_lock;
-static struct shared_pll_control *pll_control;
-
-static struct clock_state drv_state = { 0 };
-
-static void __init acpuclk_init(void);
-
 struct clkctl_acpu_speed {
 	unsigned int	use_for_scaling;
 	unsigned int	a11clk_khz;
@@ -87,59 +80,175 @@ struct clkctl_acpu_speed {
 	unsigned int	a11clk_src_div;
 	unsigned int	ahbclk_khz;
 	unsigned int	ahbclk_div;
-	int		vdd;
 	unsigned int 	axiclk_khz;
+	int		vdd;
 	unsigned long	lpj; /* loops_per_jiffy */
 /* Index in acpu_freq_tbl[] for steppings. */
 	short		down;
 	short		up;
 };
 
+static remote_spinlock_t pll_lock;
+static struct shared_pll_control *pll_control;
+static struct clock_state drv_state = { 0 };
+static struct clkctl_acpu_speed *acpu_freq_tbl;
+
+static void __init acpuclk_init(void);
+
 /*
- * ACPU speed table. Complete table is shown but certain speeds are commented
- * out to optimized speed switching. Initalize loops_per_jiffy to 0.
+ * ACPU freq tables used for different PLLs frequency combinations. The
+ * correct table is selected during init.
  *
  * Table stepping up/down is calculated during boot to choose the largest
  * frequency jump that's less than max_speed_delta_khz and preferrably on the
  * same PLL. If no frequencies using the same PLL are within
  * max_speed_delta_khz, then the farthest frequency that is within
  * max_speed_delta_khz is chosen.
- *
- * The table is initialized with the most common clock plan. Table fix up is
- * done during boot up to match the actual clock plan supported by the
- * hardware.
  */
-#if (1)
-static struct clkctl_acpu_speed  acpu_freq_tbl[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720, 0, 0, 8 },
-	{ 0, 61440, ACPU_PLL_0,  4, 3, 61440,  0, 0, 30720,  0, 0, 8 },
-	{ 0, 81920, ACPU_PLL_0,  4, 2, 40960,  1, 0, 61440,  0, 0, 8 },
-	{ 0, 96000, ACPU_PLL_1,  1, 7, 48000,  1, 0, 61440,  0, 0, 9 },
-	{ 1, 122880, ACPU_PLL_0, 4, 1, 61440,  1, 3, 61440,  0, 0, 8 },
-	{ 0, 128000, ACPU_PLL_1, 1, 5, 64000,  1, 3, 61440,  0, 0, 12 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5, 88000,  1, 3, 61440,  0, 0, 11 },
-	{ 0, 192000, ACPU_PLL_1, 1, 3, 64000,  2, 3, 61440,  0, 0, 12 },
-	{ 1, 245760, ACPU_PLL_0, 4, 0, 81920,  2, 4, 61440,  0, 0, 12 },
-	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 5, 128000, 0, 0, 12 },
-	{ 0, 264000, ACPU_PLL_2, 2, 3, 88000,  2, 5, 128000, 0, 6, 13 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2, 88000,  3, 5, 128000, 0, 6, 13 },
-	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 6, 128000, 0, 5, -1 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 128000, 0, 11, -1 },
+
+/* 7x01/7x25 normal with GSM capable modem */
+static struct clkctl_acpu_speed pll0_245_pll1_768_pll2_1056[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
+	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1,  61440, 3 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  61440, 3 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2,  61440, 4 },
+	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 128000, 5 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 128000, 5 },
+	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 128000, 6 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 128000, 7 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-#else /* Table of freq we currently use. */
-static struct clkctl_acpu_speed  acpu_freq_tbl[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720, 0, 0, 4 },
-	{ 1, 122880, ACPU_PLL_0, 4, 1, 61440, 1, 3, 61440, 0, 0, 4 },
-	{ 1, 128000, ACPU_PLL_1, 1, 5, 64000, 1, 3, 61440, 0, 0, 6 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5, 88000, 1, 3, 61440, 0, 0, 5 },
-	{ 1, 245760, ACPU_PLL_0, 4, 0, 81920, 2, 4, 61440, 0, 0, 5 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2, 88000, 3, 5, 128000, 0, 3, 7 },
-	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 6, 128000, 0, 2, -1 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 128000, 0, 5, -1 },
+
+/* 7x01/7x25 normal with CDMA-only modem */
+static struct clkctl_acpu_speed pll0_196_pll1_768_pll2_1056[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1,  24576, 3 },
+	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1,  24576, 3 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  24576, 3 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  24576, 4 },
+	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 128000, 5 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 128000, 5 },
+	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 128000, 6 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 128000, 7 },
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-#endif
+
+/* 7x01/7x25 turbo with GSM capable modem */
+static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1056[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  61440, 3 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  61440, 3 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2,  61440, 4 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 120000, 5 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 120000, 5 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 120000, 6 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 122880, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+/* 7x01/7x25 turbo with CDMA-only modem */
+static struct clkctl_acpu_speed pll0_196_pll1_960_pll2_1056[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1,  24576, 3 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  24576, 3 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  24576, 3 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  24576, 4 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 120000, 5 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 120000, 5 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 120000, 6 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 120000, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+/* 7x27 normal with GSM capable modem */
+static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1200[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  61440, 3 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  61440, 4 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0, 122880, 1, 122880, 4 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 122880, 5 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 122880, 5 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 122880, 6 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 122880, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+/* 7x27 normal with CDMA-only modem */
+static struct clkctl_acpu_speed pll0_196_pll1_960_pll2_1200[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  98304, 0,  49152, 3 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  49152, 3 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  98304, 4 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  98304, 4 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 120000, 5 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 120000, 5 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 120000, 6 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 120000, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+/* 7x27 normal with GSM capable modem - PLL0 and PLL1 swapped */
+static struct clkctl_acpu_speed pll0_960_pll1_245_pll2_1200[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
+	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1,  61440, 3 },
+	{ 1, 122880, ACPU_PLL_1, 1, 1,  61440, 1,  61440, 3 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  61440, 4 },
+	{ 1, 245760, ACPU_PLL_1, 1, 0, 122880, 1, 122880, 4 },
+	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 122880, 5 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 122880, 5 },
+	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 122880, 6 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 122880, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+/* 7x27 normal with CDMA-only modem - PLL0 and PLL1 swapped */
+static struct clkctl_acpu_speed pll0_960_pll1_196_pll2_1200[] = {
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
+	{ 1,  98304, ACPU_PLL_1, 1, 1,  98304, 0,  49152, 3 },
+	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1,  49152, 3 },
+	{ 1, 196608, ACPU_PLL_1, 1, 0,  65536, 2,  98304, 4 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  98304, 4 },
+	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 120000, 5 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 120000, 5 },
+	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 120000, 6 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 120000, 7 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+#define PLL_196_MHZ	10
+#define PLL_245_MHZ	12
+#define PLL_491_MHZ	25
+#define PLL_768_MHZ	40
+#define PLL_960_MHZ	50
+#define PLL_1056_MHZ	55
+#define PLL_1200_MHZ	62
+
+#define PLL_CONFIG(m0, m1, m2) { \
+	PLL_##m0##_MHZ, PLL_##m1##_MHZ, PLL_##m2##_MHZ, \
+	pll0_##m0##_pll1_##m1##_pll2_##m2 \
+}
+
+struct pll_freq_tbl_map {
+	unsigned int	pll0_l;
+	unsigned int	pll1_l;
+	unsigned int	pll2_l;
+	struct clkctl_acpu_speed *tbl;
+};
+
+static struct pll_freq_tbl_map acpu_freq_tbl_list[] = {
+	PLL_CONFIG(196, 768, 1056),
+	PLL_CONFIG(245, 768, 1056),
+	PLL_CONFIG(196, 960, 1056),
+	PLL_CONFIG(245, 960, 1056),
+	PLL_CONFIG(196, 960, 1200),
+	PLL_CONFIG(245, 960, 1200),
+	PLL_CONFIG(960, 196, 1200),
+	PLL_CONFIG(960, 245, 1200),
+	{ 0, 0, 0, 0 }
+};
 
 #ifdef CONFIG_CPU_FREQ_MSM
 static struct cpufreq_frequency_table freq_table[20];
@@ -517,136 +626,17 @@ uint32_t acpuclk_get_switch_time(void)
  * Clock driver initialization
  *---------------------------------------------------------------------------*/
 
-static int __init cmp_acpu_speed(const void *a, const void *b)
-{
-	return ((struct clkctl_acpu_speed *)a)->a11clk_khz
-		- ((struct clkctl_acpu_speed *)b)->a11clk_khz;
-}
-
 #define DIV2REG(n)		((n)-1)
 #define REG2DIV(n)		((n)+1)
 #define SLOWER_BY(div, factor)	div = DIV2REG(REG2DIV(div) * factor)
-
-static void __init pll0_a11_ahb_fixup(unsigned long pll0_l,
-					struct clkctl_acpu_speed *t)
-{
-#define PLL0_196608_KHZ		10
-#define PLL0_245760_KHZ		12
-#define PLL0_491520_KHZ		25
-#define PLL0_983000_KHZ		51
-
-	switch (pll0_l) {
-	case PLL0_983000_KHZ:
-		SLOWER_BY(t->a11clk_src_div, 4);
-		break;
-	case PLL0_491520_KHZ:
-		SLOWER_BY(t->a11clk_src_div, 2);
-		break;
-	case PLL0_245760_KHZ:
-		/* Initialization correct except for 7x27. */
-		if (cpu_is_msm7x27() && t->a11clk_khz == 245760) {
-			t->ahbclk_div--;
-			t->ahbclk_khz = 122880;
-		}
-		break;
-	case PLL0_196608_KHZ:
-		t->a11clk_khz = 196608 / REG2DIV(t->a11clk_src_div);
-		switch (REG2DIV(t->a11clk_src_div)) {
-		case 4: /* 49.152 MHz */
-			t->ahbclk_khz = t->a11clk_khz;
-			break;
-		case 3: /* 65.536 MHz */
-			t->ahbclk_khz = t->a11clk_khz;
-			t->ahbclk_div = DIV2REG(1);
-			break;
-		case 2: /* 98.304 MHz */
-			/* TODO: Increase AHB freq for sRoc
-			 * and Roc 2.0 */
-			t->ahbclk_khz = t->a11clk_khz >> 1;
-			break;
-		case 1: /* 196.608 MHz */
-			/* TODO: Increase AHB freq for sRoc
-			 * and Roc 2.0 */
-			t->ahbclk_khz = t->a11clk_khz / 3;
-			break;
-		}
-		break;
-	default:
-		printk(KERN_CRIT "Unknown PLL0 speed.\n");
-		BUG();
-		break;
-	}
-}
-
-static void __init pll1_a11_ahb_fixup(unsigned long pll1_l,
-					struct clkctl_acpu_speed *t)
-{
-#define PLL1_768000_KHZ		40
-#define PLL1_960000_KHZ		50
-
-	switch (pll1_l) {
-	case PLL1_960000_KHZ:
-		t->a11clk_khz = 960000 / REG2DIV(t->a11clk_src_div);
-		/* XXX: Necessary for AHB freq of 128 MHz, but not
-		 * necessary for lower AHB freqs. All ACPU freqs used
-		 * for scaling have AHB of 128 MHz, so unconditional
-		 * increment might be okay.
-		 *
-		 * 7x27 is an exception because running AHB at 160 MHz
-		 * is meaningful (because it can run AXI at 160 MHz at
-		 * lower CPU frequencies without impacting power
-		 * consumption).
-		 */
-		if (!cpu_is_msm7x27())
-			t->ahbclk_div++;
-		t->ahbclk_khz = t->a11clk_khz / REG2DIV(t->ahbclk_div);
-		break;
-	case PLL1_768000_KHZ:
-		/* Initialization correct. */
-		break;
-	default:
-		printk(KERN_CRIT "Unknown PLL1 speed.\n");
-		BUG();
-		break;
-	}
-}
-
-static void __init pll2_a11_ahb_fixup(unsigned long pll2_l,
-					struct clkctl_acpu_speed *t)
-{
-#define PLL2_960000_KHZ		50
-#define PLL2_1056000_KHZ	55
-#define PLL2_1200000_KHZ	62
-
-	switch (pll2_l) {
-	case PLL2_1200000_KHZ:
-		t->a11clk_khz = 1200000 / REG2DIV(t->a11clk_src_div);
-		if (t->ahbclk_div > 2)
-			t->ahbclk_div--;
-		t->ahbclk_khz = t->a11clk_khz / REG2DIV(t->ahbclk_div);
-		break;
-	case PLL2_1056000_KHZ:
-		/* Initialization correct. */
-		break;
-	case PLL2_960000_KHZ:
-		t->a11clk_khz = 960000 / REG2DIV(t->a11clk_src_div);
-		if (t->ahbclk_div > 1)
-			t->ahbclk_div--;
-		t->ahbclk_khz = t->a11clk_khz / REG2DIV(t->ahbclk_div);
-		break;
-	default:
-		printk(KERN_CRIT "Unknown PLL2 speed.\n");
-		BUG();
-		break;
-	}
-}
 
 static void __init acpu_freq_tbl_fixup(void)
 {
 	unsigned long pll0_l, pll1_l, pll2_l;
 	int axi_160mhz = 0, axi_200mhz = 0;
+	struct pll_freq_tbl_map *lst;
 	struct clkctl_acpu_speed *t;
-	unsigned int n = 0;
+	unsigned int pll0_needs_fixup = 0;
 
 	/* Wait for the PLLs to be initialized and then read their frequency.
 	 */
@@ -669,84 +659,53 @@ static void __init acpu_freq_tbl_fixup(void)
 	printk(KERN_INFO "L val: PLL0: %d, PLL1: %d, PLL2: %d\n",
 				(int)pll0_l, (int)pll1_l, (int)pll2_l);
 
-	/* No fix up needed. */
-	if (pll0_l == PLL0_245760_KHZ && pll1_l == PLL1_768000_KHZ
-	    && pll2_l == PLL2_1056000_KHZ)
-		goto print_info;
-
-	/* The AXI bus frequency is also based off the PLL frequencies. For
-	 * the AXI bus to be able to run at 160 MHz or 200 MHz, it needs a
-	 * PLL that runs at an integer multiple of that frequency.
+	/* Some configurations run PLL0 twice as fast. Instead of having
+	 * separate tables for this case, we simply fix up the ACPU clock
+	 * source divider since it's a simple fix up.
 	 */
-	axi_160mhz = (pll1_l == PLL1_960000_KHZ || pll2_l == PLL2_960000_KHZ);
-	axi_200mhz = (pll2_l == PLL2_1200000_KHZ);
+	if (pll0_l == PLL_491_MHZ) {
+		pll0_l = PLL_245_MHZ;
+		pll0_needs_fixup = 1;
+	}
 
-	/* Fix the dividers and the allowed clock rates based on the PLL
-	 * frequencies.
-	 *
-	 * The CPU freq is based off the PLL frequencies. So if the actual
-	 * PLL freq is different from the PLL freq assumed in the default
-	 * table, then the dividers are adjusted to run the CPU at
-	 * frequencies closer to the ones in the default table.
-	 *
-	 * The AHB freq is based off the CPU freq. Attempt is made to
-	 * generally keep the AHB freq as close as possible to the AXI bus
-	 * freq. But for each VDD level there is an upper limit for the AHB
-	 * bus freq. Apart from the per VDD upper limit the AHB also has an
-	 * absolute upper limit of 160 MHz. In most cases, these limitations
-	 * would explain why the AHB divider is changed when a PLL freq
-	 * changes.
-	 */
-	for (t = &acpu_freq_tbl[0]; t->a11clk_khz != 0; t++) {
-		n++;
-
-		switch (t->pll) {
-		case ACPU_PLL_0:
-			pll0_a11_ahb_fixup(pll0_l, t);
-			break;
-		case ACPU_PLL_1:
-			pll1_a11_ahb_fixup(pll1_l, t);
-			break;
-		case ACPU_PLL_2:
-			pll2_a11_ahb_fixup(pll2_l, t);
+	/* Select the right table to use. */
+	for (lst = acpu_freq_tbl_list; lst->tbl != 0; lst++) {
+		if (lst->pll0_l == pll0_l && lst->pll1_l == pll1_l
+		    && lst->pll2_l == pll2_l) {
+			acpu_freq_tbl = lst->tbl;
 			break;
 		}
+	}
 
-		if (pll0_l == PLL0_196608_KHZ && t->a11clk_khz <= 196608)
-			t->axiclk_khz = 24576;
+	if (acpu_freq_tbl == NULL) {
+		pr_crit("Unknown PLL configuration!\n");
+		BUG();
+	}
 
-		if (cpu_is_msm7x27() && t->a11clk_khz == 245760)
-			t->axiclk_khz = 122880;
+	/* Fix up PLL0 source divider if necessary. Also, fix up the AXI to
+	 * the max that's supported by the board (RAM used in board).
+	 */
+	axi_160mhz = (pll0_l == PLL_960_MHZ || pll1_l == PLL_960_MHZ);
+	axi_200mhz = (pll2_l == PLL_1200_MHZ);
+	for (t = &acpu_freq_tbl[0]; t->a11clk_khz != 0; t++) {
 
+		if (pll0_needs_fixup && t->pll == ACPU_PLL_0)
+			SLOWER_BY(t->a11clk_src_div, 2);
 		if (axi_160mhz && drv_state.max_axi_khz >= 160000
 		    && t->ahbclk_khz > 128000)
 			t->axiclk_khz = 160000;
 		if (axi_200mhz && drv_state.max_axi_khz >= 200000
 		    && t->ahbclk_khz > 160000)
 			t->axiclk_khz = 200000;
-
-		/* 128 MHz is derived from PLL1 @ 768 MHz. If PLL1 @ 960 MHz
-		 * then only 120 MHz can be derived from it. */
-		if (pll1_l == PLL1_960000_KHZ && t->axiclk_khz == 128000)
-			t->axiclk_khz = 120000;
 	}
 
-	/* The ACPU table is expected to be in ascending order by the rest
-	 * of the code. This is the case after most fix ups. One example
-	 * exception is when PLL1 runs at 960 MHz. In this case the entries
-	 * corresponding to (256 and 264) need to be swapped.
-	 */
-	sort(acpu_freq_tbl, n, sizeof(struct clkctl_acpu_speed),
-					cmp_acpu_speed, NULL);
-
-print_info:
 	/* The default 7x27 ACPU clock plan supports running the AXI bus at
 	 * 200 MHz. So we don't classify it as Turbo mode.
 	 */
 	if (cpu_is_msm7x27())
 		return;
 
-	t = acpu_freq_tbl + n - 1;
+	t--;
 	if (!axi_160mhz)
 		pr_info("Turbo mode not supported.\n");
 	else if (t->axiclk_khz == 160000)
