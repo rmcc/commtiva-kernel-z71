@@ -237,8 +237,7 @@ void ard_clk_set_icodec_tx_clk(void)
 {
 	s32 rc = CAD_RES_SUCCESS;
 
-	/* Frequency in Hz - 8KHz */
-	rc = clk_set_rate(tx_clk, 2048000);
+	rc = clk_set_rate(tx_clk, g_clk_info.tx_clk_freq*256);
 
 	if (rc != CAD_RES_SUCCESS)
 		pr_err("ard_clk: Rate on TX clk not set!\n");

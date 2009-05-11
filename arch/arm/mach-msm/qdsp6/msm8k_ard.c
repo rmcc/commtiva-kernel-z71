@@ -69,11 +69,16 @@
 #include <mach/qdsp6/msm8k_ard_helper.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_drvi.h>
 #include <mach/qdsp6/msm8k_cad_q6enc_drvi.h>
+#include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
 
 static struct ard_session_info_struct_type	ard_session
 							[ARD_AUDIO_MAX_CLIENT];
 struct ard_session_info_struct_type		*ardsession[CAD_MAX_SESSION];
 struct ard_state_struct_type			ard_state;
+struct clk_info 				g_clk_info = {8000, 0};
+
+
+
 
 #define CAD_FORMAT_BLK_OFFSET	0x100000
 
@@ -326,7 +331,18 @@ s32 ard_close(s32 session_id)
 	struct ard_state_struct_type            *local_ard_state = NULL;
 
 	rc = dal_rc = CAD_RES_SUCCESS;
+	if (ardsession[session_id]->enabled == ARD_FALSE)
+		return rc;
 
+	/*PCM recording specific change*/
+	if (ardsession[session_id]->sess_open_info->cad_open.op_code ==
+		CAD_OPEN_OP_READ &&
+		ardsession[session_id]->sess_open_info->cad_open.format ==
+		CAD_FORMAT_PCM) {
+
+		g_clk_info.open_rec_sessions -= 1;
+		g_clk_info.tx_clk_freq = 8000;
+	}
 
 	local_ard_state = &ard_state;
 	cadr = ardsession[session_id]->sess_open_info;
@@ -450,7 +466,7 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 	struct cad_stream_device_struct_type	*strm_dev = NULL;
 	struct ard_state_struct_type            *local_ard_state = NULL;
 	void					*config_format_block = NULL;
-
+	struct cad_write_pcm_format_struct_type *pcm_format_struct;
 
 	rc = dal_rc = CAD_RES_SUCCESS;
 
@@ -842,6 +858,23 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			rc = CAD_RES_FAILURE;
 		}
 
+		if (cadr_stream->app_type == CAD_STREAM_APP_VOICE &&
+			ardsession[session_id]->sess_open_info->cad_open.op_code
+			== CAD_OPEN_OP_READ) {
+
+			if (g_clk_info.tx_clk_freq != 8000)
+				for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++)
+					if (ardsession[i] &&
+						ardsession[i]->sess_open_info
+						->cad_open.op_code
+						== CAD_OPEN_OP_READ
+						&& i != session_id)
+						ard_close(i);
+
+			g_clk_info.open_rec_sessions += 1;
+
+		}
+
 		D("ard_ioctl STRM INFO SET ses %d, sess_opn_info(cadr) = %p\n",
 			session_id, cadr);
 
@@ -863,6 +896,65 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		D("ard_ioctl STRM CFG SET ses %d, sess_opn_info(cadr) = %p\n",
 			session_id, cadr);
 
+		if (ardsession[session_id]->sess_open_info->cad_open.format ==
+			CAD_FORMAT_PCM &&
+			ardsession[session_id]->sess_open_info->cad_open.op_code
+			== CAD_OPEN_OP_READ) {
+
+			pcm_format_struct = cmd_buf;
+
+			if (g_clk_info.open_rec_sessions > 0 &&
+				g_clk_info.tx_clk_freq !=
+				pcm_format_struct->pcm.us_sample_rate) {
+
+				rc = CAD_RES_FAILURE;
+				D("clk mismatch with current recording\n");
+				break;
+			}
+
+			g_clk_info.open_rec_sessions += 1;
+
+			switch (pcm_format_struct->pcm.us_sample_rate) {
+
+			case 0:
+				g_clk_info.tx_clk_freq = 96000;
+				break;
+			case 1:
+				g_clk_info.tx_clk_freq = 88200;
+				break;
+			case 2:
+				g_clk_info.tx_clk_freq = 64000;
+				break;
+			case 3:
+				g_clk_info.tx_clk_freq = 48000;
+				break;
+			case 4:
+				g_clk_info.tx_clk_freq = 44100;
+				break;
+			case 5:
+				g_clk_info.tx_clk_freq = 32000;
+				break;
+			case 6:
+				g_clk_info.tx_clk_freq = 24000;
+				break;
+			case 7:
+				g_clk_info.tx_clk_freq = 22050;
+				break;
+			case 8:
+				g_clk_info.tx_clk_freq = 16000;
+				break;
+			case 9:
+				g_clk_info.tx_clk_freq = 12000;
+				break;
+			case 10:
+				g_clk_info.tx_clk_freq = 11025;
+				break;
+			case 11:
+				g_clk_info.tx_clk_freq = 8000;
+				break;
+			}
+
+		}
 		print_data(session_id);
 		break;
 

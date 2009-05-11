@@ -81,6 +81,14 @@ void ard_clk_set_sdac_rx_clk(void);
 void ard_clk_set_sdac_tx_clk(void);
 void ard_clk_disable_sdac_clk(void);
 
+struct clk_info {
+
+	u32 tx_clk_freq;
+	u16 open_rec_sessions;
+};
+
+extern struct clk_info g_clk_info;
+
 #endif
 
 

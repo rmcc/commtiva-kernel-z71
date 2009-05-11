@@ -63,6 +63,7 @@
 #include <mach/qdsp6/msm8k_adie_codec_rpc.h>
 #include <mach/qdsp6/msm8k_adie_codec_dev.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
+#include <mach/qdsp6/msm8k_ard_clk.h>
 
 struct adie_state_struct_type	adie_state;
 
@@ -332,8 +333,15 @@ enum adie_state_ret_enum_type adie_state_reset(u32 dev_type, u32 dev_id)
 
 	if (path_type == ADIE_CODEC_RX)
 		freq_plan = 48000;
-	else
-		freq_plan = 8000;
+	else {
+
+		if (g_clk_info.tx_clk_freq > 16000)
+			freq_plan = 48000;
+		else if (g_clk_info.tx_clk_freq > 8000)
+			freq_plan = 16000;
+		else
+			freq_plan = 8000;
+	}
 
 	/* Set the path */
 	dal_rc = rpc_adie_codec_set_path(adie_state.adie_handle, path_id,
