@@ -166,4 +166,55 @@ struct msm_rpc_server
 
 int msm_rpc_create_server(struct msm_rpc_server *server);
 
+#define MSM_RPC_MSGSIZE_MAX 8192
+
+struct msm_rpc_client;
+
+struct msm_rpc_client {
+	struct task_struct *read_thread;
+	struct task_struct *cb_thread;
+
+	struct msm_rpc_endpoint *ept;
+	wait_queue_head_t reply_wait;
+
+	uint32_t prog, ver;
+
+	void *buf;
+	int read_avail;
+
+	int (*cb_func)(struct msm_rpc_client *, void *, int);
+	void *cb_buf;
+	int cb_size;
+
+	struct list_head cb_item_list;
+	struct mutex cb_item_list_lock;
+
+	wait_queue_head_t cb_wait;
+	int cb_avail;
+
+	uint32_t exit_flag;
+	struct completion complete;
+	struct completion cb_complete;
+
+	struct mutex req_lock;
+	char req[MSM_RPC_MSGSIZE_MAX];
+};
+
+struct msm_rpc_client *msm_rpc_register_client(
+	const char *name,
+	uint32_t prog, uint32_t ver,
+	uint32_t create_cb_thread,
+	int (*cb_func)(struct msm_rpc_client *, void *, int));
+
+int msm_rpc_unregister_client(struct msm_rpc_client *client);
+
+int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
+		       int (*arg_func)(void *, void *),
+		       int (*result_func)(void *, void *),
+		       void *data);
+
+int msm_rpc_send_accepted_reply(struct msm_rpc_client *client,
+				uint32_t xid, uint32_t accept_status,
+				char *buf, uint32_t size);
+
 #endif

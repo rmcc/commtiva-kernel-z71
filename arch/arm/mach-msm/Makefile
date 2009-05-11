@@ -27,6 +27,7 @@ obj-$(CONFIG_MSM_RESET_MODEM) += reset_modem.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_device.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_servers.o
+obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_clients.o
 obj-$(CONFIG_MSM_RPCSERVERS) += rpc_server_dog_keepalive.o
 obj-$(CONFIG_MSM_RPCSERVERS) += rpc_server_time_remote.o
 obj-$(CONFIG_MSM_DALRPC) += dal.o
