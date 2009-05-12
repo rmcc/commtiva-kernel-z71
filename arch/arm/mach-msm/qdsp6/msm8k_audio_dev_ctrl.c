@@ -197,17 +197,19 @@ int audio_switch_device(int new_device)
 		return -ENODEV;
 	}
 
-	if (cad_dev.reserved == CAD_RX_DEVICE)
-		ctrl->current_rx_device = cad_dev.device;
-	else
-		ctrl->current_tx_device = cad_dev.device;
-
 	rc = cad_ioctl(ctrl->cad_ctrl_handle,
 			CAD_IOCTL_CMD_DEVICE_SET_GLOBAL_DEFAULT,
 			&cad_dev,
 			sizeof(struct cad_device_struct_type));
-	if (rc)
+	if (rc) {
 		pr_err("cad_ioctl() SET_GLOBAL_DEFAULT failed\n");
+		return rc;
+	}
+
+	if (cad_dev.reserved == CAD_RX_DEVICE)
+		ctrl->current_rx_device = cad_dev.device;
+	else
+		ctrl->current_tx_device = cad_dev.device;
 
 	return rc;
 }
@@ -234,7 +236,7 @@ int audio_set_device_volume(int vol)
 			sizeof(struct cad_flt_cfg_dev_vol));
 	ctrl->current_volume = vol;
 	cad_dev_volume.volume = ctrl->current_volume;
-	cad_dev_volume.path = 0;
+	cad_dev_volume.path = CAD_RX_DEVICE;
 	cad_dev_volume.device_id = ctrl->current_rx_device;
 	strm_flt.filter_type =
 				CAD_FILTER_CONFIG_DEVICE_VOLUME;
@@ -254,22 +256,16 @@ int audio_set_device_volume(int vol)
 EXPORT_SYMBOL(audio_set_device_volume);
 
 
-int audio_set_device_mute(int mute_info)
+int audio_set_device_mute(struct msm_mute_info *m)
 {
 	int rc;
 	struct cad_stream_filter_struct_type strm_flt;
 	struct cad_flt_cfg_dev_mute dev_mute_buf;
 	struct msm8k_audio_dev_ctrl *ctrl = &g_ctrl;
-	int mute;
-	int path;
 
 	D("%s\n", __func__);
 
-	/* Lower word is mute/unmute, upper is path. */
-	mute = mute_info & 0x0000FFFF;
-	path = (mute_info & 0xFFFF0000) >> 16;
-
-	if ((path != 0) && (path != 1)) {
+	if ((m->path != CAD_RX_DEVICE) && (m->path != CAD_TX_DEVICE)) {
 		pr_err("%s: invalid path\n", __func__);
 		return -1;
 	}
@@ -281,13 +277,13 @@ int audio_set_device_mute(int mute_info)
 
 	dev_mute_buf.ver_id = CAD_FILTER_CONFIG_DEVICE_VOLUME_VERID;
 
-	if (path == 0)
+	if (m->path == CAD_RX_DEVICE)
 		dev_mute_buf.device_id = ctrl->current_rx_device;
 	else
 		dev_mute_buf.device_id = ctrl->current_tx_device;
 
-	dev_mute_buf.path = path;
-	dev_mute_buf.mute = mute;
+	dev_mute_buf.path = m->path;
+	dev_mute_buf.mute = m->mute;
 
 	strm_flt.filter_type = CAD_FILTER_CONFIG_DEVICE_MUTE;
 	strm_flt.format_block_len =
@@ -310,6 +306,7 @@ static int msm8k_audio_dev_ctrl_ioctl(struct inode *inode, struct file *f,
 {
 	int rc;
 	u32 uparam;
+	struct msm_mute_info m;
 
 	D("%s\n", __func__);
 
@@ -330,13 +327,14 @@ static int msm8k_audio_dev_ctrl_ioctl(struct inode *inode, struct file *f,
 
 		break;
 	case AUDIO_SET_MUTE:
-		rc = copy_from_user(&uparam, (void *)arg, sizeof(u32));
+		rc = copy_from_user(&m, (void *)arg,
+				sizeof(struct msm_mute_info));
 		if (rc) {
 			pr_err("AUDIO_SET_MUTE copy from user failed\n");
 			break;
 		}
 
-		rc = audio_set_device_mute(uparam);
+		rc = audio_set_device_mute(&m);
 
 		break;
 	default:

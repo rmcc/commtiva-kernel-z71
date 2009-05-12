@@ -59,6 +59,7 @@
 #define CAD_H
 
 #include <linux/kernel.h>
+#include <linux/msm_audio.h>
 
 #define CAD_RES_SUCCESS       0
 #define CAD_RES_FAILURE      -1
@@ -117,6 +118,6 @@ int audio_switch_device(int new_device);
 
 int audio_set_device_volume(int vol);
 
-int audio_set_device_mute(int mute_info);
+int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif

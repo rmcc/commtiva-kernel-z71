@@ -209,8 +209,12 @@ static int snd_mute_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int rc = 0;
+	struct msm_mute_info m;
 
-	rc = audio_set_device_mute(ucontrol->value.integer.value[0]);
+	m.path = CAD_RX_DEVICE;
+	m.mute = ucontrol->value.integer.value[0];
+
+	rc = audio_set_device_mute(&m);
 	if (rc)
 		printk(KERN_ERR "audio_set_device_mute failed\n");
 	else
