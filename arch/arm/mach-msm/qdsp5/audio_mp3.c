@@ -71,6 +71,8 @@ printk(KERN_DEBUG format, ## arg)
 #define  AUDPP_DEC_STATUS_CFG   2
 #define  AUDPP_DEC_STATUS_PLAY  3
 
+#define AUDMP3_EVENT_NUM 10 /* Default number of pre-allocated event packets */
+
 struct buffer {
 	void *data;
 	unsigned size;
@@ -151,6 +153,7 @@ struct audio {
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct audmp3_suspend_ctl suspend_ctl;
 #endif
+	struct list_head free_event_queue;
 	struct list_head event_queue;
 	wait_queue_head_t event_wait;
 	spinlock_t event_queue_lock;
@@ -582,6 +585,12 @@ static void audmp3_reset_event_queue(struct audio *audio)
 		list_del(&drv_evt->list);
 		kfree(drv_evt);
 	}
+	list_for_each_safe(ptr, next, &audio->free_event_queue) {
+		drv_evt = list_first_entry(&audio->free_event_queue,
+			struct audmp3_event, list);
+		list_del(&drv_evt->list);
+		kfree(drv_evt);
+	}
 	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 
 	return;
@@ -627,18 +636,17 @@ static long audmp3_process_event_req(struct audio *audio, void __user *arg)
 			struct audmp3_event, list);
 		list_del(&drv_evt->list);
 	}
-	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
-
 	if (drv_evt) {
 		usr_evt.event_type = drv_evt->event_type;
 		usr_evt.event_payload = drv_evt->payload;
-
-		if (copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
-			rc = -EFAULT;
-
-		kfree(drv_evt);
+		list_add_tail(&drv_evt->list, &audio->free_event_queue);
 	} else
 		rc = -1;
+	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
+
+	if (!rc && copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
+		rc = -EFAULT;
+
 	return rc;
 }
 
@@ -1172,17 +1180,23 @@ static void audmp3_post_event(struct audio *audio, int type,
 	struct audmp3_event *e_node = NULL;
 	unsigned long flags;
 
-	e_node = kmalloc(sizeof(struct audmp3_event), GFP_KERNEL);
+	spin_lock_irqsave(&audio->event_queue_lock, flags);
 
-	if (!e_node) {
-		pr_err("%s: No mem to post event %d\n", __func__, type);
-		return;
+	if (!list_empty(&audio->free_event_queue)) {
+		e_node = list_first_entry(&audio->free_event_queue,
+			struct audmp3_event, list);
+		list_del(&e_node->list);
+	} else {
+		e_node = kmalloc(sizeof(struct audmp3_event), GFP_ATOMIC);
+		if (!e_node) {
+			pr_err("%s: No mem to post event %d\n", __func__, type);
+			return;
+		}
 	}
 
 	e_node->event_type = type;
 	e_node->payload = payload;
 
-	spin_lock_irqsave(&audio->event_queue_lock, flags);
 	list_add_tail(&e_node->list, &audio->event_queue);
 	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 	wake_up(&audio->event_wait);
@@ -1215,7 +1229,8 @@ struct audio the_mp3_audio;
 static int audio_open(struct inode *inode, struct file *file)
 {
 	struct audio *audio = &the_mp3_audio;
-	int rc;
+	int rc, i;
+	struct audmp3_event *e_node = NULL;
 
 	mutex_lock(&audio->lock);
 
@@ -1254,6 +1269,15 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->suspend_ctl.audio = audio;
 	register_early_suspend(&audio->suspend_ctl.node);
 #endif
+	for (i = 0; i < AUDMP3_EVENT_NUM; i++) {
+		e_node = kmalloc(sizeof(struct audmp3_event), GFP_KERNEL);
+		if (e_node)
+			list_add_tail(&e_node->list, &audio->free_event_queue);
+		else {
+			pr_info("%s: event pkt alloc failed\n", __func__);
+			break;
+		}
+	}
 	rc = 0;
 done:
 	mutex_unlock(&audio->lock);
@@ -1390,6 +1414,7 @@ static int __init audio_init(void)
 	debugfs_create_file("msm_mp3", S_IFREG | S_IRUGO, NULL,
 		(void *) &the_mp3_audio, &audmp3_debug_fops);
 #endif
+	INIT_LIST_HEAD(&the_mp3_audio.free_event_queue);
 	INIT_LIST_HEAD(&the_mp3_audio.event_queue);
 	init_waitqueue_head(&the_mp3_audio.event_wait);
 	spin_lock_init(&the_mp3_audio.event_queue_lock);
