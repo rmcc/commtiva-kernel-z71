@@ -131,46 +131,36 @@ static int rpc_adsp_rtos_app_to_modem(uint32_t cmd, uint32_t module,
 {
 	int rc;
 	struct rpc_adsp_rtos_app_to_modem_args_t rpc_req;
-	struct rpc_reply_hdr *rpc_rsp;
-
-	msm_rpc_setup_req(&rpc_req.hdr,
-			  rpc_adsp_rtos_atom_prog,
-			  rpc_adsp_rtos_atom_vers,
-			  RPC_ADSP_RTOS_APP_TO_MODEM_PROC);
+	struct rpc_reply_hdr rpc_rsp;
 
 	rpc_req.gotit = cpu_to_be32(1);
 	rpc_req.cmd = cpu_to_be32(cmd);
 	rpc_req.proc_id = cpu_to_be32(RPC_ADSP_RTOS_PROC_APPS);
 	rpc_req.module = cpu_to_be32(module);
-	rc = msm_rpc_write(adsp_module->rpc_client, &rpc_req, sizeof(rpc_req));
-	if (rc < 0) {
-		pr_err("adsp: could not send RPC request: %d\n", rc);
-		return rc;
-	}
+	rc = msm_rpc_call_reply(adsp_info.init_info_rpc_client,
+					RPC_ADSP_RTOS_APP_TO_MODEM_PROC,
+					&rpc_req, sizeof(rpc_req),
+					&rpc_rsp, sizeof(rpc_rsp),
+					5 * HZ);
 
-	rc = msm_rpc_read(adsp_module->rpc_client,
-			  (void **)&rpc_rsp, -1, (5*HZ));
 	if (rc < 0) {
 		pr_err("adsp: error receiving RPC reply: %d (%d)\n",
 		       rc, -ERESTARTSYS);
 		return rc;
 	}
 
-	if (be32_to_cpu(rpc_rsp->reply_stat) != RPCMSG_REPLYSTAT_ACCEPTED) {
+	if (be32_to_cpu(rpc_rsp.reply_stat) != RPCMSG_REPLYSTAT_ACCEPTED) {
 		pr_err("adsp: RPC call was denied!\n");
-		kfree(rpc_rsp);
 		return -EPERM;
 	}
 
-	if (be32_to_cpu(rpc_rsp->data.acc_hdr.accept_stat) !=
+	if (be32_to_cpu(rpc_rsp.data.acc_hdr.accept_stat) !=
 	    RPC_ACCEPTSTAT_SUCCESS) {
 		pr_err("adsp error: RPC call was not successful (%d)\n",
-		       be32_to_cpu(rpc_rsp->data.acc_hdr.accept_stat));
-		kfree(rpc_rsp);
+		       be32_to_cpu(rpc_rsp.data.acc_hdr.accept_stat));
 		return -EINVAL;
 	}
 
-	kfree(rpc_rsp);
 	return 0;
 }
 
@@ -240,6 +230,7 @@ static void  msm_get_init_info(void)
 {
 	int rc;
 	struct rpc_adsp_rtos_app_to_modem_args_t rpc_req;
+	struct rpc_reply_hdr rpc_rsp;
 
 	adsp_info.init_info_rpc_client = msm_rpc_connect(
 		rpc_adsp_rtos_atom_prog,
@@ -258,18 +249,17 @@ static void  msm_get_init_info(void)
 		}
 	}
 
-	msm_rpc_setup_req(&rpc_req.hdr,
-				rpc_adsp_rtos_atom_prog,
-				rpc_adsp_rtos_atom_vers,
-				RPC_ADSP_RTOS_APP_TO_MODEM_PROC);
-
 	rpc_req.gotit = cpu_to_be32(1);
 	rpc_req.cmd = cpu_to_be32(RPC_ADSP_RTOS_CMD_GET_INIT_INFO);
 	rpc_req.proc_id = cpu_to_be32(RPC_ADSP_RTOS_PROC_APPS);
 	rpc_req.module = 0;
 
-	rc = msm_rpc_write(adsp_info.init_info_rpc_client,
-				&rpc_req, sizeof(rpc_req));
+	rc = msm_rpc_call_reply(adsp_info.init_info_rpc_client,
+					RPC_ADSP_RTOS_APP_TO_MODEM_PROC,
+					&rpc_req, sizeof(rpc_req),
+					&rpc_rsp, sizeof(rpc_rsp),
+					5 * HZ);
+
 	if (rc < 0)
 		pr_err("adsp: could not send RPC request: %d\n", rc);
 }
@@ -282,8 +272,8 @@ int msm_adsp_get(const char *name, struct msm_adsp_module **out,
 	static uint32_t init_info_cmd_sent;
 
 	if (!init_info_cmd_sent) {
-		msm_get_init_info();
 		init_waitqueue_head(&adsp_info.init_info_wait);
+		msm_get_init_info();
 		rc = wait_event_timeout(adsp_info.init_info_wait,
 			adsp_info.init_info_state == ADSP_STATE_INIT_INFO,
 			5 * HZ);
