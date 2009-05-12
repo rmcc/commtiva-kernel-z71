@@ -365,11 +365,8 @@ static int qsd_pcm_playback_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
-	int ret;
 
 	mutex_lock(&the_locks.lock);
-	ret = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_STREAM_PAUSE,
-			NULL, 0);
 	cad_close(prtd->cad_w_handle);
 	mutex_unlock(&the_locks.lock);
 	prtd->enabled = 0;
@@ -434,11 +431,8 @@ static int qsd_pcm_capture_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
-	int ret;
 
 	mutex_lock(&the_locks.lock);
-	ret = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_STREAM_PAUSE,
-			NULL, 0);
 	cad_close(prtd->cad_w_handle);
 	mutex_unlock(&the_locks.lock);
 
