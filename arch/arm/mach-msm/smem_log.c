@@ -115,22 +115,33 @@ struct smem_log_item {
 #define SMEM_STATIC_LOG_EVENTS_SIZE (sizeof(struct smem_log_item) * \
 				     SMEM_LOG_NUM_STATIC_ENTRIES)
 
+#define SMEM_LOG_NUM_POWER_ENTRIES 2000
+#define SMEM_POWER_LOG_EVENTS_SIZE (sizeof(struct smem_log_item) * \
+			      SMEM_LOG_NUM_POWER_ENTRIES)
+
 #define SMEM_SPINLOCK_SMEM_LOG 2
 #define SMEM_SPINLOCK_STATIC_LOG 5
+/* POWER shares with SMEM_SPINLOCK_SMEM_LOG */
 
-static struct smem_log_item __iomem *smem_log_events;
-static uint32_t __iomem *smem_log_idx;
 static remote_spinlock_t remote_spinlock;
-static struct smem_log_item __iomem *smem_log_static_events;
-static uint32_t __iomem *smem_log_static_idx;
 static remote_spinlock_t remote_spinlock_static;
 
 struct smem_log_inst {
-	struct smem_log_item __iomem *smem_log_cur_events;
-	uint32_t __iomem *smem_log_cur_idx;
-	int smem_log_cur_num;
-	remote_spinlock_t *cur_remote_spinlock;
+	int which_log;
+	struct smem_log_item __iomem *events;
+	uint32_t __iomem *idx;
+	int num;
+	remote_spinlock_t *remote_spinlock;
 };
+
+enum smem_logs {
+	GEN = 0,
+	STA,
+	POW,
+	NUM
+};
+
+static struct smem_log_inst inst[NUM];
 
 #if defined(CONFIG_DEBUG_FS)
 
@@ -951,13 +962,13 @@ static void smem_log_event_from_user(struct smem_log_inst *inst,
 	int first = 1;
 	int ret;
 
-	remote_spin_lock_irqsave(inst->cur_remote_spinlock, flags);
+	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
 
 	while (num--) {
-		idx = *inst->smem_log_cur_idx;
+		idx = *inst->idx;
 
-		if (idx < inst->smem_log_cur_num) {
-			ret = copy_from_user(&inst->smem_log_cur_events[idx],
+		if (idx < inst->num) {
+			ret = copy_from_user(&inst->events[idx],
 					     buf, size);
 			if (ret) {
 				printk("ERROR %s:%i tried to write "
@@ -969,29 +980,29 @@ static void smem_log_event_from_user(struct smem_log_inst *inst,
 
 			if (first) {
 				identifier =
-					inst->smem_log_cur_events[idx].
+					inst->events[idx].
 					identifier;
 				timetick = read_timestamp();
 				first = 0;
 			} else {
 				identifier |= SMEM_LOG_CONT;
 			}
-			inst->smem_log_cur_events[idx].identifier =
+			inst->events[idx].identifier =
 				identifier;
-			inst->smem_log_cur_events[idx].timetick =
+			inst->events[idx].timetick =
 				timetick;
 		}
 
 		next_idx = idx + 1;
-		if (next_idx >= inst->smem_log_cur_num)
+		if (next_idx >= inst->num)
 			next_idx = 0;
-		*inst->smem_log_cur_idx = next_idx;
+		*inst->idx = next_idx;
 
 		buf += sizeof(struct smem_log_item);
 	}
 
  out:
-	remote_spin_unlock_irqrestore(inst->cur_remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
 }
 
 static void _smem_log_event(
@@ -1075,8 +1086,8 @@ static void _smem_log_event6(
 void smem_log_event(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(smem_log_events, smem_log_idx,
-			&remote_spinlock, SMEM_LOG_NUM_ENTRIES,
+	_smem_log_event(inst[GEN].events, inst[GEN].idx,
+			inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
 			id, data1, data2, data3);
 }
 
@@ -1084,16 +1095,16 @@ void smem_log_event6(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(smem_log_events, smem_log_idx,
-			 &remote_spinlock, SMEM_LOG_NUM_ENTRIES,
+	_smem_log_event6(inst[GEN].events, inst[GEN].idx,
+			 inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
 			 id, data1, data2, data3, data4, data5, data6);
 }
 
 void smem_log_event_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(smem_log_static_events, smem_log_static_idx,
-			&remote_spinlock_static, SMEM_LOG_NUM_STATIC_ENTRIES,
+	_smem_log_event(inst[STA].events, inst[STA].idx,
+			inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
 			id, data1, data2, data3);
 }
 
@@ -1101,37 +1112,56 @@ void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(smem_log_static_events, smem_log_static_idx,
-			 &remote_spinlock_static, SMEM_LOG_NUM_STATIC_ENTRIES,
+	_smem_log_event6(inst[STA].events, inst[STA].idx,
+			 inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
 			 id, data1, data2, data3, data4, data5, data6);
 }
 
 static int _smem_log_init(void)
 {
-	smem_log_events =
+	inst[GEN].which_log = GEN;
+	inst[GEN].events =
 		(struct smem_log_item *)smem_alloc(SMEM_SMEM_LOG_EVENTS,
 						  SMEM_LOG_EVENTS_SIZE);
-	smem_log_idx = (uint32_t *)smem_alloc(SMEM_SMEM_LOG_IDX,
+	inst[GEN].idx = (uint32_t *)smem_alloc(SMEM_SMEM_LOG_IDX,
 					     sizeof(uint32_t));
-	if (!smem_log_events || !smem_log_idx) {
-		printk(KERN_INFO "smem_log_init: no log or log_idx allocated, "
+	if (!inst[GEN].events || !inst[GEN].idx) {
+		printk(KERN_ERR "smem_log_init: no log or log_idx allocated, "
 		       "smem_log disabled");
-		return -EIO;
 	}
+	inst[GEN].num = SMEM_LOG_NUM_ENTRIES;
+	inst[GEN].remote_spinlock = &remote_spinlock;
 
-	smem_log_static_events =
+	inst[STA].which_log = STA;
+	inst[STA].events =
 		(struct smem_log_item *)
 		smem_alloc(SMEM_SMEM_STATIC_LOG_EVENTS,
 			   SMEM_STATIC_LOG_EVENTS_SIZE);
-	smem_log_static_idx = (uint32_t *)smem_alloc(SMEM_SMEM_STATIC_LOG_IDX,
+	inst[STA].idx = (uint32_t *)smem_alloc(SMEM_SMEM_STATIC_LOG_IDX,
 						     sizeof(uint32_t));
-	if (!smem_log_static_events || !smem_log_static_idx) {
-		printk(KERN_INFO "smem_log_init: no static log or log_idx "
+	if (!inst[STA].events || !inst[STA].idx) {
+		printk(KERN_ERR "smem_log_init: no static log or log_idx "
 		       "allocated, smem_log disabled");
-		return -EIO;
 	}
+	inst[STA].num = SMEM_LOG_NUM_STATIC_ENTRIES;
+	inst[STA].remote_spinlock = &remote_spinlock_static;
 
-	remote_spin_lock_init(&remote_spinlock, SMEM_SPINLOCK_SMEM_LOG);
+	inst[POW].which_log = POW;
+	inst[POW].events =
+		(struct smem_log_item *)
+		smem_alloc(SMEM_SMEM_LOG_POWER_EVENTS,
+			   SMEM_POWER_LOG_EVENTS_SIZE);
+	inst[POW].idx = (uint32_t *)smem_alloc(SMEM_SMEM_LOG_POWER_IDX,
+						     sizeof(uint32_t));
+	if (!inst[POW].events || !inst[POW].idx) {
+		printk(KERN_ERR "smem_log_init: no power log or log_idx "
+		       "allocated, smem_log disabled");
+	}
+	inst[POW].num = SMEM_LOG_NUM_POWER_ENTRIES;
+	inst[POW].remote_spinlock = &remote_spinlock;
+
+	remote_spin_lock_init(&remote_spinlock,
+			      SMEM_SPINLOCK_SMEM_LOG);
 	remote_spin_lock_init(&remote_spinlock_static,
 			      SMEM_SPINLOCK_STATIC_LOG);
 
@@ -1152,15 +1182,15 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 
 	inst = fp->private_data;
 
-	remote_spin_lock_irqsave(inst->cur_remote_spinlock, flags);
+	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
 
-	orig_idx = *inst->smem_log_cur_idx;
+	orig_idx = *inst->idx;
 	idx = orig_idx;
 
 	while (1) {
 		idx--;
 		if (idx < 0)
-			idx = inst->smem_log_cur_num - 1;
+			idx = inst->num - 1;
 		if (idx == orig_idx) {
 			ret = tot_bytes;
 			break;
@@ -1171,7 +1201,7 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 			break;
 		}
 
-		ret = copy_to_user(buf, &smem_log_events[idx],
+		ret = copy_to_user(buf, &inst[GEN].events[idx],
 				   sizeof(struct smem_log_item));
 		if (ret) {
 			ret = -EIO;
@@ -1183,7 +1213,7 @@ static ssize_t smem_log_read_bin(struct file *fp, char __user *buf,
 		buf += sizeof(struct smem_log_item);
 	}
 
-	remote_spin_unlock_irqrestore(inst->cur_remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
 
 	return ret;
 }
@@ -1202,15 +1232,15 @@ static ssize_t smem_log_read(struct file *fp, char __user *buf,
 
 	inst = fp->private_data;
 
-	remote_spin_lock_irqsave(inst->cur_remote_spinlock, flags);
+	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
 
-	orig_idx = *inst->smem_log_cur_idx;
+	orig_idx = *inst->idx;
 	idx = orig_idx;
 
 	while (1) {
 		idx--;
 		if (idx < 0)
-			idx = inst->smem_log_cur_num - 1;
+			idx = inst->num - 1;
 		if (idx == orig_idx) {
 			ret = tot_bytes;
 			break;
@@ -1218,11 +1248,11 @@ static ssize_t smem_log_read(struct file *fp, char __user *buf,
 
 		i = scnprintf(loc_buf, 128,
 			      "0x%x 0x%x 0x%x 0x%x 0x%x\n",
-			      smem_log_events[idx].identifier,
-			      smem_log_events[idx].timetick,
-			      smem_log_events[idx].data1,
-			      smem_log_events[idx].data2,
-			      smem_log_events[idx].data3);
+			      inst->events[idx].identifier,
+			      inst->events[idx].timetick,
+			      inst->events[idx].data1,
+			      inst->events[idx].data2,
+			      inst->events[idx].data3);
 		if (i == 0) {
 			ret = -EIO;
 			break;
@@ -1244,7 +1274,7 @@ static ssize_t smem_log_read(struct file *fp, char __user *buf,
 		buf += i;
 	}
 
-	remote_spin_unlock_irqrestore(inst->cur_remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
 
 	return ret;
 }
@@ -1317,19 +1347,19 @@ static ssize_t smem_log_write(struct file *fp, const char __user *buf,
 	}
 
 	if (vals > 5) {
-		if (inst->smem_log_cur_events == smem_log_events)
+		if (inst->which_log == GEN)
 			smem_log_event6(val[0], val[2], val[3], val[4],
 					val[7], val[8], val[9]);
-		else if (inst->smem_log_cur_events == smem_log_static_events)
+		else if (inst->which_log == STA)
 			smem_log_event6_to_static(val[0],
 						  val[2], val[3], val[4],
 						  val[7], val[8], val[9]);
 		else
 			return -1;
 	} else {
-		if (inst->smem_log_cur_events == smem_log_events)
+		if (inst->which_log == GEN)
 			smem_log_event(val[0], val[2], val[3], val[4]);
-		else if (inst->smem_log_cur_events == smem_log_static_events)
+		else if (inst->which_log == STA)
 			smem_log_event_to_static(val[0],
 						 val[2], val[3], val[4]);
 		else
@@ -1341,24 +1371,7 @@ static ssize_t smem_log_write(struct file *fp, const char __user *buf,
 
 static int smem_log_open(struct inode *ip, struct file *fp)
 {
-	struct smem_log_inst *inst;
-
-	inst = kzalloc(sizeof(struct smem_log_inst), GFP_KERNEL);
-
-	if (IS_ERR(inst)) {
-		printk(KERN_ERR "ERROR:%s:%i:%s kmalloc() ENOMEM\n",
-		       __FILE__,
-		       __LINE__-5,
-		       __func__);
-		return -ENOMEM;
-	}
-
-	inst->smem_log_cur_idx = smem_log_idx;
-	inst->smem_log_cur_events = smem_log_events;
-	inst->smem_log_cur_num = SMEM_LOG_NUM_ENTRIES;
-	inst->cur_remote_spinlock = &remote_spinlock;
-
-	fp->private_data = inst;
+	fp->private_data = &inst[GEN];
 
 	return 0;
 }
@@ -1366,8 +1379,6 @@ static int smem_log_open(struct inode *ip, struct file *fp)
 
 static int smem_log_release(struct inode *ip, struct file *fp)
 {
-	kfree(fp->private_data);
-
 	return 0;
 }
 
@@ -1415,19 +1426,12 @@ static int smem_log_ioctl(struct inode *ip, struct file *fp,
 		}
 		break;
 	case SMIOC_SETLOG:
-		if (arg == SMIOC_LOG) {
-			inst->smem_log_cur_events = smem_log_events;
-			inst->smem_log_cur_idx = smem_log_idx;
-			inst->smem_log_cur_num = SMEM_LOG_NUM_ENTRIES;
-			inst->cur_remote_spinlock = &remote_spinlock;
-		} else if (arg == SMIOC_STATIC_LOG) {
-			inst->smem_log_cur_events = smem_log_static_events;
-			inst->smem_log_cur_idx = smem_log_static_idx;
-			inst->smem_log_cur_num = SMEM_LOG_NUM_STATIC_ENTRIES;
-			inst->cur_remote_spinlock = &remote_spinlock_static;
-		} else {
+		if (arg == SMIOC_LOG)
+			fp->private_data = &inst[GEN];
+		else if (arg == SMIOC_STATIC_LOG)
+			fp->private_data = &inst[STA];
+		else
 			return -EINVAL;
-		}
 		break;
 	}
 
@@ -1442,45 +1446,48 @@ static struct miscdevice smem_log_dev = {
 
 #if defined(CONFIG_DEBUG_FS)
 
-static int debug_dump(char *buf, int max)
+static int _debug_dump(int log, char *buf, int max)
 {
 	unsigned int idx;
 	int orig_idx;
 	unsigned long flags;
 	int i = 0;
 
-	remote_spin_lock_irqsave(&remote_spinlock, flags);
+	if (!inst[log].events)
+		return 0;
 
-	orig_idx = *smem_log_idx;
+	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
+
+	orig_idx = *inst[log].idx;
 	idx = orig_idx;
 
 	while (1) {
 		idx++;
-		if (idx > SMEM_LOG_NUM_ENTRIES - 1)
+		if (idx > inst[log].num - 1)
 			idx = 0;
 		if (idx == orig_idx)
 			break;
 
-		if (idx < SMEM_LOG_NUM_ENTRIES) {
-			if (!smem_log_events[idx].identifier)
+		if (idx < inst[log].num) {
+			if (!inst[log].events[idx].identifier)
 				continue;
 
 			i += scnprintf(buf + i, max - i,
 			       "%08x %08x %08x %08x %08x\n",
-			       smem_log_events[idx].identifier,
-			       smem_log_events[idx].timetick,
-			       smem_log_events[idx].data1,
-			       smem_log_events[idx].data2,
-			       smem_log_events[idx].data3);
+			       inst[log].events[idx].identifier,
+			       inst[log].events[idx].timetick,
+			       inst[log].events[idx].data1,
+			       inst[log].events[idx].data2,
+			       inst[log].events[idx].data3);
 		}
 	}
 
-	remote_spin_unlock_irqrestore(&remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
 	return i;
 }
 
-static int debug_dump_sym(char *buf, int max)
+static int _debug_dump_sym(int log, char *buf, int max)
 {
 	unsigned int idx;
 	int orig_idx;
@@ -1504,6 +1511,9 @@ static int debug_dump_sym(char *buf, int max)
 
 	int k;
 
+	if (!inst[log].events)
+		return 0;
+
 	find_voters(); /* need to call each time in case voters come and go */
 
 	i += scnprintf(buf + i, max - i, "Voters:\n");
@@ -1517,30 +1527,30 @@ static int debug_dump_sym(char *buf, int max)
 				       voter_d2_syms[k].str);
 	i += scnprintf(buf + i, max - i, "\n");
 
-	remote_spin_lock_irqsave(&remote_spinlock, flags);
+	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
 
-	orig_idx = *smem_log_idx;
+	orig_idx = *inst[log].idx;
 	idx = orig_idx;
 
 	while (1) {
 		idx++;
-		if (idx > SMEM_LOG_NUM_ENTRIES - 1)
+		if (idx > inst[log].num - 1)
 			idx = 0;
 		if (idx == orig_idx) {
 			i += scnprintf(buf + i, max - i, "\n");
 			break;
 		}
-		if (idx < SMEM_LOG_NUM_ENTRIES) {
-			if (!smem_log_events[idx].identifier)
+		if (idx < inst[log].num) {
+			if (!inst[log].events[idx].identifier)
 				continue;
 
-			proc_val = PROC & smem_log_events[idx].identifier;
-			sub_val = SUB & smem_log_events[idx].identifier;
-			id_val = (SUB | ID) & smem_log_events[idx].identifier;
-			id_only_val = ID & smem_log_events[idx].identifier;
-			data1 = smem_log_events[idx].data1;
-			data2 = smem_log_events[idx].data2;
-			data3 = smem_log_events[idx].data3;
+			proc_val = PROC & inst[log].events[idx].identifier;
+			sub_val = SUB & inst[log].events[idx].identifier;
+			id_val = (SUB | ID) & inst[log].events[idx].identifier;
+			id_only_val = ID & inst[log].events[idx].identifier;
+			data1 = inst[log].events[idx].data1;
+			data2 = inst[log].events[idx].data2;
+			data3 = inst[log].events[idx].data3;
 
 			if (!(proc_val & SMEM_LOG_CONT)) {
 				i += scnprintf(buf + i, max - i, "\n");
@@ -1555,12 +1565,12 @@ static int debug_dump_sym(char *buf, int max)
 					i += scnprintf(buf + i, max - i,
 						       "%04x: ",
 						       PROC &
-						       smem_log_events[idx].
+						       inst[log].events[idx].
 						       identifier);
 
 				i += scnprintf(buf + i, max - i,
 					       "%10u ",
-					       smem_log_events[idx].timetick);
+					       inst[log].events[idx].timetick);
 
 				sub = find_sym(BASE_SYM, sub_val);
 
@@ -1906,61 +1916,53 @@ static int debug_dump_sym(char *buf, int max)
 		}
 	}
 
-	remote_spin_unlock_irqrestore(&remote_spinlock, flags);
+	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
 	return i;
+}
+
+static int debug_dump(char *buf, int max)
+{
+	return _debug_dump(GEN, buf, max);
+}
+
+static int debug_dump_sym(char *buf, int max)
+{
+	return _debug_dump_sym(GEN, buf, max);
 }
 
 static int debug_dump_static(char *buf, int max)
 {
-	unsigned int idx;
-	int orig_idx;
-	unsigned long flags;
-	int i = 0;
+	return _debug_dump(STA, buf, max);
+}
 
-	remote_spin_lock_irqsave(&remote_spinlock_static, flags);
+static int debug_dump_static_sym(char *buf, int max)
+{
+	return _debug_dump_sym(STA, buf, max);
+}
 
-	orig_idx = *smem_log_static_idx;
-	idx = orig_idx;
+static int debug_dump_power(char *buf, int max)
+{
+	return _debug_dump(POW, buf, max);
+}
 
-	while (1) {
-		idx++;
-		if (idx > SMEM_LOG_NUM_ENTRIES - 1)
-			idx = 0;
-		if (idx == orig_idx)
-			break;
-
-		if (idx < SMEM_LOG_NUM_STATIC_ENTRIES) {
-			if (!smem_log_static_events[idx].identifier)
-				continue;
-
-			i += scnprintf(buf + i, max - i,
-			       "%08x %08x %08x %08x %08x\n",
-			       smem_log_static_events[idx].identifier,
-			       smem_log_static_events[idx].timetick,
-			       smem_log_static_events[idx].data1,
-			       smem_log_static_events[idx].data2,
-			       smem_log_static_events[idx].data3);
-		}
-	}
-
-	remote_spin_unlock_irqrestore(&remote_spinlock_static, flags);
-
-	return i;
+static int debug_dump_power_sym(char *buf, int max)
+{
+	return _debug_dump_sym(POW, buf, max);
 }
 
 #define SMEM_LOG_ITEM_PRINT_SIZE 160
 
-#define SMEM_LOG_CUR_EVENTS_PRINT_SIZE \
+#define EVENTS_PRINT_SIZE \
 (SMEM_LOG_ITEM_PRINT_SIZE * SMEM_LOG_NUM_ENTRIES)
 
-static char debug_buffer[SMEM_LOG_CUR_EVENTS_PRINT_SIZE];
+static char debug_buffer[EVENTS_PRINT_SIZE];
 
 static ssize_t debug_read(struct file *file, char __user *buf,
 			  size_t count, loff_t *ppos)
 {
 	int (*fill)(char *buf, int max) = file->private_data;
-	int bsize = fill(debug_buffer, SMEM_LOG_CUR_EVENTS_PRINT_SIZE);
+	int bsize = fill(debug_buffer, EVENTS_PRINT_SIZE);
 	return simple_read_from_buffer(buf, count, ppos, debug_buffer,
 				       bsize);
 }
@@ -1994,6 +1996,9 @@ static void smem_log_debugfs_init(void)
 	debug_create("dump", 0444, dent, debug_dump);
 	debug_create("dump_sym", 0444, dent, debug_dump_sym);
 	debug_create("dump_static", 0444, dent, debug_dump_static);
+	debug_create("dump_static_sym", 0444, dent, debug_dump_static_sym);
+	debug_create("dump_power", 0444, dent, debug_dump_power);
+	debug_create("dump_power_sym", 0444, dent, debug_dump_power_sym);
 }
 #else
 static void smem_log_debugfs_init(void) {}
