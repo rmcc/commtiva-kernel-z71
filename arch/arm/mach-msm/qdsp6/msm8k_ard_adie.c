@@ -164,9 +164,9 @@ s32 adie_init(void)
 	}
 
 	/* Initialize the PMIC MIC and SPKR */
-	set_speaker_gain(SPKR_GAIN_PLUS04DB);
-	mic_set_volt(MIC_VOLT_1_80V);
-	speaker_cmd(SPKR_ENABLE);
+	pmic_set_speaker_gain(SPKR_GAIN_PLUS04DB);
+	pmic_mic_set_volt(MIC_VOLT_1_80V);
+	pmic_speaker_cmd(SPKR_ENABLE);
 
 	return dal_rc;
 }
@@ -189,7 +189,7 @@ s32 adie_dinit(void)
 		adie_state.adie_path_type[dev_type].state = ADIE_STATE_RESET;
 	}
 
-	speaker_cmd(SPKR_DISABLE);
+	pmic_speaker_cmd(SPKR_DISABLE);
 
 	adie_state.adie_opened = ADIE_FALSE;
 
@@ -442,12 +442,12 @@ enum adie_state_ret_enum_type adie_state_digital_analog_active(u32 dev_type,
 	if (adie_state.adie_path_type[dev_type].enabled == ADIE_TRUE) {
 		/* Stay in this state till teardown or reconfigure */
 		if (path_type == ADIE_CODEC_TX) {
-			mic_en(1);
+			pmic_mic_en(1);
 		} else if ((path_type == ADIE_CODEC_RX) &&
 			(dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO)) {
 
-			speaker_cmd(SPKR_ON);
-			spkr_en_left_chan(1);
+			pmic_speaker_cmd(SPKR_ON);
+			pmic_spkr_en_left_chan(1);
 		} else {
 			D("ARD ADIE Loopback Device\n");
 		}
@@ -455,12 +455,12 @@ enum adie_state_ret_enum_type adie_state_digital_analog_active(u32 dev_type,
 	} else {
 		/*Turn off the PMIC if it's a TX*/
 		if (path_type == ADIE_CODEC_TX) {
-			mic_en(0);
+			pmic_mic_en(0);
 		} else if ((path_type == ADIE_CODEC_RX) &&
 			(dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO)) {
 
-			speaker_cmd(SPKR_OFF);
-			spkr_en_left_chan(0);
+			pmic_speaker_cmd(SPKR_OFF);
+			pmic_spkr_en_left_chan(0);
 		} else {
 			D("ARD ADIE Loopback Device\n");
 		}

@@ -29,7 +29,7 @@ static void msm_keypad_bl_led_set(struct led_classdev *led_cdev,
 {
 	int ret;
 
-	ret = set_led_intensity(LED_KEYPAD, value / MAX_KEYPAD_BL_LEVEL);
+	ret = pmic_set_led_intensity(LED_KEYPAD, value / MAX_KEYPAD_BL_LEVEL);
 	if (ret)
 		dev_err(led_cdev->dev, "can't set keypad backlight\n");
 }

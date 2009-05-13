@@ -399,7 +399,7 @@ static int mddi_toshiba_pmic_bl(int level)
 	int ret = -EPERM;
 
 	if (machine_is_qsd8x50_ffa()) {
-		ret = set_led_intensity(LED_LCD, level);
+		ret = pmic_set_led_intensity(LED_LCD, level);
 
 		if (ret)
 			printk(KERN_WARNING "%s: can't set lcd backlight!\n",

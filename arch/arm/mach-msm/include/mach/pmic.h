@@ -117,24 +117,26 @@ enum ledtype {
 	LED_TYPE_OUT_OF_RANGE
 };
 
-int spkr_en_right_chan(const unsigned char enable);
-int spkr_is_right_chan_en(unsigned char *enabled);
-int spkr_en_left_chan(const unsigned char enable);
-int spkr_is_left_chan_en(unsigned char *enabled);
-int spkr_is_en(const enum spkr_left_right left_right, unsigned char *enabled);
-int spkr_get_gain(const enum spkr_left_right left_right, enum spkr_gain *gain);
-int set_speaker_gain(const enum spkr_gain speaker_gain);
-int speaker_cmd(const enum spkr_cmd cmd);
-int set_spkr_configuration(const struct spkr_config_mode *t);
-int get_spkr_configuration(struct spkr_config_mode *t);
+int pmic_spkr_en_right_chan(const unsigned char enable);
+int pmic_spkr_is_right_chan_en(unsigned char *enabled);
+int pmic_spkr_en_left_chan(const unsigned char enable);
+int pmic_spkr_is_left_chan_en(unsigned char *enabled);
+int pmic_spkr_is_en(const enum spkr_left_right left_right,
+				unsigned char *enabled);
+int pmic_spkr_get_gain(const enum spkr_left_right left_right,
+				enum spkr_gain *gain);
+int pmic_set_speaker_gain(const enum spkr_gain speaker_gain);
+int pmic_speaker_cmd(const enum spkr_cmd cmd);
+int pmic_set_spkr_configuration(const struct spkr_config_mode *t);
+int pmic_get_spkr_configuration(struct spkr_config_mode *t);
 
-int mic_en(const unsigned char enable);
-int mic_is_en(unsigned char *enabled);
-int mic_set_volt(const enum mic_volt type);
+int pmic_mic_en(const unsigned char enable);
+int pmic_mic_is_en(unsigned char *enabled);
+int pmic_mic_set_volt(const enum mic_volt type);
 
 /* Cannot use 'current' as the parameter name because 'current' is defined as
  * a macro to get a pointer to the current task.
  */
-int flash_led_set_current(const uint16_t milliamps);
+int pmic_flash_led_set_current(const uint16_t milliamps);
 
-int set_led_intensity(const enum ledtype type, int val);
+int pmic_set_led_intensity(const enum ledtype type, int val);
