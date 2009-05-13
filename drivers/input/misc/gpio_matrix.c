@@ -316,8 +316,7 @@ int gpio_event_matrix_func(struct input_dev *input_dev,
 		set_bit(EV_KEY, input_dev->evbit);
 		for (i = 0; i < key_count; i++) {
 			if (mi->keymap[i])
-				set_bit(mi->keymap[i] & KEY_MAX,
-					input_dev->keybit);
+				__set_bit(mi->keymap[i], input_dev->keybit);
 		}
 
 		for (i = 0; i < mi->noutputs; i++) {
