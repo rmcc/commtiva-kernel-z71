@@ -45,6 +45,8 @@ static struct snd_ctxt the_snd;
 
 #define SND_SET_DEVICE_PROC 2
 #define SND_SET_VOLUME_PROC 3
+#define SND_AVC_CTL_PROC 29
+#define SND_AGC_CTL_PROC 30
 
 struct rpc_snd_set_device_args {
 	uint32_t device;
@@ -64,6 +66,18 @@ struct rpc_snd_set_volume_args {
 	uint32_t client_data;
 };
 
+struct rpc_snd_avc_ctl_args {
+	uint32_t avc_ctl;
+	uint32_t cb_func;
+	uint32_t client_data;
+};
+
+struct rpc_snd_agc_ctl_args {
+	uint32_t agc_ctl;
+	uint32_t cb_func;
+	uint32_t client_data;
+};
+
 struct snd_set_device_msg {
 	struct rpc_request_hdr hdr;
 	struct rpc_snd_set_device_args args;
@@ -72,6 +86,16 @@ struct snd_set_device_msg {
 struct snd_set_volume_msg {
 	struct rpc_request_hdr hdr;
 	struct rpc_snd_set_volume_args args;
+};
+
+struct snd_avc_ctl_msg {
+	struct rpc_request_hdr hdr;
+	struct rpc_snd_avc_ctl_args args;
+};
+
+struct snd_agc_ctl_msg {
+	struct rpc_request_hdr hdr;
+	struct rpc_snd_agc_ctl_args args;
 };
 
 struct snd_endpoint *get_snd_endpoints(int *size);
@@ -115,10 +139,15 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct snd_set_device_msg dmsg;
 	struct snd_set_volume_msg vmsg;
+	struct snd_avc_ctl_msg avc_msg;
+	struct snd_agc_ctl_msg agc_msg;
+
 	struct msm_snd_device_config dev;
 	struct msm_snd_volume_config vol;
 	struct snd_ctxt *snd = file->private_data;
 	int rc = 0;
+
+	uint32_t avc, agc;
 
 	mutex_lock(&snd->lock);
 	switch (cmd) {
@@ -174,6 +203,47 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = msm_rpc_call(snd->ept,
 			SND_SET_VOLUME_PROC,
 			&vmsg, sizeof(vmsg), 5 * HZ);
+		break;
+
+	case SND_AVC_CTL:
+		if (get_user(avc, (uint32_t __user *) arg)) {
+			rc = -EFAULT;
+			break;
+		} else if ((avc != 1) && (avc != 0)) {
+			rc = -EINVAL;
+			break;
+		}
+
+		avc_msg.args.avc_ctl = cpu_to_be32(avc);
+
+		vmsg.args.cb_func = -1;
+		vmsg.args.client_data = 0;
+
+		pr_info("snd_avc_ctl %d\n", avc);
+
+		rc = msm_rpc_call(snd->ept,
+			SND_AVC_CTL_PROC,
+			&avc_msg, sizeof(avc_msg), 5 * HZ);
+		break;
+
+	case SND_AGC_CTL:
+		if (get_user(agc, (uint32_t __user *) arg)) {
+			rc = -EFAULT;
+			break;
+		} else if ((agc != 1) && (agc != 0)) {
+			rc = -EINVAL;
+			break;
+		}
+		agc_msg.args.agc_ctl = cpu_to_be32(agc);
+
+		agc_msg.args.cb_func = -1;
+		agc_msg.args.client_data = 0;
+
+		pr_info("snd_agc_ctl %d\n", agc);
+
+		rc = msm_rpc_call(snd->ept,
+			SND_AGC_CTL_PROC,
+			&agc_msg, sizeof(agc_msg), 5 * HZ);
 		break;
 
 	case SND_GET_NUM_ENDPOINTS:
