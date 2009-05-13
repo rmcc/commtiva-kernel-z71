@@ -387,6 +387,9 @@ static void usb_ept_start(struct msm_endpoint *ept)
 	ept->head->next = req->item_dma;
 	ept->head->info = 0;
 
+	/* flush buffers before priming ept */
+	dmb();
+
 	/* start the endpoint */
 	writel(1 << ept->bit, USB_ENDPTPRIME);
 
@@ -1582,6 +1585,12 @@ static int msm72k_probe(struct platform_device *pdev)
 	ui->pclk = clk_get(&pdev->dev, "usb_hs_pclk");
 	if (IS_ERR(ui->pclk))
 		return usb_free(ui, PTR_ERR(ui->pclk));
+
+	/* FIXME: dmb cannot be called from interrupt context
+	 * for the first time; Need to verify on how it needs
+	 * to be fixed
+	 */
+	dmb();
 
 	ret = request_irq(irq, usb_interrupt, 0, pdev->name, ui);
 	if (ret)
