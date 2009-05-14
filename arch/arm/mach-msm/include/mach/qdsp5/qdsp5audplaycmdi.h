@@ -94,4 +94,36 @@ struct audplay_cmd_buffer_refresh {
   unsigned int buf1_address;
   unsigned int buf1_length;
 } __attribute__((packed));
+
+#define AUDPLAY_CMD_BITSTREAM_DATA_AVAIL_NT2            0x0005
+#define AUDPLAY_CMD_BITSTREAM_DATA_AVAIL_NT2_LEN    \
+	sizeof(audplay_cmd_bitstream_data_avail_nt2)
+
+/* Type specification of dec_data_avail message sent to AUDPLAYTASK
+ * for NT2 */
+struct audplay_cmd_bitstream_data_avail_nt2 {
+  /*command ID*/
+  unsigned int cmd_id;
+
+  /* Decoder ID for which message is being sent */
+  unsigned int decoder_id;
+
+  /* Start address of data in ARM global memory */
+  unsigned int buf_ptr;
+
+  /* Number of 16-bit words of bit-stream data contiguously available at the
+   * above-mentioned address
+   */
+  unsigned int buf_size;
+
+  /* Partition number used by audPlayTask to communicate with DSP's RTOS
+   * kernel
+   */
+  unsigned int partition_number;
+
+ /* bitstream write pointer */
+  unsigned int dspBitstreamWritePtr;
+
+} __attribute__((packed));
+
 #endif /* QDSP5AUDPLAYCMD_H */
