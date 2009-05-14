@@ -73,7 +73,6 @@ struct buffer {
 	unsigned size;
 	unsigned used;		/* Input usage actual DSP produced PCM size  */
 	unsigned addr;
-	int 	 eos; /* non-tunnel EOS purpose */
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -239,10 +238,6 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 				audio->fill_next);
 			audio->in[audio->fill_next].used =
 				payload[3 + index * 2];
-			if (audio->in[audio->fill_next].used == 0) {
-				dprintk("%s: EOS signaled\n", __func__);
-				audio->in[audio->fill_next].eos = 1;
-			}
 			if ((++audio->fill_next) == audio->pcm_buf_count)
 				audio->fill_next = 0;
 
@@ -254,8 +249,7 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 			break;
 		}
 	}
-	if (audio->in[audio->fill_next].used == 0 &&
-		!audio->in[audio->fill_next].eos) {
+	if (audio->in[audio->fill_next].used == 0) {
 		audplay_buffer_refresh(audio);
 	} else {
 		dprintk("audio_update_pcm_buf_entry: read cannot keep up\n");
@@ -1019,12 +1013,10 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 	mutex_lock(&audio->read_lock);
 	dprintk("audio_read() %d \n", count);
 	while (count > 0) {
-		rc = wait_event_interruptible(
-			audio->read_wait,
-			(audio->in[audio->read_next].
-			used > 0) || (audio->stopped)
-			|| (audio->rflush)
-			|| (audio->in[audio->read_next].eos));
+		rc = wait_event_interruptible(audio->read_wait,
+					      (audio->in[audio->read_next].
+						used > 0) || (audio->stopped)
+						|| (audio->rflush));
 
 		if (rc < 0)
 			break;
@@ -1043,21 +1035,6 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 		} else {
 			dprintk("audio_read: read from in[%d]\n",
 				audio->read_next);
-			if (audio->in[audio->read_next].eos) {
-				pr_info("%s: eos set\n", __func__);
-				if (buf == start) {
-					audio->in[audio->read_next].eos = 0;
-					if ((++audio->read_next) ==
-						audio->pcm_buf_count)
-						audio->read_next = 0;
-				}
-				/* else client buffer already has data
-				 * return the buffer first so next read
-				 * returns 0 byte
-				 */
-				break;
-			}
-
 			if (copy_to_user
 			    (buf, audio->in[audio->read_next].data,
 			     audio->in[audio->read_next].used)) {
@@ -1098,69 +1075,6 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 	return rc;
 }
 
-static int audplay_signal_eos(struct audio *audio)
-{
-	audplay_cmd_bitstream_data_avail cmd;
-	pr_info("%s()\n", __func__);
-	cmd.cmd_id	= AUDPLAY_CMD_BITSTREAM_DATA_AVAIL;
-	cmd.decoder_id	= -1; /* Set metafield to -1 */
-	cmd.buf_ptr = 0;
-	cmd.buf_size	= 0; /* Set Zero Buffer size, to signal EOS to FW */
-	cmd.partition_number	= 0;
-	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
-}
-
-static int audaac_handle_eos(struct audio *audio)
-{
-	int rc = 0;
-	struct buffer *frame;
-	char *buf_ptr;
-
-	mutex_lock(&audio->write_lock);
-
-	if (audio->reserved) {
-		dprintk("%s: flush reserve byte\n", __func__);
-		frame = audio->out + audio->out_head;
-		buf_ptr = frame->data;
-		rc = wait_event_interruptible(audio->write_wait,
-			(frame->used == 0)
-			|| (audio->stopped)
-			|| (audio->wflush));
-		if (rc < 0)
-			goto done;
-		if (audio->stopped || audio->wflush) {
-			rc = -EBUSY;
-			goto done;
-		}
-
-		buf_ptr[0] = audio->rsv_byte;
-		buf_ptr[1] = 0;
-		audio->out_head ^= 1;
-		frame->used = 2;
-		audio->reserved = 0;
-		audplay_send_data(audio, 0);
-	}
-
-	rc = wait_event_interruptible(audio->write_wait,
-		(audio->out_needed &&
-		audio->out[0].used == 0 &&
-		audio->out[1].used == 0)
-		|| (audio->stopped)
-		|| (audio->wflush));
-
-	if (rc < 0)
-		goto done;
-	if (audio->stopped || audio->wflush) {
-		rc = -EBUSY;
-		goto done;
-	}
-	audplay_signal_eos(audio);
-
-done:
-	mutex_unlock(&audio->write_lock);
-	return rc;
-}
-
 static ssize_t audio_write(struct file *file, const char __user *buf,
 			   size_t count, loff_t *pos)
 {
@@ -1171,12 +1085,6 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 	char *cpy_ptr;
 	int rc = 0;
 	unsigned dsize;
-
-	dprintk("%s: cnt=%d\n", __func__, count);
-
-	if (!count) { /* client signal EOS */
-		return audaac_handle_eos(audio);
-	}
 
 	mutex_lock(&audio->write_lock);
 	while (count > 0) {
