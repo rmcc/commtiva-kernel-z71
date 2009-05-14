@@ -561,7 +561,6 @@ static int __exit s5k3e2fx_remove(struct i2c_client *client)
 {
 	struct s5k3e2fx_work_t *sensorw = i2c_get_clientdata(client);
 	free_irq(client->irq, sensorw);
-	i2c_detach_client(client);
 	s5k3e2fx_client = NULL;
 	kfree(sensorw);
 	return 0;

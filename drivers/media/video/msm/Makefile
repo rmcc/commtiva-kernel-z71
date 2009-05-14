@@ -1,9 +1,3 @@
-# Remove the -Werror until i2c deprecated functions are fixed
-CFLAGS_REMOVE_mt9p012_bam.o = -Werror
-CFLAGS_REMOVE_mt9t013.o = -Werror
-CFLAGS_REMOVE_mt9d112.o = -Werror
-CFLAGS_REMOVE_s5k3e2fx.o = -Werror
-CFLAGS_REMOVE_mt9p012_fox.o = -Werror
 obj-$(CONFIG_MSM_CAMERA) += vb6801.o mt9p012_reg.o mt9t013.o mt9t013_reg.o mt9d112.o mt9d112_reg.o s5k3e2fx.o flash.o
 obj-$(CONFIG_MSM_CAMERA_AF_FOXCONN) += mt9p012_fox.o
 obj-$(CONFIG_MSM_CAMERA_AF_BAM) += mt9p012_bam.o

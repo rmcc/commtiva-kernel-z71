@@ -750,7 +750,6 @@ static int __exit mt9d112_remove(struct i2c_client *client)
 {
 	struct mt9d112_work_t *sensorw = i2c_get_clientdata(client);
 	free_irq(client->irq, sensorw);
-	i2c_detach_client(client);
 	mt9d112_client = NULL;
 	mt9d112_sensorw = NULL;
 	kfree(sensorw);
