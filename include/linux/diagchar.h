@@ -68,7 +68,7 @@
 #define DATA_TYPE_F3            1
 #define DATA_TYPE_LOG           2
 #define DATA_TYPE_RESPONSE      3
-
+#define DIAG_IOCTL_COMMAND_REG  0
 
 struct bindpkt_params {
 	uint16_t cmd_code;

@@ -150,25 +150,26 @@ static int diagchar_ioctl(struct inode *inode, struct file *filp,
 	struct bindpkt_params_per_process *pkt_params =
 			 (struct bindpkt_params_per_process *) ioarg;
 
-	for (i = 0; i < REG_TABLE_SIZE; i++) {
-		if (driver->table[i].process_id == 0) {
-			driver->table[i].cmd_code =
-				 pkt_params->params->cmd_code;
-			driver->table[i].subsys_id =
-				 pkt_params->params->subsys_id;
-			driver->table[i].cmd_code_lo =
-				 pkt_params->params->cmd_code_hi;
-			driver->table[i].cmd_code_hi =
-				 pkt_params->params->cmd_code_lo;
-			driver->table[i].process_id = current->tgid;
-			count_entries++;
-			if (pkt_params->count > count_entries)
-					pkt_params->params++;
-			else
-					break;
+	if (iocmd == DIAG_IOCTL_COMMAND_REG) {
+		for (i = 0; i < REG_TABLE_SIZE; i++) {
+			if (driver->table[i].process_id == 0) {
+				driver->table[i].cmd_code =
+					 pkt_params->params->cmd_code;
+				driver->table[i].subsys_id =
+					 pkt_params->params->subsys_id;
+				driver->table[i].cmd_code_lo =
+					 pkt_params->params->cmd_code_hi;
+				driver->table[i].cmd_code_hi =
+					 pkt_params->params->cmd_code_lo;
+				driver->table[i].process_id = current->tgid;
+				count_entries++;
+				if (pkt_params->count > count_entries)
+						pkt_params->params++;
+				else
+						break;
+			}
 		}
 	}
-
 	return -EINVAL;
 }
 
