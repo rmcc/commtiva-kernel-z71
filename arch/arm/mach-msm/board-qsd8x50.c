@@ -634,67 +634,43 @@ static unsigned bt_config_power_on[] = {
 	GPIO_CFG(18, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* SYSRST */
 	GPIO_CFG(19, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* WAKE */
 	GPIO_CFG(21, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* HOST_WAKE */
-	GPIO_CFG(22, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* PWR_EN */
+	GPIO_CFG(22, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* VDD_IO */
 	GPIO_CFG(43, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* RFR */
 	GPIO_CFG(44, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* CTS */
 	GPIO_CFG(45, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* Rx */
 	GPIO_CFG(46, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* Tx */
-};
-static unsigned bt_config_power_off[] = {
-	GPIO_CFG(18, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* SYSRST */
-	GPIO_CFG(19, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* WAKE */
-	GPIO_CFG(21, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* HOST_WAKE */
-	GPIO_CFG(22, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* PWR_EN */
-	GPIO_CFG(43, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* RFR */
-	GPIO_CFG(44, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* CTS */
-	GPIO_CFG(45, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Rx */
-	GPIO_CFG(46, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Tx */
+	GPIO_CFG(113, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* VDD_FREG */
 };
 
 static int bluetooth_power(int on)
 {
-	int pin, rc;
+	printk(KERN_DEBUG "Bluetooth power switch: %d\n", on);
 
-	printk(KERN_DEBUG "%s\n", __func__);
-
-	if (on) {
-		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_on); pin++) {
-			rc = gpio_tlmm_config(bt_config_power_on[pin],
-					      GPIO_ENABLE);
-			if (rc) {
-				printk(KERN_ERR
-				       "%s: gpio_tlmm_config(%#x)=%d\n",
-				       __func__, bt_config_power_on[pin], rc);
-				return -EIO;
-			}
-		}
-
-		gpio_set_value(22, on); /* PWR_EN */
-		gpio_set_value(18, on); /* SYSRST */
-
-	} else {
-		gpio_set_value(18, on); /* SYSRST */
-		gpio_set_value(22, on); /* PWR_EN */
-
-		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_off); pin++) {
-			rc = gpio_tlmm_config(bt_config_power_off[pin],
-					      GPIO_ENABLE);
-			if (rc) {
-				printk(KERN_ERR
-				       "%s: gpio_tlmm_config(%#x)=%d\n",
-				       __func__, bt_config_power_off[pin], rc);
-				return -EIO;
-			}
-		}
-
-	}
+	gpio_set_value(18, on); /* SYSRST* */
 
 	return 0;
 }
 
 static void __init bt_power_init(void)
 {
+	int pin, rc;
+
+	for (pin = 0; pin < ARRAY_SIZE(bt_config_power_on); pin++) {
+		rc = gpio_tlmm_config(bt_config_power_on[pin],
+				      GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR
+			       "%s: gpio_tlmm_config(%#x)=%d\n",
+			       __func__, bt_config_power_on[pin], rc);
+			return;
+		}
+	}
+
+	gpio_set_value(18, 0); /* SYSRST* */
+	gpio_set_value(22, 1); /* VDD_IO */
+	gpio_set_value(113, 1); /* VDD_FREG */
 	msm_bt_power_device.dev.platform_data = &bluetooth_power;
+	printk(KERN_DEBUG "Bluetooth power switch initialized\n");
 }
 #else
 #define bt_power_init(x) do {} while (0)
@@ -1240,7 +1216,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 
 		clear_bit(pdev->id, &vreg_sts);
 
-		if (!vreg_sts) {
+		if (!vreg_sts && !machine_is_qsd8x50_ffa()) {
 			rc = vreg_disable(vreg_mmc);
 			if (rc)
 				printk(KERN_ERR "%s: return val: %d \n",
@@ -1249,7 +1225,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 		return 0;
 	}
 
-	if (!vreg_sts) {
+	if (!vreg_sts && !machine_is_qsd8x50_ffa()) {
 		rc = vreg_set_level(vreg_mmc, 2850);
 		if (!rc)
 			rc = vreg_enable(vreg_mmc);
@@ -1268,9 +1244,7 @@ static struct mmc_platform_data qsd8x50_sdcc_data = {
 
 static void __init qsd8x50_init_mmc(void)
 {
-	if (machine_is_qsd8x50_ffa())
-		vreg_mmc = vreg_get(NULL, "gp6");
-	else
+	if (!machine_is_qsd8x50_ffa())
 		vreg_mmc = vreg_get(NULL, "gp5");
 
 	if (IS_ERR(vreg_mmc)) {
@@ -1360,6 +1334,37 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT].residency = 0,
 };
 
+static void __init gp6_init(void)
+{
+	struct vreg *vreg;
+	int rc;
+
+	vreg = vreg_get(NULL, "gp6");
+	if (IS_ERR(vreg)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg));
+		return;
+	}
+
+	/* units of mV, steps of 50 mV */
+	rc = vreg_set_level(vreg, 2850);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg set level failed (%d)\n",
+		       __func__, rc);
+		return;
+	}
+
+	rc = vreg_enable(vreg);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+		       __func__, rc);
+		return;
+	}
+
+	if (machine_is_qsd8x50_ffa())
+		vreg_mmc = vreg;
+}
+
 static void __init qsd8x50_init(void)
 {
 	if (socinfo_init() < 0)
@@ -1372,6 +1377,7 @@ static void __init qsd8x50_init(void)
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_fb_add_devices();
 	msm_camera_add_device();
+	gp6_init();
 	qsd8x50_init_mmc();
 	bt_power_init();
 	audio_gpio_init();
