@@ -70,7 +70,7 @@
 #define DALDEVICEID_VDEC_DEVICE         0x02000026
 #define DALDEVICEID_VDEC_PORTNAME	"DAL_AQ_VID"
 
-#define VDEC_INTERFACE_VERSION		0x00010000
+#define VDEC_INTERFACE_VERSION		0x00020000
 
 #define MAJOR_MASK 0xFFFF0000
 #define MINOR_MASK 0x0000FFFF
@@ -82,10 +82,12 @@
 enum {
 	VDEC_DALRPC_INITIALIZE = DALDEVICE_FIRST_DEVICE_API_IDX,
 	VDEC_DALRPC_SETBUFFERS,
+	VDEC_DALRPC_FREEBUFFERS,
 	VDEC_DALRPC_QUEUE,
 	VDEC_DALRPC_SIGEOFSTREAM,
 	VDEC_DALRPC_FLUSH,
 	VDEC_DALRPC_REUSEFRAMEBUFFER,
+	VDEC_DALRPC_GETDECATTRIBUTES,
 };
 
 struct vdec_init_cfg {
@@ -107,11 +109,16 @@ struct vdec_msg_list {
 };
 
 struct vdec_mem_info {
-	u32 initialized;
+	u32 buf_type;
 	u32 id;
 	u32 phys_addr;
 	u32 len;
 	struct file *file;
+};
+
+struct vdec_mem_list {
+	struct list_head list;
+	struct vdec_mem_info mem;
 };
 
 struct vdec_data {
@@ -122,7 +129,9 @@ struct vdec_data {
 	struct list_head vdec_msg_list_free;
 	wait_queue_head_t vdec_msg_evt;
 	struct mutex vdec_list_lock;
-	struct vdec_mem_info mem;
+	struct list_head vdec_mem_list_head;
+	struct mutex vdec_mem_list_lock;
+	int mem_initialized;
 	int running;
 	int close_decode;
 };
@@ -137,7 +146,7 @@ static inline int vdec_check_version(u32 client, u32 server)
 	int ret = -EINVAL;
 	if ((VDEC_GET_MAJOR_VERSION(client) == VDEC_GET_MAJOR_VERSION(server))
 	    && (VDEC_GET_MINOR_VERSION(client) <=
-			VDEC_GET_MINOR_VERSION(server)))
+		VDEC_GET_MINOR_VERSION(server)))
 		ret = 0;
 	return ret;
 }
@@ -187,6 +196,28 @@ static void vdec_put_msg(struct vdec_data *vd, struct vdec_msg *msg)
 		wake_up(&vd->vdec_msg_evt);
 	else
 		printk(KERN_ERR "vdec_put_msg can't find free list!\n");
+}
+
+static struct vdec_mem_list *vdec_get_mem_from_list(struct vdec_data *vd,
+						    u32 pmem_id, u32 buf_type)
+{
+	struct vdec_mem_list *l;
+	int found = 0;
+
+	mutex_lock(&vd->vdec_mem_list_lock);
+	list_for_each_entry(l, &vd->vdec_mem_list_head, list) {
+		if (l->mem.buf_type == buf_type && l->mem.id == pmem_id) {
+			found = 1;
+			break;
+		}
+	}
+	mutex_unlock(&vd->vdec_mem_list_lock);
+
+	if (found)
+		return l;
+	else
+		return NULL;
+
 }
 
 static int vdec_initialize(struct vdec_data *vd, void *argp)
@@ -250,11 +281,13 @@ static int vdec_initialize(struct vdec_data *vd, void *argp)
 
 static int vdec_setbuffers(struct vdec_data *vd, void *argp)
 {
-	struct vdec_memory vmem;
+	struct vdec_buffer vmem;
+	struct vdec_mem_list *l;
 	unsigned long vstart;
+
 	int ret = 0;
 
-	vd->mem.initialized = 0;
+	vd->mem_initialized = 0;
 
 	ret = copy_from_user(&vmem, argp, sizeof(vmem));
 	if (ret) {
@@ -262,39 +295,33 @@ static int vdec_setbuffers(struct vdec_data *vd, void *argp)
 		return ret;
 	}
 
-	vd->mem.id = vmem.id;
+	l = kzalloc(sizeof(struct vdec_mem_list), GFP_KERNEL);
+	if (!l) {
+		printk(KERN_ERR "%s: kzalloc failed!\n", __func__);
+		return -ENOMEM;
+	}
 
-	ret = get_pmem_file(vd->mem.id,
-			    (unsigned long *)&vd->mem.phys_addr,
+	l->mem.id = vmem.pmem_id;
+	l->mem.buf_type = vmem.buf.buf_type;
+
+	ret = get_pmem_file(l->mem.id,
+			    (unsigned long *)&l->mem.phys_addr,
 			    &vstart,
-			    (unsigned long *)&vd->mem.len,
-			    &vd->mem.file);
+			    (unsigned long *)&l->mem.len, &l->mem.file);
 
 	if (ret) {
 		printk(KERN_ERR "%s: get_pmem_fd failed\n", __func__);
-		return ret;
+		goto vdec_setbuffers_fail;
 	}
 
 	/* input buffers */
-	if ((vmem.buf.in.offset + vmem.buf.in.size) > vd->mem.len) {
+	if ((vmem.buf.region.offset + vmem.buf.region.size) > l->mem.len) {
 		printk(KERN_ERR "%s: invalid input buffer offset!\n", __func__);
-		return -EINVAL;
-	}
-	vmem.buf.in.offset += vd->mem.phys_addr;
+		ret = -EINVAL;
+		goto vdec_setbuffers_fail;
 
-	/* output buffers */
-	if ((vmem.buf.out.offset + vmem.buf.out.size) > vd->mem.len) {
-		printk(KERN_ERR "%s: invalid out buffer offset!\n", __func__);
-		return -EINVAL;
 	}
-	vmem.buf.out.offset += vd->mem.phys_addr;
-
-	/* decoder  buffers */
-	if ((vmem.buf.dec.offset + vmem.buf.dec.size) > vd->mem.len) {
-		printk(KERN_ERR "%s: invalid dec buffer offset!\n", __func__);
-		return -EINVAL;
-	}
-	vmem.buf.dec.offset += vd->mem.phys_addr;
+	vmem.buf.region.offset += l->mem.phys_addr;
 
 	ret =
 	    dalrpc_fcn_5(VDEC_DALRPC_SETBUFFERS,
@@ -302,38 +329,70 @@ static int vdec_setbuffers(struct vdec_data *vd, void *argp)
 	if (ret) {
 		printk(KERN_ERR
 		       "%s: remote function failed (%d)\n", __func__, ret);
-		return ret;
+		goto vdec_setbuffers_fail;
 	}
 
-	vd->mem.initialized = 1;
+	mutex_lock(&vd->vdec_mem_list_lock);
+
+	list_add(&l->list, &vd->vdec_mem_list_head);
+
+	mutex_unlock(&vd->vdec_mem_list_lock);
+
+	vd->mem_initialized = 1;
+	return ret;
+vdec_setbuffers_fail:
+	kfree(l);
 	return ret;
 }
 
 static int vdec_queue(struct vdec_data *vd, void *argp)
 {
-	struct vdec_input_buf buf;
+	struct vdec_input_buf_info buf_info;
+	struct vdec_mem_list *l;
+	struct vdec_queue_status status;
+	u32 pmem_id;
 	int ret = 0;
 
-	if (!vd->mem.initialized) {
+	if (!vd->mem_initialized) {
 		printk(KERN_ERR
 		       "%s: memory is not being initialized!\n", __func__);
 		return -EPERM;
 	}
 
-	ret = copy_from_user(&buf, argp, sizeof(buf));
+	ret = copy_from_user(&buf_info,
+			     &((struct vdec_input_buf *)argp)->buffer,
+			     sizeof(buf_info));
 	if (ret) {
 		printk(KERN_ERR "%s: copy_from_user failed\n", __func__);
 		return ret;
 	}
 
-	if ((buf.size + buf.offset) >= vd->mem.len) {
+	ret = copy_from_user(&pmem_id,
+			     &((struct vdec_input_buf *)argp)->pmem_id,
+			     sizeof(u32));
+	if (ret) {
+		printk(KERN_ERR "%s: copy_from_user failed\n", __func__);
+		return ret;
+	}
+
+	l = vdec_get_mem_from_list(vd, pmem_id, VDEC_BUFFER_TYPE_INPUT);
+
+	if (NULL == l) {
+		printk(KERN_ERR "%s: not able to find the buffer from list\n",
+		       __func__);
+		return -EPERM;
+	}
+
+	if ((buf_info.size + buf_info.offset) >= l->mem.len) {
 		printk(KERN_ERR "%s: invalid queue buffer offset!\n", __func__);
 		return -EINVAL;
 	}
-	buf.offset += vd->mem.phys_addr;
 
-	ret = dalrpc_fcn_5(VDEC_DALRPC_QUEUE, vd->vdec_handle,
-			   (void *)&buf, sizeof(buf));
+	buf_info.offset += l->mem.phys_addr;
+
+	ret = dalrpc_fcn_8(VDEC_DALRPC_QUEUE, vd->vdec_handle,
+			   (void *)&buf_info, sizeof(buf_info),
+			   (void *)&status, sizeof(status));
 	if (ret)
 		printk(KERN_ERR
 		       "%s: remote function failed (%d)\n", __func__, ret);
@@ -381,6 +440,87 @@ static int vdec_flush(struct vdec_data *vd, void *argp)
 	return ret;
 }
 
+static int vdec_close(struct vdec_data *vd, void *argp)
+{
+	struct vdec_mem_list *l;
+	int ret = 0;
+
+	vd->close_decode = 1;
+	wake_up(&vd->vdec_msg_evt);
+
+	if (vd->mem_initialized) {
+		list_for_each_entry(l, &vd->vdec_mem_list_head, list)
+		    put_pmem_file(l->mem.file);
+	}
+
+	ret = daldevice_close(vd->vdec_handle);
+	if (ret)
+		printk(KERN_ERR
+		       "%s: failed to close daldevice (%d)\n", __func__, ret);
+	return ret;
+}
+static int vdec_getdecattributes(struct vdec_data *vd, void *argp)
+{
+	struct vdec_dec_attributes dec_attr;
+	int ret = 0;
+
+	ret = dalrpc_fcn_9(VDEC_DALRPC_GETDECATTRIBUTES, vd->vdec_handle,
+			   (void *)&dec_attr, sizeof(dec_attr));
+	if (ret)
+		printk(KERN_ERR
+		       "%s: remote function failed (%d)\n", __func__, ret);
+	else
+		ret =
+		    copy_to_user(((struct vdec_dec_attributes *)argp),
+				 &dec_attr, sizeof(dec_attr));
+	return ret;
+}
+
+static int vdec_freebuffers(struct vdec_data *vd, void *argp)
+{
+	struct vdec_buffer vmem;
+	struct vdec_mem_list *l;
+
+	int ret = 0;
+
+	if (!vd->mem_initialized) {
+		printk(KERN_ERR
+		       "%s: memory is not being initialized!\n", __func__);
+		return -EPERM;
+	}
+
+	ret = copy_from_user(&vmem, argp, sizeof(vmem));
+	if (ret) {
+		printk(KERN_ERR "%s: copy_from_user failed\n", __func__);
+		return ret;
+	}
+
+	l = vdec_get_mem_from_list(vd, vmem.pmem_id, vmem.buf.buf_type);
+
+	if (NULL == l) {
+		printk(KERN_ERR "%s: not able to find the buffer from list\n",
+		       __func__);
+		return -EPERM;
+	}
+
+	/* input buffers */
+	if ((vmem.buf.region.offset + vmem.buf.region.size) > l->mem.len) {
+		printk(KERN_ERR "%s: invalid input buffer offset!\n", __func__);
+		return -EINVAL;
+
+	}
+	vmem.buf.region.offset += l->mem.phys_addr;
+
+	ret =
+	    dalrpc_fcn_5(VDEC_DALRPC_FREEBUFFERS,
+			 vd->vdec_handle, (void *)&vmem.buf, sizeof(vmem.buf));
+	if (ret) {
+		printk(KERN_ERR
+		       "%s: remote function failed (%d)\n", __func__, ret);
+	}
+
+	return ret;
+}
 static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vdec_data *vd = file->private_data;
@@ -429,18 +569,25 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case VDEC_IOCTL_CLOSE:
-		vd->close_decode = 1;
-		wake_up(&vd->vdec_msg_evt);
+		ret = vdec_close(vd, argp);
+		break;
 
-		if (vd->mem.initialized)
-			put_pmem_file(vd->mem.file);
-
-		ret = daldevice_close(vd->vdec_handle);
+	case VDEC_IOCTL_GETDECATTRIBUTES:
+		ret = vdec_getdecattributes(vd, argp);
 
 		if (ret)
 			printk(KERN_ERR
-				"%s: failed to close daldevice (%d)\n",
-				__func__, ret);
+			       "%s: remote function failed (%d)\n",
+			       __func__, ret);
+		break;
+
+	case VDEC_IOCTL_FREEBUFFERS:
+		ret = vdec_freebuffers(vd, argp);
+
+		if (ret)
+			printk(KERN_ERR
+			       "%s: remote function failed (%d)\n",
+			       __func__, ret);
 		break;
 
 	default:
@@ -455,36 +602,49 @@ static void vdec_dcdone_handler(void *context, uint32_t param, void *frame,
 				uint32_t frame_size)
 {
 	struct vdec_msg msg;
+	struct vdec_mem_list *l;
+	int found = 0;
 	struct vdec_data *vd = (struct vdec_data *)context;
 
-	if (!vd->mem.initialized) {
-				printk(KERN_ERR
+	if (!vd->mem_initialized) {
+		printk(KERN_ERR
 		       "%s:memory not initialize but callback called!\n",
-					__func__);
+		       __func__);
 		return;
 	}
 	if (frame_size != sizeof(struct vdec_frame_info)) {
 		printk(KERN_ERR
 		       "%s:frame_size is not same as vdec!\n", __func__);
 		return;
-			}
+	}
 
 	memcpy(&msg.vfr_info, (struct vdec_frame_info *)frame,
 	       sizeof(struct vdec_frame_info));
 
-			if (msg.vfr_info.status == VDEC_FRAME_DECODE_OK) {
-				if ((msg.vfr_info.offset < vd->mem.phys_addr) ||
-				    (msg.vfr_info.offset >=
-				     (vd->mem.phys_addr + vd->mem.len))) {
-					printk(KERN_ERR
-					       "%s: invalid phys addr = 0x%x\n",
-					       __func__, msg.vfr_info.offset);
-			return;
-				}
+	if (msg.vfr_info.status == VDEC_FRAME_DECODE_OK) {
+		mutex_lock(&vd->vdec_mem_list_lock);
+		list_for_each_entry(l, &vd->vdec_mem_list_head, list) {
+			if ((l->mem.buf_type == VDEC_BUFFER_TYPE_OUTPUT) &&
+			    (msg.vfr_info.offset >= l->mem.phys_addr) &&
+			    (msg.vfr_info.offset <
+			     (l->mem.phys_addr + l->mem.len))) {
+				found = 1;
+				msg.vfr_info.offset -= l->mem.phys_addr;
+				msg.vfr_info.data2 = l->mem.id;
+				break;
 			}
-				msg.vfr_info.offset -= vd->mem.phys_addr;
-			msg.id = VDEC_MSG_FRAMEDONE;
-			vdec_put_msg(vd, &msg);
+		}
+		mutex_unlock(&vd->vdec_mem_list_lock);
+	}
+
+	if (found || (msg.vfr_info.status != VDEC_FRAME_DECODE_OK)) {
+		msg.id = VDEC_MSG_FRAMEDONE;
+		vdec_put_msg(vd, &msg);
+	} else {
+		printk(KERN_ERR
+		       "%s: invalid phys addr = 0x%x\n",
+		       __func__, msg.vfr_info.offset);
+	}
 
 }
 
@@ -496,16 +656,16 @@ static void vdec_reuseibuf_handler(void *context, uint32_t param, void *bufstat,
 	struct vdec_data *vd = (struct vdec_data *)context;
 
 	if (bufstat_size != sizeof(struct vdec_buffer_status)) {
-				printk(KERN_ERR
+		printk(KERN_ERR
 		       "%s:bufstat_size is not same as vdec_bufstat!\n",
-					__func__);
+		       __func__);
 		return;
-			}
+	}
 
 	vdec_bufstat = (struct vdec_buffer_status *)bufstat;
-			msg.id = VDEC_MSG_REUSEINPUTBUFFER;
+	msg.id = VDEC_MSG_REUSEINPUTBUFFER;
 	msg.buf_id = vdec_bufstat->data;
-			vdec_put_msg(vd, &msg);
+	vdec_put_msg(vd, &msg);
 }
 
 static int vdec_open(struct inode *inode, struct file *file)
@@ -524,13 +684,15 @@ static int vdec_open(struct inode *inode, struct file *file)
 	}
 	file->private_data = vd;
 
-	vd->mem.initialized = 0;
+	vd->mem_initialized = 0;
 	INIT_LIST_HEAD(&vd->vdec_msg_list_head);
 	INIT_LIST_HEAD(&vd->vdec_msg_list_free);
+	INIT_LIST_HEAD(&vd->vdec_mem_list_head);
 	init_waitqueue_head(&vd->vdec_msg_evt);
 
 	vdec_ref++;
 	mutex_init(&vd->vdec_list_lock);
+	mutex_init(&vd->vdec_mem_list_lock);
 	for (i = 0; i < VDEC_MSG_MAX; i++) {
 		l = kzalloc(sizeof(struct vdec_msg_list), GFP_KERNEL);
 		if (!l) {
@@ -550,12 +712,11 @@ static int vdec_open(struct inode *inode, struct file *file)
 		goto vdec_open_err_handle_list;
 	}
 
-	ret = daldevice_info(vd->vdec_handle,
-			     &deviceinfo, sizeof(deviceinfo));
+	ret = daldevice_info(vd->vdec_handle, &deviceinfo, sizeof(deviceinfo));
 
 	if (ret) {
 		printk(KERN_ERR "%s: failed to get the version info (%d)\n",
-			 __func__, ret);
+		       __func__, ret);
 		ret = -EIO;
 		goto vdec_open_err_handle_daldetach;
 	}
@@ -624,12 +785,17 @@ static int vdec_release(struct inode *inode, struct file *file)
 	if (ret)
 		printk(KERN_INFO "%s: failed to detach (%d)\n", __func__, ret);
 
-	list_for_each_entry_safe(l, n,  &vd->vdec_msg_list_free, list) {
+	list_for_each_entry_safe(l, n, &vd->vdec_msg_list_free, list) {
 		list_del(&l->list);
 		kfree(l);
 	}
 
 	list_for_each_entry_safe(l, n, &vd->vdec_msg_list_head, list) {
+		list_del(&l->list);
+		kfree(l);
+	}
+
+	list_for_each_entry_safe(l, n, &vd->vdec_mem_list_head, list) {
 		list_del(&l->list);
 		kfree(l);
 	}
@@ -664,7 +830,7 @@ static int __init vdec_init(void)
 		goto vdec_init_err_unregister_chrdev_region;
 	}
 	class_dev = device_create(driver_class, NULL,
-					vdec_device_no, NULL, "vdec");
+				  vdec_device_no, NULL, "vdec");
 	if (!class_dev) {
 		printk(KERN_ERR "%s: class_device_create failed %d\n",
 		       __func__, rc);
@@ -701,7 +867,7 @@ static void __exit vdec_exit(void)
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("video decoder driver for QSD platform");
-MODULE_VERSION("1.01");
+MODULE_VERSION("2.00");
 
 module_init(vdec_init);
 module_exit(vdec_exit);
