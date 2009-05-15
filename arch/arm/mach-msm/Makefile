@@ -11,11 +11,10 @@ obj-y += rpc_hsusb.o rpc_pmapp.o
 obj-y += socinfo.o
 obj-y += cpufreq.o
 obj-y += nohlt.o
+obj-y += pmic.o
 
 obj-$(CONFIG_ARCH_MSM) += acpuclock.o
-obj-$(CONFIG_ARCH_MSM) += pmic.o
 obj-$(CONFIG_ARCH_QSD) += acpuclock-8x50.o sirc.o
-obj-$(CONFIG_ARCH_QSD) += pmic.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
 obj-$(CONFIG_CPU_V7) += idle-v7.o
 
@@ -23,6 +22,7 @@ obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_tty.o smd_qmi.o smem_log.o
 obj-$(CONFIG_MSM_SMD) += smd_ctl2.o smd_loopback.o smd_nmea.o
+obj-$(CONFIG_DEBUG_FS) += pmic_debugfs.o
 obj-$(CONFIG_MSM_RESET_MODEM) += reset_modem.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_device.o

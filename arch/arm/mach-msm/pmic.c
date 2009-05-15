@@ -55,35 +55,53 @@
  *
  */
 #include <linux/module.h>
+#include <linux/init.h>
 #include <linux/debugfs.h>
 #include <linux/err.h>
 #include <linux/uaccess.h>
+#include <linux/mutex.h>
 
 #include <mach/pmic.h>
 
 #include "smd_rpcrouter.h"
 
-#define TRACE_SPEAKER 0
+#define TRACE_PMIC 0
 
-#if TRACE_SPEAKER
-#define SPEAKER(x...) printk(KERN_INFO "[SPEAKER] " x)
+#if TRACE_PMIC
+#define PMIC(x...) printk(KERN_INFO "[PMIC] " x)
 #else
-#define SPEAKER(x...) do {} while (0)
+#define PMIC(x...) do {} while (0)
 #endif
 
-/* rpc related */
-#define PMIC_RPC_TIMEOUT (5*HZ)
 
-#define SPEAKER_PDEV_NAME	"rs00010001:00000000"
-#define SPEAKER_RPC_PROG	0x30000061
-#define SPEAKER_RPC_VER		0x00010001
-
+#define LIB_NULL_PROC 0
+#define LIB_RPC_GLUE_CODE_INFO_REMOTE_PROC 1
+#define LP_MODE_CONTROL_PROC 2
+#define VREG_SET_LEVEL_PROC 3
+#define VREG_PULL_DOWN_SWITCH_PROC 4
+#define SECURE_MPP_CONFIG_DIGITAL_OUTPUT_PROC 5
+#define SECURE_MPP_CONFIG_I_SINK_PROC 6
+#define RTC_START_PROC 7
+#define RTC_STOP_PROC 8
+#define RTC_GET_TIME_PROC 9
+#define RTC_ENABLE_ALARM_PROC 10
+#define RTC_DISABLE_ALARM_PROC 11
+#define RTC_GET_ALARM_TIME_PROC 12
+#define RTC_GET_ALARM_STATUS_PROC 13
+#define RTC_SET_TIME_ADJUST_PROC 14
+#define RTC_GET_TIME_ADJUST_PROC 15
 #define SET_LED_INTENSITY_PROC 16
 #define FLASH_LED_SET_CURRENT_PROC 17
-
+#define FLASH_LED_SET_MODE_PROC 18
+#define FLASH_LED_SET_POLARITY_PROC 19
 #define SPEAKER_CMD_PROC 20
 #define SET_SPEAKER_GAIN_PROC 21
-
+#define VIB_MOT_SET_VOLT_PROC 22
+#define VIB_MOT_SET_MODE_PROC 23
+#define VIB_MOT_SET_POLARITY_PROC 24
+#define VID_EN_PROC 25
+#define VID_IS_EN_PROC 26
+#define VID_LOAD_DETECT_EN_PROC 27
 #define MIC_EN_PROC 28
 #define MIC_IS_EN_PROC 29
 #define MIC_SET_VOLT_PROC 30
@@ -96,6 +114,37 @@
 #define GET_SPKR_CONFIGURATION_PROC 37
 #define SPKR_GET_GAIN_PROC 38
 #define SPKR_IS_EN_PROC 39
+#define SPKR_EN_MUTE_PROC 40
+#define SPKR_IS_MUTE_EN_PROC 41
+#define SPKR_SET_DELAY_PROC 42
+#define SPKR_GET_DELAY_PROC 43
+#define SECURE_MPP_CONFIG_DIGITAL_INPUT_PROC 44
+#define SET_SPEAKER_DELAY_PROC 45
+#define SPEAKER_1K6_ZIN_ENABLE_PROC 46
+#define SPKR_SET_MUX_HPF_CORNER_FREQ_PROC 47
+#define SPKR_GET_MUX_HPF_CORNER_FREQ_PROC 48
+#define SPKR_IS_RIGHT_LEFT_CHAN_ADDED_PROC 49
+#define SPKR_EN_STEREO_PROC 50
+#define SPKR_IS_STEREO_EN_PROC 51
+#define SPKR_SELECT_USB_WITH_HPF_20HZ_PROC 52
+#define SPKR_IS_USB_WITH_HPF_20HZ_PROC 53
+#define SPKR_BYPASS_MUX_PROC 54
+#define SPKR_IS_MUX_BYPASSED_PROC 55
+#define SPKR_EN_HPF_PROC 56
+#define SPKR_IS_HPF_EN_PROC 57
+#define SPKR_EN_SINK_CURR_FROM_REF_VOLT_CIR_PROC 58
+#define SPKR_IS_SINK_CURR_FROM_REF_VOLT_CIR_EN_PROC 59
+#define SPKR_ADD_RIGHT_LEFT_CHAN_PROC 60
+#define SPKR_SET_GAIN_PROC 61
+#define SPKR_EN_PROC 62
+
+
+/* rpc related */
+#define PMIC_RPC_TIMEOUT (5*HZ)
+
+#define PMIC_PDEV_NAME	"rs00010001:00000000"
+#define PMIC_RPC_PROG	0x30000061
+#define PMIC_RPC_VER	0x00010001
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
@@ -109,67 +158,86 @@
 #define PM_ERR_FLAG__SBI_OPT_ERR		(0x0080)
 #define PM_ERR_FLAG__FEATURE_NOT_SUPPORTED	(0x0100)
 
-struct std_rpc_req {
-	struct rpc_request_hdr req;
-	uint32_t value;
+#define	PMIC_BUFF_SIZE		256
+
+struct pmic_buf {
+	char *start;		/* buffer start addr */
+	char *end;		/* buffer end addr */
+	int size;		/* buffer size */
+	char *data;		/* payload begin addr */
+	int len;		/* payload len */
 };
 
-struct std_rpc_reply {
-	struct rpc_reply_hdr hdr;
-	uint32_t result;
+static DEFINE_MUTEX(pmic_mtx);
+
+struct pmic_ctrl {
+	int inited;
+	struct pmic_buf	tbuf;
+	struct pmic_buf	rbuf;
+	struct msm_rpc_endpoint *endpoint;
 };
 
-struct get_value_rep {
-	struct std_rpc_reply reply_hdr;
-	uint32_t MoreData;
-	uint32_t value;
+static struct pmic_ctrl pmic_ctrl = {
+	.inited = -1,
 };
 
-struct std_rpc_req2 {
-	struct rpc_request_hdr hdr;
-	uint32_t value1;
-	uint32_t value2;
-};
+static int pmic_rpc_req_reply(struct pmic_buf *tbuf,
+				struct pmic_buf *rbuf, int proc);
+static int pmic_rpc_set_only(uint data0, uint data1, uint data2,
+				uint data3, int num, int proc);
+static int pmic_rpc_set_struct(int, uint, uint *data, uint size, int proc);
+static int pmic_rpc_set_get(uint setdata, uint *getdata, int size, int proc);
+static int pmic_rpc_get_only(uint *getdata, int size, int proc);
 
-struct set_spkr_configuration_req {
-	struct rpc_request_hdr hdr;
-	uint32_t MoreData;
-	struct spkr_config_mode type;
-};
-
-struct get_spkr_configuration_rep {
-	struct std_rpc_reply reply_hdr;
-	uint32_t MoreData;
-	struct spkr_config_mode type;
-};
-
-static struct msm_rpc_endpoint *endpoint;
-
-static int check_and_connect(void)
+static int pmic_buf_init(void)
 {
-	if (endpoint != NULL)
-		return 0;
+	struct pmic_ctrl *pm = &pmic_ctrl;
 
-	endpoint = msm_rpc_connect(SPEAKER_RPC_PROG, SPEAKER_RPC_VER, 0);
-	if (endpoint == NULL) {
-		return -ENODEV;
-	} else if (IS_ERR(endpoint)) {
-		int rc = PTR_ERR(endpoint);
-		printk(KERN_ERR "%s: init rpc failed! rc = %d\n",
-		       __func__, rc);
-		endpoint = NULL;
-		return rc;
+	memset(&pmic_ctrl, 0, sizeof(pmic_ctrl));
+
+	pm->tbuf.start = kmalloc(PMIC_BUFF_SIZE, GFP_KERNEL);
+	if (pm->tbuf.start == NULL) {
+		printk(KERN_ERR "%s:%u\n", __func__, __LINE__);
+		return -ENOMEM;
 	}
+
+	pm->tbuf.data = pm->tbuf.start;
+	pm->tbuf.size = PMIC_BUFF_SIZE;
+	pm->tbuf.end = pm->tbuf.start + PMIC_BUFF_SIZE;
+	pm->tbuf.len = 0;
+
+	pm->rbuf.start = kmalloc(PMIC_BUFF_SIZE, GFP_KERNEL);
+	if (pm->rbuf.start == NULL) {
+		kfree(pm->tbuf.start);
+		printk(KERN_ERR "%s:%u\n", __func__, __LINE__);
+		return -ENOMEM;
+	}
+	pm->rbuf.data = pm->rbuf.start;
+	pm->rbuf.size = PMIC_BUFF_SIZE;
+	pm->rbuf.end = pm->rbuf.start + PMIC_BUFF_SIZE;
+	pm->rbuf.len = 0;
+
+	pm->inited = 1;
+
 	return 0;
 }
 
-static int modem_to_linux_err(u16 err_netendian)
+static inline void pmic_buf_reserve(struct pmic_buf *bp, int len)
 {
-	u32 err;
-	if (!err_netendian)
+	bp->data += len;
+}
+
+static inline void pmic_buf_reset(struct pmic_buf *bp)
+{
+	bp->data = bp->start;
+	bp->len = 0;
+}
+
+static int modem_to_linux_err(uint err)
+{
+	if (err == 0)
 		return 0;
 
-	err = be32_to_cpu(err_netendian);
 	if (err & PM_ERR_FLAG__ALL_PARMS_OUT_OF_RANGE)
 		return -EINVAL;	/* PM_ERR_FLAG__PAR[1..5]_OUT_OF_RANGE */
 
@@ -182,639 +250,792 @@ static int modem_to_linux_err(u16 err_netendian)
 	return -EPERM;
 }
 
-static int do_remote_value(const uint32_t set_value,
-			   uint32_t * const get_value,
-			   const uint32_t proc)
+static int pmic_put_tx_data(struct pmic_buf *tp, uint datav)
 {
-	struct std_rpc_req req;
-	struct std_rpc_reply std_rep;
-	struct get_value_rep rep;
-	void *rep_ptr;
-	int rep_size, rc = check_and_connect();
+	uint *lp;
 
-	if (rc) /* connect problem */
-		return rc;
-
-	if (get_value != NULL) { /* get value */
-		req.value = cpu_to_be32(1); /* output_pointer_not_null */
-		rep_size = sizeof(rep);
-		rep_ptr = &rep;
-	} else { /* set value */
-		req.value = cpu_to_be32(set_value);
-		rep_size = sizeof(std_rep);
-		rep_ptr = &std_rep;
+	if ((tp->size - tp->len) < sizeof(datav)) {
+		printk(KERN_ERR "%s: OVERFLOW size=%d len=%d\n",
+					__func__, tp->size, tp->len);
+		return -1;
 	}
-	rc = msm_rpc_call_reply(endpoint, proc,
-				&req, sizeof(req),
-				rep_ptr, rep_size,
-				PMIC_RPC_TIMEOUT);
-	if (rc < 0)
-		return rc;
 
-	if (get_value != NULL) { /* get value */
-		if (!rep.reply_hdr.result) {
-			if (!rep.MoreData)
-				return -ENOMSG;
+	lp = (uint *)tp->data;
+	*lp = cpu_to_be32(datav);
+	tp->data += sizeof(datav);
+	tp->len += sizeof(datav);
 
-			*get_value = be32_to_cpu(rep.value);
+	return sizeof(datav);
+}
+
+static int pmic_pull_rx_data(struct pmic_buf *rp, uint *datap)
+{
+	uint *lp;
+
+	if (rp->len < sizeof(*datap)) {
+		printk(KERN_ERR "%s: UNDERRUN len=%d\n", __func__, rp->len);
+		return -1;
+	}
+	lp = (uint *)rp->data;
+	*datap = be32_to_cpu(*lp);
+	rp->data += sizeof(*datap);
+	rp->len -= sizeof(*datap);
+
+	return sizeof(*datap);
+}
+
+
+/*
+ *
+ *   +-------------------+
+ *   |  PROC cmd layer   |
+ *   +-------------------+
+ *   |     RPC layer     |
+ *   +-------------------+
+ *
+ * 1) network byte order
+ * 2) RPC request header(40 bytes) and RPC reply header (24 bytes)
+ * 3) each transaction consists of a request and reply
+ * 3) PROC (comamnd) layer has its own sub-protocol defined
+ * 4) sub-protocol can be grouped to follwoing 7 cases:
+ *  	a) set one argument, no get
+ * 	b) set two argument, no get
+ * 	c) set three argument, no get
+ * 	d) set a struct, no get
+ * 	e) set a argument followed by a struct, no get
+ * 	f) set a argument, get a argument
+ * 	g) no set, get either a argument or a struct
+ */
+
+/**
+ * pmic_rpc_req_reply() - send request and wait for reply
+ * @tbuf:	buffer contains arguments
+ * @rbuf:	buffer to be filled with arguments at reply
+ * @proc:	command/request id
+ *
+ * This function send request to modem and wait until reply received
+ */
+static int pmic_rpc_req_reply(struct pmic_buf *tbuf, struct pmic_buf *rbuf,
+	int	proc)
+{
+	struct pmic_ctrl *pm = &pmic_ctrl;
+	int	ans, len;
+
+
+	if (pm->endpoint == NULL) {
+		pm->endpoint = msm_rpc_connect(PMIC_RPC_PROG,
+					PMIC_RPC_VER, 0);
+		if (pm->endpoint == NULL) {
+			return -ENODEV;
+		} else if (IS_ERR(pm->endpoint)) {
+			ans  = PTR_ERR(pm->endpoint);
+			printk(KERN_ERR "%s: init rpc failed! ans = %d\n",
+						__func__, ans);
+			pm->endpoint = NULL;
+			return ans;
 		}
-		rc = modem_to_linux_err(rep.reply_hdr.result);
-	} else {
-		rc = modem_to_linux_err(std_rep.result);
-	}
-	return rc;
-}
-
-int pmic_spkr_en_right_chan(const unsigned char enable)
-{
-	return do_remote_value(enable, NULL, SPKR_EN_RIGHT_CHAN_PROC);
-}
-EXPORT_SYMBOL(pmic_spkr_en_right_chan);
-
-int pmic_spkr_is_right_chan_en(unsigned char * const enabled)
-{
-	uint32_t word_enabled;
-	int rc;
-
-	if (enabled == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	rc = do_remote_value(0, &word_enabled, SPKR_IS_RIGHT_CHAN_EN_PROC);
-	if (!rc)
-		*enabled = (unsigned char)word_enabled;
-	return rc;
-}
-EXPORT_SYMBOL(pmic_spkr_is_right_chan_en);
-
-int pmic_spkr_en_left_chan(const unsigned char enable)
-{
-	return do_remote_value(enable, NULL, SPKR_EN_LEFT_CHAN_PROC);
-}
-EXPORT_SYMBOL(pmic_spkr_en_left_chan);
-
-int pmic_spkr_is_left_chan_en(unsigned char * const enabled)
-{
-	uint32_t word_enabled;
-	int rc;
-
-	if (enabled == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	rc = do_remote_value(0, &word_enabled, SPKR_IS_LEFT_CHAN_EN_PROC);
-	if (!rc)
-		*enabled = (unsigned char)word_enabled;
-	return rc;
-}
-EXPORT_SYMBOL(pmic_spkr_is_left_chan_en);
-
-int pmic_spkr_is_en(const enum spkr_left_right left_right,
-	       unsigned char * const enabled)
-{
-	if (left_right >= SPKR_OUT_OF_RANGE)
-		return -EINVAL;
-
-	return left_right == LEFT_SPKR ?
-		pmic_spkr_is_left_chan_en(enabled) :
-		pmic_spkr_is_right_chan_en(enabled);
-}
-EXPORT_SYMBOL(pmic_spkr_is_en);
-
-static int do_std_rpc_req2(struct get_value_rep *rep, uint32_t proc,
-				uint32_t value1, uint32_t value2)
-{
-	struct std_rpc_req2 req;
-	int rc;
-
-	rc = check_and_connect();
-	if (rc) {
-		printk(KERN_ERR "%s: can't make rpc connection!\n", __func__);
-		return rc;
 	}
 
-	req.value1 = cpu_to_be32(value1);
-	req.value2 = cpu_to_be32(value2);
+	/*
+	* data is point to next available space at this moment,
+	* move it back to beginning of request header and increase
+	* the length
+	*/
+	tbuf->data = tbuf->start;
+	tbuf->len += sizeof(struct rpc_request_hdr);
 
-	rc = msm_rpc_call_reply(endpoint, proc,
-				    &req, sizeof(req),
-				    rep, sizeof(*rep),
-				    PMIC_RPC_TIMEOUT);
-	if (rc < 0) {
-		printk(KERN_ERR
-			"%s: msm_rpc_call_reply failed! proc=%d rc=%d\n",
-			__func__, proc, rc);
-		return rc;
+	len = msm_rpc_call_reply(pm->endpoint, proc,
+				tbuf->data, tbuf->len,
+				rbuf->data, rbuf->size,
+				PMIC_RPC_TIMEOUT);
+
+	if (len <= 0) {
+		printk(KERN_ERR "%s: rpc failed! len = %d\n", __func__, len);
+		pm->endpoint = NULL;	/* re-connect later ? */
+		return len;
 	}
 
-	return modem_to_linux_err(rep->reply_hdr.result);
+	rbuf->len = len;
+	/* strip off rpc_reply_hdr */
+	rbuf->data += sizeof(struct rpc_reply_hdr);
+	rbuf->len -= sizeof(struct rpc_reply_hdr);
+
+	return rbuf->len;
 }
 
-int pmic_spkr_get_gain(const enum spkr_left_right left_right,
-		  enum spkr_gain * const gain)
+/**
+ * pmic_rpc_set_only() - set arguments and no get
+ * @data0:	first argumrnt
+ * @data1:	second argument
+ * @data2:	third argument
+ * @data3:	fourth argument
+ * @num:	number of argument
+ * @proc:	command/request id
+ *
+ * This function covers case a, b, and c
+ */
+static int pmic_rpc_set_only(uint data0, uint data1, uint data2, uint data3,
+		int num, int proc)
 {
-	struct get_value_rep rep;
-	int rc;
+	struct pmic_ctrl *pm = &pmic_ctrl;
+	struct pmic_buf	*tp;
+	struct pmic_buf	*rp;
+	int	stat;
 
-	if (left_right >= SPKR_OUT_OF_RANGE)
-		return -EINVAL;
 
-	if (gain == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
+	if (mutex_lock_interruptible(&pmic_mtx))
+		return -ERESTARTSYS;
 
-	rc = do_std_rpc_req2(&rep, SPKR_GET_GAIN_PROC, (uint32_t)left_right, 1);
-
-	if (!rc && !rep.reply_hdr.result) {
-		if (!rep.MoreData)
-			return -ENOMSG;
-
-		*gain = (enum spkr_gain)be32_to_cpu(rep.value);
+	if (pm->inited <= 0) {
+		stat = pmic_buf_init();
+		if (stat < 0) {
+			mutex_unlock(&pmic_mtx);
+			return stat;
+		}
 	}
 
-	return rc;
-}
-EXPORT_SYMBOL(pmic_spkr_get_gain);
+	tp = &pm->tbuf;
+	rp = &pm->rbuf;
 
-int pmic_set_speaker_gain(const enum spkr_gain speaker_gain)
+	pmic_buf_reset(tp);
+	pmic_buf_reserve(tp, sizeof(struct rpc_request_hdr));
+	pmic_buf_reset(rp);
+
+	if (num > 0)
+		pmic_put_tx_data(tp, data0);
+
+	if (num > 1)
+		pmic_put_tx_data(tp, data1);
+
+	if (num > 2)
+		pmic_put_tx_data(tp, data2);
+
+	if (num > 3)
+		pmic_put_tx_data(tp, data3);
+
+	stat = pmic_rpc_req_reply(tp, rp, proc);
+	if (stat < 0) {
+		mutex_unlock(&pmic_mtx);
+		return stat;
+	}
+
+	pmic_pull_rx_data(rp, &stat);	/* result from server */
+
+	mutex_unlock(&pmic_mtx);
+
+	return modem_to_linux_err(stat);
+}
+
+/**
+ * pmic_rpc_set_struct() - set the whole struct
+ * @xflag:	indicates an extra argument
+ * @xdata:	the extra argument
+ * @*data:	starting address of struct
+ * @size:	size of struct
+ * @proc:	command/request id
+ *
+ * This fucntion covers case d and e
+ */
+static int pmic_rpc_set_struct(int xflag, uint xdata, uint *data, uint size,
+	int proc)
 {
-	if (speaker_gain >= SPKR_GAIN_OUT_OF_RANGE)
-		return -EINVAL;
+	struct pmic_ctrl *pm = &pmic_ctrl;
+	struct pmic_buf *tp;
+	struct pmic_buf	*rp;
+	int	i, stat, more_data;
 
-	return do_remote_value(speaker_gain, NULL, SET_SPEAKER_GAIN_PROC);
+
+	if (mutex_lock_interruptible(&pmic_mtx))
+		return -ERESTARTSYS;
+
+	if (pm->inited <= 0) {
+		stat = pmic_buf_init();
+		if (stat < 0) {
+			mutex_unlock(&pmic_mtx);
+			return stat;
+		}
+	}
+
+	tp = &pm->tbuf;
+	rp = &pm->rbuf;
+
+	pmic_buf_reset(tp);
+	pmic_buf_reserve(tp, sizeof(struct rpc_request_hdr));
+	pmic_buf_reset(rp);
+
+	if (xflag)
+		pmic_put_tx_data(tp, xdata);
+
+	more_data = 1; 		/* tell server there have more data followed */
+	pmic_put_tx_data(tp, more_data);
+
+	size >>= 2;
+	for (i = 0; i < size; i++) {
+		pmic_put_tx_data(tp, *data);
+		data++;
+	}
+
+	stat = pmic_rpc_req_reply(tp, rp, proc);
+	if (stat < 0) {
+		mutex_unlock(&pmic_mtx);
+		return stat;
+	}
+
+	pmic_pull_rx_data(rp, &stat);	/* result from server */
+
+	mutex_unlock(&pmic_mtx);
+
+	return modem_to_linux_err(stat);
 }
-EXPORT_SYMBOL(pmic_set_speaker_gain);
 
+/**
+ * pmic_rpc_set_get() - set one argument and get one argument
+ * @setdata:	set argument
+ * @*getdata:	memory to store argumnet
+ * @size:	size of memory
+ * @proc:	command/request id
+ *
+ * This function covers case f
+ */
+static int pmic_rpc_set_get(uint setdata, uint *getdata, int size, int proc)
+{
+	struct pmic_ctrl *pm = &pmic_ctrl;
+	struct pmic_buf	*tp;
+	struct pmic_buf	*rp;
+	unsigned int *lp;
+	int i, stat, more_data;
+
+
+	if (mutex_lock_interruptible(&pmic_mtx))
+		return -ERESTARTSYS;
+
+	if (pm->inited <= 0) {
+		stat = pmic_buf_init();
+		if (stat < 0) {
+			mutex_unlock(&pmic_mtx);
+			return stat;
+		}
+	}
+
+	tp = &pm->tbuf;
+	rp = &pm->rbuf;
+
+	pmic_buf_reset(tp);
+	pmic_buf_reserve(tp, sizeof(struct rpc_request_hdr));
+	pmic_buf_reset(rp);
+
+	pmic_put_tx_data(tp, setdata);
+
+	/*
+	* more_data = TRUE to ask server reply with requested datum
+	* otherwise, server will reply without datum
+	*/
+	more_data = (getdata != NULL);
+	pmic_put_tx_data(tp, more_data);
+
+	stat = pmic_rpc_req_reply(tp, rp, proc);
+	if (stat < 0) {
+		mutex_unlock(&pmic_mtx);
+		return stat;
+	}
+
+	pmic_pull_rx_data(rp, &stat);		/* result from server */
+	pmic_pull_rx_data(rp, &more_data);
+
+	if (more_data) { 				/* more data followed */
+		size >>= 2;
+		lp = getdata;
+		for (i = 0; i < size; i++) {
+			if (pmic_pull_rx_data(rp, lp++) < 0)
+				break;	/* not supposed to happen */
+		}
+	}
+
+	mutex_unlock(&pmic_mtx);
+
+	return modem_to_linux_err(stat);
+}
+
+/**
+ * pmic_rpc_get_only() - get one or more than one arguments
+ * @*getdata:	memory to store arguments
+ * @size:	size of mmory
+ * @proc:	command/request id
+ *
+ * This function covers case g
+ */
+static int pmic_rpc_get_only(uint *getdata, int size, int proc)
+{
+	struct pmic_ctrl *pm = &pmic_ctrl;
+	struct pmic_buf *tp;
+	struct pmic_buf *rp;
+	unsigned int *lp;
+	int	i, stat, more_data;
+
+
+	if (mutex_lock_interruptible(&pmic_mtx))
+		return -ERESTARTSYS;
+
+	if (pm->inited <= 0) {
+		stat = pmic_buf_init();
+		if (stat < 0) {
+			mutex_unlock(&pmic_mtx);
+			return stat;
+		}
+	}
+
+	tp = &pm->tbuf;
+	rp = &pm->rbuf;
+
+	pmic_buf_reset(tp);
+	pmic_buf_reserve(tp, sizeof(struct rpc_request_hdr));
+	pmic_buf_reset(rp);
+
+	/*
+	* more_data = TRUE to ask server reply with requested datum
+	* otherwise, server will reply without datum
+	*/
+	more_data = (getdata != NULL);
+	pmic_put_tx_data(tp, more_data);
+
+	stat = pmic_rpc_req_reply(tp, rp, proc);
+	if (stat < 0) {
+		mutex_unlock(&pmic_mtx);
+		return stat;
+	}
+
+	pmic_pull_rx_data(rp, &stat);		/* result from server */
+	pmic_pull_rx_data(rp, &more_data);
+
+	if (more_data) { 				/* more data followed */
+		size >>= 2;
+		lp = getdata;
+		for (i = 0; i < size; i++) {
+			if (pmic_pull_rx_data(rp, lp++) < 0)
+				break;	/* not supposed to happen */
+		}
+	}
+
+	mutex_unlock(&pmic_mtx);
+
+	return modem_to_linux_err(stat);
+}
+
+
+int pmic_lp_mode_control(enum switch_cmd cmd, enum vreg_lp_id id)
+{
+	return pmic_rpc_set_only(cmd, id, 0, 0, 2, LP_MODE_CONTROL_PROC);
+}
+EXPORT_SYMBOL(pmic_lp_mode_control);
+
+int pmic_vreg_set_level(enum vreg_id vreg, int level)
+{
+	return pmic_rpc_set_only(vreg, level, 0, 0, 2, VREG_SET_LEVEL_PROC);
+}
+EXPORT_SYMBOL(pmic_vreg_set_level);
+
+int pmic_vreg_pull_down_switch(enum switch_cmd cmd, enum vreg_pdown_id id)
+{
+	return pmic_rpc_set_only(cmd, id, 0, 0, 2, VREG_PULL_DOWN_SWITCH_PROC);
+}
+EXPORT_SYMBOL(pmic_vreg_pull_down_switch);
+
+int pmic_secure_mpp_control_digital_output(enum mpp_which which,
+	enum mpp_dlogic_level level,
+	enum mpp_dlogic_out_ctrl out)
+{
+	return pmic_rpc_set_only(which, level, out, 0, 3,
+				SECURE_MPP_CONFIG_DIGITAL_OUTPUT_PROC);
+}
+EXPORT_SYMBOL(pmic_secure_mpp_control_digital_output);
+
+int pmic_secure_mpp_config_i_sink(enum mpp_which which,
+				enum mpp_i_sink_level level,
+				enum mpp_i_sink_switch onoff)
+{
+	return pmic_rpc_set_only(which, level, onoff, 0, 3,
+				SECURE_MPP_CONFIG_I_SINK_PROC);
+}
+EXPORT_SYMBOL(pmic_secure_mpp_config_i_sink);
+
+int pmic_secure_mpp_config_digital_input(enum mpp_which which,
+	enum mpp_dlogic_level level,
+	enum mpp_dlogic_in_dbus dbus)
+{
+	return pmic_rpc_set_only(which, level, dbus, 0, 3,
+				SECURE_MPP_CONFIG_DIGITAL_INPUT_PROC);
+}
+EXPORT_SYMBOL(pmic_secure_mpp_config_digital_input);
+
+int pmic_rtc_start(struct rtc_time *time)
+{
+	return pmic_rpc_set_struct(0, 0, (uint *)time, sizeof(*time),
+				RTC_START_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_start);
+
+int pmic_rtc_stop(void)
+{
+	return pmic_rpc_set_only(0, 0, 0, 0, 0, RTC_STOP_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_stop);
+
+int pmic_rtc_get_time(struct rtc_time *time)
+{
+	return pmic_rpc_get_only((uint *)time, sizeof(*time),
+				RTC_GET_TIME_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_get_time);
+
+int pmic_rtc_enable_alarm(enum rtc_alarm alarm,
+	struct rtc_time *time)
+{
+	return pmic_rpc_set_struct(1, alarm, (uint *)time, sizeof(*time),
+				RTC_ENABLE_ALARM_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_enable_alarm);
+
+int pmic_rtc_disable_alarm(enum rtc_alarm alarm)
+{
+	return pmic_rpc_set_only(alarm, 0, 0, 0, 1, RTC_DISABLE_ALARM_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_disable_alarm);
+
+int pmic_rtc_get_alarm_time(enum rtc_alarm	alarm,
+	struct rtc_time *time)
+{
+	return pmic_rpc_set_get(alarm, (uint *)time, sizeof(*time),
+				RTC_GET_ALARM_TIME_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_get_alarm_time);
+
+int pmic_rtc_get_alarm_status(uint *status)
+{
+	return pmic_rpc_get_only(status, sizeof(*status),
+				RTC_GET_ALARM_STATUS_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_get_alarm_status);
+
+int pmic_rtc_set_time_adjust(uint adjust)
+{
+	return pmic_rpc_set_only(adjust, 0, 0, 0, 1,
+				RTC_SET_TIME_ADJUST_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_set_time_adjust);
+
+int pmic_rtc_get_time_adjust(uint *adjust)
+{
+	return pmic_rpc_get_only(adjust, sizeof(*adjust),
+				RTC_GET_TIME_ADJUST_PROC);
+}
+EXPORT_SYMBOL(pmic_rtc_get_time_adjust);
+
+/*
+ * generic speaker
+ */
 int pmic_speaker_cmd(const enum spkr_cmd cmd)
 {
-	if (cmd >= SPKR_CMD_OUT_OF_RANGE)
-		return -EINVAL;
-
-	return do_remote_value(cmd, NULL, SPEAKER_CMD_PROC);
+	return pmic_rpc_set_only(cmd, 0, 0, 0, 1, SPEAKER_CMD_PROC);
 }
 EXPORT_SYMBOL(pmic_speaker_cmd);
 
-int pmic_set_spkr_configuration(const struct spkr_config_mode * const t)
+int pmic_set_spkr_configuration(struct spkr_config_mode	*cfg)
 {
-	struct set_spkr_configuration_req req;
-	struct std_rpc_reply rep;
-	int i, rc;
-
-	if (t == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	rc = check_and_connect();
-	if (rc)
-		return rc;
-
-	for (i = 0; i < sizeof(*t)/sizeof(uint32_t); i++)
-		((uint32_t *)&req.type)[i] = cpu_to_be32(((uint32_t *)t)[i]);
-
-	req.MoreData = cpu_to_be32(1);
-	rc = msm_rpc_call_reply(endpoint, SET_SPKR_CONFIGURATION_PROC,
-				&req, sizeof(req),
-				&rep, sizeof(rep),
-				PMIC_RPC_TIMEOUT);
-	if (rc < 0)
-		return rc;
-
-	return modem_to_linux_err(rep.result);
+	return pmic_rpc_set_struct(0, 0, (uint *)cfg, sizeof(*cfg),
+				SET_SPKR_CONFIGURATION_PROC);
 }
 EXPORT_SYMBOL(pmic_set_spkr_configuration);
 
-int pmic_get_spkr_configuration(struct spkr_config_mode * const t)
+int pmic_get_spkr_configuration(struct spkr_config_mode *cfg)
 {
-	struct std_rpc_req req;
-	struct get_spkr_configuration_rep rep;
-	int rc;
-
-	if (t == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	rc = check_and_connect();
-	if (rc)
-		return rc;
-
-	req.value = cpu_to_be32(1); /* output_pointer_not_null */
-	rc = msm_rpc_call_reply(endpoint, GET_SPKR_CONFIGURATION_PROC,
-				    &req, sizeof(req),
-				    &rep, sizeof(rep),
-				    PMIC_RPC_TIMEOUT);
-	if (rc < 0)
-		return rc;
-
-	if (!rep.reply_hdr.result) {
-		int i;
-
-		if (!rep.MoreData)
-			return -ENOMSG;
-
-		for (i = 0; i < sizeof(*t)/sizeof(uint32_t); i++)
-			((uint32_t *)t)[i] =
-				be32_to_cpu(((uint32_t *)&rep.type)[i]);
-	}
-
-	return modem_to_linux_err(rep.reply_hdr.result);
+	return pmic_rpc_get_only((uint *)cfg, sizeof(*cfg),
+				GET_SPKR_CONFIGURATION_PROC);
 }
 EXPORT_SYMBOL(pmic_get_spkr_configuration);
 
-int pmic_mic_en(const unsigned char enable)
+int pmic_spkr_en_right_chan(uint enable)
 {
-	return do_remote_value(enable, NULL, MIC_EN_PROC);
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, SPKR_EN_RIGHT_CHAN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en_right_chan);
+
+int pmic_spkr_is_right_chan_en(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_RIGHT_CHAN_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_right_chan_en);
+
+int pmic_spkr_en_left_chan(uint	enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, SPKR_EN_LEFT_CHAN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en_left_chan);
+
+int pmic_spkr_is_left_chan_en(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_LEFT_CHAN_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_left_chan_en);
+
+int pmic_set_speaker_gain(enum spkr_gain gain)
+{
+	return pmic_rpc_set_only(gain, 0, 0, 0, 1, SET_SPEAKER_GAIN_PROC);
+}
+EXPORT_SYMBOL(pmic_set_speaker_gain);
+
+int pmic_set_speaker_delay(enum spkr_dly delay)
+{
+	return pmic_rpc_set_only(delay, 0, 0, 0, 1, SET_SPEAKER_DELAY_PROC);
+}
+EXPORT_SYMBOL(pmic_set_speaker_delay);
+
+int pmic_speaker_1k6_zin_enable(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1,
+				SPEAKER_1K6_ZIN_ENABLE_PROC);
+}
+EXPORT_SYMBOL(pmic_speaker_1k6_zin_enable);
+
+int pmic_spkr_set_mux_hpf_corner_freq(enum spkr_hpf_corner_freq	freq)
+{
+	return pmic_rpc_set_only(freq, 0, 0, 0, 1,
+				SPKR_SET_MUX_HPF_CORNER_FREQ_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_set_mux_hpf_corner_freq);
+
+int pmic_spkr_get_mux_hpf_corner_freq(enum spkr_hpf_corner_freq	*freq)
+{
+	return pmic_rpc_get_only(freq, sizeof(*freq),
+				SPKR_GET_MUX_HPF_CORNER_FREQ_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_get_mux_hpf_corner_freq);
+
+int pmic_spkr_select_usb_with_hpf_20hz(uint	enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1,
+				SPKR_SELECT_USB_WITH_HPF_20HZ_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_select_usb_with_hpf_20hz);
+
+int pmic_spkr_is_usb_with_hpf_20hz(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_USB_WITH_HPF_20HZ_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_usb_with_hpf_20hz);
+
+int pmic_spkr_bypass_mux(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, SPKR_BYPASS_MUX_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_bypass_mux);
+
+int pmic_spkr_is_mux_bypassed(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_MUX_BYPASSED_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_mux_bypassed);
+
+int pmic_spkr_en_hpf(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, SPKR_EN_HPF_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en_hpf);
+
+int pmic_spkr_is_hpf_en(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_HPF_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_hpf_en);
+
+int pmic_spkr_en_sink_curr_from_ref_volt_cir(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1,
+				SPKR_EN_SINK_CURR_FROM_REF_VOLT_CIR_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en_sink_curr_from_ref_volt_cir);
+
+int pmic_spkr_is_sink_curr_from_ref_volt_cir_en(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_SINK_CURR_FROM_REF_VOLT_CIR_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_sink_curr_from_ref_volt_cir_en);
+
+/*
+ * 	speaker indexed by left_right
+ */
+int pmic_spkr_en(enum spkr_left_right left_right, uint enable)
+{
+	return pmic_rpc_set_only(left_right, enable, 0, 0, 2, SPKR_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en);
+
+int pmic_spkr_is_en(enum spkr_left_right left_right, uint *enabled)
+{
+	return pmic_rpc_set_get(left_right, enabled, sizeof(*enabled),
+				SPKR_IS_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_en);
+
+int pmic_spkr_set_gain(enum spkr_left_right left_right, enum spkr_gain gain)
+{
+	return pmic_rpc_set_only(left_right, gain, 0, 0, 2, SPKR_SET_GAIN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_set_gain);
+
+int pmic_spkr_get_gain(enum spkr_left_right left_right, enum spkr_gain *gain)
+{
+	return pmic_rpc_set_get(left_right, gain, sizeof(*gain),
+				SPKR_GET_GAIN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_get_gain);
+
+int pmic_spkr_set_delay(enum spkr_left_right left_right, enum spkr_dly delay)
+{
+	return pmic_rpc_set_only(left_right, delay, 0, 0, 2,
+				SPKR_SET_DELAY_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_set_delay);
+
+int pmic_spkr_get_delay(enum spkr_left_right left_right, enum spkr_dly *delay)
+{
+	return pmic_rpc_set_get(left_right, delay, sizeof(*delay),
+				SPKR_GET_DELAY_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_get_delay);
+
+int pmic_spkr_en_mute(enum spkr_left_right left_right, uint enabled)
+{
+	return pmic_rpc_set_only(left_right, enabled, 0, 0, 2,
+				SPKR_EN_MUTE_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_en_mute);
+
+int pmic_spkr_is_mute_en(enum spkr_left_right left_right, uint *enabled)
+{
+	return pmic_rpc_set_get(left_right, enabled, sizeof(*enabled),
+				SPKR_IS_MUTE_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_spkr_is_mute_en);
+
+/*
+ * 	mic
+ */
+int pmic_mic_en(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, MIC_EN_PROC);
 }
 EXPORT_SYMBOL(pmic_mic_en);
 
-int pmic_mic_is_en(unsigned char * const enabled)
+int pmic_mic_is_en(uint	*enabled)
 {
-	uint32_t word_enabled;
-	int rc;
-
-	if (enabled == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	rc = do_remote_value(0, &word_enabled, MIC_IS_EN_PROC);
-	if (!rc)
-		*enabled = (unsigned char)word_enabled;
-
-	return rc;
+	return pmic_rpc_get_only(enabled, sizeof(*enabled), MIC_IS_EN_PROC);
 }
 EXPORT_SYMBOL(pmic_mic_is_en);
 
-int pmic_mic_set_volt(const enum mic_volt type)
+int pmic_mic_set_volt(enum mic_volt vol)
 {
-	if (type >= MIC_VOLT_OUT_OF_RANGE)
-		return -EINVAL;
-
-	return do_remote_value(type, NULL, MIC_SET_VOLT_PROC);
+	return pmic_rpc_set_only(vol, 0, 0, 0, 1, MIC_SET_VOLT_PROC);
 }
 EXPORT_SYMBOL(pmic_mic_set_volt);
 
-int pmic_mic_get_volt(enum mic_volt * const voltage)
+int pmic_mic_get_volt(enum mic_volt *voltage)
 {
-	if (voltage == NULL)
-		return modem_to_linux_err(PM_ERR_FLAG__PAR1_OUT_OF_RANGE);
-
-	return do_remote_value(0, voltage, MIC_GET_VOLT_PROC);
+	return pmic_rpc_get_only(voltage, sizeof(*voltage), MIC_GET_VOLT_PROC);
 }
 EXPORT_SYMBOL(pmic_mic_get_volt);
 
-/* Cannot use 'current' as the parameter name because 'current' is defined as
- * a macro to get a pointer to the current task.
- */
-int pmic_flash_led_set_current(const uint16_t milliamps)
+int pmic_vib_mot_set_volt(uint vol)
 {
-	return do_remote_value(milliamps, NULL, FLASH_LED_SET_CURRENT_PROC);
+	return pmic_rpc_set_only(vol, 0, 0, 0, 1, VIB_MOT_SET_VOLT_PROC);
 }
-EXPORT_SYMBOL(pmic_flash_led_set_current);
+EXPORT_SYMBOL(pmic_vib_mot_set_volt);
 
-int pmic_set_led_intensity(const enum ledtype type, int level)
+int pmic_vib_mot_set_mode(enum pm_vib_mot_mode mode)
 {
-	struct get_value_rep rep;
+	return pmic_rpc_set_only(mode, 0, 0, 0, 1, VIB_MOT_SET_MODE_PROC);
+}
+EXPORT_SYMBOL(pmic_vib_mot_set_mode);
 
-	if (type >= LED_TYPE_OUT_OF_RANGE)
-		return -EINVAL;
+int pmic_vib_mot_set_polarity(enum pm_vib_mot_pol pol)
+{
+	return pmic_rpc_set_only(pol, 0, 0, 0, 1, VIB_MOT_SET_POLARITY_PROC);
+}
+EXPORT_SYMBOL(pmic_vib_mot_set_polarity);
 
-	return do_std_rpc_req2(&rep, SET_LED_INTENSITY_PROC,
-				(uint32_t)type, level);
+int pmic_vid_en(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, VID_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_vid_en);
+
+int pmic_vid_is_en(uint *enabled)
+{
+	return pmic_rpc_get_only(enabled, sizeof(*enabled), VID_IS_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_vid_is_en);
+
+int pmic_vid_load_detect_en(uint enable)
+{
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, VID_LOAD_DETECT_EN_PROC);
+}
+EXPORT_SYMBOL(pmic_vid_load_detect_en);
+
+int pmic_set_led_intensity(enum ledtype type, int level)
+{
+	return pmic_rpc_set_only(type, level, 0, 0, 2, SET_LED_INTENSITY_PROC);
 }
 EXPORT_SYMBOL(pmic_set_led_intensity);
 
-#if defined(CONFIG_DEBUG_FS)
-static void debugfs_log_return_status(const int caller_rc,
-				      const char * const caller__func__,
-				      const u64 caller_val)
+int pmic_flash_led_set_current(const uint16_t milliamps)
 {
-	if (!caller_rc)
-		printk(KERN_INFO "%s: succeeded, val %llu\n",
-			caller__func__, caller_val);
-	else
-		printk(KERN_ERR "%s: ERROR! val %llu, rc:%d(%#x)\n",
-			caller__func__, caller_val, caller_rc, caller_rc);
+	return pmic_rpc_set_only(milliamps, 0, 0, 0, 1,
+				FLASH_LED_SET_CURRENT_PROC);
 }
+EXPORT_SYMBOL(pmic_flash_led_set_current);
 
-static int debugfs_spkr_en_chan(void *data, u64 val)
+int pmic_flash_led_set_mode(enum flash_led_mode mode)
 {
-	int rc = ((enum spkr_left_right)data) == LEFT_SPKR ?
-		  pmic_spkr_en_left_chan((const unsigned char)val) :
-		  pmic_spkr_en_right_chan((const unsigned char)val);
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
+	return pmic_rpc_set_only((int)mode, 0, 0, 0, 1,
+				FLASH_LED_SET_MODE_PROC);
 }
+EXPORT_SYMBOL(pmic_flash_led_set_mode);
 
-static int debugfs_spkr_is_chan_en(void *data, u64 *val)
+int pmic_flash_led_set_polarity(enum flash_led_pol pol)
 {
-	unsigned char enabled;
-	int rc = ((enum spkr_left_right)data) == LEFT_SPKR ?
-		  pmic_spkr_is_left_chan_en(&enabled) :
-		  pmic_spkr_is_right_chan_en(&enabled);
-
-	if (!rc)
-		*val = (u64)enabled;
-
-	debugfs_log_return_status(rc, __func__, *val);
-	return rc;
+	return pmic_rpc_set_only((int)pol, 0, 0, 0, 1,
+				FLASH_LED_SET_POLARITY_PROC);
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_spkr_en_chan_fops,
-			debugfs_spkr_is_chan_en,
-			debugfs_spkr_en_chan,
-			"%llu\n");
+EXPORT_SYMBOL(pmic_flash_led_set_polarity);
 
-static int debugfs_spkr_get_gain(void *data, u64 *val)
+int pmic_spkr_add_right_left_chan(uint enable)
 {
-	enum spkr_gain gain;
-	int rc = pmic_spkr_get_gain((enum spkr_left_right)data, &gain);
-
-	if (!rc)
-		*val = (u64)gain;
-
-	debugfs_log_return_status(rc, __func__, *val);
-	return rc;
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1,
+				SPKR_ADD_RIGHT_LEFT_CHAN_PROC);
 }
+EXPORT_SYMBOL(pmic_spkr_add_right_left_chan);
 
-static int debugfs_set_speaker_gain(void *data, u64 val)
+int pmic_spkr_is_right_left_chan_added(uint *enabled)
 {
-	int rc = pmic_set_speaker_gain((enum spkr_gain)val);
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_RIGHT_LEFT_CHAN_ADDED_PROC);
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_spkr_gain_fops,
-			debugfs_spkr_get_gain,
-			debugfs_set_speaker_gain,
-			"%llu\n");
+EXPORT_SYMBOL(pmic_spkr_is_right_left_chan_added);
 
-static int debugfs_speaker_cmd(void *data, u64 val)
+int pmic_spkr_en_stereo(uint enable)
 {
-	int rc = pmic_speaker_cmd((const enum spkr_cmd)val);
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
+	return pmic_rpc_set_only(enable, 0, 0, 0, 1, SPKR_EN_STEREO_PROC);
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_speaker_cmd_fops,
-			NULL,
-			debugfs_speaker_cmd,
-			"%llu\n");
+EXPORT_SYMBOL(pmic_spkr_en_stereo);
 
-static int debugfs_spkr_configuration_open(struct inode *inode,
-					   struct file *filp)
+int pmic_spkr_is_stereo_en(uint *enabled)
 {
-	filp->private_data = inode->i_private;
-	return 0;
+	return pmic_rpc_get_only(enabled, sizeof(*enabled),
+				SPKR_IS_STEREO_EN_PROC);
 }
-
-#define debugfs_speaker_configuration_format_str \
-	"%u,%u,%u,%u,%u,%u,%u,%u\n" \
-	"is_right_chan_en: %u\n" \
-	"is_left_chan_en: %u\n" \
-	"is_right_left_chan_added: %u\n" \
-	"is_stereo_en: %u\n" \
-	"is_usb_with_hpf_20hz: %u\n" \
-	"is_mux_bypassed: %u\n" \
-	"is_hpf_en: %u\n" \
-	"is_sink_curr_from_ref_volt_cir_en: %u\n"
-
-static ssize_t debugfs_spkr_get_configuration(struct file *filp,
-					      char __user *ubuf,
-					      size_t cnt, loff_t *ppos)
-{
-	struct spkr_config_mode type;
-	int rc = pmic_get_spkr_configuration(&type);
-
-	if (!rc) {
-		/* Hopefully, 100 additional chars is enough. The number is
-		 * calculated by having 16 elements with up to 5 digits each
-		 * and then doubling it for paranoia's sake.  In any case,
-		 * snprintf will truncate, so no danger of oops or panic.
-		 */
-		char speaker_configuration_dump_buf[
-			sizeof(debugfs_speaker_configuration_format_str) + 200];
-		int bytes_copied = snprintf(speaker_configuration_dump_buf,
-				sizeof(speaker_configuration_dump_buf),
-				debugfs_speaker_configuration_format_str,
-				type.is_right_chan_en,
-				type.is_left_chan_en,
-				type.is_right_left_chan_added,
-				type.is_stereo_en,
-				type.is_usb_with_hpf_20hz,
-				type.is_mux_bypassed,
-				type.is_hpf_en,
-				type.is_sink_curr_from_ref_volt_cir_en,
-				type.is_right_chan_en,
-				type.is_left_chan_en,
-				type.is_right_left_chan_added,
-				type.is_stereo_en,
-				type.is_usb_with_hpf_20hz,
-				type.is_mux_bypassed,
-				type.is_hpf_en,
-				type.is_sink_curr_from_ref_volt_cir_en);
-
-		if (bytes_copied > cnt) {
-			rc = -EINVAL;
-			goto out_err;
-		}
-
-		rc = (int)simple_read_from_buffer(ubuf, cnt, ppos,
-				speaker_configuration_dump_buf, bytes_copied);
-		if (rc < 0)
-			goto out_err;
-
-		printk(KERN_INFO "%s: succeeded, (%d)%d bytes copied\n%s",
-			__func__, rc, bytes_copied,
-			speaker_configuration_dump_buf);
-	}
-out_err:
-	if (rc < 0)
-		printk(KERN_ERR "%s: ERROR! rc: %d(%#x)\n", __func__, rc, rc);
-
-	return rc;
-}
-
-#define debugfs_spkr_set_configuration_format_str "%u,%u,%u,%u,%u,%u,%u,%u"
-
-static ssize_t debugfs_spkr_set_configuration(struct file *filp,
-		const char __user *ubuf,
-		size_t cnt, loff_t *ppos)
-{
-	char buf[100]; /* 8 unsigned ints + paranoia */
-	struct spkr_config_mode t;
-	int rc;
-
-	if (cnt >= sizeof(buf))
-		return -EINVAL;
-
-	if (copy_from_user(&buf, ubuf, cnt))
-		return -EFAULT;
-
-	buf[cnt] = 0;
-
-	rc = sscanf(buf, debugfs_spkr_set_configuration_format_str,
-		    &t.is_right_chan_en,
-		    &t.is_left_chan_en,
-		    &t.is_right_left_chan_added,
-		    &t.is_stereo_en,
-		    &t.is_usb_with_hpf_20hz,
-		    &t.is_mux_bypassed,
-		    &t.is_hpf_en,
-		    &t.is_sink_curr_from_ref_volt_cir_en);
-
-	if (rc < 8) {
-		printk(KERN_ERR "%s: snprintf failed arg convert"
-				" after arg #%d on buf %s\n",
-			__func__, rc, buf);
-		return -EINVAL;
-	}
-
-	rc = pmic_set_spkr_configuration(&t);
-	if (!rc)
-		printk(KERN_INFO "%s: succeeded, %s\n", __func__, buf);
-	else
-		printk(KERN_ERR
-			"%s: set_spkr_configuration error %d(%#x), buf: %s\n",
-			__func__, rc, rc, buf);
-
-	return rc < 0 ? rc : cnt;
-}
-
-static const struct file_operations debugfs_spkr_configuration_fops = {
-	.open = debugfs_spkr_configuration_open,
-	.read = debugfs_spkr_get_configuration,
-	.write = debugfs_spkr_set_configuration,
-};
-
-static int debugfs_mic_en(void *data, u64 val)
-{
-	int rc = pmic_mic_en((const unsigned char)val);
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
-}
-
-static int debugfs_mic_is_en(void *data, u64 *val)
-{
-	unsigned char enabled;
-	int rc = pmic_mic_is_en(&enabled);
-
-	if (!rc)
-		*val = (u64)enabled;
-
-	debugfs_log_return_status(rc, __func__, *val);
-	return rc;
-}
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_mic_en_fops,
-			debugfs_mic_is_en,
-			debugfs_mic_en,
-			"%llu\n");
-
-static int debugfs_mic_set_volt(void *data, u64 val)
-{
-	int rc = pmic_mic_set_volt((const enum mic_volt)val);
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
-}
-
-static int debugfs_mic_get_volt(void *data, u64 *val)
-{
-	enum mic_volt voltage;
-	int rc = pmic_mic_get_volt(&voltage);
-
-	if (!rc)
-		*val = (u64)voltage;
-
-	debugfs_log_return_status(rc, __func__, *val);
-	return rc;
-}
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_mic_volt_fops,
-			debugfs_mic_get_volt,
-			debugfs_mic_set_volt,
-			"%llu\n");
-
-static uint16_t debugfs_flash_led_milliamps;
-static int debugfs_flash_led_set_current_execute(void *data, u64 val)
-{
-	int rc = pmic_flash_led_set_current((const uint16_t)val);
-
-	if (!rc)
-		debugfs_flash_led_milliamps = (const uint16_t)val;
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
-}
-
-static int debugfs_flash_led_set_current_get_cached(void *data, u64 *val)
-{
-	*val = (u64)debugfs_flash_led_milliamps;
-
-	debugfs_log_return_status(0, __func__, *val);
-	return 0;
-}
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_flash_led_current_fops,
-			debugfs_flash_led_set_current_get_cached,
-			debugfs_flash_led_set_current_execute,
-			"%llu\n");
-
-static uint16_t debugfs_lcd_intensity;
-static int debugfs_set_lcd_intensity(void *data, u64 val)
-{
-	int rc = pmic_set_led_intensity(LED_LCD, (const uint16_t)val);
-
-	if (!rc)
-		debugfs_lcd_intensity = (const uint16_t)val;
-
-	debugfs_log_return_status(rc, __func__, val);
-	return rc;
-}
-
-static int debugfs_set_lcd_intensity_get_cached(void *data, u64 *val)
-{
-	*val = (u64)debugfs_lcd_intensity;
-
-	debugfs_log_return_status(0, __func__, *val);
-	return 0;
-}
-
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_set_lcd_intensity_fops,
-			debugfs_set_lcd_intensity_get_cached,
-			debugfs_set_lcd_intensity,
-			"%llu\n");
-
-static int __init debugfs_speaker_init(void)
-{
-	struct dentry *dent = debugfs_create_dir("pmic", NULL);
-
-	if (IS_ERR(dent)) {
-		printk(KERN_ERR "%s: debugfs_create_dir fail, error %ld\n",
-			__func__, PTR_ERR(dent));
-		return (int)PTR_ERR(dent);
-	}
-	debugfs_create_file("spkr_left_en", 0644, dent, (void *)LEFT_SPKR,
-				&debugfs_spkr_en_chan_fops);
-	debugfs_create_file("spkr_right_en", 0644, dent, (void *)RIGHT_SPKR,
-				&debugfs_spkr_en_chan_fops);
-	debugfs_create_file("spkr_left_gain", 0644, dent, (void *)LEFT_SPKR,
-				&debugfs_spkr_gain_fops);
-	debugfs_create_file("spkr_right_gain", 0644, dent, (void *)RIGHT_SPKR,
-				&debugfs_spkr_gain_fops);
-	debugfs_create_file("spkr_cmd", 0644, dent, NULL,
-				&debugfs_speaker_cmd_fops);
-	debugfs_create_file("spkr_config", 0644, dent, NULL,
-				&debugfs_spkr_configuration_fops);
-	debugfs_create_file("mic_en", 0644, dent, NULL, &debugfs_mic_en_fops);
-	debugfs_create_file("mic_volt", 0644, dent, NULL,
-				&debugfs_mic_volt_fops);
-	debugfs_create_file("flash_led_current", 0644, dent, NULL,
-				&debugfs_flash_led_current_fops);
-	debugfs_create_file("set_lcd_intensity", 0644, dent, NULL,
-				&debugfs_set_lcd_intensity_fops);
-	return 0;
-}
-
-late_initcall(debugfs_speaker_init);
-
-static int __init speaker_init(void)
-{
-	/* try to connect initially, ignore any errors for now */
-	check_and_connect();
-	return 0;
-}
-
-device_initcall(speaker_init);
-#endif
+EXPORT_SYMBOL(pmic_spkr_is_stereo_en);
