@@ -297,6 +297,7 @@ enum data_direction {
 	DATA_DIR_TO_HOST,
 	DATA_DIR_NONE
 };
+int can_stall = 1;
 
 struct fsg_dev {
 	struct usb_function function;
@@ -431,6 +432,20 @@ static void dump_cdb(struct fsg_dev *fsg)
 #endif /* VERBOSE_DEBUG */
 #endif /* DUMP_MSGS */
 
+static int fsg_set_halt(struct fsg_dev *fsg, struct usb_ep *ep)
+{
+	const char  *name;
+
+	if (ep == fsg->bulk_in)
+		name = "bulk-in";
+	else if (ep == fsg->bulk_out)
+		name = "bulk-out";
+	else
+		return -1;
+
+	DBG(fsg, "%s set halt\n", name);
+	return usb_ep_set_halt(ep);
+}
 
 /*-------------------------------------------------------------------------*/
 
@@ -636,12 +651,15 @@ static int fsg_function_setup(struct usb_function *f,
 {
 	struct fsg_dev	*fsg = func_to_dev(f);
 	struct usb_composite_dev *cdev = fsg->cdev;
+	struct usb_request	*req = cdev->req;
 	int			value = -EOPNOTSUPP;
 	u16			w_index = le16_to_cpu(ctrl->wIndex);
 	u16			w_value = le16_to_cpu(ctrl->wValue);
 	u16			w_length = le16_to_cpu(ctrl->wLength);
 
 	DBG(fsg, "fsg_function_setup\n");
+	if (w_index != intf_desc.bInterfaceNumber)
+		return value;
 	/* Handle Bulk-only class-specific requests */
 	if ((ctrl->bRequestType & USB_TYPE_MASK) == USB_TYPE_CLASS) {
 	DBG(fsg, "USB_TYPE_CLASS\n");
@@ -650,7 +668,7 @@ static int fsg_function_setup(struct usb_function *f,
 			if (ctrl->bRequestType != (USB_DIR_OUT |
 					USB_TYPE_CLASS | USB_RECIP_INTERFACE))
 				break;
-			if (w_index != 0 || w_value != 0) {
+			if (w_value != 0) {
 				value = -EDOM;
 				break;
 			}
@@ -658,15 +676,14 @@ static int fsg_function_setup(struct usb_function *f,
 			/* Raise an exception to stop the current operation
 			 * and reinitialize our state. */
 			DBG(fsg, "bulk reset request\n");
-			raise_exception(fsg, FSG_STATE_RESET);
-			value = DELAYED_STATUS;
+			value = 0;
 			break;
 
 		case USB_BULK_GET_MAX_LUN_REQUEST:
 			if (ctrl->bRequestType != (USB_DIR_IN |
 					USB_TYPE_CLASS | USB_RECIP_INTERFACE))
 				break;
-			if (w_index != 0 || w_value != 0) {
+			if (w_value != 0) {
 				value = -EDOM;
 				break;
 			}
@@ -683,6 +700,12 @@ static int fsg_function_setup(struct usb_function *f,
 			"%02x.%02x v%04x i%04x l%u\n",
 			ctrl->bRequestType, ctrl->bRequest,
 			le16_to_cpu(ctrl->wValue), w_index, w_length);
+	if (value >= 0) {
+		req->length = value;
+		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
+		if (value < 0)
+			req->status = 0;
+	}
 	return value;
 }
 
@@ -1464,6 +1487,26 @@ static int do_mode_select(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 }
 
 
+static int halt_bulk_in_endpoint(struct fsg_dev *fsg)
+{
+	int     rc;
+
+	rc = fsg_set_halt(fsg, fsg->bulk_in);
+	if (rc == -EAGAIN)
+		DBG(fsg, "delayed bulk-in endpoint halt\n");
+	while (rc != 0) {
+		if (rc != -EAGAIN) {
+			DBG(fsg, "usb_ep_set_halt -> %d\n", rc);
+			rc = 0;
+			break;
+		}
+		/* Wait for a short time and then try again */
+		if (msleep_interruptible(100) != 0)
+			return -EINTR;
+		rc = usb_ep_set_halt(fsg->bulk_in);
+	}
+	return rc;
+}
 /*-------------------------------------------------------------------------*/
 #if 0
 static int write_zero(struct fsg_dev *fsg)
@@ -1543,6 +1586,7 @@ static int finish_reply(struct fsg_dev *fsg)
 {
 	struct fsg_buffhd	*bh = fsg->next_buffhd_to_fill;
 	int			rc = 0;
+	int 			i;
 
 	switch (fsg->data_dir) {
 	case DATA_DIR_NONE:
@@ -1563,9 +1607,23 @@ static int finish_reply(struct fsg_dev *fsg)
 					&bh->inreq_busy, &bh->state);
 			fsg->next_buffhd_to_fill = bh->next;
 		} else {
+			if (can_stall) {
+				bh->state = BUF_STATE_EMPTY;
+				for (i = 0; i < NUM_BUFFERS; ++i) {
+					struct fsg_buffhd
+							*bh = &fsg->buffhds[i];
+					while (bh->state != BUF_STATE_EMPTY) {
+						rc = sleep_thread(fsg);
+						if (rc)
+							return rc;
+					}
+				}
+				rc = halt_bulk_in_endpoint(fsg);
+			} else {
 			start_transfer(fsg, fsg->bulk_in, bh->inreq,
 					&bh->inreq_busy, &bh->state);
 			fsg->next_buffhd_to_fill = bh->next;
+			}
 #if 0
 			/* this is unnecessary, and was causing problems with MacOS */
 			if (bh->inreq->length > 0)

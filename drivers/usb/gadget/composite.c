@@ -809,6 +809,10 @@ unknown:
 		 */
 		if ((ctrl->bRequestType & USB_RECIP_MASK)
 				== USB_RECIP_INTERFACE) {
+			struct usb_configuration	*config;
+			config = cdev->config;
+			if (w_index >= config->next_interface_id)
+				goto done;
 			f = cdev->config->interface[intf];
 			if (f && f->setup)
 				value = f->setup(f, ctrl);
