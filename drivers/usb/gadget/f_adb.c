@@ -295,6 +295,9 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 
 	DBG(cdev, "adb_read(%d)\n", count);
 
+	if (!dev)
+		return -EIO;
+
 	if (_lock(&dev->read_excl))
 		return -EBUSY;
 
@@ -397,6 +400,9 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 
 	DBG(cdev, "adb_write(%d)\n", count);
 
+	if (!dev)
+		return -EIO;
+
 	if (_lock(&dev->write_excl))
 		return -EBUSY;
 
@@ -455,6 +461,9 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 static int adb_open(struct inode *ip, struct file *fp)
 {
 	printk(KERN_INFO "adb_open\n");
+	if (!_adb_dev)
+		return -EIO;
+
 	if (_lock(&_adb_dev->open_excl))
 		return -EBUSY;
 
@@ -469,7 +478,8 @@ static int adb_open(struct inode *ip, struct file *fp)
 static int adb_release(struct inode *ip, struct file *fp)
 {
 	printk(KERN_INFO "adb_release\n");
-	_unlock(&_adb_dev->open_excl);
+	if (_adb_dev)
+		_unlock(&_adb_dev->open_excl);
 	return 0;
 }
 
