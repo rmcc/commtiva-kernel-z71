@@ -106,11 +106,32 @@ static struct usb_composition usb_func_composition[] = {
 		/* MSC */
 		.functions	    = 0x02, /* 0010 */
 	},
+	{
+		.product_id         = 0xF005,
+		/* MODEM ONLY */
+		.functions	    = 0x03,
+	},
+
+	{
+		.product_id         = 0x8080,
+		/* DIAG + MODEM */
+		.functions	    = 0x34,
+	},
+	{
+		.product_id         = 0x8082,
+		/* DIAG + ADB + MODEM */
+		.functions	    = 0x0314,
+	},
+	{
+		.product_id         = 0x8085,
+		/* DIAG + ADB + MODEM + NMEA + MSC*/
+		.functions	    = 0x25314,
+	},
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,
-	.product_id	= 0x9015,
-	.functions	= 0x12,
+	.product_id	= 0x8085,
+	.functions	= 0x25314,
 	.version	= 0x0100,
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
