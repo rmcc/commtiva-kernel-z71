@@ -223,7 +223,6 @@ static void adb_complete_in(struct usb_ep *ep, struct usb_request *req)
 static void adb_complete_out(struct usb_ep *ep, struct usb_request *req)
 {
 	struct adb_dev *dev = _adb_dev;
-
 	if (req->status != 0) {
 		dev->error = 1;
 		req_put(dev, &dev->rx_idle, req);
@@ -588,6 +587,8 @@ static void adb_function_disable(struct usb_function *f)
 	DBG(cdev, "adb_function_disable\n");
 	dev->online = 0;
 	dev->error = 1;
+	usb_ep_fifo_flush(dev->ep_in);
+	usb_ep_fifo_flush(dev->ep_out);
 	usb_ep_disable(dev->ep_in);
 	usb_ep_disable(dev->ep_out);
 
