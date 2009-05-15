@@ -53,6 +53,9 @@
 #include "devices.h"
 #include "socinfo.h"
 #include "msm-keypad-devices.h"
+#ifdef CONFIG_USB_ANDROID
+#include <linux/usb/android.h>
+#endif
 #include "pm.h"
 
 #define MSM_PMEM_MDP_SIZE	0x800000
@@ -73,6 +76,7 @@ static struct resource smc91x_resources[] = {
 	},
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
 	.nluns          = 0x02,
 	.buf_size       = 16384,
@@ -88,7 +92,40 @@ static struct platform_device mass_storage_device = {
 		.platform_data          = &usb_mass_storage_pdata,
 	},
 };
-
+#endif
+#ifdef CONFIG_USB_ANDROID
+/* dynamic composition */
+static struct usb_composition usb_func_composition[] = {
+	{
+		.product_id         = 0x9015,
+		/* MSC + ADB */
+		.functions	    = 0x12 /* 10010 */
+	},
+	{
+		.product_id         = 0xF000,
+		/* MSC */
+		.functions	    = 0x02, /* 0010 */
+	},
+};
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x05C6,
+	.product_id	= 0x9015,
+	.functions	= 0x12,
+	.version	= 0x0100,
+	.compositions   = usb_func_composition,
+	.num_compositions = ARRAY_SIZE(usb_func_composition),
+	.product_name	= "Qualcomm HSUSB Device",
+	.manufacturer_name = "Qualcomm Incorporated",
+	.nluns = 1,
+};
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+#endif
 static struct platform_device smc91x_device = {
 	.name		= "smc91x",
 	.id		= 0,
@@ -96,6 +133,7 @@ static struct platform_device smc91x_device = {
 	.resource	= smc91x_resources,
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_function_map usb_functions_map[] = {
 	{"diag", 0},
 	{"adb", 1},
@@ -148,8 +186,10 @@ static struct usb_composition usb_func_composition[] = {
 	},
 
 };
+#endif
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
+#ifdef CONFIG_USB_FUNCTION
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
 	.vendor_id          = 0x5c6,
@@ -160,6 +200,8 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
+	.config_gpio    = NULL,
+#endif
 };
 
 #define SND(desc, num) { .name = #desc, .id = num }
@@ -668,8 +710,15 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
 	&msm_device_hsusb_otg,
 	&msm_device_hsusb_host,
+#if defined(CONFIG_USB_FUNCTION) || defined(CONFIG_USB_ANDROID)
 	&msm_device_hsusb_peripheral,
+#endif
+#ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
+#endif
+#ifdef CONFIG_USB_ANDROID
+	&android_usb_device,
+#endif
 	&msm_device_i2c,
 	&smc91x_device,
 	&msm_device_tssc,

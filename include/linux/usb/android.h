@@ -16,6 +16,11 @@
  */
 #ifndef	__LINUX_USB_ANDROID_H
 #define	__LINUX_USB_ANDROID_H
+#define ANDROID_ADB		0x0001
+#define ANDROID_MSC		0x0002
+#define ANDROID_ACM_MODEM	0x0003
+#define ANDROID_DIAG		0x0004
+#define ANDROID_ACM_NMEA	0x0005
 
 struct android_usb_platform_data {
 	/* USB device descriptor fields */
@@ -24,10 +29,16 @@ struct android_usb_platform_data {
 	/* Default product ID. */
 	__u16 product_id;
 
+	/* Default function map. */
+	unsigned long functions;
+
 	/* Product ID when adb is enabled. */
 	__u16 adb_product_id;
 
 	__u16 version;
+	/* Fields for composition switch support */
+	struct usb_composition *compositions;
+	int num_compositions;
 
 	char *product_name;
 	char *manufacturer_name;
@@ -35,6 +46,11 @@ struct android_usb_platform_data {
 
 	/* number of LUNS for mass storage function */
 	int nluns;
+};
+/* composition support structure */
+struct usb_composition {
+	__u16   product_id;
+	unsigned long functions;
 };
 
 #endif	/* __LINUX_USB_ANDROID_H */
