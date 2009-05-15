@@ -733,6 +733,27 @@ config USB_ANDROID_DIAG
 	  Say "y" to link the driver statically, or "m" to build
 	  as a part of "g_android"
 
+config USB_F_SERIAL
+	tristate "generic serial function driver"
+	depends on USB_ANDROID
+	default n
+	help
+	  Say "y" to link the driver statically, or "m" to build
+	  as a part of "g_android"
+
+config MODEM_SUPPORT
+	tristate "modem support in generic serial function driver"
+	depends on USB_F_SERIAL
+	default n
+	help
+          This feature enables the modem functionality in the
+	  generic serial.
+	  adds interrupt endpoint support to send modem notifications
+	  to host.
+	  adds CDC descriptors to enumerate the generic serial as MODEM.
+	  adds CDC class requests to configure MODEM line settings.
+	  Say "y" to enable MODEM support in the generic serial driver.
+
 config USB_CDC_COMPOSITE
 	tristate "CDC Composite Device (Ethernet and ACM)"
 	depends on NET
