@@ -128,11 +128,41 @@ static int  android_bind_config(struct usb_configuration *c)
 	unsigned long n;
 	acm_func_cnt = 0;
 	printk(KERN_DEBUG "android_bind_config\n");
+	n = dev->functions;
+	while (n) {
+		switch (n & 0x0F) {
+		case ANDROID_ADB:
+			ret = adb_function_add(dev->cdev, c);
+			if (ret)
+				return ret;
+			dev->adb_enabled = 1;
+			break;
+		case ANDROID_MSC:
+			ret = mass_storage_function_add(dev->cdev, c,
+								dev->nluns);
+			if (ret)
+				return ret;
+			break;
+		case ANDROID_ACM_MODEM:
+			ret = acm_bind_config(c, 0);
+			if (ret)
+				return ret;
+			acm_func_cnt++;
+			break;
+		case ANDROID_ACM_NMEA:
+			ret = acm_bind_config(c, 1);
+			if (ret)
+				return ret;
+			acm_func_cnt++;
+			break;
+		default:
+			ret = -EINVAL;
+			return ret;
+		}
+		n = n >> 4;
+	}
+	return ret;
 
-	ret = mass_storage_function_add(dev->cdev, c, dev->nluns);
-	if (ret)
-		return ret;
-	return adb_function_add(dev->cdev, c);
 }
 
 static struct usb_configuration android_config_driver = {
@@ -144,7 +174,7 @@ static struct usb_configuration android_config_driver = {
 	.bMaxPower	= 0x80, /* 250ma */
 };
 
-static void android_unbind(struct usb_composite_dev *cdev)
+static int android_unbind(struct usb_composite_dev *cdev)
 {
 	struct android_dev *dev = _android_dev;
 
@@ -153,6 +183,7 @@ static void android_unbind(struct usb_composite_dev *cdev)
 	if (acm_func_cnt)
 		gserial_cleanup();
 
+	return 0;
 }
 static int  android_bind(struct usb_composite_dev *cdev)
 {
