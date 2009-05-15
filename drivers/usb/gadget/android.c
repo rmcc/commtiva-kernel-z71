@@ -37,6 +37,9 @@
 #include "f_mass_storage.h"
 #include "f_adb.h"
 #include "u_serial.h"
+#ifdef CONFIG_USB_ANDROID_DIAG
+#include "f_diag.h"
+#endif
 
 #include "gadget_chips.h"
 
@@ -155,6 +158,13 @@ static int  android_bind_config(struct usb_configuration *c)
 				return ret;
 			acm_func_cnt++;
 			break;
+#ifdef CONFIG_USB_ANDROID_DIAG
+		case ANDROID_DIAG:
+			ret = diag_function_add(c, dev->pdata->serial_number);
+			if (ret)
+				return ret;
+			break;
+#endif
 		default:
 			ret = -EINVAL;
 			return ret;

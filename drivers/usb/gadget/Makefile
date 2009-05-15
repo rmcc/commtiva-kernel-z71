@@ -26,6 +26,10 @@ obj-$(CONFIG_USB_MSM_72K)	+= msm72k_udc.o
 #
 # USB gadget drivers
 #
+ifeq ($(CONFIG_USB_ANDROID_DIAG),y)
+F_DIAG = f_diag.o
+endif
+
 g_zero-objs			:= zero.o
 g_ether-objs			:= ether.o
 g_serial-objs			:= serial.o
@@ -35,7 +39,7 @@ g_file_storage-objs		:= file_storage.o
 g_printer-objs			:= printer.o
 g_cdc-objs			:= cdc2.o
 g_android-objs			:= android.o f_adb.o f_mass_storage.o \
-					u_serial.o f_acm.o
+					u_serial.o f_acm.o $(F_DIAG)
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
 obj-$(CONFIG_USB_ETH)		+= g_ether.o

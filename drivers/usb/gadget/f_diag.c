@@ -24,6 +24,7 @@
 
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
+#include <linux/workqueue.h>
 
 #define WRITE_COMPLETE 0
 #define READ_COMPLETE  0
@@ -137,10 +138,9 @@ static void diag_function_unbind(struct usb_configuration *c,
 		usb_free_descriptors(f->hs_descriptors);
 	usb_free_descriptors(f->descriptors);
 }
-void usb_config_work_func(struct work_struct *work)
+static void usb_config_work_func(struct work_struct *work)
 {
 	struct diag_context *ctxt = &_context;
-	int ret;
 	if ((ctxt->operations) &&
 		(ctxt->operations->diag_connect))
 			ctxt->operations->diag_connect();
@@ -225,9 +225,8 @@ static int diag_function_set_alt(struct usb_function *f,
 static void diag_function_disable(struct usb_function *f)
 {
 	struct diag_context  *dev = func_to_dev(f);
-	struct usb_composite_dev *cdev = f->config->cdev;
 
-	printk(KERN_INFO, "diag_function_disable\n");
+	printk(KERN_INFO "diag_function_disable\n");
 	dev->diag_configured = 0;
 	if (dev->in) {
 		usb_ep_fifo_flush(dev->in);
@@ -362,12 +361,12 @@ static struct diag_req_entry *diag_alloc_req_entry(struct usb_ep *ep,
 
 	req = kmalloc(sizeof(struct diag_req_entry), kmalloc_flags);
 	if (req == NULL)
-		return -ENOMEM;
+		return NULL;
 
 	req->usb_req  =  usb_ep_alloc_request(ep, GFP_KERNEL);
 	if (req->usb_req == NULL) {
 		kfree(req);
-		return -ENOMEM;
+		return NULL;
 	}
 	req->usb_req->context = req;
 	return req;
@@ -493,11 +492,10 @@ static void diag_read_complete(struct usb_ep *ep ,
 				req->buf, req->actual, req->status);
 }
 int diag_function_add(struct usb_configuration *c,
-				const char *serial_number)
+				char *serial_number)
 {
 	struct diag_context *dev = &_context;
 	int ret;
-	int r;
 
 	printk(KERN_INFO "%s\n", __func__);
 	spin_lock_init(&_context.dev_lock);
