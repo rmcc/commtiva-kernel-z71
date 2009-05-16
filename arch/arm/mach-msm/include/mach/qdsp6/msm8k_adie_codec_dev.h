@@ -81,6 +81,28 @@
 #define DAL_ADIE_CODEC_FTM_EAR_RX             0x01074103
 #define DAL_ADIE_CODEC_FTM_SPKR_RX            0x01074102
 
-/* Path IDs used for Line in -> AuxPGA -> Line Out Stereo Mode*/
-#define DAL_ADIE_CODEC_LINEIN_AUX_LINEOUT     0x01074100
+/* Path IDs for Loopback */
 
+/* Path IDs used for Line in -> AuxPGA -> Line Out Stereo Mode*/
+#define DAL_ADIE_CODEC_AUXPGA_LINEOUT_STEREO_LB      0x01074100
+
+/* Line in -> AuxPGA -> LineOut Mono */
+#define DAL_ADIE_CODEC_AUXPGA_LINEOUT_MONO_LB 0x01073d82
+/* Line in -> AuxPGA -> Stereo Headphone */
+#define DAL_ADIE_CODEC_AUXPGA_HDPH_STEREO_LB  0x01074109
+/* Line in -> AuxPGA -> Mono Headphone */
+#define DAL_ADIE_CODEC_AUXPGA_HDPH_MONO_LB    0x01073d85
+
+/* Line in -> AuxPGA -> Earpiece */
+#define DAL_ADIE_CODEC_AUXPGA_EAP_LB          0x01073d81
+/* Line in -> AuxPGA -> AuxOut */
+#define DAL_ADIE_CODEC_AUXPGA_AUXOUT_LB       0x01073d86
+
+
+/* Concurrency Profiles */
+#define DAL_ADIE_CODEC_SPKR_STEREO_HDPH_MONO_RX  0x01073d83
+
+#define DAL_ADIE_CODEC_SPKR_MONO_HDPH_MONO_RX    0x01073d84
+
+#define DAL_ADIE_CODEC_SPKR_MONO_HDPH_STEREO_RX  0x01073d88
+#define DAL_ADIE_CODEC_SPKR_STEREO_HDPH_STEREO_RX  0x01073d89

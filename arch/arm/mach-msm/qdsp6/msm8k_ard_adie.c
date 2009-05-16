@@ -56,6 +56,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/slab.h>
 
 #include <mach/pmic.h>
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
@@ -66,6 +67,13 @@
 #include <mach/qdsp6/msm8k_ard_clk.h>
 
 struct adie_state_struct_type	adie_state;
+static int pmic_is_stereo;
+
+static u32 adie_spkr_mono_ref1_cnt;
+static u32 adie_spkr_stereo_ref1_cnt;
+
+static u32 adie_spkr_mono_ref2_cnt;
+static u32 adie_spkr_stereo_ref2_cnt;
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "adie: " fmt, ##args)
@@ -97,8 +105,10 @@ u32 get_path_id(u32 dev_id)
 		adie_path_id = DAL_ADIE_CODEC_SPEAKER_TX;
 		break;
 	case CAD_HW_DEVICE_ID_SPKR_PHONE_MONO:
-	case CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO:
 		adie_path_id = DAL_ADIE_CODEC_SPEAKER_RX;
+		break;
+	case CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO:
+		adie_path_id = DAL_ADIE_CODEC_SPEAKER_STEREO_RX;
 		break;
 	case CAD_HW_DEVICE_ID_TTY_HEADSET_MIC:
 		adie_path_id = DAL_ADIE_CODEC_TTY_HEADSET_TX;
@@ -106,9 +116,34 @@ u32 get_path_id(u32 dev_id)
 	case CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR:
 		adie_path_id = DAL_ADIE_CODEC_TTY_HEADSET_RX;
 		break;
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX:
+		adie_path_id = DAL_ADIE_CODEC_SPKR_STEREO_HDPH_MONO_RX;
+		break;
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX:
+		adie_path_id = DAL_ADIE_CODEC_SPKR_MONO_HDPH_MONO_RX;
+		break;
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX:
+		adie_path_id = DAL_ADIE_CODEC_SPKR_MONO_HDPH_STEREO_RX;
+		break;
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX:
+		adie_path_id = DAL_ADIE_CODEC_SPKR_STEREO_HDPH_STEREO_RX;
+		break;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO_LB:
+		adie_path_id = DAL_ADIE_CODEC_AUXPGA_HDPH_STEREO_LB;
+		break;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO_LB:
+		adie_path_id = DAL_ADIE_CODEC_AUXPGA_HDPH_MONO_LB;
+		break;
+	case CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB:
+		adie_path_id = DAL_ADIE_CODEC_AUXPGA_LINEOUT_STEREO_LB;
+		break;
+	case CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB:
+		adie_path_id = DAL_ADIE_CODEC_AUXPGA_LINEOUT_MONO_LB;
+		break;
 	case CAD_HW_DEVICE_ID_BT_SCO_MIC:
 	case CAD_HW_DEVICE_ID_BT_SCO_SPKR:
 	case CAD_HW_DEVICE_ID_BT_A2DP_SPKR:
+	case CAD_HW_DEVICE_ID_BT_A2DP_TX:
 	default:
 		pr_err("ARD ADIE Paths not supported for dev_id %d\n", dev_id);
 		break;
@@ -148,6 +183,9 @@ s32 adie_init(void)
 	dal_rc = CAD_RES_SUCCESS;
 	dev_type = 0;
 
+	/* NULL is ok, as it will not use the param. */
+	if (pmic_spkr_is_stereo_en(NULL))
+		pmic_is_stereo = 1;
 
 	dal_rc = daldevice_attach(DALDEVICEID_ADIE_CODEC, ADIE_CODEC_PORT_NAME,
 			ADIE_CODEC_CPU, &adie_state.adie_handle);
@@ -164,9 +202,13 @@ s32 adie_init(void)
 	}
 
 	/* Initialize the PMIC MIC and SPKR */
-	pmic_set_speaker_gain(SPKR_GAIN_PLUS04DB);
+	if (pmic_is_stereo) {
+		pmic_spkr_set_gain(LEFT_SPKR, SPKR_GAIN_PLUS12DB);
+		pmic_spkr_set_gain(RIGHT_SPKR, SPKR_GAIN_PLUS12DB);
+	} else
+		pmic_set_speaker_gain(SPKR_GAIN_PLUS12DB);
+
 	pmic_mic_set_volt(MIC_VOLT_1_80V);
-	pmic_speaker_cmd(SPKR_ENABLE);
 
 	return dal_rc;
 }
@@ -188,8 +230,6 @@ s32 adie_dinit(void)
 		adie_state.adie_path_type[dev_type].enable_request = ADIE_FALSE;
 		adie_state.adie_path_type[dev_type].state = ADIE_STATE_RESET;
 	}
-
-	pmic_speaker_cmd(SPKR_DISABLE);
 
 	adie_state.adie_opened = ADIE_FALSE;
 
@@ -225,17 +265,20 @@ s32 adie_close(u32 dev_type)
 
 	rc = CAD_RES_SUCCESS;
 
-	if (adie_state.adie_opened != ADIE_TRUE)
-		goto done;
-
-	/* Do not close if at least 1 path is still enabled */
-	if (((adie_state.adie_path_type[0]).enabled != ADIE_TRUE) &&
-		((adie_state.adie_path_type[1]).enabled != ADIE_TRUE)) {
-
-		daldevice_close(adie_state.adie_handle);
-		adie_state.adie_opened = ADIE_FALSE;
+	if (adie_state.adie_opened == ADIE_TRUE) {
+		if (((adie_state.adie_path_type[CAD_RX_DEVICE]).enabled
+					== ADIE_TRUE) ||
+			((adie_state.adie_path_type[CAD_TX_DEVICE]).enabled
+					== ADIE_TRUE) ||
+			((adie_state.adie_path_type[CAD_AUXPGA_DEVICE]).enabled
+					== ADIE_TRUE)) {
+			/* Do not close if at least 1 path is still enabled */
+		} else {
+			rc = daldevice_close(adie_state.adie_handle);
+			adie_state.adie_opened = ADIE_FALSE;
+		}
 	}
-done:
+
 	return rc;
 }
 
@@ -243,18 +286,16 @@ s32 adie_enable(u32 dev_type, u32 dev_id)
 {
 	s32 rc = CAD_RES_SUCCESS;
 
-	if (adie_state.adie_path_type[dev_type].enabled == ADIE_TRUE) {
+	if (adie_state.adie_path_type[dev_type].enabled != ADIE_TRUE) {
+		adie_state.adie_path_type[dev_type].enable_request = ADIE_TRUE;
+		rc = adie_state_control(dev_type, dev_id);
+		if (rc != CAD_RES_SUCCESS)
+			pr_err("ADIE STATE M/C FAILED, dev_id = %d\n", dev_id);
+		else
+			D("ADIE ENABLED - PATH %d\n", dev_type);
+	} else
 		rc = CAD_RES_FAILURE;
-		goto done;
-	}
-	adie_state.adie_path_type[dev_type].enable_request = ADIE_TRUE;
 
-	rc = adie_state_control(dev_type, dev_id);
-	if (rc != CAD_RES_SUCCESS)
-		pr_err("ADIE STATE M/C FAILED, dev_id = %d\n", dev_id);
-	else
-		D("ADIE ENABLED - PATH %d\n", dev_type);
-done:
 	return rc;
 }
 
@@ -262,20 +303,19 @@ s32 adie_disable(u32 dev_type, u32 dev_id)
 {
 	s32		rc = CAD_RES_SUCCESS;
 
-	if (adie_state.adie_path_type[dev_type].enabled == ADIE_FALSE) {
+	if (adie_state.adie_path_type[dev_type].enabled != ADIE_FALSE) {
+		adie_state.adie_path_type[dev_type].enabled = ADIE_FALSE;
+
+		rc = adie_state_control(dev_type, dev_id);
+		if (rc != CAD_RES_SUCCESS)
+			pr_err("ADIE STATE M/C FAILED, dev_id = %d\n", dev_id);
+		else
+			D("ADIE DISABLED\n");
+	} else {
 		pr_err("ADIE ALREADY DISABLED, dev_id = %d\n", dev_id);
 		rc = CAD_RES_FAILURE;
-		goto done;
 	}
 
-	adie_state.adie_path_type[dev_type].enabled = ADIE_FALSE;
-
-	rc = adie_state_control(dev_type, dev_id);
-	if (rc != CAD_RES_SUCCESS)
-		pr_err("ADIE STATE M/C FAILED, dev_id = %d\n", dev_id);
-	else
-		D("ADIE DISABLED\n");
-done:
 	return rc;
 }
 
@@ -334,7 +374,6 @@ enum adie_state_ret_enum_type adie_state_reset(u32 dev_type, u32 dev_id)
 	if (path_type == ADIE_CODEC_RX)
 		freq_plan = 48000;
 	else {
-
 		if (g_clk_info.tx_clk_freq > 16000)
 			freq_plan = 48000;
 		else if (g_clk_info.tx_clk_freq > 8000)
@@ -381,6 +420,30 @@ done:
 	return rc;
 }
 
+static int is_speaker_mono(u32 dev_id)
+{
+	if ((dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO) ||
+		(dev_id == CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB) ||
+		(dev_id == CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX) ||
+		(dev_id == CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX))
+		return 1;
+	else
+		return 0;
+}
+
+static int is_speaker_stereo(u32 dev_id)
+{
+	if ((CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO == dev_id) ||
+		(CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB == dev_id) ||
+		(CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX
+				== dev_id) ||
+		(CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX
+				== dev_id))
+		return 1;
+	else
+		return 0;
+}
+
 enum adie_state_ret_enum_type adie_state_digital_active(u32 dev_type,
 							u32 dev_id)
 {
@@ -393,6 +456,88 @@ enum adie_state_ret_enum_type adie_state_digital_active(u32 dev_type,
 
 	path_type = get_path_type(dev_type);
 	if (adie_state.adie_path_type[dev_type].enable_request == ADIE_TRUE) {
+
+		/* Prepare the PMIC, if necessary. Configure and power on,
+		   but mute it until codec output is ready. */
+		if (path_type == ADIE_CODEC_TX)
+			if ((dev_id == CAD_HW_DEVICE_ID_HANDSET_MIC) ||
+			    (dev_id == CAD_HW_DEVICE_ID_HEADSET_MIC) ||
+			    (dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MIC))
+				pmic_mic_en(ON_CMD);
+			else
+				/* need to turn off MIC bias
+				   for TTY_HEADSET_MIC */
+				pmic_mic_en(OFF_CMD);
+		else if ((path_type == ADIE_CODEC_RX) ||
+			(path_type == ADIE_CODEC_LB)) {
+			struct spkr_config_mode scm;
+			memset(&scm, 0, sizeof(struct spkr_config_mode));
+
+			if (is_speaker_mono(dev_id)) {
+				if (!adie_spkr_mono_ref1_cnt) {
+					if (pmic_is_stereo) {
+
+						scm.is_right_chan_en = 0;
+						scm.is_left_chan_en = 1;
+						scm.is_stereo_en = 0;
+						scm.is_hpf_en = 1;
+
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 0);
+						pmic_spkr_en_mute(
+							RIGHT_SPKR, 0);
+
+						pmic_set_spkr_configuration(
+								&scm);
+
+						pmic_spkr_en(LEFT_SPKR, 1);
+						pmic_spkr_en(RIGHT_SPKR, 0);
+					} else {
+						pmic_speaker_cmd(SPKR_MUTE_ON);
+						pmic_speaker_cmd(SPKR_ENABLE);
+					}
+				}
+
+				/* keep a reference for stereo speaker.
+				   case when Rx spkr is disabled when LB speaker
+				   is already enabled. */
+				adie_spkr_mono_ref1_cnt++;
+			} else if (is_speaker_stereo(dev_id)) {
+				if (!adie_spkr_stereo_ref1_cnt) {
+					if (pmic_is_stereo) {
+
+						scm.is_right_chan_en = 1;
+						scm.is_left_chan_en = 1;
+						scm.is_stereo_en = 1;
+						scm.is_hpf_en = 1;
+
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 0);
+						pmic_spkr_en_mute(
+							RIGHT_SPKR, 0);
+
+						pmic_set_spkr_configuration(
+								&scm);
+
+						pmic_spkr_en(LEFT_SPKR, 1);
+						pmic_spkr_en(RIGHT_SPKR, 1);
+					} else {
+						pmic_speaker_cmd(SPKR_MUTE_ON);
+						pmic_speaker_cmd(SPKR_ENABLE);
+					}
+				}
+
+				/* keep a reference for stereo speaker.
+				   case when Rx spkr is disabled when LB speaker
+				   is already enabled. */
+				adie_spkr_stereo_ref1_cnt++;
+			} else {
+				pr_err("bad mode: not stereo or mono\n");
+			}
+		} else {
+			pr_err("bad path type\n");
+		}
+
 		/* Proceed to next stage */
 		dal_rc = rpc_adie_codec_proceed_to_stage(adie_state.adie_handle,
 				path_type, ADIE_CODEC_DIGITAL_ANALOG_READY);
@@ -410,6 +555,44 @@ enum adie_state_ret_enum_type adie_state_digital_active(u32 dev_type,
 		adie_state.adie_path_type[dev_type].enable_request = ADIE_FALSE;
 		rc = ADIE_STATE_RC_CONTINUE;
 	} else {
+
+		if (path_type == ADIE_CODEC_TX)
+			pmic_mic_en(OFF_CMD);
+		else if ((path_type == ADIE_CODEC_RX) ||
+				(path_type == ADIE_CODEC_LB)) {
+			if (is_speaker_mono(dev_id)) {
+
+				/* disable a speaker LB or RX */
+				adie_spkr_mono_ref1_cnt--;
+
+				/* if no active speaker ref then disable pmic */
+				if (!adie_spkr_mono_ref1_cnt) {
+					if (pmic_is_stereo) {
+						pmic_spkr_en(LEFT_SPKR, 0);
+						pmic_spkr_en(RIGHT_SPKR, 0);
+					} else
+						pmic_speaker_cmd(SPKR_DISABLE);
+				}
+
+			} else if (is_speaker_stereo(dev_id)) {
+
+				/* disable a speaker LB or RX */
+				adie_spkr_stereo_ref1_cnt--;
+
+				/* if no active speaker ref then disable pmic */
+				if (!adie_spkr_stereo_ref1_cnt) {
+					if (pmic_is_stereo) {
+						pmic_spkr_en(LEFT_SPKR, 0);
+						pmic_spkr_en(RIGHT_SPKR, 0);
+					} else
+						pmic_speaker_cmd(SPKR_DISABLE);
+				}
+			}
+		}
+
+
+
+
 		/* Proceed to digital off stage */
 		dal_rc = rpc_adie_codec_proceed_to_stage(adie_state.adie_handle,
 				path_type, ADIE_CODEC_DIGITAL_OFF);
@@ -441,26 +624,81 @@ enum adie_state_ret_enum_type adie_state_digital_analog_active(u32 dev_type,
 
 	if (adie_state.adie_path_type[dev_type].enabled == ADIE_TRUE) {
 		/* Stay in this state till teardown or reconfigure */
-		if (path_type == ADIE_CODEC_TX) {
-			pmic_mic_en(1);
-		} else if ((path_type == ADIE_CODEC_RX) &&
-			(dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO)) {
 
-			pmic_speaker_cmd(SPKR_ON);
-			pmic_spkr_en_left_chan(1);
+		if ((path_type == ADIE_CODEC_RX) ||
+			(path_type == ADIE_CODEC_LB)) {
+			if (is_speaker_mono(dev_id)) {
+				/* make sure its not already on */
+				if (!adie_spkr_mono_ref2_cnt) {
+					if (pmic_is_stereo)
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 1);
+					else
+						pmic_speaker_cmd(
+							SPKR_MUTE_OFF);
+				}
+
+				/* increment ref count for LB and RX devices */
+				adie_spkr_mono_ref2_cnt++;
+
+			} else if (is_speaker_stereo(dev_id)) {
+
+				/* make sure its not already on */
+				if (!adie_spkr_stereo_ref2_cnt) {
+					if (pmic_is_stereo) {
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 1);
+						pmic_spkr_en_mute(
+							RIGHT_SPKR, 1);
+					} else {
+						pmic_speaker_cmd(
+							SPKR_MUTE_OFF);
+					}
+				}
+
+				/* increment ref count for LB and RX devices */
+				adie_spkr_stereo_ref2_cnt++;
+			} else {
+				pr_err("error: not stereo or mono\n");
+			}
 		} else {
 			D("ARD ADIE Loopback Device\n");
 		}
 
 	} else {
-		/*Turn off the PMIC if it's a TX*/
-		if (path_type == ADIE_CODEC_TX) {
-			pmic_mic_en(0);
-		} else if ((path_type == ADIE_CODEC_RX) &&
-			(dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO)) {
 
-			pmic_speaker_cmd(SPKR_OFF);
-			pmic_spkr_en_left_chan(0);
+		if ((path_type == ADIE_CODEC_RX) ||
+			(path_type == ADIE_CODEC_LB)) {
+			if (is_speaker_mono(dev_id)) {
+
+				/* decrement ref count for LB or RX device */
+				adie_spkr_mono_ref2_cnt--;
+
+				if (!adie_spkr_mono_ref2_cnt) {
+					if (pmic_is_stereo)
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 0);
+					else
+						pmic_speaker_cmd(SPKR_MUTE_ON);
+				}
+			} else if (is_speaker_stereo(dev_id)) {
+
+				/* decrement ref count for LB/RX device */
+				adie_spkr_stereo_ref2_cnt--;
+
+				if (!adie_spkr_stereo_ref2_cnt) {
+					if (pmic_is_stereo) {
+						pmic_spkr_en_mute(
+							LEFT_SPKR, 0);
+						pmic_spkr_en_mute(
+							RIGHT_SPKR, 0);
+					} else {
+						pmic_speaker_cmd(SPKR_MUTE_ON);
+					}
+				}
+			} else {
+				pr_err("error: not stereo or mono\n");
+			}
 		} else {
 			D("ARD ADIE Loopback Device\n");
 		}
