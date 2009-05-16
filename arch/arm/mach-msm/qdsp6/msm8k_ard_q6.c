@@ -118,12 +118,16 @@ s32 qdsp6_open(s32 session_id)
 
 	/* reference the stream dev pointer */
 	if (cadr->cad_device.device != NULL)
-		cadr->cad_device.device = (u32 *)(g_audio_base + session_id *
-			sizeof(struct cad_stream_device_struct_type) + 4096 +
-			(Q6_ENC_BUF_PER_SESSION *
-			Q6_ENC_BUF_MAX_SIZE + 4096) +
+		cadr->cad_device.device = (u32 *)(g_audio_base +
 			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			Q6_DEC_BUFFER_SIZE_MAX + 4096));
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * session_id +
+			(Q6_DEC_BUFFER_NUM_PER_STREAM *
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING));
+
 
 	if (ardsession[session_id]->qdsp6_opened == ARD_FALSE) {
 		/* Only ARD will open a session with Q6 */

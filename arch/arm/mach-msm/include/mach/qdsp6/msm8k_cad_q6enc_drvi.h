@@ -62,7 +62,7 @@
 
 #define		Q6_ENC_MAX_SESSION_COUNT	4
 #define		Q6_ENC_BUF_PER_SESSION		4
-#define		Q6_ENC_BUF_MAX_SIZE		(1024 * 100)
+#define		Q6_ENC_BUF_MAX_SIZE		(1024 * 10)
 
 enum q6_enc_session_state {
 	Q6_ENC_STATE_RESET = 0,

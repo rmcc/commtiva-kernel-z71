@@ -246,7 +246,7 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 
 	info = (struct cad_stream_info_struct_type *)cmd_buf;
 	if ((info->ses_buf_max_size == 0) ||
-		(info->ses_buf_max_size >= Q6_DEC_BUFFER_SIZE_MAX) ||
+		(info->ses_buf_max_size > Q6_DEC_BUFFER_SIZE_MAX) ||
 		(self->session_state != Q6_DEC_RESET)) {
 
 		return CAD_RES_FAILURE;
@@ -257,13 +257,20 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 	self->buffer_size = info->ses_buf_max_size;
 
 	if (self->shared_buf == NULL) {
-		self->shared_buf = g_audio_mem;
+		self->shared_buf = g_audio_mem +
+			((Q6_DEC_BUFFER_NUM_PER_STREAM *
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * self->session_id);
+
+
 		if (self->shared_buf == NULL)
 			return CAD_RES_FAILURE;
 	}
 
-	memset(self->shared_buf, 0, Q6_DEC_BUFFER_NUM_PER_STREAM *
-					self->buffer_size + 4096);
+	memset(self->shared_buf, 0, (Q6_DEC_BUFFER_NUM_PER_STREAM *
+		(self->buffer_size + MEMORY_PADDING)));
 
 	for (i = 0; i < Q6_DEC_BUFFER_NUM_PER_STREAM; i++) {
 		node = kmalloc(sizeof(struct q6dec_sesson_buffer_node),
@@ -277,9 +284,16 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 		node->next = self->free_buf_list;
 		self->free_buf_list = node;
 		D("----> create buffer node 0x%x\n", (u32)node);
-		node->buf = self->shared_buf + i * self->buffer_size;
+		node->buf = self->shared_buf + i * (self->buffer_size +
+			MEMORY_PADDING);
+
 		node->phys_addr = g_audio_base +
-					i * self->buffer_size;
+			(Q6_DEC_BUFFER_NUM_PER_STREAM *
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * self->session_id +
+			i * (self->buffer_size + MEMORY_PADDING);
 	}
 	return result;
 

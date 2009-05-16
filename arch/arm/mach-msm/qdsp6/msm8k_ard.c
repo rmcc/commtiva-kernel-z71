@@ -818,12 +818,15 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		cadr = ardsession[session_id]->sess_open_info;
 		cadr_strm_device = &(cadr->cad_device);
 		strm_dev = (struct cad_stream_device_struct_type *)cmd_buf;
-		cadr_strm_device->device = (u32 *)(g_audio_mem + session_id *
-			sizeof(struct cad_stream_device_struct_type) + 4096 +
-			(Q6_ENC_BUF_PER_SESSION *
-			Q6_ENC_BUF_MAX_SIZE + 4096) +
+		cadr_strm_device->device = (u32 *)(g_audio_mem +
 			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			Q6_DEC_BUFFER_SIZE_MAX + 4096));
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * session_id +
+			(Q6_DEC_BUFFER_NUM_PER_STREAM *
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING));
 
 		/* Save the cmdbuff passed in */
 		if ((cmd_buf != NULL) && (cadr_strm_device->device != NULL)) {
@@ -886,11 +889,26 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		cadr_config = &(cadr->cad_config);
 
 		cadr_config->format_block =
-			(void *)(g_audio_base + CAD_FORMAT_BLK_OFFSET);
+			(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
+				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+				MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+				sizeof(struct cad_stream_device_struct_type) +
+				MEMORY_PADDING) * session_id +
+				Q6_DEC_BUFFER_NUM_PER_STREAM *
+				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
+
+
 		cadr_config->format_block_len = cmd_len;
 
-		config_format_block = (void *)(g_audio_mem
-						+ CAD_FORMAT_BLK_OFFSET);
+		config_format_block =
+			(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
+				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
+				MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+				sizeof(struct cad_stream_device_struct_type) +
+				MEMORY_PADDING) * session_id +
+				Q6_DEC_BUFFER_NUM_PER_STREAM *
+				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
+
 		memcpy(config_format_block, cmd_buf, cmd_len);
 
 		D("ard_ioctl STRM CFG SET ses %d, sess_opn_info(cadr) = %p\n",

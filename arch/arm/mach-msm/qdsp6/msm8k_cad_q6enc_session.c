@@ -95,7 +95,7 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 
 	/* limit the buffer size and create buf only in reset state */
 	if (info->ses_buf_max_size == 0  ||
-		info->ses_buf_max_size >= Q6_ENC_BUF_MAX_SIZE ||
+		info->ses_buf_max_size > Q6_ENC_BUF_MAX_SIZE ||
 		Q6_ENC_STATE_RESET != self->session_state) {
 
 		return CAD_RES_FAILURE;
@@ -108,17 +108,21 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 	release_buffers(&self->used_nodes);
 	release_buffers(&self->free_nodes);
 
-	if (self->shared_buffer != NULL) {
-		pr_err("Error: Shared buffer already allocated for"
-			" CAD Encoder!\n");
-		return CAD_RES_FAILURE;
+	if (self->shared_buffer == NULL) {
+
+		self->shared_buffer = g_audio_mem +
+			((Q6_ENC_BUF_PER_SESSION *
+			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * self->session_id);
+
+		if (self->shared_buffer == NULL)
+			return CAD_RES_FAILURE;
 	}
 
-	/* use memory after the decoders */
-	self->shared_buffer = g_audio_mem +
-		(Q6_DEC_BUFFER_NUM_PER_STREAM * Q6_DEC_BUFFER_SIZE_MAX + 4096);
-	memset(self->shared_buffer, 0, (Q6_ENC_BUF_PER_SESSION * self->buf_size
-		+ 4096));
+	memset(self->shared_buffer, 0, (Q6_ENC_BUF_PER_SESSION *
+		(self->buf_size + MEMORY_PADDING)));
 
 	/* it's time the create the read buffers */
 	for (i = 0; i < Q6_ENC_BUF_PER_SESSION; i++) {
@@ -136,10 +140,15 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 		self->free_nodes = node;
 		D("----> create buffer node 0x%x\n", (u32)node);
 		node->buf = (u8 *)((u32)self->shared_buffer +
-			i * self->buf_size);
-		node->phys_addr = (g_audio_base + i * self->buf_size) +
-			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			Q6_DEC_BUFFER_SIZE_MAX + 4096);
+			i * (self->buf_size + MEMORY_PADDING));
+
+		node->phys_addr = g_audio_base +
+			(Q6_ENC_BUF_PER_SESSION *
+			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
+			sizeof(struct cad_stream_device_struct_type) +
+			MEMORY_PADDING) * self->session_id +
+			i * (self->buf_size + MEMORY_PADDING);
 	}
 	return res;
 }

@@ -62,7 +62,9 @@
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_cad_event.h>
 
-#define CAD_MAX_SESSION         10
+#define CAD_MAX_SESSION			10
+#define MAX_FORMAT_BLOCK_SIZE		40
+#define MEMORY_PADDING			4096
 
 
 typedef s32 (*cad_open_func_ptr_type)(s32 session_id,
