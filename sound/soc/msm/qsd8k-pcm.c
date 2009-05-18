@@ -111,18 +111,6 @@ static struct snd_pcm_hardware qsd_pcm_capture_hardware = {
 	.fifo_size = 0,
 };
 
-/* Conventional and unconventional sample rate supported */ static
-unsigned int supported_sample_rates[] = {
-	8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000
-};
-
-static struct snd_pcm_hw_constraint_list constraints_sample_rates = {
-	.count = ARRAY_SIZE(supported_sample_rates),
-	.list = supported_sample_rates,
-	.mask = 0,
-};
-
-
 int qsd_audio_volume_update(struct qsd_audio *prtd)
 {
 
@@ -294,14 +282,6 @@ static int qsd_pcm_open(struct snd_pcm_substream *substream)
 		prtd->dir = SNDRV_PCM_STREAM_CAPTURE;
 		prtd->capture_substream = substream;
 		prtd->cos.op_code = CAD_OPEN_OP_READ;
-	}
-
-	ret = snd_pcm_hw_constraint_list(runtime, 0,
-					 SNDRV_PCM_HW_PARAM_RATE,
-					 &constraints_sample_rates);
-	if (ret < 0) {
-		kfree(prtd);
-		return ret;
 	}
 
 	runtime->private_data = prtd;

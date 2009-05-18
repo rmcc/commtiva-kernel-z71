@@ -34,7 +34,8 @@ extern void register_cb(void *);
 #define USE_FORMATS             (SNDRV_PCM_FMTBIT_S16_LE)
 #define USE_CHANNELS_MIN        1
 #define USE_CHANNELS_MAX        2
-#define USE_RATE                (SNDRV_PCM_RATE_8000_48000 | SNDRV_PCM_RATE_KNOT)
+#define USE_RATE                (SNDRV_PCM_RATE_8000_48000 \
+				| SNDRV_PCM_RATE_CONTINUOUS)
 #define USE_RATE_MIN            8000
 #define USE_RATE_MAX            48000
 #define MAX_BUFFER_SIZE         (4096*4)
