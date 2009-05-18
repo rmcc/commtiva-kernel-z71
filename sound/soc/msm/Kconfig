@@ -5,7 +5,20 @@ config SND_MSM_SOC
 	depends on ARCH_MSM && SND_SOC
 	select MSM_ADSP
 	help
-	  To add support for ALSA PCM driver for MSM7k board.
+	  To add support for ALSA PCM driver for MSM board.
+
+config SND_MSM_DAI_SOC
+	tristate "SoC CPU/CODEC DAI for the MSM chip"
+	depends on SND_MSM_SOC
+	help
+	  To add support for ALSA PCM driver for MSM board.
+
+config SND_MSM_SOC_MSM7K
+        tristate "SoC Audio support for MSM7K"
+        depends on SND_MSM_SOC && SND_MSM_DAI_SOC
+        help
+          Say Y if you want to add support for SoC audio on msm7k
+		for msm72x1 or msm7x27
 
 config SND_QSD_SOC
 	tristate "SoC Audio for the QSD chip"

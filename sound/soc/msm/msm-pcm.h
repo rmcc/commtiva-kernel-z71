@@ -174,19 +174,20 @@ struct msm_audio {
 
 /* platform data */
 extern int audio_dsp_out_enable(struct msm_audio *prtd, int yes);
-extern struct snd_pcm_ops msm_pcm_ops;
+extern struct snd_soc_platform msm_soc_platform;
+extern struct snd_soc_dai msm_dais[2];
+extern struct snd_soc_codec_device soc_codec_dev_msm;
 
 int audrec_encoder_config(struct msm_audio *prtd);
-void audrec_get_dsp_frames(struct msm_audio *prtd);
-int audio_dsp_send_buffer(struct msm_audio *prtd, unsigned idx, unsigned len);
-int audrec_dsp_enable(struct msm_audio *prtd, int enable);
-int audrec_disable(struct msm_audio *prtd);
-int audio_configure(struct msm_audio *prtd);
-int audio_disable(struct msm_audio *prtd);
-int audio_adsp_configure(struct msm_audio *prtd);
-int audio_buffer_read(struct msm_audio *prtd, void __user *buf,
+extern void alsa_get_dsp_frames(struct msm_audio *prtd);
+extern int alsa_rec_dsp_enable(struct msm_audio *prtd, int enable);
+extern int alsa_audrec_disable(struct msm_audio *prtd);
+extern int alsa_audio_configure(struct msm_audio *prtd);
+extern int alsa_audio_disable(struct msm_audio *prtd);
+extern int alsa_adsp_configure(struct msm_audio *prtd);
+extern int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
 					size_t count, loff_t *pos);
-ssize_t audio_send_buffer(struct msm_audio *prtd, const char __user *buf,
+ssize_t alsa_send_buffer(struct msm_audio *prtd, const char __user *buf,
 					size_t count, loff_t *pos);
 int msm_audio_volume_update(unsigned id,
 				int volume, int pan);

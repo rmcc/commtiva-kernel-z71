@@ -26,6 +26,7 @@
 #include <linux/wait.h>
 #include <linux/platform_device.h>
 #include <sound/core.h>
+#include <sound/soc.h>
 #include <sound/pcm.h>
 #include <sound/initval.h>
 #include <asm/dma.h>
@@ -42,6 +43,10 @@
 	msm_adsp_write(prtd->audrec, QDSP_uPAudRecBitStreamQueue, cmd, len)
 #define audio_send_queue_rec(prtd, cmd, len) \
 	msm_adsp_write(prtd->audrec, QDSP_uPAudRecCmdQueue, cmd, len)
+
+int intcnt;
+static int audio_dsp_send_buffer(struct msm_audio *prtd,
+			unsigned idx, unsigned len);
 
 struct audio_frame {
 	uint16_t count_low;
@@ -102,7 +107,7 @@ int msm_audio_volume_update(unsigned id,
 }
 EXPORT_SYMBOL(msm_audio_volume_update);
 
-void audio_dsp_event(void *data, unsigned id, uint16_t *msg)
+void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 {
 	struct msm_audio *prtd = data;
 	struct buffer *frame;
@@ -150,7 +155,7 @@ void audio_dsp_event(void *data, unsigned id, uint16_t *msg)
 			break;
 		}
 	case AUDPP_MSG_PCMDMAMISSED:
-		printk(KERN_ERR "audio_dsp_event: PCMDMAMISSED %d\n", msg[0]);
+		printk(KERN_ERR "alsa_dsp_event: PCMDMAMISSED %d\n", msg[0]);
 		break;
 	case AUDPP_MSG_CFG_MSG:
 		if (msg[0] == AUDPP_MSG_ENA_ENA) {
@@ -160,24 +165,24 @@ void audio_dsp_event(void *data, unsigned id, uint16_t *msg)
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			prtd->running = 0;
 		} else {
-			printk(KERN_ERR "audio_dsp_event:CFG_MSG=%d\n", msg[0]);
+			printk(KERN_ERR "alsa_dsp_event:CFG_MSG=%d\n", msg[0]);
 		}
 		break;
 	case EVENT_MSG_ID:
-		pr_info("audio_dsp_event: arm9 event\n");
+		printk(KERN_INFO"alsa_dsp_event: arm9 event\n");
 		break;
 	default:
-		printk(KERN_ERR "audio_dsp_event: UNKNOWN (%d)\n", id);
+		printk(KERN_ERR "alsa_dsp_event: UNKNOWN (%d)\n", id);
 	}
 }
 
-void audpre_dsp_event(void *data, unsigned id, size_t len,
+void alsa_audpre_dsp_event(void *data, unsigned id, size_t len,
 		      void (*getevent) (void *ptr, size_t len))
 {
 	uint16_t msg[MAX_DATA_SIZE/2];
 
 	if (len > MAX_DATA_SIZE) {
-		pr_err("audpre: event too large(%d bytes)\n", len);
+		printk(KERN_ERR"audpre: event too large(%d bytes)\n", len);
 		return;
 	}
 	getevent(msg, len);
@@ -189,7 +194,7 @@ void audpre_dsp_event(void *data, unsigned id, size_t len,
 		printk(KERN_ERR "audpre: err_index %d\n", msg[0]);
 		break;
 	case EVENT_MSG_ID:
-		pr_info("audpre: arm9 event\n");
+		printk(KERN_INFO"audpre: arm9 event\n");
 		break;
 	default:
 		printk(KERN_ERR "audpre: unknown event %d\n", id);
@@ -204,7 +209,7 @@ void audrec_dsp_event(void *data, unsigned id, size_t len,
 	uint16_t msg[MAX_DATA_SIZE/2];
 
 	if (len > MAX_DATA_SIZE) {
-		pr_err("audrec: event/msg too large(%d bytes)\n", len);
+		printk(KERN_ERR"audrec: event/msg too large(%d bytes)\n", len);
 		return;
 	}
 	getevent(msg, len);
@@ -226,7 +231,7 @@ void audrec_dsp_event(void *data, unsigned id, size_t len,
 		printk(KERN_ERR "audrec: ERROR %x\n", msg[0]);
 		break;
 	case AUDREC_MSG_PACKET_READY_MSG:
-		audrec_get_dsp_frames(prtd);
+		alsa_get_dsp_frames(prtd);
 		++intcnt;
 		if (prtd->channel_mode == 1) {
 			spin_lock_irqsave(&the_locks.read_dsp_lock, flag);
@@ -248,7 +253,7 @@ void audrec_dsp_event(void *data, unsigned id, size_t len,
 		}
 		break;
 	case EVENT_MSG_ID:
-		pr_info("audrec: arm9 event\n");
+		printk(KERN_INFO"audrec: arm9 event\n");
 		break;
 	default:
 		printk(KERN_ERR "audrec: unknown event %d\n", id);
@@ -256,14 +261,14 @@ void audrec_dsp_event(void *data, unsigned id, size_t len,
 }
 
 struct msm_adsp_ops aud_pre_adsp_ops = {
-	.event = audpre_dsp_event,
+	.event = alsa_audpre_dsp_event,
 };
 
 struct msm_adsp_ops aud_rec_adsp_ops = {
 	.event = audrec_dsp_event,
 };
 
-int audio_adsp_configure(struct msm_audio *prtd)
+int alsa_adsp_configure(struct msm_audio *prtd)
 {
 	int ret, i;
 
@@ -337,8 +342,9 @@ err2:
 err1:
 	return ret;
 }
+EXPORT_SYMBOL(alsa_adsp_configure);
 
-int audio_configure(struct msm_audio *prtd)
+int alsa_audio_configure(struct msm_audio *prtd)
 {
 	struct audmgr_config cfg;
 	int rc;
@@ -359,7 +365,7 @@ int audio_configure(struct msm_audio *prtd)
 	if (rc < 0)
 		return rc;
 
-	if (audpp_enable(AUDPP_ALSA_DECODER, audio_dsp_event, prtd)) {
+	if (audpp_enable(AUDPP_ALSA_DECODER, alsa_dsp_event, prtd)) {
 		printk(KERN_ERR "audio: audpp_enable() failed\n");
 		audmgr_disable(&prtd->audmgr);
 		return -ENODEV;
@@ -368,8 +374,9 @@ int audio_configure(struct msm_audio *prtd)
 	prtd->enabled = 1;
 	return 0;
 }
+EXPORT_SYMBOL(alsa_audio_configure);
 
-ssize_t audio_send_buffer(struct msm_audio *prtd, const char __user *buf,
+ssize_t alsa_send_buffer(struct msm_audio *prtd, const char __user *buf,
 			  size_t count, loff_t *pos)
 {
 	unsigned long flag;
@@ -415,8 +422,9 @@ ssize_t audio_send_buffer(struct msm_audio *prtd, const char __user *buf,
 		return buf - start;
 	return rc;
 }
+EXPORT_SYMBOL(alsa_send_buffer);
 
-int audio_disable(struct msm_audio *prtd)
+int alsa_audio_disable(struct msm_audio *prtd)
 {
 	if (prtd->enabled) {
 		mutex_lock(&the_locks.lock);
@@ -430,13 +438,14 @@ int audio_disable(struct msm_audio *prtd)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(alsa_audio_disable);
 
-int audrec_disable(struct msm_audio *prtd)
+int alsa_audrec_disable(struct msm_audio *prtd)
 {
 	if (prtd->enabled) {
 		mutex_lock(&the_locks.lock);
 		prtd->enabled = 0;
-		audrec_dsp_enable(prtd, 0);
+		alsa_rec_dsp_enable(prtd, 0);
 		wake_up(&the_locks.read_wait);
 		msm_adsp_disable(prtd->audpre);
 		msm_adsp_disable(prtd->audrec);
@@ -447,6 +456,7 @@ int audrec_disable(struct msm_audio *prtd)
 	}
 	return 0;
 }
+EXPORT_SYMBOL(alsa_audrec_disable);
 
 static int audio_dsp_read_buffer(struct msm_audio *prtd, uint32_t read_cnt)
 {
@@ -517,7 +527,7 @@ int audio_dsp_out_enable(struct msm_audio *prtd, int yes)
 	return audpp_send_queue2(&cmd, sizeof(cmd));
 }
 
-int audio_buffer_read(struct msm_audio *prtd, void __user *buf,
+int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
 		      size_t count, loff_t *pos)
 {
 	unsigned long flag;
@@ -567,8 +577,10 @@ int audio_buffer_read(struct msm_audio *prtd, void __user *buf,
 	mutex_unlock(&the_locks.read_lock);
 	return rc;
 }
+EXPORT_SYMBOL(alsa_buffer_read);
 
-int audio_dsp_send_buffer(struct msm_audio *prtd, unsigned idx, unsigned len)
+static int audio_dsp_send_buffer(struct msm_audio *prtd,
+					unsigned idx, unsigned len)
 {
 	audpp_cmd_pcm_intf_send_buffer cmd;
 	cmd.cmd_id = AUDPP_CMD_PCM_INTF_2;
@@ -581,7 +593,7 @@ int audio_dsp_send_buffer(struct msm_audio *prtd, unsigned idx, unsigned len)
 	return audpp_send_queue2(&cmd, sizeof(cmd));
 }
 
-int audrec_dsp_enable(struct msm_audio *prtd, int enable)
+int alsa_rec_dsp_enable(struct msm_audio *prtd, int enable)
 {
 	audrec_cmd_cfg cmd;
 
@@ -593,8 +605,9 @@ int audrec_dsp_enable(struct msm_audio *prtd, int enable)
 
 	return audio_send_queue_rec(prtd, &cmd, sizeof(cmd));
 }
+EXPORT_SYMBOL(alsa_rec_dsp_enable);
 
-void audrec_get_dsp_frames(struct msm_audio *prtd)
+void alsa_get_dsp_frames(struct msm_audio *prtd)
 {
 	struct audio_frame *frame;
 	uint32_t index = 0;
@@ -625,3 +638,4 @@ void audrec_get_dsp_frames(struct msm_audio *prtd)
 		/* TODO AAC not supported yet. */
 	}
 }
+EXPORT_SYMBOL(alsa_get_dsp_frames);

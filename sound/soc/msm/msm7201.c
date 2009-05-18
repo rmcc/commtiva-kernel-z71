@@ -52,54 +52,6 @@ static struct msm_snd_rpc_ids snd_rpc_ids;
 
 static struct platform_device *msm_audio_snd_device;
 
-struct snd_soc_dai msm7201_dai = {
-	.name = "ASOC",
-	.playback = {
-		.stream_name = "Playback",
-		.channels_min = USE_CHANNELS_MIN,
-		.channels_max = USE_CHANNELS_MAX,
-		.rates = USE_RATE,
-		.rate_min = USE_RATE_MIN,
-		.rate_max = USE_RATE_MAX,
-		.formats = USE_FORMATS,
-	},
-	.capture = {
-		.stream_name = "Capture",
-		.channels_min = USE_CHANNELS_MIN,
-		.channels_max = USE_CHANNELS_MAX,
-		.rate_min = USE_RATE_MIN,
-		.rates = USE_RATE,
-		.formats = USE_FORMATS,
-	},
-};
-
-struct snd_soc_dai msm_cpudai = {
-	.name = "MSM_7200A",
-	.id = 0,
-	.playback = {
-		.channels_min = USE_CHANNELS_MIN,
-		.channels_max = USE_CHANNELS_MAX,
-		.rates = USE_RATE,
-		.rate_min = USE_RATE_MIN,
-		.rate_max = USE_RATE_MAX,
-		.formats = USE_FORMATS,
-	},
-	.capture = {
-		.channels_min = USE_CHANNELS_MIN,
-		.channels_max = USE_CHANNELS_MAX,
-		.rate_min = USE_RATE_MIN,
-		.rates = USE_RATE,
-		.formats = USE_FORMATS,
-	},
-};
-
-static struct snd_soc_dai_link msm_dai = {
-	.name = "ASOC",
-	.stream_name = "ASOC",
-	.codec_dai = &msm7201_dai,
-	.cpu_dai = &msm_cpudai,
-};
-
 static int snd_msm_volume_info(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_info *uinfo)
 {
@@ -299,6 +251,7 @@ static int msm_new_mixer(struct snd_card *card)
 	unsigned int idx;
 	int err;
 
+	printk(KERN_ERR "msm_soc:ALSA MSM Mixer Setting");
 	strcpy(card->mixername, "MSM Mixer");
 	for (idx = 0; idx < ARRAY_SIZE(snd_msm_controls); idx++) {
 		err = snd_ctl_add(card,
@@ -309,141 +262,25 @@ static int msm_new_mixer(struct snd_card *card)
 	return 0;
 }
 
-
-static int msm_pcm_probe(struct platform_device *devptr)
+static int msm_soc_dai_init(struct snd_soc_codec *codec)
 {
-	struct snd_card *card;
-	struct snd_soc_codec *codec;
-	int ret;
 
-	struct snd_soc_device *socdev = platform_get_drvdata(devptr);
-
-	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
-	if (codec == NULL)
-		return -ENOMEM;
-
-	codec->name = "MSM-CARD";
-	codec->owner = THIS_MODULE;
-	socdev->codec = codec;
-	mutex_init(&codec->mutex);
-
-	INIT_LIST_HEAD(&codec->dapm_widgets);
-	INIT_LIST_HEAD(&codec->dapm_paths);
-
-	/* register pcms */
-	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
-	if (ret < 0) {
-		printk(KERN_ERR "msm_soc: failed to create pcms\n");
-		goto __nopcm;
-	}
-
-	card = socdev->codec->card;
-	ret = msm_new_mixer(card);
+	int ret = 0;
+	ret = msm_new_mixer(codec->card);
 	if (ret < 0) {
 		printk(KERN_ERR "msm_soc:ALSA MSM Mixer Fail");
-		goto __nodev;
 	}
 
-	ret = snd_soc_init_card(socdev);
-	if (ret < 0) {
-		printk(KERN_ERR "msm_soc: failed to register card\n");
-		goto __nodev;
-	}
-
-	return 0;
-
-__nodev:
-	snd_soc_free_pcms(socdev);
-__nopcm:
-	kfree(codec);
 	return ret;
 }
 
 
-static int msm_pcm_remove(struct platform_device *devptr)
-{
-	struct snd_soc_device *socdev = platform_get_drvdata(devptr);
-	snd_soc_free_pcms(socdev);
-	kfree(socdev->codec);
-	platform_set_drvdata(devptr, NULL);
-	return 0;
-}
-
-
-static int pcm_preallocate_dma_buffer(struct snd_pcm *pcm,
-	int stream)
-{
-	struct snd_pcm_substream *substream = pcm->streams[stream].substream;
-	struct snd_dma_buffer *buf = &substream->dma_buffer;
-	size_t size;
-	if (!stream)
-		size = PLAYBACK_DMASZ;
-	else
-		size = CAPTURE_DMASZ;
-
-	buf->dev.type = SNDRV_DMA_TYPE_DEV;
-	buf->dev.dev = pcm->card->dev;
-	buf->private_data = NULL;
-	buf->area = dma_alloc_coherent(pcm->card->dev, size,
-					   &buf->addr, GFP_KERNEL);
-	if (!buf->area)
-		return -ENOMEM;
-
-	buf->bytes = size;
-	return 0;
-}
-
-static void msm_pcm_free_dma_buffers(struct snd_pcm *pcm)
-{
-	struct snd_pcm_substream *substream;
-	struct snd_dma_buffer *buf;
-	int stream;
-
-	for (stream = 0; stream < 2; stream++) {
-		substream = pcm->streams[stream].substream;
-		if (!substream)
-			continue;
-
-		buf = &substream->dma_buffer;
-		if (!buf->area)
-			continue;
-
-		dma_free_coherent(pcm->card->dev, buf->bytes,
-				      buf->area, buf->addr);
-		buf->area = NULL;
-	}
-}
-static int msm_pcm_new(struct snd_card *card,
-			struct snd_soc_dai *codec_dai,
-			struct snd_pcm *pcm)
-{
-	int ret;
-	if (!card->dev->coherent_dma_mask)
-		card->dev->coherent_dma_mask = DMA_32BIT_MASK;
-
-	if (codec_dai->playback.channels_min) {
-		ret = pcm_preallocate_dma_buffer(pcm,
-			SNDRV_PCM_STREAM_PLAYBACK);
-		if (ret)
-			return ret;
-	}
-
-	if (codec_dai->capture.channels_min) {
-		ret = pcm_preallocate_dma_buffer(pcm,
-			SNDRV_PCM_STREAM_CAPTURE);
-		if (ret)
-			msm_pcm_free_dma_buffers(pcm);
-	}
-	return ret;
-}
-
-struct snd_soc_platform msm_soc_platform = {
-	.name		= "msm-audio",
-	.probe          = msm_pcm_probe,
-	.remove         = msm_pcm_remove,
-	.pcm_ops 	= &msm_pcm_ops,
-	.pcm_new	= msm_pcm_new,
-	.pcm_free	= msm_pcm_free_dma_buffers,
+static struct snd_soc_dai_link msm_dai = {
+	.name = "ASOC",
+	.stream_name = "ASOC",
+	.codec_dai = &msm_dais[0],
+	.cpu_dai = &msm_dais[1],
+	.init	= msm_soc_dai_init,
 };
 
 struct snd_soc_card snd_soc_card_msm = {
@@ -456,24 +293,17 @@ struct snd_soc_card snd_soc_card_msm = {
 /* msm_audio audio subsystem */
 static struct snd_soc_device msm_audio_snd_devdata = {
 	.card = &snd_soc_card_msm,
+	.codec_dev = &soc_codec_dev_msm,
 };
 
 
 static int __init msm_audio_init(void)
 {
 	int ret;
-	struct snd_soc_codec_device *msm_soc_codec_device;
 
 	msm_audio_snd_device = platform_device_alloc("soc-audio", -1);
 	if (!msm_audio_snd_device)
 		return -ENOMEM;
-	msm_soc_codec_device = kzalloc(sizeof(struct snd_soc_codec_device),
-								GFP_KERNEL);
-	if (!msm_soc_codec_device) {
-		platform_device_put(msm_audio_snd_device);
-		return -ENOMEM;
-	}
-	msm_audio_snd_devdata.codec_dev = msm_soc_codec_device;
 
 	platform_set_drvdata(msm_audio_snd_device, &msm_audio_snd_devdata);
 	msm_audio_snd_devdata.dev = &msm_audio_snd_device->dev;
@@ -498,7 +328,6 @@ static int __init msm_audio_init(void)
 
 static void __exit msm_audio_exit(void)
 {
-	kfree(msm_audio_snd_devdata.codec_dev);
 	platform_device_unregister(msm_audio_snd_device);
 }
 
