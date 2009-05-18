@@ -67,6 +67,7 @@ struct msm_i2c_dev {
 	spinlock_t          lock;
 
 	struct i2c_msg      *msg;
+	int                 rem;
 	int                 pos;
 	int                 cnt;
 	int                 err;
@@ -172,7 +173,7 @@ msm_i2c_interrupt(int irq, void *devid)
 		if (dev->cnt) {
 			/* Ready to take a byte */
 			data = dev->msg->buf[dev->pos];
-			if (dev->cnt == 1)
+			if (dev->cnt == 1 && dev->rem == 1)
 				data |= I2C_WRITE_DATA_LAST_BYTE;
 
 			writel(data, dev->base + I2C_WRITE_DATA);
@@ -235,6 +236,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	uint16_t addr;
 	long timeout;
 	unsigned long flags;
+	int check_busy = 1;
 
 	while (rem) {
 		addr = msgs->addr << 1;
@@ -243,6 +245,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 		spin_lock_irqsave(&dev->lock, flags);
 		dev->msg = msgs;
+		dev->rem = rem;
 		dev->pos = 0;
 		dev->err = 0;
 		dev->flush_cnt = 0;
@@ -250,10 +253,14 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		dev->complete = &complete;
 		spin_unlock_irqrestore(&dev->lock, flags);
 
-		ret = msm_i2c_poll_notbusy(dev);
-		if (ret) {
-			dev_err(dev->dev, "Error waiting for notbusy\n");
-			goto out_err;
+		if (check_busy) {
+			ret = msm_i2c_poll_notbusy(dev);
+			if (ret) {
+				dev_err(dev->dev,
+					"Error waiting for notbusy\n");
+				goto out_err;
+			}
+			check_busy = 0;
 		}
 
 		if (rem == 1 && msgs->len == 0)
@@ -338,6 +345,9 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			goto out_err;
 		}
 
+		if (msgs->flags & I2C_M_RD)
+			check_busy = 1;
+
 		msgs++;
 		rem--;
 	}
@@ -347,6 +357,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	spin_lock_irqsave(&dev->lock, flags);
 	dev->complete = NULL;
 	dev->msg = NULL;
+	dev->rem = 0;
 	dev->pos = 0;
 	dev->err = 0;
 	dev->flush_cnt = 0;
