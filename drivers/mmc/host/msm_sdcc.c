@@ -62,7 +62,8 @@ static int  msmsdcc_dbg_init(void);
 #endif
 
 static unsigned int msmsdcc_fmin = 144000;
-static unsigned int msmsdcc_fmid = 25000000;
+static unsigned int msmsdcc_fmid = 24576000;
+static unsigned int msmsdcc_temp = 25000000;
 static unsigned int msmsdcc_fmax = 49152000;
 static unsigned int msmsdcc_4bit = 1;
 static unsigned int msmsdcc_pwrsave = 1;
@@ -771,10 +772,11 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 		if (ios->clock != host->clk_rate) {
 			rc = clk_set_rate(host->clk, ios->clock);
-			if (rc < 0)
-				printk(KERN_ERR
-				"Error setting clock rate (%d)\n", rc);
-			else
+			if (rc < 0) {
+				rc = clk_set_rate(host->clk, msmsdcc_temp);
+				WARN_ON(rc < 0);
+				host->clk_rate = msmsdcc_temp;
+			} else
 				host->clk_rate = ios->clock;
 		}
 		clk |= MCI_CLK_ENABLE;
