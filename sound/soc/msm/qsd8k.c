@@ -37,56 +37,6 @@
 #include "qsd-pcm.h"
 
 static struct platform_device *qsd_audio_snd_device;
-struct qsd_ctl qsd_glb_ctl;
-
-struct snd_soc_dai qsd8k_dai = {
-	.name = "ASOC",
-	.playback = {
-		.stream_name 	= "Playback",
-		.channels_min 	= USE_CHANNELS_MIN,
-		.channels_max 	= USE_CHANNELS_MAX,
-		.rates 		= USE_RATE,
-		.rate_min 	= USE_RATE_MIN,
-		.rate_max 	= USE_RATE_MAX,
-		.formats 	= USE_FORMATS,
-	},
-	.capture = {
-		.stream_name 	= "Capture",
-		.channels_min 	= USE_CHANNELS_MIN,
-		.channels_max 	= USE_CHANNELS_MAX,
-		.rate_min 	= USE_RATE_MIN,
-		.rates 		= USE_RATE,
-		.formats 	= USE_FORMATS,
-	},
-};
-
-struct snd_soc_dai qsd_cpudai = {
-	.name = "QSD_8650",
-	.id = 0,
-	.playback = {
-		.channels_min 	= USE_CHANNELS_MIN,
-		.channels_max 	= USE_CHANNELS_MAX,
-		.rates 		= USE_RATE,
-		.rate_min 	= USE_RATE_MIN,
-		.rate_max 	= USE_RATE_MAX,
-		.formats 	= USE_FORMATS,
-	},
-	.capture = {
-		.channels_min 	= USE_CHANNELS_MIN,
-		.channels_max 	= USE_CHANNELS_MAX,
-		.rate_min	= USE_RATE_MIN,
-		.rates 		= USE_RATE,
-		.formats 	= USE_FORMATS,
-	},
-};
-
-
-static struct snd_soc_dai_link qsd_dai = {
-	.name 		= "ASOC",
-	.stream_name 	= "ASOC",
-	.codec_dai 	= &qsd8k_dai,
-	.cpu_dai 	= &qsd_cpudai,
-};
 
 static int snd_qsd_route_info(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_info *uinfo)
@@ -296,85 +246,24 @@ static int qsd_new_mixer(struct snd_card *card)
 	return 0;
 }
 
-static int qsd_pcm_probe(struct platform_device *devptr)
+static int qsd_soc_dai_init(struct snd_soc_codec *codec)
 {
-	struct snd_card *card;
-	struct snd_soc_codec *codec;
-	int ret;
 
-	struct snd_soc_device *socdev = platform_get_drvdata(devptr);
-
-	codec = kzalloc(sizeof(struct snd_soc_codec), GFP_KERNEL);
-	if (codec == NULL)
-		return -ENOMEM;
-
-	codec->name = "MSM-CARD";
-	codec->owner = THIS_MODULE;
-	socdev->codec = codec;
-	mutex_init(&codec->mutex);
-
-	INIT_LIST_HEAD(&codec->dapm_widgets);
-	INIT_LIST_HEAD(&codec->dapm_paths);
-
-	/* register pcms */
-	ret = snd_soc_new_pcms(socdev, SNDRV_DEFAULT_IDX1, SNDRV_DEFAULT_STR1);
+	int ret = 0;
+	ret = qsd_new_mixer(codec->card);
 	if (ret < 0) {
-		printk(KERN_ERR "qsd_soc: failed to create pcms\n");
-		goto __nopcm;
+		printk(KERN_ERR "msm_soc:ALSA MSM Mixer Fail");
 	}
 
-	card = socdev->codec->card;
-
-	ret = qsd_new_mixer(card);
-	if (ret < 0) {
-		printk(KERN_ERR "qsd_soc:ALSA MSM Mixer Fail");
-		goto __nodev;
-	}
-
-	ret = snd_soc_init_card(socdev);
-	if (ret < 0) {
-		printk(KERN_ERR "qsd_soc: failed to register card\n");
-		goto __nodev;
-	}
-
-	qsd_glb_ctl.playback_device = CAD_HW_DEVICE_ID_DEFAULT_RX;
-	qsd_glb_ctl.capture_device = CAD_HW_DEVICE_ID_DEFAULT_TX;
-	qsd_glb_ctl.volume = 50;
-
-	return 0;
-
-__nodev:
-	snd_soc_free_pcms(socdev);
-__nopcm:
-	kfree(codec);
 	return ret;
 }
 
-static int qsd_pcm_remove(struct platform_device *devptr)
-{
-	struct snd_soc_device *socdev = platform_get_drvdata(devptr);
-	snd_soc_free_pcms(socdev);
-	kfree(socdev->codec);
-	platform_set_drvdata(devptr, NULL);
-	return 0;
-}
-
-static int qsd_pcm_new(struct snd_card *card,
-			struct snd_soc_dai *codec_dai,
-			struct snd_pcm *pcm)
-{
-	if (!card->dev->coherent_dma_mask)
-		card->dev->coherent_dma_mask = DMA_32BIT_MASK;
-
-	return 0;
-}
-
-struct snd_soc_platform qsd_soc_platform = {
-	.name		= "qsd-audio",
-	.probe          = qsd_pcm_probe,
-	.remove         = qsd_pcm_remove,
-	.pcm_ops 	= &qsd_pcm_ops,
-	.pcm_new	= qsd_pcm_new,
+static struct snd_soc_dai_link qsd_dai = {
+	.name = "ASOC",
+	.stream_name = "ASOC",
+	.codec_dai = &msm_dais[0],
+	.cpu_dai = &msm_dais[1],
+	.init   = qsd_soc_dai_init,
 };
 
 struct snd_soc_card snd_soc_card_qsd = {
@@ -387,27 +276,19 @@ struct snd_soc_card snd_soc_card_qsd = {
 /* qsd_audio audio subsystem */
 static struct snd_soc_device qsd_audio_snd_devdata = {
 	.card = &snd_soc_card_qsd,
+	.codec_dev = &soc_codec_dev_msm,
 };
 
 static int __init qsd_audio_init(void)
 {
 	int ret;
-	struct snd_soc_codec_device *qsd_soc_codec_device;
 
 	qsd_audio_snd_device = platform_device_alloc("soc-audio", -1);
 	if (!qsd_audio_snd_device)
 		return -ENOMEM;
-	qsd_soc_codec_device = kzalloc(sizeof(struct snd_soc_codec_device),
-								GFP_KERNEL);
-	if (!qsd_soc_codec_device) {
-		platform_device_put(qsd_audio_snd_device);
-		return -ENOMEM;
-	}
-	qsd_audio_snd_devdata.codec_dev = qsd_soc_codec_device;
 
 	platform_set_drvdata(qsd_audio_snd_device, &qsd_audio_snd_devdata);
 	qsd_audio_snd_devdata.dev = &qsd_audio_snd_device->dev;
-
 	ret = platform_device_add(qsd_audio_snd_device);
 	if (ret) {
 		platform_device_put(qsd_audio_snd_device);

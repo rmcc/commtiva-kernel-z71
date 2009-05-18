@@ -87,6 +87,8 @@ struct qsd_audio {
 
 extern struct qsd_ctl qsd_glb_ctl;
 
-extern struct qsd_ctl qsd_glb_ctl;
+extern struct snd_soc_dai msm_dais[2];
+extern struct snd_soc_codec_device soc_codec_dev_msm;
+extern struct snd_soc_platform qsd_soc_platform;
 
 #endif /*_QSD_PCM_H*/

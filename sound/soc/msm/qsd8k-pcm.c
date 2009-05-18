@@ -31,6 +31,8 @@
 #include <sound/pcm.h>
 #include <sound/initval.h>
 #include <sound/control.h>
+#include <asm/dma.h>
+#include <linux/dma-mapping.h>
 
 #include "qsd-pcm.h"
 
@@ -46,7 +48,10 @@ struct snd_qsd {
 	struct snd_pcm *pcm;
 };
 
+struct qsd_ctl qsd_glb_ctl;
+EXPORT_SYMBOL(qsd_glb_ctl);
 struct audio_locks the_locks;
+EXPORT_SYMBOL(the_locks);
 
 static unsigned convert_dsp_samp_index(unsigned index)
 {
@@ -581,5 +586,44 @@ struct snd_pcm_ops qsd_pcm_ops = {
 };
 EXPORT_SYMBOL_GPL(qsd_pcm_ops);
 
-MODULE_DESCRIPTION("PCM module platform driver for 8k");
+static int qsd_pcm_remove(struct platform_device *devptr)
+{
+	struct snd_soc_device *socdev = platform_get_drvdata(devptr);
+	snd_soc_free_pcms(socdev);
+	kfree(socdev->codec);
+	platform_set_drvdata(devptr, NULL);
+	return 0;
+}
+
+static int qsd_pcm_new(struct snd_card *card,
+			struct snd_soc_dai *codec_dai,
+			struct snd_pcm *pcm)
+{
+	if (!card->dev->coherent_dma_mask)
+		card->dev->coherent_dma_mask = DMA_32BIT_MASK;
+
+	return 0;
+}
+
+struct snd_soc_platform qsd_soc_platform = {
+	.name		= "qsd-audio",
+	.remove         = qsd_pcm_remove,
+	.pcm_ops 	= &qsd_pcm_ops,
+	.pcm_new	= qsd_pcm_new,
+};
+EXPORT_SYMBOL(qsd_soc_platform);
+
+static int __init qsd_soc_platform_init(void)
+{
+	return snd_soc_register_platform(&qsd_soc_platform);
+}
+module_init(qsd_soc_platform_init);
+
+static void __exit qsd_soc_platform_exit(void)
+{
+	snd_soc_unregister_platform(&qsd_soc_platform);
+}
+module_exit(qsd_soc_platform_exit);
+
+MODULE_DESCRIPTION("PCM module platform driver");
 MODULE_LICENSE("GPL v2");
