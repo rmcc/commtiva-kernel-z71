@@ -28,6 +28,7 @@
 #include <linux/delay.h>
 #include <linux/earlysuspend.h>
 #include <linux/list.h>
+#include <linux/android_pmem.h>
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
 #include <mach/msm_adsp.h>
@@ -51,6 +52,11 @@ printk(KERN_DEBUG format, ## arg)
 #define dprintk(format, arg...) do {} while (0)
 #endif
 
+#define ADRV_STATUS_AIO_INTF 0x00000001
+#define ADRV_STATUS_OBUF_GIVEN 0x00000002
+#define ADRV_STATUS_IBUF_GIVEN 0x00000004
+#define ADRV_STATUS_FSYNC 0x00000008
+
 /* Size must be power of 2 */
 #define BUFSZ_MAX 32768
 #define BUFSZ_MIN 4096
@@ -73,6 +79,37 @@ printk(KERN_DEBUG format, ## arg)
 
 #define AUDMP3_EVENT_NUM 10 /* Default number of pre-allocated event packets */
 
+#define __CONTAINS(r, v, l) ({					\
+	typeof(r) __r = r;					\
+	typeof(v) __v = v;					\
+	typeof(v) __e = __v + l;				\
+	int res = ((__v >= __r->vaddr) && 			\
+		(__e <= __r->vaddr + __r->len));		\
+	res;							\
+})
+
+#define CONTAINS(r1, r2) ({					\
+	typeof(r2) __r2 = r2;					\
+	__CONTAINS(r1, __r2->vaddr, __r2->len);			\
+})
+
+#define IN_RANGE(r, v) ({					\
+	typeof(r) __r = r;					\
+	typeof(v) __vv = v;					\
+	int res = ((__vv >= __r->vaddr) &&			\
+		(__vv < (__r->vaddr + __r->len)));		\
+	res;							\
+})
+
+#define OVERLAPS(r1, r2) ({					\
+	typeof(r1) __r1 = r1;					\
+	typeof(r2) __r2 = r2;					\
+	typeof(__r2->vaddr) __v = __r2->vaddr;			\
+	typeof(__v) __e = __v + __r2->len - 1;			\
+	int res = (IN_RANGE(__r1, __v) || IN_RANGE(__r1, __e));	\
+	res;							\
+})
+
 struct buffer {
 	void *data;
 	unsigned size;
@@ -94,6 +131,32 @@ struct audmp3_event {
 	union msm_audio_event_payload payload;
 };
 
+struct audmp3_pmem_region {
+	struct list_head list;
+	struct file *file;
+	int fd;
+	void *vaddr;
+	unsigned long paddr;
+	unsigned long kvaddr;
+	unsigned long len;
+	unsigned ref_cnt;
+};
+
+struct audmp3_buffer_node {
+	struct list_head list;
+	struct msm_audio_aio_buf buf;
+	unsigned long paddr;
+};
+
+struct audmp3_drv_operations {
+	void (*pcm_buf_update)(struct audio *, uint32_t *);
+	void (*buffer_refresh)(struct audio *);
+	void (*send_data)(struct audio *, unsigned);
+	void (*out_flush)(struct audio *);
+	void (*in_flush)(struct audio *);
+	int (*fsync)(struct audio *);
+};
+
 struct audio {
 	struct buffer out[2];
 
@@ -103,7 +166,7 @@ struct audio {
 	uint8_t out_tail;
 	uint8_t out_needed; /* number of buffers the dsp is waiting for */
 	unsigned out_dma_sz;
-
+	struct list_head out_queue; /* queue to retain output buffers */
 	atomic_t out_bytes;
 
 	struct mutex lock;
@@ -119,6 +182,7 @@ struct audio {
 	uint8_t read_next;	/* index to input buffers to be read next */
 	uint8_t fill_next;	/* index to buffer that DSP should be filling */
 	uint8_t pcm_buf_count;	/* number of pcm buffer allocated */
+	struct list_head in_queue; /* queue to retain input buffers */
 	/* ---- End of Host PCM section */
 
 	struct msm_adsp_module *audplay;
@@ -133,6 +197,7 @@ struct audio {
 	char *data;
 	dma_addr_t phys;
 
+	uint32_t drv_status;
 	int rflush; /* Read  flush */
 	int wflush; /* Write flush */
 	int opened;
@@ -159,6 +224,9 @@ struct audio {
 	spinlock_t event_queue_lock;
 	struct mutex get_event_lock;
 	int event_abort;
+
+	struct list_head pmem_region_queue; /* protected by lock */
+	struct audmp3_drv_operations drv_ops;
 };
 
 static int auddec_dsp_config(struct audio *audio, int enable);
@@ -170,6 +238,8 @@ static void audplay_buffer_refresh(struct audio *audio);
 static void audio_dsp_event(void *private, unsigned id, uint16_t *msg);
 static void audmp3_post_event(struct audio *audio, int type,
 	union msm_audio_event_payload payload);
+static unsigned long audmp3_pmem_fixup(struct audio *audio, void *addr,
+				unsigned long len, int ref_up);
 
 /* must be called with audio->lock held */
 static int audio_enable(struct audio *audio)
@@ -230,6 +300,52 @@ static int audio_disable(struct audio *audio)
 }
 
 /* ------------------- dsp --------------------- */
+static void audmp3_async_pcm_buf_update(struct audio *audio, uint32_t *payload)
+{
+	unsigned long flags;
+	union msm_audio_event_payload event_payload;
+	struct audmp3_buffer_node *filled_buf;
+	uint8_t index;
+
+	if (audio->rflush)
+		return;
+
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+	for (index = 0; index < payload[1]; index++) {
+		BUG_ON(list_empty(&audio->in_queue));
+		filled_buf = list_first_entry(&audio->in_queue,
+					struct audmp3_buffer_node, list);
+		if (filled_buf->paddr == payload[2 + index * 2]) {
+			list_del(&filled_buf->list);
+			event_payload.aio_buf = filled_buf->buf;
+			event_payload.aio_buf.data_len =
+				payload[3 + index * 2];
+			/* data_len == 0 means output EOS signaled */
+			if (!event_payload.aio_buf.data_len)
+				pr_info("%s: pcm buf %p EOS signaled\n",
+				__func__, filled_buf);
+			else
+				dprintk("%s: pcm buf %p data_len %d\n",
+				 __func__, filled_buf,
+				event_payload.aio_buf.data_len);
+			audmp3_post_event(audio, AUDIO_EVENT_READ_DONE,
+						event_payload);
+			kfree(filled_buf);
+		} else {
+			pr_err("%s: expected=%lx ret=%x\n"
+			     , __func__
+			     , filled_buf->paddr,
+			     payload[2 + index * 2]);
+			break;
+		}
+	}
+
+	audio->drv_status &= ~ADRV_STATUS_IBUF_GIVEN;
+	audio->drv_ops.buffer_refresh(audio);
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+
+}
+
 static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 {
 	uint8_t index;
@@ -257,13 +373,13 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 			pr_err
 			    ("audio_update_pcm_buf_entry: expected=%x ret=%x\n"
 			     , audio->in[audio->fill_next].addr,
-			     payload[1 + index * 2]);
+			     payload[2 + index * 2]);
 			break;
 		}
 	}
 	if (audio->in[audio->fill_next].used == 0 &&
 		!audio->in[audio->fill_next].eos) {
-		audplay_buffer_refresh(audio);
+		audio->drv_ops.buffer_refresh(audio);
 	} else {
 		pr_info("audio_update_pcm_buf_entry: read cannot keep up\n");
 		audio->buf_refresh = 1;
@@ -284,11 +400,11 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 
 	switch (id) {
 	case AUDPLAY_MSG_DEC_NEEDS_DATA:
-		audplay_send_data(audio, 1);
+		audio->drv_ops.send_data(audio, 1);
 		break;
 
 	case AUDPLAY_MSG_BUFFER_UPDATE:
-		audio_update_pcm_buf_entry(audio, msg);
+		audio->drv_ops.pcm_buf_update(audio, msg);
 		break;
 
 	default:
@@ -322,7 +438,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 				pr_info("decoder status: play \n");
 				if (audio->pcm_feedback) {
 					audplay_config_hostpcm(audio);
-					audplay_buffer_refresh(audio);
+					audio->drv_ops.buffer_refresh(audio);
 				}
 				break;
 			default:
@@ -359,7 +475,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 		audio->rflush = 0;
 		wake_up(&audio->write_wait);
 		if (audio->pcm_feedback)
-			audplay_buffer_refresh(audio);
+			audio->drv_ops.buffer_refresh(audio);
 		break;
 
 	case AUDPP_MSG_PCMDMAMISSED:
@@ -441,6 +557,35 @@ static int audplay_dsp_send_data_avail(struct audio *audio,
 	cmd.partition_number	= 0;
 	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
 }
+/* Caller holds irq_lock */
+static void audmp3_async_buffer_refresh(struct audio *audio)
+{
+	struct audplay_cmd_buffer_refresh refresh_cmd;
+	struct audmp3_buffer_node *next_buf;
+
+	if (!audio->running ||
+	    audio->drv_status & ADRV_STATUS_IBUF_GIVEN)
+		return;
+
+	if (!list_empty(&audio->in_queue)) {
+		next_buf = list_first_entry(&audio->in_queue,
+		    struct audmp3_buffer_node, list);
+		if (!next_buf)
+			return;
+		dprintk("%s: next buf %p phy %lx len %d\n", __func__,
+		next_buf, next_buf->paddr, next_buf->buf.buf_len);
+		refresh_cmd.cmd_id = AUDPLAY_CMD_BUFFER_REFRESH;
+		refresh_cmd.num_buffers = 1;
+		refresh_cmd.buf0_address = next_buf->paddr;
+		refresh_cmd.buf0_length = next_buf->buf.buf_len -
+		(next_buf->buf.buf_len % 576);	/* Mp3 frame size */
+		refresh_cmd.buf_read_count = 0;
+		audio->drv_status |= ADRV_STATUS_IBUF_GIVEN;
+		(void) audplay_send_queue0(audio, &refresh_cmd,
+			sizeof(refresh_cmd));
+	}
+
+}
 
 static void audplay_buffer_refresh(struct audio *audio)
 {
@@ -470,6 +615,69 @@ static void audplay_config_hostpcm(struct audio *audio)
 	cfg_cmd.partition_number = 0;
 	(void)audplay_send_queue0(audio, &cfg_cmd, sizeof(cfg_cmd));
 
+}
+
+static void audmp3_async_send_data(struct audio *audio, unsigned needed)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+	if (!audio->running)
+		goto done;
+
+	if (needed && !audio->wflush) {
+		audio->out_needed = 1;
+		if (audio->drv_status & ADRV_STATUS_OBUF_GIVEN) {
+			/* pop one node out of queue */
+			union msm_audio_event_payload payload;
+			struct audmp3_buffer_node *used_buf;
+
+			dprintk("%s: consumed\n", __func__);
+
+			BUG_ON(list_empty(&audio->out_queue));
+			used_buf = list_first_entry(&audio->out_queue,
+				struct audmp3_buffer_node, list);
+			list_del(&used_buf->list);
+			payload.aio_buf = used_buf->buf;
+			audmp3_post_event(audio, AUDIO_EVENT_WRITE_DONE,
+				payload);
+			kfree(used_buf);
+			audio->drv_status &= ~ADRV_STATUS_OBUF_GIVEN;
+		}
+
+	}
+
+	if (audio->out_needed) {
+		struct audmp3_buffer_node *next_buf;
+		audplay_cmd_bitstream_data_avail cmd;
+		if (!list_empty(&audio->out_queue)) {
+			next_buf = list_first_entry(&audio->out_queue,
+					struct audmp3_buffer_node, list);
+			dprintk("%s: next_buf %p\n", __func__, next_buf);
+			if (next_buf) {
+				dprintk("next buf phy %lx len %d\n",
+				next_buf->paddr, next_buf->buf.data_len);
+
+				cmd.cmd_id = AUDPLAY_CMD_BITSTREAM_DATA_AVAIL;
+				if (next_buf->buf.data_len)
+					cmd.decoder_id = audio->dec_id;
+				else {
+					cmd.decoder_id = -1;
+					pr_info("%s: input EOS signaled\n",
+					__func__);
+				}
+				cmd.buf_ptr	= (unsigned) next_buf->paddr;
+				cmd.buf_size = next_buf->buf.data_len >> 1;
+				cmd.partition_number	= 0;
+				audplay_send_queue0(audio, &cmd, sizeof(cmd));
+				audio->out_needed = 0;
+				audio->drv_status |= ADRV_STATUS_OBUF_GIVEN;
+			}
+		}
+	}
+
+done:
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
 }
 
 static void audplay_send_data(struct audio *audio, unsigned needed)
@@ -521,6 +729,25 @@ done:
 }
 
 /* ------------------- device --------------------- */
+static void audmp3_async_flush(struct audio *audio)
+{
+	struct audmp3_buffer_node *buf_node;
+	struct list_head *ptr, *next;
+	union msm_audio_event_payload payload;
+
+	dprintk("%s()\n", __func__);
+	list_for_each_safe(ptr, next, &audio->out_queue) {
+		buf_node = list_entry(ptr, struct audmp3_buffer_node, list);
+		list_del(&buf_node->list);
+		payload.aio_buf = buf_node->buf;
+		audmp3_post_event(audio, AUDIO_EVENT_WRITE_DONE,
+				payload);
+		kfree(buf_node);
+	}
+	audio->drv_status &= ~ADRV_STATUS_OBUF_GIVEN;
+	audio->out_needed = 0;
+	atomic_set(&audio->out_bytes, 0);
+}
 
 static void audio_flush(struct audio *audio)
 {
@@ -531,6 +758,26 @@ static void audio_flush(struct audio *audio)
 	audio->reserved = 0;
 	audio->out_needed = 0;
 	atomic_set(&audio->out_bytes, 0);
+}
+
+static void audmp3_async_flush_pcm_buf(struct audio *audio)
+{
+	struct audmp3_buffer_node *buf_node;
+	struct list_head *ptr, *next;
+	union msm_audio_event_payload payload;
+
+	dprintk("%s()\n", __func__);
+	list_for_each_safe(ptr, next, &audio->in_queue) {
+		buf_node = list_entry(ptr, struct audmp3_buffer_node, list);
+		list_del(&buf_node->list);
+		payload.aio_buf = buf_node->buf;
+		payload.aio_buf.data_len = 0;
+		audmp3_post_event(audio, AUDIO_EVENT_READ_DONE,
+				payload);
+		kfree(buf_node);
+	}
+	audio->drv_status &= ~ADRV_STATUS_IBUF_GIVEN;
+
 }
 
 static void audio_flush_pcm_buf(struct audio *audio)
@@ -547,18 +794,34 @@ static void audio_flush_pcm_buf(struct audio *audio)
 
 static void audio_ioport_reset(struct audio *audio)
 {
-	/* Make sure read/write thread are free from
-	 * sleep and knowing that system is not able
-	 * to process io request at the moment
-	 */
-	wake_up(&audio->write_wait);
-	mutex_lock(&audio->write_lock);
-	audio_flush(audio);
-	mutex_unlock(&audio->write_lock);
-	wake_up(&audio->read_wait);
-	mutex_lock(&audio->read_lock);
-	audio_flush_pcm_buf(audio);
-	mutex_unlock(&audio->read_lock);
+	if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
+		/* If fsync is in progress, make sure
+		 * return value of fsync indicates
+		 * abort due to flush
+		 */
+		if (audio->drv_status & ADRV_STATUS_FSYNC) {
+			dprintk("%s: fsync in progress\n", __func__);
+			wake_up(&audio->write_wait);
+			mutex_lock(&audio->write_lock);
+			audio->drv_ops.out_flush(audio);
+			mutex_unlock(&audio->write_lock);
+		} else
+			audio->drv_ops.out_flush(audio);
+		audio->drv_ops.in_flush(audio);
+	} else {
+		/* Make sure read/write thread are free from
+		 * sleep and knowing that system is not able
+		 * to process io request at the moment
+		 */
+		wake_up(&audio->write_wait);
+		mutex_lock(&audio->write_lock);
+		audio->drv_ops.out_flush(audio);
+		mutex_unlock(&audio->write_lock);
+		wake_up(&audio->read_wait);
+		mutex_lock(&audio->read_lock);
+		audio->drv_ops.in_flush(audio);
+		mutex_unlock(&audio->read_lock);
+	}
 }
 
 static int audmp3_events_pending(struct audio *audio)
@@ -644,10 +907,244 @@ static long audmp3_process_event_req(struct audio *audio, void __user *arg)
 		rc = -1;
 	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 
+	if (drv_evt->event_type == AUDIO_EVENT_WRITE_DONE ||
+	    drv_evt->event_type == AUDIO_EVENT_READ_DONE) {
+		mutex_lock(&audio->lock);
+		audmp3_pmem_fixup(audio, drv_evt->payload.aio_buf.buf_addr,
+				  drv_evt->payload.aio_buf.buf_len, 0);
+		mutex_unlock(&audio->lock);
+	}
 	if (!rc && copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
 		rc = -EFAULT;
 
 	return rc;
+}
+
+static int audmp3_pmem_check(struct audio *audio,
+		void *vaddr, unsigned long len)
+{
+	struct audmp3_pmem_region *region_elt;
+	struct audmp3_pmem_region t = { .vaddr = vaddr, .len = len };
+
+	list_for_each_entry(region_elt, &audio->pmem_region_queue, list) {
+		if (CONTAINS(region_elt, &t) || CONTAINS(&t, region_elt) ||
+		    OVERLAPS(region_elt, &t)) {
+			pr_err("region (vaddr %p len %ld)"
+				" clashes with registered region"
+				" (vaddr %p paddr %p len %ld)\n",
+				vaddr, len,
+				region_elt->vaddr,
+				(void *)region_elt->paddr,
+				region_elt->len);
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static int audmp3_pmem_add(struct audio *audio,
+	struct msm_audio_pmem_info *info)
+{
+	unsigned long paddr, kvaddr, len;
+	struct file *file;
+	struct audmp3_pmem_region *region;
+	int rc = -EINVAL;
+
+	dprintk("%s()\n", __func__);
+	region = kmalloc(sizeof(*region), GFP_KERNEL);
+
+	if (!region) {
+		rc = -ENOMEM;
+		goto end;
+	}
+
+	if (get_pmem_file(info->fd, &paddr, &kvaddr, &len, &file)) {
+		kfree(region);
+		goto end;
+	}
+
+	rc = audmp3_pmem_check(audio, info->vaddr, len);
+	if (rc < 0) {
+		put_pmem_file(file);
+		kfree(region);
+		goto end;
+	}
+
+	region->vaddr = info->vaddr;
+	region->fd = info->fd;
+	region->paddr = paddr;
+	region->kvaddr = kvaddr;
+	region->len = len;
+	region->file = file;
+	region->ref_cnt = 0;
+	dprintk("%s: add region paddr %lx vaddr %p, len %lu\n",
+		__func__, region->paddr, region->vaddr, region->len);
+	list_add_tail(&region->list, &audio->pmem_region_queue);
+end:
+	return rc;
+}
+
+static int audmp3_pmem_remove(struct audio *audio,
+	struct msm_audio_pmem_info *info)
+{
+	struct audmp3_pmem_region *region;
+	struct list_head *ptr, *next;
+	int rc = -EINVAL;
+
+	dprintk("%s() info fd %d vaddr %p\n",
+		__func__, info->fd, info->vaddr);
+
+	list_for_each_safe(ptr, next, &audio->pmem_region_queue) {
+		region = list_entry(ptr, struct audmp3_pmem_region, list);
+
+		if ((region->fd == info->fd) &&
+		    (region->vaddr == info->vaddr)) {
+			if (region->ref_cnt) {
+				pr_info("%s: region %p in use ref_cnt %d\n",
+				__func__, region, region->ref_cnt);
+				break;
+			}
+			dprintk("%s: remove region fd %d vaddr %p \n", __func__,
+				info->fd, info->vaddr);
+			list_del(&region->list);
+			put_pmem_file(region->file);
+			kfree(region);
+			rc = 0;
+			break;
+		}
+	}
+
+	return rc;
+}
+
+static int audmp3_pmem_lookup_vaddr(struct audio *audio, void *addr,
+		     unsigned long len, struct audmp3_pmem_region **region)
+{
+	struct audmp3_pmem_region *region_elt;
+
+	int match_count = 0;
+
+	*region = NULL;
+
+	/* returns physical address or zero */
+	list_for_each_entry(region_elt, &audio->pmem_region_queue,
+		list) {
+		if (addr >= region_elt->vaddr &&
+		    addr < region_elt->vaddr + region_elt->len &&
+		    addr + len <= region_elt->vaddr + region_elt->len) {
+			/* offset since we could pass vaddr inside a registerd
+			 * pmem buffer
+			 */
+
+			match_count++;
+			if (!*region)
+				*region = region_elt;
+		}
+	}
+
+	if (match_count > 1) {
+		pr_err("%s:	multiple hits for vaddr %p, len %ld\n",
+			__func__, addr, len);
+		list_for_each_entry(region_elt,
+		  &audio->pmem_region_queue, list) {
+			if (addr >= region_elt->vaddr &&
+			    addr < region_elt->vaddr + region_elt->len &&
+			    addr + len <= region_elt->vaddr + region_elt->len)
+				pr_err("\t%p, %ld --> %p\n",
+					region_elt->vaddr,
+					region_elt->len,
+					(void *)region_elt->paddr);
+		}
+	}
+
+	return *region ? 0 : -1;
+}
+
+unsigned long audmp3_pmem_fixup(struct audio *audio, void *addr,
+		    unsigned long len, int ref_up)
+{
+	struct audmp3_pmem_region *region;
+	unsigned long paddr;
+	int ret;
+
+	ret = audmp3_pmem_lookup_vaddr(audio, addr, len, &region);
+	if (ret) {
+		pr_err("%s: lookup (%p, %ld) failed\n",
+		   __func__, addr, len);
+		return 0;
+	}
+	if (ref_up)
+		region->ref_cnt++;
+	else
+		region->ref_cnt--;
+	dprintk("%s: found region %p ref_cnt %d\n",
+		__func__, region, region->ref_cnt);
+	paddr = region->paddr + (addr - region->vaddr);
+	return paddr;
+}
+
+/* audio -> lock must be held at this point */
+static int audmp3_aio_buf_add(struct audio *audio, unsigned dir,
+	void __user *arg)
+{
+	unsigned long flags;
+	struct audmp3_buffer_node *buf_node;
+
+	buf_node = kmalloc(sizeof(*buf_node), GFP_KERNEL);
+
+	if (!buf_node)
+		return -ENOMEM;
+
+	if (copy_from_user(&buf_node->buf, arg, sizeof(buf_node->buf))) {
+		kfree(buf_node);
+		return -EFAULT;
+	}
+
+	dprintk("%s: node %p dir %x buf_addr %p buf_len %d data_len %d\n",
+	__func__,
+	buf_node,
+	dir,
+	buf_node->buf.buf_addr,
+	buf_node->buf.buf_len,
+	buf_node->buf.data_len);
+
+	buf_node->paddr = audmp3_pmem_fixup(
+		audio, buf_node->buf.buf_addr,
+		buf_node->buf.buf_len, 1);
+
+	if (dir) {
+		/* write */
+		if (!buf_node->paddr ||
+		    (buf_node->paddr & 0x1) ||
+		    (buf_node->buf.data_len & 0x1) ||
+		    (!audio->pcm_feedback &&
+		    !buf_node->buf.data_len)) {
+			kfree(buf_node);
+			return -EINVAL;
+		}
+		spin_lock_irqsave(&audio->dsp_lock, flags);
+		list_add_tail(&buf_node->list, &audio->out_queue);
+		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		audio->drv_ops.send_data(audio, 0);
+	} else {
+		/* read */
+		if (!buf_node->paddr ||
+		    (buf_node->paddr & 0x1) ||
+		    (buf_node->buf.buf_len < PCM_BUFSZ_MIN)) {
+			kfree(buf_node);
+			return -EINVAL;
+		}
+		spin_lock_irqsave(&audio->dsp_lock, flags);
+		list_add_tail(&buf_node->list, &audio->in_queue);
+		audio->drv_ops.buffer_refresh(audio);
+		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+	}
+
+	dprintk("%s: Add buf_node %p paddr %lx\n",
+		__func__, buf_node, buf_node->paddr);
+
+	return 0;
 }
 
 static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
@@ -780,6 +1277,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				rc = -EFAULT;
 				break;
 			}
+
+			if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
+				audio->pcm_feedback =
+				(config.pcm_feedback ? 1 : 0);
+				break;
+			}
+
 			if ((config.buffer_count > PCM_BUF_MAX_COUNT) ||
 			    (config.buffer_count == 1))
 				config.buffer_count = PCM_BUF_MAX_COUNT;
@@ -835,6 +1339,40 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		dprintk("%s: AUDIO_PAUSE %ld\n", __func__, arg);
 		rc = audpp_pause(audio->dec_id, (int) arg);
 		break;
+
+	case AUDIO_REGISTER_PMEM: {
+			struct msm_audio_pmem_info info;
+			dprintk("%s: AUDIO_REGISTER_PMEM\n", __func__);
+			if (copy_from_user(&info, (void *) arg, sizeof(info)))
+				rc = -EFAULT;
+			else
+				rc = audmp3_pmem_add(audio, &info);
+			break;
+		}
+
+	case AUDIO_DEREGISTER_PMEM: {
+			struct msm_audio_pmem_info info;
+			dprintk("%s: AUDIO_DEREGISTER_PMEM\n", __func__);
+			if (copy_from_user(&info, (void *) arg, sizeof(info)))
+				rc = -EFAULT;
+			else
+				rc = audmp3_pmem_remove(audio, &info);
+			break;
+		}
+	case AUDIO_ASYNC_WRITE:
+		if (audio->drv_status & ADRV_STATUS_FSYNC)
+			rc = -EBUSY;
+		else
+			rc = audmp3_aio_buf_add(audio, 1, (void __user *) arg);
+		break;
+
+	case AUDIO_ASYNC_READ:
+		if (audio->pcm_feedback)
+			rc = audmp3_aio_buf_add(audio, 0, (void __user *) arg);
+		else
+			rc = -EPERM;
+		break;
+
 	default:
 		rc = -EINVAL;
 	}
@@ -843,18 +1381,46 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 }
 
 /* Only useful in tunnel-mode */
-int audmp3_fsync(struct file *file, struct dentry *dentry, int datasync)
+int audmp3_async_fsync(struct audio *audio)
 {
-	struct audio *audio = file->private_data;
-	struct buffer *frame;
 	int rc = 0;
 
 	dprintk("%s()\n", __func__);
 
-	if (!audio->running || audio->pcm_feedback) {
-		rc = -EINVAL;
-		goto done_nolock;
-	}
+	/* Blocking client sends more data */
+	mutex_lock(&audio->lock);
+	audio->drv_status |= ADRV_STATUS_FSYNC;
+	mutex_unlock(&audio->lock);
+
+	mutex_lock(&audio->write_lock);
+	/* pcm dmamiss message is sent continously
+	 * when decoder is starved so no race
+	 * condition concern
+	 */
+	audio->teos = 0;
+
+	rc = wait_event_interruptible(audio->write_wait,
+		(audio->teos && audio->out_needed &&
+		list_empty(&audio->out_queue))
+		|| audio->wflush || audio->stopped);
+
+	if (audio->stopped || audio->wflush)
+		rc = -EBUSY;
+
+	mutex_unlock(&audio->write_lock);
+	mutex_lock(&audio->lock);
+	audio->drv_status &= ~ADRV_STATUS_FSYNC;
+	mutex_unlock(&audio->lock);
+
+	return rc;
+}
+
+int audmp3_sync_fsync(struct audio *audio)
+{
+	struct buffer *frame;
+	int rc = 0;
+
+	dprintk("%s()\n", __func__);
 
 	mutex_lock(&audio->write_lock);
 
@@ -876,7 +1442,7 @@ int audmp3_fsync(struct file *file, struct dentry *dentry, int datasync)
 		((char *) frame->data)[0] = audio->rsv_byte;
 		((char *) frame->data)[1] = 0;
 		frame->used = 2;
-		audplay_send_data(audio, 0);
+		audio->drv_ops.send_data(audio, 0);
 
 		rc = wait_event_interruptible(audio->write_wait,
 			(!audio->out[0].used &&
@@ -905,8 +1471,17 @@ int audmp3_fsync(struct file *file, struct dentry *dentry, int datasync)
 
 done:
 	mutex_unlock(&audio->write_lock);
-done_nolock:
 	return rc;
+}
+
+int audmp3_fsync(struct file *file, struct dentry *dentry, int datasync)
+{
+	struct audio *audio = file->private_data;
+
+	if (!audio->running || audio->pcm_feedback)
+		return -EINVAL;
+
+	return audio->drv_ops.fsync(audio);
 }
 
 static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
@@ -916,7 +1491,9 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 	const char __user *start = buf;
 	int rc = 0;
 
-	if (!audio->pcm_feedback)
+	if (audio->drv_status & ADRV_STATUS_AIO_INTF)
+		return -EPERM;
+	else if (!audio->pcm_feedback)
 		return 0; /* PCM feedback disabled. Nothing to read */
 
 	mutex_lock(&audio->read_lock);
@@ -991,7 +1568,7 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 	if (audio->buf_refresh && !audio->rflush) {
 		audio->buf_refresh = 0;
 		pr_info("audio_read: kick start pcm feedback again\n");
-		audplay_buffer_refresh(audio);
+		audio->drv_ops.buffer_refresh(audio);
 	}
 
 	mutex_unlock(&audio->read_lock);
@@ -1042,7 +1619,7 @@ static int audmp3_handle_eos(struct audio *audio)
 		audio->out_head ^= 1;
 		frame->used = 2;
 		audio->reserved = 0;
-		audplay_send_data(audio, 0);
+		audio->drv_ops.send_data(audio, 0);
 	}
 
 	rc = wait_event_interruptible(audio->write_wait,
@@ -1075,6 +1652,9 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 	char *cpy_ptr;
 	int rc = 0;
 	unsigned dsize;
+
+	if (audio->drv_status & ADRV_STATUS_AIO_INTF)
+		return -EPERM;
 
 	dprintk("%s: cnt=%d\n", __func__, count);
 
@@ -1129,7 +1709,7 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		if (dsize > 0) {
 			audio->out_head ^= 1;
 			frame->used = dsize;
-			audplay_send_data(audio, 0);
+			audio->drv_ops.send_data(audio, 0);
 		}
 	}
 	mutex_unlock(&audio->write_lock);
@@ -1137,6 +1717,21 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		return buf - start;
 
 	return rc;
+}
+
+static void audmp3_reset_pmem_region(struct audio *audio)
+{
+	struct audmp3_pmem_region *region;
+	struct list_head *ptr, *next;
+
+	list_for_each_safe(ptr, next, &audio->pmem_region_queue) {
+		region = list_entry(ptr, struct audmp3_pmem_region, list);
+		list_del(&region->list);
+		put_pmem_file(region->file);
+		kfree(region);
+	}
+
+	return;
 }
 
 static int audio_release(struct inode *inode, struct file *file)
@@ -1147,8 +1742,10 @@ static int audio_release(struct inode *inode, struct file *file)
 
 	mutex_lock(&audio->lock);
 	audio_disable(audio);
-	audio_flush(audio);
-	audio_flush_pcm_buf(audio);
+	audio->drv_ops.out_flush(audio);
+	audio->drv_ops.in_flush(audio);
+	audmp3_reset_pmem_region(audio);
+
 	msm_adsp_put(audio->audplay);
 	audio->audplay = NULL;
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -1169,6 +1766,7 @@ static int audio_release(struct inode *inode, struct file *file)
 	audio->wflush = 0;
 	audio->rflush = 0;
 	audio->pcm_feedback = 0;
+	audio->drv_status = 0;
 	mutex_unlock(&audio->lock);
 	return 0;
 }
@@ -1251,12 +1849,33 @@ static int audio_open(struct inode *inode, struct file *file)
 		goto done;
 	}
 
+	audio->drv_status = 0;
+
+	if (file->f_flags & O_NONBLOCK) {
+		pr_info("%s: set to aio interface \n", __func__);
+		audio->drv_status |= ADRV_STATUS_AIO_INTF;
+		audio->drv_ops.pcm_buf_update = audmp3_async_pcm_buf_update;
+		audio->drv_ops.buffer_refresh = audmp3_async_buffer_refresh;
+		audio->drv_ops.send_data = audmp3_async_send_data;
+		audio->drv_ops.out_flush = audmp3_async_flush;
+		audio->drv_ops.in_flush = audmp3_async_flush_pcm_buf;
+		audio->drv_ops.fsync = audmp3_async_fsync;
+	} else {
+		pr_info("%s: set to std io interface \n", __func__);
+		audio->drv_ops.pcm_buf_update = audio_update_pcm_buf_entry;
+		audio->drv_ops.buffer_refresh = audplay_buffer_refresh;
+		audio->drv_ops.send_data = audplay_send_data;
+		audio->drv_ops.out_flush = audio_flush;
+		audio->drv_ops.in_flush = audio_flush_pcm_buf;
+		audio->drv_ops.fsync = audmp3_sync_fsync;
+	}
+
 	audio->out_sample_rate = 44100;
 	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
 	audio->dec_id = 0;
 	audio->volume = 0x2000;	/* equal to Q13 number 1.0 Unit Gain */
 
-	audio_flush(audio);
+	audio->drv_ops.out_flush(audio);
 
 	file->private_data = audio;
 	audio->opened = 1;
@@ -1408,6 +2027,9 @@ static int __init audio_init(void)
 	spin_lock_init(&the_mp3_audio.dsp_lock);
 	init_waitqueue_head(&the_mp3_audio.write_wait);
 	init_waitqueue_head(&the_mp3_audio.read_wait);
+	INIT_LIST_HEAD(&the_mp3_audio.out_queue);
+	INIT_LIST_HEAD(&the_mp3_audio.in_queue);
+	INIT_LIST_HEAD(&the_mp3_audio.pmem_region_queue);
 	the_mp3_audio.read_data = NULL;
 #ifdef CONFIG_DEBUG_FS
 	debugfs_create_file("msm_mp3", S_IFREG | S_IRUGO, NULL,
