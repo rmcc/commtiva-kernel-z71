@@ -977,6 +977,12 @@ static void usb_reset(struct usb_info *ui)
 	/* select ULPI phy */
 	writel(0x80000000, USB_PORTSC);
 
+	/* electrical compliance failure in eye-diagram tests
+	 * were observed w/ integrated phy. To avoid failure
+	 * raise signal amplitude to 400mv
+	 */
+	ulpi_write(ui, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
+
 	ulpi_init(ui);
 
 	writel(ui->dma, USB_ENDPOINTLISTADDR);
