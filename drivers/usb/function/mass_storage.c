@@ -1065,7 +1065,9 @@ static int do_write(struct fsg_dev *fsg)
 							BUF_STATE_BUSY)
 						break;
 				}
-				if (i == NUM_BUFFERS) {
+				/* Check whether we received the complete
+				 * data from the host, before sending csw */
+				if (!amount_left_to_req && i == NUM_BUFFERS) {
 					csw_hack_sent = 1;
 					send_status(fsg);
 				}
