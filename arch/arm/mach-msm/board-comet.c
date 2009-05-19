@@ -98,16 +98,60 @@
 #define MSM_PMEM_GPU0_SIZE	(MSM_SMI_SIZE - MSM_FB_SIZE)
 
 #define COMET_CPLD_START                 0x70004000
-#define COMET_CPLD_SIZE                  0x00000020
 #define COMET_CPLD_PER_ENABLE            0x00000010
 #define COMET_CPLD_PER_RESET             0x00000018
-#define COMET_CPLD_PER_RESET_BT_RESET    0x00000001
-#define COMET_CPLD_PER_RESET_ALL_RESET   0x000000FF
+#define COMET_CPLD_STATUS                0x00000028
+#define COMET_CPLD_EXT_PER_ENABLE        0x00000030
+#define COMET_CPLD_I2C_ENABLE            0x00000038
+#define COMET_CPLD_EXT_PER_RESET         0x00000048
+#define COMET_CPLD_VERSION               0x00000058
+
+#define COMET_CPLD_SIZE                  0x00000060
+#define COMET_CPLD_STATUS_WVGA           0x0004
+#define COMET_CPLD_VERSION_MAJOR         0xFF00
+#define COMET_CPLD_PER_ENABLE_WVGA       0x0400
+#define COMET_CPLD_PER_ENABLE_LVDS       0x0200
+#define COMET_CPLD_PER_ENABLE_WXGA       0x0040
+#define COMET_CPLD_EXT_PER_ENABLE_WXGA   0x0080
+
+static int                  cpld_version;
+static bool                 wvga_present;
+static bool                 wxga_present;
+static struct comet_cpld_t {
+	u16 per_reset_all_reset;
+	u16 ext_per_reset_all_reset;
+	u16 i2c_enable;
+	u16 per_enable_all;
+	u16 ext_per_enable_all;
+	u16 bt_reset_reg;
+	u16 bt_reset_mask;
+} comet_cpld[] = {
+	[0] = {
+		.per_reset_all_reset     = 0x00FF,
+		/* enable all peripherals except microphones and */
+		/* reset line for i2c touchpad                   */
+		.per_enable_all          = 0xFFD8,
+		.bt_reset_reg            = 0x0018,
+		.bt_reset_mask           = 0x0001,
+	},
+	[1] = {
+		.per_reset_all_reset     = 0x00BF,
+		.ext_per_reset_all_reset = 0x0007,
+		.i2c_enable              = 0x07FF,
+		/* enable all peripherals except microphones and */
+		/* displays                                      */
+		.per_enable_all          = 0xF9B0,
+		.ext_per_enable_all      = 0x007F,
+		.bt_reset_reg            = 0x0048,
+		.bt_reset_mask           = 0x0004,
+	},
+};
+static struct comet_cpld_t *cpld_info;
 
 static struct resource smc911x_resources[] = {
 	[0] = {
-		.start  = 0x90000000,
-		.end    = 0x90000100,
+		.start  = 0x84000000,
+		.end    = 0x84000100,
 		.flags  = IORESOURCE_MEM,
 	},
 	[1] = {
@@ -318,7 +362,8 @@ static int msm_fb_detect_panel(const char *name)
 {
 	int ret;
 
-	if (!strcmp(name, "mddi_toshiba_wvga"))
+	if ((!strcmp(name, "mddi_toshiba_wvga") && wvga_present) ||
+	    (!strcmp(name, "lcdc_wxga") && wxga_present))
 		ret = 0;
 	else
 		ret = -ENODEV;
@@ -526,12 +571,12 @@ static int bluetooth_power(int on)
 		}
 
 		gpio_set_value(22, on); /* PWR_EN */
-		writeb(COMET_CPLD_PER_RESET_BT_RESET,
-		       cpld_base + COMET_CPLD_PER_RESET); /* SYSRST */
+		writeb(cpld_info->bt_reset_mask,
+		       cpld_base + cpld_info->bt_reset_reg); /* SYSRST */
 
 	} else {
-		writeb(COMET_CPLD_PER_RESET_BT_RESET,
-		       cpld_base + COMET_CPLD_PER_RESET); /* SYSRST */
+		writeb(cpld_info->bt_reset_mask,
+		       cpld_base + cpld_info->bt_reset_reg); /* SYSRST */
 		gpio_set_value(22, on); /* PWR_EN */
 
 		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_off); pin++) {
@@ -948,15 +993,49 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 static void __init comet_init(void)
 {
 	char __iomem *cpld_base;
+	int           per_enable;
+	int           ext_per_enable;
 
 	cpld_base = comet_cpld_base();
-	if (cpld_base) {
-		/* enable all peripherals except microphones and */
-		/* reset line for i2c touchpad                   */
-		writew(0xFFD8, cpld_base + COMET_CPLD_PER_ENABLE);
-		writew(COMET_CPLD_PER_RESET_ALL_RESET,
-		       cpld_base + COMET_CPLD_PER_RESET);
+
+	if (!cpld_base)
+		return;
+
+	cpld_version = (readw(cpld_base + COMET_CPLD_VERSION) &
+			COMET_CPLD_VERSION_MAJOR) >> 8;
+	if (cpld_version >= 2) {
+		cpld_info = &comet_cpld[1];
+		per_enable = cpld_info->per_enable_all;
+		wvga_present = (readw(cpld_base + COMET_CPLD_STATUS)
+				& COMET_CPLD_STATUS_WVGA) != 0;
+		wxga_present = !wvga_present;
+		ext_per_enable = cpld_info->ext_per_enable_all;
+		if (wvga_present)
+			per_enable |= COMET_CPLD_PER_ENABLE_WVGA;
+		else {
+			per_enable |= COMET_CPLD_PER_ENABLE_LVDS |
+				COMET_CPLD_PER_ENABLE_WXGA;
+			ext_per_enable |= COMET_CPLD_EXT_PER_ENABLE_WXGA;
+		}
+		writew(ext_per_enable,
+		       cpld_base + COMET_CPLD_EXT_PER_ENABLE);
+		writew(cpld_info->i2c_enable,
+		       cpld_base + COMET_CPLD_I2C_ENABLE);
+		writew(cpld_info->ext_per_reset_all_reset,
+		       cpld_base + COMET_CPLD_EXT_PER_RESET);
+	} else {
+		cpld_info = &comet_cpld[0];
+		wvga_present = 1;
+		wxga_present = 1;
+		per_enable = cpld_info->per_enable_all;
+		smc911x_resources[0].start = 0x90000000;
+		smc911x_resources[0].end   = 0x90000100;
 	}
+
+	writew(per_enable,
+	       cpld_base + COMET_CPLD_PER_ENABLE);
+	writew(cpld_info->per_reset_all_reset,
+	       cpld_base + COMET_CPLD_PER_RESET);
 
 	msm_acpu_clock_init(&comet_clock_data);
 
