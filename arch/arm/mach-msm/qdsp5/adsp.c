@@ -137,7 +137,7 @@ static int rpc_adsp_rtos_app_to_modem(uint32_t cmd, uint32_t module,
 	rpc_req.cmd = cpu_to_be32(cmd);
 	rpc_req.proc_id = cpu_to_be32(RPC_ADSP_RTOS_PROC_APPS);
 	rpc_req.module = cpu_to_be32(module);
-	rc = msm_rpc_call_reply(adsp_info.init_info_rpc_client,
+	rc = msm_rpc_call_reply(adsp_module->rpc_client,
 					RPC_ADSP_RTOS_APP_TO_MODEM_PROC,
 					&rpc_req, sizeof(rpc_req),
 					&rpc_rsp, sizeof(rpc_rsp),
