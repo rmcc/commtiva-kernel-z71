@@ -87,7 +87,7 @@ struct logger_tag {
 
 static struct kset *logger_kset;
 
-unsigned char logger_default_priority = LOG_PRIORITY_INFO;
+unsigned char logger_default_priority = LOG_PRIORITY_VERBOSE;
 EXPORT_SYMBOL(logger_default_priority);
 
 int logger_default_enabled = 1;
