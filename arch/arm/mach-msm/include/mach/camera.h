@@ -154,6 +154,10 @@ struct msm_sync_t {
 	struct list_head ctrl_status_queue;
 	wait_queue_head_t ctrl_status_wait;
 
+	spinlock_t af_status_lock;
+	struct msm_ctrl_cmd_t af_status;
+	int af_flag;
+	wait_queue_head_t af_status_wait;
 	struct hlist_head frame;
 	struct hlist_head stats;
 };
