@@ -967,9 +967,6 @@ static void usb_reset(struct usb_info *ui)
 	if (ui->phy_reset)
 		ui->phy_reset();
 
-	/* INCR4 BURST mode */
-	writel(0x01, USB_SBUSCFG);
-
 	/* select DEVICE mode */
 	writel(0x12, USB_USBMODE);
 	msleep(1);
@@ -982,6 +979,13 @@ static void usb_reset(struct usb_info *ui)
 	 * raise signal amplitude to 400mv
 	 */
 	ulpi_write(ui, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
+
+	/* fix potential usb stability issues with "integrated phy"
+	 * by enabling unspecified length of INCR burst and using
+	 * the AHB master interface of the AHB2AHB transactor
+	 */
+	writel(0, USB_AHB_BURST);
+	writel(0, USB_AHB_MODE);
 
 	ulpi_init(ui);
 
