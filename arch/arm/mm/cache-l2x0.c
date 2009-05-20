@@ -136,13 +136,23 @@ void l2x0_suspend(void)
 	l2x0_flush_all();
 	/* Disable the cache */
 	writel(0, l2x0_base + L2X0_CTRL);
+
+	/* Memory barrier */
+	dmb();
 }
 
 void l2x0_resume(int collapsed)
 {
-	if (collapsed)
+	if (collapsed) {
+		/* Disable the cache */
+		writel(0, l2x0_base + L2X0_CTRL);
+
 		/* Restore aux control register value */
 		writel(aux_ctrl_save, l2x0_base + L2X0_AUX_CTRL);
+
+		/* Invalidate the cache */
+		l2x0_inv_all();
+	}
 
 	/* Enable the cache */
 	writel(1, l2x0_base + L2X0_CTRL);
