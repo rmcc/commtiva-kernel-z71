@@ -82,6 +82,7 @@ struct android_dev {
 };
 
 static int acm_func_cnt;
+static int gser_func_cnt;
 static atomic_t adb_enable_excl;
 static struct android_dev *_android_dev;
 static void android_switch_composition(unsigned short pid);
@@ -130,6 +131,7 @@ static int  android_bind_config(struct usb_configuration *c)
 	int ret = -EINVAL;
 	unsigned long n;
 	acm_func_cnt = 0;
+	gser_func_cnt = 0;
 	printk(KERN_DEBUG "android_bind_config\n");
 	n = dev->functions;
 	while (n) {
@@ -165,6 +167,20 @@ static int  android_bind_config(struct usb_configuration *c)
 				return ret;
 			break;
 #endif
+#ifdef CONFIG_USB_F_SERIAL
+		case ANDROID_GENERIC_MODEM:
+			ret = gser_bind_config(c, 0);
+			if (ret)
+				return ret;
+			gser_func_cnt++;
+			break;
+		case ANDROID_GENERIC_NMEA:
+			ret = gser_bind_config(c, 1);
+			if (ret)
+				return ret;
+			gser_func_cnt++;
+			break;
+#endif
 		default:
 			ret = -EINVAL;
 			return ret;
@@ -190,7 +206,7 @@ static int android_unbind(struct usb_composite_dev *cdev)
 
 	if (dev->adb_enabled)
 		dev->adb_enabled = 0;
-	if (acm_func_cnt)
+	if (acm_func_cnt || gser_func_cnt)
 		gserial_cleanup();
 
 	return 0;
@@ -202,6 +218,7 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	int			gcnum;
 	int			id;
 	int			ret;
+	int                     num_ports;
 
 	printk(KERN_INFO "android_bind\n");
 
@@ -255,8 +272,9 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	usb_gadget_set_selfpowered(gadget);
 	dev->cdev = cdev;
 	device_desc.idProduct = dev->product_id;
-	if (acm_func_cnt) {
-		ret = gserial_setup(cdev->gadget, acm_func_cnt);
+	num_ports = acm_func_cnt + gser_func_cnt;
+	if (acm_func_cnt || gser_func_cnt) {
+		ret = gserial_setup(cdev->gadget, num_ports);
 		if (ret < 0)
 			return ret;
 	}

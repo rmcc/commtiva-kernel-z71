@@ -21,6 +21,8 @@
 #define ANDROID_ACM_MODEM	0x0003
 #define ANDROID_DIAG		0x0004
 #define ANDROID_ACM_NMEA	0x0005
+#define ANDROID_GENERIC_MODEM	0x0006
+#define ANDROID_GENERIC_NMEA	0x0007
 
 struct android_usb_platform_data {
 	/* USB device descriptor fields */
