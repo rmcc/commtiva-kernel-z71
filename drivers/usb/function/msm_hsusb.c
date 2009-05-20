@@ -1014,30 +1014,27 @@ static void handle_setup(struct usb_info *ui)
 
 	/* let functions handle vendor and class requests */
 	if ((ctl.bRequestType & USB_TYPE_MASK) != USB_TYPE_STANDARD) {
-		int i;
-		for (i = 0; i < ui->num_funcs; i++) {
-			struct usb_function_info *fi = ui->func[i];
-			if (!fi || !(ui->composition->functions & (1 << i)))
-				continue;
-			if (!fi->func->setup)
-				continue;
+		struct usb_function *func;
+
+		/* Send stall if received interface number is invalid */
+		if (ctl.wIndex >= ui->next_ifc_num)
+			goto stall;
+
+		func = ui->func2ifc_map[ctl.wIndex];
+		if (func && func->setup) {
 			if (ctl.bRequestType & USB_DIR_IN) {
 				struct usb_request *req = ui->setup_req;
-
-				int ret = fi->func->setup(&ctl,
+				int ret = func->setup(&ctl,
 						req->buf, SETUP_BUF_SIZE,
-						fi->func->context);
+						func->context);
 				if (ret >= 0) {
 					req->length = ret;
 					ep0_setup_send(ui, ctl.wLength);
 					return;
 				}
 			} else {
-				/* FIXME - support reading setup
-				 * data from host.
-				 */
-				int ret = fi->func->setup(&ctl, NULL, 0,
-							fi->func->context);
+				int ret = func->setup(&ctl, NULL, 0,
+							func->context);
 				if (ret >= 0) {
 					ep0_setup_ack(ui);
 					return;
