@@ -383,6 +383,13 @@ config MSM_RPCSERVERS
 	help
 	  none
 
+config MSM_RPC_PING
+	depends on MSM_ONCRPCROUTER
+	default m
+	bool "MSM rpc ping"
+	help
+	  Implements MSM rpc ping module.
+
 config MSM_RPCSERVER_HANDSET
 	depends on MSM_ONCRPCROUTER
 	default y
