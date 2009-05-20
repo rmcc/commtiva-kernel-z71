@@ -911,18 +911,17 @@ static void vfe_process_camif_sof_irq(void)
 	}
 }
 
-static int vfe_get_af_pingpong_status(void)
+static boolean vfe_get_af_pingpong_status(void)
 {
 	uint32_t busPingPongStatus;
-	int rc = 0;
 
 	busPingPongStatus =
 		readl(ctrl->vfebase + VFE_BUS_PINGPONG_STATUS);
 
 	if ((busPingPongStatus & VFE_AF_PINGPONG_STATUS_BIT) == 0)
-		return -EFAULT;
+		return FALSE;
 
-	return rc;
+	return TRUE;
 }
 
 static uint32_t vfe_read_af_buf_addr(boolean pipo)
@@ -1221,7 +1220,7 @@ vfe_parse_interrupt_status(uint32_t irqStatusIn)
 		ret.camifErrorIrq    ||
 		ret.camifOverflowIrq ||
 		ret.afOverflowIrq    ||
-		ret.awbPingpongIrq   ||
+		ret.awbOverflowIrq   ||
 		ret.busOverflowIrq   ||
 		ret.axiErrorIrq      ||
 		ret.violationIrq;
@@ -1626,10 +1625,6 @@ static void vfe_process_frame_done_irq_no_frag(
 	struct vfe_output_path_combo *in)
 {
 	uint32_t addressToRender[2];
-	static uint32_t fcnt;
-
-	if (fcnt++ < 3)
-		return;
 
 	if (!in->ackPending) {
 		vfe_process_frame_done_irq_no_frag_io(in,
@@ -3165,8 +3160,8 @@ void vfe_stats_start_af(struct vfe_cmd_stats_af_start *in)
 	memset(&cmd, 0, sizeof(cmd));
 	memset(&cmd2, 0, sizeof(cmd2));
 
-ctrl->vfeStatsCmdLocal.autoFocusEnable = in->enable;
-ctrl->vfeImaskLocal.afPingpongIrq = TRUE;
+	ctrl->vfeStatsCmdLocal.autoFocusEnable = in->enable;
+	ctrl->vfeImaskLocal.afPingpongIrq = TRUE;
 
 	cmd.windowVOffset = in->windowVOffset;
 	cmd.windowHOffset = in->windowHOffset;
@@ -3348,19 +3343,6 @@ void vfe_axi_input_config(struct vfe_cmd_axi_input_config *in)
 
 	writel(busPingpongRdIrqEnable,
 		ctrl->vfebase + VFE_BUS_PINGPONG_IRQ_EN);
-}
-
-void vfe_stats_config(struct vfe_cmd_stats_setting *in)
-{
-	ctrl->afStatsControl.addressBuffer[0] = in->afBuffer[0];
-	ctrl->afStatsControl.addressBuffer[1] = in->afBuffer[1];
-	ctrl->afStatsControl.nextFrameAddrBuf = in->afBuffer[2];
-
-	ctrl->awbStatsControl.addressBuffer[0] = in->awbBuffer[0];
-	ctrl->awbStatsControl.addressBuffer[1] = in->awbBuffer[1];
-	ctrl->awbStatsControl.nextFrameAddrBuf = in->awbBuffer[2];
-
-	vfe_stats_setting(in);
 }
 
 void vfe_axi_output_config(

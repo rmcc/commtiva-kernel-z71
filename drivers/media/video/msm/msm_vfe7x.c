@@ -448,7 +448,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 	}
 
 	switch (cmd->cmd_type) {
-	case CMD_STATS_ENABLE:
+	case CMD_STATS_AEC_AWB_ENABLE:
 	case CMD_STATS_AXI_CFG: {
 		axid = data;
 		if (!axid) {
@@ -526,7 +526,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			axid->bufnum1, sfcfg_t->af_enable);
 
 		if (axid->bufnum1 > 0) {
-			regptr = axid->region;
+			regptr = &axid->region[0];
 
 			for (i = 0; i < axid->bufnum1; i++) {
 

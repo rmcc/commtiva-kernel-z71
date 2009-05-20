@@ -915,17 +915,26 @@ static long msm_config_vfe(void __user *arg,
 	if (copy_from_user(&cfgcmd_t, arg, sizeof(cfgcmd_t)))
 		return -EFAULT;
 
-	if (cfgcmd_t.cmd_type == CMD_STATS_ENABLE) {
+	if (cfgcmd_t.cmd_type == CMD_STATS_AEC_AWB_ENABLE) {
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&msm->sync.stats,
-		MSM_PMEM_AEC_AWB, &region[0],
-		NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
+			MSM_PMEM_AEC_AWB, &region[0],
+			NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
 		axi_data.region = &region[0];
-
 	} else if (cfgcmd_t.cmd_type == CMD_STATS_AF_ENABLE) {
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&msm->sync.stats,
 			MSM_PMEM_AF, &region[0],
+			NUM_AF_STAT_OUTPUT_BUFFERS);
+		axi_data.region = &region[0];
+	} else if (cfgcmd_t.cmd_type == CMD_STATS_ENABLE) {
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&msm->sync.stats,
+			MSM_PMEM_AEC_AWB, &region[0],
+			NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
+		axi_data.bufnum2 =
+			msm_pmem_region_lookup(&msm->sync.stats,
+			MSM_PMEM_AF, &region[axi_data.bufnum1],
 			NUM_AF_STAT_OUTPUT_BUFFERS);
 		axi_data.region = &region[0];
 	}
