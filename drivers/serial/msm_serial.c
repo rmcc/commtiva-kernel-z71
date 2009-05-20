@@ -62,6 +62,8 @@ struct msm_port {
 };
 
 #define UART_TO_MSM(uart_port)	((struct msm_port *) uart_port)
+#define is_console(port)	((port)->cons && \
+				(port)->cons->index == (port)->line)
 
 static inline void msm_write(struct uart_port *port, unsigned int val,
 			     unsigned int off)
@@ -908,8 +910,6 @@ static int __init msm_console_setup(struct console *co, char *options)
 
 	msm_reset(port);
 
-	msm_deinit_clock(port);
-
 	printk(KERN_INFO "msm_serial: console setup on port #%d\n", port->line);
 
 	return uart_set_options(port, co, baud, parity, bits, flow);
@@ -1008,8 +1008,11 @@ static int msm_serial_suspend(struct platform_device *pdev, pm_message_t state)
 	struct uart_port *port;
 	port = get_port_from_line(pdev->id);
 
-	if (port)
+	if (port) {
 		uart_suspend_port(&msm_uart_driver, port);
+		if (is_console(port))
+			msm_deinit_clock(port);
+	}
 
 	return 0;
 }
@@ -1019,8 +1022,11 @@ static int msm_serial_resume(struct platform_device *pdev)
 	struct uart_port *port;
 	port = get_port_from_line(pdev->id);
 
-	if (port)
+	if (port) {
+		if (is_console(port))
+			msm_init_clock(port);
 		uart_resume_port(&msm_uart_driver, port);
+	}
 
 	return 0;
 }
