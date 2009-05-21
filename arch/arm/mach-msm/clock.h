@@ -97,7 +97,14 @@ struct clk {
 #define SPI_CLK		45
 #define VFE_AXI_CLK	46
 
-#define NR_CLKS		47
+#define USB_HS2_CLK	47  /* High speed USB 2 core clock */
+#define USB_HS2_PCLK	48  /* High speed USB 2 pbus clock */
+#define USB_HS3_CLK	49  /* High speed USB 3 core clock */
+#define USB_HS3_PCLK	50  /* High speed USB 3 pbus clock */
+
+#define GRP_PCLK	51  /* Graphics pbus clock */
+
+#define NR_CLKS		52
 
 #ifdef CONFIG_DEBUG_FS
 #define CLOCK_DBG_NAME(x) .dbg_name = x,
