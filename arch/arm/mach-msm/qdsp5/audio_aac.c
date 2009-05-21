@@ -881,46 +881,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				config.buffer_size = PCM_BUFSZ_MIN;
 
 			/* Check if pcm feedback is required */
-			if ((config.pcm_feedback) && (!audio->read_data)) {
-				dprintk("ioctl: allocate PCM buffer %d\n",
-					config.buffer_count *
-					config.buffer_size);
-				audio->read_data =
-				    dma_alloc_coherent(NULL,
-						       config.buffer_size *
-						       config.buffer_count,
-						       &audio->read_phys,
-						       GFP_KERNEL);
-				if (!audio->read_data) {
-					pr_err("audio_aac: buf alloc fail\n");
-					rc = -1;
-				} else {
-					uint8_t index;
-					uint32_t offset = 0;
+			if (config.pcm_feedback) {
 					audio->pcm_feedback = 1;
 					audio->buf_refresh = 0;
-					audio->pcm_buf_count =
-					    config.buffer_count;
 					audio->read_next = 0;
 					audio->fill_next = 0;
-
-					for (index = 0;
-					     index < config.buffer_count;
-					     index++) {
-						audio->in[index].data =
-						    audio->read_data + offset;
-						audio->in[index].addr =
-						    audio->read_phys + offset;
-						audio->in[index].size =
-						    config.buffer_size;
-						audio->in[index].used = 0;
-						offset += config.buffer_size;
-					}
-					rc = 0;
-				}
-			} else {
-				rc = 0;
 			}
+			rc = 0;
 			break;
 		}
 	case AUDIO_PAUSE:
@@ -1162,12 +1129,6 @@ static int audio_release(struct inode *inode, struct file *file)
 	wake_up(&audio->event_wait);
 	audaac_reset_event_queue(audio);
 	audio->reserved = 0;
-	if (audio->read_data != NULL) {
-		dma_free_coherent(NULL,
-				  audio->in[0].size * audio->pcm_buf_count,
-				  audio->read_data, audio->read_phys);
-		audio->read_data = NULL;
-	}
 	audio->wflush = 0;
 	audio->rflush = 0;
 	audio->pcm_feedback = 0;
@@ -1408,6 +1369,34 @@ static int __init audio_init(void)
 	the_aac_audio.out[1].data = the_aac_audio.data + pmem_sz;
 	the_aac_audio.out[1].addr = the_aac_audio.phys + pmem_sz;
 	the_aac_audio.out[1].size = pmem_sz;
+
+	the_aac_audio.read_data =
+			dma_alloc_coherent(NULL, PCM_BUFSZ_MIN *
+			PCM_BUF_MAX_COUNT,
+			&the_aac_audio.read_phys,
+			GFP_KERNEL);
+	if (!the_aac_audio.read_data) {
+		pr_err("audio_aac: buf alloc fail\n");
+		dma_free_coherent(NULL, DMASZ, the_aac_audio.data,
+						the_aac_audio.phys);
+		the_aac_audio.data = NULL;
+		goto fail_nomem;
+	} else {
+		uint8_t index;
+		uint32_t offset = 0;
+		the_aac_audio.pcm_buf_count = PCM_BUF_MAX_COUNT;
+
+		for (index = 0;
+			index < PCM_BUF_MAX_COUNT; index++) {
+			the_aac_audio.in[index].data =
+				the_aac_audio.read_data + offset;
+			the_aac_audio.in[index].addr =
+				the_aac_audio.read_phys + offset;
+			the_aac_audio.in[index].size = PCM_BUFSZ_MIN;
+			the_aac_audio.in[index].used = 0;
+			offset += PCM_BUFSZ_MIN;
+		}
+	}
 
 	mutex_init(&the_aac_audio.lock);
 	mutex_init(&the_aac_audio.write_lock);
