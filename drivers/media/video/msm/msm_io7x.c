@@ -276,6 +276,7 @@ void msm_camio_vfe_blk_reset(void)
 {
 	uint32_t val;
 
+	/* do apps reset */
 	val = readl(appbase + 0x00000210);
 	val |= 0x1;
 	writel(val, appbase + 0x00000210);
@@ -284,6 +285,17 @@ void msm_camio_vfe_blk_reset(void)
 	val = readl(appbase + 0x00000210);
 	val &= ~0x1;
 	writel(val, appbase + 0x00000210);
+	mdelay(10);
+
+	/* do axi reset */
+	val = readl(appbase + 0x00000208);
+	val |= 0x1;
+	writel(val, appbase + 0x00000208);
+	mdelay(10);
+
+	val = readl(appbase + 0x00000208);
+	val &= ~0x1;
+	writel(val, appbase + 0x00000208);
 	mdelay(10);
 }
 
