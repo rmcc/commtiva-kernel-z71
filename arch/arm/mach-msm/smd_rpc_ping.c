@@ -64,6 +64,7 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/miscdevice.h>
+#include <linux/uaccess.h>
 #include <mach/msm_rpcrouter.h>
 
 #define PING_TEST_BASE 0x31
@@ -527,6 +528,7 @@ static int ping_test_release(struct inode *ip, struct file *fp)
 		msm_rpc_unregister_client(rpc_client);
 		pr_info("%s: disconnected from remote ping server\n",
 			__func__);
+		kfree(fp->private_data);
 	}
 	mutex_unlock(&ping_mdm_lock);
 	return 0;
@@ -534,6 +536,8 @@ static int ping_test_release(struct inode *ip, struct file *fp)
 
 static int ping_test_open(struct inode *ip, struct file *fp)
 {
+	int *test_res;
+
 	mutex_lock(&ping_mdm_lock);
 	if (open_count++ == 0) {
 		rpc_client = msm_rpc_register_client("pingdef",
@@ -545,6 +549,16 @@ static int ping_test_open(struct inode *ip, struct file *fp)
 			return PTR_ERR(rpc_client);
 		}
 		pr_info("%s: connected to remote ping server\n", __func__);
+		test_res = kzalloc(sizeof(int), GFP_KERNEL);
+		if (IS_ERR(test_res)) {
+			msm_rpc_unregister_client(rpc_client);
+			pr_info("%s: disconnected from remote ping server\n",
+				__func__);
+			mutex_unlock(&ping_mdm_lock);
+			return -ENOMEM;
+		}
+
+		fp->private_data = test_res;
 	}
 	mutex_unlock(&ping_mdm_lock);
 	return 0;
@@ -589,9 +603,66 @@ static int ping_test_ioctl(struct inode *ip, struct file *fp,
 	return 0;
 }
 
+static ssize_t ping_test_read(struct file *fp, char __user *buf,
+			size_t count, loff_t *pos)
+{
+	int *test_res = fp->private_data;
+	char _buf[16];
+
+	snprintf(_buf, sizeof(_buf), "%i\n", *test_res);
+
+	return simple_read_from_buffer(buf, count, pos, _buf, strlen(_buf));
+}
+
+static ssize_t ping_test_write(struct file *fp, const char __user *buf,
+			 size_t count, loff_t *pos)
+{
+	unsigned char cmd[64];
+	int len;
+	int *test_res;
+
+	test_res =  (int *) fp->private_data;
+
+	if (count < 1)
+		return 0;
+
+	len = count > 63 ? 63 : count;
+
+	if (copy_from_user(cmd, buf, len))
+		return -EFAULT;
+
+	cmd[len] = 0;
+
+	/* lazy */
+	if (cmd[len-1] == '\n') {
+		cmd[len-1] = 0;
+		len--;
+	}
+
+	if (!strncmp(cmd, "null_test", 64)) {
+		*test_res = ping_mdm_null_test();
+	} else if (!strncmp(cmd, "reg_test", 64)) {
+		*test_res = ping_mdm_register_test();
+	} else if (!strncmp(cmd, "data_reg_test", 64)) {
+		*test_res = ping_mdm_data_register_test();
+	} else if (!strncmp(cmd, "data_cb_reg_test", 64)) {
+		*test_res = ping_mdm_data_cb_register_test();
+	} else if (!strncmp(cmd, "use_multi_clients", 64)) {
+		ping_test_use_multi_clients = 1;
+		pr_info("%s: tests to use multiple clients\n", __func__);
+	} else if (!strncmp(cmd, "use_default_client", 64)) {
+		ping_test_use_multi_clients = 0;
+		pr_info("%s: tests to use default client\n", __func__);
+	}
+
+	return count;
+}
+
 static const struct file_operations ping_test_fops = {
 	.owner = THIS_MODULE,
 	.open = ping_test_open,
+	.read = ping_test_read,
+	.write = ping_test_write,
 	.release = ping_test_release,
 	.ioctl = ping_test_ioctl,
 };
