@@ -1426,21 +1426,29 @@ static void mddi_toshiba_lcd_set_backlight(struct msm_fb_data_type *mfd)
 {
 	int32 level;
 	int ret = -EPERM;
+	int max = mfd->panel_info.bl_max;
+	int min = mfd->panel_info.bl_min;
 
 	if (mddi_toshiba_pdata && mddi_toshiba_pdata->pmic_backlight)
 		ret = mddi_toshiba_pdata->pmic_backlight(mfd->bl_level);
 
 	if (ret && mddi_toshiba_pdata && mddi_toshiba_pdata->backlight_level) {
-		level = mddi_toshiba_pdata->backlight_level(mfd->bl_level);
+		level = mddi_toshiba_pdata->backlight_level(mfd->bl_level,
+								max, min);
 
 		if (level < 0)
 			return;
 
 		if (TM_GET_PID(mfd->panel.id) == LCD_SHARP_2P4_VGA)
 			write_client_reg(TIMER0LOAD, 0x00001388, TRUE);
-
-		write_client_reg(PWM0OFF, level, TRUE);
+	} else {
+		if (!max)
+			level = 0;
+		else
+			level = (mfd->bl_level * 4999) / max;
 	}
+
+	write_client_reg(PWM0OFF, level, TRUE);
 }
 
 static void mddi_toshiba_vsync_set_handler(msm_fb_vsync_handler_type handler,	/* ISR to be executed */

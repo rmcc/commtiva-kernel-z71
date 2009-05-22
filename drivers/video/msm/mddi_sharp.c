@@ -227,9 +227,13 @@ static void mddi_sharp_lcd_set_backlight(struct msm_fb_data_type *mfd)
 {
 	uint32 regdata;
 	int32 level;
+	int max = mfd->panel_info.bl_max;
+	int min = mfd->panel_info.bl_min;
 
 	if (mddi_sharp_pdata && mddi_sharp_pdata->backlight_level) {
-		level = mddi_sharp_pdata->backlight_level(mfd->bl_level);
+		level = mddi_sharp_pdata->backlight_level(mfd->bl_level,
+							  max,
+							  min);
 
 		if (level < 0)
 			return;

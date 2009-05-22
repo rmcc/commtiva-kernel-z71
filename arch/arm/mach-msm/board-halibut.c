@@ -475,58 +475,23 @@ static int mddi_get_panel_num(void)
 		return 1;
 }
 
-static int mddi_toshiba_backlight_level(int level)
+static int mddi_toshiba_backlight_level(int level, int max, int min)
 {
 	int out_val;
 
+	if (!max)
+		return 0;
+
 	if (machine_is_msm7201a_ffa()) {
-		switch (level) {
-		case 0:
-			out_val = 0x00001387;
-			break;
-		case 1:
-			out_val = 3500;
-			break;
-		case 2:
-			out_val = 3200;
-			break;
-		case 3:
-			out_val = 2700;
-			break;
-		case 4:
-			out_val = 2200;
-			break;
-		default:
-			out_val = 0x0000;
-			break;
-		}
+		out_val = 2200 + (((max - level) * (4000 - 2200)) / max);
 	} else {
-		switch (level) {
-		case 0:
-			out_val = 0x0000;
-			break;
-		case 1:
-			out_val = 1250;
-			break;
-		case 2:
-			out_val = 2500;
-			break;
-		case 3:
-			out_val = 3750;
-			break;
-		case 4:
-			out_val = 4999;
-			break;
-		default:
-			out_val = 0x00001387;
-			break;
-		}
+		out_val = (level * 4999) / max;
 	}
 
 	return out_val;
 }
 
-static int mddi_sharp_backlight_level(int level)
+static int mddi_sharp_backlight_level(int level, int max, int min)
 {
 	if (machine_is_msm7201a_ffa())
 		return level;
