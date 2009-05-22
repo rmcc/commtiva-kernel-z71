@@ -140,7 +140,7 @@ static int __init mddi_toshiba_vga_init(void)
 	pinfo.lcd.v_pulse_width = 0;
 	pinfo.lcd.hw_vsync_mode = FALSE;
 	pinfo.lcd.vsync_notifier_period = (1 * HZ);
-	pinfo.bl_max = 4;
+	pinfo.bl_max = 99;
 	pinfo.bl_min = 1;
 	pinfo.clk_rate = 122880000;
 	pinfo.clk_min =  120000000;
