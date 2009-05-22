@@ -22,15 +22,6 @@
 #define xprintk(level, fmt, args...) \
 	printk(level "%s: " fmt , driver_name , ## args)
 
-#ifdef DEBUG
-#undef DEBUG
-#define DEBUG(fmt, args...) \
-	xprintk(KERN_DEBUG , fmt , ## args)
-#else
-#define DEBUG(fmt,args...) \
-	do { } while (0)
-#endif /* DEBUG */
-
 #ifdef VERBOSE
 #define VDEBUG DEBUG
 #else
