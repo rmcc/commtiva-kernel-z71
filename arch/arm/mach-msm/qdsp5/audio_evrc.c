@@ -50,13 +50,14 @@
 #define dprintk(format, arg...) do {} while (0)
 #endif
 
-/* Hold 30 packets of 24 bytes each*/
-#define BUFSZ 			720
+/* Hold 30 packets of 24 bytes each and 14 bytes of meta in */
+#define BUFSZ 			734
 #define DMASZ 			(BUFSZ * 2)
 
 #define AUDDEC_DEC_EVRC 	12
 
-#define PCM_BUFSZ_MIN 		1600	/* 100ms worth of data */
+#define PCM_BUFSZ_MIN 		1624	/* 100ms worth of data and
+					   and 24 bytes of meta out */
 #define PCM_BUF_MAX_COUNT 	5
 /* DSP only accepts 5 buffers at most
  * but support 2 buffers currently
@@ -71,12 +72,18 @@
 #define  AUDPP_DEC_STATUS_CFG   2
 #define  AUDPP_DEC_STATUS_PLAY  3
 
+#define AUDEVRC_METAFIELD_MASK 0xFFFF0000
+#define AUDEVRC_EOS_FLG_OFFSET 0x0A /* Offset from beginning of buffer */
+#define AUDEVRC_EOS_FLG_MASK 0x01
+#define AUDEVRC_EOS_NONE 0x0 /* No EOS detected */
+#define AUDEVRC_EOS_SET 0x1 /* EOS set in meta field */
+
 struct buffer {
 	void *data;
 	unsigned size;
 	unsigned used;		/* Input usage actual DSP produced PCM size  */
 	unsigned addr;
-	int      eos; /* non-tunnel EOS purpose */
+	unsigned short mfield_sz; /*only useful for data has meta field */
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -125,6 +132,7 @@ struct audio {
 	char *data;
 	dma_addr_t phys;
 
+	int mfield; /* meta field embedded in data */
 	int rflush; /* Read  flush */
 	int wflush; /* Write flush */
 	uint8_t opened:1;
@@ -234,10 +242,6 @@ static void audevrc_update_pcm_buf_entry(struct audio *audio,
 				audio->fill_next);
 			audio->in[audio->fill_next].used =
 				payload[3 + index * 2];
-			if (audio->in[audio->fill_next].used == 0) {
-				dprintk("%s: EOS signaled\n", __func__);
-				audio->in[audio->fill_next].eos = 1;
-			}
 			if ((++audio->fill_next) == audio->pcm_buf_count)
 				audio->fill_next = 0;
 
@@ -249,8 +253,7 @@ static void audevrc_update_pcm_buf_entry(struct audio *audio,
 			break;
 		}
 	}
-	if (audio->in[audio->fill_next].used == 0 &&
-		!audio->in[audio->fill_next].eos) {
+	if (audio->in[audio->fill_next].used == 0) {
 		audevrc_buffer_refresh(audio);
 	} else {
 		dprintk("audevrc_update_pcm_buf_entry: read cannot keep up\n");
@@ -409,26 +412,17 @@ static void audpp_cmd_cfg_routing_mode(struct audio *audio)
 static int audplay_dsp_send_data_avail(struct audio *audio,
 				       unsigned idx, unsigned len)
 {
-	audplay_cmd_bitstream_data_avail cmd;
+	struct audplay_cmd_bitstream_data_avail_nt2 cmd;
 
-	cmd.cmd_id = AUDPLAY_CMD_BITSTREAM_DATA_AVAIL;
-	cmd.decoder_id = audio->dec_id;
+	cmd.cmd_id = AUDPLAY_CMD_BITSTREAM_DATA_AVAIL_NT2;
+	if (audio->mfield)
+		cmd.decoder_id = AUDEVRC_METAFIELD_MASK |
+			(audio->out[idx].mfield_sz >> 1);
+	else
+		cmd.decoder_id = audio->dec_id;
 	cmd.buf_ptr = audio->out[idx].addr;
 	cmd.buf_size = len / 2;
 	cmd.partition_number = 0;
-	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
-}
-
-static int audplay_signal_eos(struct audio *audio)
-{
-	audplay_cmd_bitstream_data_avail cmd;
-
-	dprintk("%s()\n", __func__);
-	cmd.cmd_id              = AUDPLAY_CMD_BITSTREAM_DATA_AVAIL;
-	cmd.decoder_id  = -1; /* Set metafield to -1 */
-	cmd.buf_ptr = 0;
-	cmd.buf_size    = 0; /* Set Zero Buffer size, to signal EOS to FW */
-	cmd.partition_number    = 0;
 	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
 }
 
@@ -708,7 +702,16 @@ static long audevrc_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 	case AUDIO_SET_CONFIG:{
-			dprintk("AUDIO_SET_CONFIG not applicable \n");
+			struct msm_audio_config config;
+			if (copy_from_user
+				(&config, (void *)arg, sizeof(config))) {
+				rc = -EFAULT;
+				break;
+			}
+			audio->mfield = config.meta_field;
+			rc = 0;
+			dprintk("AUDIO_SET_CONFIG applicable only for \
+					meta field configuration\n");
 			break;
 		}
 	case AUDIO_GET_CONFIG:{
@@ -717,6 +720,7 @@ static long audevrc_ioctl(struct file *file, unsigned int cmd,
 			config.buffer_count = 2;
 			config.sample_rate = 8000;
 			config.channel_count = 1;
+			config.meta_field = 0;
 			config.unused[0] = 0;
 			config.unused[1] = 0;
 			config.unused[2] = 0;
@@ -867,8 +871,7 @@ static ssize_t audevrc_read(struct file *file, char __user *buf, size_t count,
 	while (count > 0) {
 		rc = wait_event_interruptible(audio->read_wait,
 				(audio->in[audio->read_next].used > 0) ||
-				(audio->stopped) || (audio->rflush) ||
-				(audio->in[audio->read_next].eos));
+				(audio->stopped) || (audio->rflush));
 
 		dprintk("audevrc_read() wait terminated \n");
 		if (rc < 0)
@@ -887,20 +890,6 @@ static ssize_t audevrc_read(struct file *file, char __user *buf, size_t count,
 		} else {
 			dprintk("audevrc_read: read from in[%d]\n",
 				audio->read_next);
-			if (audio->in[audio->read_next].eos) {
-				dprintk("%s: EOS set\n", __func__);
-				if (buf == start) {
-					audio->in[audio->read_next].eos = 0;
-					if ((++audio->read_next) ==
-						audio->pcm_buf_count)
-						audio->read_next = 0;
-				}
-				/* else client buffer already has data
-				 * return the buffer first so next read
-				 * returns 0 byte
-				 */
-				break;
-			}
 
 			if (copy_to_user
 			    (buf, audio->in[audio->read_next].data,
@@ -915,11 +904,12 @@ static ssize_t audevrc_read(struct file *file, char __user *buf, size_t count,
 			audio->in[audio->read_next].used = 0;
 			if ((++audio->read_next) == audio->pcm_buf_count)
 				audio->read_next = 0;
-			if (audio->in[audio->read_next].used == 0)
-				break;	/* No data ready at this moment
-					 * Exit while loop to prevent
-					 * output thread sleep too long
-					 */
+			break;
+				/* Force to exit while loop
+				 * to prevent output thread
+				 * sleep too long if data is
+				 * not ready at this moment
+				 */
 
 		}
 	}
@@ -939,11 +929,13 @@ static ssize_t audevrc_read(struct file *file, char __user *buf, size_t count,
 	return rc;
 }
 
-static int audevrc_handle_eos(struct audio *audio)
+static int audevrc_process_eos(struct audio *audio,
+		const char __user *buf_start, unsigned short mfield_size)
 {
 	int rc = 0;
+	struct buffer *frame;
 
-	mutex_lock(&audio->write_lock);
+	frame = audio->out + audio->out_head;
 
 	rc = wait_event_interruptible(audio->write_wait,
 		(audio->out_needed &&
@@ -958,9 +950,18 @@ static int audevrc_handle_eos(struct audio *audio)
 		rc = -EBUSY;
 		goto done;
 	}
-	audplay_signal_eos(audio);
+
+	if (copy_from_user(frame->data, buf_start, mfield_size)) {
+		rc = -EFAULT;
+		goto done;
+	}
+
+	frame->mfield_sz = mfield_size;
+	audio->out_head ^= 1;
+	frame->used = mfield_size;
+	audevrc_send_data(audio, 0);
+
 done:
-	mutex_unlock(&audio->write_lock);
 	return rc;
 }
 
@@ -971,20 +972,19 @@ static ssize_t audevrc_write(struct file *file, const char __user *buf,
 	const char __user *start = buf;
 	struct buffer *frame;
 	size_t xfer;
-	int rc = 0;
+	char *cpy_ptr;
+	unsigned short mfield_size = 0;
+	int rc = 0, eos_condition = AUDEVRC_EOS_NONE;
 
 	dprintk("%s: cnt=%d\n", __func__, count);
 
 	if (count & 1)
 		return -EINVAL;
 
-	if (!count) { /* client signal EOS */
-		return audevrc_handle_eos(audio);
-	}
-
 	mutex_lock(&audio->write_lock);
 	while (count > 0) {
 		frame = audio->out + audio->out_head;
+		cpy_ptr = frame->data;
 		rc = wait_event_interruptible(audio->write_wait,
 					      (frame->used == 0)
 						|| (audio->stopped)
@@ -995,23 +995,70 @@ static ssize_t audevrc_write(struct file *file, const char __user *buf,
 			rc = -EBUSY;
 			break;
 		}
-		xfer = (count > frame->size) ? frame->size : count;
-		if (copy_from_user(frame->data, buf, xfer)) {
+
+		if (audio->mfield) {
+			if (buf == start) {
+				/* Processing beginning of user buffer */
+				if (__get_user(mfield_size,
+					(unsigned short __user *) buf)) {
+					rc = -EFAULT;
+					break;
+				} else if (mfield_size > count) {
+					rc = -EINVAL;
+					break;
+				}
+				dprintk("audio_write: mf offset_val %x\n",
+						mfield_size);
+				if (copy_from_user(cpy_ptr, buf,
+							mfield_size)) {
+					rc = -EFAULT;
+					break;
+				}
+				/* Check if EOS flag is set and buffer has
+				 * contains just meta field
+				 */
+				if (cpy_ptr[AUDEVRC_EOS_FLG_OFFSET] &
+						AUDEVRC_EOS_FLG_MASK) {
+					dprintk("audio_write: eos set\n");
+					eos_condition = AUDEVRC_EOS_SET;
+					if (mfield_size == count) {
+						buf += mfield_size;
+						break;
+					} else
+					cpy_ptr[AUDEVRC_EOS_FLG_OFFSET] &=
+						~AUDEVRC_EOS_FLG_MASK;
+				}
+				 /* Check EOS to see if */
+				cpy_ptr += mfield_size;
+				count -= mfield_size;
+				buf += mfield_size;
+			 } else {
+				 mfield_size = 0;
+				 dprintk("audio_write: continuous buffer\n");
+			 }
+			 frame->mfield_sz = mfield_size;
+		}
+
+		xfer = (count > (frame->size - mfield_size)) ?
+			(frame->size - mfield_size) : count;
+		if (copy_from_user(cpy_ptr, buf, xfer)) {
 			rc = -EFAULT;
 			break;
 		}
 
-		frame->used = xfer;
+		frame->used = xfer + mfield_size;
 		audio->out_head ^= 1;
 		count -= xfer;
 		buf += xfer;
-
 		audevrc_send_data(audio, 0);
-
 	}
+	if (eos_condition == AUDEVRC_EOS_SET)
+		rc = audevrc_process_eos(audio, start, mfield_size);
 	mutex_unlock(&audio->write_lock);
-	if (buf > start)
-		return buf - start;
+	if (!rc) {
+		if (buf > start)
+			return buf - start;
+	}
 	return rc;
 }
 
@@ -1145,6 +1192,7 @@ static int audevrc_open(struct inode *inode, struct file *file)
 
 	audio->opened = 1;
 	audio->event_abort = 0;
+	audio->mfield = 0;
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	audio->suspend_ctl.node.resume = audevrc_resume;
