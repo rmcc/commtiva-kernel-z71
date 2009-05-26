@@ -102,7 +102,10 @@ enum kbd_codes {
 	QKBD_KCODE_PRTPFX1	= 0x2A,	/* set 1 PrtScr prefix  */
 	QKBD_KCODE_PRTPFX2	= 0xB7,	/* set 1 PrtScr prefix  */
 	QKBD_KCODE_BRKPFX	= 0xF0,	/* set 2 break prefix   */
-	QKBD_KCODE_OVRFL	= 0xFF	/* overflow error       */
+	QKBD_KCODE_OVRFL	= 0xFF,	/* overflow error       */
+	QKBD_KCODE_INTERR	= 0xFC, /* keybd internal error */
+	QKBD_KCODE_F7		= 0x83  /* F7 = special case    */
+
 };
 
 /* keyboard status register bit definitions */
@@ -308,9 +311,16 @@ static irqreturn_t qi2ckybd_irqhandler(int irq, void *dev_id)
 
 static int qi2ckybd_irqsetup(struct i2ckybd_record *kbdrec)
 {
-	int rc = request_irq(KBDIRQNO(kbdrec), &qi2ckybd_irqhandler,
-			     IRQF_TRIGGER_RISING | IRQF_SAMPLE_RANDOM,
-			     i2ckybd_name, kbdrec);
+	unsigned long flags;
+	int rc;
+	struct input_dev *dev = kbdrec->i2ckbd_idev;
+
+	flags = (dev->id.version >= 0x12) ?
+		IRQF_TRIGGER_FALLING | IRQF_SAMPLE_RANDOM :
+		IRQF_TRIGGER_RISING | IRQF_SAMPLE_RANDOM;
+
+	rc = request_irq(KBDIRQNO(kbdrec), &qi2ckybd_irqhandler,
+			 flags, i2ckybd_name, kbdrec);
 
 	if (rc < 0) {
 		printk(KERN_ERR
@@ -529,8 +539,12 @@ static void qi2ckybd_recoverkbd(struct work_struct *work)
 
 	rc = qi2ckybd_enablekybd(kbd);
 	if (!rc) {
-		qi2ckybd_irqsetup(kbdrec);
 		kbdrec->kybd_connected = 1;
+		if (kbdrec->scanset == 2)
+			qi2ckybd_selscanset(kbd, 2);
+		qi2ckybd_irqsetup(kbdrec);
+		/* make sure we don't drop irq */
+		schedule_work(&kbdrec->qkybd_irqwork);
 	} else
 		dev_err(&kbd->dev,
 			"recovery failed with (rc=%d)\n", rc);
@@ -599,6 +613,13 @@ static u32 pr_set1code(struct i2ckybd_record *kbdrec,
 			"I2C Keyboard Sync Failure: keyboard overflow\n");
 		xlkcode = 0;
 		kbdrec->prefix = 0;
+		break;
+	case QKBD_KCODE_INTERR:
+		dev_err(dev, "Sync Failure: keyboard internal error\n");
+		xlkcode = 0;
+		kbdrec->prefix = 0;
+		/* force a recovery */
+		*i2cerr = -EIO;
 		break;
 	default:
 		if (code >= 0)
@@ -674,6 +695,16 @@ static u32 pr_set2code(struct i2ckybd_record *kbdrec,
 		xlkcode = 0;
 		kbdrec->prefix = kbdrec->pfxstk[0] = kbdrec->pfxstk[1] = 0;
 		break;
+	case QKBD_KCODE_INTERR:
+		dev_err(dev, "Sync Failure: keyboard internal error\n");
+		xlkcode = 0;
+		kbdrec->prefix = kbdrec->pfxstk[0] = kbdrec->pfxstk[1] = 0;
+		/* force a recovery */
+		*i2cerr = -EIO;
+		break;
+	case QKBD_KCODE_F7:
+		/* F7 conflict with F5 key (0x83 vs. 0x03) */
+		code--;
 	default:
 		if (code < 0) {
 			*i2cerr = code;
@@ -840,7 +871,9 @@ static int qi2ckybd_opencb(struct input_dev *dev)
 		dev->id.version = kbdrec->product_info & 0xFF;
 		dev->id.product = (kbdrec->product_info & ~0xFF) |
 			kbdrec->scanset;
-		kbdrec->kybd_connected = 1;
+		rc = qi2ckybd_irqsetup(kbdrec);
+		if (!rc)
+			kbdrec->kybd_connected = 1;
 	} else
 		rc = -EIO;
 	return rc;
@@ -882,6 +915,9 @@ static struct input_dev *create_inputdev_instance(struct i2ckybd_record *kbdrec)
 				BIT(EV_REP);
 		idev->ledbit[0] = BIT(LED_SCROLLL) | BIT(LED_NUML) |
 			BIT(LED_CAPSL);
+		__clear_bit(LED_SCROLLL, idev->led);
+		__clear_bit(LED_NUML, idev->led);
+		__clear_bit(LED_CAPSL, idev->led);
 		memset(idev->keycode, 0, QKBD_IN_MXKYEVTS);
 
 		if (kbdrec->scanset == 1) {
@@ -1075,21 +1111,16 @@ static int __devinit qi2ckybd_probe(struct i2c_client *client,
 	if (rc)
 		goto failexit1;
 
-	INIT_WORK(&rd->qkybd_irqwork, qi2ckybd_fetchkeys);
-	rc = qi2ckybd_irqsetup(rd);
-	if (rc)
-		goto failexit2;
-
 	rc = testfor_keybd(client);
 	if (!rc)
 		device_init_wakeup(&client->dev, 1);
 	else
-		goto failexit2;
+		goto failexit1;
+
+	INIT_WORK(&rd->qkybd_irqwork, qi2ckybd_fetchkeys);
 
 	return 0;
 
- failexit2:
-	free_irq(KBDIRQNO(rd), rd);
  failexit1:
 	qi2ckybd_release_gpio(rd);
 	kfree(rd);
