@@ -182,37 +182,27 @@ static int snd_msm_device_put(struct snd_kcontrol *kcontrol,
 		uint32_t client_data;
 	} req;
 
-	struct snd_start_rep {
-		struct rpc_reply_hdr hdr;
-		uint32_t err_flag;
-	} rep;
-
 	snd_rpc_ids.device = (int)ucontrol->value.integer.value[0];
 	req.hdr.type = 0;
 	req.hdr.rpc_vers = 2;
 
-	req.rpc_snd_device = be32_to_cpu(snd_rpc_ids.device);
-	req.snd_mute_ear_mute = be32_to_cpu(1);
-	req.snd_mute_mic_mute = be32_to_cpu(0);
-	req.client_data = be32_to_cpu(0);
-
-	rc = msm_snd_rpc_connect();
-	if (rc < 0)
-		return rc;
+	req.rpc_snd_device = cpu_to_be32(snd_rpc_ids.device);
+	req.snd_mute_ear_mute = cpu_to_be32(1);
+	req.snd_mute_mic_mute = cpu_to_be32(0);
+	req.callback_ptr = -1;
+	req.client_data = cpu_to_be32(0);
 
 	req.hdr.prog = snd_rpc_ids.prog;
 	req.hdr.vers = snd_rpc_ids.vers;
 
-	rc = msm_rpc_call_reply(snd_ep, snd_rpc_ids.rpc_set_snd_device ,
-			&req, sizeof(req), &rep, sizeof(rep), 100 * HZ);
+	rc = msm_rpc_call(snd_ep, snd_rpc_ids.rpc_set_snd_device ,
+			&req, sizeof(req), 5 * HZ);
 
 	if (rc < 0) {
 		printk(KERN_ERR "%s: snd rpc call failed! rc = %d\n",
 			__func__, rc);
 	} else
 		printk(KERN_INFO "snd device connected \n");
-
-	rc = msm_snd_rpc_close();
 
 	return rc;
 }
@@ -323,11 +313,14 @@ static int __init msm_audio_init(void)
 	msm_vol_ctl.volume = MSM_PLAYBACK_DEFAULT_VOLUME;
 	msm_vol_ctl.pan = MSM_PLAYBACK_DEFAULT_PAN;
 
+	ret = msm_snd_rpc_connect();
+
 	return ret;
 }
 
 static void __exit msm_audio_exit(void)
 {
+	msm_snd_rpc_close();
 	platform_device_unregister(msm_audio_snd_device);
 }
 
