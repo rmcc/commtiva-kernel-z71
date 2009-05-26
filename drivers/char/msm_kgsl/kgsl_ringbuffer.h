@@ -160,14 +160,11 @@ struct kgsl_rbwatchdog {
 	unsigned int  rptr_sample;
 };
 
-#pragma pack(push)
-#pragma pack(1)
 #define GSL_RB_MEMPTRS_SCRATCH_COUNT	 8
 struct kgsl_rbmemptrs {
 	volatile int  rptr;
 	volatile int  wptr_poll;
 };
-#pragma pack(pop)
 
 #define GSL_RB_MEMPTRS_RPTR_OFFSET \
 	(offsetof(struct kgsl_rbmemptrs, rptr))

@@ -64,6 +64,7 @@
 #include "yamato_reg.h"
 #include <linux/firmware.h>
 #include <linux/io.h>
+#include <linux/sched.h>
 
 
 #define GSL_RB_NOP_SIZEDWORDS				2
