@@ -195,8 +195,10 @@ __v7_setup:
 	mcr	p15, 0, r10, c3, c0, 0		@ load domain access register
 #endif
 #ifdef CONFIG_ARCH_MSM_SCORPION
+#ifndef CONFIG_ARCH_MSM7X30
 	mov     r0, #0x77
 	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
+#endif
 
 	mrc     p15, 0, r0, c1, c0, 1           @ read ACTLR
 #ifdef CONFIG_CPU_CACHE_ERR_REPORT
