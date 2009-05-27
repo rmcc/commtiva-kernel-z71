@@ -26,8 +26,6 @@
 #include "devices.h"
 
 #include <asm/mach/flash.h>
-#include <linux/mtd/nand.h>
-#include <linux/mtd/partitions.h>
 
 #include <asm/mach/mmc.h>
 
@@ -282,17 +280,30 @@ struct platform_device msm_device_hsusb_host = {
 	},
 };
 
-struct flash_platform_data msm_nand_data = {
-	.parts		= NULL,
-	.nr_parts	= 0,
-};
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_NAND_PHYS		0xA0200000
+#else
+#define MSM_NAND_PHYS		0xA0A00000
+#endif
 
 static struct resource resources_nand[] = {
 	[0] = {
-		.start	= 7,
-		.end	= 7,
+		.name   = "msm_nand_dmac",
+		.start	= DMOV_NAND_CHAN,
+		.end	= DMOV_NAND_CHAN,
 		.flags	= IORESOURCE_DMA,
 	},
+	[1] = {
+		.name   = "msm_nand_phys",
+		.start  = MSM_NAND_PHYS,
+		.end    = MSM_NAND_PHYS + 0x7FF,
+		.flags  = IORESOURCE_MEM,
+	},
+};
+
+struct flash_platform_data msm_nand_data = {
+	.parts		= NULL,
+	.nr_parts	= 0,
 };
 
 struct platform_device msm_device_nand = {

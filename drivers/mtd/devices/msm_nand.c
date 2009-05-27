@@ -29,8 +29,9 @@
 
 #include <mach/dma.h>
 
-#define MSM_NAND_BASE 0xA0A00000
 #include "msm_nand.h"
+
+unsigned long msm_nand_phys;
 
 #define MSM_NAND_DMA_BUFFER_SIZE SZ_4K
 #define MSM_NAND_DMA_BUFFER_SLOTS \
@@ -3893,14 +3894,21 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 {
 	struct msm_nand_info *info;
 	struct flash_platform_data *pdata = pdev->dev.platform_data;
+	struct resource *res;
 	int err, i;
 
-	if (pdev->num_resources != 1) {
-		pr_err("invalid num_resources");
+	res = platform_get_resource_byname(pdev,
+					   IORESOURCE_MEM, "msm_nand_phys");
+	if (!res || !res->start) {
+		pr_err("invalid msm_nand_phys resource");
 		return -ENODEV;
 	}
-	if (pdev->resource[0].flags != IORESOURCE_DMA) {
-		pr_err("invalid resource type");
+	msm_nand_phys = res->start;
+
+	res = platform_get_resource_byname(pdev,
+					   IORESOURCE_DMA, "msm_nand_dmac");
+	if (!res || !res->start) {
+		pr_err("invalid msm_nand_dmac resource");
 		return -ENODEV;
 	}
 
@@ -3912,7 +3920,10 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 
 	init_waitqueue_head(&info->msm_nand.wait_queue);
 
-	info->msm_nand.dma_channel = pdev->resource[0].start;
+	info->msm_nand.dma_channel = res->start;
+	pr_info("msm_nand: phys addr 0x%lx dmac 0x%x\n",
+				msm_nand_phys, info->msm_nand.dma_channel);
+
 	/* this currently fails if dev is passed in */
 	info->msm_nand.dma_buffer =
 		dma_alloc_coherent(/*dev*/ NULL, MSM_NAND_DMA_BUFFER_SIZE,

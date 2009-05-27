@@ -19,7 +19,9 @@
 
 #include <mach/msm_iomap.h>
 
-#define NAND_REG(off) (MSM_NAND_BASE + (off))
+extern unsigned long msm_nand_phys;
+
+#define NAND_REG(off) (msm_nand_phys + (off))
 
 #define NAND_FLASH_CMD            NAND_REG(0x0000)
 #define NAND_ADDR0                NAND_REG(0x0004)
