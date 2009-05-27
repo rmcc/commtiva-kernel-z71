@@ -33,6 +33,7 @@ extern struct platform_device msm_device_sdc4;
 
 extern struct platform_device msm_device_hsusb_otg;
 extern struct platform_device msm_device_hsusb_peripheral;
+extern struct platform_device msm_device_gadget_peripheral;
 extern struct platform_device msm_device_hsusb_host;
 extern struct platform_device msm_device_hsusb_host2;
 

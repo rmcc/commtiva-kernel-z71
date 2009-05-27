@@ -978,9 +978,8 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
 	&msm_device_hsusb_otg,
 	&msm_device_hsusb_host,
-#if defined(CONFIG_USB_FUNCTION) || defined(CONFIG_USB_ANDROID)
 	&msm_device_hsusb_peripheral,
-#endif
+	&msm_device_gadget_peripheral,
 #ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
 #endif

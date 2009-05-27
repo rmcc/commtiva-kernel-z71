@@ -82,4 +82,8 @@ struct msm_hsusb_platform_data {
 	unsigned int max_axi_khz;
 };
 
+struct msm_otg_platform_data {
+	int (*rpc_connect)(int);
+	int (*phy_reset)(void);
+};
 #endif

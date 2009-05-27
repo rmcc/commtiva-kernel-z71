@@ -274,11 +274,18 @@ static struct resource resources_hsusb_peripheral[] = {
 };
 
 struct platform_device msm_device_hsusb_peripheral = {
-#ifdef CONFIG_USB_ANDROID
-	.name		= "msm_hsusb",
-#else
 	.name		= "msm_hsusb_peripheral",
-#endif
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(resources_hsusb_peripheral),
+	.resource	= resources_hsusb_peripheral,
+	.dev		= {
+		.dma_mask 		= &dma_mask,
+		.coherent_dma_mask	= 0xffffffffULL,
+	},
+};
+
+struct platform_device msm_device_gadget_peripheral = {
+	.name		= "msm_hsusb",
 	.id		= -1,
 	.num_resources	= ARRAY_SIZE(resources_hsusb_peripheral),
 	.resource	= resources_hsusb_peripheral,
