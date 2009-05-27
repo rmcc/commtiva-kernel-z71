@@ -387,6 +387,29 @@ static struct resource resources_nand[] = {
 	},
 };
 
+static struct resource resources_otg[] = {
+	{
+		.start	= 0xA0800000,
+		.end	= 0xA0800000 + SZ_1K,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_USB_HS,
+		.end	= INT_USB_HS,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_otg = {
+	.name		= "msm_otg",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(resources_otg),
+	.resource	= resources_otg,
+	.dev		= {
+		.coherent_dma_mask	= 0xffffffffULL,
+	},
+};
+
 struct flash_platform_data msm_nand_data = {
 	.parts		= NULL,
 	.nr_parts	= 0,
@@ -808,8 +831,13 @@ struct clk msm_clocks_7x01a[] = {
 	CLK_PCOM("uart_clk",	UART3_CLK,	&msm_device_uart3.dev, OFF),
 	CLK_PCOM("uartdm_clk",	UART1DM_CLK,	&msm_device_uart_dm1.dev, OFF),
 	CLK_PCOM("uartdm_clk",	UART2DM_CLK,	&msm_device_uart_dm2.dev, 0),
+#ifdef CONFIG_USB_MSM_OTG_72K
+	CLK_PCOM("usb_hs_clk",	USB_HS_CLK,	&msm_device_otg.dev, OFF),
+	CLK_PCOM("usb_hs_pclk",	USB_HS_PCLK,	&msm_device_otg.dev, OFF),
+#else
 	CLK_PCOM("usb_hs_clk",	USB_HS_CLK,	NULL, OFF),
 	CLK_PCOM("usb_hs_pclk",	USB_HS_PCLK,	NULL, OFF),
+#endif
 	CLK_PCOM("usb_otg_clk",	USB_OTG_CLK,	NULL, 0),
 	CLK_PCOM("vdc_clk",	VDC_CLK,	NULL, OFF | CLK_MIN),
 	CLK_PCOM("vfe_clk",	VFE_CLK,	NULL, OFF),
