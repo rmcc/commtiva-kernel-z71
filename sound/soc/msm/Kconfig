@@ -1,15 +1,15 @@
 menu "MSM SoC Audio support"
 
 config SND_MSM_SOC
-	tristate "SoC Audio for the MSM chip"
-	depends on ARCH_MSM && SND_SOC
+	tristate "SoC Audio for the MSM series chips"
+	depends on ARCH_MSM_ARM11 && SND_SOC
 	select MSM_ADSP
 	help
 	  To add support for ALSA PCM driver for MSM board.
 
 config SND_QSD_SOC
-	tristate "SoC Audio for the QSD chip"
-	depends on ARCH_QSD && SND_SOC && QSD_AUDIO
+	tristate "SoC Audio for the QSD8x50 chip"
+	depends on ARCH_QSD8X50 && SND_SOC && QSD_AUDIO
 	default y
 	help
 	  To add support for ALSA PCM driver for QSD8k board.

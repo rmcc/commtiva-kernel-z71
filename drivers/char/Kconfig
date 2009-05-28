@@ -1120,7 +1120,7 @@ config DCC_TTY
 
 config Q6_VENC
 	tristate "q6 video encoder driver"
-	depends on ARCH_QSD && MSM_DALRPC
+	depends on ARCH_MSM_SCORPION && MSM_DALRPC
 	default m
 	help
 	  Kernel driver for MSM QDSP6 video encoding.
@@ -1128,7 +1128,7 @@ config Q6_VENC
 config MSM_KGSL
 	tristate "MSM 3D Graphics driver for QSD8x50 and MSM7x27"
 	default n
-	depends on FB && ARM && ARCH_QSD && !MSM_HW3D
+	depends on FB && ARM && ARCH_QSD8X50 && !MSM_HW3D
 	select GENERIC_ALLOCATOR
 	select FW_LOADER
 	---help---
@@ -1140,7 +1140,7 @@ source "drivers/s390/char/Kconfig"
 
 config MSM_Q6VDEC
 	tristate "MSM QDSP6 Video Decoder Driver"
-	depends on ARCH_QSD && MSM_DALRPC
+	depends on ARCH_MSM_SCORPION && MSM_DALRPC
 	default m
 	---help---
 	  This driver provides access to MSM QDSP6 for video frame decoding.

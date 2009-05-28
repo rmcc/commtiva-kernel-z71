@@ -208,7 +208,7 @@ config MMC_SDRICOH_CS
 
 config MMC_MSM
 	tristate "Qualcomm SDCC Controller Support"
-	depends on MMC && (ARCH_MSM || ARCH_QSD)
+	depends on MMC && ARCH_MSM
 	help
 	  This provides support for the SD/MMC cell found in the
           MSM and QSD SOCs from Qualcomm.

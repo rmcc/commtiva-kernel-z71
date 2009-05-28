@@ -146,7 +146,6 @@ endif
  machine-$(CONFIG_ARCH_ORION5X)	   := orion5x
     plat-$(CONFIG_PLAT_ORION)	   := orion
  machine-$(CONFIG_ARCH_MSM)	   := msm
- machine-$(CONFIG_ARCH_QSD)	   := msm
  machine-$(CONFIG_ARCH_LOKI)       := loki
  machine-$(CONFIG_ARCH_MV78XX0)    := mv78xx0
  machine-$(CONFIG_ARCH_W90X900)    := w90x900

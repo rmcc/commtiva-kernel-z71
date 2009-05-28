@@ -245,7 +245,7 @@ config INPUT_KEYCHORD
 
 config INPUT_MSM_HANDSET
 	bool "MSM Handset event(s) driver"
-	depends on ARCH_MSM
+	depends on ARCH_MSM_ARM11
 	default n
 	help
 	  Say Y here if you want support to receive handset events on Qualcomm

@@ -180,7 +180,7 @@ config BT_HCIVHCI
 
 config MSM_BT_POWER
 	tristate "MSM Bluetooth Power Control"
-	depends on (ARCH_MSM || ARCH_QSD) && RFKILL
+	depends on ARCH_MSM && RFKILL
 	default m
 	help
 	  Provides a parameter to switch on/off power from PMIC

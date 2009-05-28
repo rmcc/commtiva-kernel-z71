@@ -403,7 +403,7 @@ do_bad(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 static int
 do_imprecise_ext(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 {
-#ifdef CONFIG_ARCH_QSD
+#ifdef CONFIG_ARCH_MSM_SCORPION
 	unsigned int regval;
 	static unsigned char flush_toggle;
 

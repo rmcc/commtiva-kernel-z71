@@ -22,7 +22,7 @@
 #define NR_MSM_IRQS 64
 #define NR_BOARD_IRQS 64
 
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #include "irqs-8xxx.h"
 #include "sirc.h"
 #else

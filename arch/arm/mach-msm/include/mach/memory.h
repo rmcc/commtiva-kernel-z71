@@ -21,13 +21,13 @@
 
 #ifdef CONFIG_QSD_BASE_24000000
 #define PHYS_OFFSET		UL(0x24000000)
-#elif defined(CONFIG_ARCH_QSD)
+#elif defined(CONFIG_ARCH_MSM_SCORPION)
 #define PHYS_OFFSET		UL(0x16000000)
 #else
 #define PHYS_OFFSET		UL(0x10000000)
 #endif
 
-#else
+#else /* !CONFIG_MSM_STACKED_MEMORY */
 
 #define PHYS_OFFSET		UL(0x00200000)
 
@@ -38,7 +38,7 @@
 #ifndef __ASSEMBLY__
 void *alloc_bootmem_aligned(unsigned long size, unsigned long alignment);
 
-#ifdef CONFIG_ARCH_MSM
+#ifdef CONFIG_ARCH_MSM_ARM11
 void write_to_strongly_ordered_memory(void);
 
 #include <asm/mach-types.h>

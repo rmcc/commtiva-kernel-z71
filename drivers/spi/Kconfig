@@ -152,9 +152,9 @@ config SPI_MPC83xx
 	  (opposed to the CPM based descriptor model).
 
 config SPI_QSD
-	tristate "QSD SPI support"
+	tristate "QSD8X50 SPI support"
 	default n
-	depends on ARCH_QSD
+	depends on ARCH_QSD8X50
 	help
 	  Support for Serial Peripheral Interface for Qualcomm 8x50
 

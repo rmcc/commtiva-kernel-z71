@@ -194,7 +194,7 @@ __v7_setup:
 	mov	r10, #0x1f			@ domains 0, 1 = manager
 	mcr	p15, 0, r10, c3, c0, 0		@ load domain access register
 #endif
-#ifdef CONFIG_ARCH_QSD
+#ifdef CONFIG_ARCH_MSM_SCORPION
 	mov     r0, #0x77
 	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
 

@@ -26,7 +26,7 @@ choice
 
 config USB_FUNCTION_MSM_HSUSB
 	boolean "MSM Highspeed USB Peripheral Controller"
-	depends on ARCH_MSM || ARCH_QSD
+	depends on ARCH_MSM
 	help
 	  High speed USB device controller for Qualcomm chipsets using
 	  USB Function framework. Controller supports IAD and

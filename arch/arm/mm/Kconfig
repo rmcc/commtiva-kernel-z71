@@ -387,8 +387,8 @@ config CPU_32v6K
 
 # ARMv7
 config CPU_V7
-	bool "Support ARM V7 processor" if ARCH_INTEGRATOR || MACH_REALVIEW_EB || ARCH_QSD
-	default y if ARCH_QSD
+	bool "Support ARM V7 processor" if ARCH_INTEGRATOR || MACH_REALVIEW_EB || ARCH_MSM_SCORPION
+	default y if ARCH_MSM_SCORPION
 	select CPU_32v6K
 	select CPU_32v7
 	select CPU_ABRT_EV7
@@ -639,7 +639,7 @@ config CPU_DCACHE_SIZE
 
 config CPU_CACHE_ERR_REPORT
 	bool "Report errors in the L1 and L2 caches"
-	depends on ARCH_QSD
+	depends on ARCH_MSM_SCORPION
 	default y
 	help
 	  Say Y here to have errors in the L1 and L2 caches reported as

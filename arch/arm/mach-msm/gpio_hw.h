@@ -33,7 +33,7 @@
 #define GPIO1_REG(off) (MSM_GPIO1_BASE + 0x800 + (off))
 #define GPIO2_REG(off) (MSM_GPIO2_BASE + 0xC00 + (off))
 
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #include "gpio_hw-8xxx.h"
 #else
 #include "gpio_hw-7xxx.h"

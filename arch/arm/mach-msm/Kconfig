@@ -1,4 +1,115 @@
-if ARCH_MSM || ARCH_QSD
+if ARCH_MSM
+
+choice
+	prompt "MSM SoC Type"
+	default ARCH_MSM7X00A
+
+config ARCH_MSM7X01A
+	bool "MSM7x00A / MSM7x01A"
+	select ARCH_MSM_ARM11
+	select CPU_V6
+
+config ARCH_MSM7X27
+	bool "MSM7x27"
+	select ARCH_MSM_ARM11
+	select CPU_V6
+
+config ARCH_MSM7X30
+	bool "MSM7x30"
+	select ARCH_MSM_SCORPION
+	select CPU_V7
+
+config ARCH_QSD8X50
+	bool "QSD8X50"
+	select ARCH_MSM_SCORPION
+	select CPU_V7
+
+endchoice
+
+config  ARCH_MSM_ARM11
+	bool
+config  ARCH_MSM_SCORPION
+	bool
+
+
+menu "MSM Board Selection"
+
+config MACH_HALIBUT
+	depends on ARCH_MSM7X01A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "Halibut Board (QCT SURF7201A)"
+	help
+	  Support for the Qualcomm SURF7201A eval board.
+
+config MACH_MSM7201A_SURF
+	depends on ARCH_MSM7X01A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "MSM7201A SURF"
+	help
+	  Support for the Qualcomm MSM7201A SURF eval board.
+
+config MACH_MSM7201A_FFA
+	depends on ARCH_MSM7X01A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "MSM7201A FFA"
+	help
+	  Support for the Qualcomm MSM7201A FFA eval board.
+
+config MACH_TROUT
+	depends on ARCH_MSM7X01A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "Trout"
+
+config MACH_MSM7X27_SURF
+	depends on ARCH_MSM7X27
+	depends on !MSM_STACKED_MEMORY
+	default y
+	bool "MSM7x27 SURF"
+	help
+	  Support for the Qualcomm MSM7x27 SURF eval board.
+
+config MACH_MSM7X27_FFA
+	depends on ARCH_MSM7X27
+	depends on !MSM_STACKED_MEMORY
+	default y
+	bool "MSM7x27 FFA"
+	help
+	  Support for the Qualcomm MSM7x27 FFA eval board.
+
+config MACH_SAPPHIRE
+	depends on ARCH_MSM7X01A
+	default n
+	bool "Sapphire"
+
+config MACH_QSD8X50_SURF
+	depends on ARCH_QSD8X50
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "QSD8x50 SURF"
+	help
+	  Support for the Qualcomm QSD8x50 SURF eval board.
+
+config MACH_QSD8X50_FFA
+	depends on ARCH_QSD8X50
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "QSD8x50 FFA"
+	help
+	  Support for the Qualcomm QSD8x50 FFA eval board.
+
+config MACH_QSD8X50_COMET
+	depends on ARCH_QSD8X50
+	depends on MSM_STACKED_MEMORY
+	default n
+	bool "QSD8x50 Comet"
+	help
+	  Support for the Qualcomm Comet eval board.
+
+endmenu
 
 config MSM_STACKED_MEMORY
 	bool "Stacked Memory"
@@ -52,107 +163,6 @@ choice
 	config MSM_DEBUG_UART3
 		bool "UART3"
 endchoice
-
-comment "MSM Board Type"
-	depends on ARCH_MSM
-
-config MACH_HALIBUT
-	depends on ARCH_MSM
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "Halibut Board (QCT SURF7201A)"
-	help
-	  Support for the Qualcomm SURF7201A eval board.
-
-config MACH_MSM7201A_SURF
-	depends on ARCH_MSM
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "MSM7201A SURF"
-	help
-	  Support for the Qualcomm MSM7201A SURF eval board.
-
-config MACH_MSM7201A_FFA
-	depends on ARCH_MSM
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "MSM7201A FFA"
-	help
-	  Support for the Qualcomm MSM7201A FFA eval board.
-
-config MACH_TROUT
-	depends on ARCH_MSM
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "Trout"
-
-config MACH_MSM7X27_SURF
-	depends on ARCH_MSM
-	depends on !MSM_STACKED_MEMORY
-	default y
-	bool "MSM7x27 SURF"
-	help
-	  Support for the Qualcomm MSM7x27 SURF eval board.
-
-config MACH_MSM7X27_FFA
-	depends on ARCH_MSM
-	depends on !MSM_STACKED_MEMORY
-	default y
-	bool "MSM7x27 FFA"
-	help
-	  Support for the Qualcomm MSM7x27 FFA eval board.
-
-# config TROUT_H2W
-
-config MACH_SAPPHIRE
-	depends on ARCH_MSM
-	default n
-	bool "Sapphire"
-
-config HTC_HEADSET
-	tristate "HTC 2 Wire detection driver"
-	default n
-	help
-	 Provides support for detecting HTC 2 wire devices, such as wired
-	 headset, on the trout platform. Can be used with the msm serial
-	 debugger, but not with serial console.
-
-config TROUT_BATTCHG
-	depends on MACH_TROUT && POWER_SUPPLY
-	default y
-	bool "Trout battery / charger driver"
-
-config HTC_PWRSINK
-	depends on MSM_SMD
-	default n
-	bool "HTC Power Sink Driver"
-
-comment "QSD Board Type"
-	depends on ARCH_QSD
-
-config MACH_QSD8X50_SURF
-	depends on ARCH_QSD
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "QSD8x50 SURF"
-	help
-	  Support for the Qualcomm QSD8x50 SURF eval board.
-
-config MACH_QSD8X50_FFA
-	depends on ARCH_QSD
-	depends on MSM_STACKED_MEMORY
-	default y
-	bool "QSD8x50 FFA"
-	help
-	  Support for the Qualcomm QSD8x50 FFA eval board.
-
-config MACH_QSD8X50_COMET
-	depends on ARCH_QSD
-	depends on MSM_STACKED_MEMORY
-	default n
-	bool "QSD8x50 Comet"
-	help
-	  Support for the Qualcomm Comet eval board.
 
 choice
 	prompt "Default Timer"
@@ -283,6 +293,24 @@ config MSM_SUSPEND_STATS_FIRST_BUCKET
 
 endif # MSM_IDLE_STATS
 
+config HTC_HEADSET
+	tristate "HTC 2 Wire detection driver"
+	default n
+	help
+	 Provides support for detecting HTC 2 wire devices, such as wired
+	 headset, on the trout platform. Can be used with the msm serial
+	 debugger, but not with serial console.
+
+config TROUT_BATTCHG
+	depends on MACH_TROUT && POWER_SUPPLY
+	default y
+	bool "Trout battery / charger driver"
+
+config HTC_PWRSINK
+	depends on MSM_SMD
+	default n
+	bool "HTC Power Sink Driver"
+
 config QSD_SVS
 	bool "QSD Static Voltage Scaling"
 	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET)
@@ -326,8 +354,8 @@ config MSM_SMD
 choice
 	prompt "MSM Shared memory interface version"
 	depends on MSM_SMD
-	default MSM_SMD_PKG3 if ARCH_MSM
-	default MSM_SMD_PKG4 if ARCH_QSD
+	default MSM_SMD_PKG3 if ARCH_MSM_ARM11
+	default MSM_SMD_PKG4 if ARCH_MSM_SCORPION
 
 	config MSM_SMD_PKG3
 	  bool "Package 3"
@@ -337,7 +365,7 @@ choice
 endchoice
 
 config MSM_N_WAY_SMD
-	depends on (MSM_SMD && (ARCH_QSD || MACH_MSM7X27_SURF || MACH_MSM7X27_FFA))
+	depends on (MSM_SMD && (ARCH_MSM_SCORPION || ARCH_MSM7X27))
 	default y
 	bool "MSM N-WAY SMD support"
 	help
@@ -345,7 +373,7 @@ config MSM_N_WAY_SMD
 	  normal APPS-MODEM SMD communication.
 
 config MSM_N_WAY_SMSM
-	depends on (MSM_SMD && (ARCH_QSD || MACH_MSM7X27_SURF || MACH_MSM7X27_FFA))
+	depends on (MSM_SMD && (ARCH_MSM_SCORPION || ARCH_MSM7X27))
 	default y
 	bool "MSM N-WAY SMSM support"
 	help
@@ -400,7 +428,7 @@ config MSM_RPCSERVER_HANDSET
 
 config MSM_DALRPC
 	bool "DAL RPC support"
-	depends on ARCH_QSD
+	depends on ARCH_MSM_SCORPION
 	default y
 	help
 	  Supports RPC calls to DAL devices on remote processor cores.
@@ -473,7 +501,6 @@ config MSM_VREG_SWITCH_INVERTED
 
 config MSM_DMA_TEST
 	tristate "MSM DMA test module"
-	depends on (ARCH_MSM || ARCH_QSD)
 	default m
 	help
 	  Intended to be compiled as a module.  Provides a device node
@@ -492,7 +519,7 @@ config WIFI_MEM_PREALLOC
 
 config QSD_AUDIO
 	bool "QSD audio"
-	depends on (ARCH_QSD && MSM_DALRPC)
+	depends on (ARCH_MSM_SCORPION && MSM_DALRPC)
 	default y
 	help
 	  Provides PCM, MP3, and AAC audio playback.
@@ -513,7 +540,7 @@ config AUDIO_ENHANCED_AAC_PLUS
 
 config SURF_FFA_GPIO_KEYPAD
 	bool "MSM SURF/FFA GPIO keypad"
-	depends on (ARCH_QSD || ARCH_MSM) && INPUT_GPIO = "y"
+	depends on INPUT_GPIO = "y"
 	default y
 	help
 	  Select if the GPIO keypad is attached.
@@ -545,10 +572,9 @@ config MSM_SLEEP_TIME_OVERRIDE
 
 config QSD_BASE_24000000
 	bool "Base memory at 0x24000000"
-	depends on ARCH_QSD
+	depends on ARCH_MSM_SCORPION
 	default n
 	help
 	  Select if physical DRAM at 0x24000000
-
 
 endif

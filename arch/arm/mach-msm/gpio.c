@@ -170,7 +170,7 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 		},
 		.chip = {
 			.start = 95,
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 			.end = 103,
 #else
 			.end = 106,
@@ -195,7 +195,7 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 			.oe =          GPIO_OE_5,
 		},
 		.chip = {
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 			.start = 104,
 			.end = 121,
 #else
@@ -210,7 +210,7 @@ struct msm_gpio_chip msm_gpio_chips[] = {
 			.clear_detect_status = msm_gpio_clear_detect_status
 		}
 	},
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 	{
 		.regs = {
 			.out =         GPIO_OUT_6,

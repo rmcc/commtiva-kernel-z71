@@ -574,7 +574,7 @@ proc_types:
 @		b	__arm6_mmu_cache_off
 @		b	__armv3_mmu_cache_flush
 
-#ifndef CONFIG_ARCH_QSD
+#ifndef CONFIG_ARCH_MSM_SCORPION
 		.word	0x00000000		@ old ARM ID
 		.word	0x0000f000
 		mov	pc, lr

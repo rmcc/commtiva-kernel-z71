@@ -49,7 +49,7 @@ module_param_named(debug_mask, msm_timer_debug_mask, int, S_IRUGO | S_IWUSR | S_
 #define CSR_PROTECTION_EN               1
 
 #define GPT_HZ 32768
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define DGT_HZ 4800000 /* DGT is run with divider of 4 */
 #else
 #define DGT_HZ 19200000 /* 19.2 MHz or 600 KHz after shift */
@@ -541,7 +541,7 @@ void msm_timer_exit_idle(int low_power)
 		clock != &msm_clocks[MSM_CLOCK_DGT]);
 
 	if (low_power) {
-#if !defined(CONFIG_ARCH_QSD)
+#if !defined(CONFIG_ARCH_MSM_SCORPION)
 		if (!(readl(clock->regbase+TIMER_ENABLE) & TIMER_ENABLE_EN))
 #endif
 		{

@@ -45,7 +45,7 @@
 #endif
 
 #define MSM_VIC_BASE          IOMEM(0xE0000000)
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_VIC_PHYS          0xAC000000
 #else
 #define MSM_VIC_PHYS          0xC0000000
@@ -53,7 +53,7 @@
 #define MSM_VIC_SIZE          SZ_4K
 
 #define MSM_CSR_BASE          IOMEM(0xE0001000)
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_CSR_PHYS          0xAC100000
 #else
 #define MSM_CSR_PHYS          0xC0100000
@@ -69,7 +69,7 @@
 #define MSM_DMOV_SIZE         SZ_4K
 
 #define MSM_GPIO1_BASE        IOMEM(0xE0003000)
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_GPIO1_PHYS        0xA9000000
 #else
 #define MSM_GPIO1_PHYS        0xA9200000
@@ -77,7 +77,7 @@
 #define MSM_GPIO1_SIZE        SZ_4K
 
 #define MSM_GPIO2_BASE        IOMEM(0xE0004000)
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_GPIO2_PHYS        0xA9100000
 #else
 #define MSM_GPIO2_PHYS        0xA9300000

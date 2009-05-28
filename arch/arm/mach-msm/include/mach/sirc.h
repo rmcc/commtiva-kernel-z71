@@ -76,7 +76,7 @@ void msm_init_sirc(void);
 void msm_sirc_enter_sleep(void);
 void msm_sirc_exit_sleep(void);
 
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 
 #include <mach/msm_iomap.h>
 

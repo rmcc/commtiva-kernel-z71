@@ -402,7 +402,7 @@ static int bad_syscall(int n, struct pt_regs *regs)
 	return regs->ARM_r0;
 }
 
-#ifdef CONFIG_ARCH_MSM
+#ifdef CONFIG_ARCH_MSM_ARM11
 #define CACHE_LINE_SIZE 32
 void flush_axi_bus_buffer(void);
 
@@ -426,14 +426,14 @@ do_cache_op(unsigned long start, unsigned long end, int flags)
 {
 	struct vm_area_struct *vma;
 
-#ifdef CONFIG_ARCH_MSM
+#ifdef CONFIG_ARCH_MSM_ARM11
 	if (end < start)
 #else
 	if (end < start || flags)
 #endif
 		return;
 
-#ifdef CONFIG_ARCH_MSM
+#ifdef CONFIG_ARCH_MSM_ARM11
 	if (flags == 1) {
 		clean_and_invalidate_user_range(start & PAGE_MASK,
 						PAGE_ALIGN(end));

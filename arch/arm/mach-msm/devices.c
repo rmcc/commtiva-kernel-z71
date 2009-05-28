@@ -91,7 +91,7 @@ struct platform_device msm_device_uart3 = {
 	.resource	= resources_uart3,
 };
 
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_UART1DM_PHYS      0xA0200000
 #define MSM_UART2DM_PHYS      0xA0900000
 #else
@@ -310,7 +310,7 @@ struct platform_device msm_device_smd = {
 	.id	= -1,
 };
 
-#if defined(CONFIG_ARCH_QSD)
+#if defined(CONFIG_ARCH_MSM_SCORPION)
 #define MSM_SDC1_BASE         0xA0300000
 #define MSM_SDC2_BASE         0xA0400000
 #define MSM_SDC3_BASE         0xA0500000

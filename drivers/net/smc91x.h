@@ -402,7 +402,7 @@ static inline void LPD7_SMC_outsw (unsigned char* a, int r,
 
 #include <asm/unit/smc91111.h>
 
-#elif defined(CONFIG_ARCH_MSM) || defined(CONFIG_ARCH_QSD)
+#elif defined(CONFIG_ARCH_MSM)
 
 #define SMC_CAN_USE_8BIT	0
 #define SMC_CAN_USE_16BIT	1

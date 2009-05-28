@@ -2121,7 +2121,7 @@ config FB_PRE_INIT_FB
 
 config FB_MSM
 	tristate "MSM Frame Buffer support"
-	depends on FB  && (ARCH_MSM || ARCH_QSD)
+	depends on FB && ARCH_MSM
 	select FB_BACKLIGHT if FB_MSM_BACKLIGHT
 	select NEW_LEDS
 	select LEDS_CLASS

@@ -1576,7 +1576,7 @@ static int __init msm_pm_init(void)
 		return -ENODEV;
 	}
 
-#ifdef CONFIG_ARCH_QSD
+#ifdef CONFIG_ARCH_MSM_SCORPION
 	/* The bootloader is responsible for initializing many of Scorpion's
 	 * coprocessor registers for things like cache timing. The state of
 	 * these coprocessor registers is lost on reset, so part of the
@@ -1590,7 +1590,7 @@ static int __init msm_pm_init(void)
 		printk(KERN_ERR "%s: failed to map reset vector\n", __func__);
 		return -ENODEV;
 	}
-#endif /* CONFIG_ARCH_QSD */
+#endif /* CONFIG_ARCH_MSM_SCORPION */
 
 	BUG_ON(msm_pm_modes == NULL);
 
