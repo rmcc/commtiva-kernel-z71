@@ -1145,12 +1145,47 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("tvenc", &tvenc_pdata);
 }
 
+static void
+msm_i2c_gpio_config(int iface, int config_type)
+{
+	int gpio_scl;
+	int gpio_sda;
+	if (iface) {
+		gpio_scl = 95;
+		gpio_sda = 96;
+	} else {
+		gpio_scl = 60;
+		gpio_sda = 61;
+	}
+	if (config_type) {
+		gpio_tlmm_config(GPIO_CFG(gpio_scl, 1, GPIO_INPUT,
+					GPIO_NO_PULL, GPIO_16MA), GPIO_ENABLE);
+		gpio_tlmm_config(GPIO_CFG(gpio_sda, 1, GPIO_INPUT,
+					GPIO_NO_PULL, GPIO_16MA), GPIO_ENABLE);
+	} else {
+		gpio_tlmm_config(GPIO_CFG(gpio_scl, 0, GPIO_OUTPUT,
+					GPIO_NO_PULL, GPIO_16MA), GPIO_ENABLE);
+		gpio_tlmm_config(GPIO_CFG(gpio_sda, 0, GPIO_OUTPUT,
+					GPIO_NO_PULL, GPIO_16MA), GPIO_ENABLE);
+	}
+}
+
 static struct msm_i2c_platform_data msm_i2c_pdata = {
 	.clk_freq = 100000,
+	.msm_i2c_config_gpio = msm_i2c_gpio_config,
 };
 
 static void __init msm_device_i2c_init(void)
 {
+	if (gpio_request(60, "i2c_pri_clk"))
+		pr_err("failed to request gpio i2c_pri_clk\n");
+	if (gpio_request(61, "i2c_pri_dat"))
+		pr_err("failed to request gpio i2c_pri_dat\n");
+	if (gpio_request(95, "i2c_sec_clk"))
+		pr_err("failed to request gpio i2c_sec_clk\n");
+	if (gpio_request(96, "i2c_sec_dat"))
+		pr_err("failed to request gpio i2c_sec_dat\n");
+
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
 

@@ -424,6 +424,11 @@ msm_i2c_probe(struct platform_device *pdev)
 		ret = -ENOSYS;
 		goto err_clk_get_failed;
 	}
+	if (!pdata->msm_i2c_config_gpio) {
+		dev_err(&pdev->dev, "config_gpio function not initialized\n");
+		ret = -ENOSYS;
+		goto err_clk_get_failed;
+	}
 	target_clk = pdata->clk_freq;
 	/* We support frequencies upto FAST Mode(400KHz) */
 	if (target_clk <= 0 || target_clk > 400000) {
@@ -482,6 +487,9 @@ msm_i2c_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "request_irq failed\n");
 		goto err_request_irq_failed;
 	}
+	/* Config GPIOs for primary and secondary lines */
+	pdata->msm_i2c_config_gpio(0, 1);
+	pdata->msm_i2c_config_gpio(1, 1);
 	return 0;
 
 /*	free_irq(dev->irq, dev); */

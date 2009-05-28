@@ -105,6 +105,7 @@ struct msm_fb_platform_data {
 
 struct msm_i2c_platform_data {
 	int clk_freq;
+	void (*msm_i2c_config_gpio)(int iface, int config_type);
 };
 
 struct msm_serial_platform_data {
