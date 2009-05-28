@@ -71,8 +71,8 @@ static int __init parse_tag_msm_partition(const struct tag *tag)
 		name[15] = 0;
 
 		ptn->name = name;
-		ptn->offset = entry->offset * 64 * 2048;
-		ptn->size = entry->size * 64 * 2048;
+		ptn->offset = entry->offset;
+		ptn->size = entry->size;
 
 		printk(KERN_INFO "Partition (from atag) %s "
 				"-- Offset:%llx Size:%llx\n",
@@ -158,7 +158,7 @@ static int get_nand_partitions(void)
 			ptn->name = name;
 
 			/*TODO: Get block count and size info */
-			ptn->offset = part_entry->offset * 64 * 2048;
+			ptn->offset = part_entry->offset;
 
 			/* For SMEM, -1 indicates remaining space in flash,
 			 * but for MTD it is 0
@@ -166,7 +166,7 @@ static int get_nand_partitions(void)
 			if (part_entry->length == (u32)-1)
 				ptn->size = 0;
 			else
-				ptn->size = part_entry->length * 64 * 2048;
+				ptn->size = part_entry->length;
 
 			msm_nand_data.nr_parts = 1;
 			msm_nand_data.parts = msm_nand_partitions;
