@@ -1358,6 +1358,7 @@ static int msmfb_blit(struct fb_info *info, void __user *p)
 
 DECLARE_MUTEX(msm_fb_ioctl_ppp_sem);
 DEFINE_MUTEX(msm_fb_ioctl_lut_sem);
+DEFINE_MUTEX(msm_fb_ioctl_hist_sem);
 
 static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
@@ -1366,6 +1367,7 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	void __user *argp = (void __user *)arg;
 	struct fb_cursor cursor;
 	struct fb_cmap cmap;
+	struct mdp_histogram hist;
 
 	int ret = 0;
 
@@ -1430,6 +1432,19 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		mutex_lock(&msm_fb_ioctl_lut_sem);
 		ret = msm_fb_set_lut(&cmap, info);
 		mutex_unlock(&msm_fb_ioctl_lut_sem);
+		break;
+
+	case MSMFB_HISTOGRAM:
+		if (!mfd->do_histogram)
+			return -ENODEV;
+
+		ret = copy_from_user(&hist, argp, sizeof(hist));
+		if (ret)
+			return ret;
+
+		mutex_lock(&msm_fb_ioctl_hist_sem);
+		ret = mfd->do_histogram(info, &hist);
+		mutex_unlock(&msm_fb_ioctl_hist_sem);
 		break;
 
 	default:

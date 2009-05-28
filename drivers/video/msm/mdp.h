@@ -266,6 +266,7 @@ struct mdp_dma_data {
 #define TV_OUT_DMA3_DONE    BIT(6)
 #define TV_ENC_UNDERRUN     BIT(7)
 #define TV_OUT_DMA3_START   BIT(13)
+#define MDP_HIST_DONE       BIT(20)
 
 #ifdef CONFIG_FB_MSM_MDP22
 #define MDP_ANY_INTR_MASK (MDP_PPP_DONE| \
@@ -276,6 +277,7 @@ struct mdp_dma_data {
 			MDP_DMA_P_DONE| \
 			MDP_DMA_S_DONE| \
 			LCDC_UNDERFLOW| \
+			MDP_HIST_DONE| \
 			TV_ENC_UNDERRUN)
 #endif
 

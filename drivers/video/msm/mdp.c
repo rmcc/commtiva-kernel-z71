@@ -214,6 +214,55 @@ static int mdp_lut_update_lcdc(struct fb_info *info, struct fb_cmap *cmap)
 
 	return 0;
 }
+
+#define MDP_HIST_MAX_BIN 32
+static __u32 mdp_hist_r[MDP_HIST_MAX_BIN];
+static __u32 mdp_hist_g[MDP_HIST_MAX_BIN];
+static __u32 mdp_hist_b[MDP_HIST_MAX_BIN];
+
+static struct mdp_histogram mdp_hist;
+static struct completion mdp_hist_comp;
+
+static int mdp_do_histogram(struct fb_info *info, struct mdp_histogram *hist)
+{
+	int ret = 0;
+
+	if (!hist->frame_cnt || (hist->bin_cnt == 0) ||
+				 (hist->bin_cnt > MDP_HIST_MAX_BIN))
+		return -EINVAL;
+
+	INIT_COMPLETION(mdp_hist_comp);
+
+	mdp_hist.bin_cnt = hist->bin_cnt;
+	mdp_hist.r = (hist->r) ? mdp_hist_r : 0;
+	mdp_hist.g = (hist->g) ? mdp_hist_g : 0;
+	mdp_hist.b = (hist->b) ? mdp_hist_b : 0;
+
+	MDP_OUTP(MDP_BASE + 0x94004, hist->frame_cnt);
+	MDP_OUTP(MDP_BASE + 0x94000, 1);
+	wait_for_completion_interruptible(&mdp_hist_comp);
+
+	if (hist->r) {
+		ret = copy_to_user(hist->r, mdp_hist.r, hist->bin_cnt*4);
+		if (ret)
+			goto hist_err;
+	}
+	if (hist->g) {
+		ret = copy_to_user(hist->g, mdp_hist.g, hist->bin_cnt*4);
+		if (ret)
+			goto hist_err;
+	}
+	if (hist->b) {
+		ret = copy_to_user(hist->b, mdp_hist.b, hist->bin_cnt*4);
+		if (ret)
+			goto hist_err;
+	}
+	return 0;
+
+hist_err:
+	printk(KERN_ERR "%s: invalid hist buffer\n", __func__);
+	return ret;
+}
 #endif
 
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
@@ -421,6 +470,20 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 			}
 		}
 #ifndef CONFIG_FB_MSM_MDP22
+		if (mdp_interrupt & MDP_HIST_DONE) {
+			outp32(MDP_BASE + 0x94018, 0x3);
+			outp32(MDP_INTR_CLEAR, MDP_HIST_DONE);
+			if (mdp_hist.r)
+				memcpy(mdp_hist.r, MDP_BASE + 0x94100,
+						mdp_hist.bin_cnt*4);
+			if (mdp_hist.g)
+				memcpy(mdp_hist.g, MDP_BASE + 0x94200,
+						mdp_hist.bin_cnt*4);
+			if (mdp_hist.b)
+				memcpy(mdp_hist.b, MDP_BASE + 0x94300,
+						mdp_hist.bin_cnt*4);
+			complete(&mdp_hist_comp);
+		}
 
 		///////////////////////////////
 		// LCDC UnderFlow
@@ -536,6 +599,10 @@ static void mdp_drv_init(void)
 	dma_s_data.waiting = FALSE;
 	init_completion(&dma_s_data.comp);
 	init_MUTEX(&dma_s_data.mutex);
+
+#ifndef CONFIG_FB_MSM_MDP22
+	init_completion(&mdp_hist_comp);
+#endif
 
 	///////////////////////////////////////////////////////
 	// initializing mdp power block counter to 0
@@ -750,6 +817,7 @@ static int mdp_probe(struct platform_device *pdev)
 			mfd->dma_fnc = mdp_dma2_update;
 			mfd->dma = &dma2_data;
 			mfd->lut_update = mdp_lut_update_nonlcdc;
+			mfd->do_histogram = mdp_do_histogram;
 		} else {
 			mfd->dma_fnc = mdp_dma_s_update;
 			mfd->dma = &dma_s_data;
@@ -770,6 +838,7 @@ static int mdp_probe(struct platform_device *pdev)
 		mfd->cursor_update = mdp_hw_cursor_update;
 #ifndef CONFIG_FB_MSM_MDP22
 		mfd->lut_update = mdp_lut_update_lcdc;
+		mfd->do_histogram = mdp_do_histogram;
 #endif
 		mfd->dma_fnc = mdp_lcdc_update;
 		mfd->dma = &dma2_data;
