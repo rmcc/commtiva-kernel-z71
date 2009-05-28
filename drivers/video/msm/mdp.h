@@ -609,6 +609,11 @@ struct mdp_dma_data {
 #define MDP_CURSOR_HEIGHT 64
 #define MDP_CURSOR_SIZE (MDP_CURSOR_WIDTH*MDP_CURSOR_WIDTH*4)
 
+#define MDP_DMA_P_LUT_C0_EN   BIT(0)
+#define MDP_DMA_P_LUT_C1_EN   BIT(1)
+#define MDP_DMA_P_LUT_C2_EN   BIT(2)
+#define MDP_DMA_P_LUT_POST    BIT(4)
+
 void mdp_hw_init(void);
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd);
 void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,

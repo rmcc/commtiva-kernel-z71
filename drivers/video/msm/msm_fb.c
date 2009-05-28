@@ -615,6 +615,17 @@ static int msm_fb_blank(int blank_mode, struct fb_info *info)
 	return msm_fb_blank_sub(blank_mode, info, mfd->op_enable);
 }
 
+static int msm_fb_set_lut(struct fb_cmap *cmap, struct fb_info *info)
+{
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	if (!mfd->lut_update)
+		return -ENODEV;
+
+	mfd->lut_update(info, cmap);
+	return 0;
+}
+
 static struct fb_ops msm_fb_ops = {
 	.owner = THIS_MODULE,
 	.fb_open = msm_fb_open,
@@ -830,7 +841,17 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			mfd->cursor_update = 0;
 	}
 
+	if (mfd->lut_update) {
+		ret = fb_alloc_cmap(&fbi->cmap, 256, 0);
+		if (ret)
+			printk(KERN_ERR "%s: fb_alloc_cmap() failed!\n",
+					__func__);
+	}
+
 	if (register_framebuffer(fbi) < 0) {
+		if (mfd->lut_update)
+			fb_dealloc_cmap(&fbi->cmap);
+
 		if (mfd->cursor_buf)
 			dma_free_coherent(NULL,
 				MDP_CURSOR_SIZE,
@@ -1336,6 +1357,7 @@ static int msmfb_blit(struct fb_info *info, void __user *p)
 }
 
 DECLARE_MUTEX(msm_fb_ioctl_ppp_sem);
+DEFINE_MUTEX(msm_fb_ioctl_lut_sem);
 
 static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
@@ -1343,6 +1365,7 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	void __user *argp = (void __user *)arg;
 	struct fb_cursor cursor;
+	struct fb_cmap cmap;
 
 	int ret = 0;
 
@@ -1397,6 +1420,16 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			return ret;
 
 		ret = msm_fb_cursor(info, &cursor);
+		break;
+
+	case MSMFB_SET_LUT:
+		ret = copy_from_user(&cmap, argp, sizeof(cmap));
+		if (ret)
+			return ret;
+
+		mutex_lock(&msm_fb_ioctl_lut_sem);
+		ret = msm_fb_set_lut(&cmap, info);
+		mutex_unlock(&msm_fb_ioctl_lut_sem);
 		break;
 
 	default:

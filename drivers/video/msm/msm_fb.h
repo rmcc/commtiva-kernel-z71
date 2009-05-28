@@ -154,7 +154,8 @@ struct msm_fb_data_type {
 	void (*dma_fnc) (struct msm_fb_data_type *mfd);
 	int (*cursor_update) (struct fb_info *info,
 			      struct fb_cursor *cursor);
-
+	int (*lut_update) (struct fb_info *info,
+			      struct fb_cmap *cmap);
 	void *cursor_buf;
 	void *cursor_buf_phys;
 

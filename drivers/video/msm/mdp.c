@@ -144,6 +144,78 @@ struct timeval mdp_ppp_timeval;
 static struct early_suspend early_suspend;
 #endif
 
+#ifndef CONFIG_FB_MSM_MDP22
+DEFINE_MUTEX(mdp_lut_push_sem);
+static int mdp_lut_i;
+static int mdp_lut_hw_update(struct fb_cmap *cmap)
+{
+	int i;
+	u16 *c[3];
+	u16 r, g, b;
+
+	c[0] = cmap->green;
+	c[1] = cmap->blue;
+	c[2] = cmap->red;
+
+	for (i = 0; i < cmap->len; i++) {
+		if (copy_from_user(&r, cmap->red++, sizeof(r)) ||
+		    copy_from_user(&g, cmap->green++, sizeof(g)) ||
+		    copy_from_user(&b, cmap->blue++, sizeof(b)))
+			return -EFAULT;
+
+		MDP_OUTP(MDP_BASE + 0x93800 +
+			(0x400*mdp_lut_i) + cmap->start*4 + i*4,
+				((g & 0xff) |
+				 ((b & 0xff) << 8) |
+				 ((r & 0xff) << 16)));
+	}
+
+	return 0;
+}
+
+static int mdp_lut_push;
+static int mdp_lut_push_i;
+static int mdp_lut_update_nonlcdc(struct fb_info *info, struct fb_cmap *cmap)
+{
+	int ret;
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	ret = mdp_lut_hw_update(cmap);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+
+	if (ret)
+		return ret;
+
+	mutex_lock(&mdp_lut_push_sem);
+	mdp_lut_push = 1;
+	mdp_lut_push_i = mdp_lut_i;
+	mutex_unlock(&mdp_lut_push_sem);
+
+	mdp_lut_i = (mdp_lut_i + 1)%2;
+
+	return 0;
+}
+
+static int mdp_lut_update_lcdc(struct fb_info *info, struct fb_cmap *cmap)
+{
+	int ret;
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	ret = mdp_lut_hw_update(cmap);
+
+	if (ret) {
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+		return ret;
+	}
+
+	MDP_OUTP(MDP_BASE + 0x90070, (mdp_lut_i << 10) | 0x7);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	mdp_lut_i = (mdp_lut_i + 1)%2;
+
+	return 0;
+}
+#endif
+
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
 	/*---------------------------------------------------------
@@ -185,6 +257,13 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 #ifdef CONFIG_FB_MSM_MDP22
 		outpdw(MDP_CMD_DEBUG_ACCESS_BASE + 0x0044, 0x0);	// start DMA
 #else
+		if (mdp_lut_push) {
+			mutex_lock(&mdp_lut_push_sem);
+			mdp_lut_push = 0;
+			MDP_OUTP(MDP_BASE + 0x90070,
+					(mdp_lut_push_i << 10) | 0x7);
+			mutex_unlock(&mdp_lut_push_sem);
+		}
 		outpdw(MDP_BASE + 0x0044, 0x0);	// start DMA
 #endif
 	} else if (term == MDP_DMA_S_TERM) {
@@ -342,6 +421,7 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 			}
 		}
 #ifndef CONFIG_FB_MSM_MDP22
+
 		///////////////////////////////
 		// LCDC UnderFlow
 		///////////////////////////////
@@ -669,6 +749,7 @@ static int mdp_probe(struct platform_device *pdev)
 		if (mfd->panel_info.pdest == DISPLAY_1) {
 			mfd->dma_fnc = mdp_dma2_update;
 			mfd->dma = &dma2_data;
+			mfd->lut_update = mdp_lut_update_nonlcdc;
 		} else {
 			mfd->dma_fnc = mdp_dma_s_update;
 			mfd->dma = &dma_s_data;
@@ -687,6 +768,9 @@ static int mdp_probe(struct platform_device *pdev)
 		pdata->off = mdp_lcdc_off;
 		mfd->hw_refresh = TRUE;
 		mfd->cursor_update = mdp_hw_cursor_update;
+#ifndef CONFIG_FB_MSM_MDP22
+		mfd->lut_update = mdp_lut_update_lcdc;
+#endif
 		mfd->dma_fnc = mdp_lcdc_update;
 		mfd->dma = &dma2_data;
 
