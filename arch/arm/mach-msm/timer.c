@@ -35,18 +35,26 @@ enum {
 static int msm_timer_debug_mask;
 module_param_named(debug_mask, msm_timer_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_DGT_BASE (MSM_GPT_BASE + 0x24)
+#define MSM_DGT_SHIFT (5)
+
+#define TIMER_MATCH_VAL         0x0004
+#define TIMER_COUNT_VAL         0x0008
+#define TIMER_ENABLE            0x000C
+#define TIMER_ENABLE_EN		1
+
+#else
+
 #define MSM_DGT_BASE (MSM_GPT_BASE + 0x10)
 #define MSM_DGT_SHIFT (5)
 
 #define TIMER_MATCH_VAL         0x0000
 #define TIMER_COUNT_VAL         0x0004
 #define TIMER_ENABLE            0x0008
-#define TIMER_ENABLE_CLR_ON_MATCH_EN    2
-#define TIMER_ENABLE_EN                 1
-#define TIMER_CLEAR             0x000C
+#define TIMER_ENABLE_EN		1
 
-#define CSR_PROTECTION          0x0020
-#define CSR_PROTECTION_EN               1
+#endif
 
 #define GPT_HZ 32768
 #if defined(CONFIG_ARCH_MSM_SCORPION)

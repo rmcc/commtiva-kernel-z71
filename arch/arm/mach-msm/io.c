@@ -91,6 +91,29 @@ static struct map_desc qsd8x50_io_desc[] __initdata = {
 	},
 };
 
+static struct map_desc msm7x30_io_desc[] __initdata = {
+	MSM_DEVICE(VIC),
+	MSM_DEVICE(CSR),
+	MSM_DEVICE(GPT),
+	MSM_DEVICE(DMOV),
+	MSM_DEVICE(GPIO1),
+	MSM_DEVICE(GPIO2),
+	MSM_DEVICE(CLK_CTL),
+	MSM_DEVICE(SIRC),
+	MSM_DEVICE(SCPLL),
+	MSM_DEVICE(AD5),
+	MSM_DEVICE(MDC),
+	MSM_DEVICE(GCC),
+#ifdef CONFIG_MSM_DEBUG_UART
+	MSM_DEVICE(DEBUG_UART),
+#endif
+	{
+		.virtual =  (unsigned long) MSM_SHARED_RAM_BASE,
+		.length =   MSM_SHARED_RAM_SIZE,
+		.type =     MT_DEVICE,
+	},
+};
+
 static struct map_desc comet_io_desc[] __initdata = {
 	MSM_DEVICE(VIC),
 	MSM_DEVICE(CSR),
@@ -145,6 +168,20 @@ void __init msm_map_qsd8x50_io(void)
 				__phys_to_pfn(msm_shared_ram_phys);
 
 	iotable_init(qsd8x50_io_desc, ARRAY_SIZE(qsd8x50_io_desc));
+}
+
+void __init msm_map_msm7x30_io(void)
+{
+	int i;
+
+	BUG_ON(!ARRAY_SIZE(msm7x30_io_desc));
+	for (i = 0; i < ARRAY_SIZE(msm7x30_io_desc); i++)
+		if (msm7x30_io_desc[i].virtual ==
+				(unsigned long)MSM_SHARED_RAM_BASE)
+			msm7x30_io_desc[i].pfn =
+				__phys_to_pfn(msm_shared_ram_phys);
+
+	iotable_init(msm7x30_io_desc, ARRAY_SIZE(msm7x30_io_desc));
 }
 
 void __init msm_map_comet_io(void)

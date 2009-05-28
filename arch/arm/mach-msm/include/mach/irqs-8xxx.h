@@ -127,5 +127,7 @@
 #define INT_SIRC_1           (32 + 31)
 
 #define NR_GPIO_IRQS 165
+#define NR_MSM_IRQS 64
+#define NR_BOARD_IRQS 64
 
 #endif

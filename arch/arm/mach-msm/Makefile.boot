@@ -3,12 +3,17 @@ ifeq ($(CONFIG_QSD_BASE_24000000),y)
   zreladdr-y		:= 0x24008000
 params_phys-y		:= 0x24000100
 initrd_phys-y		:= 0x28000000
-else # !CONFIG_QSD_BASE_24000000
+endif # CONFIG_QSD_BASE_24000000
+ifeq ($(CONFIG_MSM_STACKED_MEMORY), y)
   zreladdr-y		:= 0x16008000
 params_phys-y		:= 0x16000100
 initrd_phys-y		:= 0x1A000000
-endif # CONFIG_QSD_BASE_24000000
-else  # CONFIG_ARCH_MSM_ARM11
+else  # !CONFIG_MSM_STACKED_MEMORY
+  zreladdr-y		:= 0x00208000
+params_phys-y		:= 0x00200100
+initrd_phys-y		:= 0x01200000
+endif # CONFIG_MSM_STACKED_MEMORY
+else  # !CONFIG_ARCH_MSM_SCORPION
 ifeq ($(CONFIG_MSM_STACKED_MEMORY), y)
   zreladdr-y		:= 0x10008000
 params_phys-y		:= 0x10000100

@@ -59,7 +59,7 @@
 #define _ARCH_ARM_MACH_MSM_IRQ_H_
 
 int msm_irq_idle_sleep_allowed(void);
-int msm_irq_pending(void);
+unsigned int msm_irq_pending(void);
 void msm_irq_enter_sleep1(bool arm9_wake, int from_idle, uint32_t *irq_mask);
 int msm_irq_enter_sleep2(bool arm9_wake, int from_idle);
 void msm_irq_exit_sleep1

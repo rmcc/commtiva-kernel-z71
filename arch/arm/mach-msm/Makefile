@@ -14,10 +14,11 @@ obj-y += nohlt.o
 obj-y += pmic.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o
-obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-8x50.o sirc.o
+obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-8x50.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
 obj-$(CONFIG_CPU_V7) += idle-v7.o
 
+obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
 obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_tty.o smd_qmi.o smem_log.o
@@ -56,6 +57,7 @@ obj-$(CONFIG_TROUT_H2W) += board-trout-h2w.o
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
 obj-$(CONFIG_TROUT_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o
+obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o
 
 obj-$(CONFIG_QSD_AUDIO) += qdsp6/
 
