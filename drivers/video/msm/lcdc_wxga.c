@@ -57,13 +57,15 @@
 
 #include "msm_fb.h"
 
-static int __init lcdc_external_init(void)
+static int __init lcdc_wxga_init(void)
 {
 	int ret;
 	struct msm_panel_info pinfo;
 
-	if (msm_fb_detect_client("lcdc_external"))
+#ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
+	if (msm_fb_detect_client("lcdc_wxga"))
 		return 0;
+#endif
 
 	pinfo.xres = 1280;
 	pinfo.yres = 720;
@@ -91,4 +93,4 @@ static int __init lcdc_external_init(void)
 	return ret;
 }
 
-module_init(lcdc_external_init);
+module_init(lcdc_wxga_init);

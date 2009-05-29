@@ -2223,6 +2223,11 @@ config FB_MSM_LCDC_GORDON_VGA
 	select FB_MSM_LCDC_PANEL
 	default n
 
+config FB_MSM_LCDC_WXGA
+	bool
+	select FB_MSM_LCDC_PANEL
+	default n
+
 choice
 	prompt "LCD Panel"
 	default FB_MSM_MDDI_AUTO_DETECT
@@ -2247,6 +2252,7 @@ config FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
 	select FB_MSM_MDDI_AUTO_DETECT
 	select FB_MSM_LCDC_PRISM_WVGA
 	select FB_MSM_LCDC_GORDON_VGA
+	select FB_MSM_LCDC_WXGA
 	---help---
 	  Support for MDDI panel auto detect.
 	  If it can't find any MDDI panel, it will load LCDC Prism WVGA panel.
@@ -2279,7 +2285,7 @@ config FB_MSM_MDDI_TOSHIBA_WVGA
 	bool "MDDI Toshiba WVGA panel"
 	select FB_MSM_MDDI_TOSHIBA_COMMON
 	---help---
-	  Support for MDDI Tohsiba (800x480) WVGA panel
+	  Support for MDDI Toshiba (800x480) WVGA panel
 
 config FB_MSM_MDDI_SHARP_QVGA_128x128
 	bool "MDDI Sharp QVGA Dual Panel"
