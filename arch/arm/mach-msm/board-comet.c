@@ -363,6 +363,7 @@ static int msm_fb_detect_panel(const char *name)
 	int ret;
 
 	if ((!strcmp(name, "mddi_toshiba_wvga") && wvga_present) ||
+	    (!strcmp(name, "lcdc_external") && wvga_present) ||
 	    (!strcmp(name, "lcdc_wxga") && wxga_present))
 		ret = 0;
 	else
@@ -1045,7 +1046,7 @@ static void __init comet_init(void)
 	} else {
 		cpld_info = &comet_cpld[0];
 		wvga_present = 1;
-		wxga_present = 1;
+		wxga_present = 0;
 		per_enable = cpld_info->per_enable_all;
 		smc911x_resources[0].start = 0x90000000;
 		smc911x_resources[0].end   = 0x90000100;
