@@ -389,6 +389,7 @@ static void bma150_create_dbfs_entry(struct driver_data *dd) { }
 static void bma150_remove_dbfs_entry(struct driver_data *dd) { }
 #endif
 
+#ifdef CONFIG_PM
 static int bma150_suspend(struct spi_device *spi, pm_message_t mesg)
 {
 	disable_irq(spi->irq);
@@ -400,6 +401,10 @@ static int bma150_resume(struct spi_device *spi)
 	enable_irq(spi->irq);
 	return 0;
 }
+#else
+#define bma150_suspend NULL
+#define bma150_resume NULL
+#endif /* CONFIG_PM */
 
 static irqreturn_t bma150_irq(int irq, void *dev_id)
 {
