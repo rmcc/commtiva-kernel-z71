@@ -1001,11 +1001,11 @@ static int32_t s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 
 	uint16_t max_legal_gain = 0x0200;
 	uint32_t ll_ratio; /* Q10 */
-	uint16_t ll_pck, fl_lines;
+	uint32_t ll_pck, fl_lines;
 	uint16_t offset = 4;
-	uint8_t  gain_msb, gain_lsb;
-	uint8_t  intg_t_msb, intg_t_lsb;
-	uint8_t  ll_pck_msb, ll_pck_lsb, tmp;
+	uint32_t  gain_msb, gain_lsb;
+	uint32_t  intg_t_msb, intg_t_lsb;
+	uint32_t  ll_pck_msb, ll_pck_lsb;
 
 	struct s5k3e2fx_i2c_reg_conf tbl[2];
 
@@ -1017,10 +1017,10 @@ static int32_t s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 		s5k3e2fx_ctrl->my_reg_line_count = (uint16_t)line;
 
 		fl_lines = s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
-			s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_l;
+			s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l;
 
 		ll_pck = s5k3e2fx_reg_pat[S_RES_PREVIEW].size_w +
-			s5k3e2fx_reg_pat[S_RES_CAPTURE].blk_p;
+			s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_p;
 
 	} else {
 
@@ -1057,16 +1057,16 @@ static int32_t s5k3e2fx_write_exp_gain(uint16_t gain, uint32_t line)
 	ll_pck_msb = ((ll_pck / 0x400) & 0xFF00) >> 8;
 	ll_pck_lsb = (ll_pck / 0x400) & 0x00FF;
 	tbl[0].waddr = REG_LINE_LENGTH_PCK_MSB;
-	tbl[0].bdata = s5k3e2fx_reg_pat[S_RES_PREVIEW].line_length_pck_msb;
+	tbl[0].bdata = ll_pck_msb;
 	tbl[1].waddr = REG_LINE_LENGTH_PCK_LSB;
-	tbl[1].bdata = s5k3e2fx_reg_pat[S_RES_PREVIEW].line_length_pck_lsb;
+	tbl[1].bdata = ll_pck_lsb;
 	rc = s5k3e2fx_i2c_write_table(&tbl[0], ARRAY_SIZE(tbl));
 	if (rc < 0)
 		goto write_gain_done;
 
-	tmp = (ll_pck * 0x400) / ll_ratio;
-	intg_t_msb = (tmp & 0xFF00) >> 8;
-	intg_t_lsb = (tmp & 0x00FF);
+	line = line / ll_ratio;
+	intg_t_msb = (line & 0xFF00) >> 8;
+	intg_t_lsb = (line & 0x00FF);
 	tbl[0].waddr = REG_COARSE_INTEGRATION_TIME;
 	tbl[0].bdata = intg_t_msb;
 	tbl[1].waddr = REG_COARSE_INTEGRATION_TIME_LSB;
