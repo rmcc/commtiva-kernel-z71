@@ -741,6 +741,7 @@ err_probe_exit:
 	return rc;
 }
 
+#ifdef CONFIG_PM
 static int msm_spi_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct spi_master *master = platform_get_drvdata(pdev);
@@ -784,6 +785,10 @@ static int msm_spi_resume(struct platform_device *pdev)
 resume_exit:
 	return 0;
 }
+#else
+#define msm_spi_suspend NULL
+#define msm_spi_resume NULL
+#endif /* CONFIG_PM */
 
 static int __devexit msm_spi_remove(struct platform_device *pdev)
 {
