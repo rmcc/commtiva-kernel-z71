@@ -336,7 +336,7 @@ static const struct file_operations dbfs_bpw_fops = {
 	.write    = bma150_dbfs_bpw_write,
 };
 
-static void bma150_create_dbfs_entry(struct driver_data *dd)
+static void __devinit bma150_create_dbfs_entry(struct driver_data *dd)
 {
 	char buf[16];
 
@@ -374,7 +374,7 @@ dbfs_err_root:
 	return;
 }
 
-static void bma150_remove_dbfs_entry(struct driver_data *dd)
+static void __devexit bma150_remove_dbfs_entry(struct driver_data *dd)
 {
 	if (dd->dbfs_regs)
 		debugfs_remove(dd->dbfs_regs);
@@ -384,9 +384,9 @@ static void bma150_remove_dbfs_entry(struct driver_data *dd)
 		debugfs_remove(dd->dbfs_root);
 }
 #else
-static void bma150_create_dbfs_entry(struct driver_data *dd) { }
+static void __devinit bma150_create_dbfs_entry(struct driver_data *dd) { }
 
-static void bma150_remove_dbfs_entry(struct driver_data *dd) { }
+static void __devexit bma150_remove_dbfs_entry(struct driver_data *dd) { }
 #endif
 
 #ifdef CONFIG_PM
@@ -502,7 +502,7 @@ workf_exit:
 	dev_err(&dd->ip_dev->dev, "%s: exit with error %d\n", __func__, rc);
 }
 
-static int bma150_power_down(struct driver_data *dd)
+static int __devexit bma150_power_down(struct driver_data *dd)
 {
 	char                tx_buf[2];
 	int                 rc;
@@ -523,7 +523,7 @@ static int bma150_power_down(struct driver_data *dd)
 	return rc;
 }
 
-static int bma150_power_up(struct driver_data *dd)
+static int __devinit bma150_power_up(struct driver_data *dd)
 {
 	char                tx_buf[8];
 	int                 rc;
@@ -544,7 +544,7 @@ static int bma150_power_up(struct driver_data *dd)
 	return rc;
 }
 
-static int bma150_config(struct driver_data *dd)
+static int __devinit bma150_config(struct driver_data *dd)
 {
 	char                tx_buf[8];
 	char                rx_buf[8];
@@ -604,7 +604,7 @@ config_exit:
 	return rc;
 }
 
-static int bma150_probe(struct spi_device *spi)
+static int __devinit bma150_probe(struct spi_device *spi)
 {
 	struct driver_data *dd;
 	int                 rc;
@@ -632,7 +632,7 @@ static int bma150_probe(struct spi_device *spi)
 		goto probe_err_cfg;
 
 	bma150_create_dbfs_entry(dd);
-	dev_set_drvdata(&spi->dev, dd);
+	spi_set_drvdata(spi, dd);
 
 	dd->ip_dev = input_allocate_device();
 	if (!dd->ip_dev) {
@@ -649,11 +649,11 @@ static int bma150_probe(struct spi_device *spi)
 	dd->ip_dev->id.vendor  = BMA150_VENDORID;
 	dd->ip_dev->id.product = 1;
 	dd->ip_dev->id.version = 1;
-	set_bit(EV_REL,    dd->ip_dev->evbit);
-	set_bit(REL_X,     dd->ip_dev->relbit);
-	set_bit(REL_Y,     dd->ip_dev->relbit);
-	set_bit(REL_Z,     dd->ip_dev->relbit);
-	set_bit(REL_MISC,  dd->ip_dev->relbit);
+	__set_bit(EV_REL,    dd->ip_dev->evbit);
+	__set_bit(REL_X,     dd->ip_dev->relbit);
+	__set_bit(REL_Y,     dd->ip_dev->relbit);
+	__set_bit(REL_Z,     dd->ip_dev->relbit);
+	__set_bit(REL_MISC,  dd->ip_dev->relbit);
 	rc = input_register_device(dd->ip_dev);
 	if (rc) {
 		dev_err(&dd->ip_dev->dev,
@@ -665,10 +665,11 @@ static int bma150_probe(struct spi_device *spi)
 	return rc;
 
 probe_err_reg_dev:
+	dd->ip_dev = NULL;
 	input_free_device(dd->ip_dev);
 probe_err_reg:
 	bma150_remove_dbfs_entry(dd);
-	dev_set_drvdata(&spi->dev, NULL);
+	spi_set_drvdata(spi, NULL);
 probe_err_cfg:
 	mutex_lock(&bma150_dd_lock);
 	list_del(&dd->next_dd);
@@ -680,12 +681,12 @@ probe_exit:
 	return rc;
 }
 
-static int bma150_remove(struct spi_device *spi)
+static int __devexit bma150_remove(struct spi_device *spi)
 {
 	struct driver_data *dd;
 	int                 rc;
 
-	dd = dev_get_drvdata(&spi->dev);
+	dd = spi_get_drvdata(spi);
 
 	rc = bma150_power_down(dd);
 	if (rc)
@@ -693,9 +694,8 @@ static int bma150_remove(struct spi_device *spi)
 			"%s: power down failed with error %d\n",
 			__func__, rc);
 	input_unregister_device(dd->ip_dev);
-	input_free_device(dd->ip_dev);
 	bma150_remove_dbfs_entry(dd);
-	dev_set_drvdata(&spi->dev, NULL);
+	spi_set_drvdata(spi, NULL);
 	mutex_lock(&bma150_dd_lock);
 	list_del(&dd->next_dd);
 	mutex_unlock(&bma150_dd_lock);
@@ -703,7 +703,7 @@ static int bma150_remove(struct spi_device *spi)
 	return 0;
 }
 
-static struct spi_driver bma150_drv = {
+static struct spi_driver bma150_driver = {
 	.driver = {
 		.name  = BMA150_NAME,
 		.owner = THIS_MODULE,
@@ -722,13 +722,13 @@ static int __init bma150_init(void)
 	INIT_LIST_HEAD(&dd_list);
 	mutex_init(&bma150_dd_lock);
 
-	rc = spi_register_driver(&bma150_drv);
+	rc = spi_register_driver(&bma150_driver);
 	return rc;
 }
 module_init(bma150_init);
 
 static void __exit bma150_exit(void)
 {
-	spi_unregister_driver(&bma150_drv);
+	spi_unregister_driver(&bma150_driver);
 }
 module_exit(bma150_exit);
