@@ -67,12 +67,14 @@ struct adsp_module_info {
 };
 
 #define ADSP_EVENT_MAX_SIZE 496
+#define EVENT_LEN       12
+#define EVENT_MSG_ID ((uint16_t)~0)
 
 struct adsp_event {
 	struct list_head list;
 	uint32_t size; /* always in bytes */
-	unsigned msg_id;
-	uint16_t type; /* 0 for msgs (from aDSP), 1 for events (from ARM9) */
+	uint16_t msg_id;
+	uint16_t type; /* 0 for msgs (from aDSP), -1 for events (from ARM9) */
 	int is16; /* always 0 (msg is 32-bit) when the event type is 1(ARM9) */
 	union {
 		uint16_t msg16[ADSP_EVENT_MAX_SIZE / 2];
@@ -169,9 +171,6 @@ enum qdsp_image_type {
 	/* DO NOT USE: Force this enum to be a 32bit type to improve speed */
 	QDSP_IMAGE_32BIT_DUMMY = 0x10000
 };
-
-#define	EVENT_LEN	12
-#define	EVENT_MSG_ID	(~0)
 
 struct adsp_rtos_mp_mtoa_header_type {
 	enum rpc_adsp_rtos_mod_status_type  event;
