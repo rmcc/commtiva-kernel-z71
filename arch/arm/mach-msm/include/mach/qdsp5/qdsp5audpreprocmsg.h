@@ -50,7 +50,7 @@ Notice that changes are listed in reverse chronological order.
  */
 
 
-#define	AUDPREPROC_MSG_CMD_CFG_DONE_MSG	0x0000
+#define	AUDPREPROC_MSG_CMD_CFG_DONE_MSG	0x0001
 #define	AUDPREPROC_MSG_CMD_CFG_DONE_MSG_LEN	\
 	sizeof(audpreproc_msg_cmd_cfg_done_msg)
 
@@ -72,7 +72,7 @@ typedef struct {
  * Message to indicate particular feature has selected for wrong samp freq
  */
 
-#define	AUDPREPROC_MSG_ERROR_MSG_ID		0x0001
+#define	AUDPREPROC_MSG_ERROR_MSG_ID		0x0002
 #define	AUDPREPROC_MSG_ERROR_MSG_ID_LEN	\
 	sizeof(audpreproc_msg_error_msg_id)
 
