@@ -48,6 +48,7 @@
 #include <mach/msm_rpcrouter.h>
 #include <mach/memory.h>
 #include <mach/msm_battery.h>
+#include <mach/camera.h>
 
 #ifdef CONFIG_USB_FUNCTION
 #include <linux/usb/mass_storage_function.h>
@@ -321,6 +322,172 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.config_gpio 	= usb_config_gpio,
 #endif
 };
+static struct i2c_board_info i2c_devices[] = {
+#ifdef CONFIG_MT9D112
+	{
+		I2C_BOARD_INFO("mt9d112", 0x78 >> 1),
+	},
+#endif
+#ifdef CONFIG_S5K3E2FX
+	{
+		I2C_BOARD_INFO("s5k3e2fx", 0x20 >> 1),
+	},
+#endif
+#ifdef CONFIG_MT9P012
+	{
+		I2C_BOARD_INFO("mt9p012", 0x6C >> 1),
+	},
+#endif
+#if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
+	{
+		I2C_BOARD_INFO("mt9t013", 0x6C), // 0x78>>1
+	},
+#endif
+};
+
+#ifdef CONFIG_MSM_CAMERA
+static uint32_t camera_off_gpio_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(0,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT0 */
+	GPIO_CFG(1,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT1 */
+	GPIO_CFG(2,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT2 */
+	GPIO_CFG(3,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT3 */
+	GPIO_CFG(4,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT4 */
+	GPIO_CFG(5,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT5 */
+	GPIO_CFG(6,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT6 */
+	GPIO_CFG(7,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT7 */
+	GPIO_CFG(8,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT8 */
+	GPIO_CFG(9,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT9 */
+	GPIO_CFG(10, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT10 */
+	GPIO_CFG(11, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT11 */
+	GPIO_CFG(12, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PCLK */
+	GPIO_CFG(13, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* HSYNC_IN */
+	GPIO_CFG(14, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VSYNC_IN */
+	GPIO_CFG(15, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), /* MCLK */
+};
+
+static uint32_t camera_on_gpio_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(0,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT0 */
+	GPIO_CFG(1,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT1 */
+	GPIO_CFG(2,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT2 */
+	GPIO_CFG(3,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT3 */
+	GPIO_CFG(4,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT4 */
+	GPIO_CFG(5,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT5 */
+	GPIO_CFG(6,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT6 */
+	GPIO_CFG(7,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT7 */
+	GPIO_CFG(8,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT8 */
+	GPIO_CFG(9,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT9 */
+	GPIO_CFG(10, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT10 */
+	GPIO_CFG(11, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT11 */
+	GPIO_CFG(12, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* PCLK */
+	GPIO_CFG(13, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* HSYNC_IN */
+	GPIO_CFG(14, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VSYNC_IN */
+	GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_16MA), /* MCLK */
+};
+
+static void config_gpio_table(uint32_t *table, int len)
+{
+	int n, rc;
+	for (n = 0; n < len; n++) {
+		rc = gpio_tlmm_config(table[n], GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, table[n], rc);
+			break;
+		}
+	}
+}
+
+static void config_camera_on_gpios(void)
+{
+	config_gpio_table(camera_on_gpio_table,
+		ARRAY_SIZE(camera_on_gpio_table));
+}
+
+static void config_camera_off_gpios(void)
+{
+	config_gpio_table(camera_off_gpio_table,
+		ARRAY_SIZE(camera_off_gpio_table));
+}
+
+static struct msm_camera_device_platform_data msm_camera_device_data = {
+	.camera_gpio_on  = config_camera_on_gpios,
+	.camera_gpio_off = config_camera_off_gpios,
+	.ioext.mdcphy = MSM_MDC_PHYS,
+	.ioext.mdcsz  = MSM_MDC_SIZE,
+	.ioext.appphy = MSM_CLK_CTL_PHYS,
+	.ioext.appsz  = MSM_CLK_CTL_SIZE,
+};
+
+#ifdef CONFIG_MT9D112
+static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
+	.sensor_name	= "mt9d112",
+	.sensor_reset	= 89,
+	.sensor_pwd	= 85,
+	.vcm_pwd	= 0,
+	.pdata		= &msm_camera_device_data
+};
+
+static struct platform_device msm_camera_sensor_mt9d112 = {
+	.name	   = "msm_camera_mt9d112",
+	.dev	    = {
+		.platform_data = &msm_camera_sensor_mt9d112_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_S5K3E2FX
+static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
+	.sensor_name	= "s5k3e2fx",
+	.sensor_reset	= 89,
+	.sensor_pwd	= 85,
+	.vcm_pwd	= 0,
+	.pdata		= &msm_camera_device_data
+};
+
+static struct platform_device msm_camera_sensor_s5k3e2fx = {
+	.name	   = "msm_camera_s5k3e2fx",
+	.dev	    = {
+		.platform_data = &msm_camera_sensor_s5k3e2fx_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_MT9P012
+static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
+	.sensor_name	= "mt9p012",
+	.sensor_reset	= 89,
+	.sensor_pwd	= 85,
+	.vcm_pwd	= 88,
+	.pdata		= &msm_camera_device_data
+};
+
+static struct platform_device msm_camera_sensor_mt9p012 = {
+	.name	   = "msm_camera_mt9p012",
+	.dev	    = {
+		.platform_data = &msm_camera_sensor_mt9p012_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_MT9T013
+static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
+	.sensor_name	= "mt9t013",
+	.sensor_reset	= 89,
+	.sensor_pwd	= 85,
+	.vcm_pwd	= 0,
+	.pdata		= &msm_camera_device_data
+};
+
+static struct platform_device msm_camera_sensor_mt9t013 = {
+	.name	   = "msm_camera_mt9t013",
+	.dev	    = {
+		.platform_data = &msm_camera_sensor_mt9t013_data,
+	},
+};
+#endif
+#endif /*CONFIG_MSM_CAMERA*/
 
 #define SND(desc, num) { .name = #desc, .id = num }
 static struct snd_endpoint snd_endpoints_list[] = {
@@ -769,6 +936,19 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_BT
 	&msm_bt_power_device,
 #endif
+
+#ifdef CONFIG_MT9T013
+	&msm_camera_sensor_mt9t013,
+#endif
+#ifdef CONFIG_MT9D112
+	&msm_camera_sensor_mt9d112,
+#endif
+#ifdef CONFIG_S5K3E2FX
+	&msm_camera_sensor_s5k3e2fx,
+#endif
+#ifdef CONFIG_MT9P012
+	&msm_camera_sensor_mt9p012,
+#endif
 	&halibut_snd,
 	&msm_bluesleep_device,
 	&msm_fb_device,
@@ -1123,6 +1303,10 @@ static void __init halibut_init(void)
 	msm_hsusb_pdata.max_axi_khz = halibut_clock_data.max_axi_khz;
 	msm_hsusb_pdata.soc_version = socinfo_get_version();
 	msm_acpu_clock_init(&halibut_clock_data);
+#ifdef CONFIG_MSM_CAMERA
+	config_camera_off_gpios(); /* might not be necessary */
+#endif
+	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata,
 	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata,
 	platform_add_devices(devices, ARRAY_SIZE(devices));

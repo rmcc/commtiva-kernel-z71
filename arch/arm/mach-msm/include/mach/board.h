@@ -40,14 +40,32 @@ struct msm_camera_io_ext {
 	uint32_t appsz;
 };
 
-struct msm_camera_device_platform_data{
+struct msm_camera_device_platform_data {
 	void (*camera_gpio_on) (void);
 	void (*camera_gpio_off)(void);
-	uint8_t snum;
-	struct msm_camera_sensor_info *sinfo;
 	struct msm_camera_io_ext ioext;
+};
+
+#ifdef CONFIG_SENSORS_MT9T013
+struct msm_camera_legacy_device_platform_data {
+	int sensor_reset;
+	int sensor_pwd;
+	int vcm_pwd;
 	void (*config_gpio_on) (void);
 	void (*config_gpio_off)(void);
+};
+#endif
+
+#define MSM_CAMERA_FLASH_NONE 0
+#define MSM_CAMERA_FLASH_LED  1
+
+struct msm_camera_sensor_info {
+	const char *sensor_name;
+	int sensor_reset;
+	int sensor_pwd;
+	int vcm_pwd;
+	int mclk;
+	struct msm_camera_device_platform_data *pdata;
 };
 
 struct clk;
