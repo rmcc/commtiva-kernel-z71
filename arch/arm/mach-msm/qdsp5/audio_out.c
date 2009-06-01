@@ -108,15 +108,23 @@ module_init(_pcm_log_init);
 #define EQ_ENABLE    0x0002
 #define IIR_ENABLE   0x0004
 
+#define AUDPP_MBADRC_EXTERNAL_BUF_SIZE 196
+
+struct adrc_ext_buf {
+	int16_t buff[AUDPP_MBADRC_EXTERNAL_BUF_SIZE];
+};
+
 struct adrc_filter {
-	uint16_t compression_th;
-	uint16_t compression_slope;
-	uint16_t rms_time;
-	uint16_t attack_const_lsw;
-	uint16_t attack_const_msw;
-	uint16_t release_const_lsw;
-	uint16_t release_const_msw;
-	uint16_t adrc_system_delay;
+	uint16_t enable;
+	uint16_t num_bands;
+	uint16_t down_samp_level;
+	uint16_t adrc_delay;
+	uint16_t ext_buf_size;
+	uint16_t ext_partition;
+	uint16_t ext_buf_msw;
+	uint16_t ext_buf_lsw;
+	struct adrc_config adrc_band[AUDPP_MAX_MBADRC_BANDS];
+	struct adrc_ext_buf  ext_buf;
 };
 
 struct eqalizer {
@@ -403,17 +411,11 @@ static int audio_dsp_set_adrc(struct audio *audio)
 	cmd.common.command_type = AUDPP_CMD_ADRC;
 
 	if (audio->adrc_enable) {
-		cmd.adrc_flag = AUDPP_CMD_ADRC_FLAG_ENA;
-		cmd.compression_th = audio->adrc.compression_th;
-		cmd.compression_slope = audio->adrc.compression_slope;
-		cmd.rms_time = audio->adrc.rms_time;
-		cmd.attack_const_lsw = audio->adrc.attack_const_lsw;
-		cmd.attack_const_msw = audio->adrc.attack_const_msw;
-		cmd.release_const_lsw = audio->adrc.release_const_lsw;
-		cmd.release_const_msw = audio->adrc.release_const_msw;
-		cmd.adrc_system_delay = audio->adrc.adrc_system_delay;
+		memcpy(&cmd.enable, &audio->adrc,
+			sizeof(audio->adrc) -  sizeof(struct adrc_ext_buf));
+		cmd.enable = AUDPP_CMD_ADRC_FLAG_ENA;
 	} else {
-		cmd.adrc_flag = AUDPP_CMD_ADRC_FLAG_DIS;
+		cmd.enable = AUDPP_CMD_ADRC_FLAG_DIS;
 	}
 	return audpp_send_queue3(&cmd, sizeof(cmd));
 }

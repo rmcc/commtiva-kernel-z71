@@ -748,17 +748,32 @@ typedef struct {
 #define AUDPP_CMD_ADRC_FLAG_DIS		0x0000
 #define AUDPP_CMD_ADRC_FLAG_ENA		-1
 
+#define	AUDPP_MAX_MBADRC_BANDS		5
+
+struct adrc_config {
+	uint16_t subband_enable;
+	uint16_t adrc_sub_mute;
+	uint16_t rms_time;
+	uint16_t compression_th;
+	uint16_t compression_slope;
+	uint16_t attack_const_lsw;
+	uint16_t attack_const_msw;
+	uint16_t release_const_lsw;
+	uint16_t release_const_msw;
+	uint16_t makeup_gain;
+};
+
 typedef struct {
 	audpp_cmd_cfg_object_params_common 	common;
-	signed short				adrc_flag;
-	unsigned short				compression_th;
-	unsigned short				compression_slope;
-	unsigned short				rms_time;
-	unsigned short				attack_const_lsw;
-	unsigned short				attack_const_msw;
-	unsigned short				release_const_lsw;
-	unsigned short				release_const_msw;
-	unsigned short				adrc_system_delay;
+	uint16_t enable;
+	uint16_t num_bands;
+	uint16_t down_samp_level;
+	uint16_t adrc_delay;
+	uint16_t ext_buf_size;
+	uint16_t ext_partition;
+	uint16_t ext_buf_msw;
+	uint16_t ext_buf_lsw;
+	struct adrc_config adrc_band[AUDPP_MAX_MBADRC_BANDS];
 } __attribute__((packed)) audpp_cmd_cfg_object_params_adrc;
 
 /*
