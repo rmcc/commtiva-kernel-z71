@@ -1136,6 +1136,10 @@ config MSM_KGSL
 	  use hardware accelerated OpenGL ES 2.0 and 1.1 on these
 	  chips.
 
+config MSM_KGSL_DRM
+	bool "Build a DRM interface for the MSM_KGSL driver"
+	depends on MSM_KGSL && DRM
+
 source "drivers/s390/char/Kconfig"
 
 config MSM_Q6VDEC

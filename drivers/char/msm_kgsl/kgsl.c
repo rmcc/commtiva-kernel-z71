@@ -73,6 +73,7 @@
 #include "kgsl_drawctxt.h"
 #include "kgsl_ringbuffer.h"
 #include "kgsl_log.h"
+#include "kgsl_drm.h"
 
 struct kgsl_file_private {
 	struct list_head list;
@@ -830,6 +831,7 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 
 	kgsl_driver.shmem.physbase = res->start;
 	kgsl_driver.shmem.size = resource_size(res);
+	result = kgsl_drm_init(pdev);
 
 done:
 	if (result)
@@ -844,6 +846,7 @@ static int kgsl_platform_remove(struct platform_device *pdev)
 {
 
 	kgsl_driver_cleanup();
+	kgsl_drm_exit();
 	misc_deregister(&kgsl_driver.misc);
 
 	return 0;
