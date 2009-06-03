@@ -43,7 +43,7 @@
 
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
-static struct msm_vfe_resp *resp;
+static struct msm_vfe_callback *resp;
 static void *extdata;
 static uint32_t extlen;
 
@@ -53,8 +53,8 @@ static uint8_t vfestopped;
 
 static struct stop_event stopevent;
 
-static void vfe_7x_convert(struct msm_vfe_phy_info_t *pinfo,
-		enum vfe_resp_msg_t type,
+static void vfe_7x_convert(struct msm_vfe_phy_info *pinfo,
+		enum vfe_resp_msg type,
 		void *data, void **ext, int32_t *elen)
 {
 	switch (type) {
@@ -98,17 +98,17 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 		void (*getevent)(void *ptr, size_t len))
 {
 	uint32_t evt_buf[3];
-	struct msm_vfe_resp_t *rp;
+	struct msm_vfe_resp *rp;
 	void *data;
 
 	len = (id == (uint16_t)-1) ? 0 : len;
-	data = resp->vfe_alloc(sizeof(struct msm_vfe_resp_t) + len, vfe_syncdata);
+	data = resp->vfe_alloc(sizeof(struct msm_vfe_resp) + len, vfe_syncdata);
 
 	if (!data) {
 		pr_err("rp: cannot allocate buffer\n");
 		return;
 	}
-	rp = (struct msm_vfe_resp_t *)data;
+	rp = (struct msm_vfe_resp *)data;
 	rp->evt_msg.len = len;
 
 	if (id == ((uint16_t)-1)) {
@@ -177,7 +177,7 @@ static struct msm_adsp_ops vfe_7x_sync = {
 	.event = vfe_7x_ops,
 };
 
-static int vfe_7x_enable(struct camera_enable_cmd_t *enable)
+static int vfe_7x_enable(struct camera_enable_cmd *enable)
 {
 	int rc = -EFAULT;
 
@@ -189,7 +189,7 @@ static int vfe_7x_enable(struct camera_enable_cmd_t *enable)
 	return rc;
 }
 
-static int vfe_7x_disable(struct camera_enable_cmd_t *enable,
+static int vfe_7x_disable(struct camera_enable_cmd *enable,
 		struct platform_device *dev __attribute__((unused)))
 {
 	int rc = -EFAULT;
@@ -245,7 +245,7 @@ static void vfe_7x_release(struct platform_device *pdev)
 	extlen = 0;
 }
 
-static int vfe_7x_init(struct msm_vfe_resp *presp,
+static int vfe_7x_init(struct msm_vfe_callback *presp,
 	struct platform_device *dev)
 {
 	int rc = 0;
@@ -299,7 +299,7 @@ init_fail:
 }
 
 static int vfe_7x_config_axi(int mode,
-	struct axidata_t *ad, struct axiout_t *ao)
+	struct axidata *ad, struct axiout *ao)
 {
 	struct msm_pmem_region *regptr;
 	unsigned long *bptr;
@@ -362,19 +362,19 @@ static int vfe_7x_config_axi(int mode,
 	return rc;
 }
 
-static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
+static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 {
 	struct msm_pmem_region *regptr;
 	unsigned char buf[256];
 
-	struct vfe_stats_ack_t sack;
-	struct axidata_t *axid;
+	struct vfe_stats_ack sack;
+	struct axidata *axid;
 	uint32_t i;
 
-	struct vfe_stats_we_cfg_t *scfg_t = NULL;
-	struct vfe_stats_af_cfg_t *sfcfg_t = NULL;
+	struct vfe_stats_we_cfg *scfg = NULL;
+	struct vfe_stats_af_cfg *sfcfg = NULL;
 
-	struct axiout_t *axio = NULL;
+	struct axiout *axio = NULL;
 	void   *cmd_data = NULL;
 	void   *cmd_data_alloc = NULL;
 	long rc = 0;
@@ -408,15 +408,15 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			goto config_failure;
 		}
 
-		scfg_t =
-			kmalloc(sizeof(struct vfe_stats_we_cfg_t),
+		scfg =
+			kmalloc(sizeof(struct vfe_stats_we_cfg),
 				GFP_ATOMIC);
-		if (!scfg_t) {
+		if (!scfg) {
 			rc = -ENOMEM;
 			goto config_failure;
 		}
 
-		if (copy_from_user(scfg_t,
+		if (copy_from_user(scfg,
 					(void __user *)(vfecmd->value),
 					vfecmd->length)) {
 
@@ -425,7 +425,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 		}
 
 		CDBG("STATS_ENABLE: bufnum = %d, enabling = %d\n",
-			axid->bufnum1, scfg_t->wb_expstatsenable);
+			axid->bufnum1, scfg->wb_expstatsenable);
 
 		if (axid->bufnum1 > 0) {
 			regptr = axid->region;
@@ -435,12 +435,12 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 				CDBG("STATS_ENABLE, phy = 0x%lx\n",
 					regptr->paddr);
 
-				scfg_t->wb_expstatoutputbuffer[i] =
+				scfg->wb_expstatoutputbuffer[i] =
 					(void *)regptr->paddr;
 				regptr++;
 			}
 
-			cmd_data = scfg_t;
+			cmd_data = scfg;
 
 		} else {
 			rc = -EINVAL;
@@ -457,16 +457,16 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			goto config_failure;
 		}
 
-		sfcfg_t =
-			kmalloc(sizeof(struct vfe_stats_af_cfg_t),
+		sfcfg =
+			kmalloc(sizeof(struct vfe_stats_af_cfg),
 				GFP_ATOMIC);
 
-		if (!sfcfg_t) {
+		if (!sfcfg) {
 			rc = -ENOMEM;
 			goto config_failure;
 		}
 
-		if (copy_from_user(sfcfg_t,
+		if (copy_from_user(sfcfg,
 					(void __user *)(vfecmd->value),
 					vfecmd->length)) {
 
@@ -475,7 +475,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 		}
 
 		CDBG("AF_ENABLE: bufnum = %d, enabling = %d\n",
-			axid->bufnum1, sfcfg_t->af_enable);
+			axid->bufnum1, sfcfg->af_enable);
 
 		if (axid->bufnum1 > 0) {
 			regptr = axid->region;
@@ -485,13 +485,13 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 				CDBG("STATS_ENABLE, phy = 0x%lx\n",
 					regptr->paddr);
 
-				sfcfg_t->af_outbuf[i] =
+				sfcfg->af_outbuf[i] =
 					(void *)regptr->paddr;
 
 				regptr++;
 			}
 
-			cmd_data = sfcfg_t;
+			cmd_data = sfcfg;
 
 		} else {
 			rc = -EINVAL;
@@ -501,15 +501,15 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 		break;
 
 	case CMD_FRAME_BUF_RELEASE: {
-		struct msm_frame_t *b;
+		struct msm_frame *b;
 		unsigned long p;
-		struct vfe_outputack_t fack;
+		struct vfe_outputack fack;
 		if (!data)  {
 			rc = -EFAULT;
 			goto config_failure;
 		}
 
-		b = (struct msm_frame_t *)(cmd->value);
+		b = (struct msm_frame *)(cmd->value);
 		p = *(unsigned long *)data;
 
 		fack.header = VFE_FRAME_ACK;
@@ -521,7 +521,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			(void *)(p + b->cbcr_off);
 
 		vfecmd->queue = QDSP_CMDQUEUE;
-		vfecmd->length = sizeof(struct vfe_outputack_t);
+		vfecmd->length = sizeof(struct vfe_outputack);
 		cmd_data = &fack;
 	}
 		break;
@@ -540,7 +540,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 		sack.bufaddr = (void *)*(uint32_t *)data;
 
 		vfecmd->queue  = QDSP_CMDQUEUE;
-		vfecmd->length = sizeof(struct vfe_stats_ack_t);
+		vfecmd->length = sizeof(struct vfe_stats_ack);
 		cmd_data = &sack;
 	}
 		break;
@@ -556,7 +556,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 		sack.bufaddr = (void *)*(uint32_t *)data;
 
 		vfecmd->queue  = QDSP_CMDQUEUE;
-		vfecmd->length = sizeof(struct vfe_stats_ack_t);
+		vfecmd->length = sizeof(struct vfe_stats_ack);
 		cmd_data = &sack;
 	}
 		break;
@@ -612,14 +612,14 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			goto config_failure;
 		}
 
-		axio = kmalloc(sizeof(struct axiout_t), GFP_ATOMIC);
+		axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
 		if (!axio) {
 			rc = -ENOMEM;
 			goto config_failure;
 		}
 
 		if (copy_from_user(axio, (void *)(vfecmd->value),
-					sizeof(struct axiout_t))) {
+					sizeof(struct axiout))) {
 			rc = -EFAULT;
 			goto config_done;
 		}
@@ -638,14 +638,14 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			goto config_failure;
 		}
 
-		axio = kmalloc(sizeof(struct axiout_t), GFP_ATOMIC);
+		axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
 		if (!axio) {
 			rc = -ENOMEM;
 			goto config_failure;
 		}
 
 		if (copy_from_user(axio, (void __user *)(vfecmd->value),
-					sizeof(struct axiout_t))) {
+					sizeof(struct axiout))) {
 			rc = -EFAULT;
 			goto config_done;
 		}
@@ -662,14 +662,14 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 			goto config_failure;
 		}
 
-		axio = kmalloc(sizeof(struct axiout_t), GFP_ATOMIC);
+		axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
 		if (!axio) {
 			rc = -ENOMEM;
 			goto config_failure;
 		}
 
 		if (copy_from_user(axio, (void __user *)(vfecmd->value),
-					sizeof(struct axiout_t))) {
+					sizeof(struct axiout))) {
 			rc = -EFAULT;
 			goto config_done;
 		}
@@ -697,13 +697,13 @@ config_done:
 		kfree(cmd_data_alloc);
 
 config_failure:
-	kfree(scfg_t);
+	kfree(scfg);
 	kfree(axio);
 	kfree(vfecmd);
 	return rc;
 }
 
-void msm_camvfe_fn_init(struct msm_camvfe_fn_t *fptr, void *data)
+void msm_camvfe_fn_init(struct msm_camvfe_fn *fptr, void *data)
 {
 	mutex_init(&vfe_lock);
 	fptr->vfe_init    = vfe_7x_init;
