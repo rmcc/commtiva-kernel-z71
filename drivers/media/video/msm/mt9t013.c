@@ -25,6 +25,7 @@
 #include <media/msm_camera.h>
 #include <mach/gpio.h>
 #include <mach/camera.h>
+#include <asm/mach-types.h>
 #include "mt9t013.h"
 
 /*=============================================================
@@ -622,10 +623,19 @@ static int32_t mt9t013_setting(enum mt9t013_reg_update_t rupdate,
 		if (rc < 0)
 			return rc;
 
-		rc =
-			mt9t013_i2c_write_w(mt9t013_client->addr,
-				REG_READ_MODE,
-				mt9t013_regs.reg_pat[rt].read_mode);
+		if (machine_is_sapphire()) {
+			if (rt == 0)
+				rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					0x046F);
+			else
+				rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					0x0027);
+		} else
+			rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					mt9t013_regs.reg_pat[rt].read_mode);
 		if (rc < 0)
 			return rc;
 
@@ -635,6 +645,7 @@ static int32_t mt9t013_setting(enum mt9t013_reg_update_t rupdate,
 				mt9t013_regs.reg_pat[rt].scale_m);
 		if (rc < 0)
 			return rc;
+
 
 		rc =
 			mt9t013_i2c_write_w(mt9t013_client->addr,
@@ -828,10 +839,19 @@ static int32_t mt9t013_setting(enum mt9t013_reg_update_t rupdate,
 		if (rc < 0)
 			return rc;
 
-		rc =
-			mt9t013_i2c_write_w(mt9t013_client->addr,
-				REG_READ_MODE,
-				mt9t013_regs.reg_pat[rt].read_mode);
+		if (machine_is_sapphire()) {
+			if (rt == 0)
+				rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					0x046F);
+			else
+				rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					0x0027);
+		} else
+			rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+					REG_READ_MODE,
+					mt9t013_regs.reg_pat[rt].read_mode);
 		if (rc < 0)
 			return rc;
 
