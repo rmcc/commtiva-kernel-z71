@@ -1,8 +1,8 @@
 ifeq ($(CONFIG_ARCH_MSM_SCORPION),y)
 ifeq ($(CONFIG_MSM_STACKED_MEMORY), y)
-  zreladdr-y		:= 0x24008000
-params_phys-y		:= 0x24000100
-initrd_phys-y		:= 0x28000000
+  zreladdr-y		:= 0x20008000
+params_phys-y		:= 0x20000100
+initrd_phys-y		:= 0x24000000
 else  # !CONFIG_MSM_STACKED_MEMORY
   zreladdr-y		:= 0x00208000
 params_phys-y		:= 0x00200100

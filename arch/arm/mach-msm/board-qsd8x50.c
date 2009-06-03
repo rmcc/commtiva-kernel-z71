@@ -2017,7 +2017,7 @@ MACHINE_START(QSD8X50_SURF, "QCT QSD8X50 SURF")
 	.phys_io  = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params = 0x24000100,
+	.boot_params = 0x20000100,
 	.map_io = qsd8x50_map_io,
 	.init_irq = qsd8x50_init_irq,
 	.init_machine = qsd8x50_init,
@@ -2029,7 +2029,7 @@ MACHINE_START(QSD8X50_FFA, "QCT QSD8X50 FFA")
 	.phys_io  = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params = 0x24000100,
+	.boot_params = 0x20000100,
 	.map_io = qsd8x50_map_io,
 	.init_irq = qsd8x50_init_irq,
 	.init_machine = qsd8x50_init,
