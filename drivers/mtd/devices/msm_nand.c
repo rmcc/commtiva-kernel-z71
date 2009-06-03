@@ -439,7 +439,7 @@ uint32_t flash_onfi_probe(struct msm_nand_chip *chip)
 	unsigned crc_chk_count = 0;
 
 	if (msm_nand_data.nr_parts) {
-		page_address = ((msm_nand_data.parts[0]).offset >> 11);
+		page_address = ((msm_nand_data.parts[0]).offset << 6);
 	} else {
 		pr_err("flash_onfi_probe: "
 				"No partition info available\n");
