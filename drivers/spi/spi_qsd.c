@@ -72,7 +72,6 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/io.h>
-#include <linux/gpio.h>
 
 #define SPI_CONFIG                    0x0000
 #define SPI_IO_CONTROL                0x0004
@@ -136,8 +135,6 @@
 #define SPI_ERR_MASK                  0x0000007F
 
 #define SPI_NUM_CHIPSELECTS           4
-#define SPI_CS_RESOURCE_NAME          "spi_cs  "
-#define SPI_IRQ_CS_RESOURCE_NAME      "spi_irq_cs  "
 #define SPI_QSD_NAME                  "spi_qsd"
 
 MODULE_LICENSE("GPL v2");
@@ -167,10 +164,6 @@ struct msm_spi {
 	u32                      irq_in;
 	u32                      irq_out;
 	u32                      irq_err;
-	u32                      gpio_clk, gpio_mosi, gpio_miso;
-	u32                      gpio_pwr;
-	u32                      gpio_cs[SPI_NUM_CHIPSELECTS];
-	u32                      gpio_irq_cs[SPI_NUM_CHIPSELECTS];
 	int                      bytes_per_word;
 	bool                     suspended;
 	bool                     transfer_in_progress;
@@ -526,12 +519,14 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	struct spi_master      *master;
 	struct msm_spi	       *dd;
 	struct resource	       *resmem;
-	struct resource	       *resclk, *resmosi, *resmiso, *respwr;
-	struct resource	       *res;
-	int                     i;
-	char                    res_cs_name[] = SPI_CS_RESOURCE_NAME;
-	char                    res_irq_cs_name[] = SPI_IRQ_CS_RESOURCE_NAME;
 	int			rc = 0;
+	int (*gpio_config)(void) = pdev->dev.platform_data;
+
+	if (!gpio_config) {
+		rc = -ENXIO;
+		dev_dbg(&pdev->dev, "gpio_config function not initialized\n");
+		goto err_probe_exit;
+	}
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct msm_spi));
 	if (!master) {
@@ -555,78 +550,12 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 
 	resmem  = platform_get_resource_byname(pdev,
 					       IORESOURCE_MEM, "spi_base");
-	resclk  = platform_get_resource_byname(pdev,
-					       IORESOURCE_IRQ, "spi_clk");
-	resmosi = platform_get_resource_byname(pdev,
-					       IORESOURCE_IRQ, "spi_mosi");
-	resmiso = platform_get_resource_byname(pdev,
-					       IORESOURCE_IRQ, "spi_miso");
-	if ((!resmem) || (!resclk) || (!resmosi) || (!resmiso)) {
+	if (!resmem) {
 		rc = -ENXIO;
 		goto err_probe_res;
 	}
 
-	dd->gpio_clk = resclk->start;
-	rc += gpio_request(dd->gpio_clk, 0);
-	rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_clk, resclk->end,
-					GPIO_INPUT,
-					GPIO_NO_PULL, GPIO_2MA),
-			       GPIO_ENABLE);
-	dd->gpio_mosi = resmosi->start;
-	rc += gpio_request(dd->gpio_mosi, 0);
-	rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_mosi, resmosi->end,
-					GPIO_INPUT,
-					GPIO_NO_PULL, GPIO_2MA),
-			       GPIO_ENABLE);
-	dd->gpio_miso = resmiso->start;
-	rc += gpio_request(dd->gpio_miso, 0);
-	rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_miso, resmiso->end,
-					GPIO_INPUT,
-					GPIO_NO_PULL, GPIO_2MA),
-			       GPIO_ENABLE);
-
-	/* the following are optional */
-	respwr = platform_get_resource_byname(pdev,
-					      IORESOURCE_IRQ, "spi_pwr");
-	if (respwr) {
-		dd->gpio_pwr = respwr->start;
-		rc += gpio_request(dd->gpio_pwr, 0);
-		rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_pwr, respwr->end,
-						GPIO_OUTPUT,
-						GPIO_PULL_UP, GPIO_16MA),
-				       GPIO_ENABLE);
-		gpio_direction_output(dd->gpio_pwr, 1);
-	}
-	for (i = 0; i < SPI_NUM_CHIPSELECTS; i++) {
-		snprintf(res_cs_name, ARRAY_SIZE(res_cs_name), "spi_cs%d", i);
-		res = platform_get_resource_byname(pdev, IORESOURCE_IRQ,
-						   res_cs_name);
-		if (res) {
-			dd->gpio_cs[i] = res->start;
-			rc += gpio_request(dd->gpio_cs[i], 0);
-			rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_cs[i],
-							res->end,
-							GPIO_INPUT,
-							GPIO_NO_PULL,
-							GPIO_2MA),
-					       GPIO_ENABLE);
-		}
-		snprintf(res_irq_cs_name, ARRAY_SIZE(res_irq_cs_name),
-			 "spi_irq_cs%d", i);
-		res = platform_get_resource_byname(pdev, IORESOURCE_IRQ,
-						   res_irq_cs_name);
-		if (res) {
-			dd->gpio_irq_cs[i] = res->start;
-			rc += gpio_request(dd->gpio_irq_cs[i], 0);
-			rc += gpio_tlmm_config(GPIO_CFG(dd->gpio_irq_cs[i],
-							res->end,
-							GPIO_INPUT,
-							GPIO_NO_PULL,
-							GPIO_2MA),
-					       GPIO_ENABLE);
-		}
-	}
-
+	rc = (*gpio_config)();
 	if (rc) {
 		dev_err(&pdev->dev, "%s: error configuring GPIOs\n",
 		       __func__);
@@ -721,20 +650,6 @@ err_probe_reqmem:
 	destroy_workqueue(dd->workqueue);
 err_probe_workq:
 err_probe_gpio:
-	if (dd->gpio_clk)
-		gpio_free(dd->gpio_clk);
-	if (dd->gpio_mosi)
-		gpio_free(dd->gpio_mosi);
-	if (dd->gpio_miso)
-		gpio_free(dd->gpio_miso);
-	if (dd->gpio_pwr)
-		gpio_free(dd->gpio_pwr);
-	for (i = 0; i < SPI_NUM_CHIPSELECTS; i++) {
-		if (dd->gpio_cs[i])
-			gpio_free(dd->gpio_cs[i]);
-		if (dd->gpio_irq_cs[i])
-			gpio_free(dd->gpio_irq_cs[i]);
-	}
 err_probe_res:
 	spi_master_put(master);
 err_probe_exit:
@@ -794,21 +709,10 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 {
 	struct spi_master *master = platform_get_drvdata(pdev);
 	struct msm_spi    *dd = spi_master_get_devdata(master);
-	int                i;
 
 	free_irq(dd->irq_in, dd);
 	free_irq(dd->irq_out, dd);
 	free_irq(dd->irq_err, master);
-	gpio_free(dd->gpio_clk);
-	gpio_free(dd->gpio_mosi);
-	gpio_free(dd->gpio_miso);
-	gpio_free(dd->gpio_pwr);
-	for (i = 0; i < SPI_NUM_CHIPSELECTS; i++) {
-		if (dd->gpio_cs[i])
-			gpio_free(dd->gpio_cs[i]);
-		if (dd->gpio_irq_cs[i])
-			gpio_free(dd->gpio_irq_cs[i]);
-	}
 	iounmap(dd->base);
 	release_mem_region(dd->mem_phys_addr, dd->mem_size);
 	clk_disable(dd->clk);

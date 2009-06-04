@@ -338,42 +338,6 @@ static struct resource qsd_spi_resources[] = {
 		.end	= 0xA1200000 + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
-	{
-		.name   = "spi_clk",
-		.start	= 17,
-		.end	= 1,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_mosi",
-		.start	= 18,
-		.end	= 1,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_miso",
-		.start	= 19,
-		.end	= 1,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_cs0",
-		.start	= 20,
-		.end	= 1,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_pwr",
-		.start	= 21,
-		.end	= 0,
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.name   = "spi_irq_cs0",
-		.start	= 22,
-		.end	= 0,
-		.flags	= IORESOURCE_IRQ,
-	},
 };
 
 static struct platform_device qsd_device_spi = {
@@ -393,6 +357,52 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 		.max_speed_hz	= 10000000,
 	}
 };
+
+static unsigned qsd_spi_gpio_config_data[] = {
+	GPIO_CFG(17, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CLK */
+	GPIO_CFG(18, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MOSI */
+	GPIO_CFG(19, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
+	GPIO_CFG(20, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
+	GPIO_CFG(21, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), /* SPI_PWR */
+	GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* IRQ_CS0 */
+};
+
+static int msm_qsd_spi_gpio_config(void)
+{
+	int i, rc;
+
+	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
+		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, qsd_spi_gpio_config_data[i], rc);
+			return -EIO;
+		}
+	}
+
+	/* Set direction for SPI_PWR */
+	gpio_direction_output(21, 1);
+
+	return 0;
+}
+
+static void __init msm_qsd_spi_init(void)
+{
+	if (gpio_request(17, "spi_clk"))
+		pr_err("failed to request gpio spi_clk\n");
+	if (gpio_request(18, "spi_mosi"))
+		pr_err("failed to request gpio spi_mosi\n");
+	if (gpio_request(19, "spi_miso"))
+		pr_err("failed to request gpio spi_miso\n");
+	if (gpio_request(20, "spi_cs0"))
+		pr_err("failed to request gpio spi_cs0\n");
+	if (gpio_request(21, "spi_pwr"))
+		pr_err("failed to request gpio spi_pwr\n");
+	if (gpio_request(22, "spi_irq_cs0"))
+		pr_err("failed to request gpio spi_irq_cs0\n");
+
+	qsd_device_spi.dev.platform_data = msm_qsd_spi_gpio_config;
+}
 
 static int mddi_toshiba_pmic_bl(int level)
 {
@@ -1437,6 +1447,7 @@ static void __init qsd8x50_init(void)
 	bt_power_init();
 	audio_gpio_init();
 	msm_device_i2c_init();
+	msm_qsd_spi_init();
 	i2c_register_board_info(0, msm_i2c_board_info,
 				ARRAY_SIZE(msm_i2c_board_info));
 	spi_register_board_info(msm_spi_board_info,
