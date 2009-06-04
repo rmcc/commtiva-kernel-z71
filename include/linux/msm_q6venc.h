@@ -147,4 +147,6 @@ struct frame_type {
 #define VENC_IOCTL_WAIT_FOR_ENCODE  _IOR(VENC_IOCTL_MAGIC, 7, struct frame_type)
 #define VENC_IOCTL_STOP_ENCODE       _IO(VENC_IOCTL_MAGIC, 8)
 
+extern void v7_dma_inv_range(unsigned int start, unsigned int end);
+
 #endif /* _MSM_VENC_H_ */

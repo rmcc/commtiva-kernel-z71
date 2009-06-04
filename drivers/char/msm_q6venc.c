@@ -81,6 +81,41 @@
 #define DBG(x...) do {} while (0)
 #endif
 
+#define CACHE_LINE_SIZE         128
+#define MMU_ALIGN_REQ           4096
+
+#define LOG_VENC_INIT_CONFIG(q6_init_config)  \
+		DBG("q6_init_config->venc_standard  = 0x%08x" \
+		"q6_init_config->partial_run_length_flag = 0x%08x \n" \
+		"q6_init_config->h263_annex_ispt = 0x%08x " \
+		"q6_init_config->h263_annex_jspt = 0x%08x \n" \
+		"q6_init_config->h263_annex_tspt = 0x%08x " \
+		"q6_init_config->rc_flag = 0x%08x \n" \
+		"q6_init_config->one_mv_flag = 0x%08x " \
+		"q6_init_config->acdc_pred_enable = 0x%08x \n" \
+		"q6_init_config->rounding_bit_ctrl = 0x%08x " \
+		"q6_init_config->rotation_flag = 0x%08x \n" \
+		"q6_init_config->max_mvx = 0x%08x " \
+		"q6_init_config->max_mvy = 0x%08x \n" \
+		"q6_init_config->enc_frame_height_inmb = 0x%08x " \
+		"q6_init_config->enc_frame_width_inmb = 0x%08x " \
+		"q6_init_config->rlc_buf_length = 0x%08x \n", \
+		(unsigned int)q6_init_config->venc_standard, \
+		(unsigned int)q6_init_config->partial_run_length_flag, \
+		q6_init_config->h263_annex_ispt, \
+		q6_init_config->h263_annex_jspt , \
+		q6_init_config->h263_annex_tspt, \
+		q6_init_config->rc_flag, \
+		q6_init_config->one_mv_flag, \
+		q6_init_config->acdc_pred_enable, \
+		q6_init_config->rounding_bit_ctrl, \
+		q6_init_config->rotation_flag, \
+		q6_init_config->max_mvx, \
+		q6_init_config->max_mvy, \
+		q6_init_config->enc_frame_height_inmb, \
+		q6_init_config->enc_frame_width_inmb, \
+		q6_init_config->rlc_buf_length)
+
 #define LOG_VENC_ENCODE_PARAM(encode_param)  \
 		DBG("encode_param->y_addr.fd  = 0x%08x" \
 		"encode_param->y_addr.offset = 0x%08x \n" \
@@ -92,17 +127,18 @@
 		(unsigned int)encode_param->uv_addr.offset)
 
 #define LOG_VENC_Y_PHY_ADDR(q6_encode_param, len)   \
-		DBG("from pmem  y_addr_phy = 0x%08x, len = 0x%08x" ,\
+		DBG("from pmem  y_addr_phy = 0x%08x, len = 0x%08x \n" ,\
 		(unsigned int)q6_encode_param->y_addr_phy,\
 		(unsigned int)len)
 
 #define LOG_VENC_UV_PHY_ADDR(q6_encode_param, len)  \
-		DBG("from pmem y_addr_phy = 0x%08x, len = 0x%08x" ,\
+		DBG("from pmem y_addr_phy = 0x%08x, len = 0x%08x \n" ,\
 		(unsigned int)q6_encode_param->uv_addr_phy, \
 		(unsigned int)len)
 
 #define LOG_VENC_Y_UV_PHY_ADDR_WITH_OFFSET(q6_encode_param) \
-	DBG("after adding offset y_addr_phy  = 0x%08x, uv_addr_phy = 0x%08x" ,\
+	DBG("after adding offset y_addr_phy  = 0x%08x, " \
+	"uv_addr_phy = 0x%08x \n" ,\
 	(unsigned int)q6_encode_param->y_addr_phy, \
 	(unsigned int)q6_encode_param->uv_addr_phy);
 
@@ -114,6 +150,7 @@ struct callback_event_data {
 
 struct phy_to_venc_buf_map {
 	unsigned int phy_address;
+	unsigned int virt_address;
 	struct file *file;
 	struct venc_buf venc_buf;
 };
@@ -128,6 +165,9 @@ struct q6venc_dev {
 	int encode_done;
 	int stop_encode;
 	unsigned int buf_num;
+	unsigned int rlc_buf_ptr;
+	unsigned int rlc_buf_len;
+	struct phy_to_venc_buf_map rlc_buf_map[2];
 	struct phy_to_venc_buf_map phy_to_vbuf_map[VENC_MAX_BUF_NUM];
 	struct frame_type frame_type;
 	wait_queue_head_t encode_wq;
@@ -149,13 +189,13 @@ static void q6venc_callback(void *context, uint32_t param, void *data,
 
 	q6venc_devp->encode_done = 1;
 
-	for (id = 0; id < q6venc_devp->buf_num; id++) {
-		if (q6venc_devp->phy_to_vbuf_map[id].phy_address ==
-		    q6_frame_type->frame_addr)
-			break;
-	}
-
-	if ((q6venc_devp->buf_num == 0) || (id == q6venc_devp->buf_num)) {
+	if (q6venc_devp->rlc_buf_map[0].phy_address ==
+	    q6_frame_type->frame_addr)
+		id = 0;
+	else if (q6venc_devp->rlc_buf_map[1].phy_address ==
+		 q6_frame_type->frame_addr)
+		id = 1;
+	else {
 		printk(KERN_ERR
 		       "%s got Incorrect phy address 0x%08x from q6 \n",
 		       __func__, q6_frame_type->frame_addr);
@@ -165,9 +205,11 @@ static void q6venc_callback(void *context, uint32_t param, void *data,
 	}
 
 	q6venc_devp->frame_type.frame_addr =
-	    q6venc_devp->phy_to_vbuf_map[id].venc_buf;
+	    q6venc_devp->rlc_buf_map[id].venc_buf;
 
 	q6venc_devp->frame_type.q6_frame_type = *q6_frame_type;
+
+	q6venc_devp->rlc_buf_ptr = q6venc_devp->rlc_buf_map[id].virt_address;
 
 	wake_up_interruptible(&q6venc_devp->encode_wq);
 }
@@ -183,6 +225,9 @@ static int q6venc_open(struct inode *inode, struct file *file)
 	q6venc_devp = container_of(inode->i_cdev, struct q6venc_dev, cdev);
 
 	memset(&(q6venc_devp->phy_to_vbuf_map[0]), 0, VENC_MAX_BUF_NUM *
+	       sizeof(struct phy_to_venc_buf_map));
+
+	memset(&(q6venc_devp->rlc_buf_map[0]), 0, 2 *
 	       sizeof(struct phy_to_venc_buf_map));
 
 	file->private_data = q6venc_devp;
@@ -257,15 +302,16 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 				     struct init_config *init_config)
 {
 	unsigned long len;
-	unsigned long vaddr;
+	unsigned int vaddr;
 	struct file *file;
 	int ret;
 
 	struct q6_init_config *q6_init_config = &init_config->q6_init_config;
 
-	ret = get_pmem_file(init_config->ref_frame_buf1.fd,
-			    (unsigned long *)&q6_init_config->
-			    ref_frame_buf1_phy, &vaddr, (unsigned long *)&len,
+	LOG_VENC_INIT_CONFIG(q6_init_config);
+	ret = get_pmem_file(init_config->ref_frame_buf1.fd, (unsigned long *)
+			    &q6_init_config->ref_frame_buf1_phy,
+			    (unsigned long *)&vaddr, (unsigned long *)&len,
 			    &file);
 
 	if (ret) {
@@ -285,9 +331,9 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 
 	q6venc_devp->phy_to_vbuf_map[0].venc_buf = init_config->ref_frame_buf1;
 
-	ret = get_pmem_file(init_config->ref_frame_buf2.fd,
-			    (unsigned long *)&q6_init_config->
-			    ref_frame_buf2_phy, &vaddr, (unsigned long *)&len,
+	ret = get_pmem_file(init_config->ref_frame_buf2.fd, (unsigned long *)
+			    &q6_init_config->ref_frame_buf2_phy,
+			    (unsigned long *)&vaddr, (unsigned long *)&len,
 			    &file);
 
 	if (ret) {
@@ -309,7 +355,8 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 
 	ret = get_pmem_file(init_config->rlc_buf1.fd,
 			    (unsigned long *)&q6_init_config->rlc_buf1_phy,
-			    &vaddr, (unsigned long *)&len, &file);
+			    (unsigned long *)&vaddr, (unsigned long *)&len,
+			    &file);
 
 	if (ret) {
 		printk(KERN_ERR "%s: get_pmem_file failed"
@@ -320,16 +367,34 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 
 	q6_init_config->rlc_buf1_phy += init_config->rlc_buf1.offset;
 
-	q6venc_devp->phy_to_vbuf_map[2].phy_address =
-	    q6_init_config->rlc_buf1_phy;
+	q6venc_devp->rlc_buf_map[0].phy_address = q6_init_config->rlc_buf1_phy;
 
-	q6venc_devp->phy_to_vbuf_map[2].file = file;
+	if ((q6_init_config->rlc_buf1_phy & (CACHE_LINE_SIZE - 1)) != 0) {
+		printk(KERN_ERR
+		       "rlf buffer1 address not aligned to cache line \n");
+		return -EIO;
+	}
 
-	q6venc_devp->phy_to_vbuf_map[2].venc_buf = init_config->rlc_buf1;
+	q6venc_devp->rlc_buf_map[0].virt_address = vaddr;
+	q6venc_devp->rlc_buf_ptr = 0;
+	q6venc_devp->rlc_buf_len = 2 * (q6_init_config->rlc_buf_length);
+	if ((q6venc_devp->rlc_buf_len & (CACHE_LINE_SIZE - 1)) != 0) {
+		printk(KERN_ERR "rlf buffer size not aligned to cache line \n");
+		return -EIO;
+	}
+
+	DBG("Invalidate phy_addr: 0x%08x, virt_addr:0x%08x, len:0x%08x \n",
+	    q6venc_devp->rlc_buf_map[0].phy_address, vaddr,
+	    q6venc_devp->rlc_buf_len);
+	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len);
+
+	q6venc_devp->rlc_buf_map[0].file = file;
+	q6venc_devp->rlc_buf_map[0].venc_buf = init_config->rlc_buf1;
 
 	ret = get_pmem_file(init_config->rlc_buf2.fd,
 			    (unsigned long *)&q6_init_config->rlc_buf2_phy,
-			    &vaddr, (unsigned long *)&len, &file);
+			    (unsigned long *)&vaddr, (unsigned long *)&len,
+			    &file);
 
 	if (ret) {
 		printk(KERN_ERR "%s: get_pmem_file failed "
@@ -339,15 +404,26 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 	}
 
 	q6_init_config->rlc_buf2_phy += init_config->rlc_buf2.offset;
+	if ((q6_init_config->rlc_buf2_phy & (CACHE_LINE_SIZE - 1)) != 0) {
+		printk(KERN_ERR
+		       "rlf buffer2 address not aligned to cache line \n");
+		return -EIO;
+	}
 
-	q6venc_devp->phy_to_vbuf_map[3].phy_address =
-	    q6_init_config->rlc_buf2_phy;
+	q6venc_devp->rlc_buf_map[1].phy_address = q6_init_config->rlc_buf2_phy;
+	q6venc_devp->rlc_buf_map[1].virt_address = vaddr;
 
-	q6venc_devp->phy_to_vbuf_map[3].file = file;
+	DBG("Invalidate phys_addr: 0x%08x, virt_addr: 0x%08x, len:0x%08x \n",
+	    q6venc_devp->rlc_buf_map[1].phy_address, vaddr,
+	    q6venc_devp->rlc_buf_len);
 
-	q6venc_devp->phy_to_vbuf_map[3].venc_buf = init_config->rlc_buf2;
+	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len);
 
-	q6venc_devp->buf_num = 4;
+	q6venc_devp->rlc_buf_map[1].file = file;
+
+	q6venc_devp->rlc_buf_map[1].venc_buf = init_config->rlc_buf2;
+
+	q6venc_devp->buf_num = 2;
 
 	return 0;
 
@@ -386,10 +462,9 @@ static int convert_to_q6_encode_param(struct q6venc_dev *q6venc_devp,
 	}
 
 	if ((buf_num == 0) || (id == buf_num)) {
-		ret = get_pmem_file(encode_param->y_addr.fd,
-				    (unsigned long *)&q6_encode_param->
-				    y_addr_phy, &vaddr, (unsigned long *)&len,
-				    &file);
+		ret = get_pmem_file(encode_param->y_addr.fd, (unsigned long *)
+				    &q6_encode_param->y_addr_phy, &vaddr,
+				    (unsigned long *)&len, &file);
 
 		LOG_VENC_Y_PHY_ADDR(q6_encode_param, len);
 
@@ -401,6 +476,11 @@ static int convert_to_q6_encode_param(struct q6venc_dev *q6venc_devp,
 		}
 
 		q6_encode_param->y_addr_phy += encode_param->y_addr.offset;
+
+		if ((q6_encode_param->y_addr_phy & (MMU_ALIGN_REQ - 1)) != 0) {
+			printk(KERN_ERR "Input buffer not 4k aligned \n");
+			return -EIO;
+		}
 
 		q6venc_devp->phy_to_vbuf_map[buf_num].phy_address =
 		    q6_encode_param->y_addr_phy;
@@ -436,6 +516,7 @@ static int q6venc_ioctl(struct inode *inode, struct file *file,
 	struct encode_param encode_param;
 	struct intra_refresh intra_refresh;
 	struct rc_config rc_config;
+	unsigned int start_addr, end_addr;
 
 	struct q6venc_dev *q6venc_devp = file->private_data;
 
@@ -485,6 +566,17 @@ static int q6venc_ioctl(struct inode *inode, struct file *file,
 			       " failed \n", __func__);
 			return err;
 		}
+
+		if (q6venc_devp->rlc_buf_ptr ==
+		    q6venc_devp->rlc_buf_map[0].virt_address)
+			start_addr = q6venc_devp->rlc_buf_map[1].virt_address;
+		else
+			start_addr = q6venc_devp->rlc_buf_map[0].virt_address;
+
+		end_addr = start_addr + q6venc_devp->rlc_buf_len;
+		DBG("Cache invalidate:start_vaddr:0x%08x, end_vaddr: 0x%08x \n",
+		    start_addr, end_addr);
+		v7_dma_inv_range(start_addr, end_addr);
 
 		err = q6venc_encode(q6venc_devp->q6venc_handle,
 				    (void *)&encode_param.q6_encode_param,
@@ -569,10 +661,13 @@ static int q6venc_ioctl(struct inode *inode, struct file *file,
 
 		for (id = 0; id < q6venc_devp->buf_num; id++) {
 			if (q6venc_devp->phy_to_vbuf_map[id].file) {
-				put_pmem_file(q6venc_devp->phy_to_vbuf_map[id].
-					      file);
+				put_pmem_file(q6venc_devp->
+					      phy_to_vbuf_map[id].file);
 			}
 		}
+
+		put_pmem_file(q6venc_devp->rlc_buf_map[0].file);
+		put_pmem_file(q6venc_devp->rlc_buf_map[1].file);
 
 		err = q6venc_stop(q6venc_devp->q6venc_handle);
 
@@ -614,8 +709,8 @@ static int q6venc_ioctl(struct inode *inode, struct file *file,
 
 				if (copy_to_user((void __user *)arg,
 						 &q6venc_devp->frame_type,
-						 sizeof(q6venc_devp->
-							frame_type)))
+						 sizeof
+						 (q6venc_devp->frame_type)))
 					return -EFAULT;
 			}
 		} else {
