@@ -208,9 +208,9 @@ static void scpll_set_freq(uint32_t lval, unsigned freq_switch)
 	while (readl(SCPLL_STATUS_ADDR) & 0x1)
 		;
 
-	/* status bit seems to clear early, requires at least
-	 * ~8 microseconds to settle, using 20 to be safe  */
-	udelay(20);
+	/* status bit seems to clear early, using
+	 * 100us to handle the worst case. */
+	udelay(100);
 }
 
 static void scpll_apps_enable(bool state)
@@ -234,6 +234,7 @@ static void scpll_apps_enable(bool state)
 		regval = readl(SCPLL_CTL_ADDR);
 		regval |= (0x7);
 		writel(regval, SCPLL_CTL_ADDR);
+		udelay(200);
 	} else {
 		/* put the pll in power down mode */
 		regval = readl(SCPLL_CTL_ADDR);
@@ -245,6 +246,10 @@ static void scpll_apps_enable(bool state)
 
 static void scpll_init(void)
 {
+	uint32_t regval;
+#define L_VAL_384MHZ	0xA
+#define L_VAL_768MHZ	0x14
+
 	/* power down scpll */
 	writel(0x0, SCPLL_CTL_ADDR);
 
@@ -264,8 +269,52 @@ static void scpll_init(void)
 	while (readl(SCPLL_STATUS_ADDR) & 0x2)
 		;
 
-	/* power down scpll */
-	writel(0x0, SCPLL_CTL_ADDR);
+	/* Start: Set of experimentally derived steps
+	 * to work around a h/w bug. */
+
+	/* Put the pll in normal mode */
+	scpll_apps_enable(1);
+
+	/* SHOT switch to 384 MHz */
+	regval = readl(SCPLL_FSM_CTL_EXT_ADDR);
+	regval &= ~(0x3f << 3);
+	regval |= (L_VAL_384MHZ << 3);
+	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	regval &= ~0x7;
+	regval |= SHOT_SWITCH;
+	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	/* Wait for frequency switch to finish */
+	while (readl(SCPLL_STATUS_ADDR) & 0x1)
+		;
+
+	/* Status bit seems to clear early, using
+	 * 800 microseconds for the worst case. */
+	udelay(800);
+
+	/* HOP switch to 768 MHz. */
+	regval = readl(SCPLL_FSM_CTL_EXT_ADDR);
+	regval &= ~(0x3f << 3);
+	regval |= (L_VAL_768MHZ << 3);
+	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	regval &= ~0x7;
+	regval |= HOP_SWITCH;
+	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	/* Wait for frequency switch to finish */
+	while (readl(SCPLL_STATUS_ADDR) & 0x1)
+		;
+
+	/* Status bit seems to clear early, using
+	 * 100 microseconds for the worst case. */
+	udelay(100);
+
+	/* End: Work around for h/w bug */
+
+	/* Power down scpll */
+	scpll_apps_enable(0);
 }
 
 static void config_pll(struct clkctl_acpu_speed *s)
@@ -273,7 +322,7 @@ static void config_pll(struct clkctl_acpu_speed *s)
 	uint32_t regval;
 
 	if (s->pll == ACPU_PLL_3)
-		scpll_set_freq(s->sc_l_value, SHOT_SWITCH);
+		scpll_set_freq(s->sc_l_value, HOP_SWITCH);
 	else {
 		/* get the current clock source selection */
 		regval = readl(SPSS_CLK_SEL_ADDR) & 0x1;
