@@ -93,6 +93,7 @@
 #define PING_MDM_CB_PROC                 2
 
 static struct msm_rpc_client *rpc_client;
+static uint32_t test_res;
 static uint32_t open_count;
 static uint32_t ping_test_use_multi_clients;
 static DEFINE_MUTEX(ping_mdm_lock);
@@ -536,8 +537,6 @@ static int ping_test_release(struct inode *ip, struct file *fp)
 
 static int ping_test_open(struct inode *ip, struct file *fp)
 {
-	int *test_res;
-
 	mutex_lock(&ping_mdm_lock);
 	if (open_count++ == 0) {
 		rpc_client = msm_rpc_register_client("pingdef",
@@ -549,16 +548,6 @@ static int ping_test_open(struct inode *ip, struct file *fp)
 			return PTR_ERR(rpc_client);
 		}
 		pr_info("%s: connected to remote ping server\n", __func__);
-		test_res = kzalloc(sizeof(int), GFP_KERNEL);
-		if (IS_ERR(test_res)) {
-			msm_rpc_unregister_client(rpc_client);
-			pr_info("%s: disconnected from remote ping server\n",
-				__func__);
-			mutex_unlock(&ping_mdm_lock);
-			return -ENOMEM;
-		}
-
-		fp->private_data = test_res;
 	}
 	mutex_unlock(&ping_mdm_lock);
 	return 0;
@@ -606,10 +595,9 @@ static int ping_test_ioctl(struct inode *ip, struct file *fp,
 static ssize_t ping_test_read(struct file *fp, char __user *buf,
 			size_t count, loff_t *pos)
 {
-	int *test_res = fp->private_data;
 	char _buf[16];
 
-	snprintf(_buf, sizeof(_buf), "%i\n", *test_res);
+	snprintf(_buf, sizeof(_buf), "%i\n", test_res);
 
 	return simple_read_from_buffer(buf, count, pos, _buf, strlen(_buf));
 }
@@ -619,9 +607,6 @@ static ssize_t ping_test_write(struct file *fp, const char __user *buf,
 {
 	unsigned char cmd[64];
 	int len;
-	int *test_res;
-
-	test_res =  (int *) fp->private_data;
 
 	if (count < 1)
 		return 0;
@@ -640,13 +625,13 @@ static ssize_t ping_test_write(struct file *fp, const char __user *buf,
 	}
 
 	if (!strncmp(cmd, "null_test", 64)) {
-		*test_res = ping_mdm_null_test();
+		test_res = ping_mdm_null_test();
 	} else if (!strncmp(cmd, "reg_test", 64)) {
-		*test_res = ping_mdm_register_test();
+		test_res = ping_mdm_register_test();
 	} else if (!strncmp(cmd, "data_reg_test", 64)) {
-		*test_res = ping_mdm_data_register_test();
+		test_res = ping_mdm_data_register_test();
 	} else if (!strncmp(cmd, "data_cb_reg_test", 64)) {
-		*test_res = ping_mdm_data_cb_register_test();
+		test_res = ping_mdm_data_cb_register_test();
 	} else if (!strncmp(cmd, "use_multi_clients", 64)) {
 		ping_test_use_multi_clients = 1;
 		pr_info("%s: tests to use multiple clients\n", __func__);
@@ -682,6 +667,7 @@ static int __init ping_test_init(void)
 {
 	int rc = 0;
 
+	test_res = 0;
 	open_count = 0;
 	ping_test_use_multi_clients = 0;
 	rc = misc_register(&ping_test_device);
