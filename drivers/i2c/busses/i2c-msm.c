@@ -72,6 +72,7 @@ struct msm_i2c_dev {
 	int                 cnt;
 	int                 err;
 	int                 flush_cnt;
+	int                 rd_acked;
 	void                *complete;
 };
 
@@ -135,18 +136,22 @@ msm_i2c_interrupt(int irq, void *devid)
 			if (dev->cnt) { /* DATA */
 				uint8_t *data = &dev->msg->buf[dev->pos];
 
-				*data = readl(dev->base + I2C_READ_DATA);
-				dev->cnt--;
-				dev->pos++;
 				/* This is in spin-lock. So there will be no
 				 * scheduling between reading the second-last
 				 * byte and writing LAST_BYTE to the controller.
 				 * So extra read-cycle-clock won't be generated
+				 * Per I2C MSM HW Specs: Write LAST_BYTE befure
+				 * reading 2nd last byte
 				 */
-				if (dev->cnt == 1)
+				if (dev->cnt == 2)
 					writel(I2C_WRITE_DATA_LAST_BYTE,
 						dev->base + I2C_WRITE_DATA);
-				else if (dev->cnt == 0)
+				*data = readl(dev->base + I2C_READ_DATA);
+				dev->cnt--;
+				dev->pos++;
+				if (dev->msg->len == 1)
+					dev->rd_acked = 0;
+				if (dev->cnt == 0)
 					goto out_complete;
 
 			} else {
@@ -159,7 +164,10 @@ msm_i2c_interrupt(int irq, void *devid)
 				err = -EIO;
 				goto out_err;
 			}
-		}
+		} else if (dev->msg->len == 1 && dev->rd_acked == 0 &&
+				(status & I2C_STATUS_RX_DATA_STATE))
+			writel(I2C_WRITE_DATA_LAST_BYTE,
+				dev->base + I2C_WRITE_DATA);
 	} else {
 		uint16_t data;
 
@@ -302,12 +310,15 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				retries++;
 			}
 			if (retries >= 2000) {
+				dev->rd_acked = 0;
 				spin_unlock_irqrestore(&dev->lock, flags);
-				dev_err(dev->dev,
-					"Error doing one byte read\n");
-				goto out_err;
+				/* 1-byte-reads from slow devices in interrupt
+				 * context
+				 */
+				goto wait_for_int;
 			}
 
+			dev->rd_acked = 1;
 			writel(I2C_WRITE_DATA_LAST_BYTE,
 					dev->base + I2C_WRITE_DATA);
 			spin_unlock_irqrestore(&dev->lock, flags);
@@ -324,6 +335,7 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		 * Now that we've setup the xfer, the ISR will transfer the data
 		 * and wake us up with dev->err set if there was an error
 		 */
+wait_for_int:
 
 		timeout = wait_for_completion_timeout(&complete, HZ);
 		if (!timeout) {
