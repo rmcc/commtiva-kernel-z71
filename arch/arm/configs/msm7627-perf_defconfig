@@ -347,7 +347,7 @@ CONFIG_CPU_FREQ_MSM=y
 #
 # CONFIG_FPE_NWFPE is not set
 # CONFIG_FPE_FASTFPE is not set
-# CONFIG_VFP is not set
+CONFIG_VFP=y
 
 #
 # Userspace binary formats
