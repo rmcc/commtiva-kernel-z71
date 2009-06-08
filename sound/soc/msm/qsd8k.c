@@ -201,7 +201,7 @@ static int snd_strm_vol_put(struct snd_kcontrol *kcontrol,
 		ucontrol->value.integer.value[0] = CAD_STREAM_MIN_GAIN;
 
 	volume = ucontrol->value.integer.value[0];
-	change = (qsd_glb_ctl.volume != volume);
+	change = (qsd_glb_ctl.strm_volume != volume);
 	mutex_lock(&the_locks.mixer_lock);
 	if (change) {
 		qsd_glb_ctl.strm_volume = volume;
