@@ -91,28 +91,30 @@ u32 get_device_id(u32 cad_device_requested)
 		(cad_device_requested == CAD_HW_DEVICE_ID_HANDSET_SPKR) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR) ||
-		(cad_device_requested == CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO))
+		(cad_device_requested ==
+		CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO)) {
 
 		dev_id = 0;
-	else if ((cad_device_requested == CAD_HW_DEVICE_ID_SPKR_PHONE_MIC) ||
+	} else if ((cad_device_requested == CAD_HW_DEVICE_ID_SPKR_PHONE_MIC) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_HEADSET_MIC) ||
-		(cad_device_requested == CAD_HW_DEVICE_ID_HANDSET_MIC))
+		(cad_device_requested == CAD_HW_DEVICE_ID_HANDSET_MIC)) {
 
 		dev_id = 1;
-	else if ((cad_device_requested == CAD_HW_DEVICE_ID_BT_SCO_SPKR) ||
-		(cad_device_requested == CAD_HW_DEVICE_ID_BT_A2DP_SPKR))
+	} else if ((cad_device_requested == CAD_HW_DEVICE_ID_BT_SCO_SPKR) ||
+		(cad_device_requested == CAD_HW_DEVICE_ID_BT_A2DP_SPKR)) {
 
 		dev_id = 2;
-	else if (cad_device_requested == CAD_HW_DEVICE_ID_BT_SCO_MIC)
+	} else if (cad_device_requested == CAD_HW_DEVICE_ID_BT_SCO_MIC) {
 		dev_id = 3;
-	else if (cad_device_requested == CAD_HW_DEVICE_ID_I2S_RX)
+	} else if (cad_device_requested == CAD_HW_DEVICE_ID_I2S_RX) {
 		dev_id = 6;
-	else if (cad_device_requested == CAD_HW_DEVICE_ID_I2S_TX)
+	} else if (cad_device_requested == CAD_HW_DEVICE_ID_I2S_TX) {
 		dev_id = 7;
-	else
+	} else {
 		pr_err("ARD No Support for other devices device = %d\n",
 			cad_device_requested);
-
+		dev_id = 0xFF;
+	}
 	return dev_id;
 }
 

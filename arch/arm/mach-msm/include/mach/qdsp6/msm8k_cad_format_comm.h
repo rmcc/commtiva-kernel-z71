@@ -55,73 +55,44 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef _CAD_FORMAT_COMMOM_H_
+#define _CAD_FORMAT_COMMOM_H_
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+#define CAD_WRITE_AMR_VERSION_10	0x10
+
+
+/* common digital sample rate */
+enum cad_sample_rate {
+	CAD_SR_VARIABLE = 0,	/* variable rate or unknown bit rate */
+	CAD_SR_8000,
+	CAD_SR_11025,
+	CAD_SR_22050,
+	CAD_SR_32000,
+	CAD_SR_44056,
+	CAD_SR_44100,
+	CAD_SR_47250,
+	CAD_SR_48000,
+	CAD_SR_50000,
+	CAD_SR_50400,
+	CAD_SR_88200,
+	CAD_SR_96000,
+	CAD_SR_176400,
+	CAD_SR_192000,
+	CAD_SR_2822400,
+	CAD_SR_MAX = 0x7FFFFFFF
 };
 
-
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
+/* CDMA Rate types */
+enum cad_cdma_rate {
+	cad_cdma_rate_blank = 0,	/*CDMA encoded frame is blank*/
+	cad_cdma_rate_eighth,		/*CDMA encoded frame in eighth rate*/
+	cad_cdma_rate_quarter,		/*CDMA encoded frame in quarter rate*/
+	cad_cdma_rate_half,		/*CDMA encoded frame in half rate*/
+	cad_cdma_rate_full,		/*CDMA encoded frame in full rate*/
+	cad_cdma_rate_erasure,		/*CDMA erasure frame*/
+	cad_cdma_rate_max = 0x7FFFFFFF
 };
-
-
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
-
-s32 cad_open(struct cad_open_struct_type *open_param);
-
-s32 cad_close(s32 driver_handle);
-
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
-
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif
+

@@ -69,7 +69,8 @@ enum cad_stream_app_enum_type {
 	CAD_STREAM_APP_RINGER                   = 0x08,
 	CAD_STREAM_APP_SYSTEM_SOUND             = 0x10,
 	CAD_STREAM_APP_RECORD                   = 0x20,
-	CAD_STREAM_APP_A2DP_MIX_MODE		= 0x40
+	CAD_STREAM_APP_A2DP_MIX_MODE		= 0x40,
+	CAD_STREAM_APP_AUDIO_VIDEO		= 0x80
 };
 
 

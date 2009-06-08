@@ -55,73 +55,68 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef __ADSP_AUDIO_DEVICE_H
+#define __ADSP_AUDIO_DEVICE_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
-};
+#include <mach/qdsp6/msm8k_adsp_audio_types.h>
 
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
-};
+/* Device direction Rx/Tx flag */
+#define ADSP_AUDIO_RX_DEVICE		0x00
+#define ADSP_AUDIO_TX_DEVICE		0x01
 
 
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
+/* Predefined Audio device ids. */
 
-s32 cad_open(struct cad_open_struct_type *open_param);
 
-s32 cad_close(s32 driver_handle);
+/* Default RX or TX device */
+#define ADSP_AUDIO_DEVICE_ID_DEFAULT		0x1081679
 
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
 
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
+/* Source (TX) devices */
+#define ADSP_AUDIO_DEVICE_ID_HANDSET_MIC	0x107ac8d
+#define ADSP_AUDIO_DEVICE_ID_HEADSET_MIC	0x1081510
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MIC	0x1081512
+#define ADSP_AUDIO_DEVICE_ID_BT_SCO_MIC		0x1081518
+#define ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_MIC	0x108151b
+#define ADSP_AUDIO_DEVICE_ID_I2S_MIC		0x1089bf3
 
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
 
-int audio_switch_device(int new_device);
+/* Special loopback pseudo device to be paired with an RX device */
+/* with usage ADSP_AUDIO_DEVICE_USAGE_MIXED_PCM_LOOPBACK */
+#define ADSP_AUDIO_DEVICE_ID_MIXED_PCM_LOOPBACK_TX	0x1089bf2
 
-int audio_set_device_volume(int vol);
 
-int audio_set_device_mute(struct msm_mute_info *m);
+/* Sink (RX) devices */
+#define ADSP_AUDIO_DEVICE_ID_HANDSET_SPKR			0x107ac88
+#define ADSP_AUDIO_DEVICE_ID_HEADSET_SPKR_MONO			0x1081511
+#define ADSP_AUDIO_DEVICE_ID_HEADSET_SPKR_STEREO		0x107ac8a
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MONO			0x1081513
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MONO_W_MONO_HEADSET     0x108c508
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MONO_W_STEREO_HEADSET   0x108c894
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_STEREO			0x1081514
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_STEREO_W_MONO_HEADSET   0x108c895
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_STEREO_W_STEREO_HEADSET	0x108c509
+#define ADSP_AUDIO_DEVICE_ID_BT_SCO_SPKR			0x1081519
+#define ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_SPKR			0x108151c
+#define ADSP_AUDIO_DEVICE_ID_I2S_SPKR				0x1089bf4
+
+
+/* BT A2DP playback device. */
+/* This device must be paired with */
+/* ADSP_AUDIO_DEVICE_ID_MIXED_PCM_LOOPBACK_TX using  */
+/* ADSP_AUDIO_DEVICE_USAGE_MIXED_PCM_LOOPBACK mode */
+#define ADSP_AUDIO_DEVICE_ID_BT_A2DP_SPKR	0x108151a
+
+
+/*  Audio device usage types. */
+/*  This is a bit mask to determine which topology to use in the */
+/* device session */
+#define ADSP_AUDIO_DEVICE_CONTEXT_VOICE			0x01
+#define ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK		0x02
+#define ADSP_AUDIO_DEVICE_CONTEXT_RECORD		0x20
+#define ADSP_AUDIO_DEVICE_CONTEXT_PCM_LOOPBACK		0x40
 
 #endif
+

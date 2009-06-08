@@ -63,6 +63,7 @@
 #include "linux/mutex.h"
 #include "msm8k_cad_devices.h"
 #include "msm8k_cad_itypes.h"
+#include "msm8k_adsp_audio_event.h"
 
 #define ARD_AUDIO_MAX_CLIENT	10
 #define MAX_NUM_TX_DEVICE	2
@@ -125,11 +126,12 @@ struct ard_device_struct_type {
 	u8			device_config_request;
 	u8			device_change_request;
 	u32			device_inuse;
-	struct mutex		device_mutex;
 	enum ard_ret_enum_type	afe_enabled;
 	u8			dsp_started;
 	u8			clk_configured;
 	u32			stream_count;
+	struct mutex		device_mutex;
+	u32			device_sample_rate;
 };
 
 struct ard_state_struct_type {
@@ -148,7 +150,7 @@ s32 qdsp6_enable(s32 session_id);
 s32 qdsp6_disable(s32 session_id);
 s32 qdsp6_start(s32 session_id);
 
-void ard_callback_func(struct cadi_evt_struct_type *ev_data,
+void ard_callback_func(struct adsp_audio_event *ev_data,
 		       void *client_data);
 enum ard_state_ret_enum_type ard_state_control(s32 session_id,
 					       u32 dev_id);
@@ -166,5 +168,6 @@ enum ard_ret_enum_type device_needs_setup(u32 cad_device);
 
 extern struct ard_session_info_struct_type	*ardsession[CAD_MAX_SESSION];
 extern struct ard_state_struct_type		ard_state;
+extern u32					device_control_session;
 
 #endif

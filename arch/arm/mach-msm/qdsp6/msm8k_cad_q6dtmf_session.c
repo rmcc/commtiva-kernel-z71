@@ -60,6 +60,7 @@
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
@@ -99,7 +100,7 @@ s32 cad_dtmf_session_close(struct q6dtmf_session *self)
 s32 cad_dtmf_session_ioctl(struct q6dtmf_session *self, s32 cmd_code,
 				void *cmd_buf, s32 cmd_len)
 {
-	struct cadi_evt_struct_type	return_status;
+	struct adsp_audio_event		return_status;
 	struct q6_dtmf_start		q6data;
 	struct cad_cmd_gen_dtmf		*data;
 	s32				result = CAD_RES_SUCCESS;

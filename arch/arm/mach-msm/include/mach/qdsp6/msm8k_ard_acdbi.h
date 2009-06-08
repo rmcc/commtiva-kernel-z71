@@ -55,73 +55,67 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
+#ifndef __DALIACDB_H__
+#define __DALIACDB_H__
 
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+/* ACDB Command ID definitions */
+#define ACDB_GET_DEVICE		0x0108bb92
+#define ACDB_SET_DEVICE		0x0108bb93
+#define ACDB_GET_STREAM		0x0108bb95
+#define ACDB_SET_STREAM		0x0108bb96
+#define ACDB_GET_DEVICE_TABLE	0x0108bb97
+#define ACDB_GET_STREAM_TABLE	0x0108bb98
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+/* ACDB Error Codes */
+#define ACDB_RES_SUCCESS	0
+#define ACDB_RES_FAILURE	-1
+#define ACDB_RES_BADPARM	-2
+#define ACDB_RES_BADSTATE	-3
+
+
+/* ACDB Structure Definitions */
+
+/* These structures are passed as input argument to the */
+/* acdb_ioctl function defined below */
+
+struct acdb_cmd_device_struct {
+	u32	command_id;
+	u32	device_id;
+	u32	network_id;
+	u32	sample_rate_id;
+	u32	interface_id;
+	u32	algorithm_block_id;
+
+	/* Actual Length of allocated memory pointed to by phys_addr */
+	u32	total_bytes;
+
+	/* Physical address pointing to first memory location allocated by */
+	/* CAD - translated from a page aligned virtual address. */
+	u32	unmapped_buf;
 };
 
+struct acbd_cmd_device_table_struct {
+	u32	command_id;
+	u32	device_id;
+	u32	network_id;
+	u32	sample_rate_id;
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
+	/* Actual Length of allocated memory pointed to by phys_addr */
+	u32	total_bytes;
+
+	/* Physical address pointing to first memory location allocated by */
+	/* CAD - translated from a page aligned virtual address. */
+	u32	unmapped_buf;
 };
 
-
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
-
-s32 cad_open(struct cad_open_struct_type *open_param);
-
-s32 cad_close(s32 driver_handle);
-
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
-
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
+struct acdb_result_struct {
+	/* Physical address pointing to first shared memory location */
+	u32	unmapped_buf;
+	/* The size of data copied to phys_addr by ACDB */
+	u32	used_bytes;
+	/* Result of operation */
+	u32	result;
+};
 
 #endif

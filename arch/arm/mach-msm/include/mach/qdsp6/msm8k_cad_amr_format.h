@@ -55,73 +55,85 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
+#ifndef CAD_AMR_FORMAT_H
+#define CAD_AMR_FORMAT_H
 
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
+#include <mach/qdsp6/msm8k_cad_format_comm.h>
 
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
-
-
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+/* cad AMR band mode */
+enum cad_amr_band_mode {
+	CAD_AMR_BM_UNUSED = 0,		/* AMRNB Mode unused / unknown */
+	CAD_AMR_BM_NB0,			/* AMRNB Mode 0 =  4750 bps */
+	CAD_AMR_BM_NB1,			/* AMRNB Mode 1 =  5150 bps */
+	CAD_AMR_BM_NB2,			/* AMRNB Mode 2 =  5900 bps */
+	CAD_AMR_BM_NB3,			/* AMRNB Mode 3 =  6700 bps */
+	CAD_AMR_BM_NB4,			/* AMRNB Mode 4 =  7400 bps */
+	CAD_AMR_BM_NB5,			/* AMRNB Mode 5 =  7950 bps */
+	CAD_AMR_BM_NB6,			/* AMRNB Mode 6 = 10200 bps */
+	CAD_AMR_BM_NB7,			/* AMRNB Mode 7 = 12200 bps */
+	CAD_AMR_BM_WB0,			/* AMRWB Mode 0 =  6600 bps */
+	CAD_AMR_BM_WB1,			/* AMRWB Mode 1 =  8850 bps */
+	CAD_AMR_BM_WB2,			/* AMRWB Mode 2 = 12650 bps */
+	CAD_AMR_BM_WB3,			/* AMRWB Mode 3 = 14250 bps */
+	CAD_AMR_BM_WB4,			/* AMRWB Mode 4 = 15850 bps */
+	CAD_AMR_BM_WB5,			/* AMRWB Mode 5 = 18250 bps */
+	CAD_AMR_BM_WB6,			/* AMRWB Mode 6 = 19850 bps */
+	CAD_AMR_BM_WB7,			/* AMRWB Mode 7 = 23050 bps */
+	CAD_AMR_BM_WB8,			/* AMRWB Mode 8 = 23850 bps */
+	CAD_AMR_BM_MAX = 0x7FFFFFFF
 };
 
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
+/* cad AMR DTX mode */
+enum cad_amr_dtx_mode {
+	CAD_AMR_DTX_OFF = 0,	/* DTX is disabled */
+	CAD_AMR_DTX_VAD1,	/* Voice Activity Detector 1 is enabled */
+	CAD_AMR_DTX_VAD2,	/* Voice Activity Detector 2 is enabled */
+	CAD_AMR_DTX_AUTO,	/* The codec will automatically select */
+	CAD_AMR_DTX_EFR,	/* DTX as EFR instead of AMR standard */
+	CAD_AMR_DTX_MAX = 0x7FFFFFFF
+};
+
+/* cad AMR Frame format */
+enum cad_amr_frame_format {
+	/* AMR Conformance(Standard) Format */
+	CAD_AMR_FF_CONFORMANCE = 0,
+	/* AMR Interface Format 1 */
+	CAD_AMR_FF_IF1,
+	/* AMR Interface Format 2 */
+	CAD_AMR_FF_IF2,
+	/* AMR File Storage Format */
+	CAD_AMR_FF_FSF,
+	/* Real-time Transport Protocol Payload */
+	CAD_AMR_FF_RTP,
+	/* ITU Format */
+	CAD_AMR_FF_ITU,
+	CAD_AMR_FF_MAX = 0x7FFFFFFF
 };
 
 
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
+/* cad AMR format block */
+struct cad_amr_format {
+	/* size of the structure in bytes */
+	u32          size;
+	/* version */
+	u32          version;
+	/* number of channels */
+	u32          channels;
 
-s32 cad_open(struct cad_open_struct_type *open_param);
+	/* value is defined by enum cad_amr_band_mode */
+	u32          amr_band_mode;
 
-s32 cad_close(s32 driver_handle);
+	/* value is defined by enum cad_amr_dtx_mode */
+	u32          amr_dtx_mode;
 
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
+	/* value is defined by enum cad_amr_frame_format */
+	u32          amr_frame_format;
+};
 
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
 
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
-
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif
+
+
+

@@ -55,73 +55,68 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef __ADSP_AUDIO_IOCTL_H
+#define __ADSP_AUDIO_IOCTL_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+#include <mach/qdsp6/msm8k_adsp_audio_device_ioctl.h>
+
+
+/* Control and Stream session IOCTL command definitions */
+
+
+/* All device switch protocol IOCTLs have payload struct */
+/* adsp_audio_device_change A device switch requires three IOCTL */
+/* commands in the following sequence: */
+/*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_PREPARE */
+/*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_STANDBY */
+/*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_COMMIT */
+
+
+/* Device Class */
+/*   DMA 0 - Int RX */
+/*   DMA 1 - Int TX */
+/*   DMA 2 - Ext RX */
+/*   DMA 3 - Ext TX */
+
+#pragma pack(1)
+struct adsp_audio_device_change {
+	/* Associated client data */
+	struct adsp_audio_header	header;
+	/* DeviceID to switch from */
+	u32				old_device;
+	/* DeviceID to switch to */
+	u32				new_device;
+	/* TBD */
+	u8				device_class;
+	/* 0 == Rx, 1 == Tx and 2 == both */
+	u8				device_type;
 };
+#pragma pack()
 
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
-};
+
+/* Device switch protocol step #1. Pause old device and */
+/* generate silence for the old device. */
+
+#define ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_PREPARE	0x010815c4
 
 
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
+/* Device switch protocol step #2. Release old device, */
+/* create new device and generate silence for the new device. */
 
-s32 cad_open(struct cad_open_struct_type *open_param);
+/* When client receives ack for this IOCTL, the client can */
+/* start sending IOCTL commands to configure, calibrate and */
+/* change filter settings on the new device. */
 
-s32 cad_close(s32 driver_handle);
+#define ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_STANDBY	0x010815c5
 
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
 
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
+/* Device switch protocol step #3. Start normal operations on new device */
 
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
+#define ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_COMMIT	0x01075ee7
 
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif
+
+

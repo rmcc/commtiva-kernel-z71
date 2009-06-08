@@ -64,6 +64,7 @@
 #include <mach/qdsp6/msm8k_cad_q6enc_session.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_drvi.h>
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
@@ -110,12 +111,16 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 
 	if (self->shared_buffer == NULL) {
 
+		/* Set to virtual address of shared memory */
+		/* reserved for this session. */
+		/* memory for each session is stored as: */
+		/* |b|p|b|p|b|p|b|p|fb|p */
+		/* b - buffer, fb - format block, p - padding */
 		self->shared_buffer = g_audio_mem +
 			((Q6_ENC_BUF_PER_SESSION *
 			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-			sizeof(struct cad_stream_device_struct_type) +
-			MEMORY_PADDING) * self->session_id);
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			* self->session_id);
 
 		if (self->shared_buffer == NULL)
 			return CAD_RES_FAILURE;
@@ -139,16 +144,18 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 		node->next = self->free_nodes;
 		self->free_nodes = node;
 		D("----> create buffer node 0x%x\n", (u32)node);
+		/* Set each buffer to next block of buffer memory */
+		/* for this session */
 		node->buf = (u8 *)((u32)self->shared_buffer +
 			i * (self->buf_size + MEMORY_PADDING));
 
+		/* Set to the physical address of buffer memory */
 		node->phys_addr = g_audio_base +
 			(Q6_ENC_BUF_PER_SESSION *
 			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-			sizeof(struct cad_stream_device_struct_type) +
-			MEMORY_PADDING) * self->session_id +
-			i * (self->buf_size + MEMORY_PADDING);
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			* self->session_id + i *
+			(self->buf_size + MEMORY_PADDING);
 	}
 	return res;
 }
@@ -156,16 +163,17 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 /* push all the free buffers to the Q6 */
 static s32 send_buffers(struct q6_enc_session_data *self)
 {
-	struct cad_buf_struct_type	cad_buf;
+	struct adsp_audio_buffer	cad_buf;
 	struct q6_enc_session_buf_node	*node = NULL;
 	s32				res = CAD_RES_SUCCESS;
 
 	while (self->free_nodes) {
 		node = self->free_nodes;
 		self->free_nodes = node->next;
-		cad_buf.buffer = node->buf;
-		cad_buf.phys_addr = node->phys_addr;
-		cad_buf.max_size = self->buf_size;
+		cad_buf.header.client_data.data = (u32)node->buf;
+		cad_buf.buffer.buffer_addr = node->phys_addr;
+		cad_buf.buffer.max_size = self->buf_size;
+		cad_buf.buffer.actual_size = self->buf_size;
 
 		memset(node->buf, -1, self->buf_size);
 		/* add to used list */
@@ -187,19 +195,18 @@ static s32 send_buffers(struct q6_enc_session_data *self)
 }
 
 static void cad_q6enc_session_handle_async_evt(
-	struct cadi_evt_struct_type *return_event, void *clientData)
+	struct adsp_audio_event *return_event, void *clientData)
 {
 	struct q6_enc_session_buf_node	*node = NULL;
 	struct q6_enc_session_buf_node	*prev_node = NULL;
 	struct q6_enc_session_data	*self = clientData;
 	struct timeval			tv1;
 
-	if (return_event->cad_event_header.cmd_event_id !=
-		CAD_EVT_STATUS_BUF_DONE) {
+	if (return_event->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
 
 		/* unhandled event */
 		pr_err("invalid event ID: %d\n",
-			return_event->cad_event_header.cmd_event_id);
+			return_event->event_id);
 		return;
 	}
 
@@ -207,7 +214,8 @@ static void cad_q6enc_session_handle_async_evt(
 	node = self->used_nodes;
 
 	while (node) {
-		if (node->buf == return_event->cad_event_data.buf_data.buffer) {
+		if ((u32)node->buf ==
+			return_event->header.client_data.data) {
 
 			if (prev_node == NULL) {
 				self->used_nodes = node->next;
@@ -222,13 +230,13 @@ static void cad_q6enc_session_handle_async_evt(
 
 	if (node) {
 		node->buf_len = return_event->
-			cad_event_data.buf_data.actual_size;
+			event_data.buf_data.actual_size;
 
 		do_gettimeofday(&tv1);
 		/* timestamp test */
 		/* put this node into full list */
 		D("Get full read buffer(0x%x)!, sec: %d, usec: %d\n",
-			return_event->cad_event_data.buf_data.phys_addr,
+			return_event->event_data.buf_data.phys_addr,
 			(int)tv1.tv_sec, (int)tv1.tv_usec);
 
 		if (self->full_nodes_head == NULL) {
@@ -247,9 +255,8 @@ static void cad_q6enc_session_handle_async_evt(
 			up(&self->all_buf_done_evt);
 
 		if (self->cb_data.callback != NULL)
-			self->cb_data.callback(return_event->cad_event_header.
-				cmd_event_id, NULL, 0,
-				self->cb_data.client_data);
+			self->cb_data.callback(return_event->event_id,
+				NULL, 0, self->cb_data.client_data);
 	}
 	mutex_unlock(&self->session_mutex);
 	return;
