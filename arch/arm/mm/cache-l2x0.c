@@ -82,6 +82,25 @@ static void l2x0_inv_range(unsigned long start, unsigned long end)
 	cache_sync();
 }
 
+static void l2x0_inv_range_atomic(unsigned long start, unsigned long end)
+{
+	unsigned long addr;
+
+	if (start & (CACHE_LINE_SIZE - 1)) {
+		start &= ~(CACHE_LINE_SIZE - 1);
+		writel(start, l2x0_base + L2X0_CLEAN_INV_LINE_PA);
+		start += CACHE_LINE_SIZE;
+	}
+
+	if (end & (CACHE_LINE_SIZE - 1)) {
+		end &= ~(CACHE_LINE_SIZE - 1);
+		writel(end, l2x0_base + L2X0_CLEAN_INV_LINE_PA);
+	}
+
+	for (addr = start; addr < end; addr += CACHE_LINE_SIZE)
+		writel(addr, l2x0_base + L2X0_INV_LINE_PA);
+}
+
 static void l2x0_clean_range(unsigned long start, unsigned long end)
 {
 	unsigned long addr;
@@ -90,6 +109,15 @@ static void l2x0_clean_range(unsigned long start, unsigned long end)
 	for (addr = start; addr < end; addr += CACHE_LINE_SIZE)
 		sync_writel(addr, L2X0_CLEAN_LINE_PA, 1);
 	cache_sync();
+}
+
+static void l2x0_clean_range_atomic(unsigned long start, unsigned long end)
+{
+	unsigned long addr;
+
+	start &= ~(CACHE_LINE_SIZE - 1);
+	for (addr = start; addr < end; addr += CACHE_LINE_SIZE)
+		writel(addr, l2x0_base + L2X0_CLEAN_LINE_PA);
 }
 
 static void l2x0_flush_range(unsigned long start, unsigned long end)
@@ -102,30 +130,54 @@ static void l2x0_flush_range(unsigned long start, unsigned long end)
 	cache_sync();
 }
 
+void l2x0_flush_range_atomic(unsigned long start, unsigned long end)
+{
+	unsigned long addr;
+
+	start &= ~(CACHE_LINE_SIZE - 1);
+	for (addr = start; addr < end; addr += CACHE_LINE_SIZE)
+		writel(addr, l2x0_base + L2X0_CLEAN_INV_LINE_PA);
+}
+
 void __init l2x0_init(void __iomem *base, __u32 aux_val, __u32 aux_mask)
 {
-	__u32 aux;
+	__u32 bits;
 
 	l2x0_base = base;
 
 	/* disable L2X0 */
-	writel(0, l2x0_base + L2X0_CTRL);
+	bits = readl(l2x0_base + L2X0_CTRL);
+	bits &= ~0x01;	/* clear bit 0 */
+	writel(bits, l2x0_base + L2X0_CTRL);
 
-	aux = readl(l2x0_base + L2X0_AUX_CTRL);
-	aux &= aux_mask;
-	aux |= aux_val;
-	writel(aux, l2x0_base + L2X0_AUX_CTRL);
+	bits = readl(l2x0_base + L2X0_AUX_CTRL);
+	bits &= aux_mask;
+	bits |= aux_val;
+	writel(bits, l2x0_base + L2X0_AUX_CTRL);
 
 	l2x0_inv_all();
 
 	/* enable L2X0 */
-	writel(1, l2x0_base + L2X0_CTRL);
+	bits = readl(l2x0_base + L2X0_CTRL);
+	bits |= 0x01;	/* set bit 0 */
+	writel(bits, l2x0_base + L2X0_CTRL);
 
-	outer_cache.inv_range = l2x0_inv_range;
-	outer_cache.clean_range = l2x0_clean_range;
-	outer_cache.flush_range = l2x0_flush_range;
+	bits = readl(l2x0_base + L2X0_CACHE_ID);
+	bits >>= 6;	/* part no, bit 6 to 9 */
+	bits &= 0x0f;	/* 4 bits */
 
-	printk(KERN_INFO "L2X0 cache controller enabled\n");
+	if (bits == 2) {	/* L220 */
+		outer_cache.inv_range = l2x0_inv_range;
+		outer_cache.clean_range = l2x0_clean_range;
+		outer_cache.flush_range = l2x0_flush_range;
+		printk(KERN_INFO "L220 cache controller enabled\n");
+	} else {		/* L210 */
+		outer_cache.inv_range = l2x0_inv_range_atomic;
+		outer_cache.clean_range = l2x0_clean_range_atomic;
+		outer_cache.flush_range = l2x0_flush_range_atomic;
+		printk(KERN_INFO "L210 cache controller enabled\n");
+	}
+
 }
 
 void l2x0_suspend(void)
