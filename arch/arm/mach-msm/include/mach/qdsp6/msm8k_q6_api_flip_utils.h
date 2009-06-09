@@ -55,73 +55,60 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef QDSP6APIFLIPUTILS_H
+#define QDSP6APIFLIPUTILS_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
-};
+#include <mach/qdsp6/msm8k_cad.h>
+#include <mach/qdsp6/msm8k_cad_itypes.h>
+#include <mach/qdsp6/msm8k_cad_rpc.h>
+#include <mach/qdsp6/msm8k_cad_devices.h>
+#include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
+#include <mach/qdsp6/msm8k_cad_write_aac_format.h>
+#include <mach/qdsp6/msm8k_cad_adpcm_format.h>
+#include <mach/qdsp6/msm8k_cad_amr_format.h>
+#include <mach/qdsp6/msm8k_cad_qcelp13k_format.h>
+#include <mach/qdsp6/msm8k_cad_evrc_format.h>
+#include <mach/qdsp6/msm8k_adsp_audio_driver.h>
 
+/* utility functions */
+u32 q6_stream_context_mapping(enum cad_stream_app_enum_type app_type,
+				u32 *mode);
+u32 q6_open_op_mapping(u32 op_code);
+u32 q6_device_id_mapping(u32 device);
+u8 q6_device_direction_mapping(u8 device);
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
-};
-
-
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
-
-s32 cad_open(struct cad_open_struct_type *open_param);
-
-s32 cad_close(s32 driver_handle);
-
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
-
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
+s32 convert_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_pcm_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_adpcm_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_aac_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_amr_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_dtmf_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_midi_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_v13k_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_evrc_format_block(s32 session_id,
+				struct adsp_audio_open_device *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+u32 q6_dtx_mode_mapping(u32 dtx_mode);
+u32 q6_band_mode_mapping(u32 mode);
 
 #endif
+
+
+

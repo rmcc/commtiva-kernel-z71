@@ -1,8 +1,9 @@
+obj-$(CONFIG_QSD_AUDIO) += msm8k_q6_api_flip_utils.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad.o msm8k_cad_rpc.o msm8k_cad_q6dec_drv.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6dec_session.o msm8k_ard.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6enc_drv.o msm8k_cad_q6enc_session.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6dtmf_drv.o msm8k_cad_q6dtmf_session.o
-obj-$(CONFIG_QSD_AUDIO) += msm8k_ard_adie.o msm8k_ard_clk.o
+obj-$(CONFIG_QSD_AUDIO) += msm8k_ard_adie.o msm8k_ard_clk.o msm8k_ard_acdb.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_ard_helper.o msm8k_ard_q6.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_volume.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_pcm.o

@@ -55,73 +55,94 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef __ADSP_AUDIO_EVENT_H
+#define __ADSP_AUDIO_EVENT_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+#include <mach/qdsp6/msm8k_adsp_audio_types.h>
+
+
+/* All IOCTL commands generate an event with the IOCTL opcode as the */
+/* event id after the IOCTL command has been executed. */
+
+
+
+/* This event is generated after a media stream session is opened. */
+#define ADSP_AUDIO_EVT_STATUS_OPEN				0x0108c0d6
+
+
+/* This event is generated after a media stream  session is closed. */
+#define ADSP_AUDIO_EVT_STATUS_CLOSE				0x0108c0d7
+
+
+/* Asyncronous buffer consumption. This event is generated after a */
+/* recived  buffer is consumed during rendering or filled during */
+/* capture opeartion. */
+#define ADSP_AUDIO_EVT_STATUS_BUF_DONE				0x0108c0d8
+
+
+/* This event is generated when rendering operation is starving for */
+/* data. In order to avoid audio loss at the end of a plauback, the */
+/* client should wait for this event before issuing the close command. */
+#define ADSP_AUDIO_EVT_STATUS_BUF_UNDERRUN			0x0108c0d9
+
+
+/* This event is generated during capture operation when there are no */
+/* buffers available to copy the captured audio data */
+#define ADSP_AUDIO_EVT_STATUS_BUF_OVERFLOW			0x0108c0da
+
+
+
+/* Event data payload definition */
+
+#pragma pack(1)
+struct adsp_audio_event_data {
+	union {
+		/* integer data */
+		s32				ivalue;
+		/* unsigned integer data */
+		u32				uvalue;
+		/* media data buffer */
+		struct adsp_audio_data_buffer	buf_data;
+		/* media session Time */
+		s64				audio_time;
+	};
+};
+#pragma pack()
+
+
+
+/* ADSP Audio event */
+
+#pragma pack(1)
+struct adsp_audio_event {
+	/* Associated client data */
+	struct adsp_audio_header	header;
+	/* Stream/Control session handle */
+	u32				handle;
+	/* ID for the command/event */
+	u32				event_id;
+	/* Return status/error code */
+	s32				status;
+	/* Length of additional event data */
+	u32				data_len;
+	/* Returned data only present if */
+	/* data_len > 0 */
+	struct adsp_audio_event_data	event_data;
+};
+#pragma pack()
+
+
+/* Callback function type for clients to recieve events */
+typedef void (*adsp_audio_event_cb_func)(struct adsp_audio_event *event,
+						void *client_data);
+
+struct adsp_audio_event_cb {
+	adsp_audio_event_cb_func	callback;
+	void				*client_data;
 };
 
-
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
-};
-
-
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
-
-s32 cad_open(struct cad_open_struct_type *open_param);
-
-s32 cad_close(s32 driver_handle);
-
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
-
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
-
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif
+
+

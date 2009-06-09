@@ -67,6 +67,7 @@
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_ard_q6.h>
 #include <mach/qdsp6/msm8k_ard_helper.h>
+#include <mach/qdsp6/msm8k_ard_acdb.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_drvi.h>
 #include <mach/qdsp6/msm8k_cad_q6enc_drvi.h>
 #include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
@@ -76,11 +77,7 @@ static struct ard_session_info_struct_type	ard_session
 struct ard_session_info_struct_type		*ardsession[CAD_MAX_SESSION];
 struct ard_state_struct_type			ard_state;
 struct clk_info 				g_clk_info = {8000, 0};
-
-
-
-
-#define CAD_FORMAT_BLK_OFFSET	0x100000
+u32						device_control_session;
 
 
 #if 0
@@ -150,6 +147,13 @@ s32 cad_ard_init(struct cad_func_tbl_type **func_ptr_tbl)
 	dal_rc = adie_init();
 	if (dal_rc != CAD_RES_SUCCESS) {
 		pr_err("ARD ard_init failed\n");
+		rc = CAD_RES_FAILURE;
+		goto done;
+	}
+
+	dal_rc = ard_acdb_init();
+	if (dal_rc != CAD_RES_SUCCESS) {
+		pr_err("ARD ard_acdb_init failed\n");
 		rc = CAD_RES_FAILURE;
 		goto done;
 	}
@@ -228,6 +232,7 @@ s32 cad_ard_dinit(void)
 	}
 
 done:
+	ard_acdb_dinit();
 	return rc;
 }
 
@@ -430,6 +435,8 @@ s32 ard_close(s32 session_id)
 	cadr_config = &cadr->cad_config;
 	cadr_stream = &cadr->cad_stream;
 
+	cadr_strm_device->device = NULL;
+
 	D("ARD Session %d, App Type = %d, Strm Ptr = %p\n",
 		session_id, cadr_stream->app_type, cadr_stream);
 
@@ -458,6 +465,7 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 	s32					rc, dal_rc;
 	u32					dev_id, i, old_dev_stream_count;
 	u32					cad_device;
+	u32					old_device, new_device;
 	struct cad_stream_device_struct_type	*cadr_strm_device = NULL;
 	struct cad_stream_info_struct_type	*cadr_stream = NULL;
 	struct cad_stream_config_struct_type	*cadr_config = NULL;
@@ -465,7 +473,6 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 	struct cad_device_struct_type		*def_device = NULL;
 	struct cad_stream_device_struct_type	*strm_dev = NULL;
 	struct ard_state_struct_type            *local_ard_state = NULL;
-	void					*config_format_block = NULL;
 	struct cad_write_pcm_format_struct_type *pcm_format_struct;
 
 	rc = dal_rc = CAD_RES_SUCCESS;
@@ -565,6 +572,8 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			local_ard_state->ard_device[dev_id].
 				device_inuse =
 				local_ard_state->new_rx_device;
+
+			old_device = local_ard_state->def_rx_device;
 		} else {
 			local_ard_state->def_tx_device =
 				def_device->device;
@@ -584,7 +593,12 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			local_ard_state->ard_device[dev_id].
 				device_inuse =
 				local_ard_state->new_tx_device;
+
+			old_device = local_ard_state->def_tx_device;
 		}
+		new_device = def_device->device;
+
+		ard_acdb_send_cal(session_id, new_device, old_device);
 
 		/* Begin new device setup */
 		if ((device_needs_setup(local_ard_state->
@@ -682,6 +696,9 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			if (rc != CAD_RES_SUCCESS)
 				pr_err("ARD DAL RPC OPEN FAILED %d\n",
 					session_id);
+			else
+				device_control_session = session_id;
+
 			break;
 		}
 
@@ -815,34 +832,52 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 
 		/* At this point Cache/Store the stream Device ID info to
 			send later to Q6 */
+		if (ardsession[session_id]->session_type == DEVICE_CTRL_TYPE) {
+			pr_err("ARD: recieved strm start for dev ctrl ses\n");
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
+
 		cadr = ardsession[session_id]->sess_open_info;
 		cadr_strm_device = &(cadr->cad_device);
-		strm_dev = (struct cad_stream_device_struct_type *)cmd_buf;
-		cadr_strm_device->device = (u32 *)(g_audio_mem +
-			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-			sizeof(struct cad_stream_device_struct_type) +
-			MEMORY_PADDING) * session_id +
-			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING));
 
-		/* Save the cmdbuff passed in */
-		if ((cmd_buf != NULL) && (cadr_strm_device->device != NULL)) {
-			memcpy(cadr_strm_device->device, strm_dev->device,
-				(sizeof(u32) * strm_dev->device_len));
-			cadr_strm_device->device_len = strm_dev->device_len;
-		} else {
+		if (cmd_buf == NULL) {
+			pr_err("ARD bad value passed as stream device\n");
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
+
+		strm_dev = (struct cad_stream_device_struct_type *)cmd_buf;
+
+		cadr_strm_device->device =
+			kmalloc((sizeof(u32) * strm_dev->device_len),
+			GFP_KERNEL);
+
+		if (cadr_strm_device->device == NULL) {
 			/* Log Error and do nothing */
 			pr_err("ARD IOCTL CMD STREAM DEVICE Memory is"
 				" NULL %d\n", session_id);
 			rc = CAD_RES_FAILURE;
+			goto done;
 		}
+
+		/* Save the cmdbuff passed in */
+		memcpy(cadr_strm_device->device, strm_dev->device,
+			(sizeof(u32) * strm_dev->device_len));
+		cadr_strm_device->device_len = strm_dev->device_len;
+
 
 		D("ard_ioctl STRM DEV SET ses %d, cadr = %p, strm_dev = %p\n",
 			session_id, cadr, cadr_strm_device);
 
+		if (strm_dev->device[0] == CAD_HW_DEVICE_ID_DEFAULT_TX)
+			dev_id = ard_state.def_tx_device;
+		else if (strm_dev->device[0] == CAD_HW_DEVICE_ID_DEFAULT_RX)
+			dev_id = ard_state.def_rx_device;
+		else
+			dev_id = strm_dev->device[0];
+
+		ard_acdb_send_cal(session_id, dev_id, 0);
 		print_data(session_id);
 		break;
 
@@ -852,14 +887,14 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		cadr_stream = &(cadr->cad_stream);
 
 		/* Save the cmdbuff passed in */
-		if (cmd_buf != NULL) {
-			memcpy(cadr_stream, cmd_buf, cmd_len);
-		} else {
+		if (cmd_buf == NULL) {
 			/* Log Error and do nothing */
 			pr_err("ARD IOCTL CMD STREAM INFO cmdBuff is NULL %d\n",
 				session_id);
 			rc = CAD_RES_FAILURE;
 		}
+
+		memcpy(cadr_stream, cmd_buf, cmd_len);
 
 		if (cadr_stream->app_type == CAD_STREAM_APP_VOICE &&
 			ardsession[session_id]->sess_open_info->cad_open.op_code
@@ -888,28 +923,22 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		cadr = ardsession[session_id]->sess_open_info;
 		cadr_config = &(cadr->cad_config);
 
-		cadr_config->format_block =
-			(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-				MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-				sizeof(struct cad_stream_device_struct_type) +
-				MEMORY_PADDING) * session_id +
-				Q6_DEC_BUFFER_NUM_PER_STREAM *
-				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
+		if (cmd_buf == NULL) {
+			pr_err("ARD bad value passed as format block\n");
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
 
+		cadr_config->format_block = kmalloc(cmd_len, GFP_KERNEL);
 
+		if (cadr_config->format_block == NULL) {
+			pr_err("ARD format block allocation failed\n");
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
+
+		memcpy(cadr_config->format_block, cmd_buf, cmd_len);
 		cadr_config->format_block_len = cmd_len;
-
-		config_format_block =
-			(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-				MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-				sizeof(struct cad_stream_device_struct_type) +
-				MEMORY_PADDING) * session_id +
-				Q6_DEC_BUFFER_NUM_PER_STREAM *
-				(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-		memcpy(config_format_block, cmd_buf, cmd_len);
 
 		D("ard_ioctl STRM CFG SET ses %d, sess_opn_info(cadr) = %p\n",
 			session_id, cadr);
@@ -996,7 +1025,7 @@ s32 ard_write(s32 session_id, struct cad_buf_struct_type *buf)
 	return CAD_RES_SUCCESS;
 }
 
-void ard_callback_func(struct cadi_evt_struct_type *ev_data, void *client_data)
+void ard_callback_func(struct adsp_audio_event *ev_data, void *client_data)
 {
 }
 
@@ -1089,7 +1118,7 @@ enum ard_state_ret_enum_type ard_state_clk_active(s32 session_id, u32 dev_id)
 
 	if ((!valid_session_present(dev_id)) ||
 		(local_ard_state->ard_device[dev_id].clk_configured
-			!= ARD_TRUE)) {
+		!= ARD_TRUE)) {
 
 		D("ARD - Teardown: Disabling clocks, ses %d\n", session_id);
 		ard_clk_disable(dev_id);

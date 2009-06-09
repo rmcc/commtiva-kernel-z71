@@ -94,13 +94,13 @@ enum {
 
 struct callback_function_node;
 struct callback_function_node {
-	RPC_CB_FCN                      cb_funct;
-	void                            *client_data;
-	struct callback_function_node   *next;
+	RPC_CB_FCN			cb_funct;
+	void				*client_data;
+	struct callback_function_node	*next;
 };
 
 struct async_evt_node {
-	struct cadi_evt_struct_type	*evt;
+	struct adsp_audio_event		*evt;
 	struct async_evt_node		*next;
 };
 
@@ -116,7 +116,7 @@ struct cad_rpc_data_struct {
 	/* sync mutex for each session call */
 	struct mutex			dal_remote_mutex_list[CAD_MAX_SESSION];
 
-	struct cadi_evt_struct_type	sync_evt_queue[CAD_MAX_SESSION];
+	struct adsp_audio_event	sync_evt_queue[CAD_MAX_SESSION];
 
 
 	struct callback_function_node   *dal_callback_list[CAD_MAX_SESSION];
@@ -124,27 +124,27 @@ struct cad_rpc_data_struct {
 
 static struct cad_rpc_data_struct cad_rpc_data;
 
-static s32 cad_rpc_async_callback(struct cadi_evt_struct_type *evt)
+static s32 cad_rpc_async_callback(struct adsp_audio_event *evt)
 {
 	struct callback_function_node	*node = NULL;
 
 	D("<-------------- ARM Async callback function fired.......\n");
 	D("Get new async event(0x%x), handle: %d!!!!!!\n",
 		evt->cad_event_data.buf_data.phys_addr,
-		evt->cad_event_header.cad_handle);
+		evt->handle);
 
-	if ((evt->cad_event_header.cad_handle <= 0) ||
-		(evt->cad_event_header.cad_handle >=
+	if ((evt->handle <= 0) ||
+		(evt->handle >=
 		CAD_MAX_SESSION)) {
 
 		pr_err("%d not a valid can handle\n",
-			evt->cad_event_header.cad_handle);
+			evt->handle);
 		return CAD_RES_FAILURE;
 	}
 
 	mutex_lock(&cad_rpc_data.resource_mutex);
 	node = cad_rpc_data.dal_callback_list[evt->
-		cad_event_header.cad_handle];
+		handle];
 
 	while (node) {
 		node->cb_funct(evt, node->client_data);
@@ -159,24 +159,24 @@ static void remote_cb_function(void *context, u32 param,
 				void *evt_buf, u32 len)
 {
 	struct cad_rpc_data_struct *self = context;
-	struct cadi_evt_struct_type *evt = evt_buf;
+	struct adsp_audio_event *evt = evt_buf;
 
 	if (param == (u32)&self->compl_list[0]) {
 		/* async event */
 		D("<-------CB: get async event!!!\n");
 		if (cad_rpc_async_callback(evt) != CAD_RES_SUCCESS)
 			pr_err("Async callback not fired for session %d\n",
-				evt->cad_event_header.cad_handle);
+				evt->handle);
 	} else {
 		if (param != (u32)&self->compl_list
-			[evt->cad_event_header.cad_handle]) {
+			[evt->handle]) {
 
 			pr_err("wrong sync event received!!!\n");
 			return;
 		}
 		/* sync event */
 		mutex_lock(&cad_rpc_data.resource_mutex);
-		memcpy(&self->sync_evt_queue[evt->cad_event_header.cad_handle],
+		memcpy(&self->sync_evt_queue[evt->handle],
 			evt, sizeof(*evt));
 		mutex_unlock(&cad_rpc_data.resource_mutex);
 		complete((struct completion *)param);
@@ -385,8 +385,8 @@ s32 cad_rpc_dereg_callback(u32 session_id, RPC_CB_FCN cbFCN)
 /*===========================================================================*/
 s32 cad_rpc_open(u32 session_id,     /* session handle */
 		u32 block_flag,     /* 0=none block, 1=block */
-		struct cadi_open_struct_type *open_buf,
-		struct cadi_evt_struct_type *ret_status)
+		struct adsp_audio_open_device *open_buf,
+		struct adsp_audio_event *ret_status)
 {
 	s32 err = CAD_RES_SUCCESS;
 	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
@@ -405,7 +405,7 @@ s32 cad_rpc_open(u32 session_id,     /* session handle */
 	err = dalrpc_fcn_5(CAD_RPC_Q6_OPEN,
 		cad_rpc_data.remote_handle_list[session_id],
 		(void *)open_buf,
-		sizeof(struct cadi_open_struct_type));
+		sizeof(struct adsp_audio_open_device));
 	if (!err) {
 		D("DALRPC Open function start wait!!!\n");
 		init_completion(&cad_rpc_data.compl_list[session_id]);
@@ -414,7 +414,7 @@ s32 cad_rpc_open(u32 session_id,     /* session handle */
 		D("Got wakeup signal for Open blocking!!!\n");
 		mutex_lock(&cad_rpc_data.resource_mutex);
 		memset(ret_status, 0,
-				sizeof(struct cadi_evt_struct_type));
+				sizeof(struct adsp_audio_event));
 		memcpy(ret_status,
 				&cad_rpc_data.sync_evt_queue[session_id],
 				sizeof(*ret_status));
@@ -429,8 +429,8 @@ s32 cad_rpc_open(u32 session_id,     /* session handle */
 
 s32 cad_rpc_read(u32 session_id,
 			u32 block_flag,    /* none block, 1=block */
-			struct cad_buf_struct_type *read_buf,
-			struct cadi_evt_struct_type *ret_status)
+			struct adsp_audio_buffer *read_buf,
+			struct adsp_audio_event *ret_status)
 {
 	s32 err = CAD_RES_SUCCESS;
 
@@ -448,7 +448,7 @@ s32 cad_rpc_read(u32 session_id,
 	err = dalrpc_fcn_5(CAD_RPC_Q6_READ,
 			cad_rpc_data.remote_handle_list[session_id],
 			(void *)read_buf,
-			sizeof(struct cad_buf_struct_type));
+			sizeof(struct adsp_audio_buffer));
 
 	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
 
@@ -457,8 +457,8 @@ s32 cad_rpc_read(u32 session_id,
 
 s32 cad_rpc_write(u32 session_id,
 			u32 block_flag,   /* 0=none block, 1=block */
-			struct cad_buf_struct_type *write_buf,
-			struct cadi_evt_struct_type *ret_status)
+			struct adsp_audio_buffer *write_buf,
+			struct adsp_audio_event *ret_status)
 {
 	s32 err = CAD_RES_SUCCESS;
 
@@ -476,7 +476,7 @@ s32 cad_rpc_write(u32 session_id,
 	err = dalrpc_fcn_5(CAD_RPC_Q6_WRITE,
 			cad_rpc_data.remote_handle_list[session_id],
 			(void *)write_buf,
-			sizeof(struct cad_buf_struct_type));
+			sizeof(struct adsp_audio_buffer));
 
 	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
 	return err;
@@ -487,7 +487,7 @@ s32 cad_rpc_ioctl(u32 session_id,
 			u32 cmd_code,
 			u8  *cmd_buf,
 			u32 cmd_buf_len,
-			struct cadi_evt_struct_type *ret_status)
+			struct adsp_audio_event *ret_status)
 {
 	s32 err = CAD_RES_SUCCESS;
 	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
@@ -515,7 +515,7 @@ s32 cad_rpc_ioctl(u32 session_id,
 		D("Got wake up signal for IOCTL blocking!!!\n");
 		mutex_lock(&cad_rpc_data.resource_mutex);
 		memset(ret_status, 0,
-				sizeof(struct cadi_evt_struct_type));
+				sizeof(struct adsp_audio_event));
 		memcpy(ret_status,
 				&cad_rpc_data.sync_evt_queue[session_id],
 				sizeof(*ret_status));
@@ -529,7 +529,7 @@ s32 cad_rpc_ioctl(u32 session_id,
 
 s32 cad_rpc_close(u32 session_id,
 		u32 block_flag,   /* 0=none block, 1=block */
-		struct cadi_evt_struct_type *ret_status)
+		struct adsp_audio_event *ret_status)
 {
 	s32 err = CAD_RES_SUCCESS;
 	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
@@ -556,7 +556,7 @@ s32 cad_rpc_close(u32 session_id,
 		D("Got wake up signal for Close blocking!!!\n");
 		mutex_lock(&cad_rpc_data.resource_mutex);
 		memset(ret_status, 0,
-				sizeof(struct cadi_evt_struct_type));
+				sizeof(struct adsp_audio_event));
 		memcpy(ret_status,
 				&cad_rpc_data.sync_evt_queue[session_id],
 				sizeof(*ret_status));

@@ -63,6 +63,7 @@
 #include <mach/qdsp6/msm8k_cad.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_session.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 
 
 static void (*event_cb)(void);
@@ -80,7 +81,7 @@ void register_cb(void *cb)
 EXPORT_SYMBOL(register_cb);
 
 
-static void cad_q6dec_session_async_callback(struct cadi_evt_struct_type *evt,
+static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
 							void *data)
 {
 	struct q6dec_session_data *self =
@@ -88,14 +89,14 @@ static void cad_q6dec_session_async_callback(struct cadi_evt_struct_type *evt,
 	struct q6dec_sesson_buffer_node *node = NULL;
 	struct q6dec_sesson_buffer_node *prev_node = NULL;
 
-	if (CAD_EVT_STATUS_BUF_DONE !=  evt->cad_event_header.cmd_event_id)
+	if (evt->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE)
 		/* unknow event, and do nothing */
 		return;
 
 	mutex_lock(&self->session_mutex);
 	node = self->used_buf_list;
 	while (node) {
-		if (node->buf == evt->cad_event_data.buf_data.buffer) {
+		if ((u32)node->buf == evt->header.client_data.data) {
 			if (prev_node == NULL) {
 				/* first node */
 				self->used_buf_list = node->next;
@@ -158,12 +159,15 @@ static s32 cad_q6dec_session_send_buf(struct q6dec_session_data *self,
 				struct q6dec_sesson_buffer_node *node,
 				u32 buf_len)
 {
-	struct cad_buf_struct_type send_buf;
+	struct adsp_audio_buffer send_buf;
 
-	memset(&send_buf, 0, sizeof(struct cad_buf_struct_type));
-	send_buf.buffer = node->buf;
-	send_buf.phys_addr = node->phys_addr;
-	send_buf.max_size = buf_len;
+	memset(&send_buf, 0, sizeof(struct adsp_audio_buffer));
+	send_buf.buffer.flags = ADSP_AUDIO_BUFFER_FLAG_START_SET |
+		ADSP_AUDIO_BUFFER_FLAG_PHYS_ADDR;
+	send_buf.header.client_data.data = (u32)node->buf;
+	send_buf.buffer.buffer_addr = (u32)node->phys_addr;
+	send_buf.buffer.max_size = buf_len;
+	send_buf.buffer.actual_size = buf_len;
 
 	/* add to the used list */
 	mutex_lock(&self->session_mutex);
@@ -257,12 +261,17 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 	self->buffer_size = info->ses_buf_max_size;
 
 	if (self->shared_buf == NULL) {
+
+		/* Set to virtual address of shared memory */
+		/* reserved for this session. */
+		/* memory for each session is stored as: */
+		/* |b|p|b|p|b|p|b|p|fb|p */
+		/* b - buffer, fb - format block, p - padding */
 		self->shared_buf = g_audio_mem +
 			((Q6_DEC_BUFFER_NUM_PER_STREAM *
 			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-			sizeof(struct cad_stream_device_struct_type) +
-			MEMORY_PADDING) * self->session_id);
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			* self->session_id);
 
 
 		if (self->shared_buf == NULL)
@@ -284,16 +293,18 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 		node->next = self->free_buf_list;
 		self->free_buf_list = node;
 		D("----> create buffer node 0x%x\n", (u32)node);
+		/* Set each buffer to next block of buffer memory */
+		/* for this session */
 		node->buf = self->shared_buf + i * (self->buffer_size +
 			MEMORY_PADDING);
 
+		/* Set to the physical address of buffer memory */
 		node->phys_addr = g_audio_base +
 			(Q6_DEC_BUFFER_NUM_PER_STREAM *
 			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING +
-			sizeof(struct cad_stream_device_struct_type) +
-			MEMORY_PADDING) * self->session_id +
-			i * (self->buffer_size + MEMORY_PADDING);
+			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			* self->session_id + i *
+			(self->buffer_size + MEMORY_PADDING);
 	}
 	return result;
 
@@ -340,7 +351,7 @@ s32 cad_q6dec_session_open(struct q6dec_session_data *self,
 
 s32 cad_q6dec_session_close(struct q6dec_session_data *self)
 {
-	struct cadi_evt_struct_type ret_status;
+	struct adsp_audio_event ret_status;
 	int rc = 0;
 
 	mutex_lock(&self->session_mutex);
@@ -386,7 +397,7 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 				u32 cmd_len)
 {
 	s32				result = CAD_RES_SUCCESS;
-	struct cadi_evt_struct_type	ret_status;
+	struct adsp_audio_event	ret_status;
 
 	switch (cmd_code) {
 	case CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR:

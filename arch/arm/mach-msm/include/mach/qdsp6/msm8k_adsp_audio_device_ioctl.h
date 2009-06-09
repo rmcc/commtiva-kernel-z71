@@ -55,73 +55,79 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef __ADSP_AUDIO_DEVICE_IOCTL_H
+#define __ADSP_AUDIO_DEVICE_IOCTL_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+
+
+/* Device control session only IOCTL command definitions */
+/* These commands will affect a logical device and all its associated */
+/* streams. */
+
+
+/* Set device volume. */
+/* This command has data payload struct adsp_audio_set_device_vol. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
+
+
+#pragma pack(1)
+struct adsp_audio_set_device_volume {
+	/* Associated client data */
+	struct adsp_audio_header	header;
+	/* DeviceID for volume change */
+	u32				device;
+	/* 0 == Rx, 1 == Tx and 2 == both */
+	u32				path;
+	/* in mB. */
+	s32				volume;
 };
+#pragma pack()
 
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
+
+/* Set device mute state. */
+/* This command has data payload struct adsp_audio_set_device_mute. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE		0x0107605f
+
+
+#pragma pack(1)
+struct adsp_audio_set_device_mute {
+	/* Associated client data */
+	struct adsp_audio_header	header;
+	/* DeviceID for mute change */
+	u32				device;
+	/* 0 == Rx, 1 == Tx and 2 == both */
+	u32				path;
+	/* 0 == UnMute, 1 == Mute */
+	u32				mute;
 };
+#pragma pack()
 
 
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
 
-s32 cad_open(struct cad_open_struct_type *open_param);
+/* Configure Equalizer for a device. */
+/* This command has payload struct adsp_audio_device_eq_cfg. */
 
-s32 cad_close(s32 driver_handle);
+#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
 
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
 
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
+#pragma pack(1)
+struct adsp_audio_device_eq_cfg {
+	/* Associated client data */
+	struct adsp_audio_header	client_data;
+	/* DeviceID for equalizer config */
+	u32				device;
+	/* Equalizer band data */
+	struct adsp_audio_eq_cfg	eq_config;
+};
+#pragma pack()
 
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
 
-int audio_switch_device(int new_device);
-
-int audio_set_device_volume(int vol);
-
-int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif
+
+

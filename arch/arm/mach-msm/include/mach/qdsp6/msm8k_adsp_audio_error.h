@@ -55,73 +55,151 @@
  *
  */
 
-#ifndef CAD_H
-#define CAD_H
-
-#include <linux/kernel.h>
-#include <linux/msm_audio.h>
-
-#define CAD_RES_SUCCESS		0
-#define CAD_RES_FAILURE		-1
-#define CAD_RES_UNSUPPORTED	-2
-#define CAD_RES_Q6_BUSY		-3
-#define CAD_RES_Q6_PREEMPTED	-4
-#define CAD_RES_Q6_UNEXPECTED	-5
-
-#define CAD_FORMAT_PCM		0x00
-#define CAD_FORMAT_ADPCM	0x01
-#define CAD_FORMAT_MP3		0x02
-#define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
-#define CAD_FORMAT_AAC		0x05
-#define CAD_FORMAT_MIDI		0x07
-#define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
-#define CAD_FORMAT_AMRWB	0x0A
-#define CAD_FORMAT_AMRNB	0x0B
-#define CAD_FORMAT_EVRC		0x0C
-#define CAD_FORMAT_DTMF		0x0D
-#define CAD_FORMAT_QCELP13K	0x0E
-
-#define CAD_OPEN_OP_READ   0x01
-#define CAD_OPEN_OP_WRITE  0x02
-
-#define CAD_OPEN_OP_DEVICE_CTRL  0x04
+#ifndef __ADSP_AUDIO_ERROR_H
+#define __ADSP_AUDIO_ERROR_H
 
 
-struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
-};
+/* success, i.e. no error */
+#define  ADSP_AUDIO_SUCCESS				0
 
 
-struct cad_buf_struct_type {
-	void    *buffer;
-	u32     phys_addr;
-	u32     max_size;
-	u32     actual_size;
-	s64	time_stamp;
-};
+
+/* ADSP Audio Error Codes */
 
 
-extern u8 *g_audio_mem;
-extern u32 g_audio_base;
+/* object already loaded */
+#define  ADSP_AUDIO_EALREADYLOADED			5
 
-s32 cad_open(struct cad_open_struct_type *open_param);
+/* unable to unload object */
+#define  ADSP_AUDIO_EUNABLETOUNLOAD			7
 
-s32 cad_close(s32 driver_handle);
+/* invalid time */
+#define  ADSP_AUDIO_EINVALIDTIME			9
 
-s32 cad_write(s32 driver_handle, struct cad_buf_struct_type *buf);
+/* invalid metric specified */
+#define  ADSP_AUDIO_EBADMETRIC				11
 
-s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf);
+/* invalid state */
+#define  ADSP_AUDIO_EBADSTATE				13
 
-s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf,
-	u32 cmd_buf_len);
+/* invalid parameter */
+#define  ADSP_AUDIO_EBADPARM				14
 
-int audio_switch_device(int new_device);
+/* invalid item */
+#define  ADSP_AUDIO_EBADITEM				16
 
-int audio_set_device_volume(int vol);
+/* invalid format */
+#define  ADSP_AUDIO_EINVALIDFORMAT			17
 
-int audio_set_device_mute(struct msm_mute_info *m);
+/* incomplete item */
+#define  ADSP_AUDIO_EINCOMPLETEITEM			18
+
+/* module left memory allocated when released */
+#define  ADSP_AUDIO_EALLOCATED				25
+
+/* operation is already in progress */
+#define  ADSP_AUDIO_EALREADY				26
+
+/* bad memory pointer */
+#define  ADSP_AUDIO_EMEMPTR				29
+
+/* context (system, interface, etc.) is idle */
+#define  ADSP_AUDIO_EIDLE				31
+
+/* context (system, interface, etc.) is busy */
+#define  ADSP_AUDIO_EITEMBUSY				32
+
+/* no type detected/found */
+#define  ADSP_AUDIO_ENOTYPE				34
+
+/* need more data/info */
+#define  ADSP_AUDIO_ENEEDMORE				35
+
+/* destination buffer given is too small */
+#define  ADSP_AUDIO_EBUFFERTOOSMALL			38
+
+/* no such name/port/socket/service exists or valid */
+#define  ADSP_AUDIO_ENOSUCH				39
+
+/* ACK pending on application */
+#define  ADSP_AUDIO_EACKPENDING				40
+
+/* current item is invalid */
+#define  ADSP_AUDIO_EINVALIDITEM			42
+
+/* invalid handle */
+#define  ADSP_AUDIO_EBADHANDLE				44
+
+/* waitable call is interrupted */
+#define  ADSP_AUDIO_EINTERRUPTED			46
+
+/* no more items available - reached end */
+#define  ADSP_AUDIO_ENOMORE				47
+
+/* Cannot change read-only object or parameter */
+#define  ADSP_AUDIO_EREADONLY				49
+
+
+
+
+
+/* Fatal, non recoverable errors */
+
+
+/* general failure */
+#define  ADSP_AUDIO_EFAILED				-1
+
+/* insufficient RAM */
+#define  ADSP_AUDIO_ENOMEMORY				2
+
+/* specified class unsupported */
+#define  ADSP_AUDIO_ECLASSNOTSUPPORT			3
+
+/* version not supported */
+#define  ADSP_AUDIO_EVERSIONNOTSUPPORT			4
+
+/* unable to load object */
+#define  ADSP_AUDIO_EUNABLETOLOAD			6
+
+/* NULL class object */
+#define  ADSP_AUDIO_EBADCLASS				10
+
+/* component expired */
+#define  ADSP_AUDIO_EEXPIRED				12
+
+/* API is not supported */
+#define  ADSP_AUDIO_EUNSUPPORTED			20
+
+/* privileges are insufficient for this operation */
+#define  ADSP_AUDIO_EPRIVLEVEL				21
+
+/* unable to find specified resource */
+#define  ADSP_AUDIO_ERESOURCENOTFOUND			22
+
+/* non re-entrant API re-entered */
+#define  ADSP_AUDIO_EREENTERED				23
+
+/* API called in wrong task context */
+#define  ADSP_AUDIO_EBADTASK				24
+
+/* heap corruption */
+#define  ADSP_AUDIO_EHEAP				30
+
+/* driver failed to close properly */
+#define  ADSP_AUDIO_EBADSHUTDOWN			37
+
+/* not an owner authorized to perform the operation */
+#define  ADSP_AUDIO_ENOTOWNER				41
+
+/* not allowed to perform the operation */
+#define  ADSP_AUDIO_ENOTALLOWED				43
+
+/* out of handles */
+#define  ADSP_AUDIO_EOUTOFHANDLES			45
+
+/* a CPU exception occurred */
+#define  ADSP_AUDIO_ECPUEXCEPTION			48
 
 #endif
+
+

@@ -64,6 +64,9 @@
 #include <mach/qdsp6/msm8k_cad_module.h>
 #include <mach/qdsp6/msm8k_cad_itypes.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
+#include <mach/qdsp6/msm8k_q6_api_flip_utils.h>
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+#include <mach/qdsp6/msm8k_adsp_audio_device_ioctl.h>
 
 struct cad_device_volume_cache
 		qdsp6_volume_cache_tbl[QDSP6VOLUME_MAX_DEVICE_COUNT];
@@ -116,19 +119,19 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	struct cad_flt_cfg_dev_mute *dev_mute_buf = NULL;
 	struct cad_flt_cfg_strm_mute *stream_mute_buf = NULL;
 
-	struct qdsp_set_device_volume *q6_set_dev_vol = NULL;
-	struct qdsp_set_stream_volume *q6_set_strm_vol = NULL;
-	struct qdsp_set_device_mute *q6_set_dev_mute = NULL;
-	struct qdsp_set_stream_mute *q6_set_strm_mute = NULL;
+	struct adsp_audio_set_device_volume *q6_set_dev_vol = NULL;
+	struct adsp_audio_set_stream_volume *q6_set_strm_vol = NULL;
+	struct adsp_audio_set_device_mute *q6_set_dev_mute = NULL;
+	struct adsp_audio_set_stream_mute *q6_set_strm_mute = NULL;
 
 	int rc = CAD_RES_SUCCESS;
 	s32 device_volume = 0;
 	s32 rpc_cmd_code = 0;
 	u8 *rpc_cmd_buf = NULL;
 	u32 rpc_cmd_buf_len = 0;
-	struct cadi_evt_struct_type event_payload;
+	struct adsp_audio_event event_payload;
 
-	memset(&event_payload, 0, sizeof(struct cadi_evt_struct_type));
+	memset(&event_payload, 0, sizeof(struct adsp_audio_event));
 
 	/* Not handle request other than the following two. */
 	if (cmd_code != CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG &&
@@ -188,20 +191,22 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			/* Construct QDSP6 device mute command. */
 			/* 1. Allocate memory for command buffer. */
 			q6_set_dev_mute = kmalloc(
-				sizeof(struct qdsp_set_device_mute),
+				sizeof(struct adsp_audio_set_device_mute),
 				GFP_KERNEL);
 			if (!q6_set_dev_mute)
 				return CAD_RES_FAILURE;
 
 			memset(q6_set_dev_mute, 0,
-				sizeof(struct qdsp_set_device_mute));
+				sizeof(struct adsp_audio_set_device_mute));
 			/* 2. Assign values to command buffer. */
-			q6_set_dev_mute->device_id = dev_vol_buf->device_id;
+			q6_set_dev_mute->device =
+				q6_device_id_mapping(dev_vol_buf->device_id);
 			q6_set_dev_mute->path = dev_vol_buf->path;
 			q6_set_dev_mute->mute = 0;
 			rpc_cmd_buf = (u8 *)q6_set_dev_mute;
-			rpc_cmd_buf_len = sizeof(struct qdsp_set_device_mute);
-			rpc_cmd_code = QDSP_IOCTL_CMD_SET_DEVICE_MUTE;
+			rpc_cmd_buf_len =
+				sizeof(struct adsp_audio_set_device_mute);
+			rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE;
 			/* 3. Send command to Q6. */
 			rc = cad_rpc_ioctl(
 				session_id,
@@ -238,36 +243,39 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			return CAD_RES_FAILURE;
 
 		memset(q6_set_dev_vol, 0,
-			sizeof(struct qdsp_set_device_volume));
+			sizeof(struct adsp_audio_set_device_volume));
 
 		/* 2. Assign values to command buffer. */
-		q6_set_dev_vol->device_id = dev_vol_buf->device_id;
+		q6_set_dev_vol->device =
+			q6_device_id_mapping(dev_vol_buf->device_id);
 		q6_set_dev_vol->path = dev_vol_buf->path;
 		q6_set_dev_vol->volume = device_volume;
 		rpc_cmd_buf = (u8 *)q6_set_dev_vol;
 		rpc_cmd_buf_len =
-			sizeof(struct qdsp_set_device_volume);
-		rpc_cmd_code = QDSP_IOCTL_CMD_SET_DEVICE_VOL;
+			sizeof(struct adsp_audio_set_device_volume);
+		rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL;
 
 		/* HACK: for volume = 0%: send mute command instead. */
 		if (dev_vol_buf->volume == 0) {
 			/* Construct QDSP6 device mute command. */
 			/* 1. Allocate memory for command buffer. */
 			q6_set_dev_mute = kmalloc(
-				sizeof(struct qdsp_set_device_mute),
+				sizeof(struct adsp_audio_set_device_mute),
 				GFP_KERNEL);
 			if (!q6_set_dev_mute)
 				return CAD_RES_FAILURE;
 
 			memset(q6_set_dev_mute, 0,
-				sizeof(struct qdsp_set_device_mute));
+				sizeof(struct adsp_audio_set_device_mute));
 			/* 2. Assign values to command buffer. */
-			q6_set_dev_mute->device_id = q6_set_dev_vol->device_id;
+			q6_set_dev_mute->device =
+				q6_device_id_mapping(q6_set_dev_vol->device);
 			q6_set_dev_mute->path = q6_set_dev_vol->path;
 			q6_set_dev_mute->mute = 1; /* mute */
 			rpc_cmd_buf = (u8 *)q6_set_dev_mute;
-			rpc_cmd_buf_len = sizeof(struct qdsp_set_device_mute);
-			rpc_cmd_code = QDSP_IOCTL_CMD_SET_DEVICE_MUTE;
+			rpc_cmd_buf_len =
+				sizeof(struct adsp_audio_set_device_mute);
+			rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE;
 		}
 
 		break;
@@ -280,19 +288,22 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* Construct QDSP6 device mute command. */
 		/* 1. Allocate memory for command buffer. */
 		q6_set_dev_mute = kmalloc(
-			sizeof(struct qdsp_set_device_mute), GFP_KERNEL);
+			sizeof(struct adsp_audio_set_device_mute),
+			GFP_KERNEL);
 		if (!q6_set_dev_mute)
 			return CAD_RES_FAILURE;
 
 		memset(q6_set_dev_mute, 0,
-			sizeof(struct qdsp_set_device_mute));
+			sizeof(struct adsp_audio_set_device_mute));
 		/* 2. Assign values to command buffer. */
-		q6_set_dev_mute->device_id = dev_mute_buf->device_id;
+		q6_set_dev_mute->device =
+			q6_device_id_mapping(dev_mute_buf->device_id);
 		q6_set_dev_mute->path = dev_mute_buf->path;
 		q6_set_dev_mute->mute = dev_mute_buf->mute;
 		rpc_cmd_buf = (u8 *)q6_set_dev_mute;
-		rpc_cmd_buf_len = sizeof(struct qdsp_set_device_mute);
-		rpc_cmd_code = QDSP_IOCTL_CMD_SET_DEVICE_MUTE;
+		rpc_cmd_buf_len =
+			sizeof(struct adsp_audio_set_device_mute);
+		rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE;
 
 		break;
 	case CAD_FILTER_CONFIG_STREAM_VOLUME:
@@ -303,7 +314,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			/* Construct QDSP6 stream mute command. */
 			/* 1. Allocate memory for command buffer. */
 			q6_set_strm_mute = kmalloc(
-				sizeof(struct qdsp_set_stream_mute),
+				sizeof(struct adsp_audio_set_stream_mute),
 				GFP_KERNEL);
 			if (!q6_set_strm_mute)
 				return CAD_RES_FAILURE;
@@ -311,8 +322,9 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			/* 2. Assign values to command buffer.	*/
 			q6_set_strm_mute->mute = 0;
 			rpc_cmd_buf = (u8 *)q6_set_strm_mute;
-			rpc_cmd_buf_len = sizeof(struct qdsp_set_stream_mute);
-			rpc_cmd_code = QDSP_IOCTL_CMD_SET_STREAM_MUTE;
+			rpc_cmd_buf_len =
+				sizeof(struct adsp_audio_set_stream_mute);
+			rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE;
 			/* 3. Send command to Q6. */
 			rc = cad_rpc_ioctl(session_id,
 					     1,
@@ -330,7 +342,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* Construct QDSP6 stream volume command. */
 		/* 1. Allocate memory for command buffer. */
 		q6_set_strm_vol = kmalloc(
-			sizeof(struct qdsp_set_stream_volume),
+			sizeof(struct adsp_audio_set_stream_volume),
 			GFP_KERNEL);
 		if (!q6_set_strm_vol)
 			return CAD_RES_FAILURE;
@@ -338,15 +350,16 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* 2. Assign values to command buffer. */
 		q6_set_strm_vol->volume = stream_vol_buf->volume;
 		rpc_cmd_buf = (u8 *)q6_set_strm_vol;
-		rpc_cmd_buf_len = sizeof(struct qdsp_set_stream_volume);
-		rpc_cmd_code = QDSP_IOCTL_CMD_SET_STREAM_VOL;
+		rpc_cmd_buf_len = sizeof(struct adsp_audio_set_stream_volume);
+		rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_VOL;
 
 		/* For volume = min: send mute command instead. */
 		if (stream_vol_buf->volume == CAD_STREAM_MIN_GAIN) {
 			/* Construct QDSP6 stream mute command. */
 			/* 1. Allocate memory for command buffer. */
 			q6_set_strm_mute = kmalloc(
-					sizeof(struct qdsp_set_stream_mute),
+					sizeof(
+					struct adsp_audio_set_stream_mute),
 					GFP_KERNEL);
 
 			if (!q6_set_strm_mute)
@@ -355,8 +368,9 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			/* 2. Assign values to command buffer. */
 			q6_set_strm_mute->mute = 1;
 			rpc_cmd_buf = (u8 *)q6_set_strm_mute;
-			rpc_cmd_buf_len = sizeof(struct qdsp_set_stream_mute);
-			rpc_cmd_code = QDSP_IOCTL_CMD_SET_STREAM_MUTE;
+			rpc_cmd_buf_len =
+				sizeof(struct adsp_audio_set_stream_mute);
+			rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE;
 		}
 
 		break;
@@ -366,7 +380,8 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* Construct QDSP6 stream mute command. */
 		/* 1. Allocate memory for command buffer. */
 		q6_set_strm_mute = kmalloc(
-					sizeof(struct qdsp_set_stream_mute),
+					sizeof(
+					struct adsp_audio_set_stream_mute),
 					GFP_KERNEL);
 		if (!q6_set_strm_mute)
 			return CAD_RES_FAILURE;
@@ -374,8 +389,8 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* 2. Assign values to command buffer. */
 		q6_set_strm_mute->mute = stream_mute_buf->mute;
 		rpc_cmd_buf = (u8 *)q6_set_strm_mute;
-		rpc_cmd_buf_len = sizeof(struct qdsp_set_stream_mute);
-		rpc_cmd_code = QDSP_IOCTL_CMD_SET_STREAM_MUTE;
+		rpc_cmd_buf_len = sizeof(struct adsp_audio_set_stream_mute);
+		rpc_cmd_code = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE;
 
 		break;
 	default:
