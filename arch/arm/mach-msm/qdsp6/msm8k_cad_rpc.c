@@ -400,6 +400,7 @@ s32 cad_rpc_open(u32 session_id,     /* session handle */
 	D("DALRPC Open function entering!!!\n");
 
 	/* clean up any pending signal */
+	init_completion(&cad_rpc_data.compl_list[session_id]);
 
 	/* making rpc open call*/
 	err = dalrpc_fcn_5(CAD_RPC_Q6_OPEN,
@@ -408,7 +409,6 @@ s32 cad_rpc_open(u32 session_id,     /* session handle */
 		sizeof(struct adsp_audio_open_device));
 	if (!err) {
 		D("DALRPC Open function start wait!!!\n");
-		init_completion(&cad_rpc_data.compl_list[session_id]);
 		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
 
 		D("Got wakeup signal for Open blocking!!!\n");
@@ -501,6 +501,7 @@ s32 cad_rpc_ioctl(u32 session_id,
 	D("DALRPC IOCTL function Entering!!!\n");
 
 	/* clean up any delayed signal */
+	init_completion(&cad_rpc_data.compl_list[session_id]);
 
 	err = dalrpc_fcn_6(CAD_RPC_Q6_IOCTL,
 			cad_rpc_data.remote_handle_list[session_id],
@@ -509,7 +510,6 @@ s32 cad_rpc_ioctl(u32 session_id,
 			cmd_buf_len);
 	if (!err && block_flag) {
 		D("DALRPC IOCTL function start wait!!!\n");
-		init_completion(&cad_rpc_data.compl_list[session_id]);
 		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
 
 		D("Got wake up signal for IOCTL blocking!!!\n");
@@ -543,6 +543,7 @@ s32 cad_rpc_close(u32 session_id,
 	D("DALRPC CLOSE function Entering!!!\n");
 
 	/* clean up any delayed signal */
+	init_completion(&cad_rpc_data.compl_list[session_id]);
 
 	/* making rpc close call */
 	err = dalrpc_fcn_0(CAD_RPC_Q6_CLOSE,
@@ -550,7 +551,6 @@ s32 cad_rpc_close(u32 session_id,
 			session_id);
 	if (!err) {
 		D("DALRPC Close function start wait!!!\n");
-		init_completion(&cad_rpc_data.compl_list[session_id]);
 		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
 
 		D("Got wake up signal for Close blocking!!!\n");
