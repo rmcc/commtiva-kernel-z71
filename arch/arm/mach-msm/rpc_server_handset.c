@@ -18,6 +18,8 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 
+#include <asm/mach-types.h>
+
 #include <mach/msm_handset.h>
 #include <mach/msm_rpcrouter.h>
 #include <mach/board.h>
@@ -26,6 +28,15 @@
 
 #define HS_SERVER_PROG 0x30000062
 #define HS_SERVER_VERS 0x00010001
+
+#define HS_RPC_PROG 0x30000091
+#define HS_RPC_VERS 0x00010001
+
+#define HS_RPC_CB_PROG 0x31000091
+#define HS_RPC_CB_VERS 0x00010001
+
+#define HS_SUBSCRIBE_SRVC_PROC 0x03
+#define HS_EVENT_CB_PROC	1
 
 #define RPC_KEYPAD_NULL_PROC 0
 #define RPC_KEYPAD_PASS_KEY_CODE_PROC 2
@@ -39,6 +50,60 @@
 
 #define KEY(hs_key, input_key) ((hs_key << 24) | input_key)
 
+struct hs_key_data {
+	uint32_t ver;        /* Version number to track sturcture changes */
+	uint32_t code;       /* which key? */
+	uint32_t parm;       /* key status. Up/down or pressed/released */
+};
+
+enum hs_subs_srvc {
+	HS_SUBS_SEND_CMD = 0, /* Subscribe to send commands to HS */
+	HS_SUBS_RCV_EVNT,     /* Subscribe to receive Events from HS */
+	HS_SUBS_SRVC_MAX
+};
+
+enum hs_subs_req {
+	HS_SUBS_REGISTER,    /* Subscribe   */
+	HS_SUBS_CANCEL,      /* Unsubscribe */
+	HS_SUB_STATUS_MAX
+};
+
+enum hs_event_class {
+	HS_EVNT_CLASS_ALL = 0, /* All HS events */
+	HS_EVNT_CLASS_LAST,    /* Should always be the last class type   */
+	HS_EVNT_CLASS_MAX
+};
+
+enum hs_cmd_class {
+	HS_CMD_CLASS_LCD = 0, /* Send LCD related commands              */
+	HS_CMD_CLASS_KPD,     /* Send KPD related commands              */
+	HS_CMD_CLASS_LAST,    /* Should always be the last class type   */
+	HS_CMD_CLASS_MAX
+};
+
+/*
+ * Receive events or send command
+ */
+union hs_subs_class {
+	enum hs_event_class	evnt;
+	enum hs_cmd_class	cmd;
+};
+
+struct hs_subs {
+	uint32_t                ver;
+	enum hs_subs_srvc	srvc;  /* commands or events */
+	enum hs_subs_req	req;   /* subscribe or unsubscribe  */
+	uint32_t		host_os;
+	enum hs_subs_req	disc;  /* discriminator    */
+	union hs_subs_class      id;
+};
+
+struct hs_event_cb_recv {
+	uint32_t cb_id;
+	uint32_t hs_key_data_ptr;
+	struct hs_key_data key;
+};
+
 static const uint32_t hs_key_map[] = {
 	KEY(HS_PWR_K, KEY_POWER),
 	KEY(HS_END_K, KEY_END),
@@ -49,6 +114,7 @@ static const uint32_t hs_key_map[] = {
 
 static struct input_dev *kpdev;
 static struct input_dev *hsdev;
+static struct msm_rpc_client *rpc_client;
 
 static int hs_find_key(uint32_t hscode)
 {
@@ -98,6 +164,9 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 	if (key_parm == HS_REL_K)
 		key_code = key_parm;
 
+	kpdev = msm_keypad_get_input_dev();
+	hsdev = msm_get_handset_input_dev();
+
 	switch (key) {
 	case KEY_POWER:
 	case KEY_END:
@@ -144,9 +213,6 @@ static int handle_hs_rpc_call(struct msm_rpc_server *server,
 		uint32_t key_parm;
 	};
 
-	kpdev = msm_keypad_get_input_dev();
-	hsdev = msm_get_handset_input_dev();
-
 	switch (req->procedure) {
 	case RPC_KEYPAD_NULL_PROC:
 		return 0;
@@ -181,8 +247,133 @@ static struct msm_rpc_server hs_rpc_server = {
 	.rpc_call	= handle_hs_rpc_call,
 };
 
-static int __init hs_rpc_server_init(void)
+static int process_subs_srvc_callback(struct hs_event_cb_recv *recv)
 {
+	if (!recv)
+		return -ENODATA;
+
+	report_hs_key(be32_to_cpu(recv->key.code), be32_to_cpu(recv->key.parm));
+
+	return 0;
+}
+
+static void process_hs_rpc_request(uint32_t proc, void *data)
+{
+	if (proc == HS_EVENT_CB_PROC)
+		process_subs_srvc_callback(data);
+	else
+		pr_err("%s: unknown rpc proc %d\n", __func__, proc);
+}
+
+static int hs_rpc_register_subs_arg(void *buffer, void *data)
+{
+	struct hs_subs_rpc_req {
+		uint32_t hs_subs_ptr;
+		struct hs_subs hs_subs;
+		uint32_t hs_cb_id;
+		uint32_t hs_handle_ptr;
+		uint32_t hs_handle_data;
+	};
+
+	struct hs_subs_rpc_req *req = buffer;
+
+	req->hs_subs_ptr	= cpu_to_be32(0x1);
+	req->hs_subs.ver	= cpu_to_be32(0x1);
+	req->hs_subs.srvc	= cpu_to_be32(HS_SUBS_RCV_EVNT);
+	req->hs_subs.req	= cpu_to_be32(HS_SUBS_REGISTER);
+	req->hs_subs.host_os	= cpu_to_be32(0x4); /* linux */
+	req->hs_subs.disc	= cpu_to_be32(HS_SUBS_RCV_EVNT);
+	req->hs_subs.id.evnt	= cpu_to_be32(HS_EVNT_CLASS_ALL);
+
+	req->hs_cb_id		= cpu_to_be32(0x1);
+
+	req->hs_handle_ptr	= cpu_to_be32(0x1);
+	req->hs_handle_data	= cpu_to_be32(0x0);
+
+	return sizeof(*req);
+}
+
+static int hs_rpc_register_subs_res(void *buffer, void *data)
+{
+	uint32_t result;
+
+	result = be32_to_cpu(*((uint32_t *)buffer));
+	pr_debug("%s: request completed: 0x%x\n", __func__, result);
+
+	return 0;
+}
+
+static int hs_cb_func(struct msm_rpc_client *client, void *buffer, int in_size)
+{
+	int rc = -1;
+
+	struct rpc_request_hdr *hdr = buffer;
+
+	hdr->type = be32_to_cpu(hdr->type);
+	hdr->xid = be32_to_cpu(hdr->xid);
+	hdr->rpc_vers = be32_to_cpu(hdr->rpc_vers);
+	hdr->prog = be32_to_cpu(hdr->prog);
+	hdr->vers = be32_to_cpu(hdr->vers);
+	hdr->procedure = be32_to_cpu(hdr->procedure);
+
+	if (hdr->type != 0)
+		return rc;
+	if (hdr->rpc_vers != 2)
+		return rc;
+	if (hdr->prog != HS_RPC_CB_PROG)
+		return rc;
+	if (!msm_rpc_is_compatible_version(HS_RPC_CB_VERS,
+				hdr->vers))
+		return rc;
+
+	process_hs_rpc_request(hdr->procedure,
+			    (void *) (hdr + 1));
+
+	rc = msm_rpc_send_accepted_reply(client, hdr->xid,
+					 RPC_ACCEPTSTAT_SUCCESS, NULL, 0);
+	if (rc) {
+		pr_err("%s: sending reply failed: %d\n", __func__, rc);
+		return rc;
+	}
+
+	return 0;
+}
+
+static int __init hs_rpc_cb_init(void)
+{
+	int rc = 0;
+
+	rpc_client = msm_rpc_register_client("hs",
+			HS_RPC_PROG, HS_RPC_VERS, 0, hs_cb_func);
+
+	if (IS_ERR(rpc_client)) {
+		pr_err("%s: couldn't open rpc client err %ld\n", __func__,
+			 PTR_ERR(rpc_client));
+		return PTR_ERR(rpc_client);
+	}
+
+	rc = msm_rpc_client_req(rpc_client, HS_SUBSCRIBE_SRVC_PROC,
+				hs_rpc_register_subs_arg,
+				hs_rpc_register_subs_res,
+				NULL);
+	if (rc) {
+		pr_err("%s: couldn't send rpc client request\n", __func__);
+		msm_rpc_unregister_client(rpc_client);
+	}
+
+	return rc;
+}
+
+static int __init hs_rpc_init(void)
+{
+	int rc;
+
+	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa()) {
+		rc = hs_rpc_cb_init();
+		if (rc)
+			pr_err("%s: failed to initialize\n", __func__);
+	}
+
 	return msm_rpc_create_server(&hs_rpc_server);
 }
-module_init(hs_rpc_server_init);
+module_init(hs_rpc_init);
