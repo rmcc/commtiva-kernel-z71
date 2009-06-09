@@ -19,43 +19,56 @@
 #include <asm/assembler.h>
 #include <asm/vfpmacros.h>
 
+ENTRY(msm_arch_idle)
+	wfi
+	bx      lr
+
 ENTRY(msm_pm_collapse)
+#if defined(CONFIG_MSM_FIQ_SUPPORT)
+	cpsid   f
+#endif
+
 	ldr     r0, =saved_state
 	stmia   r0!, {r4-r14}
 	mrc     p15, 0, r1, c1, c0, 0 /* MMU control */
-	mrc     p15, 0, r2, c2, c0, 0 /* ttb */
+	mrc     p15, 0, r2, c2, c0, 0 /* TTBR0 */
 	mrc     p15, 0, r3, c3, c0, 0 /* dacr */
 	mrc     p15, 3, r4, c15, c0, 3 /* L2CR1 is the L2 cache control reg 1 */
+	mrc     p15, 0, r5, c10, c2, 0 /* PRRR */
+	mrc     p15, 0, r6, c10, c2, 1 /* NMRR */
+	mrc     p15, 0, r7, c1, c0, 1 /* ACTLR */
+	mrc     p15, 0, r8, c2, c0, 1 /* TTBR1 */
+	mrc     p15, 0, r9, c13, c0, 3 /* TPIDRURO */
 	mrc     p15, 0, ip, c13, c0, 1 /* context ID */
-	stmia   r0!, {r1-r4, ip}
+	stmia   r0!, {r1-r9, ip}
+
 #ifdef CONFIG_VFP
 	VFPFSTMIA r0, r1              /* Save VFP working registers */
 	fmrx    r1, fpexc
 	fmrx    r2, fpscr
 	stmia   r0!, {r1, r2}         /* Save VFP state registers */
 #endif
-	stmfd   sp!, {r4-r5, r7, r9-r11, lr}
 	bl      v7_flush_dcache_all
-	ldmfd   sp!, {r4-r5, r7, r9-r11, lr}
 
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
 	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
-	/* fall though */
-ENTRY(msm_arch_idle)
-#if defined(CONFIG_MSM_FIQ_SUPPORT)
-	cpsid   f
-#endif
-	mov     r0, #0                   /* prepare wfi value
-					  * also used as return value from
-					  * msm_pm_collapse */
+
+	dsb
 	wfi
+
+	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
+	isb
 
 #if defined(CONFIG_MSM_FIQ_SUPPORT)
 	cpsie   f
 #endif
-	mov     pc, lr
+
+	ldr     r0, =saved_state         /* restore registers */
+	ldmfd   r0, {r4-r14}
+	mov     r0, #0                   /* return power collapse failed */
+	bx      lr
 
 ENTRY(msm_pm_collapse_exit)
 #if 0 /* serial debug */
@@ -89,11 +102,16 @@ ENTRY(msm_pm_collapse_exit)
 	fmxr    fpscr, r3             /* Restore FPSCR */
 	fmxr    fpexc, r2             /* Restore FPEXC last */
 #endif
-	ldmdb   r1!, {r2-r6}
+	ldmdb   r1!, {r2-r11}
 	mcr     p15, 0, r4, c3, c0, 0 /* dacr */
-	mcr     p15, 0, r3, c2, c0, 0 /* ttb */
+	mcr     p15, 0, r3, c2, c0, 0 /* TTBR0 */
 	mcr     p15, 3, r5, c15, c0, 3 /* L2CR1 */
-	mcr     p15, 0, r6, c13, c0, 1 /* context ID */
+	mcr     p15, 0, r6, c10, c2, 0 /* PRRR */
+	mcr     p15, 0, r7, c10, c2, 1 /* NMRR */
+	mcr     p15, 0, r8, c1, c0, 1 /* ACTLR */
+	mcr     p15, 0, r9, c2, c0, 1 /* TTBR1 */
+	mcr     p15, 0, r10, c13, c0, 3 /* TPIDRURO */
+	mcr     p15, 0, r11, c13, c0, 1 /* context ID */
 	isb
 	ldmdb   r1!, {r4-r14}
 	/* Add 1:1 map in the PMD to allow smooth switch when turning on MMU */
@@ -106,6 +124,7 @@ ENTRY(msm_pm_collapse_exit)
 	lsr     r0, #20         /* align current addr to 1MB boundary */
 	lsl     r0, #20
 	/* Create new entry for this 1MB page */
+	orr     r0, r0, #0x4     /* PMD_SECT_BUFFERED */
 	orr     r0, r0, #0x400   /* PMD_SECT_AP_WRITE */
 	orr     r0, r0, #0x2     /* PMD_TYPE_SECT|PMD_DOMAIN(DOMAIN_KERNEL) */
 	str     r0, [r3]         /* put new entry into the MMU table */
@@ -127,8 +146,15 @@ msm_pm_pa_to_va:
 	mcr     p15, 0, r3, c7, c10, 1  /* flush_pmd */
 	dsb
 	isb
+	mcr     p15, 0, r3, c8, c7, 0   /* UTLBIALL */
+	mcr     p15, 0, r3, c7, c5, 6   /* BPIALL */
+	dsb
+	isb
+	stmfd   sp!, {lr}
+	bl      v7_flush_kern_cache_all
+	ldmfd   sp!, {lr}
 	mov     r0, #1
-	mov     pc, lr
+	bx      lr
 	nop
 	nop
 	nop
@@ -141,7 +167,7 @@ msm_pm_pa_to_va:
 
 saved_state:
 	.space  4 * 11 /* r4-14 */
-	.space  4 * 5  /* cp15 */
+	.space  4 * 10  /* cp15 */
 #ifdef CONFIG_VFP
 	.space  8 * 32 /* VFP working registers */
 	.space  4 * 2  /* VFP state registers */
