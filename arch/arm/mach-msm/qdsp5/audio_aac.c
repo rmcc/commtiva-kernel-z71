@@ -160,6 +160,8 @@ struct audio {
 	spinlock_t event_queue_lock;
 	struct mutex get_event_lock;
 	int event_abort;
+
+	struct msm_audio_bitstream_info stream_info;
 };
 
 static int auddec_dsp_config(struct audio *audio, int enable);
@@ -267,7 +269,31 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 	spin_unlock_irqrestore(&audio->dsp_lock, flags);
 
 }
+static void audaac_update_stream_info(struct audio *audio, uint32_t *payload)
+{
+	unsigned long flags;
+	union msm_audio_event_payload e_payload;
 
+	/* get stream info from DSP msg */
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+
+	audio->stream_info.codec_type = AUDIO_CODEC_TYPE_AAC;
+	audio->stream_info.chan_info = (0x0000FFFF & payload[1]);
+	audio->stream_info.sample_rate = (0x0000FFFF & payload[2]);
+	audio->stream_info.bit_stream_info = (0x0000FFFF & payload[3]);
+	audio->stream_info.bit_rate = payload[4];
+
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+	pr_info("audio_update_stream_info: chan_info=%d, sample_rate=%d,\
+					bit_stream_info=%d\n",\
+					audio->stream_info.chan_info,\
+					audio->stream_info.sample_rate, \
+					audio->stream_info.bit_stream_info);
+
+	/* send event to ARM to notify steam info coming */
+	e_payload.stream_info = audio->stream_info;
+	audaac_post_event(audio, AUDIO_EVENT_STREAM_INFO, e_payload);
+}
 static void audplay_dsp_event(void *data, unsigned id, size_t len,
 			      void (*getevent) (void *ptr, size_t len))
 {
@@ -284,6 +310,10 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 
 	case AUDPLAY_MSG_BUFFER_UPDATE:
 		audio_update_pcm_buf_entry(audio, msg);
+		break;
+
+	case AUDPLAY_UP_STREAM_INFO:
+		audaac_update_stream_info(audio, msg);
 		break;
 
 	default:
@@ -910,6 +940,20 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		dprintk("%s: AUDIO_PAUSE %ld\n", __func__, arg);
 		rc = audpp_pause(audio->dec_id, (int) arg);
 		break;
+	case AUDIO_GET_STREAM_INFO:{
+		if (audio->stream_info.sample_rate == 0) {
+			/* haven't received DSP stream event,
+			the stream info is not updated */
+			rc = -EPERM;
+			break;
+		}
+		if (copy_to_user((void *)arg, &audio->stream_info,
+			sizeof(struct msm_audio_bitstream_info)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
 	default:
 		rc = -EINVAL;
 	}
@@ -1374,6 +1418,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->suspend_ctl.audio = audio;
 	register_early_suspend(&audio->suspend_ctl.node);
 #endif
+	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
 	rc = 0;
 done:
 	mutex_unlock(&audio->lock);
