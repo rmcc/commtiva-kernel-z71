@@ -61,6 +61,7 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/io.h>
+#include <linux/usb/mass_storage_function.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -69,6 +70,7 @@
 #include <mach/board.h>
 #include <mach/memory.h>
 #include <mach/msm_iomap.h>
+#include <mach/msm_hsusb.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -95,10 +97,94 @@ static struct platform_device smc91x_device = {
 	.resource       = smc91x_resources,
 };
 
+static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
+	.nluns          = 0x02,
+	.buf_size       = 16384,
+	.vendor         = "GOOGLE",
+	.product        = "Mass storage",
+	.release        = 0xffff,
+};
+
+static struct platform_device mass_storage_device = {
+	.name           = "usb_mass_storage",
+	.id             = -1,
+	.dev            = {
+		.platform_data          = &usb_mass_storage_pdata,
+	},
+};
+
+static struct usb_function_map usb_functions_map[] = {
+	{"diag", 0},
+	{"adb", 1},
+	{"modem", 2},
+	{"nmea", 3},
+	{"mass_storage", 4},
+	{"ethernet", 5},
+};
+
+static struct usb_composition usb_func_composition[] = {
+	{
+		.product_id         = 0x9012,
+		.functions	    = 0x5, /* 0101 */
+	},
+
+	{
+		.product_id         = 0x9013,
+		.functions	    = 0x15, /* 10101 */
+	},
+
+	{
+		.product_id         = 0x9014,
+		.functions	    = 0x30, /* 110000 */
+	},
+
+	{
+		.product_id         = 0x9016,
+		.functions	    = 0xD, /* 01101 */
+	},
+
+	{
+		.product_id         = 0x9017,
+		.functions	    = 0x1D, /* 11101 */
+	},
+
+	{
+		.product_id         = 0xF000,
+		.functions	    = 0x10, /* 10000 */
+	},
+
+	{
+		.product_id         = 0xF009,
+		.functions	    = 0x20, /* 100000 */
+	},
+
+	{
+		.product_id         = 0x9018,
+		.functions	    = 0x1F, /* 011111 */
+	},
+
+};
+static struct msm_hsusb_platform_data msm_hsusb_pdata = {
+	.version	= 0x0100,
+	.phy_info	= USB_PHY_INTEGRATED | USB_PHY_MODEL_45NM,
+	.vendor_id	= 0x5c6,
+	.product_name	= "Qualcomm HSUSB Device",
+	.serial_number	= "1234567890ABCDEF",
+	.manufacturer_name
+			= "Qualcomm Incorporated",
+	.compositions	= usb_func_composition,
+	.num_compositions
+			= ARRAY_SIZE(usb_func_composition),
+	.function_map	= usb_functions_map,
+	.num_functions	= ARRAY_SIZE(usb_functions_map),
+};
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc91x_device,
 	&msm_device_nand,
+	&msm_device_hsusb_peripheral,
+	&mass_storage_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -138,6 +224,7 @@ static void __init msm7x30_init(void)
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
+	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_pm_set_platform_data(msm_pm_data);
 }
