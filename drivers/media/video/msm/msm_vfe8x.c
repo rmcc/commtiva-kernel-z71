@@ -745,7 +745,6 @@ static int vfe_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 
 		vfe_config_axi(OUTPUT_2, axid, axio);
 
-		axio->outputDataSize = 0;
 		vfe_axi_output_config(axio);
 	}
 		break;
