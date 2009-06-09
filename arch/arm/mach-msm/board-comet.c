@@ -665,12 +665,10 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_tssc,
 };
 
-/* The TPS65023 PMIC outputs 1.225V as default at boot */
-#define TPS65023_DEFAULT_DCDC1	1225
 #ifdef CONFIG_QSD_SVS
 #define TPS65023_MAX_DCDC1	1600
 #else
-#define TPS65023_MAX_DCDC1	TPS65023_DEFAULT_DCDC1
+#define TPS65023_MAX_DCDC1	CONFIG_QSD_PMIC_DEFAULT_DCDC1
 #endif
 
 static int qsd8x50_tps65023_set_dcdc1(int mVolts)
@@ -682,13 +680,13 @@ static int qsd8x50_tps65023_set_dcdc1(int mVolts)
 	 * So we can safely switch to any frequency within this
 	 * voltage even if the device is not probed/ready.
 	 */
-	if (rc == -ENODEV && mVolts <= TPS65023_DEFAULT_DCDC1)
+	if (rc == -ENODEV && mVolts <= CONFIG_QSD_PMIC_DEFAULT_DCDC1)
 		rc = 0;
 #else
 	/* Disallow frequencies not supported in the default PMIC
 	 * output voltage.
 	 */
-	if (mVolts > TPS65023_DEFAULT_DCDC1)
+	if (mVolts > CONFIG_QSD_PMIC_DEFAULT_DCDC1)
 		rc = -EFAULT;
 #endif
 	return rc;

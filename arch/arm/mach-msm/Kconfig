@@ -335,6 +335,13 @@ config QSD_SVS
 	help
 	  Enables static voltage scaling using the TPS65023 PMIC.
 
+config QSD_PMIC_DEFAULT_DCDC1
+	int "PMIC default output voltage"
+	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET)
+	default 1250
+	help
+	  This is the PMIC voltage at Linux kernel boot.
+
 config MSM_FIQ_SUPPORT
 	default y
 	bool "Enable installation of an FIQ handler."
