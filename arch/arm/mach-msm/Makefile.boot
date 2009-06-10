@@ -1,3 +1,8 @@
+ifeq ($(CONFIG_QSD_BASE_24000000),y)
+  zreladdr-y		:= 0x24008000
+params_phys-y		:= 0x24000100
+initrd_phys-y		:= 0x28000000
+else # !CONFIG_QSD_BASE_24000000
 ifeq ($(CONFIG_ARCH_QSD),y)
   zreladdr-y		:= 0x16008000
 params_phys-y		:= 0x16000100
@@ -13,3 +18,4 @@ params_phys-y		:= 0x00200100
 initrd_phys-y		:= 0x0A000000
 endif # CONFIG_MSM_STACKED_MEMORY
 endif # CONFIG_ARCH_QSD
+endif # CONFIG_QSD_BASE_24000000

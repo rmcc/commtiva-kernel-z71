@@ -19,7 +19,9 @@
 /* physical offset of RAM */
 #ifdef CONFIG_MSM_STACKED_MEMORY
 
-#ifdef CONFIG_ARCH_QSD
+#ifdef CONFIG_QSD_BASE_24000000
+#define PHYS_OFFSET		UL(0x24000000)
+#elif defined(CONFIG_ARCH_QSD)
 #define PHYS_OFFSET		UL(0x16000000)
 #else
 #define PHYS_OFFSET		UL(0x10000000)
