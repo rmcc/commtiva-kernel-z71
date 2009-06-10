@@ -89,6 +89,14 @@ static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
 	struct q6dec_sesson_buffer_node *node = NULL;
 	struct q6dec_sesson_buffer_node *prev_node = NULL;
 
+	if (CAD_IOCTL_CMD_STREAM_END_OF_STREAM == evt->event_id) {
+
+		if (NULL != self->cb_data.callback)
+			self->cb_data.callback(CAD_EVT_STATUS_EOS, NULL, 0,
+						 self->cb_data.client_data);
+		return;
+	}
+
 	if (evt->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE)
 		/* unknow event, and do nothing */
 		return;
@@ -398,9 +406,24 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 {
 	s32				result = CAD_RES_SUCCESS;
 	struct adsp_audio_event	ret_status;
+	struct cad_event_struct_type    *cb_struct;
 
 	switch (cmd_code) {
 	case CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR:
+		if (cmd_buf == NULL) {
+			pr_err("Invalid buffer passed to decoder ioctl\n");
+			break;
+		}
+
+		cb_struct = (struct cad_event_struct_type *)cmd_buf;
+		if ((cb_struct->callback == NULL) ||
+			(cb_struct->client_data == NULL)) {
+
+			pr_err("Can not set listener function\n");
+			break;
+		}
+		self->cb_data.client_data = cb_struct->client_data;
+		self->cb_data.callback = cb_struct->callback;
 		break;
 	case CAD_IOCTL_CMD_STREAM_START:
 		if (self->session_state != Q6_DEC_INIT)
@@ -429,6 +452,10 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 		if (!result)
 			self->need_flush = 1;
 		mutex_unlock(&self->session_mutex);
+		break;
+	case CAD_IOCTL_CMD_STREAM_END_OF_STREAM:
+		result = cad_rpc_ioctl(self->session_id, 0, cmd_code,
+					cmd_buf, cmd_len, &ret_status);
 		break;
 	case CAD_IOCTL_CMD_STREAM_RESUME:
 		if ((self->session_state == Q6_DEC_READY) ||

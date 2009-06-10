@@ -62,6 +62,7 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/msm_audio.h>
+#include <linux/sched.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
@@ -84,6 +85,10 @@
 struct mp3 {
 	u32 cad_w_handle;
 	u32 volume;
+	struct mutex write_lock;
+	wait_queue_head_t eos_wait;
+	u16 eos_ack;
+	u16 flush_rcvd;
 };
 
 struct mp3 g_mp3;
@@ -106,6 +111,27 @@ static int msm8k_mp3_open(struct inode *inode, struct file *f)
 		return CAD_RES_SUCCESS;
 }
 
+static int msm8k_mp3_fsync(struct file *f, struct dentry *dentry, int datasync)
+{
+	int ret = CAD_RES_SUCCESS;
+	struct mp3 *mp3 = f->private_data;
+
+	mutex_lock(&mp3->write_lock);
+	ret = cad_ioctl(mp3->cad_w_handle,
+			CAD_IOCTL_CMD_STREAM_END_OF_STREAM,
+			NULL, 0);
+	mutex_unlock(&mp3->write_lock);
+
+	ret = wait_event_interruptible(mp3->eos_wait, mp3->eos_ack ||
+					 mp3->flush_rcvd);
+
+	mp3->eos_ack = 0;
+	mp3->flush_rcvd = 0;
+
+	return ret;
+
+}
+
 static int msm8k_mp3_release(struct inode *inode, struct file *f)
 {
 	int rc = CAD_RES_SUCCESS;
@@ -122,6 +148,18 @@ static ssize_t msm8k_mp3_read(struct file *f, char __user *buf, size_t cnt,
 {
 	D("%s\n", __func__);
 	return -EINVAL;
+}
+
+void msm8k_mp3_eos_event_cb(u32 event, void *evt_packet,
+				u32 evt_packet_len, void *client_data)
+{
+	struct mp3 *mp3 = client_data;
+
+	if (event == CAD_EVT_STATUS_EOS) {
+
+		mp3->eos_ack = 1;
+		wake_up(&mp3->eos_wait);
+	}
 }
 
 static ssize_t msm8k_mp3_write(struct file *f, const char __user *buf,
@@ -156,6 +194,7 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 	struct cad_write_mp3_format_struct_type cad_write_mp3_fmt;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_stream_filter_struct_type cad_stream_filter;
+	struct cad_event_struct_type eos_event;
 	D("%s\n", __func__);
 
 	memset(&cad_dev, 0, sizeof(struct cad_device_struct_type));
@@ -203,9 +242,21 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 			pr_err("cad_ioctl() SET_STREAM_CONFIG failed\n");
 			break;
 		}
+		eos_event.callback = &msm8k_mp3_eos_event_cb;
+		eos_event.client_data = p;
+
+		rc = cad_ioctl(p->cad_w_handle,
+				CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR,
+				&eos_event,
+				sizeof(struct cad_event_struct_type));
+
+		if (rc) {
+			D("cad_ioctl() SET_STREAM_EVENT_LSTR failed\n");
+			break;
+		}
 
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
-			NULL, 0);
+				NULL, 0);
 		if (rc) {
 			pr_err("cad_ioctl() STREAM_START failed\n");
 			break;
@@ -216,8 +267,11 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 			NULL, 0);
 		break;
 	case AUDIO_FLUSH:
+		p->flush_rcvd = 1;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
-			NULL, 0);
+				NULL, 0);
+		wake_up(&p->eos_wait);
+		p->flush_rcvd = 0;
 		break;
 	case AUDIO_GET_CONFIG:
 		/* hard-coded until we support this in the CAD */
@@ -281,6 +335,7 @@ static const struct file_operations msm8k_mp3_fops = {
 	.write = msm8k_mp3_write,
 	.ioctl = msm8k_mp3_ioctl,
 	.llseek = no_llseek,
+	.fsync = msm8k_mp3_fsync,
 };
 
 struct miscdevice msm8k_mp3_misc = {
@@ -293,6 +348,13 @@ static int __init msm8k_mp3_init(void)
 {
 	int rc;
 	D("%s\n", __func__);
+	memset(&g_mp3, 0, sizeof(struct mp3));
+
+	g_mp3.eos_ack = 0;
+	g_mp3.flush_rcvd = 0;
+
+	mutex_init(&g_mp3.write_lock);
+	init_waitqueue_head(&g_mp3.eos_wait);
 
 	rc = misc_register(&msm8k_mp3_misc);
 

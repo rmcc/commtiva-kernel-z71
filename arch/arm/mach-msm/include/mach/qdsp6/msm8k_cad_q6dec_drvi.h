@@ -103,6 +103,7 @@ struct q6dec_session_data {
 	u32					need_flush;
 	/* flag for buffer done event */
 	u32					need_buffer_done;
+	struct cad_event_struct_type    	cb_data;
 };
 
 struct q6dec_data {
