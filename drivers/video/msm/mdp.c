@@ -265,6 +265,27 @@ hist_err:
 }
 #endif
 
+/* Returns < 0 on error, 0 on timeout, or > 0 on successful wait */
+
+int mdp_ppp_pipe_wait(void)
+{
+	int ret = 1;
+
+	/* wait 5 seconds for the operation to complete before declaring
+	the MDP hung */
+
+	if (mdp_ppp_waiting == TRUE) {
+		ret = wait_for_completion_interruptible_timeout(&mdp_ppp_comp,
+								5 * HZ);
+
+		if (!ret)
+			printk(KERN_ERR "%s: Timed out waiting for the MDP.\n",
+					__func__);
+	}
+
+	return ret;
+}
+
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
 	/*---------------------------------------------------------

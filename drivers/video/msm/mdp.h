@@ -617,6 +617,7 @@ struct mdp_dma_data {
 #define MDP_DMA_P_LUT_POST    BIT(4)
 
 void mdp_hw_init(void);
+int mdp_ppp_pipe_wait(void);
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd);
 void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 		   boolean isr);
