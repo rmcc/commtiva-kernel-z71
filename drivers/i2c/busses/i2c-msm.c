@@ -500,8 +500,8 @@ msm_i2c_probe(struct platform_device *pdev)
 		goto err_request_irq_failed;
 	}
 	/* Config GPIOs for primary and secondary lines */
-	pdata->msm_i2c_config_gpio(0, 1);
-	pdata->msm_i2c_config_gpio(1, 1);
+	pdata->msm_i2c_config_gpio(dev->adapter.nr, 1);
+	pdata->msm_i2c_config_gpio(dev->adapter.nr + 1, 1);
 	return 0;
 
 /*	free_irq(dev->irq, dev); */
