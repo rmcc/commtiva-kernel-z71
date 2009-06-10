@@ -529,7 +529,50 @@ static void do_write_log(struct logger_log *log, const void *buf, size_t count)
 	log->w_off = logger_offset(log->w_off + count);
 }
 
-static int write_log_entry(struct logger_log * const log,
+static int write_log_entry_events(struct logger_log * const log,
+		const char * const buf,
+		const size_t buf_len)
+{
+	struct timespec now;
+	struct logger_entry header;
+	unsigned long flags;
+
+	/*
+	 * pid and tid may or may not be meaningful or relevant depending
+	 * on where and how we got here from the logging driver. Might as
+	 * well log them in any event, just in case.
+	 */
+	header.pid = current->tgid;
+	header.tid = current->pid;
+
+	now = current_kernel_time();
+	header.sec = now.tv_sec;
+	header.nsec = now.tv_nsec;
+
+	header.len = min_t(size_t, buf_len, LOGGER_ENTRY_MAX_PAYLOAD);
+
+	spin_lock_irqsave(&log->bufflock, flags);
+
+	/*
+	 * Fix up any readers, pulling them forward to the first readable
+	 * entry after (what will be) the new write offset. We do this now
+	 * because if we partially fail, we can end up with clobbered log
+	 * entries that encroach on readable buffer.
+	 */
+	fix_up_readers(log, sizeof(struct logger_entry) + header.len);
+
+	do_write_log(log, &header, sizeof(struct logger_entry));
+
+	do_write_log(log, buf, header.len);
+
+	spin_unlock_irqrestore(&log->bufflock, flags);
+
+	/* wake up any blocked readers */
+	wake_up_interruptible(&log->wq);
+	return header.len;
+}
+
+static int write_log_entry_mainradio(struct logger_log * const log,
 		const unsigned char *priority,
 		const char * const tag,
 		const int tag_bytes,
@@ -580,64 +623,50 @@ static int write_log_entry(struct logger_log * const log,
 	return header.len;
 }
 
+static struct logger_log log_events;
+
 /*
  * logger_aio_write - our write method, implementing support for write(),
  * writev(), and aio_write(). Writes are our fast path, and we try to optimize
  * them above all else.
  */
-ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
+static ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			 unsigned long nr_segs, loff_t ppos)
 {
 	struct logger_log * const log = file_get_log(iocb->ki_filp);
 	ssize_t ret = 0;
-	int i, total_log_bytes = min_t(size_t,
-					iocb->ki_left,
-					LOGGER_ENTRY_MAX_PAYLOAD);
+	int i;
+	size_t total_logbytes, curr_logbytes;
 	char *temp_buf, *curr_buf;
-
-	/* null writes succeed, return zero */
-	if (!total_log_bytes)
-		return 0;
 
 	if (!log)
 		return -EFAULT;
 
-	/* This API is heavily dependent on a user space assumption that
-	 * the full log entry comprising 3 vectors will be passed to it in the
-	 * format:
-	 * (from user space logger file - system/core/liblog/logd_write.c):
-	 *    vec[0].iov_base  = (unsigned char *) &prio;
-	 *    vec[0].iov_len    = 1;
-	 *    vec[1].iov_base   = (void *) tag;
-	 *    vec[1].iov_len    = strlen(tag) + 1;
-	 *    vec[2].iov_base   = (void *) msg;
-	 *    vec[2].iov_len    = strlen(msg) + 1;
-	 * Note: vec in userspace is "iov" here.
-	 * Since this driver supplies a function for aio_write, there is
-	 * no aio queueing or retry done. Once we are here we consume all of
-	 * what is passed to us, with or without error. That means that no
-	 * partial vector sets should ever be passed in.
-	 */
-	if (nr_segs < 3 || iov[0].iov_len != 1)
-		return -EINVAL;
+	/* null or disabled writes succeed, return zero */
+	if (!atomic_read(&log->enabled))
+		return 0;
+
+	total_logbytes = min_t(size_t, iocb->ki_left, LOGGER_ENTRY_MAX_PAYLOAD);
+	if (!total_logbytes)
+		return 0;
 
 	if (nr_segs > 3)
-		printk(KERN_WARNING
-			"logger: possible misformatted iovec"
+		printk(KERN_WARNING "logger: possible misformatted iovec"
 			" - extra ignored\n");
 	/*
 	 * Use GFP_KERNEL since we are guaranteed to be in user context here
 	 * and can sleep if need be.
 	 */
-	temp_buf = kmalloc(total_log_bytes + sizeof(struct logger_entry),
+	temp_buf = kmalloc(total_logbytes + sizeof(struct logger_entry),
 			GFP_KERNEL);
 	if (!temp_buf)
-		return 	-ENOMEM;
+		return -ENOMEM;
 
-	for (curr_buf = temp_buf, i = 0; i < 3; i++) {
+	for (curr_buf = temp_buf, i = 0, curr_logbytes = total_logbytes;
+			i < min_t(unsigned long, nr_segs, 3L);
+			i++) {
 		/* figure out how much of this vector we can keep */
-		size_t len = min_t(size_t, iov[i].iov_len,
-				total_log_bytes - ret);
+		size_t len = min_t(size_t, iov[i].iov_len, curr_logbytes);
 		if (!len)
 			break;
 
@@ -646,32 +675,63 @@ ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 			goto out_free_buf;
 		}
 		curr_buf += len;
+		curr_logbytes -= len;
 	}
 
-	/*
-	 * Disabled writes, or not high enough priority writes succeed, return
-	 * zero. Since the priority is a user pointer, it can't be checked
-	 * until it is copied in from user space, so we can't do this any
-	 * earlier, which means that the memory allocation must already have
-	 * been done.
-	 */
-	if (!atomic_read(&log->enabled) ||
-	    atomic_read(&log->priority)  > *(unsigned char *)temp_buf)
-		goto out_free_buf;
+	if (log == &log_events) {
+		/* no filtering on event logs */
+		ret = write_log_entry_events(log,
+				temp_buf,
+				total_logbytes);
 
-	ret = check_tag(log,
-		*(unsigned char *)temp_buf, /* priority */
-		temp_buf + 1, /* tag name */
-		iov[1].iov_len);
-	if (ret <= 0)
-		goto out_free_buf;
+	} else {
+		/* This API is heavily dependent on a user space assumption
+		 * that the full log entry comprising 3 vectors will be passed
+		 * to it in the format:
+		 * (from user space logger file -
+		 * system/core/liblog/logd_write.c):
+		 *    vec[0].iov_base  = (unsigned char *) &prio;
+		 *    vec[0].iov_len    = 1;
+		 *    vec[1].iov_base   = (void *) tag;
+		 *    vec[1].iov_len    = strlen(tag) + 1;
+		 *    vec[2].iov_base   = (void *) msg;
+		 *    vec[2].iov_len    = strlen(msg) + 1;
+		 * Note: vec in userspace is "iov" here.
+		 * Since this driver supplies a function for aio_write, there
+		 * is no aio queueing or retry done. Once we are here we
+		 * consume all of what is passed to us, with or without error.
+		 * That means that no partial vector sets should ever be passed
+		 * in.
+		 */
+		if (nr_segs < 3 || iov[0].iov_len != 1) {
+			ret = -EINVAL;
+			goto out_free_buf;
+		}
 
-	ret = write_log_entry(log,
-			temp_buf, /* priority */
-			temp_buf + 1, /* tag */
-			iov[1].iov_len, /* tag bytes */
-			temp_buf + iov[1].iov_len + 1, /* message */
-			iov[2].iov_len); /* message bytes */
+		/*
+		 * Not high enough priority writes succeed, return zero. Since
+		 * the priority is a user pointer, it can't be checked until it
+		 * is copied in from user space, so we can't do this any
+		 * earlier, which means that the memory allocation must already
+		 * have been done.
+		 */
+		if (atomic_read(&log->priority) > *(unsigned char *)temp_buf)
+			goto out_free_buf;
+
+		ret = check_tag(log,
+			*(unsigned char *)temp_buf, /* priority */
+			temp_buf + 1, /* tag name */
+			iov[1].iov_len);
+		if (ret <= 0)
+			goto out_free_buf;
+
+		ret = write_log_entry_mainradio(log,
+				temp_buf, /* priority */
+				temp_buf + 1, /* tag */
+				iov[1].iov_len, /* tag bytes */
+				temp_buf + iov[1].iov_len + 1, /* message */
+				iov[2].iov_len); /* message bytes */
+	}
 out_free_buf:
 	kfree(temp_buf);
 	return ret;
@@ -934,7 +994,7 @@ static ssize_t show_global_was_overrun(struct logger_log * const log,
 }
 RO_GLOBAL_ATTR(was_overrun);
 
-static struct attribute *global_attrs[] = {
+static struct attribute *global_mainradio_attrs[] = {
 	&global_attr_enable.attr,
 	&global_attr_priority.attr,
 	&global_attr_flush.attr,
@@ -942,9 +1002,21 @@ static struct attribute *global_attrs[] = {
 	NULL
 };
 
-static struct kobj_type global_ktype = {
+static struct kobj_type global_mainradio_ktype = {
 	.sysfs_ops = &global_ops,
-	.default_attrs = global_attrs,
+	.default_attrs = global_mainradio_attrs,
+};
+
+static struct attribute *global_events_attrs[] = {
+	&global_attr_enable.attr,
+	&global_attr_flush.attr,
+	&global_attr_was_overrun.attr,
+	NULL
+};
+
+static struct kobj_type global_events_ktype = {
+	.sysfs_ops = &global_ops,
+	.default_attrs = global_events_attrs,
 };
 
 static struct file_operations logger_fops = {
@@ -987,13 +1059,6 @@ static struct logger_log VAR = { \
 DEFINE_LOGGER_DEVICE(log_main, LOGGER_LOG_MAIN, 64*1024)
 DEFINE_LOGGER_DEVICE(log_events, LOGGER_LOG_EVENTS, 256*1024)
 DEFINE_LOGGER_DEVICE(log_radio, LOGGER_LOG_RADIO, 64*1024)
-
-/* Number of elements in this array must match 'enum logidx' */
-static struct logger_log *logs[] = {
-	&log_main,
-	&log_events,
-	&log_radio,
-};
 
 static struct logger_log *get_log_from_minor(const int minor)
 {
@@ -1040,7 +1105,7 @@ static int kernel_logger_write(struct logger_log * const log,
 		goto out_free_message;
 	}
 
-	ret = write_log_entry(log,
+	ret = write_log_entry_mainradio(log,
 			&priority,
 			tag,
 			tag_bytes,
@@ -1050,6 +1115,12 @@ out_free_message:
 	kfree(msg);
 	return ret;
 }
+
+/* Elements in this array must match 'enum logidx' */
+static struct logger_log *logs[] = {
+	&log_main,
+	&log_radio,
+};
 
 int logger_write(const enum logidx index,
 		const unsigned char prio,
@@ -1081,7 +1152,9 @@ static int __init init_log(struct logger_log * const log)
 {
 	int ret;
 
-	atomic_set(&log->priority, logger_default_priority);
+	if (log != &log_events)
+		atomic_set(&log->priority, logger_default_priority);
+
 	atomic_set(&log->enabled, logger_default_enabled);
 
 	ret = misc_register(&log->misc);
@@ -1094,9 +1167,10 @@ static int __init init_log(struct logger_log * const log)
 	memset(&log->kobj, 0, sizeof(log->kobj));
 	log->kobj.kset = logger_kset;
 	ret = kobject_init_and_add(&log->kobj,
-				&global_ktype,
-				NULL,
-				"%s", log->misc.name);
+		log == &log_events ?
+			&global_events_ktype : &global_mainradio_ktype,
+		NULL,
+		"%s", log->misc.name);
 	if (ret)
 		goto out_put_kobj;
 

@@ -61,7 +61,6 @@ enum {
 
 enum logidx {
 	LOG_MAIN_IDX = 0,
-	LOG_EVENTS_IDX,
 	LOG_RADIO_IDX,
 	LOG_INVALID_IDX,
 };
