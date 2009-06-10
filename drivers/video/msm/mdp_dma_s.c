@@ -165,7 +165,7 @@ void mdp_dma_s_update(struct msm_fb_data_type *mfd)
 		up(&mfd->sem);
 
 		// wait until DMA finishes the current job
-		wait_for_completion_interruptible(&mfd->dma->comp);
+		wait_for_completion_killable(&mfd->dma->comp);
 
 		// signal if pan function is waiting for the update completion
 		if (mfd->pan_waiting) {

@@ -178,5 +178,5 @@ void mdp_dma3_update(struct msm_fb_data_type *mfd)
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
-	wait_for_completion_interruptible(&mfd->dma->comp);
+	wait_for_completion_killable(&mfd->dma->comp);
 }
