@@ -157,7 +157,7 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 	struct cad_stream_info_struct_type cad_stream_info;
 	struct cad_write_amr_format_struct_type cad_write_amr_fmt;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
-	struct cad_stream_filter_struct_type cad_stream_filter;
+	struct cad_filter_struct flt;
 
 	D("%s\n", __func__);
 
@@ -167,8 +167,7 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 	memset(&cad_stream_info, 0, sizeof(struct cad_stream_info_struct_type));
 	memset(&cad_write_amr_fmt, 0,
 			sizeof(struct cad_write_amr_format_struct_type));
-	memset(&cad_stream_filter, 0,
-			sizeof(struct cad_stream_filter_struct_type));
+	memset(&flt, 0, sizeof(struct cad_filter_struct));
 
 	switch (cmd) {
 	case AUDIO_START:
@@ -238,14 +237,15 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 		memset(&cad_strm_volume, 0,
 				sizeof(struct cad_flt_cfg_strm_vol));
 		cad_strm_volume.volume = p->volume;
-		cad_stream_filter.filter_type = CAD_FILTER_CONFIG_STREAM_VOLUME;
-		cad_stream_filter.format_block = &cad_strm_volume;
-		cad_stream_filter.format_block_len =
+		flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+		flt.format_block = &cad_strm_volume;
+		flt.cmd = CAD_FILTER_CONFIG_STREAM_VOLUME;
+		flt.format_block_len =
 			sizeof(struct cad_flt_cfg_strm_vol);
 
 		rc = cad_ioctl(p->cad_w_handle,
 			CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
-			&cad_stream_filter,
+			&flt,
 			sizeof(struct cad_stream_filter_struct_type));
 		if (rc) {
 			pr_err("cad_ioctl() set volume failed\n");

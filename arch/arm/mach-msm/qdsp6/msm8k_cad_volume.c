@@ -67,23 +67,145 @@
 #include <mach/qdsp6/msm8k_q6_api_flip_utils.h>
 #include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 #include <mach/qdsp6/msm8k_adsp_audio_device_ioctl.h>
+#include <mach/qdsp6/msm8k_ardi.h>
 
-struct cad_device_volume_cache
+static struct cad_device_volume_cache
 		qdsp6_volume_cache_tbl[QDSP6VOLUME_MAX_DEVICE_COUNT];
+
+static s32 stream_volume_cache;
 
 
 #if 0
-#define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
+#define D(fmt, args...) printk(KERN_INFO "msm8k_vol: " fmt, ##args)
 #else
 #define D(fmt, args...) do {} while (0)
 #endif
 
+enum cad_int_device_id {
+
+	INT_CAD_HW_DEVICE_ID_DEFAULT_TX,
+	INT_CAD_HW_DEVICE_ID_DEFAULT_RX,
+
+	/* Internal devices */
+	INT_CAD_HW_DEVICE_ID_HANDSET_MIC,
+	INT_CAD_HW_DEVICE_ID_HANDSET_SPKR,
+	INT_CAD_HW_DEVICE_ID_HEADSET_MIC,
+	INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO,
+	INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO,
+	INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MIC,
+	INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MONO,
+	INT_CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO,
+	INT_CAD_HW_DEVICE_ID_BT_SCO_MIC,
+	INT_CAD_HW_DEVICE_ID_BT_SCO_SPKR,
+	INT_CAD_HW_DEVICE_ID_TTY_HEADSET_MIC,
+	INT_CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR,
+
+	INT_CAD_HW_DEVICE_ID_BT_A2DP_SPKR,
+	/* Logical Device to indicate A2DP routing */
+	INT_CAD_HW_DEVICE_ID_BT_A2DP_TX,
+
+	/* I2S */
+	INT_CAD_HW_DEVICE_ID_I2S_RX,
+	INT_CAD_HW_DEVICE_ID_I2S_TX,
+
+	/* AUXPGA */
+	INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO_LB,
+	INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO_LB,
+	INT_CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB,
+	INT_CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB,
+
+	/* Currently support following Single Stream/Multiple Devices combo: */
+	INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX,
+	INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX,
+	INT_CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX,
+	INT_CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX,
+
+	INT_CAD_HW_DEVICE_ID_MAX_NUM,
+
+	INT_CAD_HW_DEVICE_ID_INVALID
+};
+
+enum cad_int_device_id qdsp6_volume_device_id_mapping(u32 device_id)
+{
+	switch (device_id) {
+	case CAD_HW_DEVICE_ID_HANDSET_MIC:
+		return INT_CAD_HW_DEVICE_ID_HANDSET_MIC;
+	case CAD_HW_DEVICE_ID_HANDSET_SPKR:
+		return INT_CAD_HW_DEVICE_ID_HANDSET_SPKR;
+	case CAD_HW_DEVICE_ID_HEADSET_MIC:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_MIC;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO;
+	case CAD_HW_DEVICE_ID_SPKR_PHONE_MIC:
+		return INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MIC;
+	case CAD_HW_DEVICE_ID_SPKR_PHONE_MONO:
+		return INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MONO;
+	case CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO:
+		return INT_CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO;
+	case CAD_HW_DEVICE_ID_BT_SCO_MIC:
+		return INT_CAD_HW_DEVICE_ID_BT_SCO_MIC;
+	case CAD_HW_DEVICE_ID_BT_SCO_SPKR:
+		return INT_CAD_HW_DEVICE_ID_BT_SCO_SPKR;
+	case CAD_HW_DEVICE_ID_BT_A2DP_SPKR:
+		return INT_CAD_HW_DEVICE_ID_BT_A2DP_SPKR;
+	case CAD_HW_DEVICE_ID_TTY_HEADSET_MIC:
+		return INT_CAD_HW_DEVICE_ID_TTY_HEADSET_MIC;
+	case CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR:
+		return INT_CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR;
+	case CAD_HW_DEVICE_ID_DEFAULT_TX:
+		return INT_CAD_HW_DEVICE_ID_DEFAULT_TX;
+	case CAD_HW_DEVICE_ID_DEFAULT_RX:
+		return INT_CAD_HW_DEVICE_ID_DEFAULT_RX;
+	case CAD_HW_DEVICE_ID_BT_A2DP_TX:
+		return INT_CAD_HW_DEVICE_ID_BT_A2DP_TX;
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX;
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX;
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX;
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX;
+	case CAD_HW_DEVICE_ID_I2S_RX:
+		return INT_CAD_HW_DEVICE_ID_I2S_RX;
+	case CAD_HW_DEVICE_ID_I2S_TX:
+		return INT_CAD_HW_DEVICE_ID_I2S_TX;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO_LB:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO_LB;
+	case CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO_LB:
+		return INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO_LB;
+	case CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB:
+		return INT_CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB;
+	case CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB:
+		return INT_CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB;
+
+	default:
+		return INT_CAD_HW_DEVICE_ID_INVALID;
+	}
+}
 
 /* This computes linear mapping device volume. */
 s32 qdsp6_volume_mapping(u32 device_id, s32 percentage)
 {
-	s32 max_gain = qdsp6_volume_cache_tbl[device_id].max_gain;
-	s32 min_gain = qdsp6_volume_cache_tbl[device_id].min_gain;
+	s32 max_gain = 0;
+	s32 min_gain = 0;
+	u32 tmp_device_id = qdsp6_volume_device_id_mapping(device_id);
+
+	if (tmp_device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+		pr_err("%s: invalid device\n", __func__);
+		return 0xFFFFFFFF;
+	}
+
+	if (percentage < 0 || percentage > 100) {
+		pr_err("%s: invalid percentage\n", __func__);
+		return 0xFFFFFFFF;
+	}
+
+	max_gain = qdsp6_volume_cache_tbl[device_id].max_gain;
+	min_gain = qdsp6_volume_cache_tbl[device_id].min_gain;
+
 	return min_gain + (((max_gain - min_gain) * percentage) / 100);
 }
 
@@ -113,7 +235,8 @@ s32 qdsp6_volume_read(s32 session_id,
 s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	void *cmd_buf, u32 cmd_len)
 {
-	struct cad_stream_filter_struct_type *strm_flt = NULL;
+	enum cad_int_device_id device_id = INT_CAD_HW_DEVICE_ID_INVALID;
+	struct cad_filter_struct *vol_flt = NULL;
 	struct cad_flt_cfg_dev_vol *dev_vol_buf = NULL;
 	struct cad_flt_cfg_strm_vol *stream_vol_buf = NULL;
 	struct cad_flt_cfg_dev_mute *dev_mute_buf = NULL;
@@ -131,50 +254,281 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	u32 rpc_cmd_buf_len = 0;
 	struct adsp_audio_event event_payload;
 
+	struct qdsp_set_device_volume *q6_set_dev_vol1 = NULL;
+	struct qdsp_set_stream_volume *q6_set_strm_vol1 = NULL;
+	struct qdsp_set_device_mute *q6_set_dev_mute1 = NULL;
+	struct qdsp_set_stream_mute *q6_set_strm_mute1 = NULL;
+
+	s32 rpc_cmd_code1 = 0;
+	u8 *rpc_cmd_buf1 = NULL;
+	u32 rpc_cmd_buf_len1 = 0;
+	struct adsp_audio_event event_payload1;
+
+
 	memset(&event_payload, 0, sizeof(struct adsp_audio_event));
-
-	/* Not handle request other than the following two. */
-	if (cmd_code != CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG &&
-		cmd_code != CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG) {
-		/* Just silently succeed unrecognized IOCTLs. */
-		return CAD_RES_SUCCESS;
-	}
-
-	/* Defensive programming. */
-	if (session_id < 1 || session_id >= CAD_MAX_SESSION || cmd_buf == NULL
-		|| cmd_len != sizeof(struct cad_stream_filter_struct_type))
+	memset(&event_payload1, 0, sizeof(struct adsp_audio_event));
+	/* Ensure session_id is valid. */
+	if (session_id < 1 || session_id >= CAD_MAX_SESSION)
 		return CAD_RES_FAILURE;
 
+	/* Not handle request other than the following two. */
+	/* Just silently succeed unrecognized IOCTLs. */
+	if (cmd_code != CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG &&
+		cmd_code != CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG &&
+		cmd_code != CAD_IOCTL_CMD_STREAM_START)
+		return CAD_RES_SUCCESS;
+
+	/* Defensive programming. */
+	if ((cmd_buf == NULL
+		|| cmd_len != sizeof(struct cad_filter_struct))
+		&& cmd_code != CAD_IOCTL_CMD_STREAM_START) {
+		D("%s: invalid params\n", __func__);
+		return CAD_RES_FAILURE;
+	}
+
+	/* Do not handle stream_start for device control session. */
+	if (cmd_code == CAD_IOCTL_CMD_STREAM_START &&
+		ardsession[session_id]->session_type == DEVICE_CTRL_TYPE)
+		return CAD_RES_SUCCESS;
+
+	/* Handle stream start. */
+	if (cmd_code == CAD_IOCTL_CMD_STREAM_START) {
+		if (ardsession[session_id]->sess_open_info->cad_stream.app_type
+				== CAD_STREAM_APP_VOICE) {
+			D("%s: Do not handle voice session.\n", __func__);
+			return CAD_RES_SUCCESS;
+		}
+		if (ardsession[session_id]->sess_open_info->cad_open.op_code
+				== CAD_OPEN_OP_READ) {
+			D("%s: Do not handle audio recording session.",
+				__func__);
+			return CAD_RES_SUCCESS;
+		}
+
+		q6_set_strm_mute1 = kmalloc(
+			sizeof(struct qdsp_set_stream_mute),
+			GFP_KERNEL);
+		if (!q6_set_strm_mute1)
+			return CAD_RES_FAILURE;
+
+		memset(q6_set_strm_mute1, 0,
+			sizeof(struct qdsp_set_device_mute));
+		/* 2. Assign values to command buffer. */
+		if (stream_volume_cache == CAD_STREAM_MIN_GAIN)
+			q6_set_strm_mute1->mute = 1;
+		else
+			q6_set_strm_mute1->mute = 0;
+
+		rpc_cmd_buf1 = (u8 *)q6_set_strm_mute1;
+		rpc_cmd_buf_len1 = sizeof(struct qdsp_set_device_mute);
+		rpc_cmd_code1 = QDSP_IOCTL_CMD_SET_STREAM_MUTE;
+		/* 3. Send command to Q6. */
+		rc = cad_rpc_ioctl(
+			session_id,
+			1,
+			rpc_cmd_code1,
+			rpc_cmd_buf1,
+			rpc_cmd_buf_len1,
+			&event_payload1);
+		if (rc != CAD_RES_SUCCESS) {
+			pr_err("%s: cad_rpc_ioctl() failure\n",
+				__func__);
+			return rc;
+		}
+
+		if (stream_volume_cache != CAD_STREAM_MIN_GAIN) {
+			q6_set_strm_vol1 = kmalloc(
+				sizeof(struct qdsp_set_stream_volume),
+				GFP_KERNEL);
+			if (!q6_set_strm_vol1)
+				return CAD_RES_FAILURE;
+
+			/* 2. Assign values to command buffer. */
+			q6_set_strm_vol1->volume = stream_volume_cache;
+			rpc_cmd_buf1 = (u8 *)q6_set_strm_vol1;
+			rpc_cmd_buf_len1 =
+				sizeof(struct qdsp_set_stream_volume);
+			rpc_cmd_code1 = QDSP_IOCTL_CMD_SET_STREAM_VOL;
+
+			rc = cad_rpc_ioctl(
+				session_id,
+				1,
+				rpc_cmd_code1,
+				rpc_cmd_buf1,
+				rpc_cmd_buf_len1,
+				&event_payload1);
+			if (rc != CAD_RES_SUCCESS) {
+				pr_err("%s: cad_rpc_ioctl() failure\n",
+					__func__);
+				return rc;
+			}
+		}
+
+		/* Send Device Volume during stream start. */
+		if (ardsession[session_id]->sess_open_info->cad_open.op_code
+				== CAD_OPEN_OP_READ) {
+			device_id = qdsp6_volume_device_id_mapping(
+						ard_state.def_tx_device);
+			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+				rc = CAD_RES_FAILURE;
+				pr_err("%s: invalid device id %d", __func__,
+					ard_state.def_tx_device);
+				goto done;
+			}
+		} else if (ardsession[session_id]->sess_open_info->
+				cad_open.op_code == CAD_OPEN_OP_WRITE) {
+			device_id = qdsp6_volume_device_id_mapping(
+						ard_state.def_rx_device);
+			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+				rc = CAD_RES_FAILURE;
+				pr_err("%s: invalid device id %d", __func__,
+						ard_state.def_rx_device);
+				goto done;
+			}
+		}
+
+		/*
+		if (device_control_session == 0) {
+			pr_err("%s: invalid device_control_session.",
+				__func__);
+			return CAD_RES_FAILURE;
+		}
+		*/
+
+		q6_set_dev_mute1 = kmalloc(
+			sizeof(struct qdsp_set_device_mute), GFP_KERNEL);
+		if (!q6_set_dev_mute1) {
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
+
+		memset(q6_set_dev_mute1, 0,
+			sizeof(struct qdsp_set_device_mute));
+		/* 2. Assign values to command buffer. */
+		q6_set_dev_mute1->device_id =
+			qdsp6_volume_device_id_mapping(
+					ard_state.def_rx_device);
+		q6_set_dev_mute1->path = 0;
+
+		if (qdsp6_volume_cache_tbl[device_id].mute == 1)
+
+			q6_set_dev_mute1->mute = 1;
+		else
+			q6_set_dev_mute1->mute = 0;
+
+		rpc_cmd_buf1 = (u8 *)q6_set_dev_mute1;
+		rpc_cmd_buf_len1 = sizeof(struct qdsp_set_device_mute);
+		rpc_cmd_code1 = QDSP_IOCTL_CMD_SET_DEVICE_MUTE;
+
+		rc = cad_rpc_ioctl(
+			session_id,
+			1,
+			rpc_cmd_code1,
+			rpc_cmd_buf1,
+			rpc_cmd_buf_len1,
+			&event_payload1);
+		if (rc != CAD_RES_SUCCESS) {
+			pr_err("%s: cad_rpc_ioctl() failure\n",
+				__func__);
+			return rc;
+		}
+
+		if (qdsp6_volume_cache_tbl[device_id].mute == 0) {
+
+			q6_set_dev_vol1 = kmalloc(
+				sizeof(struct cad_flt_cfg_dev_vol),
+				GFP_KERNEL);
+			if (!q6_set_dev_vol1)
+				return CAD_RES_FAILURE;
+
+			memset(q6_set_dev_vol1, 0,
+				sizeof(struct qdsp_set_device_volume));
+
+			if (qdsp6_volume_cache_tbl[device_id].
+						valid_current_volume == 1) {
+				q6_set_dev_vol1->volume =
+					qdsp6_volume_cache_tbl[device_id].
+							current_volume;
+				D("%s: current_volume is %d.", __func__,
+						q6_set_dev_vol1->volume);
+			} else {
+				q6_set_dev_vol1->volume =
+					qdsp6_volume_cache_tbl[device_id].
+							default_volume;
+				D("%s: current_volume is %d (default).",
+					__func__, q6_set_dev_vol1->volume);
+			}
+			q6_set_dev_vol1->path = 0;
+			q6_set_dev_vol1->device_id =
+				qdsp6_volume_device_id_mapping(
+						ard_state.def_rx_device);
+			rpc_cmd_buf1 = (u8 *)q6_set_dev_vol1;
+			rpc_cmd_buf_len1 =
+				sizeof(struct qdsp_set_device_volume);
+			rpc_cmd_code1 = QDSP_IOCTL_CMD_SET_DEVICE_VOL;
+
+			rc = cad_rpc_ioctl(
+				session_id,
+				1,
+				rpc_cmd_code1,
+				rpc_cmd_buf1,
+				rpc_cmd_buf_len1,
+				&event_payload1);
+			if (rc != CAD_RES_SUCCESS) {
+				pr_err("%s: cad_rpc_ioctl() failure\n",
+					__func__);
+				return rc;
+			}
+		}
+
+		rc = CAD_RES_SUCCESS;
+		goto done;
+	}
+
+	if ((cmd_buf == NULL) || (cmd_len !=
+			sizeof(struct cad_filter_struct))) {
+		pr_err("%s: invalid ioctl params\n", __func__);
+		rc = CAD_RES_FAILURE;
+		goto done;
+	}
+
+	vol_flt = (struct cad_filter_struct *)cmd_buf;
+
+	if (vol_flt->filter_type != CAD_DEVICE_FILTER_TYPE_VOL) {
+		D("%s: not volume filter type\n", __func__);
+		rc = CAD_RES_SUCCESS;
+		goto done;
+	}
+
 	/* Find the appropriate command type. */
-	strm_flt = (struct cad_stream_filter_struct_type *)cmd_buf;
 	if (cmd_code == CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG
-		&& strm_flt->filter_type == CAD_FILTER_CONFIG_DEVICE_VOLUME
-		&& strm_flt->format_block_len ==
+		&& vol_flt->cmd == CAD_FILTER_CONFIG_DEVICE_VOLUME
+		&& vol_flt->format_block_len ==
 			sizeof(struct cad_flt_cfg_dev_vol))
 		dev_vol_buf =
 			(struct cad_flt_cfg_dev_vol *)
-					strm_flt->format_block;
+					vol_flt->format_block;
 	else if (CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG == cmd_code
-		&& CAD_FILTER_CONFIG_DEVICE_MUTE == strm_flt->filter_type
-		&& strm_flt->format_block_len ==
+		&& vol_flt->cmd == CAD_FILTER_CONFIG_DEVICE_MUTE
+		&& vol_flt->format_block_len ==
 			sizeof(struct cad_flt_cfg_dev_mute))
 		dev_mute_buf = (struct cad_flt_cfg_dev_mute *)
-						strm_flt->format_block;
+						vol_flt->format_block;
 
 	/* stream session */
 	else if (cmd_code == CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG
-		&& strm_flt->filter_type == CAD_FILTER_CONFIG_STREAM_VOLUME
-		&& strm_flt->format_block_len ==
+		&& vol_flt->cmd == CAD_FILTER_CONFIG_STREAM_VOLUME
+		&& vol_flt->format_block_len ==
 			sizeof(struct cad_flt_cfg_strm_vol))
 		stream_vol_buf = (struct cad_flt_cfg_strm_vol *)(
-					strm_flt->format_block);
+					vol_flt->format_block);
 
 	else if (cmd_code == CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG
-		&& CAD_FILTER_CONFIG_STREAM_MUTE == strm_flt->filter_type
-		&& strm_flt->format_block_len ==
+		&& vol_flt->cmd == CAD_FILTER_CONFIG_STREAM_MUTE
+		&& vol_flt->format_block_len ==
 			sizeof(struct cad_flt_cfg_strm_mute))
 		stream_mute_buf = (struct cad_flt_cfg_strm_mute *)
-						(strm_flt->format_block);
+						(vol_flt->format_block);
 
 	else {
 		pr_err("CAD:VOL: Error: wrong type id.\n");
@@ -182,9 +536,44 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	}
 
 	/* Handle volume control command. */
-	switch (strm_flt->filter_type) {
+	switch (vol_flt->cmd) {
 	case CAD_FILTER_CONFIG_DEVICE_VOLUME:
 		D("CAD:VOL: Device Volume\n");
+
+		if (dev_vol_buf->device_id == 0 ||
+			dev_vol_buf->device_id > CAD_HW_DEVICE_ID_MAX_NUM) {
+			pr_err("%s: invalid device id %d.",
+					__func__, dev_vol_buf->device_id);
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
+
+		if (dev_vol_buf->device_id == CAD_HW_DEVICE_ID_DEFAULT_TX)
+			dev_vol_buf->device_id = ard_state.def_tx_device;
+		else if (dev_vol_buf->device_id == CAD_HW_DEVICE_ID_DEFAULT_RX)
+			dev_vol_buf->device_id = ard_state.def_rx_device;
+		else
+			; /* Do nothing. */
+
+		if (ardsession[session_id]->sess_open_info->cad_open.op_code
+				== CAD_OPEN_OP_READ) {
+			if (dev_vol_buf->device_id !=
+					ard_state.def_tx_device) {
+				pr_err("%s: %d is not current device id.",
+					__func__, dev_vol_buf->device_id);
+				rc = CAD_RES_FAILURE;
+				goto done;
+			}
+		} else if (ardsession[session_id]->sess_open_info->
+				cad_open.op_code == CAD_OPEN_OP_WRITE) {
+			if (dev_vol_buf->device_id !=
+					ard_state.def_rx_device) {
+				pr_err("%s: %d is not current device id.",
+					__func__, dev_vol_buf->device_id);
+				rc = CAD_RES_FAILURE;
+				goto done;
+			}
+		}
 
 		/* For volume != 0%: send unmute command. */
 		if (dev_vol_buf->volume != 0) {
@@ -229,10 +618,14 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			dev_vol_buf->volume);
 
 		/* Cache the device volume. */
-		qdsp6_volume_cache_tbl[dev_vol_buf->device_id]
+		device_id = qdsp6_volume_device_id_mapping(
+				dev_vol_buf->device_id);
+		qdsp6_volume_cache_tbl[device_id]
 			.current_volume = device_volume;
-		qdsp6_volume_cache_tbl[dev_vol_buf->device_id]
+		qdsp6_volume_cache_tbl[device_id]
 			.valid_current_volume = 1;
+		qdsp6_volume_cache_tbl[device_id]
+			.mute = 0;
 
 		/* Construct QDSP6 device volume command:	*/
 		/* 1. Allocate memory for command buffer.	*/
@@ -308,6 +701,14 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		break;
 	case CAD_FILTER_CONFIG_STREAM_VOLUME:
 		D("CAD:VOL: Stream Volume\n");
+
+		stream_volume_cache = stream_vol_buf->volume;
+
+		if (ardsession[session_id]->active != ARD_TRUE) {
+			rc = CAD_RES_SUCCESS;
+			D("not active session, cached stream volume.\n");
+			goto done;
+		}
 
 		/* For volume != min: send unmute command. */
 		if (stream_vol_buf->volume != CAD_STREAM_MIN_GAIN) {
@@ -409,12 +810,17 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	if (rc != CAD_RES_SUCCESS)
 		pr_err("%s: cad_rpc_ioctl() failure\n", __func__);
 
+done:
 	D("%s: ioctl() processed.\n", __func__);
 
 	kfree(q6_set_dev_vol);
 	kfree(q6_set_strm_vol);
 	kfree(q6_set_dev_mute);
 	kfree(q6_set_strm_mute);
+	kfree(q6_set_dev_vol1);
+	kfree(q6_set_strm_vol1);
+	kfree(q6_set_dev_mute1);
+	kfree(q6_set_strm_mute1);
 
 	return rc;
 }
@@ -425,6 +831,7 @@ int cad_volume_dinit(void)
 	memset(qdsp6_volume_cache_tbl, 0,
 		sizeof(struct cad_device_volume_cache) *
 			QDSP6VOLUME_MAX_DEVICE_COUNT);
+	stream_volume_cache = 0;
 	return CAD_RES_SUCCESS;
 }
 
@@ -479,6 +886,8 @@ int cad_volume_init(struct cad_func_tbl_type **func_tbl)
 		= CAD_DEVICE_TTY_MAX_GAIN;
 	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR].min_gain
 		= CAD_DEVICE_TTY_MIN_GAIN;
+
+	stream_volume_cache = 0;
 
 	return CAD_RES_SUCCESS;
 }

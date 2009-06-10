@@ -220,7 +220,7 @@ int audio_set_device_volume(int vol)
 {
 	int rc;
 	struct cad_flt_cfg_dev_vol cad_dev_volume;
-	struct cad_stream_filter_struct_type strm_flt;
+	struct cad_filter_struct flt;
 	struct msm8k_audio_dev_ctrl *ctrl = &g_ctrl;
 
 	D("%s\n", __func__);
@@ -230,24 +230,22 @@ int audio_set_device_volume(int vol)
 		return -EINVAL;
 	}
 
-	memset(&strm_flt, 0,
-		sizeof(struct cad_stream_filter_struct_type));
+	memset(&flt, 0,	sizeof(struct cad_filter_struct));
 	memset(&cad_dev_volume, 0,
 			sizeof(struct cad_flt_cfg_dev_vol));
 	ctrl->current_volume = vol;
 	cad_dev_volume.volume = ctrl->current_volume;
 	cad_dev_volume.path = CAD_RX_DEVICE;
 	cad_dev_volume.device_id = ctrl->current_rx_device;
-	strm_flt.filter_type =
-				CAD_FILTER_CONFIG_DEVICE_VOLUME;
-	strm_flt.format_block = &cad_dev_volume;
-	strm_flt.format_block_len =
-				sizeof(struct cad_flt_cfg_dev_vol);
+	flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+	flt.cmd = CAD_FILTER_CONFIG_DEVICE_VOLUME;
+	flt.format_block = &cad_dev_volume;
+	flt.format_block_len = sizeof(struct cad_flt_cfg_dev_vol);
 
 	rc = cad_ioctl(ctrl->cad_ctrl_handle,
 		CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG,
-		&strm_flt,
-		sizeof(struct cad_stream_filter_struct_type));
+		&flt,
+		sizeof(struct cad_filter_struct));
 	if (rc)
 		pr_err("cad_ioctl() set volume failed\n");
 
@@ -259,7 +257,7 @@ EXPORT_SYMBOL(audio_set_device_volume);
 int audio_set_device_mute(struct msm_mute_info *m)
 {
 	int rc;
-	struct cad_stream_filter_struct_type strm_flt;
+	struct cad_filter_struct flt;
 	struct cad_flt_cfg_dev_mute dev_mute_buf;
 	struct msm8k_audio_dev_ctrl *ctrl = &g_ctrl;
 
@@ -270,8 +268,8 @@ int audio_set_device_mute(struct msm_mute_info *m)
 		return -1;
 	}
 
-	memset(&strm_flt, 0,
-		sizeof(struct cad_stream_filter_struct_type));
+	memset(&flt, 0,
+		sizeof(struct cad_filter_struct));
 	memset(&dev_mute_buf, 0,
 		sizeof(struct cad_flt_cfg_dev_mute));
 
@@ -285,13 +283,14 @@ int audio_set_device_mute(struct msm_mute_info *m)
 	dev_mute_buf.path = m->path;
 	dev_mute_buf.mute = m->mute;
 
-	strm_flt.filter_type = CAD_FILTER_CONFIG_DEVICE_MUTE;
-	strm_flt.format_block_len =
+	flt.cmd = CAD_FILTER_CONFIG_DEVICE_MUTE;
+	flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+	flt.format_block_len =
 		sizeof(struct cad_flt_cfg_dev_mute);
-	strm_flt.format_block = &dev_mute_buf;
+	flt.format_block = &dev_mute_buf;
 	rc = cad_ioctl(ctrl->cad_ctrl_handle,
 		CAD_IOCTL_CMD_SET_DEVICE_FILTER_CONFIG,
-		&strm_flt,
+		&flt,
 		sizeof(struct cad_stream_filter_struct_type));
 	if (rc)
 		pr_err("cad_ioctl() set mute failed\n");
@@ -403,7 +402,7 @@ static int __init msm8k_audio_dev_ctrl_init(void)
 			NULL,
 			0);
 	if (rc) {
-		pr_err("cad_ioctl() STREAM_START failed\n");
+		pr_err("%s: cad_ioctl() STREAM_START failed\n", __func__);
 		return CAD_RES_FAILURE;
 	}
 
