@@ -106,6 +106,7 @@ struct cad_state_struct_type {
 	struct cad_func_tbl_type	*resource_alloc;
 	struct cad_func_tbl_type	*volume;
 	struct cad_func_tbl_type	*dtmf;
+	struct cad_func_tbl_type	*equalizer;
 	struct cad_func_tbl_type	*audiodec;
 	struct cad_func_tbl_type	*audioenc;
 	struct cad_func_tbl_type	*voicedec;
@@ -210,6 +211,13 @@ static int __init cad_probe(struct platform_device *pdev)
 	rc = cad_dtmf_init(&cad.dtmf);
 	if (rc != CAD_RES_SUCCESS) {
 		pr_err("cad_dtmf_init failed\n");
+		rc = CAD_RES_FAILURE;
+		goto done;
+	}
+
+	rc = cad_filter_eq_init(&cad.equalizer);
+	if (rc != CAD_RES_SUCCESS) {
+		pr_err("cad_filter_eq_init failed\n");
 		rc = CAD_RES_FAILURE;
 		goto done;
 	}
@@ -351,6 +359,9 @@ s32 cad_close(s32 driver_handle)
 			cad.session_info[driver_handle].hw_accel->
 				close(driver_handle);
 
+		if (cad.equalizer && cad.equalizer->close)
+			(void) cad.equalizer->close(driver_handle);
+
 		if (cad.ard && cad.ard->close)
 			(void) cad.ard->close(driver_handle);
 
@@ -422,16 +433,21 @@ s32 cad_ioctl(s32 driver_handle, u32 cmd_code, void *cmd_buf, u32 cmd_buf_len)
 		ret_val = cad.ard->ioctl(driver_handle, cmd_code, cmd_buf,
 								cmd_buf_len);
 
-	if ((ret_val == CAD_RES_SUCCESS) && cad.volume && cad.volume->ioctl)
-		ret_val = cad.volume->ioctl(driver_handle, cmd_code, cmd_buf,
-								cmd_buf_len);
-
 	if ((ret_val != CAD_RES_FAILURE)
 		&& cad.session_info[driver_handle].hw_accel
 		&& cad.session_info[driver_handle].hw_accel->ioctl)
 		ret_val = cad.session_info[driver_handle].hw_accel->
 				ioctl(driver_handle, cmd_code, cmd_buf,
 								cmd_buf_len);
+
+	if ((ret_val == CAD_RES_SUCCESS) && cad.volume && cad.volume->ioctl)
+		ret_val = cad.volume->ioctl(driver_handle, cmd_code, cmd_buf,
+								cmd_buf_len);
+
+	if ((ret_val == CAD_RES_SUCCESS) && cad.equalizer
+			&& cad.equalizer->ioctl)
+		ret_val = cad.equalizer->ioctl(driver_handle, cmd_code,
+							cmd_buf, cmd_buf_len);
 
 	mutex_unlock(&cad.session_info[driver_handle].sync);
 
@@ -476,6 +492,7 @@ static void __exit cad_exit(void)
 		(void)cad_ard_dinit();
 		(void)cad_volume_dinit();
 		(void)cad_dtmf_dinit();
+		(void)cad_filter_eq_dinit();
 
 		iounmap(g_audio_mem);
 

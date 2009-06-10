@@ -61,6 +61,7 @@
 #include <linux/types.h>
 #include <mach/qdsp6/msm8k_adsp_audio_types.h>
 
+#define CAD_MAX_SESSION			10
 
 enum cad_stream_app_enum_type {
 	CAD_STREAM_APP_UNKNOWN                  = 0x00,
@@ -200,5 +201,11 @@ struct cad_filter_struct {
 	void *format_block;
 	u32 format_block_len;
 }  __attribute__ ((packed));
+
+#define CAD_DEVICE_FILTER_TYPE_EQ        0x0108c384
+
+#define CAD_FILTER_EQ_DEVICE_CONFIG                    0x0108b444
+#define CAD_FILTER_EQ_STREAM_CONFIG                    0x0108b445
+
 
 #endif
