@@ -329,11 +329,20 @@ static int vfp_pm_suspend(struct sys_device *dev, pm_message_t state)
 {
 	struct thread_info *ti = current_thread_info();
 	u32 fpexc = fmrx(FPEXC);
+	__u32 cpu = ti->cpu;
 
-	/* if vfp is on, then save state for resumption */
-	if (fpexc & FPEXC_EN) {
+#ifdef CONFIG_SMP
+	/* On SMP, if VFP is enabled, save the old state */
+	if ((fpexc & FPEXC_EN) && last_VFP_context[cpu]) {
+#else
+	/* If there is a VFP context we must save it. */
+	if (last_VFP_context[cpu]) {
+		/* Enable VFP so we can save the old state. */
+		fmxr(FPEXC, fpexc | FPEXC_EN);
+		isb();
+#endif
 		printk(KERN_DEBUG "%s: saving vfp state\n", __func__);
-		vfp_save_state(&ti->vfpstate, fpexc);
+		vfp_save_state(last_VFP_context[cpu], fpexc);
 
 		/* disable, just in case */
 		fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
