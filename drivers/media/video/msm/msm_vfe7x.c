@@ -638,6 +638,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd_t *cmd, void *data)
 
 			case VFE_START_CMD:
 				vfestopped = 0;
+				msm_camio_camif_pad_reg_reset_2();
 				break;
 
 			case VFE_STOP_CMD:
