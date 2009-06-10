@@ -87,18 +87,23 @@ struct amr {
 	u32 volume;
 };
 
-struct amr g_amr;
-
 static int msm8k_amr_open(struct inode *inode, struct file *f)
 {
-	struct amr *amr = &g_amr;
+	struct amr *amr;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
-	cos.format = CAD_FORMAT_AMRNB;
+	amr = kmalloc(sizeof(struct amr), GFP_KERNEL);
+	if (amr == NULL) {
+		pr_err("Could not allocate memory for amr driver\n");
+		return CAD_RES_FAILURE;
+	}
 
 	f->private_data = amr;
 
+	memset(amr, 0, sizeof(struct amr));
+
+	cos.format = CAD_FORMAT_AMRNB;
 	cos.op_code = CAD_OPEN_OP_WRITE;
 	amr->cad_w_handle = cad_open(&cos);
 
@@ -115,6 +120,7 @@ static int msm8k_amr_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(amr->cad_w_handle);
+	kfree(amr);
 
 	return rc;
 }

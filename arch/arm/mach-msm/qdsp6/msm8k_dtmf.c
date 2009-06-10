@@ -85,18 +85,23 @@ struct dtmf {
 	u32 cad_w_handle;
 };
 
-struct dtmf g_dtmf;
-
 static int msm8k_dtmf_open(struct inode *inode, struct file *f)
 {
-	struct dtmf *dtmf = &g_dtmf;
+	struct dtmf *dtmf;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
-	cos.format = CAD_FORMAT_DTMF;
+	dtmf = kmalloc(sizeof(struct dtmf), GFP_KERNEL);
+	if (dtmf == NULL) {
+		pr_err("Could not allocate memory for dtmf driver\n");
+		return CAD_RES_FAILURE;
+	}
 
 	f->private_data = dtmf;
 
+	memset(dtmf, 0, sizeof(struct dtmf));
+
+	cos.format = CAD_FORMAT_DTMF;
 	cos.op_code = CAD_OPEN_OP_WRITE;
 	dtmf->cad_w_handle = cad_open(&cos);
 
@@ -113,6 +118,7 @@ static int msm8k_dtmf_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(dtmf->cad_w_handle);
+	kfree(dtmf);
 
 	return rc;
 }

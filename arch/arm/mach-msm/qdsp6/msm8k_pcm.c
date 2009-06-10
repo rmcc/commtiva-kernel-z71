@@ -87,25 +87,37 @@ struct pcm {
 	u32 volume;
 };
 
-struct pcm g_pcm;
+
 
 static int msm8k_pcm_open(struct inode *inode, struct file *f)
 {
-	struct pcm *pcm = &g_pcm;
+	struct pcm *pcm;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
-	cos.format = CAD_FORMAT_PCM;
+	pcm = kmalloc(sizeof(struct pcm), GFP_KERNEL);
+	if (pcm == NULL) {
+		pr_err("Could not allocate memory for pcm driver\n");
+		return CAD_RES_FAILURE;
+	}
 
 	f->private_data = pcm;
 
+	memset(pcm, 0, sizeof(struct pcm));
+	pcm->cfg.buffer_size = 4096;
+	pcm->cfg.buffer_count = 2;
+	pcm->cfg.channel_count = 1;
+	pcm->cfg.sample_rate = 48000;
+
+	cos.format = CAD_FORMAT_PCM;
 	cos.op_code = CAD_OPEN_OP_WRITE;
+
 	pcm->cad_w_handle = cad_open(&cos);
 
 	if (pcm->cad_w_handle == 0)
 		return CAD_RES_FAILURE;
-	else
-		return CAD_RES_SUCCESS;
+
+	return CAD_RES_SUCCESS;
 }
 
 static int msm8k_pcm_release(struct inode *inode, struct file *f)
@@ -115,6 +127,7 @@ static int msm8k_pcm_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(pcm->cad_w_handle);
+	kfree(pcm);
 
 	return rc;
 }
@@ -345,11 +358,6 @@ static int __init msm8k_pcm_init(void)
 	D("%s\n", __func__);
 
 	rc = misc_register(&msm8k_pcm_misc);
-
-	g_pcm.cfg.buffer_size = 4096;
-	g_pcm.cfg.buffer_count = 2;
-	g_pcm.cfg.channel_count = 1;
-	g_pcm.cfg.sample_rate = 48000;
 
 #ifdef CONFIG_PROC_FS
 	create_proc_read_entry(MSM8K_PCM_PROC_NAME,

@@ -85,18 +85,28 @@ struct pcm {
 	struct msm_audio_config cfg;
 };
 
-struct pcm g_pcm_in;
 
 static int msm8k_pcm_in_open(struct inode *inode, struct file *f)
 {
-	struct pcm *pcm = &g_pcm_in;
+	struct pcm *pcm;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
-	cos.format = CAD_FORMAT_PCM;
+	pcm = kmalloc(sizeof(struct pcm), GFP_KERNEL);
+	if (pcm == NULL) {
+		pr_err("Could not allocate memory for pcm_in driver\n");
+		return CAD_RES_FAILURE;
+	}
 
 	f->private_data = pcm;
 
+	memset(pcm, 0, sizeof(struct pcm));
+	pcm->cfg.buffer_size = 4096;
+	pcm->cfg.buffer_count = 2;
+	pcm->cfg.channel_count = 1;
+	pcm->cfg.sample_rate = 8000;
+
+	cos.format = CAD_FORMAT_PCM;
 	cos.op_code = CAD_OPEN_OP_READ;
 	pcm->cad_w_handle = cad_open(&cos);
 
@@ -113,6 +123,7 @@ static int msm8k_pcm_in_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(pcm->cad_w_handle);
+	kfree(pcm);
 
 	return rc;
 }
@@ -306,11 +317,6 @@ static int __init msm8k_pcm_in_init(void)
 	D("%s\n", __func__);
 
 	rc = misc_register(&msm8k_pcm_in_misc);
-
-	g_pcm_in.cfg.buffer_size = 4096;
-	g_pcm_in.cfg.buffer_count = 2;
-	g_pcm_in.cfg.channel_count = 1;
-	g_pcm_in.cfg.sample_rate = 8000;
 
 #ifdef CONFIG_PROC_FS
 	create_proc_read_entry(MSM8K_PCM_IN_PROC_NAME,

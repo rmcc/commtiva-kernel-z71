@@ -94,18 +94,38 @@ struct aac {
 	u16 flush_rcvd;
 };
 
-struct aac g_aac;
-
 static int msm8k_aac_open(struct inode *inode, struct file *f)
 {
-	struct aac *aac = &g_aac;
+	struct aac *aac;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
-	cos.format = CAD_FORMAT_AAC;
-
+	aac = kmalloc(sizeof(struct aac), GFP_KERNEL);
+	if (aac == NULL) {
+		pr_err("Could not allocate memory for aac driver\n");
+		return CAD_RES_FAILURE;
+	}
 	f->private_data = aac;
 
+	memset(aac, 0, sizeof(struct aac));
+	aac->cfg.buffer_size = 4096;
+	aac->cfg.buffer_count = 2;
+	aac->cfg.channel_count = 1;
+	/* This sample rate will be converted to the CAD value upon start. */
+	aac->cfg.sample_rate = 48000;
+
+	aac->aac_cfg.format = CAD_BLK_FMT_ADTS;
+	aac->aac_cfg.audio_object = CAD_AUDIO_OBJ_TYPE_AAC_LC;
+	aac->aac_cfg.ep_config = CAD_ERR_PROT_SCHEME_0;
+	aac->aac_cfg.channel_configuration = CAD_CHANNEL_CFG_MONO;
+
+	aac->eos_ack = 0;
+	aac->flush_rcvd = 0;
+
+	mutex_init(&aac->write_lock);
+	init_waitqueue_head(&aac->eos_wait);
+
+	cos.format = CAD_FORMAT_AAC;
 	cos.op_code = CAD_OPEN_OP_WRITE;
 	aac->cad_w_handle = cad_open(&cos);
 
@@ -140,6 +160,7 @@ static int msm8k_aac_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(aac->cad_w_handle);
+	kfree(aac);
 
 	return CAD_RES_SUCCESS;
 }
@@ -504,23 +525,6 @@ static int __init msm8k_aac_init(void)
 	int rc;
 	D("%s\n", __func__);
 
-	memset(&g_aac, 0, sizeof(struct aac));
-
-	g_aac.cfg.buffer_size = 4096;
-	g_aac.cfg.buffer_count = 2;
-	g_aac.cfg.channel_count = 1;
-	/* This sample rate will be converted to the CAD value upon start. */
-	g_aac.cfg.sample_rate = 48000;
-
-	g_aac.aac_cfg.format = CAD_BLK_FMT_ADTS;
-	g_aac.aac_cfg.audio_object = CAD_AUDIO_OBJ_TYPE_AAC_LC;
-	g_aac.aac_cfg.ep_config = CAD_ERR_PROT_SCHEME_0;
-	g_aac.aac_cfg.channel_configuration = CAD_CHANNEL_CFG_MONO;
-	g_aac.eos_ack = 0;
-	g_aac.flush_rcvd = 0;
-
-	mutex_init(&g_aac.write_lock);
-	init_waitqueue_head(&g_aac.eos_wait);
 	rc = misc_register(&msm8k_aac_misc);
 
 #ifdef CONFIG_PROC_FS
