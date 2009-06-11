@@ -23,7 +23,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/msm_audio.h>
-
+#include <linux/seq_file.h>
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
 #include <mach/board.h>
@@ -35,6 +35,13 @@ struct snd_ctxt {
 	struct msm_rpc_endpoint *ept;
 	struct msm_snd_endpoints *snd_epts;
 };
+
+struct snd_sys_ctxt {
+	struct mutex lock;
+	struct msm_rpc_endpoint *ept;
+};
+
+static struct snd_sys_ctxt the_snd_sys;
 
 static struct snd_ctxt the_snd;
 
@@ -282,7 +289,19 @@ static int snd_release(struct inode *inode, struct file *file)
 	mutex_unlock(&snd->lock);
 	return 0;
 }
+static int snd_sys_release(void)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
 
+	mutex_lock(&snd_sys->lock);
+	rc = msm_rpc_close(snd_sys->ept);
+	if (rc < 0)
+		pr_err("snd_sys_release: msm_rpc_close failed\n");
+	snd_sys->ept = NULL;
+	mutex_unlock(&snd_sys->lock);
+	return rc;
+}
 static int snd_open(struct inode *inode, struct file *file)
 {
 	struct snd_ctxt *snd = &the_snd;
@@ -311,6 +330,28 @@ err:
 	mutex_unlock(&snd->lock);
 	return rc;
 }
+static int snd_sys_open(void)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
+	mutex_lock(&snd_sys->lock);
+	if (snd_sys->ept == NULL) {
+		snd_sys->ept = msm_rpc_connect_compatible(RPC_SND_PROG,
+			RPC_SND_VERS, 0);
+		if (IS_ERR(snd_sys->ept)) {
+			rc = PTR_ERR(snd_sys->ept);
+			snd_sys->ept = NULL;
+			pr_err("snd_sys_open: failed to connect snd svc\n");
+			goto err;
+		}
+	} else
+		pr_debug("snd already opened.\n");
+
+err:
+	mutex_unlock(&snd_sys->lock);
+	return rc;
+}
 
 static struct file_operations snd_fops = {
 	.owner		= THIS_MODULE,
@@ -325,12 +366,139 @@ struct miscdevice snd_misc = {
 	.fops	= &snd_fops,
 };
 
+static long snd_agc_enable(unsigned long arg)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	struct snd_agc_ctl_msg agc_msg;
+	int rc = 0;
+
+	if ((arg != 1) && (arg != 0))
+		return -EINVAL;
+
+	agc_msg.args.agc_ctl = cpu_to_be32(arg);
+	agc_msg.args.cb_func = -1;
+	agc_msg.args.client_data = 0;
+
+	pr_debug("snd_agc_ctl %ld,%d\n", arg, agc_msg.args.agc_ctl);
+
+	rc = msm_rpc_call(snd_sys->ept,
+		SND_AGC_CTL_PROC,
+		&agc_msg, sizeof(agc_msg), 5 * HZ);
+	return rc;
+}
+
+static long snd_avc_enable(unsigned long arg)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	struct snd_avc_ctl_msg avc_msg;
+	int rc = 0;
+
+	if ((arg != 1) && (arg != 0))
+		return -EINVAL;
+
+	avc_msg.args.avc_ctl = cpu_to_be32(arg);
+
+	avc_msg.args.cb_func = -1;
+	avc_msg.args.client_data = 0;
+
+	pr_debug("snd_avc_ctl %ld,%d\n", arg, avc_msg.args.avc_ctl);
+
+	rc = msm_rpc_call(snd_sys->ept,
+		SND_AVC_CTL_PROC,
+		&avc_msg, sizeof(avc_msg), 5 * HZ);
+	return rc;
+}
+
+static ssize_t snd_agc_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t status;
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
+	rc = snd_sys_open();
+	if (rc)
+		return rc;
+
+	mutex_lock(&snd_sys->lock);
+
+	if (sysfs_streq(buf, "enable"))
+		status = snd_agc_enable(1);
+	else if (sysfs_streq(buf, "disable"))
+		status = snd_agc_enable(0);
+	else
+		status = -EINVAL;
+
+	mutex_unlock(&snd_sys->lock);
+	rc = snd_sys_release();
+	if (rc)
+		return rc;
+
+	return status ? : size;
+}
+
+static ssize_t snd_avc_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t status;
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
+	rc = snd_sys_open();
+	if (rc)
+		return rc;
+
+	mutex_lock(&snd_sys->lock);
+
+	if (sysfs_streq(buf, "enable"))
+		status = snd_avc_enable(1);
+	else if (sysfs_streq(buf, "disable"))
+		status = snd_avc_enable(0);
+	else
+		status = -EINVAL;
+
+	mutex_unlock(&snd_sys->lock);
+	rc = snd_sys_release();
+	if (rc)
+		return rc;
+
+	return status ? : size;
+}
+
+static DEVICE_ATTR(agc, S_IWUSR | S_IRUGO,
+		NULL, snd_agc_store);
+
+static DEVICE_ATTR(avc, S_IWUSR | S_IRUGO,
+		NULL, snd_avc_store);
+
 static int snd_probe(struct platform_device *pdev)
 {
 	struct snd_ctxt *snd = &the_snd;
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
 	mutex_init(&snd->lock);
+	mutex_init(&snd_sys->lock);
+	snd_sys->ept = NULL;
 	snd->snd_epts = (struct msm_snd_endpoints *)pdev->dev.platform_data;
-	return misc_register(&snd_misc);
+	rc = misc_register(&snd_misc);
+	if (rc)
+		return rc;
+
+	rc = device_create_file(snd_misc.this_device, &dev_attr_agc);
+	if (rc) {
+		misc_deregister(&snd_misc);
+		return rc;
+	}
+
+	rc = device_create_file(snd_misc.this_device, &dev_attr_avc);
+	if (rc) {
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_agc);
+		misc_deregister(&snd_misc);
+	}
+
+	return rc;
 }
 
 static struct platform_driver snd_plat_driver = {
