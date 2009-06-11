@@ -83,6 +83,7 @@
 #include <mach/pmic.h>
 #include <mach/camera.h>
 #include <mach/memory.h>
+#include <mach/msm_spi.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -371,6 +372,19 @@ static int msm_qsd_spi_gpio_config(void)
 {
 	int i, rc;
 
+	if (gpio_request(17, "spi_clk"))
+		pr_err("failed to request gpio spi_clk\n");
+	if (gpio_request(18, "spi_mosi"))
+		pr_err("failed to request gpio spi_mosi\n");
+	if (gpio_request(19, "spi_miso"))
+		pr_err("failed to request gpio spi_miso\n");
+	if (gpio_request(20, "spi_cs0"))
+		pr_err("failed to request gpio spi_cs0\n");
+	if (gpio_request(21, "spi_pwr"))
+		pr_err("failed to request gpio spi_pwr\n");
+	if (gpio_request(22, "spi_irq_cs0"))
+		pr_err("failed to request gpio spi_irq_cs0\n");
+
 	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
 		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
 		if (rc) {
@@ -386,22 +400,24 @@ static int msm_qsd_spi_gpio_config(void)
 	return 0;
 }
 
+static void msm_qsd_spi_gpio_release(void)
+{
+	gpio_free(17);
+	gpio_free(18);
+	gpio_free(19);
+	gpio_free(20);
+	gpio_free(21);
+	gpio_free(22);
+}
+
+static struct msm_spi_platform_data qsd_spi_pdata = {
+	.gpio_config  = msm_qsd_spi_gpio_config,
+	.gpio_release = msm_qsd_spi_gpio_release
+};
+
 static void __init msm_qsd_spi_init(void)
 {
-	if (gpio_request(17, "spi_clk"))
-		pr_err("failed to request gpio spi_clk\n");
-	if (gpio_request(18, "spi_mosi"))
-		pr_err("failed to request gpio spi_mosi\n");
-	if (gpio_request(19, "spi_miso"))
-		pr_err("failed to request gpio spi_miso\n");
-	if (gpio_request(20, "spi_cs0"))
-		pr_err("failed to request gpio spi_cs0\n");
-	if (gpio_request(21, "spi_pwr"))
-		pr_err("failed to request gpio spi_pwr\n");
-	if (gpio_request(22, "spi_irq_cs0"))
-		pr_err("failed to request gpio spi_irq_cs0\n");
-
-	qsd_device_spi.dev.platform_data = msm_qsd_spi_gpio_config;
+	qsd_device_spi.dev.platform_data = &qsd_spi_pdata;
 }
 
 static int mddi_toshiba_pmic_bl(int level)
