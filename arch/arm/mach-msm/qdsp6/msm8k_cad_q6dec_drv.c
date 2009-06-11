@@ -77,6 +77,9 @@ static s32 cad_q6dec_open(s32 session_id,
 	if (CAD_OPEN_OP_WRITE == open_param->op_code &&
 			cad_q6dec_data.free_session_list) {
 		session = cad_q6dec_data.free_session_list;
+
+		memset(session, 0, sizeof(struct q6dec_session_data));
+
 		if (cad_q6dec_session_open(session, session_id, open_param)) {
 			cad_q6dec_session_close(session);
 			return CAD_RES_FAILURE;
