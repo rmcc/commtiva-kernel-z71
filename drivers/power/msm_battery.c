@@ -207,13 +207,11 @@ struct msm_battery_info {
 	u32 batt_valid;
 	u32 batt_capacity;
 
-	 u32(*calculate_capacity) (u32 voltage);
+	u32(*calculate_capacity) (u32 voltage);
 
 	s32 batt_handle;
 
-	/* Multiple call backs might occur at same time
-	 * from Modem Battery driver */
-	struct mutex lock;
+	spinlock_t lock;
 
 	struct power_supply *msm_psy_ac;
 	struct power_supply *msm_psy_usb;
@@ -460,7 +458,6 @@ static void msm_batt_update_psy_status(void)
 	u32 batt_charging = 0;
 	u32 chg_batt_event = CHG_UI_EVENT_INVALID;
 	u32 charger_valid = 0;
-	mutex_lock(&msm_batt_info.lock);
 
 	msm_batt_get_batt_chg_status(&batt_charging, &charger_valid,
 				     &chg_batt_event);
@@ -516,7 +513,6 @@ static void msm_batt_update_psy_status(void)
 	}
 
 	power_supply_changed(&msm_psy_batt);
-	mutex_unlock(&msm_batt_info.lock);
 }
 
 static int msm_batt_register(u32 desired_batt_voltage,
@@ -628,19 +624,23 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 	struct rpc_request_hdr *req;
 	int rpc_packet_type;
 	struct rpc_reply_hdr rpc_reply;
-
 	int len;
+	unsigned long flags;
 
+	spin_lock_irqsave(&msm_batt_info.lock, flags);
 	msm_batt_info.cb_thread = current;
+	spin_unlock_irqrestore(&msm_batt_info.lock, flags);
 
 	printk(KERN_INFO "%s: Batt RPC call back thread"
 	       " started.\n", __func__);
 
-	msm_batt_update_psy_status();
-
 	allow_signal(SIGCONT);
 
 	while (!atomic_read(&msm_batt_info.stop_cb_thread)) {
+
+		printk(KERN_INFO "%s: Update Batt status.\n", __func__);
+
+		msm_batt_update_psy_status();
 
 		rpc_packet = NULL;
 
@@ -656,7 +656,7 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 				flush_signals(current);
 
 				msm_batt_suspend_cleanup();
-				break;
+
 			} else {
 				printk(KERN_ERR "%s(): batt call back thread"
 				       " while  in msm_rpc_read got  signal."
@@ -664,8 +664,11 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 				       "thread.\n", __func__);
 
 				flush_signals(current);
-				break;
 			}
+
+			atomic_set(&msm_batt_info.cb_thread_stopped, 1);
+			wake_up(&msm_batt_info.wait_q);
+			break;
 		}
 
 		printk(KERN_INFO "%s: Got some packet from"
@@ -751,42 +754,45 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 			       " reply  write response %d\n", __func__, len);
 
 		kfree(rpc_packet);
-
-		printk(KERN_INFO "%s: Update Batt status.\n", __func__);
-
-		msm_batt_update_psy_status();
-
 	}
 
 	printk(KERN_INFO "%s: Batt RPC call back thread stopped.\n", __func__);
-	atomic_set(&msm_batt_info.cb_thread_stopped, 1);
-
-	wake_up(&msm_batt_info.wait_q);
 }
 
 static int msm_batt_stop_cb_thread(void)
 {
 	int rc;
-	atomic_set(&msm_batt_info.stop_cb_thread, 1);
+	unsigned long flags;
 
-	send_sig(SIGCONT, msm_batt_info.cb_thread, 0);
+	rc = 0;
 
-	rc = wait_event_interruptible(msm_batt_info.wait_q,
-				      atomic_read(&msm_batt_info.
-						  cb_thread_stopped));
+	spin_lock_irqsave(&msm_batt_info.lock, flags);
 
-	if (rc == -ERESTARTSYS)
-		printk(KERN_ERR "%s(): suspend thread got signal"
-		       "while wating for batt thread to finish\n", __func__);
-	else if (rc < 0)
-		printk(KERN_ERR "%s(): suspend thread wait returned "
-		       "error while waiting for batt thread"
-		       "to finish. rc =%d\n", __func__, rc);
-	else
-		printk(KERN_INFO "%s(): suspend thread wait returned "
-		       "rc =%d\n", __func__, rc);
+	if (msm_batt_info.cb_thread) {
+		atomic_set(&msm_batt_info.stop_cb_thread, 1);
+		send_sig(SIGCONT, msm_batt_info.cb_thread, 0);
+		spin_unlock_irqrestore(&msm_batt_info.lock, flags);
 
-	atomic_set(&msm_batt_info.cb_thread_stopped, 0);
+		rc = wait_event_interruptible(msm_batt_info.wait_q,
+			atomic_read(&msm_batt_info.  cb_thread_stopped));
+
+		if (rc == -ERESTARTSYS)
+			printk(KERN_ERR "%s(): suspend thread got signal"
+				"while wating for batt thread to finish\n",
+				__func__);
+		else if (rc < 0)
+			printk(KERN_ERR "%s(): suspend thread wait returned "
+				"error while waiting for batt thread"
+				"to finish. rc =%d\n", __func__, rc);
+		else
+			printk(KERN_INFO "%s(): suspend thread wait returned "
+				"rc =%d\n", __func__, rc);
+
+		atomic_set(&msm_batt_info.cb_thread_stopped, 0);
+	} else {
+		atomic_set(&msm_batt_info.stop_cb_thread, 1);
+		spin_unlock_irqrestore(&msm_batt_info.lock, flags);
+	}
 
 	return rc;
 }
@@ -798,13 +804,14 @@ static void msm_batt_start_cb_thread(void)
 	queue_work(msm_batt_info.msm_batt_wq, &msm_batt_cb_work);
 }
 
+static void msm_batt_early_suspend(struct early_suspend *h);
+
 static int msm_batt_cleanup(void)
 {
 	int rc = 0;
 	int rc_local;
 
 	if (msm_batt_info.msm_batt_wq) {
-
 		msm_batt_stop_cb_thread();
 		destroy_workqueue(msm_batt_info.msm_batt_wq);
 	}
@@ -849,7 +856,8 @@ static int msm_batt_cleanup(void)
 		}
 	}
 #ifdef CONFIG_HAS_EARLYSUSPEND
-	unregister_early_suspend(&msm_batt_info.early_suspend);
+	if (msm_batt_info.early_suspend.suspend == msm_batt_early_suspend)
+		unregister_early_suspend(&msm_batt_info.early_suspend);
 #endif
 	return rc;
 }
@@ -905,8 +913,6 @@ static int __devinit msm_batt_probe(struct platform_device *pdev)
 			" battery ", __func__);
 		return -EINVAL;
 	}
-
-	mutex_init(&msm_batt_info.lock);
 
 	if (pdata->avail_chg_sources & AC_CHG) {
 		rc = power_supply_register(&pdev->dev, &msm_psy_ac);
@@ -1014,9 +1020,12 @@ static int __devinit msm_batt_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static struct platform_driver msm_batt_driver;
 static int __devinit msm_batt_init_rpc(void)
 {
-	int rc = 0;
+	int rc;
+
+	spin_lock_init(&msm_batt_info.lock);
 
 	msm_batt_info.msm_batt_wq =
 	    create_singlethread_workqueue("msm_battery");
@@ -1053,9 +1062,18 @@ static int __devinit msm_batt_init_rpc(void)
 		msm_batt_info.chg_ep = NULL;
 		return rc;
 	}
+
+	rc = platform_driver_register(&msm_batt_driver);
+
+	if (rc < 0) {
+		printk(KERN_ERR "%s: platform_driver_register failed for "
+			"batt driver. rc = %d\n", __func__, rc);
+		return rc;
+	}
+
 	init_waitqueue_head(&msm_batt_info.wait_q);
 
-	return rc;
+	return 0;
 }
 
 static int __devexit msm_batt_remove(struct platform_device *pdev)
@@ -1082,7 +1100,7 @@ static struct platform_driver msm_batt_driver = {
 
 static int __init msm_batt_init(void)
 {
-	int rc = 0;
+	int rc;
 
 	rc = msm_batt_init_rpc();
 
@@ -1092,7 +1110,8 @@ static int __init msm_batt_init(void)
 		msm_batt_cleanup();
 		return rc;
 	}
-	return platform_driver_register(&msm_batt_driver);
+
+	return 0;
 }
 
 static void __exit msm_batt_exit(void)
