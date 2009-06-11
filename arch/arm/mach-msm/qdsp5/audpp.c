@@ -200,7 +200,7 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 		}
 		break;
 	case AUDPP_MSG_ROUTING_ACK:
-		audpp_broadcast(audpp, id, msg);
+		audpp_notify_clnt(audpp, msg[0], id, msg);
 		break;
 	case AUDPP_MSG_FLUSH_ACK:
 		audpp_notify_clnt(audpp, msg[0], id, msg);
