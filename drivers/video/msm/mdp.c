@@ -240,7 +240,7 @@ static int mdp_do_histogram(struct fb_info *info, struct mdp_histogram *hist)
 
 	MDP_OUTP(MDP_BASE + 0x94004, hist->frame_cnt);
 	MDP_OUTP(MDP_BASE + 0x94000, 1);
-	wait_for_completion_interruptible(&mdp_hist_comp);
+	wait_for_completion_killable(&mdp_hist_comp);
 
 	if (hist->r) {
 		ret = copy_to_user(hist->r, mdp_hist.r, hist->bin_cnt*4);
@@ -282,7 +282,7 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 
 		//HWIO_OUT(MDP_DISPLAY0_START, 0x1000);
 		outpdw(MDP_BASE + 0x30, 0x1000);
-		wait_for_completion_interruptible(&mdp_ppp_comp);
+		wait_for_completion_killable(&mdp_ppp_comp);
 
 		if (mdp_debug[MDP_PPP_BLOCK]) {
 			struct timeval now;

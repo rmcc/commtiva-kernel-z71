@@ -1280,7 +1280,7 @@ static int msm_fb_stop_sw_refresher(struct msm_fb_data_type *mfd)
 		up(&mfd->sem);
 
 		// wait until the refresher finishes the last job
-		wait_for_completion_interruptible(&mfd->refresher_comp);
+		wait_for_completion_killable(&mfd->refresher_comp);
 	}
 
 	return 0;

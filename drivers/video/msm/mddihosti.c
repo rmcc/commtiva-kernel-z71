@@ -1788,7 +1788,7 @@ uint32 mddi_get_client_id(void)
 		}
 		spin_unlock_irqrestore(&mddi_host_spin_lock, flags);
 
-		wait_for_completion_interruptible(&(mddi_rev_user.done_comp));
+		wait_for_completion_killable(&(mddi_rev_user.done_comp));
 
 		/* Set Rev Encap Size back to its original value */
 		pmhctl->rev_pkt_size = saved_rev_pkt_size;
@@ -1915,7 +1915,7 @@ uint16 mddi_get_next_free_llist_item(mddi_host_type host_idx, boolean wait)
 	spin_unlock_irqrestore(&mddi_host_spin_lock, flags);
 
 	if (forced_wait) {
-		wait_for_completion_interruptible(&
+		wait_for_completion_killable(&
 						  (pmhctl->
 						   mddi_llist_avail_comp));
 		MDDI_MSG_ERR("task waiting on mddi llist item\n");
@@ -2115,7 +2115,7 @@ void mddi_queue_reverse_encapsulation(boolean wait)
 	if (error) {
 		MDDI_MSG_ERR("Reverse Encap request already in progress\n");
 	} else if (wait)
-		wait_for_completion_interruptible(&(mddi_rev_user.done_comp));
+		wait_for_completion_killable(&(mddi_rev_user.done_comp));
 #endif
 }
 

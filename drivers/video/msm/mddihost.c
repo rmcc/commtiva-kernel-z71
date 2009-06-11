@@ -172,7 +172,7 @@ void mddi_host_register_read
 	if (wait) {
 		mddi_linked_list_notify_type *llist_notify_ptr;
 		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
-		wait_for_completion_interruptible(&
+		wait_for_completion_killable(&
 						  (llist_notify_ptr->
 						   done_comp));
 	}
@@ -237,7 +237,7 @@ void mddi_host_register_write
 	if (wait) {
 		mddi_linked_list_notify_type *llist_notify_ptr;
 		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
-		wait_for_completion_interruptible(&
+		wait_for_completion_killable(&
 						  (llist_notify_ptr->
 						   done_comp));
 	}
