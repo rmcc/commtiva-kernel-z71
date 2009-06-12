@@ -2794,8 +2794,8 @@ void vfe_asf_update(struct vfe_cmd_asf_update *in)
 
 	cmd.smoothEnable     = in->smoothFilterEnabled;
 	cmd.sharpMode        = in->sharpMode;
-	cmd.smoothCoeff1     = in->smoothCoefCenter;
-	cmd.smoothCoeff0     = in->smoothCoefSurr;
+	cmd.smoothCoeff0     = in->smoothCoefCenter;
+	cmd.smoothCoeff1     = in->smoothCoefSurr;
 	cmd.cropEnable       = in->cropEnable;
 	cmd.sharpThresholdE1 = in->sharpThreshE1;
 	cmd.sharpDegreeK1    = in->sharpK1;
