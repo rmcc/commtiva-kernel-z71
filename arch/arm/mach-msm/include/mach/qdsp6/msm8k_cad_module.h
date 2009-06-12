@@ -62,7 +62,6 @@
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_cad_event.h>
 
-#define CAD_MAX_SESSION			10
 #define MAX_FORMAT_BLOCK_SIZE		40
 #define MEMORY_PADDING			4096
 
@@ -117,5 +116,9 @@ s32 cad_ard_dinit(void);
 s32 cad_dtmf_init(struct cad_func_tbl_type **func_tbl);
 
 s32 cad_dtmf_dinit(void);
+
+s32 cad_filter_eq_init(struct cad_func_tbl_type **func_tbl);
+
+s32 cad_filter_eq_dinit(void);
 
 #endif

@@ -211,28 +211,33 @@ struct adsp_audio_eq_band {
 
 #define ADSP_AUDIO_MAX_EQ_BANDS 12
 
+#define ADSP_AUDIO_MAX_EQ_BANDS 12
+
+#define CAD_EQ_INVALID_DATA       0xFFFFFFFF
 
 #pragma pack(1)
 struct adsp_audio_eq_cfg {
-	/* 1 == On, 0 == Off switch */
 	u32				enable;
 	/* Number of consequtive bands specified */
 	u32				num_bands;
-	struct adsp_audio_eq_band	EQBands[ADSP_AUDIO_MAX_EQ_BANDS];
+	struct adsp_audio_eq_band	eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
 };
 #pragma pack()
 
-
-
-#pragma pack(1)
 struct adsp_audio_stream_eq_cfg {
 	/* Associated client data */
 	struct adsp_audio_header	header;
 	/* Equalizer band data */
-	struct adsp_audio_eq_cfg	eq_config;
+	struct adsp_audio_eq_cfg	ecfg;
 };
 #pragma pack()
 
+struct cad_filter_eq_driver_struct {
+	/* this is the device control session */
+	u32     device_session_id;
+	/* indexed by session id */
+	struct adsp_audio_stream_eq_cfg eq_stream_data[CAD_MAX_SESSION];
+};
 
 
 /* Set Audio Video sync information. */

@@ -6,6 +6,7 @@ obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6dtmf_drv.o msm8k_cad_q6dtmf_session.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_ard_adie.o msm8k_ard_clk.o msm8k_ard_acdb.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_ard_helper.o msm8k_ard_q6.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_volume.o
+obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6equalizer.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_pcm.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_pcm_in.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_aac.o

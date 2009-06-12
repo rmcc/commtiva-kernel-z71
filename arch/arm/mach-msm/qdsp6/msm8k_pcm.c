@@ -158,6 +158,7 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_filter_struct flt;
+	struct cad_filter_struct cfs;
 
 	D("%s\n", __func__);
 
@@ -291,6 +292,16 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 			pr_err("cad_ioctl() set volume failed\n");
 			break;
 		}
+		break;
+	case AUDIO_SET_EQ:
+		rc = copy_from_user(&cfs, (void *)arg,
+				sizeof(struct cad_filter_struct));
+		rc = cad_ioctl(p->cad_w_handle,
+			CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
+			&cfs,
+			sizeof(struct cad_filter_struct));
+		if (rc)
+			pr_err("cad_ioctl() set equalizer failed\n");
 		break;
 	default:
 		rc = -EINVAL;
