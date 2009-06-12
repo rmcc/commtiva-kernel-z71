@@ -535,15 +535,6 @@ static int32_t mt9p012_write_exp_gain(uint16_t gain, uint32_t line)
 		line_length_ratio = 0x00000400;
 
 	rc =
-		mt9p012_i2c_write_w(mt9p012_client->addr,
-			REG_GROUPED_PARAMETER_HOLD,
-			GROUPED_PARAMETER_HOLD);
-	if (rc < 0) {
-		CDBG("mt9p012_i2c_write_w failed... Line:%d \n", __LINE__);
-		return rc;
-	}
-
-	rc =
 		mt9p012_i2c_write_w(
 			mt9p012_client->addr,
 			REG_GLOBAL_GAIN, gain);
@@ -562,13 +553,6 @@ static int32_t mt9p012_write_exp_gain(uint16_t gain, uint32_t line)
 	}
 
 	CDBG("mt9p012_write_exp_gain: gain = %d, line = %d\n", gain, line);
-
-	rc =
-		mt9p012_i2c_write_w(mt9p012_client->addr,
-			REG_GROUPED_PARAMETER_HOLD,
-			GROUPED_PARAMETER_UPDATE);
-	if (rc < 0)
-		CDBG("mt9p012_i2c_write_w failed... Line:%d \n", __LINE__);
 
 	return rc;
 }
