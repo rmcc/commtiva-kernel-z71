@@ -81,8 +81,6 @@ static s32 cad_q6enc_open(s32 session_id,
 
 		session = q6_enc_data.q6_enc_free_sessions;
 
-		memset(session, 0, sizeof(struct q6_enc_session_data));
-
 		if (cad_q6enc_session_open(session, session_id, open_param) !=
 			CAD_RES_SUCCESS) {
 
