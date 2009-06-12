@@ -85,6 +85,8 @@
 #define CAD_FILTER_CONFIG_STREAM_VOLUME         0x010874f2
 #define CAD_FILTER_CONFIG_STREAM_MUTE           0x010874f3
 
+#define CAD_DEVICE_FILTER_TYPE_VOL		0x0108c383
+
 struct cad_flt_cfg_dev_vol {
 	u32 ver_id;
 	u32 device_id;

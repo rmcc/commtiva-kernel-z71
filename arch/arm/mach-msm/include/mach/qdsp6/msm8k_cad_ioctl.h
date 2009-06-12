@@ -59,6 +59,7 @@
 #define CADIOCTL_H
 
 #include <linux/types.h>
+#include <mach/qdsp6/msm8k_adsp_audio_types.h>
 
 
 enum cad_stream_app_enum_type {
@@ -78,7 +79,7 @@ enum cad_stream_buf_mem_type {
 	CAD_STREAM_BUF_MEM_UNKNOWN                 = 0x00,
 	CAD_STREAM_BUF_MEM_HEAP                    = 0x01,
 	CAD_STREAM_BUF_MEM_TYPE_CONTIGUOUS_HEAP    = 0x02
-};
+} __attribute__ ((packed));
 
 
 #define CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR                 0x01075ee6
@@ -125,7 +126,7 @@ enum cad_stream_buf_mem_type {
 struct cad_device_struct_type {
 	u32	device;
 	u32	reserved;
-};
+} __attribute__ ((packed));
 
 typedef void (*cad_evt_cb_func_type)(u32 event, void *evt_packet,
 		u32 evt_packet_len, void *client_data);
@@ -133,35 +134,35 @@ typedef void (*cad_evt_cb_func_type)(u32 event, void *evt_packet,
 struct cad_event_struct_type {
 	cad_evt_cb_func_type	callback;
 	void			*client_data;
-};
+} __attribute__ ((packed));
 
 
 struct cad_stream_config_struct_type {
 	void		*format_block;
 	u32		format_block_len;
-};
+} __attribute__ ((packed));
 
 struct cad_stream_info_struct_type {
 	enum cad_stream_app_enum_type	app_type;
 	u32				ses_buf_max_size;
 	enum cad_stream_buf_mem_type	buf_mem_type;
 	u32				priority;
-};
+} __attribute__ ((packed));
 
 struct cad_stream_filter_struct_type {
 	u32	filter_type;
 	void	*format_block;
 	u32	format_block_len;
-};
+} __attribute__ ((packed));
 
 struct cad_stream_device_struct_type {
 	u32	*device;
 	u32	device_len;
-};
+} __attribute__ ((packed));
 
 struct cad_stream_av_sync_struct_type {
 	u32	av_sync_interval;
-};
+} __attribute__ ((packed));
 
 struct cad_cmd_gen_dtmf {
 	u16	path;
@@ -171,26 +172,33 @@ struct cad_cmd_gen_dtmf {
 	u16	tx_gain;
 	u16	rx_gain;
 	u16	mixing;
-};
+} __attribute__ ((packed));
 
 struct qdsp_set_device_volume {
 	u32	device_id;
 	u32	path;         /*  0 == Rx, 1 == Tx and 2 == both */
 	s32	volume;       /* in mB. */
-};
+} __attribute__ ((packed));
 
 struct qdsp_set_device_mute {
 	u32	device_id;
 	u32	path;         /* 0 == Rx, 1 == Tx and 2 == both */
 	u32	mute;         /* 0 == UnMute,  1 == Mute        */
-};
+} __attribute__ ((packed));
 
 struct qdsp_set_stream_mute {
 	u32	mute;         /* 0 == UnMute,  1 == Mute */
-};
+} __attribute__ ((packed));
 
 struct qdsp_set_stream_volume {
 	s32	volume;       /* in mB */
-};
+} __attribute__ ((packed));
+
+struct cad_filter_struct {
+	u32 filter_type;
+	u32 cmd;
+	void *format_block;
+	u32 format_block_len;
+}  __attribute__ ((packed));
 
 #endif
