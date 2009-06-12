@@ -72,6 +72,7 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/io.h>
+#include <mach/msm_spi.h>
 
 #define SPI_CONFIG                    0x0000
 #define SPI_IO_CONTROL                0x0004
@@ -520,13 +521,7 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	struct msm_spi	       *dd;
 	struct resource	       *resmem;
 	int			rc = 0;
-	int (*gpio_config)(void) = pdev->dev.platform_data;
-
-	if (!gpio_config) {
-		rc = -ENXIO;
-		dev_dbg(&pdev->dev, "gpio_config function not initialized\n");
-		goto err_probe_exit;
-	}
+	struct msm_spi_platform_data *pdata = pdev->dev.platform_data;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct msm_spi));
 	if (!master) {
@@ -555,11 +550,13 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 		goto err_probe_res;
 	}
 
-	rc = (*gpio_config)();
-	if (rc) {
-		dev_err(&pdev->dev, "%s: error configuring GPIOs\n",
-		       __func__);
-		goto err_probe_gpio;
+	if (pdata && pdata->gpio_config) {
+		rc = pdata->gpio_config();
+		if (rc) {
+			dev_err(&pdev->dev, "%s: error configuring GPIOs\n",
+			       __func__);
+			goto err_probe_gpio;
+		}
 	}
 
 	spin_lock_init(&dd->queue_lock);
@@ -650,6 +647,8 @@ err_probe_reqmem:
 	destroy_workqueue(dd->workqueue);
 err_probe_workq:
 err_probe_gpio:
+	if (pdata && pdata->gpio_release)
+		pdata->gpio_release();
 err_probe_res:
 	spi_master_put(master);
 err_probe_exit:
@@ -709,10 +708,15 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 {
 	struct spi_master *master = platform_get_drvdata(pdev);
 	struct msm_spi    *dd = spi_master_get_devdata(master);
+	struct msm_spi_platform_data *pdata = pdev->dev.platform_data;
 
 	free_irq(dd->irq_in, dd);
 	free_irq(dd->irq_out, dd);
 	free_irq(dd->irq_err, master);
+
+	if (pdata && pdata->gpio_release)
+		pdata->gpio_release();
+
 	iounmap(dd->base);
 	release_mem_region(dd->mem_phys_addr, dd->mem_size);
 	clk_disable(dd->clk);
