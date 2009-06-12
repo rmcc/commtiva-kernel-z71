@@ -67,6 +67,7 @@
 
 #define CAD_EVT_AV_SYNC					0x0107605f
 
+#define CAD_EVT_STATUS_EOS				0x108b2cc
 
 struct cad_evt_avsync_struct_type {
 	u64		num_of_samples;

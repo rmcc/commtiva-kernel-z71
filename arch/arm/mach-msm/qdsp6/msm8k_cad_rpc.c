@@ -507,7 +507,7 @@ s32 cad_rpc_ioctl(u32 session_id,
 			cmd_code,
 			(void *)cmd_buf,
 			cmd_buf_len);
-	if (!err) {
+	if (!err && block_flag) {
 		D("DALRPC IOCTL function start wait!!!\n");
 		init_completion(&cad_rpc_data.compl_list[session_id]);
 		wait_for_completion(&cad_rpc_data.compl_list[session_id]);

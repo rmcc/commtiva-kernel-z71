@@ -91,6 +91,8 @@ enum cad_stream_buf_mem_type {
 
 #define CAD_IOCTL_CMD_STREAM_FLUSH                          0x01075eea
 
+#define CAD_IOCTL_CMD_STREAM_END_OF_STREAM                  0x0108b150
+
 #define CAD_IOCTL_CMD_SET_STREAM_DEVICE                     0x01075eec
 
 #define CAD_IOCTL_CMD_SET_STREAM_CONFIG                     0x01075eed

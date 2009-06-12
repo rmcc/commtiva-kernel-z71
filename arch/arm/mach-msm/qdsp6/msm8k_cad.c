@@ -338,8 +338,6 @@ s32 cad_close(s32 driver_handle)
 {
 	s32 rc;
 
-	msleep(2000);
-
 	D("%s: %s called\n", MODULE_NAME, __func__);
 
 	rc = CAD_RES_SUCCESS;

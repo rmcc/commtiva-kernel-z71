@@ -62,6 +62,7 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/msm_audio.h>
+#include <linux/sched.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
@@ -87,6 +88,10 @@ struct aac {
 	u32 volume;
 	struct msm_audio_config cfg;
 	struct msm_audio_aac_config aac_cfg;
+	struct mutex write_lock;
+	wait_queue_head_t eos_wait;
+	u16 eos_ack;
+	u16 flush_rcvd;
 };
 
 struct aac g_aac;
@@ -110,6 +115,25 @@ static int msm8k_aac_open(struct inode *inode, struct file *f)
 		return CAD_RES_SUCCESS;
 }
 
+static int msm8k_aac_fsync(struct file *f, struct dentry *dentry, int datasync)
+{
+	int ret = CAD_RES_SUCCESS;
+	struct aac *aac = f->private_data;
+
+	mutex_lock(&aac->write_lock);
+	ret = cad_ioctl(aac->cad_w_handle,
+			CAD_IOCTL_CMD_STREAM_END_OF_STREAM, NULL, 0);
+	mutex_unlock(&aac->write_lock);
+
+	ret = wait_event_interruptible(aac->eos_wait, aac->eos_ack
+					|| aac->flush_rcvd);
+
+	aac->eos_ack = 0;
+	aac->flush_rcvd = 0;
+
+	return ret;
+
+}
 static int msm8k_aac_release(struct inode *inode, struct file *f)
 {
 	struct aac *aac = f->private_data;
@@ -127,6 +151,18 @@ static ssize_t msm8k_aac_read(struct file *f, char __user *buf, size_t cnt,
 	return -EINVAL;
 }
 
+void msm8k_aac_eos_event_cb(u32 event, void *evt_packet,
+				u32 evt_packet_len, void *client_data)
+{
+	struct aac *aac = client_data;
+
+	if (event == CAD_EVT_STATUS_EOS) {
+
+		aac->eos_ack = 1;
+		wake_up(&aac->eos_wait);
+	}
+}
+
 static ssize_t msm8k_aac_write(struct file *f, const char __user *buf,
 		size_t cnt, loff_t *pos)
 {
@@ -140,7 +176,9 @@ static ssize_t msm8k_aac_write(struct file *f, const char __user *buf,
 	cbs.phys_addr = 0;
 	cbs.max_size = cnt;
 
+	mutex_lock(&aac->write_lock);
 	cad_write(aac->cad_w_handle, &cbs);
+	mutex_unlock(&aac->write_lock);
 
 	return cnt;
 }
@@ -150,7 +188,6 @@ static int msm8k_aac_ioctl(struct inode *inode, struct file *f,
 {
 	int rc;
 	struct aac *p = f->private_data;
-	void *cad_arg = (void *)arg;
 	u32 stream_device[1];
 	struct cad_device_struct_type cad_dev;
 	struct cad_stream_device_struct_type cad_stream_dev;
@@ -159,6 +196,7 @@ static int msm8k_aac_ioctl(struct inode *inode, struct file *f,
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_stream_filter_struct_type cad_stream_filter;
 	struct msm_audio_aac_config ncfg;
+	struct cad_event_struct_type eos_event;
 
 	D("%s\n", __func__);
 	memset(&cad_dev, 0, sizeof(struct cad_device_struct_type));
@@ -295,6 +333,18 @@ static int msm8k_aac_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
+		eos_event.callback = &msm8k_aac_eos_event_cb;
+		eos_event.client_data = p;
+
+		rc = cad_ioctl(p->cad_w_handle,
+			CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR,
+			&eos_event, sizeof(struct cad_event_struct_type));
+
+		if (rc) {
+			D("cad_ioctl() SET_STREAM_EVENT_LSTR failed\n");
+			break;
+		}
+
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
 			NULL, 0);
 		if (rc) {
@@ -304,11 +354,14 @@ static int msm8k_aac_ioctl(struct inode *inode, struct file *f,
 		break;
 	case AUDIO_STOP:
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_PAUSE,
-			cad_arg, sizeof(u32));
+			NULL, 0);
 		break;
 	case AUDIO_FLUSH:
+		p->flush_rcvd = 1;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
-			cad_arg, sizeof(u32));
+				NULL, 0);
+		wake_up(&p->eos_wait);
+		p->flush_rcvd = 0;
 		break;
 	case AUDIO_GET_PCM_CONFIG:
 		D("AUDIO_GET_PCM_CONFIG\n");
@@ -425,6 +478,7 @@ static const struct file_operations msm8k_aac_fops = {
 	.write = msm8k_aac_write,
 	.ioctl = msm8k_aac_ioctl,
 	.llseek = no_llseek,
+	.fsync = msm8k_aac_fsync,
 };
 
 
@@ -451,7 +505,11 @@ static int __init msm8k_aac_init(void)
 	g_aac.aac_cfg.audio_object = CAD_AUDIO_OBJ_TYPE_AAC_LC;
 	g_aac.aac_cfg.ep_config = CAD_ERR_PROT_SCHEME_0;
 	g_aac.aac_cfg.channel_configuration = CAD_CHANNEL_CFG_MONO;
+	g_aac.eos_ack = 0;
+	g_aac.flush_rcvd = 0;
 
+	mutex_init(&g_aac.write_lock);
+	init_waitqueue_head(&g_aac.eos_wait);
 	rc = misc_register(&msm8k_aac_misc);
 
 #ifdef CONFIG_PROC_FS
