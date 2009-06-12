@@ -1013,6 +1013,30 @@ static struct attribute_group dev_attr_grp = {
 	.attrs = dev_attrs,
 };
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static int polling_enabled;
+static void msmsdcc_early_suspend(struct early_suspend *h)
+{
+	struct msmsdcc_host *host =
+		container_of(h, struct msmsdcc_host, early_suspend);
+	spin_lock(&host->lock);
+	polling_enabled = host->mmc->caps & MMC_CAP_NEEDS_POLL;
+	host->mmc->caps &= ~MMC_CAP_NEEDS_POLL;
+	spin_unlock(&host->lock);
+};
+static void msmsdcc_late_resume(struct early_suspend *h)
+{
+	struct msmsdcc_host *host =
+		container_of(h, struct msmsdcc_host, early_suspend);
+	if (polling_enabled) {
+		spin_lock(&host->lock);
+		host->mmc->caps |= MMC_CAP_NEEDS_POLL;
+		mmc_detect_change(host->mmc, 0);
+		spin_unlock(&host->lock);
+	}
+};
+#endif
+
 static int
 msmsdcc_probe(struct platform_device *pdev)
 {
@@ -1212,6 +1236,13 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc_set_drvdata(pdev, mmc);
 	mmc_add_host(mmc);
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	host->early_suspend.suspend = msmsdcc_early_suspend;
+	host->early_suspend.resume  = msmsdcc_late_resume;
+	host->early_suspend.level   = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	register_early_suspend(&host->early_suspend);
+#endif
+
 	printk(KERN_INFO
 	       "%s: Qualcomm MSM SDCC at 0x%016llx irq %d,%d dma %d\n",
 	       mmc_hostname(mmc), (unsigned long long)memres->start,
@@ -1304,6 +1335,10 @@ static int msmsdcc_remove(struct platform_device *pdev)
 	clk_put(host->pclk);
 
 	mmc_free_host(mmc);
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	unregister_early_suspend(&host->early_suspend);
+#endif
 
 	return 0;
 }
