@@ -816,11 +816,24 @@ typedef struct {
 typedef struct {
 	audpp_cmd_cfg_object_params_common 	common;
 	signed short				enable_flag;
-	signed short				output_mode;
+	signed short				op_mode;
 	signed short				gain;
 	signed short				expansion;
 	signed short				delay;
 	unsigned short				stages_per_mode;
+	unsigned short				reverb_enable;
+	unsigned short				decay_msw;
+	unsigned short				decay_lsw;
+	unsigned short				decay_time_ratio_msw;
+	unsigned short				decay_time_ratio_lsw;
+	unsigned short				reflection_delay_time;
+	unsigned short				late_reverb_gain;
+	unsigned short				late_reverb_delay;
+	unsigned short                          delay_buff_size_msw;
+	unsigned short                          delay_buff_size_lsw;
+	unsigned short                          partition_num;
+	unsigned short                          delay_buff_start_msw;
+	unsigned short                          delay_buff_start_lsw;
 } __attribute__((packed)) audpp_cmd_cfg_object_params_qconcert;
 
 /*
