@@ -151,8 +151,6 @@ struct audio {
 	int reserved; /* A byte is being reserved */
 	char rsv_byte; /* Handle odd length user data */
 
-	unsigned volume;
-
 	uint16_t dec_id;
 	uint32_t read_ptr_offset;
 
@@ -165,6 +163,11 @@ struct audio {
 	spinlock_t event_queue_lock;
 	struct mutex get_event_lock;
 	int event_abort;
+
+	int eq_enable;
+	int eq_needs_commit;
+	audpp_cmd_cfg_object_params_eqalizer eq;
+	audpp_cmd_cfg_object_params_volume vol_pan;
 };
 
 static int auddec_dsp_config(struct audio *audio, int enable);
@@ -342,8 +345,9 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			auddec_dsp_config(audio, 1);
 			audio->out_needed = 0;
 			audio->running = 1;
-			audpp_set_volume_and_pan(audio->dec_id, audio->volume,
-						 0);
+			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan);
+			audpp_dsp_set_eq(audio->dec_id,	audio->eq_enable,
+								&audio->eq);
 			audpp_avsync(audio->dec_id, 22050);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			dprintk("audio_dsp_event: CFG_MSG DISABLE\n");
@@ -680,10 +684,28 @@ static long audwma_process_event_req(struct audio *audio, void __user *arg)
 	return rc;
 }
 
+static int audio_enable_eq(struct audio *audio, int enable)
+{
+	if (audio->eq_enable == enable && !audio->eq_needs_commit)
+		return 0;
+
+	audio->eq_enable = enable;
+
+	if (audio->running) {
+		audpp_dsp_set_eq(audio->dec_id, enable, &audio->eq);
+		audio->eq_needs_commit = 0;
+	}
+	return 0;
+}
+
 static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct audio *audio = file->private_data;
-	int rc = 0;
+	int rc = -EINVAL;
+	unsigned long flags = 0;
+	uint16_t enable_mask;
+	int enable;
+	int prev_state;
 
 	dprintk("audio_ioctl() cmd = %d\n", cmd);
 
@@ -695,15 +717,57 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		return 0;
 	}
-	if (cmd == AUDIO_SET_VOLUME) {
-		unsigned long flags;
+
+	switch (cmd) {
+	case AUDIO_ENABLE_AUDPP:
+		if (copy_from_user(&enable_mask, (void *) arg,
+						sizeof(enable_mask))) {
+			rc = -EFAULT;
+			break;
+		}
+
 		spin_lock_irqsave(&audio->dsp_lock, flags);
-		audio->volume = arg;
-		if (audio->running)
-			audpp_set_volume_and_pan(audio->dec_id, arg, 0);
+		enable = (enable_mask & EQ_ENABLE) ? 1 : 0;
+		audio_enable_eq(audio, enable);
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
-		return 0;
+		rc = 0;
+		break;
+	case AUDIO_SET_VOLUME:
+		spin_lock_irqsave(&audio->dsp_lock, flags);
+		audio->vol_pan.volume = arg;
+		if (audio->running)
+			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan);
+		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		rc = 0;
+		break;
+
+	case AUDIO_SET_PAN:
+		spin_lock_irqsave(&audio->dsp_lock, flags);
+		audio->vol_pan.pan = arg;
+		if (audio->running)
+			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan);
+		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		rc = 0;
+		break;
+
+	case AUDIO_SET_EQ:
+		prev_state = audio->eq_enable;
+		audio->eq_enable = 0;
+		if (copy_from_user(&audio->eq.num_bands, (void *) arg,
+				sizeof(audio->eq) -
+				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1)) {
+			rc = -EFAULT;
+			break;
+		}
+		audio->eq_enable = prev_state;
+		audio->eq_needs_commit = 1;
+		rc = 0;
+		break;
 	}
+
+	if (-EINVAL != rc)
+		return rc;
+
 	if (cmd == AUDIO_GET_EVENT) {
 		dprintk("%s: AUDIO_GET_EVENT\n", __func__);
 		if (mutex_trylock(&audio->get_event_lock)) {
@@ -1315,13 +1379,15 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->out[1].addr = audio->phys + pmem_sz;
 	audio->out[1].size = pmem_sz;
 
-	audio->volume = 0x2000;	/* equal to Q13 number 1.0 Unit Gain */
-
 	audio->wma_config.armdatareqthr =  1262;
 	audio->wma_config.channelsdecoded = 2;
 	audio->wma_config.wmabytespersec = 6003;
 	audio->wma_config.wmasamplingfreq = 44100;
 	audio->wma_config.wmaencoderopts = 31;
+
+	audio->vol_pan.volume = 0x2000;
+	audio->vol_pan.pan = 0x0;
+	audio->eq_enable = 0;
 
 	audio_flush(audio);
 
@@ -1387,7 +1453,7 @@ static ssize_t audwma_debug_read(struct file *file, char __user *buf,
 	n += scnprintf(buffer + n, debug_bufmax - n,
 				   "pcm_buf_sz %d \n", audio->in[0].size);
 	n += scnprintf(buffer + n, debug_bufmax - n,
-				   "volume %x \n", audio->volume);
+				   "volume %x \n", audio->vol_pan.volume);
 	n += scnprintf(buffer + n, debug_bufmax - n,
 				   "sample rate %d \n", audio->out_sample_rate);
 	n += scnprintf(buffer + n, debug_bufmax - n,

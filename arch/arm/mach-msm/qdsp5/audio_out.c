@@ -134,10 +134,11 @@ struct audio {
 	int enabled;
 	int running;
 	int stopped; /* set when stopped, cleared on flush */
-	unsigned volume;
 
 	struct wake_lock wakelock;
 	struct wake_lock idlelock;
+
+	audpp_cmd_cfg_object_params_volume vol_pan;
 };
 
 struct audio_copp {
@@ -325,7 +326,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			pr_info("audio_dsp_event: CFG_MSG ENABLE\n");
 			audio->out_needed = 0;
 			audio->running = 1;
-			audpp_set_volume_and_pan(5, audio->volume, 0);
+			audpp_dsp_set_vol_pan(5, &audio->vol_pan);
 			audio_dsp_out_enable(audio, 1);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			LOG(EV_ENABLE, 0);
@@ -466,7 +467,8 @@ static void audio_flush(struct audio *audio)
 static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct audio *audio = file->private_data;
-	int rc;
+	int rc = -EINVAL;
+	unsigned long flags = 0;
 
 	if (cmd == AUDIO_GET_STATS) {
 		struct msm_audio_stats stats;
@@ -475,13 +477,23 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		return 0;
 	}
-	if (cmd == AUDIO_SET_VOLUME) {
-		unsigned long flags;
+
+	switch (cmd) {
+	case AUDIO_SET_VOLUME:
 		spin_lock_irqsave(&audio->dsp_lock, flags);
-		audio->volume = arg;
+		audio->vol_pan.volume = arg;
 		if (audio->running)
-			audpp_set_volume_and_pan(6, arg, 0);
+			audpp_dsp_set_vol_pan(5, &audio->vol_pan);
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		return 0;
+
+	case AUDIO_SET_PAN:
+		spin_lock_irqsave(&audio->dsp_lock, flags);
+		audio->vol_pan.pan = arg;
+		if (audio->running)
+			audpp_dsp_set_vol_pan(5, &audio->vol_pan);
+		spin_unlock_irqrestore(&audio->dsp_lock, flags);
+		return 0;
 	}
 
 	LOG(EV_IOCTL, cmd);
@@ -708,7 +720,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->out[1].addr = audio->phys + BUFSZ;
 	audio->out[1].size = BUFSZ;
 
-	audio->volume = 0x2000;
+	audio->vol_pan.volume = 0x2000;
+	audio->vol_pan.pan = 0x0;
 
 	audio_flush(audio);
 
