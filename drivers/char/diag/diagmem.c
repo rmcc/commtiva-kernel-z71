@@ -86,6 +86,8 @@ void diagmem_free(struct diagchar_dev *driver, void *buf)
 		printk(KERN_ALERT "\n Attempt to free up DIAG driver mempool"
 				  " memory which is already free");
 
+	if (driver->count == 0 && driver->ref_count == 0)
+		mempool_destroy(driver->diagpool);
 }
 
 void diagmem_init(struct diagchar_dev *driver)
@@ -101,5 +103,6 @@ void diagmem_init(struct diagchar_dev *driver)
 
 void diagmem_exit(struct diagchar_dev *driver)
 {
-	mempool_destroy(driver->diagpool);
+	if (driver->count == 0)
+		mempool_destroy(driver->diagpool);
 }
