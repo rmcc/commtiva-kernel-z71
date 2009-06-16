@@ -263,14 +263,13 @@ static int qsd_pcm_open(struct snd_pcm_substream *substream)
 	struct cad_event_struct_type alsa_event;
 	int ret = 0;
 
-	runtime_dummy = runtime;
-
 	prtd = kzalloc(sizeof(struct qsd_audio), GFP_KERNEL);
 	if (prtd == NULL) {
 		ret = -ENOMEM;
 		return ret;
 	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
+		runtime_dummy = runtime;
 		printk(KERN_INFO "Stream = SNDRV_PCM_STREAM_PLAYBACK\n");
 		runtime->hw = qsd_pcm_playback_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_PLAYBACK;
