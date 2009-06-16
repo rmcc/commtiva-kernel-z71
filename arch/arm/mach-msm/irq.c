@@ -440,7 +440,7 @@ void msm_irq_exit_sleep1(uint32_t irq_mask, uint32_t wakeup_reason,
 
 	msm_irq_ack(INT_A9_M2A_6);
 
-	for (i = 0; i < NR_MSM_IRQS; i++) {
+	for (i = 0; i < VIC_NUM_REGS; i++) {
 		writel(msm_irq_shadow_reg[i].int_type,
 			VIC_INT_TYPE0 + i * 4);
 		writel(msm_irq_shadow_reg[i].int_polarity,
