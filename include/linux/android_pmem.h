@@ -42,6 +42,10 @@
 #define HW3D_GRANT_GPU		_IOW(PMEM_IOCTL_MAGIC, 9, unsigned int)
 #define HW3D_WAIT_FOR_INTERRUPT	_IOW(PMEM_IOCTL_MAGIC, 10, unsigned int)
 
+#define PMEM_CLEAN_INV_CACHES	_IOW(PMEM_IOCTL_MAGIC, 11, unsigned int)
+#define PMEM_CLEAN_CACHES	_IOW(PMEM_IOCTL_MAGIC, 12, unsigned int)
+#define PMEM_INV_CACHES		_IOW(PMEM_IOCTL_MAGIC, 13, unsigned int)
+
 int get_pmem_file(unsigned int fd, unsigned long *start, unsigned long *vstart,
 		  unsigned long *end, struct file **filp);
 int get_pmem_fd(int fd, unsigned long *start, unsigned long *end);
@@ -72,6 +76,12 @@ struct android_pmem_platform_data
 struct pmem_region {
 	unsigned long offset;
 	unsigned long len;
+};
+
+struct pmem_addr {
+	unsigned long vaddr;
+	unsigned long offset;
+	unsigned long length;
 };
 
 int pmem_setup(struct android_pmem_platform_data *pdata,
