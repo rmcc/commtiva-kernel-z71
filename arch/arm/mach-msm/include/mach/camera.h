@@ -173,7 +173,7 @@ struct msm_device_t {
 	int  croplen;
 
 	struct mutex pict_pp_lock;
-	uint8_t pict_pp;
+	uint32_t pict_pp;
 
 	int sidx;
 	struct msm_sensor_ctrl_t sctrl;

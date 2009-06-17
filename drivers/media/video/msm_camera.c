@@ -704,13 +704,38 @@ static long msm_get_stats(void __user *arg,
 		} else if (data->type == VFE_MSG_OUTPUT1 ||
 			data->type == VFE_MSG_OUTPUT2) {
 
-			if (copy_to_user((void *)(se.stats_event.data),
+			uint32_t pp_en;
+			struct msm_postproc_t buf;
+			mutex_lock(&msm->pict_pp_lock);
+			pp_en = msm->pict_pp;
+			mutex_unlock(&msm->pict_pp_lock);
+			if (pp_en & PP_PREV) {
+				CDBG
+				("Started Preview post processing. pp_en=%d\n",
+				pp_en);
+				buf.fmain.buffer =
+					msm_pmem_frame_ptov_lookup(
+					data->phy.y_phy,
+					data->phy.cbcr_phy, &buf.fmain.y_off,
+					&buf.fmain.cbcr_off, &buf.fmain.fd,
+					msm);
+				if (buf.fmain.buffer) {
+					if (copy_to_user(
+						(void *)(se.stats_event.data),
+						&(buf.fmain),
+						sizeof(struct msm_frame_t)))
+							rc = -EFAULT;
+					} else
+							rc = -EFAULT;
+			} else {
+				if (copy_to_user(
+					(void *)(se.stats_event.data),
 					data->extdata,
 					data->extlen))
-				rc = -EFAULT;
+						rc = -EFAULT;
+			}
 		} else if (data->type == VFE_MSG_SNAPSHOT) {
-
-			uint8_t pp_en;
+			uint32_t pp_en;
 			struct msm_postproc_t buf;
 			struct msm_pmem_region region;
 
@@ -718,7 +743,7 @@ static long msm_get_stats(void __user *arg,
 			pp_en = msm->pict_pp;
 			mutex_unlock(&msm->pict_pp_lock);
 
-			if (pp_en) {
+			if (pp_en & PP_SNAP) {
 				buf.fmnum =
 					msm_pmem_region_lookup(
 						&msm->sync.frame,
@@ -734,7 +759,7 @@ static long msm_get_stats(void __user *arg,
 					buf.fmain.fd = region.fd;
 				} else {
 					buf.fmnum =
-					msm_pmem_region_lookup(
+						msm_pmem_region_lookup(
 						&msm->sync.frame,
 						MSM_PMEM_RAW_MAINIMG,
 						&region, 1);
@@ -756,6 +781,7 @@ static long msm_get_stats(void __user *arg,
 					goto failure;
 				}
 			}
+
 			CDBG("SNAPSHOT copy_to_user!\n");
 		}
 		break;
@@ -1375,7 +1401,7 @@ static long msm_pict_pp_done(void __user *arg,
 	unsigned long flags;
 	long rc = 0;
 
-	uint8_t pp_en;
+	uint32_t pp_en;
 	mutex_lock(&msm->pict_pp_lock);
 	pp_en = msm->pict_pp;
 	mutex_unlock(&msm->pict_pp_lock);
@@ -1486,11 +1512,11 @@ static long msm_ioctl(struct file *filep, unsigned int cmd,
 		return msm_set_crop(argp, pmsm);
 
 	case MSM_CAM_IOCTL_PICT_PP: {
-		uint8_t enable;
-		if (copy_from_user(&enable, argp, sizeof(enable)))
+		uint32_t pp;
+		if (copy_from_user(&pp, argp, sizeof(pp)))
 			return -EFAULT;
 		mutex_lock(&pmsm->pict_pp_lock);
-		pmsm->pict_pp = enable;
+		pmsm->pict_pp = pp;
 		mutex_unlock(&pmsm->pict_pp_lock);
 		return 0;
 	}
@@ -1710,6 +1736,7 @@ static void msm_vfe_sync(struct msm_vfe_resp_t *vdata,
 	struct msm_queue_cmd_t *qcmd = NULL;
 	struct msm_queue_cmd_t *qcmd_frame = NULL;
 	struct msm_vfe_phy_info *fphy;
+	uint32_t pp;
 
 	unsigned long flags;
 	struct msm_device_t *msm =
@@ -1729,14 +1756,24 @@ static void msm_vfe_sync(struct msm_vfe_resp_t *vdata,
 		qcmd->type    = MSM_CAM_Q_VFE_EVT;
 	} else if (qtype == MSM_CAM_Q_VFE_MSG) {
 
+		qcmd->type = MSM_CAM_Q_VFE_MSG;
+
 		if (vdata->type == VFE_MSG_OUTPUT1 ||
 		    vdata->type == VFE_MSG_OUTPUT2) {
+
+			mutex_lock(&msm->pict_pp_lock);
+			pp = msm->pict_pp;
+			mutex_unlock(&msm->pict_pp_lock);
+
+			if (pp & PP_PREV)
+				goto sync_done;
 
 			qcmd_frame =
 				kmalloc(sizeof(struct msm_queue_cmd_t),
 					GFP_ATOMIC);
 			if (!qcmd_frame)
 				goto mem_fail2;
+
 			fphy = kmalloc(sizeof(struct msm_vfe_phy_info),
 				GFP_ATOMIC);
 			if (!fphy)
@@ -1748,7 +1785,7 @@ static void msm_vfe_sync(struct msm_vfe_resp_t *vdata,
 			qcmd_frame->command = fphy;
 
 			CDBG("qcmd_frame= 0x%x phy_y= 0x%x, phy_cbcr= 0x%x\n",
-			(int) qcmd_frame, fphy->y_phy, fphy->cbcr_phy);
+				qcmd_frame, fphy->y_phy, fphy->cbcr_phy);
 
 			spin_lock_irqsave(&msm->sync.prev_frame_q_lock,
 				flags);
@@ -1760,41 +1797,37 @@ static void msm_vfe_sync(struct msm_vfe_resp_t *vdata,
 				flags);
 
 			wake_up(&msm->sync.prev_frame_wait);
-
 			CDBG("waked up frame thread\n");
-
 		} else if (vdata->type == VFE_MSG_SNAPSHOT) {
-			unsigned pp;
+
 			mutex_lock(&msm->pict_pp_lock);
 			pp = msm->pict_pp;
 			mutex_unlock(&msm->pict_pp_lock);
+			if ((pp & PP_SNAP) || (pp & PP_RAW_SNAP))
+				goto sync_done;
 
-			CDBG("SNAPSHOT pp = %d\n", pp);
-			if (!pp) {
-				qcmd_frame =
-					kmalloc(sizeof(struct msm_queue_cmd_t),
-						GFP_ATOMIC);
-				if (!qcmd_frame)
-					goto mem_fail2;
+			qcmd_frame =
+				kmalloc(sizeof(struct msm_queue_cmd_t),
+					GFP_ATOMIC);
+			if (!qcmd_frame)
+				goto mem_fail2;
 
-				qcmd_frame->type    = MSM_CAM_Q_VFE_MSG;
-				qcmd_frame->command = NULL;
+			qcmd_frame->type    = MSM_CAM_Q_VFE_MSG;
+			qcmd_frame->command = NULL;
 
-				spin_lock_irqsave(&msm->sync.pict_frame_q_lock,
-					flags);
+			spin_lock_irqsave(&msm->sync.pict_frame_q_lock,
+				flags);
 
-				list_add_tail(&qcmd_frame->list,
-					&msm->sync.pict_frame_q);
+			list_add_tail(&qcmd_frame->list,
+				&msm->sync.pict_frame_q);
 
-				spin_unlock_irqrestore(
-					&msm->sync.pict_frame_q_lock, flags);
-				wake_up(&msm->sync.pict_frame_wait);
-			}
+			spin_unlock_irqrestore(
+				&msm->sync.pict_frame_q_lock, flags);
+			wake_up(&msm->sync.pict_frame_wait);
 		}
-
-		qcmd->type = MSM_CAM_Q_VFE_MSG;
 	}
 
+sync_done:
 	qcmd->command = (void *)vdata;
 	CDBG("vdata->type = %d\n", vdata->type);
 
