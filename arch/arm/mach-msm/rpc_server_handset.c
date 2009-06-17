@@ -17,14 +17,18 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/platform_device.h>
+#include <linux/input.h>
+#include <linux/switch.h>
 
 #include <asm/mach-types.h>
 
-#include <mach/msm_handset.h>
 #include <mach/msm_rpcrouter.h>
 #include <mach/board.h>
 
 #include "keypad-surf-ffa.h"
+
+#define DRIVER_NAME	"msm-handset"
 
 #define HS_SERVER_PROG 0x30000062
 #define HS_SERVER_VERS 0x00010001
@@ -112,9 +116,20 @@ static const uint32_t hs_key_map[] = {
 	0
 };
 
+enum {
+	NO_DEVICE	= 0,
+	MSM_HEADSET	= 1,
+};
+
+struct msm_handset {
+	struct input_dev *ipdev;
+	struct switch_dev sdev;
+};
+
 static struct input_dev *kpdev;
-static struct input_dev *hsdev;
 static struct msm_rpc_client *rpc_client;
+static struct platform_device *hs_pdev;
+static struct msm_handset *hs;
 
 static int hs_find_key(uint32_t hscode)
 {
@@ -165,7 +180,6 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 		key_code = key_parm;
 
 	kpdev = msm_keypad_get_input_dev();
-	hsdev = msm_get_handset_input_dev();
 
 	switch (key) {
 	case KEY_POWER:
@@ -179,29 +193,16 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 		input_sync(kpdev);
 		break;
 	case SW_HEADPHONE_INSERT:
-		if (!hsdev) {
-			printk(KERN_ERR "%s: No input device for reporting "
-					"handset events\n", __func__);
-			return;
-		}
-		report_headset_switch(hsdev, key, (key_code != HS_REL_K));
+		report_headset_switch(hs->ipdev, key, (key_code != HS_REL_K));
 		break;
 	case KEY_MEDIA:
-		if (!hsdev) {
-			printk(KERN_ERR "%s: No input device for reporting "
-					"handset events\n", __func__);
-			return;
-		}
-		input_report_key(hsdev, key, (key_code != HS_REL_K));
-		input_sync(hsdev);
+		input_report_key(hs->ipdev, key, (key_code != HS_REL_K));
+		input_sync(hs->ipdev);
 		break;
 	case -1:
 		printk(KERN_ERR "%s: No mapping for remote handset event %d\n",
 				 __func__, temp_key_code);
 		break;
-	default:
-		printk(KERN_ERR "%s: Unhandled handset key %d\n", __func__,
-				key);
 	}
 }
 
@@ -364,7 +365,7 @@ static int __init hs_rpc_cb_init(void)
 	return rc;
 }
 
-static int __init hs_rpc_init(void)
+static int __devinit hs_rpc_init(void)
 {
 	int rc;
 
@@ -376,4 +377,130 @@ static int __init hs_rpc_init(void)
 
 	return msm_rpc_create_server(&hs_rpc_server);
 }
-module_init(hs_rpc_init);
+
+static void __devexit hs_rpc_deinit(void)
+{
+	if (rpc_client)
+		msm_rpc_unregister_client(rpc_client);
+}
+
+static ssize_t msm_headset_print_name(struct switch_dev *sdev, char *buf)
+{
+	switch (switch_get_state(&hs->sdev)) {
+	case NO_DEVICE:
+		return sprintf(buf, "No Device\n");
+	case MSM_HEADSET:
+		return sprintf(buf, "Headset\n");
+	}
+	return -EINVAL;
+}
+
+static int __devinit hs_probe(struct platform_device *pdev)
+{
+	int rc;
+	struct input_dev *ipdev;
+
+	hs = kzalloc(sizeof(struct msm_handset), GFP_KERNEL);
+	if (!hs)
+		return -ENOMEM;
+
+	hs->sdev.name	= "h2w";
+	hs->sdev.print_name = msm_headset_print_name;
+
+	rc = switch_dev_register(&hs->sdev);
+	if (rc)
+		goto err_switch_dev_register;
+
+	ipdev = input_allocate_device();
+	if (!ipdev) {
+		rc = -ENOMEM;
+		goto err_alloc_input_dev;
+	}
+	input_set_drvdata(ipdev, hs);
+
+	hs->ipdev = ipdev;
+
+	ipdev->name		= DRIVER_NAME;
+	ipdev->phys		= "msm-handset/input0";
+	ipdev->id.vendor	= 0x0001;
+	ipdev->id.product	= 1;
+	ipdev->id.version	= 1;
+
+	input_set_capability(ipdev, EV_KEY, KEY_MEDIA);
+	input_set_capability(ipdev, EV_SW, SW_HEADPHONE_INSERT);
+
+	rc = input_register_device(ipdev);
+	if (rc) {
+		dev_err(&ipdev->dev,
+				"hs_probe: input_register_device rc=%d\n", rc);
+		goto err_reg_input_dev;
+	}
+
+	platform_set_drvdata(pdev, hs);
+
+	rc = hs_rpc_init();
+	if (rc)
+		goto err_hs_rpc_init;
+
+	return 0;
+
+err_hs_rpc_init:
+	input_unregister_device(ipdev);
+	ipdev = NULL;
+err_reg_input_dev:
+	input_free_device(ipdev);
+err_alloc_input_dev:
+	switch_dev_unregister(&hs->sdev);
+err_switch_dev_register:
+	kfree(hs);
+	return rc;
+}
+
+static int __devexit hs_remove(struct platform_device *pdev)
+{
+	struct msm_handset *hs = platform_get_drvdata(pdev);
+
+	input_unregister_device(hs->ipdev);
+	switch_dev_unregister(&hs->sdev);
+	kfree(hs);
+	hs_rpc_deinit();
+	return 0;
+}
+
+static struct platform_driver hs_driver = {
+	.probe		= hs_probe,
+	.remove		= __devexit_p(hs_remove),
+	.driver		= {
+		.name	= DRIVER_NAME,
+		.owner	= THIS_MODULE,
+	},
+};
+
+static int __init hs_init(void)
+{
+	int rc;
+
+	hs_pdev = platform_device_register_simple(DRIVER_NAME,
+					-1, NULL, 0);
+	if (IS_ERR(hs_pdev))
+		return PTR_ERR(hs_pdev);
+
+	rc = platform_driver_register(&hs_driver);
+	if (rc) {
+		platform_device_unregister(hs_pdev);
+		return rc;
+	}
+
+	return 0;
+}
+module_init(hs_init);
+
+static void __exit hs_exit(void)
+{
+	platform_driver_unregister(&hs_driver);
+	platform_device_unregister(hs_pdev);
+}
+module_exit(hs_exit);
+
+MODULE_LICENSE("GPL v2");
+MODULE_ALIAS("platform:msm-handset");
