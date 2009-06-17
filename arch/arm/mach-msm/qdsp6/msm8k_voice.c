@@ -85,11 +85,10 @@ struct voice {
 	u32 cad_w_handle;
 };
 
-struct voice g_voice;
 
 static int msm8k_voice_open(struct inode *inode, struct file *f)
 {
-	struct voice *voice = &g_voice;
+	struct voice *voice;
 	struct cad_open_struct_type  cos;
 	struct cad_stream_info_struct_type cad_stream_info;
 	struct cad_stream_device_struct_type cad_stream_dev;
@@ -98,11 +97,19 @@ static int msm8k_voice_open(struct inode *inode, struct file *f)
 	int rc;
 	D("%s\n", __func__);
 
+	voice = kmalloc(sizeof(struct voice), GFP_KERNEL);
+	if (voice == NULL) {
+		pr_err("Could not allocate memory for voice driver\n");
+		return CAD_RES_FAILURE;
+	}
+
 	memset(&cad_stream_info, 0, sizeof(struct cad_stream_info_struct_type));
 	memset(&cad_write_amr_fmt, 0,
 			sizeof(struct cad_write_amr_format_struct_type));
 
 	f->private_data = voice;
+
+	memset(voice, 0, sizeof(struct voice));
 
 	cos.op_code = CAD_OPEN_OP_WRITE;
 	voice->cad_w_handle = cad_open(&cos);
@@ -187,6 +194,7 @@ static int msm8k_voice_release(struct inode *inode, struct file *f)
 
 	cad_close(voice->cad_w_handle);
 	cad_close(voice->cad_r_handle);
+	kfree(voice);
 
 	return rc;
 }

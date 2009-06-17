@@ -91,15 +91,27 @@ struct mp3 {
 	u16 flush_rcvd;
 };
 
-struct mp3 g_mp3;
-
 static int msm8k_mp3_open(struct inode *inode, struct file *f)
 {
-	struct mp3 *mp3 = &g_mp3;
+	struct mp3 *mp3;
 	struct cad_open_struct_type  cos;
 	D("%s\n", __func__);
 
+	mp3 = kmalloc(sizeof(struct mp3), GFP_KERNEL);
+	if (mp3 == NULL) {
+		pr_err("Could not allocate memory for mp3 driver\n");
+		return CAD_RES_FAILURE;
+	}
+
 	f->private_data = mp3;
+
+	memset(mp3, 0, sizeof(struct mp3));
+
+	mp3->eos_ack = 0;
+	mp3->flush_rcvd = 0;
+
+	mutex_init(&mp3->write_lock);
+	init_waitqueue_head(&mp3->eos_wait);
 
 	cos.format = CAD_FORMAT_MP3;
 	cos.op_code = CAD_OPEN_OP_WRITE;
@@ -139,6 +151,7 @@ static int msm8k_mp3_release(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	cad_close(mp3->cad_w_handle);
+	kfree(mp3);
 
 	return rc;
 }
@@ -359,13 +372,6 @@ static int __init msm8k_mp3_init(void)
 {
 	int rc;
 	D("%s\n", __func__);
-	memset(&g_mp3, 0, sizeof(struct mp3));
-
-	g_mp3.eos_ack = 0;
-	g_mp3.flush_rcvd = 0;
-
-	mutex_init(&g_mp3.write_lock);
-	init_waitqueue_head(&g_mp3.eos_wait);
 
 	rc = misc_register(&msm8k_mp3_misc);
 
