@@ -868,7 +868,11 @@ static void __exit kgsl_mod_exit(void)
 	platform_driver_unregister(&kgsl_platform_driver);
 }
 
+#ifdef MODULE
 module_init(kgsl_mod_init);
+#else
+late_initcall(kgsl_mod_init);
+#endif
 module_exit(kgsl_mod_exit);
 
 MODULE_DESCRIPTION("3D graphics driver for QSD8x50 and MSM7x27");
