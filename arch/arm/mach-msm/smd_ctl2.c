@@ -76,7 +76,7 @@
 
 #define NUM_SMD_CTL_PORTS 3
 #define DEVICE_NAME "smdcntl"
-#define MAX_BUF_SIZE 1024
+#define MAX_BUF_SIZE 2048
 
 struct smd_ctl_dev {
 	struct cdev cdev;
@@ -207,7 +207,6 @@ ssize_t smd_ctl_read(struct file *file,
 		       size_t count,
 		       loff_t *ppos)
 {
-	unsigned char read_buf[MAX_BUF_SIZE];
 	int r;
 	int bytes_read;
 	struct smd_ctl_dev *smd_ctl_devp;
@@ -271,7 +270,7 @@ ssize_t smd_ctl_read(struct file *file,
 	}
 
 	/* smd_read and copy_to_user need to be merged to only do 1 copy */
-	if (smd_read(smd_ctl_devp->ctl_ch, read_buf, bytes_read)
+	if (smd_read(smd_ctl_devp->ctl_ch, smd_ctl_devp->rx_buf, bytes_read)
 	    != bytes_read) {
 		if (smd_ctl_devp->has_reset)
 			return -ENETRESET;
@@ -279,8 +278,8 @@ ssize_t smd_ctl_read(struct file *file,
 		printk(KERN_ERR "user read: not enough data?!\n");
 		return -EINVAL;
 	}
-	D_DUMP_BUFFER("read: ", bytes_read, read_buf);
-	r = copy_to_user(buf, read_buf, bytes_read);
+	D_DUMP_BUFFER("read: ", bytes_read, smd_ctl_devp->rx_buf);
+	r = copy_to_user(buf, smd_ctl_devp->rx_buf, bytes_read);
 
 	if (r > 0) {
 		printk(KERN_ERR "ERROR:%s:%i:%s: "
