@@ -1128,7 +1128,7 @@ config Q6_VENC
 config MSM_KGSL
 	tristate "MSM 3D Graphics driver for QSD8x50 and MSM7x27"
 	default n
-	depends on FB && ARM && ARCH_QSD8X50 && !MSM_HW3D
+	depends on FB && ARM && (ARCH_QSD8X50 || ARCH_MSM7X27) && !MSM_HW3D
 	select GENERIC_ALLOCATOR
 	select FW_LOADER
 	---help---
