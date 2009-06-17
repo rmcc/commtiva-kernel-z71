@@ -102,6 +102,8 @@
 #define MSM_PMEM_GPU0_BASE	(MSM_FB_BASE + MSM_FB_SIZE)
 #define MSM_PMEM_GPU0_SIZE	(MSM_SMI_SIZE - MSM_FB_SIZE)
 
+#define PMEM_KERNEL_EBI1_SIZE	0x200000
+
 #define COMET_CPLD_START                 0x70004000
 #define COMET_CPLD_PER_ENABLE            0x00000010
 #define COMET_CPLD_PER_RESET             0x00000018
@@ -317,6 +319,17 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 #endif
 };
 
+static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
+	.name = PMEM_KERNEL_EBI1_DATA_NAME,
+	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
+	 * the only valid choice at this time. The board structure is
+	 * set to all zeros by the C runtime initialization and that is now
+	 * the enum value of PMEM_ALLOCATORTYPE_BITMAP, now forced to 0 in
+	 * include/linux/android_pmem.h.
+	 */
+	.cached = 0,
+};
+
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.size = MSM_PMEM_MDP_SIZE,
@@ -367,6 +380,12 @@ static struct platform_device android_pmem_gpu1_device = {
 	.name = "android_pmem",
 	.id = 3,
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
+};
+
+static struct platform_device android_pmem_kernel_ebi1_device = {
+	.name = "android_pmem",
+	.id = 4,
+	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
 static struct resource qsd_spi_resources[] = {
@@ -800,6 +819,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc911x_device,
 	&s1r72v05_device,
+	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&android_pmem_gpu0_device,
@@ -1342,6 +1362,13 @@ static void __init comet_allocate_memory_regions(void)
 {
 	void *addr;
 	unsigned long size;
+
+	size = PMEM_KERNEL_EBI1_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	android_pmem_kernel_ebi1_pdata.start = __pa(addr);
+	android_pmem_kernel_ebi1_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+	       "for pmem kernel ebi1 arena\n", size, addr, __pa(addr));
 
 	addr = alloc_bootmem(android_pmem_pdata.size);
 	android_pmem_pdata.start = __pa(addr);
