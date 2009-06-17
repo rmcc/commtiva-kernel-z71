@@ -273,6 +273,8 @@ static void smd_channel_probe_worker(struct work_struct *work)
 
 	shared = smem_find(ID_CH_ALLOC_TBL, sizeof(*shared) * 64);
 
+	BUG_ON(!shared);
+
 	for (n = 0; n < 64; n++) {
 		if (smd_ch_allocated[n])
 			continue;
@@ -1699,6 +1701,8 @@ static int debug_read_alloc_tbl(char *buf, int max)
 	int n, i = 0;
 
 	shared = smem_find(ID_CH_ALLOC_TBL, sizeof(struct smd_alloc_elm[64]));
+
+	BUG_ON(!shared);
 
 	for (n = 0; n < 64; n++) {
 		i += scnprintf(buf + i, max - i,
