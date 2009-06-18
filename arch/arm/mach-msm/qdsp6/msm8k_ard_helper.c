@@ -97,6 +97,7 @@ u32 get_device_id(u32 cad_device_requested)
 		dev_id = 0;
 	} else if ((cad_device_requested == CAD_HW_DEVICE_ID_SPKR_PHONE_MIC) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_HEADSET_MIC) ||
+		(cad_device_requested == CAD_HW_DEVICE_ID_TTY_HEADSET_MIC) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_HANDSET_MIC)) {
 
 		dev_id = 1;
@@ -113,7 +114,7 @@ u32 get_device_id(u32 cad_device_requested)
 	} else {
 		pr_err("ARD No Support for other devices device = %d\n",
 			cad_device_requested);
-		dev_id = 0xFF;
+		dev_id = CAD_HW_DEVICE_ID_INVALID;
 	}
 	return dev_id;
 }

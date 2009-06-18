@@ -378,6 +378,10 @@ s32 ard_close(s32 session_id)
 				cad_device = strm_dev->device[i];
 
 			dev_id = get_device_id(cad_device);
+			if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+				pr_err("%s: unsupported device\n", __func__);
+				return CAD_RES_FAILURE;
+			}
 
 
 			/* Lock the device data*/
@@ -509,6 +513,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				= def_device->device;
 		}
 
+		if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+			pr_err("%s: unsupported device\n", __func__);
+			return CAD_RES_FAILURE;
+		}
 
 		if ((local_ard_state->ard_device[dev_id].device_inuse
 			== def_device->device) ||
@@ -559,6 +567,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			dev_id = get_device_id(
 				local_ard_state->
 				def_rx_device);
+			if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+				pr_err("%s: unsupported device\n", __func__);
+				return CAD_RES_FAILURE;
+			}
 
 			/* Grab the Device Mutex and set */
 			/* Device In Use */
@@ -580,6 +592,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			dev_id = get_device_id(
 				local_ard_state->
 				def_tx_device);
+			if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+				pr_err("%s: unsupported device\n", __func__);
+				return CAD_RES_FAILURE;
+			}
 
 			/* Grab the Device Mutex and set */
 			/* Device In Use */
@@ -728,6 +744,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				cad_device = strm_dev->device[i];
 
 			dev_id = get_device_id(cad_device);
+			if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+				pr_err("%s: unsupported device\n", __func__);
+				return CAD_RES_FAILURE;
+			}
 
 			/* Grab the Device mutex so that no updates */
 			/* are allowed to the device data */
@@ -807,6 +827,10 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				cad_device = strm_dev->device[i];
 
 			dev_id = get_device_id(cad_device);
+			if (dev_id == CAD_HW_DEVICE_ID_INVALID) {
+				pr_err("%s: unsupported device\n", __func__);
+				return CAD_RES_FAILURE;
+			}
 
 			/* Grab the route mutex so that no updates are allowed
 			   to the route data. */

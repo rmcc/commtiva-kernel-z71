@@ -96,6 +96,8 @@
 
 #define CAD_HW_DEVICE_ID_MAX_NUM                0x2F
 
+#define CAD_HW_DEVICE_ID_INVALID                0xFF
+
 #define CAD_RX_DEVICE  0x00
 #define CAD_TX_DEVICE  0x01
 #define CAD_AUXPGA_DEVICE 0x02
