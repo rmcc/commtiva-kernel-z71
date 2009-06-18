@@ -86,19 +86,22 @@ static int bluetooth_toggle_radio(void *data, enum rfkill_state state)
 static int bluetooth_power_rfkill_probe(struct platform_device *pdev)
 {
 	struct rfkill *rfkill;
-	int ret = -ENOMEM;
+	int ret;
 
 	/* force Bluetooth off during init to allow for user control */
-	rfkill_switch_all(RFKILL_TYPE_BLUETOOTH, RFKILL_STATE_SOFT_BLOCKED);
-
-	rfkill = rfkill_allocate(&pdev->dev, RFKILL_TYPE_BLUETOOTH);
+	ret = rfkill_set_default(RFKILL_TYPE_BLUETOOTH,
+				RFKILL_STATE_SOFT_BLOCKED);
+	if (!ret) {
+		rfkill = rfkill_allocate(&pdev->dev, RFKILL_TYPE_BLUETOOTH);
+	} else {
+		printk(KERN_DEBUG
+			"%s: rfkill set default failed=%d\n", __func__, ret);
+		rfkill = NULL;
+	}
 
 	if (rfkill) {
 		rfkill->name = "bt_power";
 		rfkill->toggle_radio = bluetooth_toggle_radio;
-		rfkill->state = bluetooth_power_state ?
-					RFKILL_STATE_UNBLOCKED :
-					RFKILL_STATE_SOFT_BLOCKED;
 		ret = rfkill_register(rfkill);
 		if (ret) {
 			printk(KERN_DEBUG
@@ -154,7 +157,7 @@ static int bluetooth_power_param_set(const char *val, struct kernel_param *kp)
 module_param_call(power, bluetooth_power_param_set, param_get_bool,
 		  &bluetooth_power_state, S_IWUSR | S_IRUGO);
 
-static int __init_or_module bt_power_probe(struct platform_device *pdev)
+static int __init bt_power_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 
@@ -215,7 +218,7 @@ static struct platform_driver bt_power_driver = {
 	},
 };
 
-static int __init_or_module bluetooth_power_init(void)
+static int __init bluetooth_power_init(void)
 {
 	int ret;
 
@@ -232,7 +235,7 @@ static void __exit bluetooth_power_exit(void)
 
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("MSM Bluetooth power control driver");
-MODULE_VERSION("1.10");
+MODULE_VERSION("1.20");
 MODULE_PARM_DESC(power, "MSM Bluetooth power switch (bool): 0,1=off,on");
 
 module_init(bluetooth_power_init);
