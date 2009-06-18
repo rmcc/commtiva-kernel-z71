@@ -278,8 +278,13 @@ s32   ard_acdb_send_cal(u32 session_id, u32 new_device, u32 old_device)
 			return CAD_RES_FAILURE;
 		}
 
-		acdb_cmd.sample_rate_id =
-			ard_state.ard_device[route_id].device_sample_rate;
+		if (ard_state.ard_device[route_id].stream_count > 0)
+			acdb_cmd.sample_rate_id = ard_state.
+				ard_device[route_id].device_sample_rate;
+		else
+			ard_state.ard_device[route_id].device_sample_rate =
+				ard_acdb_get_sample_rate(session_id, route_id);
+
 	} else {
 		route_id = get_device_id(new_device);
 		if (route_id == 0xFF) {
