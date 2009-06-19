@@ -91,27 +91,34 @@ static int bluetooth_power_rfkill_probe(struct platform_device *pdev)
 	/* force Bluetooth off during init to allow for user control */
 	ret = rfkill_set_default(RFKILL_TYPE_BLUETOOTH,
 				RFKILL_STATE_SOFT_BLOCKED);
-	if (!ret) {
-		rfkill = rfkill_allocate(&pdev->dev, RFKILL_TYPE_BLUETOOTH);
-	} else {
+	if (ret) {
 		printk(KERN_DEBUG
 			"%s: rfkill set default failed=%d\n", __func__, ret);
-		rfkill = NULL;
+		return ret;
 	}
 
-	if (rfkill) {
-		rfkill->name = "bt_power";
-		rfkill->toggle_radio = bluetooth_toggle_radio;
-		ret = rfkill_register(rfkill);
-		if (ret) {
-			printk(KERN_DEBUG
-				"%s: rfkill register failed=%d\n", __func__,
-				ret);
-			rfkill_free(rfkill);
-		} else
-			platform_set_drvdata(pdev, rfkill);
+	rfkill = rfkill_allocate(&pdev->dev, RFKILL_TYPE_BLUETOOTH);
+
+	if (!rfkill) {
+		printk(KERN_DEBUG
+			"%s: rfkill allocate failed\n", __func__);
+		return -ENOMEM;
 	}
-	return ret;
+
+	rfkill->name = "bt_power";
+	rfkill->toggle_radio = bluetooth_toggle_radio;
+	ret = rfkill_register(rfkill);
+	if (ret) {
+		printk(KERN_DEBUG
+			"%s: rfkill register failed=%d\n", __func__,
+			ret);
+		rfkill_free(rfkill);
+		return ret;
+	}
+
+	platform_set_drvdata(pdev, rfkill);
+
+	return 0;
 }
 
 static void bluetooth_power_rfkill_remove(struct platform_device *pdev)
