@@ -353,6 +353,8 @@ s32 cad_q6dec_session_open(struct q6dec_session_data *self,
 	self->session_id = session_id;
 	self->use_counter = 1;
 	self->ret_counter = 1;
+	self->cb_data.client_data = NULL;
+	self->cb_data.callback = NULL;
 	D("Session open successful\n");
 	return CAD_RES_SUCCESS;
 }
