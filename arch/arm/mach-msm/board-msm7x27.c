@@ -436,6 +436,7 @@ static int msm_fb_detect_panel(const char *name)
 
 static struct msm_fb_platform_data msm_fb_pdata = {
 	.detect_client = msm_fb_detect_panel,
+	.mddi_prescan = 1,
 };
 
 static struct platform_device msm_fb_device = {

@@ -175,12 +175,19 @@ int msm_fb_detect_client(const char *name)
 	int ret = -EPERM;
 #ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
 	u32 id;
-
-	id = mddi_get_client_id();
 #endif
 
-	if (msm_fb_pdata && msm_fb_pdata->detect_client)
+	if (msm_fb_pdata && msm_fb_pdata->detect_client) {
 		ret = msm_fb_pdata->detect_client(name);
+
+		/* if it's non mddi panel, we need to pre-scan
+		   mddi client to see if we can disable mddi host */
+
+#ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
+		if (!ret && msm_fb_pdata->mddi_prescan)
+			id = mddi_get_client_id();
+#endif
+	}
 
 	return ret;
 }
