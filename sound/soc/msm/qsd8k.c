@@ -138,7 +138,7 @@ static int snd_vol_put(struct snd_kcontrol *kcontrol,
 	return rc;
 }
 
-static int snd_mute_info(struct snd_kcontrol *kcontrol,
+static int snd_tx_mute_info(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_info *uinfo)
 {
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
@@ -148,14 +148,48 @@ static int snd_mute_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int snd_mute_get(struct snd_kcontrol *kcontrol,
+static int snd_tx_mute_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.mute;
+	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.tx_mute;
 	return 0;
 }
 
-static int snd_mute_put(struct snd_kcontrol *kcontrol,
+static int snd_tx_mute_put(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	int rc = 0;
+	struct msm_mute_info m;
+
+	m.path = CAD_TX_DEVICE;
+	m.mute = ucontrol->value.integer.value[0];
+
+	rc = audio_set_device_mute(&m);
+	if (rc)
+		printk(KERN_ERR "Capture device mute failed\n");
+	else
+		qsd_glb_ctl.tx_mute = ucontrol->value.integer.value[0];
+	return rc;
+}
+
+static int snd_rx_mute_info(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->count = 1; /* MUTE */
+	uinfo->value.integer.min = 0;
+	uinfo->value.integer.max = 1;
+	return 0;
+}
+
+static int snd_rx_mute_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.rx_mute;
+	return 0;
+}
+
+static int snd_rx_mute_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int rc = 0;
@@ -166,9 +200,9 @@ static int snd_mute_put(struct snd_kcontrol *kcontrol,
 
 	rc = audio_set_device_mute(&m);
 	if (rc)
-		printk(KERN_ERR "audio_set_device_mute failed\n");
+		printk(KERN_ERR "Playback device mute failed\n");
 	else
-		qsd_glb_ctl.mute = ucontrol->value.integer.value[0];
+		qsd_glb_ctl.rx_mute = ucontrol->value.integer.value[0];
 	return rc;
 }
 
@@ -225,9 +259,11 @@ static struct snd_kcontrol_new snd_qsd_controls[] = {
 			 snd_qsd_route_get, snd_qsd_route_put, 0),
 	QSD_EXT("Master Volume", 2, snd_vol_info, \
 			 snd_vol_get, snd_vol_put, 0),
-	QSD_EXT("Master Mute", 3, snd_mute_info, \
-			 snd_mute_get, snd_mute_put, 0),
-	QSD_EXT("Stream Volume", 4, snd_strm_vol_info, \
+	QSD_EXT("Master Mute Playback", 3, snd_rx_mute_info, \
+			 snd_rx_mute_get, snd_rx_mute_put, 0),
+	QSD_EXT("Master Mute Capture", 4, snd_tx_mute_info, \
+			 snd_tx_mute_get, snd_tx_mute_put, 0),
+	QSD_EXT("Stream Volume", 5, snd_strm_vol_info, \
 			 snd_strm_vol_get, snd_strm_vol_put, 0),
 };
 
