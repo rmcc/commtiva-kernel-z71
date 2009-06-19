@@ -141,6 +141,9 @@ struct i2ckybd_record {
 	int     irqpin;
 	int     (*extpin_setup) (void);
 	void    (*extpin_teardown)(void);
+
+	void (*i2c_hw_reset)(int);
+
 	uint8_t cmd;
 	uint8_t noargs;
 	uint8_t cargs[2];
@@ -550,12 +553,14 @@ static void qi2ckybd_recoverkbd(struct work_struct *work)
 			"recovery failed with (rc=%d)\n", rc);
 }
 
-/* use gpio output pin to toggle keyboard external reset pin */
-static void qi2ckybd_hwreset(int kbd_mclrpin)
+static void qi2ckybd_hwreset(struct i2ckybd_record *rd)
 {
-	gpio_direction_output(kbd_mclrpin, 0);
-	gpio_direction_output(kbd_mclrpin, 1);
+	if (rd != NULL) {
+		if (rd->i2c_hw_reset != NULL)
+			rd->i2c_hw_reset(rd->mclrpin);
+	}
 }
+
 
 /* translate from set 1 scan code(s) to intermediate xlate-lookup code */
 static inline void qi2ckybd_xlscancode(s32 rawcode, uint8_t prefix,
@@ -767,7 +772,7 @@ static void qi2ckybd_fetchkeys(struct work_struct *work)
 			       " (rc = 0x%2x)\n", i2c_error);
 			kbdrec->kybd_connected = 0;
 			free_irq(KBDIRQNO(kbdrec), kbdrec);
-			qi2ckybd_hwreset(kbdrec->mclrpin);
+			qi2ckybd_hwreset(kbdrec);
 			INIT_DELAYED_WORK(&kbdrec->kb_cmdq,
 					  qi2ckybd_recoverkbd);
 			schedule_delayed_work(&kbdrec->kb_cmdq,
@@ -801,7 +806,7 @@ static void qi2ckybd_shutdown(struct i2ckybd_record *rd)
 		rd->kybd_connected = 0;
 		free_irq(KBDIRQNO(rd), rd);
 		flush_work(&rd->qkybd_irqwork);
-		qi2ckybd_hwreset(rd->mclrpin);
+		qi2ckybd_hwreset(rd);
 	}
 }
 
@@ -993,7 +998,7 @@ static int testfor_keybd(struct i2c_client *new_kbd)
 	struct i2ckybd_record *rd = i2c_get_clientdata(new_kbd);
 
 	if (!rd->kybd_exists) {
-		qi2ckybd_hwreset(rd->mclrpin);
+		qi2ckybd_hwreset(rd);
 		mdelay(500);
 		rc = qi2ckybd_issuecmd(new_kbd, QKBD_CMD_RESET, NULL, 0);
 		if (!rc) {
@@ -1106,6 +1111,7 @@ static int __devinit qi2ckybd_probe(struct i2c_client *client,
 	rd->irqpin        = setup_data->gpioirq;
 	rd->extpin_setup  = setup_data->gpio_setup;
 	rd->extpin_teardown  = setup_data->gpio_shutdown;
+	rd->i2c_hw_reset = setup_data->hw_reset;
 
 	rc = qi2ckybd_config_gpio(rd);
 	if (rc)

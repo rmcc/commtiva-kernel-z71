@@ -56,6 +56,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/delay.h>
 #include <linux/irq.h>
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
@@ -117,8 +118,10 @@
 #define COMET_CPLD_PER_ENABLE_LVDS       0x0200
 #define COMET_CPLD_PER_ENABLE_IDE        0x0080
 #define COMET_CPLD_PER_ENABLE_WXGA       0x0040
+#define COMET_CPLD_PER_ENABLE_I2C1       0x0010
 #define COMET_CPLD_EXT_PER_ENABLE_WXGA   0x0080
 #define COMET_CPLD_PER_RESET_IDE         0x0004
+#define COMET_CPLD_EXT_PER_ENABLE_I2C1   0x0008
 
 static int                  cpld_version;
 static bool                 wvga_present;
@@ -884,47 +887,31 @@ static struct msm_touchpad_platform_data msm_touchpad_data = {
 };
 
 
-#define KBD_RST 35
 #define KBD_IRQ 144
 
 static void kbd_gpio_release(void)
 {
 	gpio_free(KBD_IRQ);
-	gpio_free(KBD_RST);
 }
 
 static int kbd_gpio_setup(void)
 {
 	int rc;
-	int respin = KBD_RST;
 	int irqpin = KBD_IRQ;
-	unsigned rescfg =
-		GPIO_CFG(respin, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA);
+
 	unsigned irqcfg =
 		GPIO_CFG(irqpin, 0, GPIO_INPUT, GPIO_NO_PULL, GPIO_2MA);
 
 	rc = gpio_request(irqpin, "gpio_keybd_irq");
 	if (rc) {
 		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       irqpin, rc);
-		goto err_gpioconfig;
-	}
-	rc = gpio_request(respin, "gpio_keybd_reset");
-	if (rc) {
-		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       respin, rc);
-		goto err_gpioconfig;
-	}
-	rc = gpio_tlmm_config(rescfg, GPIO_ENABLE);
-	if (rc) {
-		pr_err("gpio_tlmm_config failed on pin %d (rc=%d)\n",
-		       respin, rc);
+			irqpin, rc);
 		goto err_gpioconfig;
 	}
 	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
 	if (rc) {
 		pr_err("gpio_tlmm_config failed on pin %d (rc=%d)\n",
-		       irqpin, rc);
+			irqpin, rc);
 		goto err_gpioconfig;
 	}
 	return rc;
@@ -934,13 +921,55 @@ err_gpioconfig:
 	return rc;
 }
 
+/* use CPLD register to toggle keyboard external reset pin */
+static void kbd_hwreset(int kbd_mclrpin)
+{
+	char __iomem *cpld_base;
+	int per_en;
+	int ext_per_en;
+
+	cpld_base = comet_cpld_base();
+
+	if (!cpld_base)
+		return;
+
+	cpld_version = (readw(cpld_base + COMET_CPLD_VERSION)
+			& COMET_CPLD_VERSION_MAJOR) >> 8;
+
+	if (cpld_version >= 2) {
+		/* COMET2 */
+		/* Reset the pin */
+		ext_per_en = readw(cpld_base + COMET_CPLD_EXT_PER_ENABLE);
+		ext_per_en = ext_per_en & (~COMET_CPLD_EXT_PER_ENABLE_I2C1);
+		writew(ext_per_en, cpld_base + COMET_CPLD_EXT_PER_ENABLE);
+
+		msleep(2);
+
+		/* Set the pin */
+		ext_per_en = ext_per_en | COMET_CPLD_EXT_PER_ENABLE_I2C1;
+		writew(ext_per_en, cpld_base + COMET_CPLD_EXT_PER_ENABLE);
+	} else {
+		/* COMET1 */
+		/* Reset the pin */
+		per_en = readw(cpld_base + COMET_CPLD_PER_ENABLE);
+		per_en = per_en & (~COMET_CPLD_PER_ENABLE_I2C1);
+		writew(per_en, cpld_base + COMET_CPLD_PER_ENABLE);
+
+		msleep(1);
+
+		/* Set the pin */
+		per_en = per_en | COMET_CPLD_PER_ENABLE_I2C1;
+		writew(per_en, cpld_base + COMET_CPLD_PER_ENABLE);
+	}
+}
+
 static struct msm_i2ckbd_platform_data msm_kybd_data = {
 	.hwrepeat = 0,
 	.scanset1 = 1,
-	.gpioreset = KBD_RST,
 	.gpioirq = KBD_IRQ,
 	.gpio_setup = kbd_gpio_setup,
 	.gpio_shutdown = kbd_gpio_release,
+	.hw_reset = kbd_hwreset,
 };
 
 static struct i2c_board_info msm_i2c_board_info[] __initdata = {

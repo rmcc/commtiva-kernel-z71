@@ -65,6 +65,7 @@ struct msm_i2ckbd_platform_data {
 	int  gpioirq;
 	int  (*gpio_setup) (void);
 	void (*gpio_shutdown)(void);
+	void (*hw_reset) (int);
 };
 
 #endif

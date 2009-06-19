@@ -1260,25 +1260,25 @@ static int kbd_gpio_setup(void)
 	rc = gpio_request(irqpin, "gpio_keybd_irq");
 	if (rc) {
 		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       irqpin, rc);
+			irqpin, rc);
 		goto err_gpioconfig;
 	}
 	rc = gpio_request(respin, "gpio_keybd_reset");
 	if (rc) {
 		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       respin, rc);
+			respin, rc);
 		goto err_gpioconfig;
 	}
 	rc = gpio_tlmm_config(rescfg, GPIO_ENABLE);
 	if (rc) {
 		pr_err("gpio_tlmm_config failed on pin %d (rc=%d)\n",
-		       respin, rc);
+			respin, rc);
 		goto err_gpioconfig;
 	}
 	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
 	if (rc) {
 		pr_err("gpio_tlmm_config failed on pin %d (rc=%d)\n",
-		       irqpin, rc);
+			irqpin, rc);
 		goto err_gpioconfig;
 	}
 	return rc;
@@ -1288,6 +1288,13 @@ err_gpioconfig:
 	return rc;
 }
 
+/* use gpio output pin to toggle keyboard external reset pin */
+static void kbd_hwreset(int kbd_mclrpin)
+{
+	gpio_direction_output(kbd_mclrpin, 0);
+	gpio_direction_output(kbd_mclrpin, 1);
+}
+
 static struct msm_i2ckbd_platform_data msm_kybd_data = {
 	.hwrepeat = 0,
 	.scanset1 = 1,
@@ -1295,6 +1302,7 @@ static struct msm_i2ckbd_platform_data msm_kybd_data = {
 	.gpioirq = KBD_IRQ,
 	.gpio_setup = kbd_gpio_setup,
 	.gpio_shutdown = kbd_gpio_release,
+	.hw_reset = kbd_hwreset,
 };
 
 static struct i2c_board_info msm_i2c_board_info[] __initdata = {
