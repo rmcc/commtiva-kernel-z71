@@ -58,7 +58,6 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/semaphore.h>
-#include <linux/time.h>
 #include <linux/uaccess.h>
 
 #include <mach/qdsp6/msm8k_cad_q6enc_session.h>
@@ -200,7 +199,6 @@ static void cad_q6enc_session_handle_async_evt(
 	struct q6_enc_session_buf_node	*node = NULL;
 	struct q6_enc_session_buf_node	*prev_node = NULL;
 	struct q6_enc_session_data	*self = clientData;
-	struct timeval			tv1;
 
 	if (return_event->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
 
@@ -232,12 +230,9 @@ static void cad_q6enc_session_handle_async_evt(
 		node->buf_len = return_event->
 			event_data.buf_data.actual_size;
 
-		do_gettimeofday(&tv1);
-		/* timestamp test */
 		/* put this node into full list */
-		D("Get full read buffer(0x%x)!, sec: %d, usec: %d\n",
-			return_event->event_data.buf_data.phys_addr,
-			(int)tv1.tv_sec, (int)tv1.tv_usec);
+		D("Get full read buffer(0x%x)!\n",
+			return_event->event_data.buf_data.phys_addr);
 
 		if (self->full_nodes_head == NULL) {
 			self->full_nodes_head = node;
