@@ -42,7 +42,15 @@ static struct led_classdev msm_kp_bl_led = {
 
 static int msm_pmic_led_probe(struct platform_device *pdev)
 {
-	return led_classdev_register(&pdev->dev, &msm_kp_bl_led);
+	int rc;
+
+	rc = led_classdev_register(&pdev->dev, &msm_kp_bl_led);
+	if (rc) {
+		dev_err(&pdev->dev, "unable to register led class driver\n");
+		return rc;
+	}
+	msm_keypad_bl_led_set(&msm_kp_bl_led, LED_OFF);
+	return rc;
 }
 
 static int __devexit msm_pmic_led_remove(struct platform_device *pdev)
