@@ -56,7 +56,8 @@ struct qsd_ctl {
 	int16_t pan;
 	uint16_t capture_device; /* Device parameter */
 	uint16_t playback_device; /* Device  parameter */
-	uint16_t mute;		 /* Mute  parameter */
+	uint16_t tx_mute;		 /* Mute  parameter */
+	uint16_t rx_mute;		 /* Mute  parameter */
 };
 
 extern struct audio_locks the_locks;
