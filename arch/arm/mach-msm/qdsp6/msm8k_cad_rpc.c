@@ -130,7 +130,7 @@ static s32 cad_rpc_async_callback(struct adsp_audio_event *evt)
 
 	D("<-------------- ARM Async callback function fired.......\n");
 	D("Get new async event(0x%x), handle: %d!!!!!!\n",
-		evt->cad_event_data.buf_data.phys_addr,
+		evt->event_data.buf_data.buffer_addr,
 		evt->handle);
 
 	if ((evt->handle <= 0) ||

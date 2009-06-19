@@ -328,7 +328,7 @@ u32 adie_state_control(u32 dev_type, u32 dev_id)
 	rc = ADIE_STATE_RC_SUCCESS;
 
 	do {
-		D("ARD ADIE dev_type %d, adie state %d",
+		D("ARD ADIE dev_type %d, adie state %d\n",
 			dev_type, adie_state.adie_path_type[dev_type].state);
 
 		switch (adie_state.adie_path_type[dev_type].state) {

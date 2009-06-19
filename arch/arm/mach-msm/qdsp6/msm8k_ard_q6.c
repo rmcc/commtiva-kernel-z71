@@ -148,7 +148,7 @@ s32 qdsp6_open(s32 session_id)
 
 		D("ARD device id= %d, device len = %d\n",
 				cadr->stream_device.device[0],
-				cadr->stream_device.num_device);
+				cadr->stream_device.num_devices);
 
 		rc = convert_format_block(session_id, cadr, ref_cadr);
 		if (rc != CAD_RES_SUCCESS) {

@@ -188,7 +188,7 @@ static s32 send_buffers(struct q6_enc_session_data *self)
 			res = CAD_RES_FAILURE;
 			break;
 		}
-		D("Send Buffer (0x%x) to Q6\n", cad_buf.phys_addr);
+		D("Send Buffer (0x%x) to Q6\n", cad_buf.buffer.buffer_addr);
 	}
 	return res;
 }
@@ -232,7 +232,7 @@ static void cad_q6enc_session_handle_async_evt(
 
 		/* put this node into full list */
 		D("Get full read buffer(0x%x)!\n",
-			return_event->event_data.buf_data.phys_addr);
+			return_event->event_data.buf_data.buffer_addr);
 
 		if (self->full_nodes_head == NULL) {
 			self->full_nodes_head = node;

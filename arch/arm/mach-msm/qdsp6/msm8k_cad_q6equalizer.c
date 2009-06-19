@@ -124,7 +124,7 @@ s32 cad_filter_eq_process_stream_config(s32 sess_id,
 
 	/* check the stream status */
 	if (!ardsession[sess_id]->active) {
-		D("%s: stream is not active.", __func__);
+		D("%s: stream is not active.\n", __func__);
 		return CAD_RES_SUCCESS;
 	}
 
@@ -146,7 +146,7 @@ s32 cad_filter_eq_process_stream_start(s32 sess_id)
 	}
 	/* skip if this is TX session */
 	if (open_struct->cad_open.op_code != CAD_OPEN_OP_WRITE) {
-		D("%s: skip TX stream session", __func__);
+		D("%s: skip TX stream session\n", __func__);
 		return CAD_RES_SUCCESS;
 	}
 	/* skip if no stream eq data */
@@ -197,7 +197,7 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 		case CAD_FILTER_EQ_DEVICE_CONFIG:
 			if (filt->format_block_len !=
 				sizeof(struct adsp_audio_stream_eq_cfg)) {
-				D("%s: wrong device config format block",
+				D("%s: wrong device config format block\n",
 					__func__);
 				break;
 			}

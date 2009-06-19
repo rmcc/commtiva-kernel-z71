@@ -300,7 +300,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		}
 		if (ardsession[session_id]->sess_open_info->cad_open.op_code
 				== CAD_OPEN_OP_READ) {
-			D("%s: Do not handle audio recording session.",
+			D("%s: Do not handle audio recording session.\n",
 				__func__);
 			return CAD_RES_SUCCESS;
 		}
@@ -371,7 +371,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 						ard_state.def_tx_device);
 			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
 				rc = CAD_RES_FAILURE;
-				pr_err("%s: invalid device id %d", __func__,
+				pr_err("%s: invalid device id %d\n", __func__,
 					ard_state.def_tx_device);
 				goto done;
 			}
@@ -381,7 +381,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 						ard_state.def_rx_device);
 			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
 				rc = CAD_RES_FAILURE;
-				pr_err("%s: invalid device id %d", __func__,
+				pr_err("%s: invalid device id %d\n", __func__,
 						ard_state.def_rx_device);
 				goto done;
 			}
@@ -389,7 +389,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 
 		/*
 		if (device_control_session == 0) {
-			pr_err("%s: invalid device_control_session.",
+			pr_err("%s: invalid device_control_session.\n",
 				__func__);
 			return CAD_RES_FAILURE;
 		}
@@ -449,13 +449,13 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 				q6_set_dev_vol1->volume =
 					qdsp6_volume_cache_tbl[device_id].
 							current_volume;
-				D("%s: current_volume is %d.", __func__,
+				D("%s: current_volume is %d.\n", __func__,
 						q6_set_dev_vol1->volume);
 			} else {
 				q6_set_dev_vol1->volume =
 					qdsp6_volume_cache_tbl[device_id].
 							default_volume;
-				D("%s: current_volume is %d (default).",
+				D("%s: current_volume is %d (default).\n",
 					__func__, q6_set_dev_vol1->volume);
 			}
 			q6_set_dev_vol1->path = 0;
@@ -542,7 +542,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 
 		if (dev_vol_buf->device_id == 0 ||
 			dev_vol_buf->device_id > CAD_HW_DEVICE_ID_MAX_NUM) {
-			pr_err("%s: invalid device id %d.",
+			pr_err("%s: invalid device id %d.\n",
 					__func__, dev_vol_buf->device_id);
 			rc = CAD_RES_FAILURE;
 			goto done;
@@ -559,7 +559,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 				== CAD_OPEN_OP_READ) {
 			if (dev_vol_buf->device_id !=
 					ard_state.def_tx_device) {
-				pr_err("%s: %d is not current device id.",
+				pr_err("%s: %d is not current device id.\n",
 					__func__, dev_vol_buf->device_id);
 				rc = CAD_RES_FAILURE;
 				goto done;
@@ -568,7 +568,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 				cad_open.op_code == CAD_OPEN_OP_WRITE) {
 			if (dev_vol_buf->device_id !=
 					ard_state.def_rx_device) {
-				pr_err("%s: %d is not current device id.",
+				pr_err("%s: %d is not current device id.\n",
 					__func__, dev_vol_buf->device_id);
 				rc = CAD_RES_FAILURE;
 				goto done;
