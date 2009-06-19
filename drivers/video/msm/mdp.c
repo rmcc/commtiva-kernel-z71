@@ -82,7 +82,7 @@ struct completion mdp_ppp_comp;
 struct semaphore mdp_ppp_mutex;
 struct semaphore mdp_pipe_ctrl_mutex;
 
-unsigned long mdp_timer_duration = ((10000 * HZ) / 1000);	//10sec
+unsigned long mdp_timer_duration = (HZ);   /* 1 sec */
 //unsigned long mdp_mdp_timer_duration=0; //immediate
 
 boolean mdp_ppp_waiting = FALSE;
