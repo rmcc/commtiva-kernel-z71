@@ -67,6 +67,9 @@
 #define FALSE			0
 #define USB_LINK_RESET_TIMEOUT	(msecs_to_jiffies(10))
 
+#define is_phy_45nm()     (PHY_MODEL(ui->phy_info) == USB_PHY_MODEL_45NM)
+#define is_phy_external() (PHY_TYPE(ui->phy_info) == USB_PHY_EXTERNAL)
+
 static int pid = 0x9018;
 static int usb_init_err;
 
@@ -1622,19 +1625,18 @@ static int usb_suspend_phy(struct usb_info *ui)
 	 */
 	switch (PHY_TYPE(ui->phy_info)) {
 	case USB_PHY_INTEGRATED:
-		/* clearing latch register, keeping phy comparators ON and
-		   turning off PLL are done because of h/w bugs */
-		ulpi_read(ui, 0x14);/* clear PHY interrupt latch register */
+		if (!is_phy_45nm()) {
+			ulpi_read(ui, 0x14);
+			ulpi_write(ui, 0x08, 0x09);
+		}
+
 		if (ui->vbus_sn_notif &&
 			ui->usb_state == USB_STATE_NOTATTACHED)
 			/* turn off OTG PHY comparators */
 			ulpi_write(ui, 0x00, 0x30);
 		else
 			/* turn on the PHY comparators */
-			ulpi_write(ui, 0x01, 0x30);
-
-		/* turn off PLL on integrated phy */
-		ulpi_write(ui, 0x08, 0x09);
+			ulpi_write(ui, 0x01 | (1 << is_phy_45nm()), 0x30);
 		break;
 
 	case USB_PHY_UNDEFINED:
@@ -1750,6 +1752,9 @@ static int usb_hw_reset(struct usb_info *ui)
 		writel(0x00, USB_AHB_MODE);
 	}
 
+	/* TBD: do we have to add DpRise, ChargerRise and
+	 * IdFloatRise for 45nm
+	 */
 	/* Disable VbusValid and SessionEnd comparators */
 	val = ULPI_VBUS_VALID | ULPI_SESS_END;
 
@@ -2575,7 +2580,7 @@ static void usb_disable_pullup(struct usb_info *ui)
 	writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
 
 	/* S/W workaround, Issue#1 */
-	if (PHY_TYPE(ui->phy_info) == USB_PHY_INTEGRATED)
+	if (!is_phy_external() && !is_phy_45nm())
 		ulpi_write(ui, 0x48, 0x04);
 
 	enable_irq(ui->irq);
@@ -2679,13 +2684,7 @@ static void usb_lpm_wakeup_phy(struct work_struct *w)
 		pr_err("%s: resetting controller\n", __func__);
 
 		spin_lock_irqsave(&ui->lock, flags);
-		/* clear usb intr register */
-		writel(0, USB_USBINTR);
-		/* stopping controller by disabling pullup on D+ */
-		writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
-		/* S/W workaround, Issue#1 */
-		if (PHY_TYPE(ui->phy_info) == USB_PHY_INTEGRATED)
-			ulpi_write(ui, 0x48, 0x04);
+		usb_disable_pullup(ui);
 		ui->flags = USB_FLAG_RESET;
 		queue_delayed_work(usb_work, &ui->work, 0);
 		enable_irq(ui->irq);
