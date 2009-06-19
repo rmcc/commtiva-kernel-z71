@@ -116,22 +116,24 @@ int qsd_audio_volume_update(struct qsd_audio *prtd)
 
 	int rc = 0;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
-	struct cad_stream_filter_struct_type cad_stream_filter;
+	struct cad_filter_struct flt;
 
-	printk(KERN_INFO " qsd_audio_volume_update: updating volume");
+	printk(KERN_INFO "qsd_audio_volume_update: updating volume");
 	memset(&cad_strm_volume, 0, sizeof(struct cad_flt_cfg_strm_vol));
+	memset(&flt, 0, sizeof(struct cad_filter_struct));
+
 	cad_strm_volume.volume = qsd_glb_ctl.strm_volume;
-	cad_stream_filter.filter_type = CAD_FILTER_CONFIG_STREAM_VOLUME;
-	cad_stream_filter.format_block = &cad_strm_volume;
-	cad_stream_filter.format_block_len =
-		sizeof(struct cad_flt_cfg_strm_vol);
+	flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+	flt.format_block = &cad_strm_volume;
+	flt.cmd = CAD_FILTER_CONFIG_STREAM_VOLUME;
+	flt.format_block_len = sizeof(struct cad_flt_cfg_strm_vol);
 
 	rc = cad_ioctl(prtd->cad_w_handle,
 		CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
-		&cad_stream_filter,
-		sizeof(struct cad_stream_filter_struct_type));
+		&flt,
+		sizeof(struct cad_filter_struct));
 	if (rc)
-		printk(KERN_ERR"cad_ioctl() set volume failed\n");
+		printk(KERN_ERR "cad_ioctl() set volume failed\n");
 	return rc;
 }
 
