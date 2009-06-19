@@ -270,34 +270,22 @@ s32   ard_acdb_send_cal(u32 session_id, u32 new_device, u32 old_device)
 	acdb_cmd.command_id = ACDB_GET_DEVICE_TABLE;
 	acdb_cmd.device_id = q6_device_id_mapping(new_device);
 
-	if (ardsession[session_id]->session_type == DEVICE_CTRL_TYPE) {
+	route_id = get_device_id(new_device);
+	if (route_id == CAD_HW_DEVICE_ID_INVALID) {
+		pr_err("CAD:ACDB=> Unknown devices %d\n", old_device);
+		return CAD_RES_FAILURE;
+	}
 
-		route_id = get_device_id(old_device);
-		if (route_id == 0xFF) {
-			pr_err("CAD:ACDB=> Unknown devices %d\n", old_device);
-			return CAD_RES_FAILURE;
-		}
-
-		if (ard_state.ard_device[route_id].stream_count > 0)
-			acdb_cmd.sample_rate_id = ard_state.
-				ard_device[route_id].device_sample_rate;
-		else
-			ard_state.ard_device[route_id].device_sample_rate =
-				ard_acdb_get_sample_rate(session_id, route_id);
-
-	} else {
-		route_id = get_device_id(new_device);
-		if (route_id == 0xFF) {
-			pr_err("CAD:ACDB=> Unknown devices %d\n", new_device);
-			return CAD_RES_FAILURE;
-		}
+	if (ard_state.ard_device[route_id].stream_count > 0)
+		acdb_cmd.sample_rate_id = ard_state.
+			ard_device[route_id].device_sample_rate;
+	else {
 		ard_state.ard_device[route_id].device_sample_rate =
 			ard_acdb_get_sample_rate(session_id, route_id);
 
 		acdb_cmd.sample_rate_id =
 			ard_state.ard_device[route_id].device_sample_rate;
 	}
-
 
 	if (acdb_cmd.sample_rate_id == ARD_ACDB_SR_INVALID) {
 		pr_err("CAD:ACDB=> Can not select device sample rate\n");
