@@ -294,6 +294,8 @@ s32 cad_q6enc_session_open(struct q6_enc_session_data *self, s32 session_id,
 		return CAD_RES_FAILURE;
 
 	self->session_id = session_id;
+	self->cb_data.client_data = NULL;
+	self->cb_data.callback = NULL;
 	D("Session open successful\n");
 	return CAD_RES_SUCCESS;
 }
