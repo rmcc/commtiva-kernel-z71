@@ -203,10 +203,15 @@ struct platform_device msm_device_i2c = {
 	.resource	= resources_i2c,
 };
 
+#ifdef CONFIG_SOC_MSM7X30
+#define MSM_HSUSB_PHYS        0xA3600000
+#else
+#define MSM_HSUSB_PHYS        0xA0800000
+#endif
 static struct resource resources_hsusb_otg[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + MSM_HSUSB_SIZE,
+		.end	= MSM_HSUSB_PHYS + SZ_4K,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -231,7 +236,7 @@ struct platform_device msm_device_hsusb_otg = {
 static struct resource resources_hsusb_peripheral[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + MSM_HSUSB_SIZE,
+		.end	= MSM_HSUSB_PHYS + SZ_4K,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -259,7 +264,7 @@ struct platform_device msm_device_hsusb_peripheral = {
 static struct resource resources_hsusb_host[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + MSM_HSUSB_SIZE,
+		.end	= MSM_HSUSB_PHYS + SZ_4K,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
