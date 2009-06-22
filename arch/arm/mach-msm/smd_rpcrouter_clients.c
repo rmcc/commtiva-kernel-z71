@@ -1,8 +1,62 @@
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Code Aurora Forum nor
+ *       the names of its contributors may be used to endorse or promote
+ *       products derived from this software without specific prior written
+ *       permission.
+ *
+ * Alternatively, provided that this notice is retained in full, this software
+ * may be relicensed by the recipient under the terms of the GNU General Public
+ * License version 2 ("GPL") and only version 2, in which case the provisions of
+ * the GPL apply INSTEAD OF those given above.  If the recipient relicenses the
+ * software under the GPL, then the identification text in the MODULE_LICENSE
+ * macro must be changed to reflect "GPLv2" instead of "Dual BSD/GPL".  Once a
+ * recipient changes the license terms to the GPL, subsequent recipients shall
+ * not relicense under alternate licensing terms, including the BSD or dual
+ * BSD/GPL terms.  In addition, the following license statement immediately
+ * below and between the words START and END shall also then apply when this
+ * software is relicensed under the GPL:
+ *
+ * START
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 and only version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * END
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+
 /*
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
- *
  * SMD RPCROUTER CLIENTS module.
- *
  */
 
 #include <linux/kernel.h>
@@ -11,11 +65,20 @@
 #include <mach/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
 
+#define MSM_RPC_CLIENT_NULL_CB_ID 0xffffffff
+
 struct msm_rpc_client_cb_item {
 	struct list_head list;
 
 	void *buf;
 	int size;
+};
+
+struct msm_rpc_cb_table_item {
+	struct list_head list;
+
+	uint32_t cb_id;
+	void *cb_func;
 };
 
 static int rpc_clients_cb_thread(void *data)
@@ -117,8 +180,22 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 	if (!client)
 		return ERR_PTR(-ENOMEM);
 
+	client->req = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
+	if (!client->req) {
+		kfree(client);
+		return ERR_PTR(-ENOMEM);
+	}
+
+	client->reply = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
+	if (!client->reply) {
+		kfree(client->req);
+		kfree(client);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	init_waitqueue_head(&client->reply_wait);
 	mutex_init(&client->req_lock);
+	mutex_init(&client->reply_lock);
 	client->buf = NULL;
 	client->read_avail = 0;
 	client->cb_buf = NULL;
@@ -130,8 +207,24 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 	mutex_init(&client->cb_item_list_lock);
 	client->cb_avail = 0;
 	init_waitqueue_head(&client->cb_wait);
+	INIT_LIST_HEAD(&client->cb_list);
+	mutex_init(&client->cb_list_lock);
+	atomic_set(&client->next_cb_id, 1);
 
 	return client;
+}
+
+void msm_rpc_remove_all_cb_func(struct msm_rpc_client *client)
+{
+	struct msm_rpc_cb_table_item *cb_item, *tmp_cb_item;
+
+	mutex_lock(&client->cb_list_lock);
+	list_for_each_entry_safe(cb_item, tmp_cb_item,
+				 &client->cb_list, list) {
+		list_del(&cb_item->list);
+		kfree(cb_item);
+	}
+	mutex_unlock(&client->cb_list_lock);
 }
 
 /*
@@ -234,6 +327,9 @@ int msm_rpc_unregister_client(struct msm_rpc_client *client)
 	wait_for_completion(&client->complete);
 
 	msm_rpc_close(client->ept);
+	msm_rpc_remove_all_cb_func(client);
+	kfree(client->req);
+	kfree(client->reply);
 	kfree(client);
 	return 0;
 }
@@ -241,28 +337,38 @@ EXPORT_SYMBOL(msm_rpc_unregister_client);
 
 /*
  * Interface to be used to send a client request.
- * If the request takes any arguments or expects any results, the user
- * should handle it in 'arg_func' and 'result_func' respectively.
+ * If the request takes any arguments or expects any return, the user
+ * should handle it in 'arg_func' and 'ret_func' respectively.
  * Marshaling and Unmarshaling should be handled by the user in argument
- * and result functions.
+ * and return functions.
  *
  * client: pointer to client data sturcture
  *
  * proc: procedure being requested
  *
- * arg_func: argument function pointer
+ * arg_func: argument function pointer.  'buf' is where arguments needs to
+ *   be filled. 'data' is arg_data.
  *
- * result_func: result function pointer
+ * ret_func: return function pointer.  'buf' is where returned data should
+ *   be read from. 'data' is ret_data.
  *
- * data: passed as an input parameter to argument and result functions.
+ * arg_data: passed as an input parameter to argument function.
+ *
+ * ret_data: passed as an input parameter to return function.
+ *
+ * timeout: timeout for reply wait in jiffies.  If negative timeout is
+ *   specified a default timeout of 10s is used.
  *
  * Return Value:
  *        0 on success, otherwise an error code is returned.
  */
 int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
-		       int (*arg_func)(void *buf, void *data),
-		       int (*result_func)(void *buf, void *data),
-		       void *data)
+		       int (*arg_func)(struct msm_rpc_client *client,
+				       void *buf, void *data),
+		       void *arg_data,
+		       int (*ret_func)(struct msm_rpc_client *client,
+				       void *buf, void *data),
+		       void *ret_data, long timeout)
 {
 	int size = 0;
 	struct rpc_reply_hdr *rpc_rsp;
@@ -274,9 +380,14 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 			  client->ver, proc);
 	size = sizeof(struct rpc_request_hdr);
 
-	if (arg_func)
-		size += arg_func((void *)((struct rpc_request_hdr *)
-					  client->req + 1), data);
+	if (arg_func) {
+		rc = arg_func(client, (void *)((struct rpc_request_hdr *)
+					       client->req + 1), arg_data);
+		if (rc < 0)
+			goto release_locks;
+		else
+			size += rc;
+	}
 
 	rc = msm_rpc_write(client->ept, client->req, size);
 	if (rc < 0) {
@@ -285,8 +396,11 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 	} else
 		rc = 0;
 
+	if (timeout < 0)
+		timeout = msecs_to_jiffies(10000);
+
 	rc = wait_event_timeout(client->reply_wait,
-				client->read_avail, msecs_to_jiffies(10000));
+				client->read_avail, timeout);
 	if (rc == 0) {
 		rc = -ETIMEDOUT;
 		goto release_locks;
@@ -311,8 +425,8 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 		goto free_and_release;
 	}
 
-	if (result_func)
-		result_func((void *)(rpc_rsp + 1), data);
+	if (ret_func)
+		rc = ret_func(client, (void *)(rpc_rsp + 1), ret_data);
 
  free_and_release:
 	kfree(client->buf);
@@ -323,9 +437,10 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 EXPORT_SYMBOL(msm_rpc_client_req);
 
 /*
- * Interface to be used to send accepted reply required in callback handling.
- * Additional payload may be passed in through the 'buf' and 'size'.
- * Marshaling should be handled by user for the payload.
+ * Interface to be used to start accepted reply message required in
+ * callback handling. Returns the buffer pointer to attach any
+ * payload.  Should call msm_rpc_send_accepted_reply to complete
+ * sending reply.  Marshaling should be handled by user for the payload.
  *
  * client: pointer to client data structure
  *
@@ -333,23 +448,17 @@ EXPORT_SYMBOL(msm_rpc_client_req);
  *
  * accept_status: acceptance status
  *
- * buf: additional payload
- *
- * size: additional payload size
- *
  * Return Value:
- *        0 on success, otherwise returns an error code.
+ *        pointer to buffer to attach the payload.
  */
-int msm_rpc_send_accepted_reply(struct msm_rpc_client *client,
-				uint32_t xid, uint32_t accept_status,
-				char *buf, uint32_t size)
+void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
+				   uint32_t xid, uint32_t accept_status)
 {
-	int rc = 0;
 	struct rpc_reply_hdr *reply;
 
-	reply = kmalloc(sizeof(struct rpc_reply_hdr) + size, GFP_KERNEL);
-	if (!reply)
-		return -ENOMEM;
+	mutex_lock(&client->reply_lock);
+
+	reply = (struct rpc_reply_hdr *)client->reply;
 
 	reply->xid = cpu_to_be32(xid);
 	reply->type = cpu_to_be32(1); /* reply */
@@ -359,12 +468,131 @@ int msm_rpc_send_accepted_reply(struct msm_rpc_client *client,
 	reply->data.acc_hdr.verf_flavor = 0;
 	reply->data.acc_hdr.verf_length = 0;
 
-	memcpy((char *)(reply + 1), buf, size);
+	return reply + 1;
+}
+EXPORT_SYMBOL(msm_rpc_start_accepted_reply);
+
+/*
+ * Interface to be used to send accepted reply required in callback handling.
+ * msm_rpc_start_accepted_reply should have been called before.
+ * Marshaling should be handled by user for the payload.
+ *
+ * client: pointer to client data structure
+ *
+ * size: additional payload size
+ *
+ * Return Value:
+ *        0 on success, otherwise returns an error code.
+ */
+int msm_rpc_send_accepted_reply(struct msm_rpc_client *client, uint32_t size)
+{
+	int rc = 0;
+
 	size += sizeof(struct rpc_reply_hdr);
-	rc = msm_rpc_write(client->ept, reply, size);
+	rc = msm_rpc_write(client->ept, client->reply, size);
 	if (rc > 0)
 		rc = 0;
 
+	mutex_unlock(&client->reply_lock);
 	return rc;
 }
 EXPORT_SYMBOL(msm_rpc_send_accepted_reply);
+
+/*
+ * Interface to be used to add a callback function.
+ * If the call back function is already in client's 'cb_id - cb_func'
+ * table, then that cb_id is returned.  otherwise, new entry
+ * is added to the above table and corresponding cb_id is returned.
+ *
+ * client: pointer to client data structure
+ *
+ * cb_func: callback function
+ *
+ * Return Value:
+ *         callback ID on success, otherwise returns an error code.
+ */
+int msm_rpc_add_cb_func(struct msm_rpc_client *client, void *cb_func)
+{
+	struct msm_rpc_cb_table_item *cb_item;
+
+	if (cb_func == NULL)
+		return MSM_RPC_CLIENT_NULL_CB_ID;
+
+	mutex_lock(&client->cb_list_lock);
+	list_for_each_entry(cb_item, &client->cb_list, list) {
+		if (cb_item->cb_func == cb_func) {
+			mutex_unlock(&client->cb_list_lock);
+			return cb_item->cb_id;
+		}
+	}
+	mutex_unlock(&client->cb_list_lock);
+
+	cb_item = kmalloc(sizeof(struct msm_rpc_cb_table_item), GFP_KERNEL);
+	if (!cb_item)
+		return -ENOMEM;
+
+	INIT_LIST_HEAD(&cb_item->list);
+	cb_item->cb_id = atomic_add_return(1, &client->next_cb_id);
+	cb_item->cb_func = cb_func;
+
+	mutex_lock(&client->cb_list_lock);
+	list_add_tail(&cb_item->list, &client->cb_list);
+	mutex_unlock(&client->cb_list_lock);
+
+	return cb_item->cb_id;
+}
+EXPORT_SYMBOL(msm_rpc_add_cb_func);
+
+/*
+ * Interface to be used to get a callback function from a callback ID.
+ * If no entry is found, NULL is returned.
+ *
+ * client: pointer to client data structure
+ *
+ * cb_id: callback ID
+ *
+ * Return Value:
+ *         callback function pointer if entry with given cb_id is found,
+ *         otherwise returns NULL.
+ */
+void *msm_rpc_get_cb_func(struct msm_rpc_client *client, uint32_t cb_id)
+{
+	struct msm_rpc_cb_table_item *cb_item;
+
+	mutex_lock(&client->cb_list_lock);
+	list_for_each_entry(cb_item, &client->cb_list, list) {
+		if (cb_item->cb_id == cb_id) {
+			mutex_unlock(&client->cb_list_lock);
+			return cb_item->cb_func;
+		}
+	}
+	mutex_unlock(&client->cb_list_lock);
+	return NULL;
+}
+EXPORT_SYMBOL(msm_rpc_get_cb_func);
+
+/*
+ * Interface to be used to remove a callback function.
+ *
+ * client: pointer to client data structure
+ *
+ * cb_func: callback function
+ *
+ */
+void msm_rpc_remove_cb_func(struct msm_rpc_client *client, void *cb_func)
+{
+	struct msm_rpc_cb_table_item *cb_item, *tmp_cb_item;
+
+	mutex_lock(&client->cb_list_lock);
+	list_for_each_entry_safe(cb_item, tmp_cb_item,
+				 &client->cb_list, list) {
+		if (cb_item->cb_func == cb_func) {
+			list_del(&cb_item->list);
+			kfree(cb_item);
+			mutex_unlock(&client->cb_list_lock);
+			return;
+		}
+	}
+	mutex_unlock(&client->cb_list_lock);
+}
+EXPORT_SYMBOL(msm_rpc_remove_cb_func);

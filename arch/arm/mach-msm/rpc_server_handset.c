@@ -253,7 +253,8 @@ static void process_hs_rpc_request(uint32_t proc, void *data)
 		pr_err("%s: unknown rpc proc %d\n", __func__, proc);
 }
 
-static int hs_rpc_register_subs_arg(void *buffer, void *data)
+static int hs_rpc_register_subs_arg(struct msm_rpc_client *client,
+				    void *buffer, void *data)
 {
 	struct hs_subs_rpc_req {
 		uint32_t hs_subs_ptr;
@@ -281,7 +282,8 @@ static int hs_rpc_register_subs_arg(void *buffer, void *data)
 	return sizeof(*req);
 }
 
-static int hs_rpc_register_subs_res(void *buffer, void *data)
+static int hs_rpc_register_subs_res(struct msm_rpc_client *client,
+				    void *buffer, void *data)
 {
 	uint32_t result;
 
@@ -317,8 +319,9 @@ static int hs_cb_func(struct msm_rpc_client *client, void *buffer, int in_size)
 	process_hs_rpc_request(hdr->procedure,
 			    (void *) (hdr + 1));
 
-	rc = msm_rpc_send_accepted_reply(client, hdr->xid,
-					 RPC_ACCEPTSTAT_SUCCESS, NULL, 0);
+	msm_rpc_start_accepted_reply(client, hdr->xid,
+				     RPC_ACCEPTSTAT_SUCCESS);
+	rc = msm_rpc_send_accepted_reply(client, 0);
 	if (rc) {
 		pr_err("%s: sending reply failed: %d\n", __func__, rc);
 		return rc;
@@ -341,9 +344,8 @@ static int __init hs_rpc_cb_init(void)
 	}
 
 	rc = msm_rpc_client_req(rpc_client, HS_SUBSCRIBE_SRVC_PROC,
-				hs_rpc_register_subs_arg,
-				hs_rpc_register_subs_res,
-				NULL);
+				hs_rpc_register_subs_arg, NULL,
+				hs_rpc_register_subs_res, NULL, -1);
 	if (rc) {
 		pr_err("%s: couldn't send rpc client request\n", __func__);
 		msm_rpc_unregister_client(rpc_client);

@@ -192,12 +192,18 @@ struct msm_rpc_client {
 	wait_queue_head_t cb_wait;
 	int cb_avail;
 
+	atomic_t next_cb_id;
+	struct mutex cb_list_lock;
+	struct list_head cb_list;
+
 	uint32_t exit_flag;
 	struct completion complete;
 	struct completion cb_complete;
 
 	struct mutex req_lock;
-	char req[MSM_RPC_MSGSIZE_MAX];
+	struct mutex reply_lock;
+	char *req;
+	char *reply;
 };
 
 struct msm_rpc_client *msm_rpc_register_client(
@@ -209,12 +215,21 @@ struct msm_rpc_client *msm_rpc_register_client(
 int msm_rpc_unregister_client(struct msm_rpc_client *client);
 
 int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
-		       int (*arg_func)(void *, void *),
-		       int (*result_func)(void *, void *),
-		       void *data);
+		       int (*arg_func)(struct msm_rpc_client *,
+				       void *, void *), void *arg_data,
+		       int (*result_func)(struct msm_rpc_client *,
+					  void *, void *), void *result_data,
+		       long timeout);
 
-int msm_rpc_send_accepted_reply(struct msm_rpc_client *client,
-				uint32_t xid, uint32_t accept_status,
-				char *buf, uint32_t size);
+void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
+				   uint32_t xid, uint32_t accept_status);
+
+int msm_rpc_send_accepted_reply(struct msm_rpc_client *client, uint32_t size);
+
+int msm_rpc_add_cb_func(struct msm_rpc_client *client, void *cb_func);
+
+void *msm_rpc_get_cb_func(struct msm_rpc_client *client, uint32_t cb_id);
+
+void msm_rpc_remove_cb_func(struct msm_rpc_client *client, void *cb_func);
 
 #endif

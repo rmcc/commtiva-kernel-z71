@@ -80,7 +80,8 @@
 static struct msm_rpc_client *client;
 static struct msm_fsusb_rpc_ops *fsusb_ops;
 
-static int msm_fsusb_rpc_arg(void *buf, void *data)
+static int msm_fsusb_rpc_arg(struct msm_rpc_client *client,
+			     void *buf, void *data)
 {
 	int i, size = 0;
 	uint32_t proc = *(uint32_t *)data;
@@ -120,8 +121,8 @@ int msm_fsusb_init_phy(void)
 
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_INIT_PHY,
-			msm_fsusb_rpc_arg,
-			NULL, &data);
+			msm_fsusb_rpc_arg, &data,
+			NULL, NULL, -1);
 }
 EXPORT_SYMBOL(msm_fsusb_init_phy);
 
@@ -129,8 +130,8 @@ int msm_fsusb_reset_phy(void)
 {
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_RESET_PHY,
-			NULL,
-			NULL, NULL);
+			NULL, NULL,
+			NULL, NULL, -1);
 
 }
 EXPORT_SYMBOL(msm_fsusb_reset_phy);
@@ -139,8 +140,8 @@ int msm_fsusb_suspend_phy(void)
 {
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_SUSPEND_PHY,
-			NULL,
-			NULL, NULL);
+			NULL, NULL,
+			NULL, NULL, -1);
 
 }
 EXPORT_SYMBOL(msm_fsusb_suspend_phy);
@@ -149,8 +150,8 @@ int msm_fsusb_resume_phy(void)
 {
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_RESUME_PHY,
-			NULL,
-			NULL, NULL);
+			NULL, NULL,
+			NULL, NULL, -1);
 
 }
 EXPORT_SYMBOL(msm_fsusb_resume_phy);
@@ -159,8 +160,8 @@ int msm_fsusb_remote_dev_disconnected(void)
 {
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_DEV_DISCONNECTED,
-			NULL,
-			NULL, NULL);
+			NULL, NULL,
+			NULL, NULL, -1);
 
 }
 EXPORT_SYMBOL(msm_fsusb_remote_dev_disconnected);
@@ -171,8 +172,8 @@ int  msm_fsusb_set_remote_wakeup(void)
 
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_SET_WAKEUP,
-			msm_fsusb_rpc_arg,
-			NULL, &data);
+			msm_fsusb_rpc_arg, &data,
+			NULL, NULL, -1);
 
 }
 EXPORT_SYMBOL(msm_fsusb_set_remote_wakeup);
@@ -183,8 +184,8 @@ static int msm_fsusb_acquire_bus(void)
 
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_ACQUIRE_BUS,
-			msm_fsusb_rpc_arg,
-			NULL, &data);
+			msm_fsusb_rpc_arg, &data,
+			NULL, NULL, -1);
 
 }
 
@@ -192,8 +193,8 @@ static int msm_fsusb_relinquish_bus(void)
 {
 	return msm_rpc_client_req(client,
 			PM_APP_OTG_RELINQUISH_BUS,
-			NULL,
-			NULL, NULL);
+			NULL, NULL,
+			NULL, NULL, -1);
 
 }
 
@@ -217,8 +218,9 @@ static int msm_fsusb_cb_func(struct msm_rpc_client *client,
 
 	req = buffer;
 
-	rc = msm_rpc_send_accepted_reply(client, be32_to_cpu(req->xid),
-					 RPC_ACCEPTSTAT_SUCCESS, NULL, 0);
+	msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid),
+				     RPC_ACCEPTSTAT_SUCCESS);
+	rc = msm_rpc_send_accepted_reply(client, 0);
 	if (rc) {
 		pr_err("%s: sending reply failed: %d\n", __func__, rc);
 		return rc;
