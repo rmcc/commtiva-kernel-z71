@@ -58,7 +58,7 @@
 #endif
 #include "pm.h"
 
-#define MSM_PMEM_MDP_SIZE	0x800000
+#define MSM_PMEM_MDP_SIZE	0x1000000
 #define MSM_PMEM_ADSP_SIZE	0x800000
 #define MSM_PMEM_GPU1_SIZE	0x800000
 #define MSM_FB_SIZE		0x200000
