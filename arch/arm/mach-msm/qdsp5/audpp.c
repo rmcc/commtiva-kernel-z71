@@ -68,6 +68,26 @@ static DEFINE_MUTEX(audpp_lock);
 #define AUDPP_CLNT_MAX_COUNT 6
 #define AUDPP_AVSYNC_INFO_SIZE 7
 
+#define AUDPP_CMD_CFG_OBJ_UPDATE 0x8000
+#define AUDPP_CMD_EQ_FLAG_DIS	0x0000
+#define AUDPP_CMD_EQ_FLAG_ENA	-1
+#define AUDPP_CMD_IIR_FLAG_DIS	  0x0000
+#define AUDPP_CMD_IIR_FLAG_ENA	  -1
+
+#define AUDPP_CMD_VOLUME_PAN		0
+#define AUDPP_CMD_IIR_TUNING_FILTER	1
+#define AUDPP_CMD_EQUALIZER		2
+#define AUDPP_CMD_ADRC			3
+#define AUDPP_CMD_SPECTROGRAM		4
+#define AUDPP_CMD_QCONCERT		5
+#define AUDPP_CMD_SIDECHAIN_TUNING_FILTER	6
+#define AUDPP_CMD_SAMPLING_FREQUENCY	7
+#define AUDPP_CMD_QAFX			8
+#define AUDPP_CMD_QRUMBLE		9
+#define AUDPP_CMD_MBADRC		10
+
+#define MAX_EVENT_CALLBACK_CLIENTS 	1
+
 struct audpp_state {
 	struct msm_adsp_module *mod;
 	audpp_event_func func[AUDPP_CLNT_MAX_COUNT];
@@ -81,6 +101,7 @@ struct audpp_state {
 
 	/* flags, 48 bits sample/bytes counter per channel */
 	uint16_t avsync[CH_COUNT * AUDPP_CLNT_MAX_COUNT + 1];
+	struct audpp_event_callback *cb_tbl[MAX_EVENT_CALLBACK_CLIENTS];
 };
 
 struct audpp_state the_audpp_state = {
@@ -118,6 +139,44 @@ static int audpp_dsp_config(int enable)
 	return audpp_send_queue1(&cmd, sizeof(cmd));
 }
 
+int is_audpp_enable(void)
+{
+	struct audpp_state *audpp = &the_audpp_state;
+
+	return audpp->enabled;
+}
+EXPORT_SYMBOL(is_audpp_enable);
+
+int audpp_register_event_callback(struct audpp_event_callback *ecb)
+{
+	struct audpp_state *audpp = &the_audpp_state;
+	int i;
+
+	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
+		if (NULL == audpp->cb_tbl[i]) {
+			audpp->cb_tbl[i] = ecb;
+			return 0;
+		}
+	}
+	return -1;
+}
+EXPORT_SYMBOL(audpp_register_event_callback);
+
+int audpp_unregister_event_callback(struct audpp_event_callback *ecb)
+{
+	struct audpp_state *audpp = &the_audpp_state;
+	int i;
+
+	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
+		if (ecb == audpp->cb_tbl[i]) {
+			audpp->cb_tbl[i] = NULL;
+			return 0;
+		}
+	}
+	return -1;
+}
+EXPORT_SYMBOL(audpp_unregister_event_callback);
+
 static void audpp_broadcast(struct audpp_state *audpp, unsigned id,
 			    uint16_t *msg)
 {
@@ -126,6 +185,11 @@ static void audpp_broadcast(struct audpp_state *audpp, unsigned id,
 		if (audpp->func[n])
 			audpp->func[n] (audpp->private[n], id, msg);
 	}
+
+	for (n = 0; n < MAX_EVENT_CALLBACK_CLIENTS; ++n)
+		if (audpp->cb_tbl[n] && audpp->cb_tbl[n]->fn)
+			audpp->cb_tbl[n]->fn(audpp->cb_tbl[n]->private, id,
+									msg);
 }
 
 static void audpp_notify_clnt(struct audpp_state *audpp, unsigned clnt_id,
@@ -382,9 +446,6 @@ unsigned audpp_avsync_byte_count(int id)
 }
 EXPORT_SYMBOL(audpp_avsync_byte_count);
 
-#define AUDPP_CMD_CFG_OBJ_UPDATE 0x8000
-#define AUDPP_CMD_VOLUME_PAN 0
-
 int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan)
 {
 	/* cmd, obj_cfg[7], cmd_type, volume, pan */
@@ -403,6 +464,121 @@ int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan)
 	return audpp_send_queue3(cmd, sizeof(cmd));
 }
 EXPORT_SYMBOL(audpp_set_volume_and_pan);
+
+/* Implementation of COPP features */
+int audpp_dsp_set_adrc(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_adrc *adrc)
+{
+	audpp_cmd_cfg_object_params_adrc cmd;
+
+	if (id != 6)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_MBADRC;
+
+	if (enable) {
+		memcpy(&cmd.num_bands, &adrc->num_bands,
+		sizeof(*adrc) - AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1);
+		cmd.enable = AUDPP_CMD_ADRC_FLAG_ENA;
+	} else
+		cmd.enable = AUDPP_CMD_ADRC_FLAG_DIS;
+
+	return audpp_send_queue3(&cmd, sizeof(cmd));
+}
+EXPORT_SYMBOL(audpp_dsp_set_adrc);
+
+int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_qconcert *qconcert_plus)
+{
+	audpp_cmd_cfg_object_params_qconcert cmd;
+	if (id != 6)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_QCONCERT;
+
+	if (enable) {
+		memcpy(&cmd.op_mode, &qconcert_plus->op_mode,
+			sizeof(audpp_cmd_cfg_object_params_qconcert) -
+			AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1);
+		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_ENA;
+	} else
+		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_DIS;
+
+	return audpp_send_queue3(&cmd, sizeof(cmd));
+}
+
+int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
+				audpp_cmd_cfg_object_params_pcm *iir)
+{
+	audpp_cmd_cfg_object_params_pcm cmd;
+
+	if (id != 6)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_IIR_TUNING_FILTER;
+
+	if (enable) {
+		cmd.active_flag = AUDPP_CMD_IIR_FLAG_ENA;
+		cmd.num_bands = iir->num_bands;
+		memcpy(&cmd.params_filter, &iir->params_filter,
+					sizeof(iir->params_filter));
+	} else
+		cmd.active_flag = AUDPP_CMD_IIR_FLAG_DIS;
+
+	return audpp_send_queue3(&cmd, sizeof(cmd));
+}
+EXPORT_SYMBOL(audpp_dsp_set_rx_iir);
+
+/* Implementation Of COPP + POPP */
+int audpp_dsp_set_eq(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_eqalizer *eq)
+{
+	audpp_cmd_cfg_object_params_eqalizer cmd;
+	unsigned short *id_ptr = (unsigned short *)&cmd;
+
+	if (id > 6 || id == 5)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	id_ptr[1 + id] = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_EQUALIZER;
+
+	if (enable) {
+		cmd.eq_flag = AUDPP_CMD_EQ_FLAG_ENA;
+		cmd.num_bands = eq->num_bands;
+		memcpy(&cmd.eq_coeff, &eq->eq_coeff, sizeof(eq->eq_coeff));
+	} else
+		cmd.eq_flag = AUDPP_CMD_EQ_FLAG_DIS;
+
+	return audpp_send_queue3(&cmd, sizeof(cmd));
+}
+EXPORT_SYMBOL(audpp_dsp_set_eq);
+
+int audpp_dsp_set_vol_pan(unsigned id,
+				audpp_cmd_cfg_object_params_volume *vol_pan)
+{
+	audpp_cmd_cfg_object_params_volume cmd;
+	unsigned short *id_ptr = (unsigned short *)&cmd;
+
+	if (id > 6)
+		return -EINVAL;
+
+	memset(&cmd, 0, sizeof(cmd));
+	id_ptr[1 + id] = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_VOLUME_PAN;
+
+	cmd.volume = vol_pan->volume;
+	cmd.pan = vol_pan->pan;
+
+	return audpp_send_queue3(&cmd, sizeof(cmd));
+}
+EXPORT_SYMBOL(audpp_dsp_set_vol_pan);
 
 int audpp_pause(unsigned id, int pause)
 {

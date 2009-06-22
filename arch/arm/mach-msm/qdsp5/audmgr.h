@@ -17,6 +17,8 @@
 #ifndef _AUDIO_RPC_H_
 #define _AUDIO_RPC_H_
 
+#include <mach/qdsp5/qdsp5audppcmdi.h>
+
 enum rpc_aud_def_sample_rate_type {
 	RPC_AUD_DEF_SAMPLE_RATE_NONE,
 	RPC_AUD_DEF_SAMPLE_RATE_8000,
@@ -202,6 +204,15 @@ int audmgr_disable(struct audmgr *am);
 typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
 typedef void (*audrec_event_func)(void *private, unsigned id, uint16_t *msg);
 
+struct audpp_event_callback {
+	audpp_event_func fn;
+	void *private;
+};
+
+int audpp_register_event_callback(struct audpp_event_callback *eh);
+int audpp_unregister_event_callback(struct audpp_event_callback *eh);
+int is_audpp_enable(void);
+
 int audpp_enable(int id, audpp_event_func func, void *private);
 void audpp_disable(int id, void *private);
 
@@ -215,7 +226,16 @@ int audpp_flush(unsigned id);
 void audpp_avsync(int id, unsigned rate);
 unsigned audpp_avsync_sample_count(int id);
 unsigned audpp_avsync_byte_count(int id);
-
+int audpp_dsp_set_adrc(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_adrc *adrc);
+int audpp_dsp_set_eq(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_eqalizer *eq);
+int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
+				audpp_cmd_cfg_object_params_pcm *iir);
+int audpp_dsp_set_vol_pan(unsigned id,
+				audpp_cmd_cfg_object_params_volume *vol_pan);
+int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_qconcert *qconcert_plus);
 int audrectask_enable(unsigned enc_type, audrec_event_func func, void *private);
 void audrectask_disable(unsigned enc_type, void *private);
 
