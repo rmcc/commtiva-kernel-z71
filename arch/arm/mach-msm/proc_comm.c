@@ -25,11 +25,15 @@
 
 #include "proc_comm.h"
 
-#define MSM_A2M_INT(n) (MSM_CSR_BASE + 0x400 + (n) * 4)
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_TRIG_A2M_INT(n) (writel(1 << n, MSM_GCC_BASE + 0x8))
+#else
+#define MSM_TRIG_A2M_INT(n) (writel(1, MSM_CSR_BASE + 0x400 + (n) * 4))
+#endif
 
 static inline void notify_other_proc_comm(void)
 {
-	writel(1, MSM_A2M_INT(6));
+	MSM_TRIG_A2M_INT(6);
 }
 
 #define APP_COMMAND 0x00
