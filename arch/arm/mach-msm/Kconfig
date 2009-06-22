@@ -442,11 +442,11 @@ config MSM_RPCSERVERS
 	  none
 
 config MSM_RPC_PING
-	depends on MSM_ONCRPCROUTER
+	depends on MSM_ONCRPCROUTER && DEBUG_FS
 	default m
 	bool "MSM rpc ping"
 	help
-	  Implements MSM rpc ping module.
+	  Implements MSM rpc ping test module.
 
 config MSM_RPCSERVER_HANDSET
 	depends on MSM_ONCRPCROUTER
