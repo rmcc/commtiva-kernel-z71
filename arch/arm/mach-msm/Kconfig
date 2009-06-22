@@ -448,6 +448,13 @@ config MSM_RPC_PING
 	help
 	  Implements MSM rpc ping test module.
 
+config MSM_RPC_OEM_RAPI
+	depends on MSM_ONCRPCROUTER
+	default m
+	bool "MSM oem rapi"
+	help
+	  Implements MSM oem rapi client module.
+
 config MSM_RPCSERVER_HANDSET
 	depends on MSM_ONCRPCROUTER
 	default y
