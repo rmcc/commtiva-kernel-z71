@@ -101,7 +101,7 @@ s32 cad_dtmf_session_ioctl(struct q6dtmf_session *self, s32 cmd_code,
 				void *cmd_buf, s32 cmd_len)
 {
 	struct adsp_audio_event		return_status;
-	struct q6_dtmf_start		q6data;
+	struct adsp_audio_dtmf_start	q6data;
 	struct cad_cmd_gen_dtmf		*data;
 	s32				result = CAD_RES_SUCCESS;
 
@@ -117,7 +117,7 @@ s32 cad_dtmf_session_ioctl(struct q6dtmf_session *self, s32 cmd_code,
 
 		/* send the dtmf start with the configuration */
 		result = cad_rpc_ioctl(self->session_id, 1,
-			QDSP_IOCTL_CMD_STREAM_DTMF_START,
+			ADSP_AUDIO_IOCTL_CMD_STREAM_DTMF_START,
 			(void *)&q6data, sizeof(q6data), &return_status);
 		break;
 	}
