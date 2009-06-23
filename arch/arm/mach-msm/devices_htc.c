@@ -178,32 +178,32 @@ void __init msm_add_usb_devices(void (*phy_reset) (void))
 
 static struct android_pmem_platform_data pmem_pdata = {
 	.name = "pmem",
-	.no_allocator = 1,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached = 1,
 };
 
 static struct android_pmem_platform_data pmem_adsp_pdata = {
 	.name = "pmem_adsp",
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
 static struct android_pmem_platform_data pmem_camera_pdata = {
 	.name = "pmem_camera",
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
 static struct android_pmem_platform_data pmem_gpu0_pdata = {
 	.name = "pmem_gpu0",
-	.no_allocator = 1,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached = 0,
 	.buffered = 1,
 };
 
 static struct android_pmem_platform_data pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
-	.no_allocator = 1,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached = 0,
 	.buffered = 1,
 };

@@ -219,14 +219,14 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.size = MSM_PMEM_MDP_SIZE,
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 1,
 };
 
 static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.name = "pmem_adsp",
 	.size = MSM_PMEM_ADSP_SIZE,
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
@@ -234,20 +234,20 @@ static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
 	.name = "pmem_gpu0",
 	.start = MSM_PMEM_GPU0_BASE,
 	.size = MSM_PMEM_GPU0_SIZE,
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
-	.no_allocator = 0,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
 static struct android_pmem_platform_data android_pmem_camera_pdata = {
 	.name = "pmem_camera",
 	.size = MSM_PMEM_CAMERA_SIZE,
-	.no_allocator = 1,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached = 1,
 };
 
