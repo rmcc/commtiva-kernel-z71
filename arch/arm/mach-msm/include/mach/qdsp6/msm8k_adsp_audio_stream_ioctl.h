@@ -116,7 +116,6 @@
 #define ADSP_AUDIO_IOCTL_CMD_STREAM_DTMF_START		0x0108c0dd
 
 
-#pragma pack(1)
 struct adsp_audio_dtmf_start {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -128,8 +127,7 @@ struct adsp_audio_dtmf_start {
 	u32				duration_usec;
 	/* Gain in millibels */
 	s32				gain_mb;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -146,12 +144,10 @@ struct adsp_audio_dtmf_start {
 #define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_VOL		0x0108c0de
 
 
-#pragma pack(1)
 struct adsp_audio_set_stream_volume {
 	struct adsp_audio_header	header;	/* Associated client data */
 	s32				volume;	/* in mB */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -161,12 +157,10 @@ struct adsp_audio_set_stream_volume {
 #define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE		0x0108c0df
 
 
-#pragma pack(1)
 struct adsp_audio_set_stream_mute {
 	struct adsp_audio_header	header;	/* Associated client data */
 	u32				mute;	/* 0 == UnMute, 1 == Mute */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -189,7 +183,6 @@ struct adsp_audio_set_stream_mute {
 
 /* Definition for any one band of Equalizer. */
 
-#pragma pack(1)
 struct adsp_audio_eq_band {
 	/* The band index, 0 .. 11 */
 	u16	band_idx;
@@ -204,8 +197,7 @@ struct adsp_audio_eq_band {
 	/* i.e. fixed point number with q factor of 8, */
 	/* e.g. 3000/(2^8) */
 	s32	q_factor;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -215,22 +207,21 @@ struct adsp_audio_eq_band {
 
 #define CAD_EQ_INVALID_DATA       0xFFFFFFFF
 
-#pragma pack(1)
 struct adsp_audio_eq_cfg {
 	u32				enable;
 	/* Number of consequtive bands specified */
 	u32				num_bands;
 	struct adsp_audio_eq_band	eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
-};
-#pragma pack()
+} __attribute__ ((packed));
+
 
 struct adsp_audio_stream_eq_cfg {
 	/* Associated client data */
 	struct adsp_audio_header	header;
 	/* Equalizer band data */
 	struct adsp_audio_eq_cfg	ecfg;
-};
-#pragma pack()
+} __attribute__ ((packed));
+
 
 struct cad_filter_eq_driver_struct {
 	/* this is the device control session */
@@ -246,12 +237,10 @@ struct cad_filter_eq_driver_struct {
 #define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_AV_SYNC		0x0107605c
 
 
-#pragma pack(1)
 struct adsp_audio_stream_av_sync {
 	s64	relative_time;	/* Media time */
 	s64	absolute_time;	/* Presentation time */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 

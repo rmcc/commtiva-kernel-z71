@@ -70,18 +70,14 @@
 
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_CONFIG		0x0108b6cb
 
-
-#pragma pack(1)
 struct adsp_phys_mem_type {
 	u32	addr;	/* physical address */
 	u32	total;	/* Length of allocated memory */
 	u32	used;	/* Actual Length of buffer */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
-#pragma pack(1)
 struct adsp_audio_device_config {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -93,8 +89,8 @@ struct adsp_audio_device_config {
 	u32				interface_id;
 	/* Refer to DCN: TBD */
 	struct adsp_phys_mem_type	phys_mem;
-};
-#pragma pack()
+} __attribute__ ((packed));
+
 
 
 
@@ -104,7 +100,6 @@ struct adsp_audio_device_config {
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_CONFIG_TABLE	0x0108b6bf
 
 
-#pragma pack(1)
 struct adsp_audio_device_config_table  {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -112,8 +107,7 @@ struct adsp_audio_device_config_table  {
 	u32				device_id;
 	/* Refer to DCN: TBD */
 	struct adsp_phys_mem_type	phys_mem;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 

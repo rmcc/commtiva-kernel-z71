@@ -167,26 +167,22 @@
 
 /* Raw PCM, DTMF format block */
 
-#pragma pack(1)
 struct adsp_audio_format_raw_pcm {
 	u16		channels;
 	u16		bits_per_sample;
 	u32		sampling_rate;
 	bool		is_signed;
 	bool		is_interleaved;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
 /* ADPCM format block */
 
-#pragma pack(1)
 struct adsp_audio_format_adpcm {
 	struct adsp_audio_format_raw_pcm	base;
 	u32					block_size;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 /* G711 format block */
@@ -195,11 +191,9 @@ struct adsp_audio_format_adpcm {
 #define ADSP_AUDIO_COMPANDING_MLAW	0x10619ce
 
 
-#pragma pack(1)
 struct adsp_audio_format_g711 {
 	u32	companding;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
