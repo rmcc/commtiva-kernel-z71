@@ -531,7 +531,8 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Change the AXI bus frequency if we can. */
 	if (strt_s->axiclk_khz != tgt_s->axiclk_khz) {
-		rc = pc_clk_set_min_rate(EBI1_CLK, tgt_s->axiclk_khz * 1000);
+		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+						tgt_s->axiclk_khz * 1000);
 		if (rc < 0)
 			pr_err("Setting AXI min rate failed!\n");
 	}
@@ -605,7 +606,7 @@ static void __init acpuclk_init(void)
 
 	drv_state.current_speed = speed;
 
-	rc = pc_clk_set_min_rate(EBI1_CLK, speed->axiclk_khz * 1000);
+	rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, speed->axiclk_khz * 1000);
 	if (rc < 0)
 		pr_err("Setting AXI min rate failed!\n");
 
