@@ -209,6 +209,9 @@ static void kgsl_ringbuffer_submit(struct kgsl_ringbuffer *rb)
 	BUG_ON(rb->wptr == 0);
 
 	GSL_RB_UPDATE_WPTR_POLLING(rb);
+	/* Drain write buffer and data memory barrier */
+	dsb();
+	dmb();
 
 	BUG_ON(rb->wptr > rb->sizedwords);
 

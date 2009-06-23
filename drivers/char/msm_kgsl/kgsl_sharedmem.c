@@ -89,11 +89,6 @@ kgsl_sharedmem_init(struct kgsl_sharedmem *shmem)
 {
 	int result = -EINVAL;
 
-	if (!request_mem_region(shmem->physbase, shmem->size, DRIVER_NAME)) {
-		KGSL_MEM_ERR("request_mem_region failed\n");
-		goto error;
-	}
-
 	shmem->baseptr = ioremap(shmem->physbase, shmem->size);
 	KGSL_MEM_INFO("ioremap(shm) = %p\n", shmem->baseptr);
 
@@ -101,7 +96,7 @@ kgsl_sharedmem_init(struct kgsl_sharedmem *shmem)
 		KGSL_MEM_ERR("ioremap failed for address %08x size %d\n",
 				shmem->physbase, shmem->size);
 		result = -ENODEV;
-		goto error_release_mem;
+		goto error;
 	}
 
 	shmem->pool = gen_pool_create(KGSL_PAGESIZE_SHIFT, -1);
@@ -126,8 +121,6 @@ error_pool_destroy:
 error_iounmap:
 	iounmap(shmem->baseptr);
 	shmem->baseptr = NULL;
-error_release_mem:
-	release_mem_region(shmem->physbase, shmem->size);
 error:
 	return result;
 }
@@ -144,7 +137,6 @@ kgsl_sharedmem_close(struct kgsl_sharedmem *shmem)
 		KGSL_MEM_INFO("iounmap(shm) = %p\n", shmem->baseptr);
 		iounmap(shmem->baseptr);
 		shmem->baseptr = NULL;
-		release_mem_region(shmem->physbase, shmem->size);
 	}
 
 	return 0;

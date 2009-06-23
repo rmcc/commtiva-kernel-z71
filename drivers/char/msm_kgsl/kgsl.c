@@ -99,6 +99,9 @@ static int kgsl_first_open_locked(void)
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
 
+	if (kgsl_driver.grp_pclk)
+		clk_enable(kgsl_driver.grp_pclk);
+
 	clk_enable(kgsl_driver.grp_clk);
 
 	clk_enable(kgsl_driver.imem_clk);
@@ -137,6 +140,9 @@ static int kgsl_last_release_locked(void)
 
 	/* shutdown memory apertures */
 	kgsl_sharedmem_close(&kgsl_driver.shmem);
+
+	if (kgsl_driver.grp_pclk)
+		clk_disable(kgsl_driver.grp_pclk);
 
 	clk_disable(kgsl_driver.grp_clk);
 
@@ -754,6 +760,11 @@ static void kgsl_driver_cleanup(void)
 		kgsl_driver.interrupt_num = 0;
 	}
 
+	if (kgsl_driver.grp_pclk) {
+		clk_put(kgsl_driver.grp_pclk);
+		kgsl_driver.grp_pclk = NULL;
+	}
+
 	if (kgsl_driver.grp_clk) {
 		clk_put(kgsl_driver.grp_clk);
 		kgsl_driver.grp_clk = NULL;
@@ -783,6 +794,11 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	BUG_ON(kgsl_driver.imem_clk != NULL);
 
 	kgsl_driver.pdev = pdev;
+
+	clk = clk_get(&pdev->dev, "grp_pclk");
+	if (IS_ERR(clk))
+		clk = NULL;
+	kgsl_driver.grp_pclk = clk;
 
 	clk = clk_get(&pdev->dev, "grp_clk");
 	if (IS_ERR(clk)) {
