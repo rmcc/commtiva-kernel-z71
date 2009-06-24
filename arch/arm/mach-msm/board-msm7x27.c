@@ -60,8 +60,9 @@
 
 #define MSM_PMEM_MDP_SIZE	0x1000000
 #define MSM_PMEM_ADSP_SIZE	0x800000
-#define MSM_PMEM_GPU1_SIZE	0x800000
+#define MSM_PMEM_GPU1_SIZE	0x1C00000
 #define MSM_FB_SIZE		0x200000
+#define MSM_GPU_PHYS_SIZE	SZ_2M
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -282,7 +283,7 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
-	.no_allocator = 1,
+	.no_allocator = 0,
 	.cached = 0,
 };
 
@@ -561,6 +562,33 @@ static void __init bt_power_init(void)
 #define bt_power_init(x) do {} while (0)
 #endif
 
+static struct resource kgsl_resources[] = {
+	{
+		.name = "kgsl_reg_memory",
+		.start = 0xA0000000,
+		.end = 0xA001ffff,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name   = "kgsl_phys_memory",
+		.start = 0,
+		.end = 0,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.start = INT_GRAPHICS,
+		.end = INT_GRAPHICS,
+		.flags = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device msm_device_kgsl = {
+	.name = "kgsl",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(kgsl_resources),
+	.resource = kgsl_resources,
+};
+
 static struct resource bluesleep_resources[] = {
 	{
 		.name	= "gpio_host_wake",
@@ -775,6 +803,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_snd,
 	&msm_bluesleep_device,
+	&msm_device_kgsl,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
@@ -1200,6 +1229,13 @@ static void __init msm_msm7x27_allocate_memory_regions(void)
 	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
 	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
+
+	size = MSM_GPU_PHYS_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	kgsl_resources[1].start = __pa(addr);
+	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+		"for KGSL pmem\n", size, addr, __pa(addr));
 }
 
 static void __init msm7x27_map_io(void)

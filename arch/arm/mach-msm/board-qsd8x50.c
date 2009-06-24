@@ -1093,6 +1093,12 @@ static void __init qsd8x50_init_irq(void)
 	msm_init_sirc();
 }
 
+static void kgsl_phys_memory_init(void)
+{
+	request_mem_region(kgsl_resources[1].start,
+		resource_size(&kgsl_resources[1]), "kgsl");
+}
+
 static void sdcc_gpio_init(void)
 {
 	/* SDC1 GPIOs */
@@ -1467,6 +1473,7 @@ static void __init qsd8x50_init(void)
 	spi_register_board_info(msm_spi_board_info,
 				ARRAY_SIZE(msm_spi_board_info));
 	msm_pm_set_platform_data(msm_pm_data);
+	kgsl_phys_memory_init();
 
 #ifdef CONFIG_SURF_FFA_GPIO_KEYPAD
 	if (machine_is_qsd8x50_ffa())
