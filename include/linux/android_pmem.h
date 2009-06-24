@@ -56,15 +56,6 @@ void put_pmem_fd(int fd);
 void flush_pmem_fd(int fd, unsigned long start, unsigned long len);
 void flush_pmem_file(struct file *file, unsigned long start, unsigned long len);
 
-enum pmem_allocator_type {
-	PMEM_ALLOCATORTYPE_ALLORNOTHING,
-	PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
-
-	PMEM_ALLOCATORTYPE_BITMAP,
-
-	PMEM_ALLOCATORTYPE_MAX,
-};
-
 struct android_pmem_platform_data
 {
 	const char* name;
@@ -72,14 +63,8 @@ struct android_pmem_platform_data
 	unsigned long start;
 	/* size of memory region */
 	unsigned long size;
-
-	enum pmem_allocator_type allocator_type;
-	/* treated as a 'hidden' variable in the board files. Can be
-	 * set, but default is the system init value of 0 which becomes a
-	 * quantum of 4K pages.
-	 */
-	unsigned int quantum;
-
+	/* set to indicate the region should not be managed with an allocator */
+	unsigned no_allocator;
 	/* set to indicate maps of this region should be cached, if a mix of
 	 * cached and uncached is desired, set this and open the device with
 	 * O_SYNC to get an uncached region */

@@ -180,7 +180,7 @@ static struct android_pmem_platform_data pmem_data = {
 	.name = "hw3d",
 	.start = 0xA0000000,
 	.size = 0x100000,
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.no_allocator = 1,
 	.cached = 0,
 };
 

@@ -344,19 +344,19 @@ static struct platform_device halibut_snd = {
 
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.no_allocator = 0,
 	.cached = 1,
 };
 
 static struct android_pmem_platform_data android_pmem_camera_pdata = {
 	.name = "pmem_camera",
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.no_allocator = 1,
 	.cached = 1,
 };
 
 static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.name = "pmem_adsp",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.no_allocator = 0,
 	.cached = 0,
 };
 
@@ -365,14 +365,14 @@ static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
 	.name = "pmem_gpu0",
 	.start = MSM_PMEM_GPU0_BASE,
 	.size = MSM_PMEM_GPU0_SIZE,
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.no_allocator = 1,
 	.cached = 0,
 };
 #endif
 
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
+	.no_allocator = 1,
 	.cached = 0,
 };
 
