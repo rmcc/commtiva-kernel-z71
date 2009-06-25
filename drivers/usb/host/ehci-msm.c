@@ -181,6 +181,13 @@ static int usb_suspend_phy(struct usb_hcd *hcd)
 	int i;
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
+	if (msm_hc->id == FSUSB) {
+		if (readl(USB_PORTSC) & PORTSC_CCS) {
+			msm_fsusb_set_remote_wakeup();
+			msm_fsusb_suspend_phy();
+		} else
+			msm_fsusb_remote_dev_disconnected();
+	}
 	if (msm_hc->id == HSUSB) {
 		switch (PHY_TYPE(msm_hc->phy_info)) {
 		case USB_PHY_EXTERNAL:
@@ -333,6 +340,8 @@ static void usb_lpm_exit(struct usb_hcd *hcd)
 {
 	unsigned long flags;
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
+	struct device *dev = container_of((void *)hcd, struct device,
+							driver_data);
 
 	spin_lock_irqsave(&msm_hc->lock, flags);
 	if (!msm_hc->in_lpm) {
@@ -344,6 +353,14 @@ static void usb_lpm_exit(struct usb_hcd *hcd)
 	spin_unlock_irqrestore(&msm_hc->lock, flags);
 	if (msm_hc->id == HSUSB)
 		schedule_work(&(msm_hc->lpm_exit_work));
+	if (msm_hc->id == FSUSB) {
+		msm_fsusb_resume_phy();
+		msm_xusb_enable_clks(msm_hc->id);
+		writel(readl(USB_PORTSC) | PORTSC_FPR, USB_PORTSC);
+		if (device_may_wakeup(dev))
+			disable_irq_wake(hcd->irq);
+		enable_irq(hcd->irq);
+	}
 }
 
 static irqreturn_t ehci_msm_irq(struct usb_hcd *hcd)
@@ -369,8 +386,6 @@ static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 	int rc;
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
-	if (msm_hc->id == FSUSB)
-		return ehci_bus_suspend(hcd);;
 	rc = ehci_bus_suspend(hcd);
 	if (!(msm_hc->otg_registered) && (msm_hc->xceiv)) {
 		msm_hc->otg_registered = 1;
@@ -391,8 +406,6 @@ static int ehci_msm_bus_resume(struct usb_hcd *hcd)
 {
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
-	if (msm_hc->id == FSUSB)
-		return ehci_bus_resume(hcd);
 	if (!(msm_hc->active))
 		return ehci_bus_resume(hcd);
 	usb_lpm_exit(hcd);
@@ -676,7 +689,9 @@ static void fsusb_start_host(void)
 {
 	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
 
-	usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+	if (!hcd->self.root_hub)
+		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+
 }
 
 static void fsusb_lpm_exit(void)
