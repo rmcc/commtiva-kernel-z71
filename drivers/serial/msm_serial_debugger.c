@@ -65,10 +65,19 @@ static void debug_port_init(void)
 	msm_write(UART_CR_CMD_SET_RFR, UART_CR);
 
 	/* setup clock dividers */
-	msm_write(0xC0, UART_MREG);
-	msm_write(0xB2, UART_NREG);
-	msm_write(0x7D, UART_DREG);
-	msm_write(0x1C, UART_MNDREG);
+	if (clk_get_rate(debug_clk) == 19200000) {
+		/* clock is TCXO (19.2MHz) */
+		msm_write(0x06, UART_MREG);
+		msm_write(0xF1, UART_NREG);
+		msm_write(0x0F, UART_DREG);
+		msm_write(0x1A, UART_MNDREG);
+	} else {
+		/* clock must be TCXO/4 */
+		msm_write(0x18, UART_MREG);
+		msm_write(0xF6, UART_NREG);
+		msm_write(0x0F, UART_DREG);
+		msm_write(0x0A, UART_MNDREG);
+	}
 
 	msm_write(UART_CSR_115200, UART_CSR);
 
