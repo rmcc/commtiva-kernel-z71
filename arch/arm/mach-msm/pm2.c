@@ -1508,16 +1508,8 @@ static void msm_pm_power_off(void)
 
 static void msm_pm_restart(char str)
 {
-	/* If there's a hard reset hook and the restart_reason
-	 * is the default, prefer that to the (slower) proc_comm
-	 * reset command.
-	 */
-#if 0
-	if ((restart_reason == 0x776655AA) && msm_reset_hook)
-		msm_reset_hook(str);
-	else
-		msm_proc_comm(PCOM_RESET_CHIP, &restart_reason, 0);
-#endif
+	msm_proc_comm(PCOM_RESET_CHIP, &restart_reason, 0);
+
 	for (;;)
 		;
 }
