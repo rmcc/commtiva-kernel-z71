@@ -99,9 +99,41 @@ struct msm_pm_app_rpc_ids {
 
 static struct msm_pm_app_rpc_ids pm_app_rpc_ids;
 
+#define PMAPP_RPC_COMP_VER_1	0x00010001
+#define PMAPP_RPC_COMP_VER_2	0x00010002
+static int msm_pm_app_init_rpc_ids(unsigned long vers)
+{
+	switch (vers) {
+	case PMAPP_RPC_COMP_VER_1:
+		pm_app_rpc_ids.prog			= 0x30000060;
+		pm_app_rpc_ids.vers_comp		= PMAPP_RPC_COMP_VER_1;
+		pm_app_rpc_ids.vbus_sn_valid_cb_type	= 1;
+		pm_app_rpc_ids.vote_vreg_switch		= 3;
+		pm_app_rpc_ids.vote_vreg_req		= 4;
+		pm_app_rpc_ids.reg_for_vbus_sn_valid	= 5;
+		pm_app_rpc_ids.vote_usb_pwr_sel_switch	= 6;
+		return 0;
+	case PMAPP_RPC_COMP_VER_2:
+		pm_app_rpc_ids.prog			= 0x30000060;
+		pm_app_rpc_ids.vers_comp		= PMAPP_RPC_COMP_VER_2;
+		pm_app_rpc_ids.vbus_sn_valid_cb_type	= 1;
+		pm_app_rpc_ids.vote_vreg_switch		= 3;
+		pm_app_rpc_ids.vote_vreg_req		= 4;
+		pm_app_rpc_ids.reg_for_vbus_sn_valid	= 16;
+		pm_app_rpc_ids.vote_usb_pwr_sel_switch	= 17;
+		return 0;
+	default:
+		pr_err("%s: no matches found for version = %lx\n",
+						 __func__, vers);
+		return -ENODATA;
+	}
+}
+
 /* rpc connect for pm_app app */
 static int msm_pm_app_rpc_connect(void)
 {
+	int rc = 0;
+
 	if (!machine_is_qsd8x50_ffa())
 		return -ENOTSUPP;
 
@@ -110,21 +142,29 @@ static int msm_pm_app_rpc_connect(void)
 		return 0;
 	}
 
-	/* Initialize rpc ids with version compatible */
-	pm_app_rpc_ids.prog                             = 0x30000060;
-	pm_app_rpc_ids.vers_comp                        = 0x00010001;
-	pm_app_rpc_ids.vbus_sn_valid_cb_type            = 1;
-	pm_app_rpc_ids.vote_vreg_switch                 = 3;
-	pm_app_rpc_ids.vote_vreg_req                    = 4;
-	pm_app_rpc_ids.reg_for_vbus_sn_valid            = 5;
-	pm_app_rpc_ids.vote_usb_pwr_sel_switch          = 6;
+	/* Initialize rpc ids */
+	rc = msm_pm_app_init_rpc_ids(PMAPP_RPC_COMP_VER_2);
+	if (rc)
+		return rc;
 
 	pm_app_ep = msm_rpc_connect_compatible(pm_app_rpc_ids.prog,
 				pm_app_rpc_ids.vers_comp, 0);
 	if (IS_ERR(pm_app_ep)) {
 		pr_err("%s: connect failed vers = %lx\n",
 				__func__, pm_app_rpc_ids.vers_comp);
-	return PTR_ERR(pm_app_ep);
+
+		/* Initialize rpc ids with version compatible */
+		rc = msm_pm_app_init_rpc_ids(PMAPP_RPC_COMP_VER_1);
+		if (rc < 0)
+			return rc;
+
+		pm_app_ep = msm_rpc_connect_compatible(pm_app_rpc_ids.prog,
+				pm_app_rpc_ids.vers_comp, 0);
+		if (IS_ERR(pm_app_ep)) {
+			pr_err("%s: connect failed vers = %lx\n",
+				__func__, pm_app_rpc_ids.vers_comp);
+			return PTR_ERR(pm_app_ep);
+		}
 	}
 	pr_info("%s: rpc connect success vers = %lx\n",
 				__func__, pm_app_rpc_ids.vers_comp);
