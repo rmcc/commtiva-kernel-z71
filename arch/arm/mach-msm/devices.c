@@ -276,7 +276,7 @@ static struct resource resources_hsusb_host[] = {
 
 struct platform_device msm_device_hsusb_host = {
 	.name		= "msm_hsusb_host",
-	.id		= -1,
+	.id		= 0,
 	.num_resources	= ARRAY_SIZE(resources_hsusb_host),
 	.resource	= resources_hsusb_host,
 	.dev		= {
