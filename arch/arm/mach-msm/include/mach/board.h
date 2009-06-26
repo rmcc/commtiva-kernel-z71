@@ -127,6 +127,9 @@ struct mmc_platform_data;
 int __init msm_add_sdcc(unsigned int controller,
 		struct mmc_platform_data *plat);
 
+struct msm_hsusb_platform_data;
+int __init msm_add_host(unsigned int host,
+		struct msm_hsusb_platform_data *plat);
 #if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) || defined(CONFIG_USB_MSM_72K)
 void msm_hsusb_set_vbus_state(int online);
 #else

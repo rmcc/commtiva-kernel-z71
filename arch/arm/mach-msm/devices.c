@@ -28,6 +28,7 @@
 #include <asm/mach/flash.h>
 
 #include <asm/mach/mmc.h>
+#include <mach/msm_hsusb.h>
 
 static struct resource resources_uart1[] = {
 	{
@@ -207,6 +208,7 @@ struct platform_device msm_device_i2c = {
 #define MSM_HSUSB_PHYS        0xA3600000
 #else
 #define MSM_HSUSB_PHYS        0xA0800000
+#define MSM_HS2USB_PHYS        0xA0800400
 #endif
 static struct resource resources_hsusb_otg[] = {
 	{
@@ -261,6 +263,30 @@ struct platform_device msm_device_hsusb_peripheral = {
 	},
 };
 
+static struct resource resources_hsusb_host2[] = {
+	{
+		.start	= MSM_HS2USB_PHYS,
+		.end	= MSM_HSUSB_PHYS + SZ_4K,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_USB_OTG,
+		.end	= INT_USB_OTG,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_hsusb_host2 = {
+	.name		= "msm_hsusb_host",
+	.id		= 1,
+	.num_resources	= ARRAY_SIZE(resources_hsusb_host2),
+	.resource	= resources_hsusb_host2,
+	.dev		= {
+		.dma_mask 		= &dma_mask,
+		.coherent_dma_mask	= 0xffffffffULL,
+	},
+};
+
 static struct resource resources_hsusb_host[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
@@ -285,6 +311,18 @@ struct platform_device msm_device_hsusb_host = {
 	},
 };
 
+static struct platform_device *msm_host_devices[] = {
+	&msm_device_hsusb_host,
+	&msm_device_hsusb_host2,
+};
+
+int msm_add_host(unsigned int host, struct msm_hsusb_platform_data *plat)
+{
+	struct platform_device	*pdev;
+	pdev = msm_host_devices[host];
+	pdev->dev.platform_data = plat;
+	return platform_device_register(pdev);
+}
 #if defined(CONFIG_ARCH_MSM7X30)
 #define MSM_NAND_PHYS		0xA0200000
 #else

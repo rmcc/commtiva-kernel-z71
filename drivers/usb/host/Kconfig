@@ -117,6 +117,14 @@ config USB_EHCI_MSM
 	  Enables support for the USB controller present on the
 	  Qualcomm chipsets.
 
+config USB_FS_HOST
+	bool "Support for Full Speed Host Mode"
+	depends on USB_EHCI_MSM
+	default n
+	---help---
+	  Enables support for the full speed USB controller core present
+	  on the Qualcomm chipsets
+.
 config USB_ISP116X_HCD
 	tristate "ISP116X HCD support"
 	depends on USB

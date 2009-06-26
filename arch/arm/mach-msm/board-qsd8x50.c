@@ -205,6 +205,51 @@ static struct usb_composition usb_func_composition[] = {
 	},
 };
 
+#ifdef CONFIG_USB_FS_HOST
+static int fsusb_gpio_init(void)
+{
+	int rc;
+	/* FSUSB GPIOs */
+	rc = gpio_request(139, "fs_dat");
+	if (rc) {
+		pr_err("gpio_request failed on pin %d (rc=%d)\n",
+		       139, rc);
+		return rc;
+	}
+	rc = gpio_request(140, "fs_se0");
+	if (rc) {
+		pr_err("gpio_request failed on pin %d (rc=%d)\n",
+		       140, rc);
+		return rc;
+	}
+	rc = gpio_request(141, "fs_oe_n");
+	if (rc) {
+		pr_err("gpio_request failed on pin %d (rc=%d)\n",
+		       141, rc);
+		return rc;
+	}
+	return 0;
+}
+
+static unsigned fsusb_config[] = {
+	GPIO_CFG(139, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
+	GPIO_CFG(140, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
+	GPIO_CFG(141, 3, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
+};
+
+static void msm_fsusb_setup_gpio(unsigned int enable)
+{
+	int rc, i;
+
+	for (i = 0; i < ARRAY_SIZE(fsusb_config); i++) {
+		rc = gpio_tlmm_config(fsusb_config[i],
+			enable ? GPIO_ENABLE : GPIO_DISABLE);
+		if (rc)
+			pr_err("configure/unconfigure fsusb gpios failed \n");
+	}
+}
+#endif
+
 #define MSM_USB_BASE              ((unsigned)addr)
 static unsigned ulpi_read(void __iomem *addr, unsigned reg)
 {
@@ -354,6 +399,9 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.config_gpio    = NULL,
 
 	.phy_reset = msm_hsusb_phy_reset,
+#ifdef CONFIG_USB_FS_HOST
+	.config_fs_gpio = msm_fsusb_setup_gpio,
+#endif
 };
 
 static struct android_pmem_platform_data android_pmem_pdata = {
@@ -887,7 +935,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&qsd_device_spi,
 	&msm_device_hsusb_otg,
-	&msm_device_hsusb_host,
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 	&msm_device_tssc,
@@ -1239,6 +1286,15 @@ static void kgsl_phys_memory_init(void)
 		resource_size(&kgsl_resources[1]), "kgsl");
 }
 
+static void __init qsd8x50_init_host(void)
+{
+	msm_add_host(0, &msm_hsusb_pdata);
+#ifdef CONFIG_USB_FS_HOST
+	if (fsusb_gpio_init())
+		return;
+	msm_add_host(1, &msm_hsusb_pdata);
+#endif
+}
 static void sdcc_gpio_init(void)
 {
 	/* SDC1 GPIOs */
@@ -1597,11 +1653,11 @@ static void __init qsd8x50_init(void)
 	qsd8x50_cfg_smc91x();
 	msm_acpu_clock_init(&qsd8x50_clock_data);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
-	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_uart3.dev.platform_data = &msm_serial_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_fb_add_devices();
 	msm_camera_add_device();
+	qsd8x50_init_host();
 	gp6_init();
 	qsd8x50_init_mmc();
 	bt_power_init();

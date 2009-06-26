@@ -71,6 +71,8 @@ struct msm_hsusb_platform_data {
 	unsigned ulpi_data_3_pin;
 	/* gpio mux function used for LPM */
 	int (*config_gpio)(int config);
+	/* gpio function for FSUSB */
+	void (*config_fs_gpio) (unsigned int);
 	/* ROC info for AHB Mode */
 	unsigned int soc_version;
 
