@@ -73,6 +73,8 @@ struct msm_hsusb_platform_data {
 	int (*config_gpio)(int config);
 	/* ROC info for AHB Mode */
 	unsigned int soc_version;
+
+	int (*phy_reset)(void __iomem *addr);
 };
 
 #endif
