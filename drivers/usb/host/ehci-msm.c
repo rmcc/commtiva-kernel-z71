@@ -36,8 +36,13 @@
 
 #define MSM_USB_BASE (hcd->regs)
 #define SOC_ROC_2_0            0x10002 /* ROC 2.0 */
+#ifdef CONFIG_USB_FS_HOST
+#define NUM_USB_HOSTS		2
+#else
 #define NUM_USB_HOSTS		1
+#endif
 #define HSUSB			0
+#define FSUSB			1
 
 struct msm_hc_device {
 	struct ehci_hcd ehci;
@@ -54,6 +59,7 @@ struct msm_hc_device {
 	struct msm_otg_transceiver *xceiv;
 	unsigned otg_registered;
 	unsigned int clk_enabled;
+	void (*config_fs_gpio)(unsigned int);
 };
 
 static struct msm_hc_device *msm_hc_dev[NUM_USB_HOSTS];
@@ -175,62 +181,69 @@ static int usb_suspend_phy(struct usb_hcd *hcd)
 	int i;
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
-	switch (PHY_TYPE(msm_hc->phy_info)) {
-	case USB_PHY_EXTERNAL:
-		pr_info("%s: external phy\n", __func__);
-		/* clear VBusValid and SessionEnd rising interrupts */
-		ulpi_write(hcd, ULPI_VBUS_VALID_RAISE |
-				ULPI_SESSION_END_RAISE, 0x0f);
-		/* clear VBusValid and SessionEnd falling interrupts */
-		ulpi_write(hcd, ULPI_VBUS_VALID_FALL |
-				ULPI_SESSION_END_FALL, 0x12);
+	if (msm_hc->id == HSUSB) {
+		switch (PHY_TYPE(msm_hc->phy_info)) {
+		case USB_PHY_EXTERNAL:
+			pr_info("%s: external phy\n", __func__);
+			/* clear VBusValid and SessionEnd rising interrupts */
+			ulpi_write(hcd, ULPI_VBUS_VALID_RAISE |
+					ULPI_SESSION_END_RAISE, 0x0f);
+			/* clear VBusValid and SessionEnd falling interrupts */
+			ulpi_write(hcd, ULPI_VBUS_VALID_FALL |
+					ULPI_SESSION_END_FALL, 0x12);
 
-		/* spec talks about following bits in LPM but they are ignored
-		 * because
-		 * 1. disabling interface protection circuit: by disabling
-		 * interface protection curcuit we cannot come out
-		 * of lpm as asyn interrupts would be disabled
-		 * 2. setting the suspendM bit: this bit would be set by usb
-		 * controller once we set phcd bit.
-		 */
+			/* spec talks about following bits in LPM but they
+			 *are ignored  because
+			 * 1. disabling interface protection circuit:
+			 * by disabling interface protection curcuit we
+			 * cannot come out of lpm as asyn interrupts would
+			 * be disabled
+			 * 2. setting the suspendM bit: this bit would be
+			 * set by usb controller once we set phcd bit.
+			 */
 
-		break;
+			break;
 
-	case USB_PHY_INTEGRATED:
-		pr_info("%s: integrated phy\n", __func__);
-		/* clearing latch register, keeping phy comparators ON and
-		   turning off PLL are done because of h/w bugs */
-		ulpi_read(hcd, 0x14);/* clear PHY interrupt latch register */
-		ulpi_write(hcd, 0x01, 0x30);/* PHY comparators on in LPM */
-		ulpi_write(hcd, 0x08, 0x09);/* turn off PLL on integrated phy */
-		break;
+		case USB_PHY_INTEGRATED:
+			pr_info("%s: integrated phy\n", __func__);
+			/* clearing latch register, keeping phy comparators
+			 * ON and turning off PLL are done of h/w bugs */
+			/* clear PHY interrupts latch register */
+			ulpi_read(hcd, 0x14);
+			/* PHY comparators on in LPM */
+			ulpi_write(hcd, 0x01, 0x30);
+			/* turn off PLL on integrated phy */
+			ulpi_write(hcd, 0x08, 0x09);
+			break;
 
-	case USB_PHY_UNDEFINED:
-		pr_err("%s: undefined phy type\n", __func__);
-		return -1;
-	}
+		case USB_PHY_UNDEFINED:
+			pr_err("%s: undefined phy type\n", __func__);
+			return -1;
+		}
 
-	/* loop for 500 times with a delay of 1ms, input by AMSS USB team */
-	for (i = 0; i < 500; i++) {
-		/* set phy to be in lpm */
+		/* loop for 500 times with a delay of 1ms,
+		 * input by AMSS USB team */
+		for (i = 0; i < 500; i++) {
+			/* set phy to be in lpm */
+			writel(readl(USB_PORTSC) | PORTSC_PHCD, USB_PORTSC);
+
+			msleep(1);
+			if (readl(USB_PORTSC) & PORTSC_PHCD)
+				goto blk_stp_sig;
+		}
+
+		if (!(readl(USB_PORTSC) & PORTSC_PHCD)) {
+			pr_err("unable to set phcd of portsc reg\n");
+			return -1;
+		}
+
+		/* we have to set this bit again to work-around h/w bug */
 		writel(readl(USB_PORTSC) | PORTSC_PHCD, USB_PORTSC);
 
-		msleep(1);
-		if (readl(USB_PORTSC) & PORTSC_PHCD)
-			goto blk_stp_sig;
-	}
-
-	if (!(readl(USB_PORTSC) & PORTSC_PHCD)) {
-		pr_err("unable to set phcd of portsc reg\n");
-		return -1;
-	}
-
-	/* we have to set this bit again to work-around h/w bug */
-	writel(readl(USB_PORTSC) | PORTSC_PHCD, USB_PORTSC);
-
 blk_stp_sig:
-	/* block the stop signal */
-	writel(readl(USB_USBCMD) | ULPI_STP_CTRL, USB_USBCMD);
+		/* block the stop signal */
+		writel(readl(USB_USBCMD) | ULPI_STP_CTRL, USB_USBCMD);
+	}
 
 	return 0;
 }
@@ -271,7 +284,8 @@ static int usb_lpm_enter(struct usb_hcd *hcd)
 	}
 
 	/* enable async interrupt */
-	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL, USB_USBCMD);
+	if (msm_hc->id == HSUSB)
+		writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL, USB_USBCMD);
 
 	msm_xusb_disable_clks(msm_hc->id);
 	if (msm_hc->xceiv)
@@ -328,21 +342,23 @@ static void usb_lpm_exit(struct usb_hcd *hcd)
 	msm_hc->in_lpm = 0;
 	disable_irq(hcd->irq);
 	spin_unlock_irqrestore(&msm_hc->lock, flags);
-	schedule_work(&(msm_hc->lpm_exit_work));
+	if (msm_hc->id == HSUSB)
+		schedule_work(&(msm_hc->lpm_exit_work));
 }
 
 static irqreturn_t ehci_msm_irq(struct usb_hcd *hcd)
 {
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
-	if (!(msm_hc->active))
-		return IRQ_HANDLED;
+	if (msm_hc->id == HSUSB) {
+		if (!(msm_hc->active))
+			return IRQ_HANDLED;
 
-	if (msm_hc->in_lpm == 1) {
-		usb_lpm_exit(hcd);
-		return IRQ_HANDLED;
+		if (msm_hc->in_lpm == 1) {
+			usb_lpm_exit(hcd);
+			return IRQ_HANDLED;
+		}
 	}
-
 	return ehci_irq(hcd);
 }
 
@@ -353,6 +369,8 @@ static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 	int rc;
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
+	if (msm_hc->id == FSUSB)
+		return ehci_bus_suspend(hcd);;
 	rc = ehci_bus_suspend(hcd);
 	if (!(msm_hc->otg_registered) && (msm_hc->xceiv)) {
 		msm_hc->otg_registered = 1;
@@ -373,6 +391,8 @@ static int ehci_msm_bus_resume(struct usb_hcd *hcd)
 {
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
+	if (msm_hc->id == FSUSB)
+		return ehci_bus_resume(hcd);
 	if (!(msm_hc->active))
 		return ehci_bus_resume(hcd);
 	usb_lpm_exit(hcd);
@@ -445,24 +465,30 @@ static int ehci_msm_run(struct usb_hcd *hcd)
 
 	/* port configuration - phy, port speed, port power, port enable */
 	while (port--) {
-		ehci_writel(ehci, (PORTSC_PTS_ULPI | PORT_POWER | PORT_PE),
-				&ehci->regs->port_status[port]);
+		if (msm_hc->id == HSUSB)
+			ehci_writel(ehci, (PORTSC_PTS_ULPI | PORT_POWER
+				| PORT_PE), &ehci->regs->port_status[port]);
+		if (msm_hc->id == FSUSB)
+			ehci_writel(ehci, (PORTSC_PTS_SERIAL | PORT_POWER
+				| PORT_PE), &ehci->regs->port_status[port]);
 		msleep(20);
 	}
-
-	if (PHY_TYPE(msm_hc->phy_info) == USB_PHY_INTEGRATED) {
-		/* SW workaround, Issue#2 */
-		retval = ulpi_write(hcd, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
-		if (retval)
-			return retval;
-		/* SW workaround, Issue#3 */
-		writel(0x0, USB_AHB_MODE);
-		writel(0x0, USB_AHB_BURST);
-	} else {
-		if (msm_hc->soc_version >= SOC_ROC_2_0)
-			writel(0x02, USB_ROC_AHB_MODE);
-		else
-			writel(0x01, USB_ROC_AHB_MODE);
+	if (msm_hc->id == HSUSB) {
+		if (PHY_TYPE(msm_hc->phy_info) == USB_PHY_INTEGRATED) {
+			/* SW workaround, Issue#2 */
+			retval = ulpi_write(hcd, ULPI_AMPLITUDE,
+						ULPI_CONFIG_REG);
+			if (retval)
+				return retval;
+			/* SW workaround, Issue#3 */
+			writel(0x0, USB_AHB_MODE);
+			writel(0x0, USB_AHB_BURST);
+		} else {
+			if (msm_hc->soc_version >= SOC_ROC_2_0)
+				writel(0x02, USB_ROC_AHB_MODE);
+			else
+				writel(0x01, USB_ROC_AHB_MODE);
+		}
 	}
 
 	ehci_writel(ehci, ehci->periodic_dma, &ehci->regs->frame_list);
@@ -564,7 +590,8 @@ static void ehci_msm_enable(int enable)
 		msm_hc->active = 1;
 	} else {
 		msm_hc->active = 0;
-		msm_hsusb_vbus_shutdown();
+		if (!(msm_hc_dev[1]->active))
+			msm_hsusb_vbus_shutdown();
 		if (hcd->state != HC_STATE_SUSPENDED)
 			wait_for_completion(&msm_hc->suspend_done);
 		msm_xusb_disable_clks(id);
@@ -599,6 +626,8 @@ static int msm_xusb_phy_data(struct platform_device *pdev)
 		if (PHY_TYPE(msm_hc->phy_info) == USB_PHY_UNDEFINED)
 			return -ENODEV;
 	}
+	if (id == FSUSB)
+		msm_hc->config_fs_gpio = pdata->config_fs_gpio;
 	return 0;
 }
 static int msm_xusb_set_host_mode(struct usb_hcd *hcd,
@@ -642,11 +671,39 @@ static int msm_xusb_set_host_mode(struct usb_hcd *hcd,
 	}
 	return retval;
 }
+
+static void fsusb_start_host(void)
+{
+	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
+
+	usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
+}
+
+static void fsusb_lpm_exit(void)
+{
+	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
+
+	usb_lpm_exit(hcd);
+}
+
+static struct msm_fsusb_rpc_ops fsusb_ops = {
+	.start_host = fsusb_start_host,
+	.lpm_exit = fsusb_lpm_exit,
+};
+
 static int msm_xusb_rpc_connect(int id)
 {
+	int retval;
+
 	if (id == HSUSB) {
 		msm_hsusb_rpc_connect();
 		return msm_hsusb_phy_reset();
+	}
+	if (id == FSUSB) {
+		retval = msm_fsusb_rpc_init(&fsusb_ops);
+		if (retval)
+			return -ENODEV;
+		 msm_fsusb_init_phy();
 	}
 	return 0;
 }
@@ -658,8 +715,11 @@ static int msm_xusb_rpc_close(int id)
 		retval = msm_hsusb_rpc_close();
 		return retval;
 	}
+	if (id == FSUSB)
+		msm_fsusb_rpc_deinit();
 	return 0;
 }
+
 static int __init ehci_msm_probe(struct platform_device *pdev)
 {
 	struct usb_hcd *hcd;
@@ -668,6 +728,8 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	int retval;
 	int id = pdev->id;
 	struct msm_hc_device *msm_hc;
+	char *clks[2] = { "usb_hs_clk", "usb_hs2_clk" };
+	char *pclks[2] = { "usb_hs_pclk", "usb_hs2_pclk" };
 
 	hcd = usb_create_hcd(&msm_hc_driver, &pdev->dev, pdev->dev.bus_id);
 	if (!hcd)
@@ -684,6 +746,7 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	}
 
 	irq = res->start;
+	hcd->irq = irq;
 
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
@@ -704,13 +767,13 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	}
 
 	/* get usb clocks */
-	msm_hc->clk = clk_get(&pdev->dev, "usb_hs_clk");
+	msm_hc->clk = clk_get(&pdev->dev, clks[id]);
 	if (IS_ERR(msm_hc->clk)) {
 		retval = -EFAULT;
 		goto err_map;
 	}
 
-	msm_hc->pclk = clk_get(&pdev->dev, "usb_hs_pclk");
+	msm_hc->pclk = clk_get(&pdev->dev, pclks[id]);
 	if (IS_ERR(msm_hc->pclk)) {
 		retval = -EFAULT;
 		goto err_map;
@@ -730,9 +793,11 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 		goto err_hcd_add;
 
 
-	retval = usb_add_hcd(hcd, irq, IRQF_SHARED);
-	if (retval != 0)
-		goto err_hcd_add;
+	if (id == HSUSB) {
+		retval = usb_add_hcd(hcd, irq, IRQF_SHARED);
+		if (retval != 0)
+			goto err_hcd_add;
+	}
 
 
 	retval = msm_xusb_phy_data(pdev);
@@ -740,6 +805,8 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	if (retval < 0)
 		goto err_hcd_add;
 
+	if (msm_hc->config_fs_gpio != NULL)
+		msm_hc->config_fs_gpio(1);
 
 	spin_lock_init(&msm_hc->lock);
 	msm_hc->in_lpm = 0;
@@ -776,6 +843,8 @@ static int __exit ehci_msm_remove(struct platform_device *pdev)
 
 	cancel_work_sync(&msm_hc->lpm_exit_work);
 	device_init_wakeup(&pdev->dev, 0);
+	if (msm_hc->config_fs_gpio != NULL)
+		msm_hc->config_fs_gpio(0);
 	usb_remove_hcd(hcd);
 	iounmap(hcd->regs);
 	usb_put_hcd(hcd);

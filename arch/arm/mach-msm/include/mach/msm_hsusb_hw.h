@@ -233,6 +233,7 @@ struct ept_queue_item {
 #define PORTSC_PORT_RESET      0x00000100
 #define PORTSC_PTS		(3 << 30)
 #define PORTSC_PTS_ULPI		(2 << 30)
+#define PORTSC_PTS_SERIAL	(3 << 30)
 
 #define PORTSC_PORT_SPEED_FULL    0x00000000
 #define PORTSC_PORT_SPEED_LOW     0x04000000
