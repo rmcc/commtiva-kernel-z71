@@ -62,12 +62,10 @@
 /* This structure allows client to match requests with corresponding */
 /* ack events */
 
-#pragma pack(1)
 struct adsp_audio_client_data {
 	u32	context;	/* Clients Context */
 	u32	data;		/* Associated data */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 /* This structure allows for future expansion of information that */
@@ -75,13 +73,11 @@ struct adsp_audio_client_data {
 /* passed back to the client in the event corresponding to the command */
 /* received.*/
 
-#pragma pack(1)
 struct adsp_audio_header {
 	/* Client specified data */
 	struct adsp_audio_client_data	client_data;
 	/* Room for expansion */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 /* Opcode to open a device stream session to capture audio */
@@ -112,12 +108,10 @@ struct adsp_audio_header {
 
 /* AAC Encoder configuration */
 
-#pragma pack(1)
 struct adsp_audio_aac_enc_cfg {
 	u32	bit_rate;	/* bits per second */
 	u32	encoder_mode;	/* ADSP_AUDIO_ENC_* */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 /* AMR NB encoder modes */
@@ -140,32 +134,25 @@ struct adsp_audio_aac_enc_cfg {
 
 /* AMR Encoder configuration */
 
-#pragma pack(1)
 struct adsp_audio_amr_enc_cfg {
 	u32	mode;		/* ADSP_AUDIO_AMR_MR* */
 	u32	dtx_mode;	/* ADSP_AUDIO_AMR_DTX_MODE* */
 	u32	enable;		/* 1 = enable, 0 = disable */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
-#pragma pack(1)
 struct adsp_audio_qcelp13k_enc_cfg {
 	u16	min_rate;
 	u16	max_rate;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
-#pragma pack(1)
 struct adsp_audio_evrc_enc_cfg {
 	u16	min_rate;
 	u16	max_rate;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
-#pragma pack(1)
 struct adsp_audio_codec_config {
 	union {
 		struct adsp_audio_amr_enc_cfg		amr_cfg;
@@ -173,8 +160,7 @@ struct adsp_audio_codec_config {
 		struct adsp_audio_qcelp13k_enc_cfg	qcelp13k_cfg;
 		struct adsp_audio_evrc_enc_cfg		evrc_cfg;
 	};
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -200,7 +186,6 @@ struct adsp_audio_codec_config {
 
 #define ADSP_AUDIO_MAX_DEVICES 4
 
-#pragma pack(1)
 struct adsp_audio_open_stream_device {
 	/* Number of devices specified */
 	u32				num_devices;
@@ -222,15 +207,13 @@ struct adsp_audio_open_stream_device {
 	struct adsp_audio_codec_config	config;
 	/* 1- indicates AVSync playback mode */
 	u32				mode;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
 /* adsp_audio_OpenStreamDevice is not specified for OPEN_OP_DEVICE_CTRL */
 
 
-#pragma pack(1)
 struct adsp_audio_open_device {
 	/* Associated client data */
 	struct adsp_audio_header		header;
@@ -238,8 +221,7 @@ struct adsp_audio_open_device {
 	u32					op_code;
 	/* Open for READ/WRITE */
 	struct adsp_audio_open_stream_device	stream_device;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -280,7 +262,6 @@ struct adsp_audio_open_device {
 #define ADSP_AUDIO_BUFFER_FLAG_CONTINUATION      0x40
 
 
-#pragma pack(1)
 struct adsp_audio_data_buffer {
 	u32	buffer_addr;	/* Physical Address of buffer */
 	u32	max_size;	/* Maximum size of buffer */
@@ -290,17 +271,14 @@ struct adsp_audio_data_buffer {
 	s64	start;		/* Start timestamp, if any */
 	s64	stop;		/* Stop timestamp, if any */
 	s64	preroll;	/* Preroll timestamp, if any */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
-#pragma pack(1)
 struct adsp_audio_buffer {
 	struct adsp_audio_header	header;	/* Associated client data */
 	struct adsp_audio_data_buffer	buffer;	/* media data buffer */
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 #endif

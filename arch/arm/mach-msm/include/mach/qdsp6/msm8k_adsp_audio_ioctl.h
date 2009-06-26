@@ -79,7 +79,6 @@
 /*   DMA 2 - Ext RX */
 /*   DMA 3 - Ext TX */
 
-#pragma pack(1)
 struct adsp_audio_device_change {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -91,8 +90,7 @@ struct adsp_audio_device_change {
 	u8				device_class;
 	/* 0 == Rx, 1 == Tx and 2 == both */
 	u8				device_type;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 

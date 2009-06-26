@@ -73,7 +73,6 @@
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
 
 
-#pragma pack(1)
 struct adsp_audio_set_device_volume {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -83,8 +82,8 @@ struct adsp_audio_set_device_volume {
 	u32				path;
 	/* in mB. */
 	s32				volume;
-};
-#pragma pack()
+} __attribute__ ((packed));
+
 
 
 
@@ -94,7 +93,6 @@ struct adsp_audio_set_device_volume {
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE		0x0107605f
 
 
-#pragma pack(1)
 struct adsp_audio_set_device_mute {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -104,8 +102,7 @@ struct adsp_audio_set_device_mute {
 	u32				path;
 	/* 0 == UnMute, 1 == Mute */
 	u32				mute;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
@@ -115,7 +112,6 @@ struct adsp_audio_set_device_mute {
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
 
 
-#pragma pack(1)
 struct adsp_audio_device_eq_cfg {
 	/* Associated client data */
 	struct adsp_audio_header	client_data;
@@ -123,9 +119,7 @@ struct adsp_audio_device_eq_cfg {
 	u32				device;
 	/* Equalizer band data */
 	struct adsp_audio_eq_cfg	eq_config;
-};
-#pragma pack()
-
+} __attribute__ ((packed));
 
 
 #endif

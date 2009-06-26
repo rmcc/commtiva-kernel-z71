@@ -95,7 +95,6 @@
 
 /* Event data payload definition */
 
-#pragma pack(1)
 struct adsp_audio_event_data {
 	union {
 		/* integer data */
@@ -107,14 +106,12 @@ struct adsp_audio_event_data {
 		/* media session Time */
 		s64				audio_time;
 	};
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 
 /* ADSP Audio event */
 
-#pragma pack(1)
 struct adsp_audio_event {
 	/* Associated client data */
 	struct adsp_audio_header	header;
@@ -129,8 +126,7 @@ struct adsp_audio_event {
 	/* Returned data only present if */
 	/* data_len > 0 */
 	struct adsp_audio_event_data	event_data;
-};
-#pragma pack()
+} __attribute__ ((packed));
 
 
 /* Callback function type for clients to recieve events */
