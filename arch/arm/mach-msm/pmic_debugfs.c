@@ -1009,7 +1009,7 @@ struct pmic_debug_desc pmic_debug[] = {
 	{debug_get_spkr_configuration, NULL}, /* GET_SPKR_CONFIGURATION_PROC */
 	{debug_spkr_get_gain, NULL}, /* SPKR_GET_GAIN_PROC */
 	{debug_spkr_is_en, NULL}, /* SPKR_IS_EN_PROC */
-	{debug_spkr_en_mute, NULL}, /* SPKR_EN_MUTE_PROC */
+	{NULL, debug_spkr_en_mute}, /* SPKR_EN_MUTE_PROC */
 	{debug_spkr_is_mute_en, NULL}, /* SPKR_IS_MUTE_EN_PROC */
 	{NULL, debug_spkr_set_delay}, /* SPKR_SET_DELAY_PROC */
 	{debug_spkr_get_delay, NULL}, /* SPKR_GET_DELAY_PROC */
@@ -1081,6 +1081,8 @@ DEFINE_SIMPLE_ATTRIBUTE(
 
 static int pmic_debugfs_open(struct inode *inode, struct file *file)
 {
+	/* non-seekable */
+	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
 	return 0;
 }
 
@@ -1096,6 +1098,10 @@ static ssize_t pmic_debugfs_write(
 	loff_t *ppos)
 {
 	struct pmic_debug_desc *pd;
+	int len = 0;
+
+	printk(KERN_INFO "%s: proc=%d count=%d *ppos=%d\n",
+			__func__, debug_proc, count, (uint)*ppos);
 
 	if (count > sizeof(debug_buf))
 		return -EFAULT;
@@ -1108,8 +1114,11 @@ static ssize_t pmic_debugfs_write(
 
 	pd = &pmic_debug[debug_proc];
 
-	if (pd->set)
-		return pd->set(debug_buf, count);
+	if (pd->set) {
+		len = pd->set(debug_buf, count);
+		printk(KERN_INFO "%s: len=%d\n", __func__, len);
+		return len;
+	}
 
 	return 0;
 }
@@ -1121,9 +1130,15 @@ static ssize_t pmic_debugfs_read(
 	loff_t *ppos)
 {
 	struct pmic_debug_desc *pd;
-	int		len = 0;
+	int len = 0;
+
+	printk(KERN_INFO "%s: proc=%d count=%d *ppos=%d\n",
+			__func__, debug_proc, count, (uint)*ppos);
 
 	pd = &pmic_debug[debug_proc];
+
+	if (*ppos)
+		return 0;	/* the end */
 
 	if (pd->get) {
 		len = pd->get(debug_buf, sizeof(debug_buf));
@@ -1135,9 +1150,15 @@ static ssize_t pmic_debugfs_read(
 		}
 	}
 
+	printk(KERN_INFO "%s: len=%d\n", __func__, len);
+
+	if (len < 0)
+		return 0;
+
+	*ppos += len;	/* increase offset */
+
 	return len;
 }
-
 
 static const struct file_operations pmic_debugfs_fops = {
 	.open = pmic_debugfs_open,
