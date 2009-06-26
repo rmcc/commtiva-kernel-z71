@@ -1700,7 +1700,10 @@ static int usb_hw_reset(struct usb_info *ui)
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
 	/* rpc call for phy_reset */
-	msm_hsusb_phy_reset();
+	if (ui->pdata->phy_reset)
+		ui->pdata->phy_reset(ui->addr);
+	else
+		msm_hsusb_phy_reset();
 	/* Give some delay to settle phy after reset */
 	msleep(100);
 
@@ -2644,7 +2647,10 @@ static void usb_vbus_offline(struct usb_info *ui)
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
 
-	msm_hsusb_phy_reset();
+	if (ui->pdata->phy_reset)
+		ui->pdata->phy_reset(ui->addr);
+	else
+		msm_hsusb_phy_reset();
 	/* Give some delay to settle phy after reset */
 	msleep(100);
 
