@@ -69,6 +69,7 @@
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
+#include <asm/io.h>
 
 #include <asm/mach/mmc.h>
 #include <mach/vreg.h>
@@ -77,6 +78,7 @@
 #include <mach/board.h>
 #include <mach/sirc.h>
 #include <mach/msm_hsusb.h>
+#include <mach/msm_hsusb_hw.h>
 #include <mach/msm_serial_hs.h>
 #include <mach/msm_touchpad.h>
 #include <mach/msm_i2ckbd.h>
@@ -202,6 +204,142 @@ static struct usb_composition usb_func_composition[] = {
 		.functions	    = 0x0F, /* 01111 */
 	},
 };
+
+#define MSM_USB_BASE              ((unsigned)addr)
+static unsigned ulpi_read(void __iomem *addr, unsigned reg)
+{
+	unsigned timeout = 100000;
+
+	/* initiate read operation */
+	writel(ULPI_RUN | ULPI_READ | ULPI_ADDR(reg),
+	       USB_ULPI_VIEWPORT);
+
+	/* wait for completion */
+	while ((readl(USB_ULPI_VIEWPORT) & ULPI_RUN) && (--timeout))
+		cpu_relax();
+
+	if (timeout == 0) {
+		printk(KERN_ERR "ulpi_read: timeout %08x\n",
+			readl(USB_ULPI_VIEWPORT));
+		return 0xffffffff;
+	}
+	return ULPI_DATA_READ(readl(USB_ULPI_VIEWPORT));
+}
+
+static void ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
+{
+	unsigned timeout = 10000;
+
+	/* initiate write operation */
+	writel(ULPI_RUN | ULPI_WRITE |
+	       ULPI_ADDR(reg) | ULPI_DATA(val),
+	       USB_ULPI_VIEWPORT);
+
+	/* wait for completion */
+	while ((readl(USB_ULPI_VIEWPORT) & ULPI_RUN) && (--timeout))
+		cpu_relax();
+
+	if (timeout == 0)
+		printk(KERN_ERR "ulpi_write: timeout\n");
+}
+
+#define APPS_RESET                  (MSM_CLK_CTL_BASE + 0X214)
+static void msm_hsusb_apps_reset_link(int reset)
+{
+	u32 temp;
+
+	temp = readl(APPS_RESET);
+	if (reset)
+		temp |= USBH;
+	else
+		temp &= ~USBH;
+	writel(temp, APPS_RESET);
+}
+
+static void msm_hsusb_apps_reset_phy(void)
+{
+	u32 temp;
+
+	/* assert reset */
+	temp = readl(APPS_RESET);
+	temp |= USB_PHY;
+	writel(temp, APPS_RESET);
+
+	udelay(300);
+
+	/* de-assert reset */
+	temp = readl(APPS_RESET);
+	temp &= ~USB_PHY;
+	writel(temp, APPS_RESET);
+
+}
+
+#define ULPI_VERIFY_MAX_LOOP_COUNT  3
+static int msm_hsusb_phy_verify_access(void __iomem *addr)
+{
+	int temp;
+
+	for (temp = 0; temp < ULPI_VERIFY_MAX_LOOP_COUNT; temp++) {
+		if (ulpi_read(addr, ULPI_DEBUG) != (unsigned)-1)
+			break;
+		msm_hsusb_apps_reset_phy();
+	}
+
+	if (temp == ULPI_VERIFY_MAX_LOOP_COUNT) {
+		pr_err("ulpi read failed for %d times\n",
+				ULPI_VERIFY_MAX_LOOP_COUNT);
+		return -1;
+	}
+
+	return 0;
+}
+
+static int msm_hsusb_phy_caliberate(void __iomem *addr)
+{
+	int ret;
+
+	ret = msm_hsusb_phy_verify_access(addr);
+	if (ret)
+		return ret;
+
+	ulpi_write(addr, ULPI_SUSPENDM, ULPI_FUNC_CTRL_CLR);
+
+	msm_hsusb_apps_reset_phy();
+
+	return msm_hsusb_phy_verify_access(addr);
+}
+
+#define USB_LINK_RESET_TIMEOUT      (msecs_to_jiffies(10))
+static int msm_hsusb_phy_reset(void __iomem *addr)
+{
+	u32 temp;
+	unsigned long timeout;
+
+	msm_hsusb_apps_reset_link(1);
+	msm_hsusb_apps_reset_phy();
+	msm_hsusb_apps_reset_link(0);
+
+	/* select ULPI phy */
+	temp = (readl(USB_PORTSC) & ~PORTSC_PTS);
+	writel(temp | PORTSC_PTS_ULPI, USB_PORTSC);
+
+	if (msm_hsusb_phy_caliberate(addr))
+		return -1;
+
+	/* soft reset phy */
+	writel(USBCMD_RESET, USB_USBCMD);
+	timeout = jiffies + USB_LINK_RESET_TIMEOUT;
+	while (readl(USB_USBCMD) & USBCMD_RESET) {
+		if (time_after(jiffies, timeout)) {
+			pr_err("usb link reset timeout\n");
+			break;
+		}
+		msleep(1);
+	}
+
+	return 0;
+}
+
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
@@ -214,6 +352,8 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
+
+	.phy_reset = msm_hsusb_phy_reset,
 };
 
 static struct android_pmem_platform_data android_pmem_pdata = {

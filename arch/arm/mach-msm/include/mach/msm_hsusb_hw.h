@@ -273,4 +273,11 @@ struct ept_queue_item {
 #define PORTSC_PTC_K_STATE	(0x02 << 16)
 #define PORTSC_PTC_SE0_NAK	(0x03 << 16)
 #define PORTSC_PTC_TST_PKT	(0x04 << 16)
+
+#define USBH                     (1 << 15)
+#define USB_PHY                  (1 << 18)
+
+#define ULPI_DEBUG               0x15
+#define ULPI_FUNC_CTRL_CLR       0x06
+#define ULPI_SUSPENDM            (1 << 6)
 #endif /* __LINUX_USB_GADGET_MSM72K_UDC_H__ */
