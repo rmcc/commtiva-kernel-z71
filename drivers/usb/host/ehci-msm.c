@@ -60,6 +60,7 @@ struct msm_hc_device {
 	unsigned otg_registered;
 	unsigned int clk_enabled;
 	void (*config_fs_gpio)(unsigned int);
+	int (*phy_reset)(void __iomem *);
 };
 
 static struct msm_hc_device *msm_hc_dev[NUM_USB_HOSTS];
@@ -636,11 +637,13 @@ static int msm_xusb_phy_data(struct platform_device *pdev)
 	if (id == HSUSB) {
 		msm_hc->soc_version = pdata->soc_version;
 		msm_hc->phy_info = pdata->phy_info;
+		msm_hc->phy_reset = pdata->phy_reset;
 		if (PHY_TYPE(msm_hc->phy_info) == USB_PHY_UNDEFINED)
 			return -ENODEV;
 	}
 	if (id == FSUSB)
 		msm_hc->config_fs_gpio = pdata->config_fs_gpio;
+
 	return 0;
 }
 static int msm_xusb_set_host_mode(struct usb_hcd *hcd,
@@ -709,10 +712,15 @@ static struct msm_fsusb_rpc_ops fsusb_ops = {
 static int msm_xusb_rpc_connect(int id)
 {
 	int retval;
+	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[id]);
+	struct msm_hc_device *msm_hc = msm_hc_dev[id];
 
 	if (id == HSUSB) {
 		msm_hsusb_rpc_connect();
-		return msm_hsusb_phy_reset();
+		if (msm_hc->phy_reset)
+			return msm_hc->phy_reset(hcd->regs);
+		else
+			return msm_hsusb_phy_reset();
 	}
 	if (id == FSUSB) {
 		retval = msm_fsusb_rpc_init(&fsusb_ops);
@@ -797,6 +805,10 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	/* enable usb clocks */
 	msm_xusb_enable_clks(id);
 
+	retval = msm_xusb_phy_data(pdev);
+	if (retval < 0)
+		goto err_rpc_connect;
+
 	retval = msm_xusb_rpc_connect(id);
 
 	if (retval < 0)
@@ -813,12 +825,6 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 		if (retval != 0)
 			goto err_hcd_add;
 	}
-
-
-	retval = msm_xusb_phy_data(pdev);
-
-	if (retval < 0)
-		goto err_hcd_add;
 
 	if (msm_hc->config_fs_gpio != NULL)
 		msm_hc->config_fs_gpio(1);
