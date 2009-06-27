@@ -125,6 +125,11 @@ def build(target):
     dotconfig = '%s/.config' % dest_dir
     shutil.copyfile(defconfig, dotconfig)
 
+    devnull = open('/dev/null', 'r')
+    subprocess.check_call(['make', 'O=%s' % dest_dir,
+	'%s_defconfig' % target], env=make_env, stdin=devnull)
+    devnull.close()
+
     build = Builder(log_name)
     build.run(['make', 'O=%s' % dest_dir] + make_command)
     build.close()
