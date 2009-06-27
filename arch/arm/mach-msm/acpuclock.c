@@ -536,12 +536,13 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 			pr_err("Setting AXI min rate failed!\n");
 	}
 
-	/* Nothing else to do for power collapse. */
-	if (reason == SETRATE_PC)
+	/* Nothing else to do for power collapse if not 7x27. */
+	if (reason == SETRATE_PC && !cpu_is_msm7x27())
 		return 0;
 
 	/* Disable PLLs we are not using anymore. */
-	plls_enabled &= ~(1 << tgt_s->pll);
+	if (tgt_s->pll != ACPU_PLL_TCXO)
+		plls_enabled &= ~(1 << tgt_s->pll);
 	for (pll = ACPU_PLL_0; pll <= ACPU_PLL_2; pll++)
 		if (plls_enabled & (1 << pll)) {
 			rc = pc_pll_request(pll, 0);
@@ -550,6 +551,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 				goto out;
 			}
 		}
+
+	/* Nothing else to do for power collapse. */
+	if (reason == SETRATE_PC)
+		return 0;
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
