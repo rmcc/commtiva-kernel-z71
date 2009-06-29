@@ -78,6 +78,9 @@
 #define KGSL_DEV_FLAGS_STARTED		0x00000004
 #define KGSL_DEV_FLAGS_ACTIVE		0x00000008
 
+#define KGSL_CHIPID_YAMATODX_REV21  0x20100
+#define KGSL_CHIPID_YAMATODX_REV211 0x20101
+
 
 struct kgsl_device;
 struct platform_device;

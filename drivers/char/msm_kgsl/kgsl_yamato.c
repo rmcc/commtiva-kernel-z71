@@ -397,6 +397,10 @@ kgsl_yamato_getchipid(struct kgsl_device *device)
 	chipid  = ((coreid << 24) | (majorid << 16) |
 			(minorid << 8) | (patchid << 0));
 
+	/* Hardware revision 211 (8650) returns the wrong chip ID */
+	if (chipid == KGSL_CHIPID_YAMATODX_REV21)
+		chipid = KGSL_CHIPID_YAMATODX_REV211;
+
 	return chipid;
 }
 
