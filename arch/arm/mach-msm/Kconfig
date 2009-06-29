@@ -600,11 +600,4 @@ config MSM_SLEEP_TIME_OVERRIDE
 	  suspend. The feature is required for automated power management
 	  testing.
 
-config QSD_BASE_24000000
-	bool "Base memory at 0x24000000"
-	depends on ARCH_MSM_SCORPION
-	default n
-	help
-	  Select if physical DRAM at 0x24000000
-
 endif
