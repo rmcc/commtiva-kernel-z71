@@ -38,7 +38,6 @@
 
 #include "msm-pcm.h"
 
-
 #define SND_DRIVER        "snd_msm"
 #define MAX_PCM_DEVICES	SNDRV_CARDS
 #define MAX_PCM_SUBSTREAMS 1
@@ -348,6 +347,8 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 		goto out;
 
 	prtd->ops = &snd_msm_audio_ops;
+	prtd->out[0].used = BUF_INVALID_LEN;
+	prtd->out_head = 1; /* point to second buffer on startup */
 	runtime->private_data = prtd;
 
 	ret = alsa_adsp_configure(prtd);
