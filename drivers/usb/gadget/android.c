@@ -342,6 +342,22 @@ static unsigned int android_validate_product_id(unsigned short pid)
 	}
 	return 0;
 }
+static unsigned short android_validate_function_map(unsigned int n)
+{
+	struct android_dev *dev = _android_dev;
+	int i;
+
+	if (!dev->pdata)
+		return 0;
+
+	for (i = 0; i < dev->pdata->num_compositions; i++) {
+		if (dev->pdata->compositions[i].functions == n) {
+			dev->functions = dev->pdata->compositions[i].functions;
+			return dev->pdata->compositions[i].product_id;
+		}
+	}
+	return 0;
+}
 static void android_switch_composition(unsigned short pid)
 {
 	if (!android_validate_product_id(pid))
@@ -363,26 +379,41 @@ static struct attribute_group android_attr_grp = {
 
 static void enable_adb(struct android_dev *dev, int enable)
 {
-	if (enable != dev->adb_enabled) {
-		dev->adb_enabled = enable;
-		adb_function_enable(enable);
+	unsigned int n;
+	unsigned short pid;
 
-		/* set product ID to the appropriate value */
-		if (enable)
-			device_desc.idProduct =
-				__constant_cpu_to_le16(dev->adb_product_id);
-		else
-			device_desc.idProduct =
-				__constant_cpu_to_le16(dev->product_id);
-		if (dev->cdev)
-			dev->cdev->desc.idProduct = device_desc.idProduct;
+	n = dev->functions;
 
-		/* force reenumeration */
-		if (dev->cdev && dev->cdev->gadget &&
-				dev->cdev->gadget->speed != USB_SPEED_UNKNOWN) {
-			usb_gadget_disconnect(dev->cdev->gadget);
-			msleep(10);
-			usb_gadget_connect(dev->cdev->gadget);
+	if (enable) {
+
+		if (dev->adb_enabled) {
+			printk(KERN_ERR "adb already enabled\n");
+			return;
+		}
+		/* inserting adb function at second nibble*/
+		n = ((((((n >> 4) << 4) | ANDROID_ADB)) << 4) | (n & 0x0F));
+		pid = android_validate_function_map(n);
+		if (pid)
+			android_switch_composition(pid);
+		else {
+			printk(KERN_ERR "can't add adb to"
+				"the existing composition\n");
+			return;
+		}
+	} else {
+		if (!dev->adb_enabled) {
+			printk(KERN_ERR "adb already disabled\n");
+			return;
+		}
+		/* remove adb function from second nibble*/
+		n = (((n >> 8) << 4) | (n & 0x0F));
+		pid = android_validate_function_map(n);
+		if (pid)
+			android_switch_composition(pid);
+		else {
+			printk(KERN_ERR "can't remove adb from"
+				"the existing composition\n");
+			return;
 		}
 	}
 }
