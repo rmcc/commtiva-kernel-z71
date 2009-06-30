@@ -42,4 +42,18 @@ int msm_chg_usb_i_is_not_available(void);
 int msm_chg_usb_charger_disconnected(void);
 int msm_chg_rpc_close(void);
 
+struct msm_fsusb_rpc_ops {
+	void (*start_host) (void);
+	void (*lpm_exit) (void);
+};
+
+int msm_fsusb_rpc_init(struct msm_fsusb_rpc_ops *ops);
+int msm_fsusb_init_phy(void);
+int msm_fsusb_reset_phy(void);
+int msm_fsusb_suspend_phy(void);
+int msm_fsusb_resume_phy(void);
+int msm_fsusb_rpc_close(void);
+int msm_fsusb_remote_dev_disconnected(void);
+int msm_fsusb_set_remote_wakeup(void);
+void msm_fsusb_rpc_deinit(void);
 #endif
