@@ -254,22 +254,22 @@ void msm_camio_camif_pad_reg_reset(void)
 		0 << CAM_PCLK_INVERT_SHFT;
 
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	reg = (readl(mdcbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 1 << CAM_PAD_REG_SW_RESET_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	reg = (readl(mdcbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 0 << CAM_PAD_REG_SW_RESET_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	msm_camio_clk_sel(MSM_CAMIO_CLK_SRC_EXTERNAL);
-	mdelay(10);
+	msleep(10);
 }
 
 void msm_camio_vfe_blk_reset(void)

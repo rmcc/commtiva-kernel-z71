@@ -985,13 +985,13 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 	else
 		goto init_probe_done;
 
-	mdelay(20);
+	msleep(20);
 
 
 	/* enable mclk first */
 	msm_camio_clk_rate_set(MT9P012_DEFAULT_CLOCK_RATE);
 
-	mdelay(20);
+	msleep(20);
 	/* RESET the sensor image part via I2C command */
 	rc = mt9p012_i2c_write_w(mt9p012_client->addr,
 		MT9P012_REG_RESET_REGISTER, 0x10CC|0x0001);
@@ -1000,7 +1000,7 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 		goto init_probe_fail;
 	}
 
-	mdelay(MT9P012_RESET_DELAY_MSECS);
+	msleep(MT9P012_RESET_DELAY_MSECS);
 
 	/* 3. Read sensor Model ID: */
 	rc = mt9p012_i2c_read_w(mt9p012_client->addr,
@@ -1036,7 +1036,7 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 		goto init_probe_fail;
 	}
 
-	mdelay(MT9P012_RESET_DELAY_MSECS);
+	msleep(MT9P012_RESET_DELAY_MSECS);
 	goto init_probe_done;
 
 init_probe_fail:

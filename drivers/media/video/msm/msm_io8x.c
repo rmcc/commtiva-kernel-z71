@@ -269,23 +269,23 @@ void msm_camio_camif_pad_reg_reset(void)
 		0 << EXT_CAM_VSYNC_POL_SEL_SHFT |
 		0 << MDDI_CLK_CHICKEN_BIT_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	reg = (readl(mdcbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 1 << CAM_PAD_REG_SW_RESET_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	reg = (readl(mdcbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 0 << CAM_PAD_REG_SW_RESET_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
-	mdelay(10);
+	msleep(10);
 
 	msm_camio_clk_sel(MSM_CAMIO_CLK_SRC_EXTERNAL);
 
-	mdelay(10);
+	msleep(10);
 
 	/* todo: check return */
 	if (camio_vfe_clk)
