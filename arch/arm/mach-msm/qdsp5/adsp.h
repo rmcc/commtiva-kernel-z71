@@ -299,7 +299,12 @@ extern int adsp_init_info(struct adsp_info *info);
 #define QDSP_vfeCommandQueue              25
 #define QDSP_vfeCommandScaleQueue         26
 #define QDSP_vfeCommandTableQueue         27
-#define QDSP_MAX_NUM_QUEUES               28
+#define QDSP_vfeFtmCmdQueue               28
+#define QDSP_vfeFtmCmdScaleQueue          29
+#define QDSP_vfeFtmCmdTableQueue          30
+#define QDSP_uPJpegFtmCfgCmdQueue         31
+#define QDSP_uPJpegFtmActionCmdQueue      32
+#define QDSP_MAX_NUM_QUEUES               33
 
 /* Value to indicate that a queue is not defined for a particular image */
 #define QDSP_RTOS_NO_QUEUE  0xfffffffe
