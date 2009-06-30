@@ -604,7 +604,7 @@ static void ehci_msm_enable(int enable)
 		msm_hc->active = 1;
 	} else {
 		msm_hc->active = 0;
-		if (!(msm_hc_dev[1]->active))
+		if (!(msm_hc_dev[1]))
 			msm_hsusb_vbus_shutdown();
 		if (hcd->state != HC_STATE_SUSPENDED)
 			wait_for_completion(&msm_hc->suspend_done);
