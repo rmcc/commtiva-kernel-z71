@@ -127,6 +127,7 @@ struct clk {
 
 enum clkvote_client {
 	CLKVOTE_ACPUCLK = 0,
+	CLKVOTE_PMQOS,
 	CLKVOTE_MAX,
 };
 

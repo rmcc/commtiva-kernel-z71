@@ -24,6 +24,7 @@
 #include <linux/spinlock.h>
 #include <linux/debugfs.h>
 #include <linux/ctype.h>
+#include <linux/pm_qos_params.h>
 #include <mach/clk.h>
 
 #include "clock.h"
@@ -42,6 +43,7 @@ unsigned msm_num_clocks;
  */
 static DECLARE_BITMAP(clock_map_enabled, NR_CLKS);
 static DEFINE_SPINLOCK(clock_map_lock);
+static struct notifier_block axi_freq_notifier_block;
 
 /*
  * glue for the proc_comm interface
@@ -275,6 +277,12 @@ int ebi1_clk_set_min_rate(enum clkvote_client client, unsigned long rate)
 	return ret;
 }
 
+static int axi_freq_notifier_handler(struct notifier_block *block,
+				unsigned long min_freq, void *v)
+{
+	return ebi1_clk_set_min_rate(CLKVOTE_PMQOS, min_freq * 1000);
+}
+
 /*
  * Find out whether any clock is enabled that needs the TCXO clock.
  *
@@ -343,6 +351,10 @@ void __init msm_clock_init(struct clk *clock_tbl, unsigned num_clocks)
 
 	ebi1_clk = clk_get(NULL, "ebi1_clk");
 	BUG_ON(ebi1_clk == NULL);
+
+	axi_freq_notifier_block.notifier_call = axi_freq_notifier_handler;
+	pm_qos_add_notifier(PM_QOS_SYSTEM_BUS_FREQ, &axi_freq_notifier_block);
+
 }
 
 #if defined(CONFIG_DEBUG_FS)
