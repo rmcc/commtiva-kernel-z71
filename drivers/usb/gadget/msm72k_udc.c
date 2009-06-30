@@ -1563,6 +1563,7 @@ static int msm72k_probe(struct platform_device *pdev)
 	struct usb_info *ui;
 	int irq;
 	int ret;
+	struct msm_hsusb_gadget_platform_data *pdata;
 
 	INFO("msm72k_probe\n");
 	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
@@ -1572,7 +1573,7 @@ static int msm72k_probe(struct platform_device *pdev)
 	ui->pdev = pdev;
 
 	if (pdev->dev.platform_data) {
-		struct msm_hsusb_platform_data *pdata = pdev->dev.platform_data;
+		pdata = pdev->dev.platform_data;
 		ui->phy_reset = pdata->phy_reset;
 		ui->phy_init_seq = pdata->phy_init_seq;
 	}
