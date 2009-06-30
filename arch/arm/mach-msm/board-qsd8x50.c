@@ -310,7 +310,7 @@ static void msm_hsusb_apps_reset_phy(void)
 	temp |= USB_PHY;
 	writel(temp, APPS_RESET);
 
-	udelay(300);
+	msleep(1);
 
 	/* de-assert reset */
 	temp = readl(APPS_RESET);
