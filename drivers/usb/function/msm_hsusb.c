@@ -485,11 +485,17 @@ static void msm_hsusb_suspend_locks_acquire(struct usb_info *ui, int acquire)
 		wake_lock(&ui->wlock);
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, 0);
+		if (ui->pdata->max_axi_khz)
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+					DRIVER_NAME, ui->pdata->max_axi_khz);
 	} else {
 		wake_lock_timeout(&ui->wlock, HZ / 2);
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 					DRIVER_NAME,
 					PM_QOS_DEFAULT_VALUE);
+		if (ui->pdata->max_axi_khz)
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+					DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 	}
 }
 
@@ -501,9 +507,12 @@ static void msm_hsusb_suspend_locks_init(struct usb_info *ui, int init)
 		pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME,
 				PM_QOS_DEFAULT_VALUE);
+		pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 	} else {
 		wake_lock_destroy(&ui->wlock);
 		pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
+		pm_qos_remove_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME);
 	}
 }
 
