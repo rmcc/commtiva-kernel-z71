@@ -479,6 +479,34 @@ static int ulpi_write(struct usb_info *ui, unsigned val, unsigned reg)
 	return 0;
 }
 
+static void msm_hsusb_suspend_locks_acquire(struct usb_info *ui, int acquire)
+{
+	if (acquire) {
+		wake_lock(&ui->wlock);
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
+				DRIVER_NAME, 0);
+	} else {
+		wake_lock_timeout(&ui->wlock, HZ / 2);
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
+					DRIVER_NAME,
+					PM_QOS_DEFAULT_VALUE);
+	}
+}
+
+static void msm_hsusb_suspend_locks_init(struct usb_info *ui, int init)
+{
+	if (init) {
+		wake_lock_init(&ui->wlock, WAKE_LOCK_SUSPEND,
+				"usb_bus_active");
+		pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY,
+				DRIVER_NAME,
+				PM_QOS_DEFAULT_VALUE);
+	} else {
+		wake_lock_destroy(&ui->wlock);
+		pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
+	}
+}
+
 static void init_endpoints(struct usb_info *ui)
 {
 	unsigned n;
@@ -2193,7 +2221,7 @@ static int usb_free(struct usb_info *ui, int ret)
 		disable_irq_wake(ui->irq);
 		free_irq(ui->irq, ui);
 	}
-	wake_lock_destroy(&ui->wlock);
+	msm_hsusb_suspend_locks_init(ui, 0);
 	if (ui->gpio_irq[0])
 		free_irq(ui->gpio_irq[0], NULL);
 	if (ui->gpio_irq[1])
@@ -2267,10 +2295,7 @@ static void usb_do_work(struct work_struct *w)
 				 */
 				if (usb_vbus_is_on(ui)) {
 					ui->usb_state = USB_STATE_POWERED;
-					wake_lock(&ui->wlock);
-					pm_qos_update_requirement(
-							PM_QOS_CPU_DMA_LATENCY,
-							  DRIVER_NAME, 0);
+					msm_hsusb_suspend_locks_acquire(ui, 1);
 					ui->state = USB_STATE_ONLINE;
 					usb_enable_pullup(ui);
 					usb_chg_set_type(ui);
@@ -2338,10 +2363,7 @@ static void usb_do_work(struct work_struct *w)
 			if (flags & USB_FLAG_SUSPEND) {
 				ui->usb_state = USB_STATE_SUSPENDED;
 				usb_lpm_enter(ui);
-				wake_lock(&ui->wlock);
-				pm_qos_update_requirement(
-						PM_QOS_CPU_DMA_LATENCY,
-						DRIVER_NAME, 0);
+				msm_hsusb_suspend_locks_acquire(ui, 1);
 				break;
 			}
 			if ((flags & USB_FLAG_RESUME) ||
@@ -2488,8 +2510,7 @@ static void usb_lpm_exit(struct usb_info *ui)
 		if (ui->xceiv)
 			ui->xceiv->set_suspend(0);
 	}
-	wake_lock(&ui->wlock);
-	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME, 0);
+	msm_hsusb_suspend_locks_acquire(ui, 1);
 	pr_info("%s(): USB exited from low power mode\n", __func__);
 }
 
@@ -2554,9 +2575,7 @@ static int usb_lpm_enter(struct usb_info *ui)
 	}
 
 	enable_irq(ui->irq);
-	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
-							PM_QOS_DEFAULT_VALUE);
-	wake_lock_timeout(&ui->wlock, HZ / 2);
+	msm_hsusb_suspend_locks_acquire(ui, 0);
 	pr_info("%s: usb in low power mode\n", __func__);
 	return 0;
 }
@@ -3043,9 +3062,7 @@ static int __init usb_probe(struct platform_device *pdev)
 	ui->pdata = ui->pdev->dev.platform_data;
 
 	spin_lock_init(&ui->lock);
-	wake_lock_init(&ui->wlock, WAKE_LOCK_SUSPEND, "usb_bus_active");
-	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
-							PM_QOS_DEFAULT_VALUE);
+	msm_hsusb_suspend_locks_init(ui, 1);
 	the_usb_info = ui;
 
 	ui->functions_map = ui->pdata->function_map;
@@ -3332,7 +3349,6 @@ static void usb_exit(void)
 	cancel_work_sync(&ui->li.wakeup_phy);
 
 	destroy_workqueue(usb_work);
-	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
 	/* free the usb_info structure */
 	free_usb_info();
 	sysfs_remove_group(&ui->pdev->dev.kobj, &msm_hsusb_attr_grp);
