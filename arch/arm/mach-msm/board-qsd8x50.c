@@ -886,43 +886,51 @@ enum {
 	BT_SYSRST,
 	BT_WAKE,
 	BT_HOST_WAKE,
-	BT_PWR_EN,
+	BT_VDD_IO,
 	BT_RFR,
 	BT_CTS,
 	BT_RX,
 	BT_TX,
-	BT_PCM_DOUT,
-	BT_PCM_DIN,
-	BT_PCM_SYNC,
-	BT_PCM_CLK,
+	BT_VDD_FREG
 };
 
 static unsigned bt_config_power_on[] = {
 	GPIO_CFG(18, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* SYSRST */
 	GPIO_CFG(19, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* WAKE */
 	GPIO_CFG(21, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* HOST_WAKE */
-	GPIO_CFG(22, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* PWR_EN */
+	GPIO_CFG(22, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* VDD_IO */
 	GPIO_CFG(43, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* RFR */
 	GPIO_CFG(44, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* CTS */
 	GPIO_CFG(45, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* Rx */
 	GPIO_CFG(46, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* Tx */
+	GPIO_CFG(113, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),  /* VDD_FREG */
 };
 static unsigned bt_config_power_off[] = {
 	GPIO_CFG(18, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* SYSRST */
 	GPIO_CFG(19, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* WAKE */
 	GPIO_CFG(21, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* HOST_WAKE */
-	GPIO_CFG(22, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* PWR_EN */
+	GPIO_CFG(22, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* VDD_IO */
 	GPIO_CFG(43, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* RFR */
 	GPIO_CFG(44, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* CTS */
 	GPIO_CFG(45, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Rx */
 	GPIO_CFG(46, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Tx */
+	GPIO_CFG(113, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),  /* VDD_FREG */
 };
 
 static int bluetooth_power(int on)
 {
+	struct vreg *vreg_bt;
 	int pin, rc;
 
-	printk(KERN_DEBUG "%s\n", __func__);
+	/* do not have vreg bt defined, gp6 is the same */
+	/* vreg_get parameter 1 (struct device *) is ignored */
+	vreg_bt = vreg_get(NULL, "gp6");
+
+	if (IS_ERR(vreg_bt)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_bt));
+		return PTR_ERR(vreg_bt);
+	}
 
 	if (on) {
 		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_on); pin++) {
@@ -936,12 +944,35 @@ static int bluetooth_power(int on)
 			}
 		}
 
-		gpio_set_value(22, on); /* PWR_EN */
+		/* units of mV, steps of 50 mV */
+		rc = vreg_set_level(vreg_bt, 2850);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg set level failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
+		rc = vreg_enable(vreg_bt);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
+
+		gpio_set_value(113, on); /* VDD_FREG */
+		gpio_set_value(22, on); /* VDD_IO */
 		gpio_set_value(18, on); /* SYSRST */
 
 	} else {
 		gpio_set_value(18, on); /* SYSRST */
-		gpio_set_value(22, on); /* PWR_EN */
+		gpio_set_value(22, on); /* VDD_IO */
+		gpio_set_value(113, on); /* VDD_FREG */
+
+		rc = vreg_disable(vreg_bt);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg disable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
 
 		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_off); pin++) {
 			rc = gpio_tlmm_config(bt_config_power_off[pin],
@@ -955,6 +986,8 @@ static int bluetooth_power(int on)
 		}
 
 	}
+
+	printk(KERN_DEBUG "Bluetooth power switch: %d\n", on);
 
 	return 0;
 }
