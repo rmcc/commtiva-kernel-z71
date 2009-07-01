@@ -74,13 +74,6 @@ MODULE_DESCRIPTION("Diag Char Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.0");
 
-/* Size of the USB buffers used for read and write*/
-#define USB_MAX_BUF 4096
-
-/* Size of the buffer used for deframing a packet
-  reveived from the PC tool*/
-#define HDLC_MAX 4096
-
 /* Number of maximum USB requests that the USB layer should handle at
    one time. */
 #define MAX_DIAG_USB_REQUESTS 12
@@ -95,7 +88,7 @@ static void diag_smd_send_req(void)
 	if (driver->ch && (!driver->in_busy)) {
 		int r = smd_read_avail(driver->ch);
 
-		if (r > USB_MAX_BUF) {
+		if (r > USB_MAX_IN_BUF) {
 			printk(KERN_INFO "diag dropped num bytes = %d\n", r);
 			return;
 		}
@@ -120,7 +113,7 @@ static void diag_smd_qdsp_send_req(void)
 	if (driver->chqdsp && (!driver->in_busy_qdsp)) {
 		int r = smd_read_avail(driver->chqdsp);
 
-		if (r > USB_MAX_BUF) {
+		if (r > USB_MAX_IN_BUF) {
 			printk(KERN_INFO "diag dropped num bytes = %d\n", r);
 			return;
 		}
@@ -400,7 +393,7 @@ static void diag_process_hdlc(void *data, unsigned len)
 	int ret, type = 0;
 
 	hdlc.dest_ptr = driver->hdlc_buf;
-	hdlc.dest_size = USB_MAX_BUF;
+	hdlc.dest_size = USB_MAX_OUT_BUF;
 	hdlc.src_ptr = data;
 	hdlc.src_size = len;
 	hdlc.src_idx = 0;
@@ -426,7 +419,7 @@ int diagfwd_connect(void)
 	driver->in_busy = 0;
 	driver->in_busy_qdsp = 0;
 
-	diag_read(driver->usb_buf_out, USB_MAX_BUF);
+	diag_read(driver->usb_buf_out, USB_MAX_OUT_BUF);
 	return 0;
 }
 
@@ -490,7 +483,7 @@ static int diag_smd_probe(struct platform_device *pdev)
 	if (pdev->id == 0) {
 		if (driver->usb_buf_in == NULL &&
 			(driver->usb_buf_in =
-			kzalloc(USB_MAX_BUF, GFP_KERNEL)) == NULL)
+			kzalloc(USB_MAX_IN_BUF, GFP_KERNEL)) == NULL)
 
 			goto err;
 		else
@@ -501,7 +494,7 @@ static int diag_smd_probe(struct platform_device *pdev)
 	if (pdev->id == 1) {
 		if (driver->usb_buf_in_qdsp == NULL &&
 			(driver->usb_buf_in_qdsp =
-			kzalloc(USB_MAX_BUF, GFP_KERNEL)) == NULL)
+			kzalloc(USB_MAX_IN_BUF, GFP_KERNEL)) == NULL)
 
 			goto err;
 		else
@@ -529,14 +522,15 @@ static struct platform_driver msm_smd_ch1_driver = {
 void diag_read_work_fn(struct work_struct *work)
 {
 	diag_process_hdlc(driver->usb_buf_out, driver->read_len);
-	diag_read(driver->usb_buf_out, USB_MAX_BUF);
+	diag_read(driver->usb_buf_out, USB_MAX_OUT_BUF);
 }
 
 void diagfwd_init(void)
 {
 
 	if (driver->usb_buf_out  == NULL &&
-	     (driver->usb_buf_out = kzalloc(USB_MAX_BUF, GFP_KERNEL)) == NULL)
+	     (driver->usb_buf_out = kzalloc(USB_MAX_OUT_BUF,
+					 GFP_KERNEL)) == NULL)
 		goto err;
 	if (driver->hdlc_buf == NULL
 	    && (driver->hdlc_buf = kzalloc(HDLC_MAX, GFP_KERNEL)) == NULL)
