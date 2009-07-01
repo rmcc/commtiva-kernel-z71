@@ -692,9 +692,10 @@ static void fsusb_start_host(void)
 {
 	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
 
-	if (!hcd->self.root_hub)
+	if (!hcd->self.root_hub) {
+		msm_xusb_enable_clks(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
-
+	}
 }
 
 static void fsusb_lpm_exit(void)
@@ -803,7 +804,8 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	}
 
 	/* enable usb clocks */
-	msm_xusb_enable_clks(id);
+	if (id == HSUSB)
+		msm_xusb_enable_clks(id);
 
 	retval = msm_xusb_phy_data(pdev);
 	if (retval < 0)
