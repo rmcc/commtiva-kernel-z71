@@ -77,6 +77,8 @@ struct msm_hsusb_platform_data {
 	unsigned int soc_version;
 
 	int (*phy_reset)(void __iomem *addr);
+
+	unsigned int max_axi_khz;
 };
 
 #endif
