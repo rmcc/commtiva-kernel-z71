@@ -160,23 +160,23 @@ static int msm_v4l2_release(struct file *f)
 
 	g_pmsm_v4l2_dev->opencnt--;
 	if (!g_pmsm_v4l2_dev->opencnt) {
+
+		ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd_t), GFP_ATOMIC);
+		if (!ctrlcmd) {
+			CDBG("msm_v4l2_ioctl: cannot allocate buffer\n");
+			return -ENOMEM;
+		}
+		ctrlcmd->length     = 0;
+		ctrlcmd->value      = NULL;
+		ctrlcmd->timeout_ms = 10000;
+
+		ctrlcmd->type = (unsigned short)CAMERA_EXIT;
+		g_pmsm_v4l2_dev->drv->ctrl(ctrlcmd, g_pmsm_v4l2_dev->drv->vmsm);
+		g_pmsm_v4l2_dev->drv->release(f, g_pmsm_v4l2_dev->drv->vmsm);
+
 		msm_unregister(g_pmsm_v4l2_dev->drv, MSM_V4L2_DRIVER_NAME);
 		cnt = 0;
-		return 0;
-	}
-
-	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd_t), GFP_ATOMIC);
-	if (!ctrlcmd) {
-		CDBG("msm_v4l2_ioctl: cannot allocate buffer\n");
-		return -ENOMEM;
-	}
-	ctrlcmd->length     = 0;
-	ctrlcmd->value      = NULL;
-	ctrlcmd->timeout_ms = 10000;
-
-	ctrlcmd->type = (unsigned short)CAMERA_EXIT;
-	g_pmsm_v4l2_dev->drv->ctrl(ctrlcmd, g_pmsm_v4l2_dev->drv->vmsm);
-	g_pmsm_v4l2_dev->drv->release(f, g_pmsm_v4l2_dev->drv->vmsm);
+    }
 
 	return 0;
 }
@@ -542,6 +542,8 @@ static int msm_v4l2_streamoff(struct file *f, void *pctx, enum v4l2_buf_type i)
 
 	g_pmsm_v4l2_dev->drv->ctrl(ctrlcmd,
 		g_pmsm_v4l2_dev->drv->vmsm);
+
+	cnt = 0;
 
 	return 0;
 }
