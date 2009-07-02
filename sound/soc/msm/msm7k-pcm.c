@@ -341,6 +341,12 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 						&constraints_sample_rates);
 	if (ret < 0)
 		goto out;
+	/* Ensure that buffer size is a multiple of period size */
+	ret = snd_pcm_hw_constraint_integer(runtime,
+					    SNDRV_PCM_HW_PARAM_PERIODS);
+	if (ret < 0)
+		goto out;
+
 	prtd->ops = &snd_msm_audio_ops;
 	runtime->private_data = prtd;
 
