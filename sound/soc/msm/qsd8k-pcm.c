@@ -285,6 +285,14 @@ static int qsd_pcm_open(struct snd_pcm_substream *substream)
 		prtd->cos.op_code = CAD_OPEN_OP_READ;
 	}
 
+	/* Ensure that buffer size is a multiple of period size */
+	ret = snd_pcm_hw_constraint_integer(runtime,
+					    SNDRV_PCM_HW_PARAM_PERIODS);
+	if (ret < 0) {
+		kfree(prtd);
+		return ret;
+	}
+
 	runtime->private_data = prtd;
 
 	prtd->cos.format = CAD_FORMAT_PCM;
