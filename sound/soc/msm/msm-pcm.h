@@ -62,7 +62,7 @@
 #define USE_PERIODS_MIN		1
 
 
-#define MAX_DB			(18)
+#define MAX_DB			(16)
 #define MIN_DB			(-50)
 #define PCMPLAYBACK_DECODERID   5
 
