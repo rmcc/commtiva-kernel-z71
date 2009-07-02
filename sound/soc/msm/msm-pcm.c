@@ -129,8 +129,10 @@ void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 				printk(KERN_ERR "bogus buffer idx\n");
 				break;
 			}
+			/* Update with actual sent buffer size */
+			if (prtd->out[idx].used != BUF_INVALID_LEN)
+				prtd->pcm_irq_pos += prtd->out[idx].used;
 
-			prtd->pcm_irq_pos += prtd->pcm_count;
 			if (prtd->pcm_irq_pos > prtd->pcm_size)
 				prtd->pcm_irq_pos = prtd->pcm_count;
 
@@ -513,10 +515,10 @@ int audio_dsp_out_enable(struct msm_audio *prtd, int yes)
 	if (yes) {
 		cmd.write_buf1LSW = prtd->out[0].addr;
 		cmd.write_buf1MSW = prtd->out[0].addr >> 16;
-		cmd.write_buf1_len = prtd->out[0].size;
+		cmd.write_buf1_len = 0;
 		cmd.write_buf2LSW = prtd->out[1].addr;
 		cmd.write_buf2MSW = prtd->out[1].addr >> 16;
-		cmd.write_buf2_len = prtd->out[1].size;
+		cmd.write_buf2_len = prtd->out[1].used;
 		cmd.arm_to_rx_flag = AUDPP_CMD_PCM_INTF_ENA_V;
 		cmd.weight_decoder_to_rx = prtd->out_weight;
 		cmd.weight_arm_to_rx = 1;

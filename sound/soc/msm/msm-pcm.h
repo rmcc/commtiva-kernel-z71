@@ -66,6 +66,9 @@
 #define MIN_DB			(-50)
 #define PCMPLAYBACK_DECODERID   5
 
+/* 0xFFFFFFFF Indicates not to be used for audio data copy */
+#define	BUF_INVALID_LEN		0xFFFFFFFF
+
 extern int copy_count;
 extern int intcnt;
 
