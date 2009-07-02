@@ -2094,18 +2094,29 @@ static long msm_control_proc(struct msm_ctrl_cmd_t *ctrlcmd,
 
 	struct msm_queue_cmd_t *qcmd = NULL;
 	struct msm_queue_cmd_t *rcmd = NULL;
+	struct msm_ctrl_cmd_t *pctrlcmd;
+
+	pctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd_t), GFP_ATOMIC);
+	if (!pctrlcmd) {
+		CDBG("msm_control: cannot allocate buffer ctrlcmd\n");
+		rc = -ENOMEM;
+		goto end;
+    }
+
+	memcpy(pctrlcmd, ctrlcmd, sizeof(struct msm_ctrl_cmd_t));
 
 	/* wake up config thread, 4 is for V4L2 application */
 	qcmd = kmalloc(sizeof(struct msm_queue_cmd_t), GFP_ATOMIC);
 	if (!qcmd) {
 		CDBG("msm_control: cannot allocate buffer\n");
+		kfree(pctrlcmd);
 		rc = -ENOMEM;
 		goto end;
 	}
 
 	spin_lock_irqsave(&vmsm->sync.msg_event_queue_lock, flags);
 	qcmd->type = MSM_CAM_Q_V4L2_REQ;
-	qcmd->command = ctrlcmd;
+	qcmd->command = pctrlcmd;
 	list_add_tail(&qcmd->list, &vmsm->sync.msg_event_queue);
 	wake_up(&vmsm->sync.msg_event_wait);
 	spin_unlock_irqrestore(&vmsm->sync.msg_event_queue_lock, flags);
@@ -2125,7 +2136,7 @@ static long msm_control_proc(struct msm_ctrl_cmd_t *ctrlcmd,
 		if (rc == 0) {
 			CDBG("msm_control: timed out\n");
 			rc = -ETIMEDOUT;
-			goto fail;
+			goto end;
 		}
 	} else
 		rc = wait_event_interruptible(
@@ -2161,12 +2172,10 @@ static long msm_control_proc(struct msm_ctrl_cmd_t *ctrlcmd,
 	if (((struct msm_ctrl_cmd_t *)(rcmd->command))->length > 0)
 		kfree(((struct msm_ctrl_cmd_t *)
 					 (rcmd->command))->value);
-	goto end;
 
-fail:
-	kfree(qcmd);
-end:
 	kfree(rcmd);
+end:
+	kfree(ctrlcmd);
 	CDBG("msm_control_proc: end rc = %ld\n", rc);
 	return rc;
 }
