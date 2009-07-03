@@ -226,8 +226,8 @@ int audpp_flush(unsigned id);
 void audpp_avsync(int id, unsigned rate);
 unsigned audpp_avsync_sample_count(int id);
 unsigned audpp_avsync_byte_count(int id);
-int audpp_dsp_set_adrc(unsigned id, unsigned enable,
-			audpp_cmd_cfg_object_params_adrc *adrc);
+int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_mbadrc *mbadrc);
 int audpp_dsp_set_eq(unsigned id, unsigned enable,
 			audpp_cmd_cfg_object_params_eqalizer *eq);
 int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,

@@ -749,6 +749,7 @@ typedef struct {
 #define AUDPP_CMD_ADRC_FLAG_ENA		-1
 
 #define	AUDPP_MAX_MBADRC_BANDS		5
+#define	AUDPP_MBADRC_EXTERNAL_BUF_SIZE	196
 
 struct adrc_config {
 	uint16_t subband_enable;
@@ -774,7 +775,19 @@ typedef struct {
 	uint16_t ext_buf_msw;
 	uint16_t ext_buf_lsw;
 	struct adrc_config adrc_band[AUDPP_MAX_MBADRC_BANDS];
-} __attribute__((packed)) audpp_cmd_cfg_object_params_adrc;
+} __attribute__((packed)) audpp_cmd_cfg_object_params_mbadrc;
+
+struct audpp_cmd_cfg_object_params_adrc {
+	unsigned short	adrc_flag;
+	unsigned short	compression_th;
+	unsigned short	compression_slope;
+	unsigned short	rms_time;
+	unsigned short	attack_const_lsw;
+	unsigned short	attack_const_msw;
+	unsigned short	release_const_lsw;
+	unsigned short	release_const_msw;
+	unsigned short	adrc_delay;
+};
 
 /*
  * Command Structure to configure post processing parameters(Spectrum Analizer)
