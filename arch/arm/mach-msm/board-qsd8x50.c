@@ -1290,6 +1290,8 @@ static void __init qsd8x50_init_host(void)
 {
 	msm_add_host(0, &msm_hsusb_pdata);
 #ifdef CONFIG_USB_FS_HOST
+	if (machine_is_qsd8x50_ffa())
+		return;
 	if (fsusb_gpio_init())
 		return;
 	msm_add_host(1, &msm_hsusb_pdata);
