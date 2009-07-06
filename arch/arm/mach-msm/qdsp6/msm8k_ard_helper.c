@@ -92,7 +92,15 @@ u32 get_device_id(u32 cad_device_requested)
 		(cad_device_requested == CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO) ||
 		(cad_device_requested == CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR) ||
 		(cad_device_requested ==
-		CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO)) {
+			CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX) ||
+		(cad_device_requested ==
+			CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX) ||
+		(cad_device_requested ==
+			CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX) ||
+		(cad_device_requested ==
+			CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX) ||
+		(cad_device_requested ==
+			CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO)) {
 
 		dev_id = 0;
 	} else if ((cad_device_requested == CAD_HW_DEVICE_ID_SPKR_PHONE_MIC) ||
@@ -195,6 +203,11 @@ enum codec_enum_type get_codec_type(u32 device_in_use)
 	case CAD_HW_DEVICE_ID_SPKR_PHONE_MONO:
 	case CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO:
 	case CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR:
+	case CAD_HW_DEVICE_ID_TTY_HEADSET_MIC:
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX:
+	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX:
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX:
+	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX:
 		rc = CODEC_INT;
 		break;
 	case CAD_HW_DEVICE_ID_BT_SCO_MIC:

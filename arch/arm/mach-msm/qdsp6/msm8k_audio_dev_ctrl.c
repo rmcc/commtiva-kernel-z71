@@ -185,6 +185,26 @@ int audio_switch_device(int new_device)
 		cad_dev.device = CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR;
 		cad_dev.reserved = CAD_RX_DEVICE;
 		break;
+	case HEADSET_MONO_PLUS_SPKR_MONO_RX:
+		cad_dev.device =
+			CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX;
+		cad_dev.reserved = CAD_RX_DEVICE;
+		break;
+	case HEADSET_MONO_PLUS_SPKR_STEREO_RX:
+		cad_dev.device =
+			CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX;
+		cad_dev.reserved = CAD_RX_DEVICE;
+		break;
+	case HEADSET_STEREO_PLUS_SPKR_MONO_RX:
+		cad_dev.device =
+			CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX;
+		cad_dev.reserved = CAD_RX_DEVICE;
+		break;
+	case HEADSET_STEREO_PLUS_SPKR_STEREO_RX:
+		cad_dev.device =
+			CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX;
+		cad_dev.reserved = CAD_RX_DEVICE;
+		break;
 	case I2S_RX:
 		cad_dev.device = CAD_HW_DEVICE_ID_I2S_RX;
 		cad_dev.reserved = CAD_RX_DEVICE;
