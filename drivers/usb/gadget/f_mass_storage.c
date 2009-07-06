@@ -77,7 +77,7 @@
 #include "gadget_chips.h"
 
 
-#define BULK_BUFFER_SIZE           4096
+#define BULK_BUFFER_SIZE           16384
 
 /*-------------------------------------------------------------------------*/
 
@@ -251,8 +251,12 @@ static struct lun *dev_to_lun(struct device *dev)
 #define EP0_BUFSIZE	256
 #define DELAYED_STATUS	(EP0_BUFSIZE + 999)	/* An impossibly large value */
 
-/* Number of buffers we will use.  2 is enough for double-buffering */
+/* Number of buffers for CBW, DATA and CSW */
+#ifdef CONFIG_USB_CSW_HACK
+#define NUM_BUFFERS	4
+#else
 #define NUM_BUFFERS	2
+#endif
 
 enum fsg_buffer_state {
 	BUF_STATE_EMPTY = 0,
@@ -363,6 +367,7 @@ struct fsg_dev {
 
 	struct wake_lock wake_lock;
 };
+static int send_status(struct fsg_dev *fsg);
 
 static inline struct fsg_dev *func_to_dev(struct usb_function *f)
 {
@@ -910,6 +915,10 @@ static int do_write(struct fsg_dev *fsg)
 	ssize_t			nwritten;
 	int			rc;
 
+#ifdef CONFIG_USB_CSW_HACK
+	int			csw_hack_sent = 0;
+	int			i;
+#endif
 	if (curlun->ro) {
 		curlun->sense_data = SS_WRITE_PROTECTED;
 		return -EINVAL;
@@ -1005,7 +1014,17 @@ static int do_write(struct fsg_dev *fsg)
 		bh = fsg->next_buffhd_to_drain;
 		if (bh->state == BUF_STATE_EMPTY && !get_some_more)
 			break;			/* We stopped early */
+#ifdef CONFIG_USB_CSW_HACK
+		/*
+		 * If the csw packet is already submmitted to the hardware,
+		 * by marking the state of buffer as full, then by checking
+		 * the residue, we make sure that this csw packet is not
+		 * written on to the storage media.
+		 */
+		if (bh->state == BUF_STATE_FULL && fsg->residue) {
+#else
 		if (bh->state == BUF_STATE_FULL) {
+#endif
 			smp_rmb();
 			fsg->next_buffhd_to_drain = bh->next;
 			bh->state = BUF_STATE_EMPTY;
@@ -1054,12 +1073,48 @@ static int do_write(struct fsg_dev *fsg)
 
 			/* If an error occurred, report it and its position */
 			if (nwritten < amount) {
+#ifdef CONFIG_USB_CSW_HACK
+				/*
+				 * If csw is already sent & write failure
+				 * occured, then detach the storage media
+				 * from the corresponding lun, and cable must
+				 * be disconnected to recover fom this error.
+				 */
+				if (csw_hack_sent) {
+					if (backing_file_is_open(curlun)) {
+						close_backing_file(fsg, curlun);
+						curlun->unit_attention_data =
+							SS_MEDIUM_NOT_PRESENT;
+					}
+					break;
+				}
+#endif
 				curlun->sense_data = SS_WRITE_ERROR;
 				curlun->sense_data_info = file_offset >> 9;
 				curlun->info_valid = 1;
 				break;
 			}
 
+#ifdef CONFIG_USB_CSW_HACK
+			if ((nwritten == amount) && !csw_hack_sent) {
+				/*
+				 * Check if any of the buffer is in the
+				 * busy state, if any buffer is in busy state,
+				 * means the complete data is not received
+				 * yet from the host. So there is no point in
+				 * csw right away without the complete data.
+				 */
+				for (i = 0; i < NUM_BUFFERS; i++) {
+					if (fsg->buffhds[i].state ==
+							BUF_STATE_BUSY)
+						break;
+				}
+				if (!amount_left_to_req && i == NUM_BUFFERS) {
+					csw_hack_sent = 1;
+					send_status(fsg);
+				}
+			}
+#endif
 			/* Did the host decide to stop early? */
 			if (bh->outreq->actual != bh->outreq->length) {
 				fsg->short_packet_received = 1;
@@ -1709,7 +1764,15 @@ static int send_status(struct fsg_dev *fsg)
 	/* Store and send the Bulk-only CSW */
 	csw->Signature = __constant_cpu_to_le32(USB_BULK_CS_SIG);
 	csw->Tag = fsg->tag;
+#ifdef CONFIG_USB_CSW_HACK
+	/* Since csw is being sent early, before
+	 * writing on to storage media, need to set
+	 * residue to zero,assuming that write will succeed.
+	 */
+	csw->Residue = 0;
+#else
 	csw->Residue = cpu_to_le32(fsg->residue);
+#endif
 	csw->Status = status;
 
 	bh->inreq->length = USB_BULK_CS_WRAP_LEN;
@@ -2462,6 +2525,15 @@ static int fsg_main_thread(void *fsg_)
 			fsg->state = FSG_STATE_STATUS_PHASE;
 		spin_unlock_irq(&fsg->lock);
 
+#ifdef CONFIG_USB_CSW_HACK
+		/* Since status is already sent for write scsi command,
+		 * need to skip sending status once again if it is a
+		 * write scsi command.
+		 */
+		if (fsg->cmnd[0] == SC_WRITE_6  || fsg->cmnd[0] == SC_WRITE_10
+					|| fsg->cmnd[0] == SC_WRITE_12)
+			continue;
+#endif
 		if (send_status(fsg))
 			continue;
 
