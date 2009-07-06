@@ -33,6 +33,7 @@
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_otg.h>
+#include <mach/vreg.h>
 
 #define MSM_USB_BASE (hcd->regs)
 #define SOC_ROC_2_0            0x10002 /* ROC 2.0 */
@@ -44,6 +45,7 @@
 #define HSUSB			0
 #define FSUSB			1
 
+static struct vreg *vreg_boost;
 struct msm_hc_device {
 	struct ehci_hcd ehci;
 	struct clk *clk;
@@ -604,8 +606,7 @@ static void ehci_msm_enable(int enable)
 		msm_hc->active = 1;
 	} else {
 		msm_hc->active = 0;
-		if (!(msm_hc_dev[1]))
-			msm_hsusb_vbus_shutdown();
+		msm_hsusb_vbus_shutdown();
 		if (hcd->state != HC_STATE_SUSPENDED)
 			wait_for_completion(&msm_hc->suspend_done);
 		msm_xusb_disable_clks(id);
@@ -844,6 +845,20 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 			msm_hsusb_vbus_powerup();
 	}
 
+	else if (id == FSUSB) {
+		vreg_boost = vreg_get(NULL, "boost");
+		if (IS_ERR(vreg_boost)) {
+			printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			       __func__, PTR_ERR(vreg_boost));
+			retval = PTR_ERR(vreg_boost);
+			goto err_hcd_add;
+		}
+		retval = vreg_enable(vreg_boost);
+		if (retval) {
+			vreg_put(vreg_boost);
+			goto err_hcd_add;
+		}
+	}
 	return retval;
 
 err_hcd_add:
