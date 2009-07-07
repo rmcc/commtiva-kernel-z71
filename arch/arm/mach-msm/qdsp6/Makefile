@@ -10,6 +10,7 @@ obj-$(CONFIG_QSD_AUDIO) += msm8k_cad_q6equalizer.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_pcm.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_pcm_in.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_aac.o
+obj-$(CONFIG_QSD_AUDIO) += msm8k_aac_in.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_mp3.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_dtmf.o
 obj-$(CONFIG_QSD_AUDIO) += msm8k_voice.o

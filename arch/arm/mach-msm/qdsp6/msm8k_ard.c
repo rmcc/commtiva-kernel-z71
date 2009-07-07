@@ -71,6 +71,7 @@
 #include <mach/qdsp6/msm8k_cad_q6dec_drvi.h>
 #include <mach/qdsp6/msm8k_cad_q6enc_drvi.h>
 #include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
+#include <mach/qdsp6/msm8k_cad_write_aac_format.h>
 
 static struct ard_session_info_struct_type	ard_session
 							[ARD_AUDIO_MAX_CLIENT];
@@ -341,9 +342,11 @@ s32 ard_close(s32 session_id)
 
 	/*PCM recording specific change*/
 	if (ardsession[session_id]->sess_open_info->cad_open.op_code ==
-		CAD_OPEN_OP_READ &&
+		CAD_OPEN_OP_READ && (
 		ardsession[session_id]->sess_open_info->cad_open.format ==
-		CAD_FORMAT_PCM) {
+		CAD_FORMAT_PCM ||
+		ardsession[session_id]->sess_open_info->cad_open.format ==
+		CAD_FORMAT_AAC)) {
 
 		g_clk_info.open_rec_sessions -= 1;
 		g_clk_info.tx_clk_freq = 8000;
@@ -470,6 +473,8 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 	u32					dev_id, i, old_dev_stream_count;
 	u32					cad_device;
 	u32					old_device, new_device;
+	u16					sample_rate;
+	u32					clk_freq;
 	struct cad_stream_device_struct_type	*cadr_strm_device = NULL;
 	struct cad_stream_info_struct_type	*cadr_stream = NULL;
 	struct cad_stream_config_struct_type	*cadr_config = NULL;
@@ -478,6 +483,7 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 	struct cad_stream_device_struct_type	*strm_dev = NULL;
 	struct ard_state_struct_type            *local_ard_state = NULL;
 	struct cad_write_pcm_format_struct_type *pcm_format_struct;
+	struct cad_write_aac_format_struct_type *aac_format_struct;
 
 	rc = dal_rc = CAD_RES_SUCCESS;
 
@@ -967,63 +973,77 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		D("ard_ioctl STRM CFG SET ses %d, sess_opn_info(cadr) = %p\n",
 			session_id, cadr);
 
-		if (ardsession[session_id]->sess_open_info->cad_open.format ==
-			CAD_FORMAT_PCM &&
+		if ((ardsession[session_id]->sess_open_info->cad_open.format ==
+			CAD_FORMAT_PCM ||
+			ardsession[session_id]->sess_open_info->cad_open.format
+			== CAD_FORMAT_AAC) &&
 			ardsession[session_id]->sess_open_info->cad_open.op_code
 			== CAD_OPEN_OP_READ) {
 
-			pcm_format_struct = cmd_buf;
+			if (ardsession[session_id]->sess_open_info->
+				cad_open.format == CAD_FORMAT_PCM) {
 
-			if (g_clk_info.open_rec_sessions > 0 &&
-				g_clk_info.tx_clk_freq !=
-				pcm_format_struct->pcm.us_sample_rate) {
+				pcm_format_struct = cmd_buf;
+				sample_rate = pcm_format_struct->
+							pcm.us_sample_rate;
+			} else {
 
-				rc = CAD_RES_FAILURE;
-				D("clk mismatch with current recording\n");
-				break;
+				aac_format_struct = cmd_buf;
+				sample_rate = aac_format_struct->
+							aac.sample_rate;
 			}
 
-			g_clk_info.open_rec_sessions += 1;
-
-			switch (pcm_format_struct->pcm.us_sample_rate) {
+			switch (sample_rate) {
 
 			case 0:
-				g_clk_info.tx_clk_freq = 96000;
+				clk_freq = 96000;
 				break;
 			case 1:
-				g_clk_info.tx_clk_freq = 88200;
+				clk_freq = 88200;
 				break;
 			case 2:
-				g_clk_info.tx_clk_freq = 64000;
+				clk_freq = 64000;
 				break;
 			case 3:
-				g_clk_info.tx_clk_freq = 48000;
+				clk_freq = 48000;
 				break;
 			case 4:
-				g_clk_info.tx_clk_freq = 44100;
+				clk_freq = 44100;
 				break;
 			case 5:
-				g_clk_info.tx_clk_freq = 32000;
+				clk_freq = 32000;
 				break;
 			case 6:
-				g_clk_info.tx_clk_freq = 24000;
+				clk_freq = 24000;
 				break;
 			case 7:
-				g_clk_info.tx_clk_freq = 22050;
+				clk_freq = 22050;
 				break;
 			case 8:
-				g_clk_info.tx_clk_freq = 16000;
+				clk_freq = 16000;
 				break;
 			case 9:
-				g_clk_info.tx_clk_freq = 12000;
+				clk_freq = 12000;
 				break;
 			case 10:
-				g_clk_info.tx_clk_freq = 11025;
+				clk_freq = 11025;
 				break;
 			case 11:
-				g_clk_info.tx_clk_freq = 8000;
+			default:
+				clk_freq = 8000;
 				break;
 			}
+
+			if (g_clk_info.open_rec_sessions > 0 &&
+					g_clk_info.tx_clk_freq != clk_freq) {
+
+				rc = CAD_RES_FAILURE;
+				pr_err("clk mismatch with current recording\n");
+				break;
+			} else
+				g_clk_info.tx_clk_freq = clk_freq;
+
+			g_clk_info.open_rec_sessions += 1;
 
 		}
 		print_data(session_id);
