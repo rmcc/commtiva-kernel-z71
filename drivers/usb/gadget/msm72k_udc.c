@@ -1711,6 +1711,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 
 	msm72k_pullup(&dev->gadget, 0);
 	dev->state = USB_STATE_IDLE;
+	dev->online = 0;
 	device_remove_file(&dev->gadget.dev, &dev_attr_wakeup);
 	driver->disconnect(&dev->gadget);
 	driver->unbind(&dev->gadget);
