@@ -208,7 +208,7 @@ static int mdp_lut_update_lcdc(struct fb_info *info, struct fb_cmap *cmap)
 		return ret;
 	}
 
-	MDP_OUTP(MDP_BASE + 0x90070, (mdp_lut_i << 10) | 0x7);
+	MDP_OUTP(MDP_BASE + 0x90070, (mdp_lut_i << 10) | 0x17);
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	mdp_lut_i = (mdp_lut_i + 1)%2;
 
@@ -331,7 +331,7 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 			mutex_lock(&mdp_lut_push_sem);
 			mdp_lut_push = 0;
 			MDP_OUTP(MDP_BASE + 0x90070,
-					(mdp_lut_push_i << 10) | 0x7);
+					(mdp_lut_push_i << 10) | 0x17);
 			mutex_unlock(&mdp_lut_push_sem);
 		}
 		outpdw(MDP_BASE + 0x0044, 0x0);	// start DMA
