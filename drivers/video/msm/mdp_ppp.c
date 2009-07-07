@@ -1150,11 +1150,11 @@ int get_img(struct mdp_img *img, struct fb_info *info, unsigned long *start,
 	if (MAJOR(file->f_dentry->d_inode->i_rdev) == FB_MAJOR) {
 		*start = info->fix.smem_start;
 		*len = info->fix.smem_len;
+		*pp_file = file;
+	} else {
+		ret = -1;
+		fput_light(file, put_needed);
 	}
-
-	else
-	ret = -1;
-	fput_light(file, put_needed);
 	return ret;
 }
 
