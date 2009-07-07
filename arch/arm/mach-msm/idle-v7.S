@@ -41,6 +41,9 @@ ENTRY(msm_pm_collapse)
 	mrc     p15, 0, ip, c13, c0, 1 /* context ID */
 	stmia   r0!, {r1-r9, ip}
 
+#ifdef CONFIG_MSM_JTAG_V7
+	bl      msm_save_jtag_debug
+#endif
 	bl      v7_flush_dcache_all
 
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
@@ -128,6 +131,9 @@ msm_pm_pa_to_va:
 	isb
 	stmfd   sp!, {lr}
 	bl      v7_flush_kern_cache_all
+#ifdef CONFIG_MSM_JTAG_V7
+	bl      msm_restore_jtag_debug
+#endif
 	ldmfd   sp!, {lr}
 	mov     r0, #1
 	bx      lr
@@ -145,4 +151,5 @@ saved_state:
 	.space  4 * 11 /* r4-14 */
 	.space  4 * 10  /* cp15 */
 saved_state_end:
+
 

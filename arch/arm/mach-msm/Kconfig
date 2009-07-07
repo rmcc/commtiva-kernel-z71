@@ -309,6 +309,13 @@ config MSM_SUSPEND_STATS_FIRST_BUCKET
 
 endif # MSM_IDLE_STATS
 
+config MSM_JTAG_V7
+	depends on CPU_V7
+	default y if DEBUG_KERNEL
+        bool "JTAG debug support"
+	help
+          Add additional support for JTAG kernel debugging.
+
 config HTC_HEADSET
 	tristate "HTC 2 Wire detection driver"
 	default n
