@@ -103,8 +103,9 @@ struct clk {
 #define USB_HS3_PCLK	50  /* High speed USB 3 pbus clock */
 
 #define GRP_PCLK	51  /* Graphics pbus clock */
+#define USB_PHY_CLK	52  /* USB PHY clock */
 
-#define NR_CLKS		52
+#define NR_CLKS		53
 
 #ifdef CONFIG_DEBUG_FS
 #define CLOCK_DBG_NAME(x) .dbg_name = x,

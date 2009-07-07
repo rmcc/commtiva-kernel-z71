@@ -801,6 +801,7 @@ struct clk msm_clocks_7x27[] = {
 	CLOCK("vfe_clk",	VFE_CLK,	NULL, OFF),
 	CLOCK("vfe_mdc_clk",	VFE_MDC_CLK,	NULL, OFF),
 	CLOCK("grp_pclk",	GRP_PCLK,	NULL, 0),
+	CLOCK("usb_phy_clk",	USB_PHY_CLK,	NULL, 0),
 };
 
 unsigned msm_num_clocks_7x27 = ARRAY_SIZE(msm_clocks_7x27);
@@ -855,6 +856,7 @@ struct clk msm_clocks_8x50[] = {
 	CLOCK("usb_hs2_pclk",	USB_HS2_PCLK,	NULL, OFF),
 	CLOCK("usb_hs3_clk",	USB_HS3_CLK,	NULL, OFF),
 	CLOCK("usb_hs3_pclk",	USB_HS3_PCLK,	NULL, OFF),
+	CLOCK("usb_phy_clk",	USB_PHY_CLK,	NULL, 0),
 };
 
 unsigned msm_num_clocks_8x50 = ARRAY_SIZE(msm_clocks_8x50);
