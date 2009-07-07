@@ -72,6 +72,7 @@
 #include <linux/input.h>
 #include <linux/uaccess.h>
 #include <linux/debugfs.h>
+#include <linux/bma150.h>
 
 #define BMA150_CMD_READ                  0x80
 #define BMA150_REG_CHIPID                0x00
@@ -609,6 +610,7 @@ static int __devinit bma150_probe(struct spi_device *spi)
 	struct driver_data *dd;
 	int                 rc;
 	char               *devname;
+	struct bma150_platform_data *pdata = spi->dev.platform_data;
 
 	dd = kzalloc(sizeof(struct driver_data), GFP_KERNEL);
 	if (!dd) {
@@ -630,6 +632,12 @@ static int __devinit bma150_probe(struct spi_device *spi)
 	rc = bma150_config(dd);
 	if (rc)
 		goto probe_err_cfg;
+
+	if (pdata && pdata->setup) {
+		rc = pdata->setup(&spi->dev);
+		if (rc)
+			goto probe_err_cfg;
+	}
 
 	bma150_create_dbfs_entry(dd);
 	spi_set_drvdata(spi, dd);
@@ -670,6 +678,8 @@ probe_err_reg_dev:
 probe_err_reg:
 	bma150_remove_dbfs_entry(dd);
 	spi_set_drvdata(spi, NULL);
+	if (pdata && pdata->teardown)
+		pdata->teardown(&spi->dev);
 probe_err_cfg:
 	mutex_lock(&bma150_dd_lock);
 	list_del(&dd->next_dd);
@@ -686,6 +696,7 @@ static int __devexit bma150_remove(struct spi_device *spi)
 	struct driver_data *dd;
 	int                 rc;
 	const char	   *devname;
+	struct bma150_platform_data *pdata = spi->dev.platform_data;
 
 	dd = spi_get_drvdata(spi);
 	devname = dd->ip_dev->phys;
@@ -698,6 +709,8 @@ static int __devexit bma150_remove(struct spi_device *spi)
 	input_unregister_device(dd->ip_dev);
 	bma150_remove_dbfs_entry(dd);
 	spi_set_drvdata(spi, NULL);
+	if (pdata && pdata->teardown)
+		pdata->teardown(&spi->dev);
 	mutex_lock(&bma150_dd_lock);
 	list_del(&dd->next_dd);
 	mutex_unlock(&bma150_dd_lock);

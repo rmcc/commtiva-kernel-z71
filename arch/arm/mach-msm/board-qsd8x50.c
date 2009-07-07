@@ -66,6 +66,7 @@
 #include <linux/spi/spi.h>
 #include <linux/delay.h>
 #include <linux/mfd/tps65023.h>
+#include <linux/bma150.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -638,6 +639,45 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
+static unsigned msm_bma_gpio_config_data[] = {
+	GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* BMA_IRQ */
+};
+
+static void msm_bma_gpio_teardown(struct device *dev)
+{
+	gpio_free(22);
+}
+
+static int msm_bma_gpio_setup(struct device *dev)
+{
+	int i, rc;
+
+	if (gpio_request(22, "bma_irq")) {
+		pr_err("failed to request gpio bma_irq\n");
+		return -EIO;
+	}
+
+	for (i = 0; i < ARRAY_SIZE(msm_bma_gpio_config_data); i++) {
+		rc = gpio_tlmm_config(msm_bma_gpio_config_data[i], GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, msm_bma_gpio_config_data[i], rc);
+			goto err_gpioconfig;
+		}
+	}
+
+	return 0;
+
+err_gpioconfig:
+	msm_bma_gpio_teardown(dev);
+	return rc;
+}
+
+static struct bma150_platform_data bma_pdata = {
+	.setup    = msm_bma_gpio_setup,
+	.teardown = msm_bma_gpio_teardown,
+};
+
 static struct resource qsd_spi_resources[] = {
 	{
 		.name   = "spi_irq_in",
@@ -680,6 +720,7 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 		.bus_num	= 0,
 		.chip_select	= 0,
 		.max_speed_hz	= 10000000,
+		.platform_data	= &bma_pdata,
 	}
 };
 
@@ -689,7 +730,6 @@ static unsigned qsd_spi_gpio_config_data[] = {
 	GPIO_CFG(19, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
 	GPIO_CFG(20, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
 	GPIO_CFG(21, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), /* SPI_PWR */
-	GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* IRQ_CS0 */
 };
 
 static int msm_qsd_spi_gpio_config(void)
@@ -706,8 +746,6 @@ static int msm_qsd_spi_gpio_config(void)
 		pr_err("failed to request gpio spi_cs0\n");
 	if (gpio_request(21, "spi_pwr"))
 		pr_err("failed to request gpio spi_pwr\n");
-	if (gpio_request(22, "spi_irq_cs0"))
-		pr_err("failed to request gpio spi_irq_cs0\n");
 
 	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
 		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
@@ -731,7 +769,6 @@ static void msm_qsd_spi_gpio_release(void)
 	gpio_free(19);
 	gpio_free(20);
 	gpio_free(21);
-	gpio_free(22);
 }
 
 static struct msm_spi_platform_data qsd_spi_pdata = {
