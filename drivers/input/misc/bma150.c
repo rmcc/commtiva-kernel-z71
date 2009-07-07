@@ -617,7 +617,7 @@ static int __devinit bma150_probe(struct spi_device *spi)
 	}
 
 	devname = kzalloc(sizeof(BMA150_DEVICE_NAME) + 1, GFP_KERNEL);
-	if (!dd) {
+	if (!devname) {
 		rc = -ENOMEM;
 		goto probe_exit_alloc;
 	}
