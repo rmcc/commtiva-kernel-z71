@@ -2310,12 +2310,12 @@ choice
 	depends on  FB_MSM_MDP31
 	default FB_MSM_SECONDARY_PANEL_NONE
 
-config FB_MSM_LCDC_EXTERNAL_SVGA
+config FB_MSM_LCDC_EXTERNAL_WXGA
 	depends on FB_MSM_MDP31
-	bool "External SVGA on LCDC"
+	bool "External WXGA on LCDC"
 	select FB_MSM_LCDC_PANEL
 	---help---
-	  Support for external SVGA display (1280x720)
+	  Support for external WXGA display (1280x720)
 
 config FB_MSM_SECONDARY_PANEL_NONE
 	bool "NONE"
