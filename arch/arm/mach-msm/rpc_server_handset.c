@@ -126,7 +126,6 @@ struct msm_handset {
 	struct switch_dev sdev;
 };
 
-static struct input_dev *kpdev;
 static struct msm_rpc_client *rpc_client;
 static struct msm_handset *hs;
 
@@ -150,7 +149,6 @@ report_headset_switch(struct input_dev *dev, int key, int value)
 
 	input_report_switch(dev, key, value);
 	switch_set_state(&hs->sdev, value);
-	input_sync(dev);
 }
 
 /*
@@ -178,31 +176,21 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 	if (key_parm == HS_REL_K)
 		key_code = key_parm;
 
-	kpdev = msm_keypad_get_input_dev();
-
 	switch (key) {
 	case KEY_POWER:
 	case KEY_END:
-		if (!kpdev) {
-			printk(KERN_ERR "%s: No input device for reporting "
-					"pwr/end key press\n", __func__);
-			return;
-		}
-		input_report_key(kpdev, key, (key_code != HS_REL_K));
-		input_sync(kpdev);
+	case KEY_MEDIA:
+		input_report_key(hs->ipdev, key, (key_code != HS_REL_K));
 		break;
 	case SW_HEADPHONE_INSERT:
 		report_headset_switch(hs->ipdev, key, (key_code != HS_REL_K));
 		break;
-	case KEY_MEDIA:
-		input_report_key(hs->ipdev, key, (key_code != HS_REL_K));
-		input_sync(hs->ipdev);
-		break;
 	case -1:
 		printk(KERN_ERR "%s: No mapping for remote handset event %d\n",
 				 __func__, temp_key_code);
-		break;
+		return;
 	}
+	input_sync(hs->ipdev);
 }
 
 static int handle_hs_rpc_call(struct msm_rpc_server *server,
@@ -431,6 +419,8 @@ static int __devinit hs_probe(struct platform_device *pdev)
 
 	input_set_capability(ipdev, EV_KEY, KEY_MEDIA);
 	input_set_capability(ipdev, EV_SW, SW_HEADPHONE_INSERT);
+	input_set_capability(ipdev, EV_KEY, KEY_POWER);
+	input_set_capability(ipdev, EV_KEY, KEY_END);
 
 	rc = input_register_device(ipdev);
 	if (rc) {
