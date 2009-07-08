@@ -827,7 +827,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio->eq_enable = 0;
 		if (copy_from_user(&audio->eq.num_bands, (void *) arg,
 				sizeof(audio->eq) -
-				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1)) {
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2))) {
 			rc = -EFAULT;
 			break;
 		}

@@ -842,7 +842,7 @@ static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio_copp->eq_enable = 0;
 		if (copy_from_user(&audio_copp->eq.num_bands, (void *) arg,
 				sizeof(audio_copp->eq) -
-				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1))
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2)))
 			rc = -EFAULT;
 		audio_copp->eq_enable = prev_state;
 		audio_copp->eq_needs_commit = 1;
@@ -853,7 +853,7 @@ static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio_copp->rx_iir_enable = 0;
 		if (copy_from_user(&audio_copp->iir.num_bands, (void *) arg,
 				sizeof(audio_copp->iir) -
-				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1))
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2)))
 			rc = -EFAULT;
 		audio_copp->rx_iir_enable = prev_state;
 		audio_copp->rx_iir_needs_commit = 1;
@@ -875,7 +875,7 @@ static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (copy_from_user(&audio_copp->qconcert_plus.op_mode,
 				(void *) arg,
 				sizeof(audio_copp->qconcert_plus) -
-				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1))
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2)))
 			rc = -EFAULT;
 		audio_copp->qconcert_plus_enable = prev_state;
 		audio_copp->qconcert_plus_needs_commit = 1;
