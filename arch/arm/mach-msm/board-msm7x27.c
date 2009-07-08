@@ -590,6 +590,11 @@ static struct platform_device msm_device_kgsl = {
 	.resource = kgsl_resources,
 };
 
+static struct platform_device msm_device_pmic_leds = {
+	.name   = "pmic-leds",
+	.id = -1,
+};
+
 static struct resource bluesleep_resources[] = {
 	{
 		.name	= "gpio_host_wake",
@@ -802,6 +807,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_BT
 	&msm_bt_power_device,
 #endif
+	&msm_device_pmic_leds,
 	&msm_device_snd,
 	&msm_bluesleep_device,
 	&msm_device_kgsl,
