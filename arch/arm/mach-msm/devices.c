@@ -208,7 +208,7 @@ struct platform_device msm_device_i2c = {
 #define MSM_HSUSB_PHYS        0xA3600000
 #else
 #define MSM_HSUSB_PHYS        0xA0800000
-#define MSM_HS2USB_PHYS        0xA0800400
+#define MSM_HS2USB_PHYS       0xA0800400
 #endif
 static struct resource resources_hsusb_otg[] = {
 	{
@@ -263,6 +263,7 @@ struct platform_device msm_device_hsusb_peripheral = {
 	},
 };
 
+#ifdef CONFIG_USB_FS_HOST
 static struct resource resources_hsusb_host2[] = {
 	{
 		.start	= MSM_HS2USB_PHYS,
@@ -286,6 +287,7 @@ struct platform_device msm_device_hsusb_host2 = {
 		.coherent_dma_mask	= 0xffffffffULL,
 	},
 };
+#endif
 
 static struct resource resources_hsusb_host[] = {
 	{
@@ -313,7 +315,9 @@ struct platform_device msm_device_hsusb_host = {
 
 static struct platform_device *msm_host_devices[] = {
 	&msm_device_hsusb_host,
+#ifdef CONFIG_USB_FS_HOST
 	&msm_device_hsusb_host2,
+#endif
 };
 
 int msm_add_host(unsigned int host, struct msm_hsusb_platform_data *plat)
