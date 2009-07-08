@@ -103,6 +103,10 @@
 #define QCONCERT_PLUS_ENABLE	0x0008
 #define MBADRC_ENABLE		0x0010
 
+#define AGC_ENABLE		0x0001
+#define NS_ENABLE		0x0002
+#define TX_IIR_ENABLE		0x0004
+
 struct msm_audio_config {
 	uint32_t buffer_size;
 	uint32_t buffer_count;
