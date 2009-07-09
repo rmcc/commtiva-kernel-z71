@@ -43,7 +43,7 @@ int msm_chg_usb_charger_disconnected(void);
 int msm_chg_rpc_close(void);
 
 struct msm_fsusb_rpc_ops {
-	void (*start_host) (void);
+	void (*start_host) (int on);
 	void (*lpm_exit) (void);
 };
 

@@ -689,14 +689,15 @@ static int msm_xusb_set_host_mode(struct usb_hcd *hcd,
 	return retval;
 }
 
-static void fsusb_start_host(void)
+static void fsusb_start_host(int on)
 {
 	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
 
-	if (!hcd->self.root_hub) {
+	if (on) {
 		msm_xusb_enable_clks(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
-	}
+	} else
+		usb_remove_hcd(hcd);
 }
 
 static void fsusb_lpm_exit(void)
