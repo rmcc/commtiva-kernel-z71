@@ -2728,12 +2728,16 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 
 	for (i = 0; i < 64; i++)
 		init_spare_bytes[i] = 0xFF;
-	init_dma_addr = dma_map_single(chip->dev, init_spare_bytes, 64,
-			DMA_TO_DEVICE);
-	if (dma_mapping_error(chip->dev, init_dma_addr)) {
-		pr_err("%s: failed to get dma addr for %p\n",
-				__func__, init_spare_bytes);
-		return -EIO;
+
+	if ((ops->oobbuf) && (ops->mode == MTD_OOB_AUTO)) {
+		for (i = 0, k = 0; i < MTD_MAX_OOBFREE_ENTRIES; i++)
+			for (j = 0; j < mtd->ecclayout->oobfree[i].length;
+					j++) {
+				init_spare_bytes[j +
+					mtd->ecclayout->oobfree[i].offset]
+						= (ops->oobbuf)[k];
+				k++;
+			}
 	}
 
 	if (ops->datbuf) {
@@ -2755,6 +2759,16 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 			goto err_dma_map_oobbuf_failed;
 		}
 	}
+
+	init_dma_addr = dma_map_single(chip->dev, init_spare_bytes, 64,
+			DMA_TO_DEVICE);
+	if (dma_mapping_error(chip->dev, init_dma_addr)) {
+		pr_err("%s: failed to get dma addr for %p\n",
+				__func__, init_spare_bytes);
+		err = -EIO;
+		goto err_dma_map_initbuf_failed;
+	}
+
 
 	wait_event(chip->wait_queue, (dma_buffer = msm_nand_get_dma_buffer
 				(chip, sizeof(*dma_buffer))));
@@ -2926,16 +2940,6 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 
 			/* Transfer user buf contents into nand ctlr buffer */
 			if (ops->mode == MTD_OOB_AUTO) {
-				for (i = 0, k = 0;
-					i < MTD_MAX_OOBFREE_ENTRIES; i++)
-					for (j = 0;
-					j < mtd->ecclayout->oobfree[i].length;
-					j++) {
-					init_spare_bytes[j +
-					mtd->ecclayout->oobfree[i].offset]
-					= (ops->oobbuf)[k];
-					k++;
-					}
 				cmd->cmd = 0;
 				cmd->src = init_dma_addr;
 				cmd->dst = NAND_FLASH_BUFFER;
@@ -3196,6 +3200,9 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 
 	msm_nand_release_dma_buffer(chip, dma_buffer, sizeof(*dma_buffer));
 
+	dma_unmap_single(chip->dev, init_dma_addr, 64, DMA_TO_DEVICE);
+
+err_dma_map_initbuf_failed:
 	if (ops->oobbuf) {
 		dma_unmap_single(chip->dev, oob_dma_addr, ops->ooblen,
 							DMA_TO_DEVICE);
@@ -3205,8 +3212,6 @@ err_dma_map_oobbuf_failed:
 		dma_unmap_single(chip->dev, data_dma_addr, ops->len,
 							DMA_TO_DEVICE);
 	}
-
-	dma_unmap_single(chip->dev, init_dma_addr, 64, DMA_TO_DEVICE);
 
 	if (err) {
 		pr_err("%s: %llx %x %x failed\n", __func__, to_curr,
