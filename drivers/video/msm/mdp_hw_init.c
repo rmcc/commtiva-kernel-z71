@@ -691,7 +691,7 @@ void mdp_hw_init(void)
 	writel(0xff, MDP_CSC_PRE_LV2n(1));
 	writel(0, MDP_CSC_PRE_LV2n(2));
 	writel(0xff, MDP_CSC_PRE_LV2n(3));
-	writel(0, MDP_CSC_PRE_LV1n(4));
+	writel(0, MDP_CSC_PRE_LV2n(4));
 	writel(0xff, MDP_CSC_PRE_LV2n(5));
 
 	writel(mdp_plv[0], MDP_CSC_POST_LV2n(0));
