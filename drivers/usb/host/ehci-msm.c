@@ -689,13 +689,20 @@ static int msm_xusb_set_host_mode(struct usb_hcd *hcd,
 static void fsusb_start_host(int on)
 {
 	struct usb_hcd *hcd = msm_hc_device_to_hcd(msm_hc_dev[1]);
+	int ret;
 
 	if (on) {
+		ret = vreg_enable(vreg_boost);
+		if (ret)
+			pr_err("%s: boost vreg enable failed\n", __func__);
 		msm_xusb_enable_clks(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
 	} else {
 		usb_remove_hcd(hcd);
 		usb_lpm_enter(hcd);
+		ret = vreg_disable(vreg_boost);
+		if (ret)
+			pr_err("%s: boost vreg disable failed\n", __func__);
 	}
 }
 
@@ -849,11 +856,6 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 			printk(KERN_ERR "%s: vreg get failed (%ld)\n",
 			       __func__, PTR_ERR(vreg_boost));
 			retval = PTR_ERR(vreg_boost);
-			goto err_hcd_add;
-		}
-		retval = vreg_enable(vreg_boost);
-		if (retval) {
-			vreg_put(vreg_boost);
 			goto err_hcd_add;
 		}
 	}
