@@ -62,6 +62,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/usb/mass_storage_function.h>
+#include <linux/spi/spi.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -71,6 +72,7 @@
 #include <mach/memory.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_hsusb.h>
+#include <mach/msm_spi.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -179,12 +181,96 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 };
 
+static struct resource qsd_spi_resources[] = {
+	{
+		.name   = "spi_irq_in",
+		.start	= INT_SPI_INPUT,
+		.end	= INT_SPI_INPUT,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_out",
+		.start	= INT_SPI_OUTPUT,
+		.end	= INT_SPI_OUTPUT,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_irq_err",
+		.start	= INT_SPI_ERROR,
+		.end	= INT_SPI_ERROR,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name   = "spi_base",
+		.start	= 0xA8000000,
+		.end	= 0xA8000000 + SZ_4K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+static struct platform_device qsd_device_spi = {
+	.name		= "spi_qsd",
+	.id		= 0,
+	.num_resources	= ARRAY_SIZE(qsd_spi_resources),
+	.resource	= qsd_spi_resources,
+};
+
+static unsigned qsd_spi_gpio_config_data[] = {
+	GPIO_CFG(45, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CLK */
+	GPIO_CFG(46, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
+	GPIO_CFG(47, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MOSI */
+	GPIO_CFG(48, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
+};
+
+static int msm_qsd_spi_gpio_config(void)
+{
+	int i, rc;
+
+	if (gpio_request(45, "spi_clk"))
+		pr_err("failed to request gpio spi_clk\n");
+	if (gpio_request(46, "spi_cs0"))
+		pr_err("failed to request gpio spi_cs0\n");
+	if (gpio_request(47, "spi_mosi"))
+		pr_err("failed to request gpio spi_mosi\n");
+	if (gpio_request(48, "spi_miso"))
+		pr_err("failed to request gpio spi_miso\n");
+
+	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
+		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, qsd_spi_gpio_config_data[i], rc);
+			return -EIO;
+		}
+	}
+	return 0;
+}
+
+static void msm_qsd_spi_gpio_release(void)
+{
+	gpio_free(45);
+	gpio_free(46);
+	gpio_free(47);
+	gpio_free(48);
+}
+
+static struct msm_spi_platform_data qsd_spi_pdata = {
+	.gpio_config  = msm_qsd_spi_gpio_config,
+	.gpio_release = msm_qsd_spi_gpio_release
+};
+
+static void __init msm_qsd_spi_init(void)
+{
+	qsd_device_spi.dev.platform_data = &qsd_spi_pdata;
+}
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc91x_device,
 	&msm_device_nand,
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
+	&qsd_device_spi,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -226,6 +312,7 @@ static void __init msm7x30_init(void)
 		       __func__);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+	msm_qsd_spi_init();
 	msm_pm_set_platform_data(msm_pm_data);
 }
 
