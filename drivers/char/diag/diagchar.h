@@ -67,8 +67,8 @@
 #include <asm/atomic.h>
 
 /* Size of the USB buffers used for read and write*/
-#define USB_MAX_BUF 4096
-
+#define USB_MAX_OUT_BUF 4096
+#define USB_MAX_IN_BUF  8192
 /* Size of the buffer used for deframing a packet
   reveived from the PC tool*/
 #define HDLC_MAX 4096
