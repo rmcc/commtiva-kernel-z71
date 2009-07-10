@@ -369,7 +369,8 @@ static int __devinit hs_rpc_init(void)
 {
 	int rc;
 
-	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa()) {
+	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa() ||
+		machine_is_qsd8x50_surf() || machine_is_qsd8x50_ffa()) {
 		rc = hs_rpc_cb_init();
 		if (rc)
 			pr_err("%s: failed to initialize\n", __func__);
@@ -493,7 +494,7 @@ static int __init hs_init(void)
 
 	return 0;
 }
-module_init(hs_init);
+late_initcall(hs_init);
 
 static void __exit hs_exit(void)
 {
