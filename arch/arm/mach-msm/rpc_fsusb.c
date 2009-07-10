@@ -235,13 +235,17 @@ static int msm_fsusb_cb_func(struct msm_rpc_client *client,
 		if (fsusb_ops->lpm_exit != NULL)
 			fsusb_ops->lpm_exit();
 		if (fsusb_ops->start_host != NULL)
-			fsusb_ops->start_host();
+			fsusb_ops->start_host(1);
 		break;
 	}
 	case PM_APP_OTG_REMOTE_DEV_LOST_CB_PROC: {
 		pr_debug("pm_app_otg_remote_dev_lost_cb_proc"
 				" callback received");
 		msm_fsusb_acquire_bus();
+		if (fsusb_ops->lpm_exit)
+			fsusb_ops->lpm_exit();
+		if (fsusb_ops->start_host)
+			fsusb_ops->start_host(0);
 		break;
 	}
 	case PM_APP_OTG_REMOTE_DEV_RESUMED_CB_PROC: {
