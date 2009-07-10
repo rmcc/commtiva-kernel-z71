@@ -159,7 +159,6 @@ static int msm8k_pcm_in_ioctl(struct inode *inode, struct file *f,
 {
 	int rc = CAD_RES_SUCCESS;
 	struct pcm *p = f->private_data;
-	void *cad_arg = (void *)arg;
 	u32 stream_device[1];
 	struct cad_device_struct_type cad_dev;
 	struct cad_stream_device_struct_type cad_stream_dev;
@@ -261,11 +260,11 @@ static int msm8k_pcm_in_ioctl(struct inode *inode, struct file *f,
 		break;
 	case AUDIO_STOP:
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_PAUSE,
-			cad_arg, sizeof(u32));
+			NULL, 0);
 		break;
 	case AUDIO_FLUSH:
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
-			cad_arg, sizeof(u32));
+			NULL, 0);
 		break;
 	case AUDIO_GET_CONFIG:
 		if (copy_to_user((void *)arg, &p->cfg,
