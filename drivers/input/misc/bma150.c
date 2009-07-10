@@ -685,8 +685,10 @@ static int __devexit bma150_remove(struct spi_device *spi)
 {
 	struct driver_data *dd;
 	int                 rc;
+	const char	   *devname;
 
 	dd = spi_get_drvdata(spi);
+	devname = dd->ip_dev->phys;
 
 	rc = bma150_power_down(dd);
 	if (rc)
@@ -699,6 +701,8 @@ static int __devexit bma150_remove(struct spi_device *spi)
 	mutex_lock(&bma150_dd_lock);
 	list_del(&dd->next_dd);
 	mutex_unlock(&bma150_dd_lock);
+	kfree(devname);
+	kfree(dd);
 
 	return 0;
 }
