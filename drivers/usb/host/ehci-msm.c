@@ -185,11 +185,8 @@ static int usb_suspend_phy(struct usb_hcd *hcd)
 	struct msm_hc_device *msm_hc = hcd_to_msm_hc_device(hcd);
 
 	if (msm_hc->id == FSUSB) {
-		if (readl(USB_PORTSC) & PORTSC_CCS) {
-			msm_fsusb_set_remote_wakeup();
-			msm_fsusb_suspend_phy();
-		} else
-			msm_fsusb_remote_dev_disconnected();
+		msm_fsusb_set_remote_wakeup();
+		msm_fsusb_suspend_phy();
 	}
 	if (msm_hc->id == HSUSB) {
 		switch (PHY_TYPE(msm_hc->phy_info)) {
@@ -696,8 +693,10 @@ static void fsusb_start_host(int on)
 	if (on) {
 		msm_xusb_enable_clks(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
-	} else
+	} else {
 		usb_remove_hcd(hcd);
+		usb_lpm_enter(hcd);
+	}
 }
 
 static void fsusb_lpm_exit(void)
