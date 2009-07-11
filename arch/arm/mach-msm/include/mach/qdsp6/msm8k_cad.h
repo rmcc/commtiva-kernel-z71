@@ -122,6 +122,8 @@ int audio_switch_device(int new_device);
 
 int audio_set_device_volume(int vol);
 
+int audio_set_device_volume_path(struct msm_vol_info *v);
+
 int audio_set_device_mute(struct msm_mute_info *m);
 
 #endif

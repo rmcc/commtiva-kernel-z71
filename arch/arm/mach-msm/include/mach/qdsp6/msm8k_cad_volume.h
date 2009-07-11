@@ -145,6 +145,8 @@ struct q6_dtmf_start {
 	s32 gain_mb;       /* Gain in millibels */
 };
 
+void set_audio_ctrl_handle(u32 handle);
+
 int cad_volume_dinit(void);
 int cad_volume_init(struct cad_func_tbl_type **func_tbl);
 
