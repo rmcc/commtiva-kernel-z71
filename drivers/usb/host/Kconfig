@@ -119,7 +119,7 @@ config USB_EHCI_MSM
 
 config USB_FS_HOST
 	bool "Support for Full Speed Host Mode"
-	depends on USB_EHCI_MSM
+	depends on USB_EHCI_MSM && ARCH_QSD8X50
 	default n
 	---help---
 	  Enables support for the full speed USB controller core present
