@@ -367,8 +367,28 @@ static int lcdc_gordon_panel_off(struct platform_device *pdev)
 	if (gordon_state.disp_powered_up && gordon_state.display_on) {
 		serigo(GORDON_REG_LCDIFCTL2, 0x7B);
 		serigo(GORDON_REG_VALTRAN, 0x01);
+		serigo(GORDON_REG_LCDIFCTL1, 0x02);
+		serigo(GORDON_REG_LCDIFCTL3, 0x01);
+		mdelay(20);
+		serigo(GORDON_REG_VALTRAN, 0x01);
+		serigo(GORDON_REG_IMGCTL1, 0x01);
+		serigo(GORDON_REG_LCDIFCTL1, 0x00);
+		mdelay(20);
+
+		serigo(GORDON_REG_POWCTL, 0x1F);
+		mdelay(40);
+
+		serigo(GORDON_REG_POWCTL, 0x07);
+		mdelay(40);
+
+		serigo(GORDON_REG_POWCTL, 0x03);
+		mdelay(40);
+
+		serigo(GORDON_REG_POWCTL, 0x00);
+		mdelay(40);
 		lcdc_gordon_pdata->panel_config_gpio(0);
 		gordon_state.display_on = FALSE;
+		gordon_state.disp_initialized = FALSE;
 	}
 	return 0;
 }
