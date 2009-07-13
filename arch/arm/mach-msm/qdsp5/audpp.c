@@ -503,7 +503,7 @@ int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
 	if (enable) {
 		memcpy(&cmd.op_mode, &qconcert_plus->op_mode,
 			sizeof(audpp_cmd_cfg_object_params_qconcert) -
-			AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1);
+			(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2));
 		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_ENA;
 	} else
 		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_DIS;
