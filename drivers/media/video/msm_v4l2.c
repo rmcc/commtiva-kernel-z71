@@ -87,6 +87,7 @@
 /* HVGA-P (portrait) and HVGA-L (landscape) */
 #define MSM_V4L2_WIDTH              480
 #define MSM_V4L2_HEIGHT             320
+#define MSM_V4L2_DIMENSION_SIZE     28
 
 #if 1
 #define D(fmt, args...) printk(KERN_INFO "msm_v4l2: " fmt, ##args)
@@ -605,8 +606,8 @@ static int msm_v4l2_s_fmt_cap(struct file *f,
 	}
 
   ctrlcmd->type       = MSM_V4L2_VID_CAP_TYPE;
-  ctrlcmd->length     = sizeof(struct v4l2_format);
-  ctrlcmd->value      = pfmt;
+  ctrlcmd->length     = MSM_V4L2_DIMENSION_SIZE;
+  ctrlcmd->value      = (void *)pfmt->fmt.pix.priv;
   ctrlcmd->timeout_ms = 10000;
 
 	if (pfmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
