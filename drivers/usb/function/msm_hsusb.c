@@ -3091,7 +3091,7 @@ static int __init usb_probe(struct platform_device *pdev)
 		return usb_init_err;
 	}
 
-	ui->addr = ioremap(res->start, 4096);
+	ui->addr = ioremap(res->start, resource_size(res));
 	if (!ui->addr) {
 		usb_free(ui, -ENOMEM);
 		usb_init_err = -ENOMEM;
