@@ -781,9 +781,7 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	}
 
 	hcd->rsrc_start = res->start;
-	hcd->rsrc_len = res->end - res->start + 1;
-
-
+	hcd->rsrc_len = resource_size(res);
 	hcd->regs = ioremap(hcd->rsrc_start, hcd->rsrc_len);
 
 	if (hcd->regs == NULL) {

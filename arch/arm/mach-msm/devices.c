@@ -208,12 +208,11 @@ struct platform_device msm_device_i2c = {
 #define MSM_HSUSB_PHYS        0xA3600000
 #else
 #define MSM_HSUSB_PHYS        0xA0800000
-#define MSM_HS2USB_PHYS       0xA0800400
 #endif
 static struct resource resources_hsusb_otg[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + SZ_4K,
+		.end	= MSM_HSUSB_PHYS + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -238,7 +237,7 @@ struct platform_device msm_device_hsusb_otg = {
 static struct resource resources_hsusb_peripheral[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + SZ_4K,
+		.end	= MSM_HSUSB_PHYS + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -264,10 +263,11 @@ struct platform_device msm_device_hsusb_peripheral = {
 };
 
 #ifdef CONFIG_USB_FS_HOST
+#define MSM_HS2USB_PHYS        0xA0800400
 static struct resource resources_hsusb_host2[] = {
 	{
 		.start	= MSM_HS2USB_PHYS,
-		.end	= MSM_HSUSB_PHYS + SZ_4K,
+		.end	= MSM_HS2USB_PHYS + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -292,7 +292,7 @@ struct platform_device msm_device_hsusb_host2 = {
 static struct resource resources_hsusb_host[] = {
 	{
 		.start	= MSM_HSUSB_PHYS,
-		.end	= MSM_HSUSB_PHYS + SZ_4K,
+		.end	= MSM_HSUSB_PHYS + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
@@ -323,7 +323,10 @@ static struct platform_device *msm_host_devices[] = {
 int msm_add_host(unsigned int host, struct msm_hsusb_platform_data *plat)
 {
 	struct platform_device	*pdev;
+
 	pdev = msm_host_devices[host];
+	if (!pdev)
+		return -ENODEV;
 	pdev->dev.platform_data = plat;
 	return platform_device_register(pdev);
 }
