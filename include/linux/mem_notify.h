@@ -22,6 +22,9 @@ static inline void memory_pressure_notify(struct zone *zone, int pressure)
 	unsigned long target;
 	unsigned long pages_high, pages_free, pages_reserve;
 
+	if (unlikely(zone->mem_notify_status == -1))
+		return;
+
 	if (pressure) {
 		target = atomic_long_read(&last_mem_notify) + MEM_NOTIFY_FREQ;
 		if (likely(time_before(jiffies, target)))
