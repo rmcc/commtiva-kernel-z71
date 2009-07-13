@@ -27,6 +27,7 @@
 #include <linux/splice.h>
 #include <linux/pfn.h>
 #include <linux/smp_lock.h>
+#include <linux/mem_notify.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -952,6 +953,9 @@ static int memory_open(struct inode * inode, struct file * filp)
 			filp->f_op = &oldmem_fops;
 			break;
 #endif
+		case 13:
+			filp->f_op = &mem_notify_fops;
+			break;
 		default:
 			unlock_kernel();
 			return -ENXIO;
@@ -990,6 +994,7 @@ static const struct {
 #ifdef CONFIG_CRASH_DUMP
 	{12,"oldmem",    S_IRUSR | S_IWUSR | S_IRGRP, &oldmem_fops},
 #endif
+	{13, "mem_notify", S_IRUGO, &mem_notify_fops},
 };
 
 static struct class *mem_class;
