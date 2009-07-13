@@ -142,9 +142,12 @@ struct audio {
 };
 
 struct audio_copp {
-	int adrc_enable;
-	int adrc_needs_commit;
-	audpp_cmd_cfg_object_params_adrc adrc;
+	int mbadrc_enable;
+	int mbadrc_needs_commit;
+	char *mbadrc_data;
+	dma_addr_t mbadrc_phys;
+
+	audpp_cmd_cfg_object_params_mbadrc mbadrc;
 
 	int eq_enable;
 	int eq_needs_commit;
@@ -260,8 +263,8 @@ void audio_commit_pending_pp_params(void *priv, unsigned id, uint16_t *msg)
 	if (!audio_copp->status)
 		return;
 
-	audpp_dsp_set_adrc(COMMON_OBJ_ID, audio_copp->adrc_enable,
-						&audio_copp->adrc);
+	audpp_dsp_set_mbadrc(COMMON_OBJ_ID, audio_copp->mbadrc_enable,
+						&audio_copp->mbadrc);
 
 	audpp_dsp_set_eq(COMMON_OBJ_ID, audio_copp->eq_enable,
 						&audio_copp->eq);
@@ -393,16 +396,17 @@ static int audio_dsp_send_buffer(struct audio *audio, unsigned idx, unsigned len
 
 /* ------------------- device --------------------- */
 
-static int audio_enable_adrc(struct audio_copp *audio_copp, int enable)
+static int audio_enable_mbadrc(struct audio_copp *audio_copp, int enable)
 {
-	if (audio_copp->adrc_enable == enable &&
-				!audio_copp->adrc_needs_commit)
+	if (audio_copp->mbadrc_enable == enable &&
+				!audio_copp->mbadrc_needs_commit)
 		return 0;
 
-	audio_copp->adrc_enable = enable;
+	audio_copp->mbadrc_enable = enable;
 	if (is_audpp_enable()) {
-		audpp_dsp_set_adrc(COMMON_OBJ_ID, enable, &audio_copp->adrc);
-		audio_copp->adrc_needs_commit = 0;
+		audpp_dsp_set_mbadrc(COMMON_OBJ_ID, enable,
+						&audio_copp->mbadrc);
+		audio_copp->mbadrc_needs_commit = 0;
 	}
 
 	return 0;
@@ -756,8 +760,9 @@ static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			break;
 		}
 
-		enable = (enable_mask & ADRC_ENABLE) ? 1 : 0;
-		audio_enable_adrc(audio_copp, enable);
+		enable = ((enable_mask & ADRC_ENABLE) ||
+				(enable_mask & MBADRC_ENABLE)) ? 1 : 0;
+		audio_enable_mbadrc(audio_copp, enable);
 		enable = (enable_mask & EQ_ENABLE) ? 1 : 0;
 		audio_enable_eq(audio_copp, enable);
 		enable = (enable_mask & IIR_ENABLE) ? 1 : 0;
@@ -766,16 +771,71 @@ static long audpp_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		audio_enable_qconcert_plus(audio_copp, enable);
 		break;
 
-	case AUDIO_SET_ADRC:
-		prev_state = audio_copp->adrc_enable;
-		audio_copp->adrc_enable = 0;
-		if (copy_from_user(&audio_copp->adrc.num_bands, (void *) arg,
-				sizeof(audio_copp->adrc) -
-				AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1))
+	case AUDIO_SET_MBADRC: {
+		uint32_t mbadrc_coeff_buf;
+		prev_state = audio_copp->mbadrc_enable;
+		audio_copp->mbadrc_enable = 0;
+		if (copy_from_user(&audio_copp->mbadrc.num_bands, (void *) arg,
+				sizeof(audio_copp->mbadrc) -
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2)))
 			rc = -EFAULT;
-		audio_copp->adrc_enable = prev_state;
-		audio_copp->adrc_needs_commit = 1;
+		else if (audio_copp->mbadrc.ext_buf_size) {
+			mbadrc_coeff_buf = (uint32_t) ((char *) arg +
+					sizeof(audio_copp->mbadrc) -
+				(AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2));
+			if ((copy_from_user(audio_copp->mbadrc_data,
+					(void *) mbadrc_coeff_buf,
+					AUDPP_MBADRC_EXTERNAL_BUF_SIZE * 2))) {
+				rc = -EFAULT;
+				break;
+			}
+			audio_copp->mbadrc.ext_buf_lsw =
+					audio_copp->mbadrc_phys & 0xFFFF;
+			audio_copp->mbadrc.ext_buf_msw =
+				((audio_copp->mbadrc_phys & 0xFFFF0000) >> 16);
+		}
+		audio_copp->mbadrc_enable = prev_state;
+		if (!rc)
+			audio_copp->mbadrc_needs_commit = 1;
 		break;
+	}
+
+	case AUDIO_SET_ADRC: {
+			struct audpp_cmd_cfg_object_params_adrc adrc;
+			prev_state = audio_copp->mbadrc_enable;
+			audio_copp->mbadrc_enable = 0;
+			if (copy_from_user(&adrc.compression_th, (void *) arg,
+							sizeof(adrc) - 2)) {
+				rc = -EFAULT;
+				audio_copp->mbadrc_enable = prev_state;
+				break;
+			}
+			audio_copp->mbadrc.num_bands = 1;
+			audio_copp->mbadrc.down_samp_level = 8;
+			audio_copp->mbadrc.adrc_delay = adrc.adrc_delay;
+			audio_copp->mbadrc.ext_buf_size = 0;
+			audio_copp->mbadrc.ext_partition = 0;
+			audio_copp->mbadrc.adrc_band[0].subband_enable = 1;
+			audio_copp->mbadrc.adrc_band[0].adrc_sub_mute = 0;
+			audio_copp->mbadrc.adrc_band[0].rms_time =
+								adrc.rms_time;
+			audio_copp->mbadrc.adrc_band[0].compression_th =
+							adrc.compression_th;
+			audio_copp->mbadrc.adrc_band[0].compression_slope =
+							adrc.compression_slope;
+			audio_copp->mbadrc.adrc_band[0].attack_const_lsw =
+							adrc.attack_const_lsw;
+			audio_copp->mbadrc.adrc_band[0].attack_const_msw =
+							adrc.attack_const_msw;
+			audio_copp->mbadrc.adrc_band[0].release_const_lsw =
+							adrc.release_const_lsw;
+			audio_copp->mbadrc.adrc_band[0].release_const_msw =
+							adrc.release_const_msw;
+			audio_copp->mbadrc.adrc_band[0].makeup_gain = 0x2000;
+			audio_copp->mbadrc_enable = prev_state;
+			audio_copp->mbadrc_needs_commit = 1;
+			break;
+		}
 
 	case AUDIO_SET_EQ:
 		prev_state = audio_copp->eq_enable;
@@ -850,6 +910,16 @@ static int audpp_open(struct inode *inode, struct file *file)
 			audio_copp->opened = 0;
 			mutex_unlock(&audio_copp->lock);
 			return rc;
+		}
+		audio_copp->mbadrc_data = dma_alloc_coherent(NULL,
+				AUDPP_MBADRC_EXTERNAL_BUF_SIZE * 2,
+				 &audio_copp->mbadrc_phys, GFP_KERNEL);
+		if (!audio_copp->mbadrc_data) {
+			pr_err("audio: could not allocate DMA buffers\n");
+			audio_copp->opened = 0;
+			audpp_unregister_event_callback(&audio_copp->ecb);
+			mutex_unlock(&audio_copp->lock);
+			return -ENOMEM;
 		}
 		audio_copp->vol_pan.volume = 0x2000;
 		audio_copp->vol_pan.pan = 0x0;

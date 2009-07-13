@@ -466,10 +466,10 @@ int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan)
 EXPORT_SYMBOL(audpp_set_volume_and_pan);
 
 /* Implementation of COPP features */
-int audpp_dsp_set_adrc(unsigned id, unsigned enable,
-			audpp_cmd_cfg_object_params_adrc *adrc)
+int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
+			audpp_cmd_cfg_object_params_mbadrc *mbadrc)
 {
-	audpp_cmd_cfg_object_params_adrc cmd;
+	audpp_cmd_cfg_object_params_mbadrc cmd;
 
 	if (id != 6)
 		return -EINVAL;
@@ -479,15 +479,15 @@ int audpp_dsp_set_adrc(unsigned id, unsigned enable,
 	cmd.common.command_type = AUDPP_CMD_MBADRC;
 
 	if (enable) {
-		memcpy(&cmd.num_bands, &adrc->num_bands,
-		sizeof(*adrc) - AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 1);
+		memcpy(&cmd.num_bands, &mbadrc->num_bands,
+		sizeof(*mbadrc) - (AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2));
 		cmd.enable = AUDPP_CMD_ADRC_FLAG_ENA;
 	} else
 		cmd.enable = AUDPP_CMD_ADRC_FLAG_DIS;
 
 	return audpp_send_queue3(&cmd, sizeof(cmd));
 }
-EXPORT_SYMBOL(audpp_dsp_set_adrc);
+EXPORT_SYMBOL(audpp_dsp_set_mbadrc);
 
 int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
 			audpp_cmd_cfg_object_params_qconcert *qconcert_plus)
