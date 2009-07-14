@@ -77,6 +77,7 @@
 #include <mach/gpio.h>
 #include <mach/board.h>
 #include <mach/sirc.h>
+#include <mach/rpc_hsusb.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_serial_hs.h>
@@ -404,10 +405,13 @@ static int msm_hsusb_phy_caliberate(void __iomem *addr)
 }
 
 #define USB_LINK_RESET_TIMEOUT      (msecs_to_jiffies(10))
-static int msm_hsusb_phy_reset(void __iomem *addr)
+static int msm_hsusb_native_phy_reset(void __iomem *addr)
 {
 	u32 temp;
 	unsigned long timeout;
+
+	if (machine_is_qsd8x50_ffa())
+		return msm_hsusb_phy_reset();
 
 	msm_hsusb_apps_reset_link(1);
 	msm_hsusb_apps_reset_phy();
@@ -447,7 +451,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
 
-	.phy_reset = msm_hsusb_phy_reset,
+	.phy_reset = msm_hsusb_native_phy_reset,
 #ifdef CONFIG_USB_FS_HOST
 	.config_fs_gpio = msm_fsusb_setup_gpio,
 #endif
