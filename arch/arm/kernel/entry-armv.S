@@ -306,7 +306,8 @@ __pabt_svc:
 	CPU_PABORT_HANDLER(r0, r2)
 #endif
 	msr	cpsr_c, r9			@ Maybe enable interrupts
-	mov	r1, sp				@ regs
+	CPU_PABORT_IFSR(r1)			@ load IFSR
+	mov	r2, sp				@ regs
 	bl	do_PrefetchAbort		@ call abort handler
 
 	@
@@ -669,7 +670,8 @@ __pabt_usr:
 	CPU_PABORT_HANDLER(r0, r2)
 #endif
 	enable_irq				@ Enable interrupts
-	mov	r1, sp				@ regs
+	CPU_PABORT_IFSR(r1)			@ load IFSR
+	mov	r2, sp				@ regs
 	bl	do_PrefetchAbort		@ call abort handler
 	/* fall through */
 /*
