@@ -271,7 +271,7 @@ static unsigned ulpi_read(void __iomem *addr, unsigned reg)
 	return ULPI_DATA_READ(readl(USB_ULPI_VIEWPORT));
 }
 
-static void ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
+static int ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
 {
 	unsigned timeout = 10000;
 
@@ -284,8 +284,12 @@ static void ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
 	while ((readl(USB_ULPI_VIEWPORT) & ULPI_RUN) && (--timeout))
 		cpu_relax();
 
-	if (timeout == 0)
+	if (timeout == 0) {
 		printk(KERN_ERR "ulpi_write: timeout\n");
+		return -1;
+	}
+
+	return 0;
 }
 
 #define APPS_RESET                  (MSM_CLK_CTL_BASE + 0X214)
@@ -331,23 +335,68 @@ static int msm_hsusb_phy_verify_access(void __iomem *addr)
 	}
 
 	if (temp == ULPI_VERIFY_MAX_LOOP_COUNT) {
-		pr_err("ulpi read failed for %d times\n",
-				ULPI_VERIFY_MAX_LOOP_COUNT);
+		pr_err("%s: ulpi read failed for %d times\n",
+				__func__, ULPI_VERIFY_MAX_LOOP_COUNT);
 		return -1;
 	}
 
 	return 0;
 }
 
+static unsigned msm_hsusb_ulpi_read_with_reset(void __iomem *addr, unsigned reg)
+{
+	int temp;
+	unsigned res;
+
+	for (temp = 0; temp < ULPI_VERIFY_MAX_LOOP_COUNT; temp++) {
+		res = ulpi_read(addr, reg);
+		if (res != -1)
+			return res;
+		msm_hsusb_apps_reset_phy();
+	}
+
+	pr_err("%s: ulpi read failed for %d times\n",
+			__func__, ULPI_VERIFY_MAX_LOOP_COUNT);
+
+	return -1;
+}
+
+static int msm_hsusb_ulpi_write_with_reset(void __iomem *addr,
+		unsigned val, unsigned reg)
+{
+	int temp;
+	int res;
+
+	for (temp = 0; temp < ULPI_VERIFY_MAX_LOOP_COUNT; temp++) {
+		res = ulpi_write(addr, val, reg);
+		if (!res)
+			return 0;
+		msm_hsusb_apps_reset_phy();
+	}
+
+	pr_err("%s: ulpi write failed for %d times\n",
+			__func__, ULPI_VERIFY_MAX_LOOP_COUNT);
+	return -1;
+}
+
 static int msm_hsusb_phy_caliberate(void __iomem *addr)
 {
 	int ret;
+	unsigned res;
 
 	ret = msm_hsusb_phy_verify_access(addr);
 	if (ret)
-		return ret;
+		return -ETIMEDOUT;
 
-	ulpi_write(addr, ULPI_SUSPENDM, ULPI_FUNC_CTRL_CLR);
+	res = msm_hsusb_ulpi_read_with_reset(addr, ULPI_FUNC_CTRL_CLR);
+	if (res == -1)
+		return -ETIMEDOUT;
+
+	res = msm_hsusb_ulpi_write_with_reset(addr,
+			res | ULPI_SUSPENDM,
+			ULPI_FUNC_CTRL_CLR);
+	if (res)
+		return -ETIMEDOUT;
 
 	msm_hsusb_apps_reset_phy();
 
