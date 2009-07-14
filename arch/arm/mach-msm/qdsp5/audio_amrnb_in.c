@@ -48,13 +48,6 @@
 /* for queue ids - should be relative to module number*/
 #include "adsp.h"
 
-#ifdef DEBUG
-#define dprintk(format, arg...) \
-printk(KERN_DEBUG format, ## arg)
-#else
-#define dprintk(format, arg...) do {} while (0)
-#endif
-
 /* FRAME_NUM must be a power of two */
 #define FRAME_NUM		(8)
 #define FRAME_SIZE		(22 * 2)
@@ -200,7 +193,7 @@ static void audio_amrnb_in_dsp_event(void *data, unsigned id, uint16_t *msg)
 
 	switch (id) {
 	case AUDREC_MSG_CMD_CFG_DONE_MSG:
-		dprintk(" %s : CFG_DONE_MSG\n", __func__);
+		pr_debug(" %s : CFG_DONE_MSG\n", __func__);
 		if (msg[0] & AUDREC_MSG_CFG_DONE_ENC_ENA) {
 			audio->audrec_obj_idx = msg[1];
 			audio_amrnb_in_encmem_config(audio);
@@ -209,7 +202,7 @@ static void audio_amrnb_in_dsp_event(void *data, unsigned id, uint16_t *msg)
 		}
 		break;
 	case AUDREC_MSG_CMD_AREC_MEM_CFG_DONE_MSG: {
-		dprintk(" %s : AREC_MEM_CFG_DONE_MSG\n", __func__);
+		pr_debug(" %s : AREC_MEM_CFG_DONE_MSG\n", __func__);
 		if (msg[0] == audio->audrec_obj_idx)
 			audio_amrnb_in_encparam_config(audio);
 		else
@@ -217,7 +210,7 @@ static void audio_amrnb_in_dsp_event(void *data, unsigned id, uint16_t *msg)
 		break;
 	}
 	case AUDREC_MSG_CMD_AREC_PARAM_CFG_DONE_MSG: {
-		dprintk(" %s : AREC_PARAM_CFG_DONE_MSG\n", __func__);
+		pr_debug(" %s : AREC_PARAM_CFG_DONE_MSG\n", __func__);
 		if (msg[0] == audio->audrec_obj_idx)
 			audio->running = 1;
 		else
@@ -225,7 +218,7 @@ static void audio_amrnb_in_dsp_event(void *data, unsigned id, uint16_t *msg)
 		break;
 	}
 	case AUDREC_MSG_PACKET_READY_MSG: {
-		dprintk(" %s : AUDREC_MSG_PACKET_READY_MSG\n", __func__);
+		pr_debug(" %s : AUDREC_MSG_PACKET_READY_MSG\n", __func__);
 		if (msg[0] == audio->audrec_obj_idx)
 			audio_amrnb_in_get_dsp_frames(audio);
 		else
@@ -277,7 +270,7 @@ static int audio_amrnb_in_encmem_config(struct audio_amrnb_in *audio)
 	 */
 	for (cnt = 0; cnt < FRAME_NUM; cnt++) {
 		audio->in[cnt].data = data + 4; /* Pointer to Raw Packet part*/
-		dprintk(" audio->in[%d].data = %x \n",
+		pr_debug(" audio->in[%d].data = %x \n",
 				cnt, (unsigned int) audio->in[cnt].data);
 		data += 22; /* Point to next Frame buffer */
 	}
@@ -303,18 +296,18 @@ static int audio_amrnb_in_encparam_config(struct audio_amrnb_in *audio)
 	cmd.test_mode = audio->amrnb_enc_cfg.test_mode_enable;
 	cmd.used_mode = audio->amrnb_enc_cfg.enc_mode;
 
-	dprintk("cmd.common.cmd_id = 0x%4x\n", cmd.common.cmd_id);
-	dprintk("cmd.common.audrec_obj_idx = 0x%4x\n",
+	pr_debug("cmd.common.cmd_id = 0x%4x\n", cmd.common.cmd_id);
+	pr_debug("cmd.common.audrec_obj_idx = 0x%4x\n",
 				cmd.common.audrec_obj_idx);
-	dprintk("cmd.samp_rate_idx = 0x%4x\n", cmd.samp_rate_idx);
-	dprintk("cmd.voicememoencweight1 = 0x%4x\n", cmd.voicememoencweight1);
-	dprintk("cmd.voicememoencweight2 = 0x%4x\n", cmd.voicememoencweight2);
-	dprintk("cmd.voicememoencweight3 = 0x%4x\n", cmd.voicememoencweight3);
-	dprintk("cmd.voicememoencweight4 = 0x%4x\n", cmd.voicememoencweight4);
-	dprintk("cmd.update_mode = 0x%4x\n", cmd.update_mode);
-	dprintk("cmd.dtx_mode = 0x%4x\n", cmd.dtx_mode);
-	dprintk("cmd.test_mode = 0x%4x\n", cmd.test_mode);
-	dprintk("cmd.used_mode = 0x%4x\n", cmd.used_mode);
+	pr_debug("cmd.samp_rate_idx = 0x%4x\n", cmd.samp_rate_idx);
+	pr_debug("cmd.voicememoencweight1 = 0x%4x\n", cmd.voicememoencweight1);
+	pr_debug("cmd.voicememoencweight2 = 0x%4x\n", cmd.voicememoencweight2);
+	pr_debug("cmd.voicememoencweight3 = 0x%4x\n", cmd.voicememoencweight3);
+	pr_debug("cmd.voicememoencweight4 = 0x%4x\n", cmd.voicememoencweight4);
+	pr_debug("cmd.update_mode = 0x%4x\n", cmd.update_mode);
+	pr_debug("cmd.dtx_mode = 0x%4x\n", cmd.dtx_mode);
+	pr_debug("cmd.test_mode = 0x%4x\n", cmd.test_mode);
+	pr_debug("cmd.used_mode = 0x%4x\n", cmd.used_mode);
 
 	return audrectask_send_cmdqueue(&cmd, sizeof(cmd));
 }
@@ -656,7 +649,7 @@ static int __init audio_amrnb_in_init(void)
 		(void *) &the_audio_amrnb_in, &audamrnb_in_debug_fops);
 
 	if (IS_ERR(dentry))
-		dprintk("AMRNB_IN:%s:debugfs_create_file failed\n", __func__);
+		pr_err("AMRNB_IN:%s:debugfs_create_file failed\n", __func__);
 #endif
 	return misc_register(&audio_amrnb_in_misc);
 }
