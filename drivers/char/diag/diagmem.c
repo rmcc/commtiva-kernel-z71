@@ -68,8 +68,8 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size)
 
 	mutex_lock(&driver->diagmem_mutex);
 	if (driver->count < driver->poolsize) {
-		buf = mempool_alloc(driver->diagpool, GFP_ATOMIC);
 		atomic_add(1, (atomic_t *)&driver->count);
+		buf = mempool_alloc(driver->diagpool, GFP_ATOMIC);
 	} else {
 		buf = NULL;
 	}
@@ -79,7 +79,7 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size)
 
 void diagmem_free(struct diagchar_dev *driver, void *buf)
 {
-	if (driver->diagpool != NULL) {
+	if (driver->diagpool != NULL && driver->count > 0) {
 		mempool_free(buf, driver->diagpool);
 		atomic_add(-1, (atomic_t *)&driver->count);
 	} else
