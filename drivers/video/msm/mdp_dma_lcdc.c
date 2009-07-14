@@ -307,9 +307,6 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	if (!mfd->panel_power_on)
 		return;
 
-	INIT_COMPLETION(mfd->dma->comp);
-	mfd->dma->waiting = TRUE;
-
 	// no need to power on cmd block since it's lcdc mode
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
@@ -320,6 +317,9 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 
 	// enable LCDC irq
 	spin_lock_irqsave(&mdp_spin_lock, flag);
+	INIT_COMPLETION(mfd->dma->comp);
+	mfd->dma->waiting = TRUE;
+	outp32(MDP_INTR_CLEAR, LCDC_FRAME_START);
 	mdp_intr_mask |= LCDC_FRAME_START;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
