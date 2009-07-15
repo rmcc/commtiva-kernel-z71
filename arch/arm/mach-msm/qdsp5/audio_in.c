@@ -661,8 +661,8 @@ static ssize_t audio_in_read(struct file *file,
 		if (rc < 0)
 			break;
 
-		if (audio->stopped) {
-			rc = -EBUSY;
+		if (audio->stopped && !audio->in_count) {
+			rc = 0;/* End of File */
 			break;
 		}
 
