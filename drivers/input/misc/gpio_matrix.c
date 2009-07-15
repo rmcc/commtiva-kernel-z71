@@ -223,7 +223,7 @@ static irqreturn_t gpio_keypad_irq_handler(int irq_in, void *dev_id)
 			gpio_direction_input(mi->output_gpios[i]);
 	}
 	wake_lock(&kp->wake_lock);
-	hrtimer_start(&kp->timer, ktime_set(0, 0), HRTIMER_MODE_REL);
+	hrtimer_start(&kp->timer, ktime_set(0, 10000), HRTIMER_MODE_REL);
 	return IRQ_HANDLED;
 }
 
@@ -372,7 +372,8 @@ int gpio_event_matrix_func(struct input_dev *input_dev,
 
 		if (kp->use_irq)
 			wake_lock(&kp->wake_lock);
-		hrtimer_start(&kp->timer, ktime_set(0, 0), HRTIMER_MODE_REL);
+		hrtimer_start(&kp->timer, ktime_set(0, 10000),
+				 HRTIMER_MODE_REL);
 
 		return 0;
 	}
