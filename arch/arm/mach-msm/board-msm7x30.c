@@ -231,7 +231,7 @@ static void __init msm7x30_init(void)
 
 static void __init msm7x30_map_io(void)
 {
-	msm_shared_ram_phys = 0x07F00000;
+	msm_shared_ram_phys = 0x00100000;
 	msm_map_msm7x30_io();
 	msm_clock_init(msm_clocks_8x50, msm_num_clocks_8x50);
 }
