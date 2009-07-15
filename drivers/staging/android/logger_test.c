@@ -162,6 +162,7 @@ static void __exit logger_test_exit(void)
 	kthread_stop(kthread);
 }
 
+MODULE_LICENSE("Dual BSD/GPL");
 
 device_initcall(logger_test_init);
 module_exit(logger_test_exit);
