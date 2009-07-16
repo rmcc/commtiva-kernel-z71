@@ -425,6 +425,16 @@ config MSM_RESET_MODEM
 	help
 	  Allows the user to reset the modem through a device node.
 
+config MSM_SMD_LOGGING
+	depends on MSM_SMD
+	default y
+	bool "MSM Shared Memory Logger"
+	help
+	  This option exposes the shared memory logger at /dev/smem_log
+	  and a debugfs node named smem_log.
+
+	  If in doubt, say yes.
+
 config MSM_ONCRPCROUTER
 	depends on MSM_SMD
 	default y

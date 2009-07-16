@@ -219,6 +219,7 @@
 #define RPC_ROUTER_LOG_EVENT_MID_WRITTEN (SMEM_LOG_RPC_ROUTER_EVENT_BASE + 6)
 #define RPC_ROUTER_LOG_EVENT_MID_CFM_REQ (SMEM_LOG_RPC_ROUTER_EVENT_BASE + 7)
 
+#ifdef CONFIG_MSM_SMD_LOGGING
 void smem_log_event(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3);
 void smem_log_event6(uint32_t id, uint32_t data1, uint32_t data2,
@@ -229,4 +230,16 @@ void smem_log_event_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 			       uint32_t data3, uint32_t data4, uint32_t data5,
 			       uint32_t data6);
+#else
+void smem_log_event(uint32_t id, uint32_t data1, uint32_t data2,
+		    uint32_t data3) { }
+void smem_log_event6(uint32_t id, uint32_t data1, uint32_t data2,
+		     uint32_t data3, uint32_t data4, uint32_t data5,
+		     uint32_t data6) { }
+void smem_log_event_to_static(uint32_t id, uint32_t data1, uint32_t data2,
+			      uint32_t data3) { }
+void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
+			       uint32_t data3, uint32_t data4, uint32_t data5,
+			       uint32_t data6) { }
+#endif
 
