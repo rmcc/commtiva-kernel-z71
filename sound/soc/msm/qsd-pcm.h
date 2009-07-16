@@ -50,7 +50,8 @@ struct audio_locks {
 };
 
 struct qsd_ctl {
-	uint16_t volume; /* Volume parameter */
+	uint16_t tx_volume; /* Volume parameter */
+	uint16_t rx_volume; /* Volume parameter */
 	int32_t strm_volume; /* stream volume*/
 	uint16_t update;
 	int16_t pan;
