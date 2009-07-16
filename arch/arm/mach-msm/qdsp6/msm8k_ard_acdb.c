@@ -268,7 +268,7 @@ s32   ard_acdb_send_cal(u32 session_id, u32 new_device, u32 old_device)
 	memset(&acdb_cmd, 0, sizeof(acdb_cmd));
 
 	acdb_cmd.command_id = ACDB_GET_DEVICE_TABLE;
-	acdb_cmd.device_id = q6_device_id_mapping(new_device);
+	acdb_cmd.device_id = new_device;
 
 	route_id = get_device_id(new_device);
 	if (route_id == CAD_HW_DEVICE_ID_INVALID) {
@@ -315,7 +315,7 @@ s32   ard_acdb_send_cal(u32 session_id, u32 new_device, u32 old_device)
 
 	/* push the device cal to Q6 */
 	memset(&q6_cmd, 0, sizeof(q6_cmd));
-	q6_cmd.device_id = acdb_cmd.device_id;
+	q6_cmd.device_id = q6_device_id_mapping(acdb_cmd.device_id);
 	q6_cmd.phys_mem.addr = acdb_cmd.unmapped_buf;
 	q6_cmd.phys_mem.total = acdb_cmd.total_bytes;
 	q6_cmd.phys_mem.used = acdb_cmd_result.used_bytes;
