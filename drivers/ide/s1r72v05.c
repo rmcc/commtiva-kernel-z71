@@ -125,6 +125,7 @@
 #define S1R72V05_REVISIONNUM_SWAPPED_OFFSET     0x21
 #define S1R72V05_PM_CONTROL_0_OFFSET            0x22
 #define   S1R72V05_PM_CONTROL_0_GOACTIVE60      0x20
+#define   S1R72V05_PM_CONTROL_0_GOSLEEP         0x80
 #define S1R72V05_PM_CONTROL_1_OFFSET            0x23
 #define S1R72V05_IDE_STATUS_OFFSET              0x90
 #define S1R72V05_IDE_CONTROL_OFFSET             0x91
@@ -671,9 +672,88 @@ static int __devexit s1r72v05_remove(struct platform_device *plat_dev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int s1r72v05_suspend(struct platform_device *dev, pm_message_t state)
+{
+	u16 num_sleeps;
+
+	/* disable interrupts */
+	disable_irq(s1r72v05_data.irq_res->start);
+
+	/* Set controller to sleep */
+	/* NOTE:  Assumes the USB controller is inactive */
+	iowrite8(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) |
+		    S1R72V05_MAININTSTAT_FINISHEDPM,
+		 S1R72V05_REG_ADDR(MAININTSTAT));
+	iowrite8(S1R72V05_PM_CONTROL_0_GOSLEEP,
+		 S1R72V05_REG_ADDR(PM_CONTROL_0));
+
+	/* Wait for transition to Active60 state. */
+	num_sleeps = 0;
+	do {
+		udelay(S1R72V05_PM_WAIT_USEC);
+		num_sleeps += S1R72V05_PM_WAIT_USEC;
+	} while (!(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
+		   S1R72V05_MAININTSTAT_FINISHEDPM) &&
+		 num_sleeps < S1R72V05_MAX_PM_WAIT_USEC);
+	if (!(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
+	      S1R72V05_MAININTSTAT_FINISHEDPM)) {
+		printk(KERN_ALERT "%s: could not switch to sleep state\n",
+		       DRIVER_NAME);
+	}
+
+	/* clear the pending PM interrupt */
+	iowrite8(S1R72V05_MAININTSTAT_FINISHEDPM,
+		 S1R72V05_REG_ADDR(MAININTSTAT));
+
+	return 0;
+}
+
+static int s1r72v05_resume(struct platform_device *dev)
+{
+	u16 num_sleeps;
+
+	/* Set controller to Active60 */
+	/* NOTE:  Assumes the USB controller is inactive */
+	iowrite8(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) |
+		    S1R72V05_MAININTSTAT_FINISHEDPM,
+		 S1R72V05_REG_ADDR(MAININTSTAT));
+	iowrite8(S1R72V05_PM_CONTROL_0_GOACTIVE60,
+		 S1R72V05_REG_ADDR(PM_CONTROL_0));
+
+	/* Wait for transition to Active60 state. */
+	num_sleeps = 0;
+	do {
+		udelay(S1R72V05_PM_WAIT_USEC);
+		num_sleeps += S1R72V05_PM_WAIT_USEC;
+	} while (!(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
+		   S1R72V05_MAININTSTAT_FINISHEDPM) &&
+		 num_sleeps < S1R72V05_MAX_PM_WAIT_USEC);
+	if (!(ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
+	      S1R72V05_MAININTSTAT_FINISHEDPM)) {
+		printk(KERN_ALERT "%s: could not switch to sleep state\n",
+		       DRIVER_NAME);
+	}
+
+	/* clear the pending PM interrupt */
+	iowrite8(S1R72V05_MAININTSTAT_FINISHEDPM,
+		 S1R72V05_REG_ADDR(MAININTSTAT));
+
+	/* enable interrupts */
+	enable_irq(s1r72v05_data.irq_res->start);
+
+	return 0;
+}
+#else
+#define s1r72v05_suspend NULL
+#define s1r72v05_resume  NULL
+#endif
+
 static struct platform_driver s1r72v05_driver = {
 	.probe = s1r72v05_probe,
 	.remove = __devexit_p(s1r72v05_remove),
+	.suspend = s1r72v05_suspend,
+	.resume = s1r72v05_resume,
 	.driver = {
 		   .name = DRIVER_NAME,
 		   .owner = THIS_MODULE,
