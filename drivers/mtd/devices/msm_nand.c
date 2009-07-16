@@ -1078,7 +1078,7 @@ static int msm_nand_read_oob(struct mtd_info *mtd, loff_t from,
 err_dma_map_oobbuf_failed:
 	if (ops->datbuf) {
 		dma_unmap_single(chip->dev, data_dma_addr,
-				 ops->len, DMA_FROM_DEVICE);
+				 ops->len, DMA_BIDIRECTIONAL);
 	}
 
 	if (ops->mode != MTD_OOB_RAW)
