@@ -564,14 +564,14 @@ static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.size = MSM_PMEM_MDP_SIZE,
-	.allocator_type = PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 1,
 };
 
 static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.name = "pmem_adsp",
 	.size = MSM_PMEM_ADSP_SIZE,
-	.allocator_type = PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
