@@ -77,6 +77,46 @@ struct msm_snd_endpoints {
 	unsigned num;
 };
 
+/* 7k target ADSP information */
+/* Bit 23:0, for codec identification like mp3, wav etc *
+ * Bit 27:24, for mode identification like tunnel, non tunnel*
+ * bit 31:28, for operation support like DM, DMA */
+enum msm_adspdec_concurrency {
+	MSM_ADSP_CODEC_WAV = 0,
+	MSM_ADSP_CODEC_ADPCM = 1,
+	MSM_ADSP_CODEC_MP3 = 2,
+	MSM_ADSP_CODEC_REALAUDIO = 3,
+	MSM_ADSP_CODEC_WMA = 4,
+	MSM_ADSP_CODEC_AAC = 5,
+	MSM_ADSP_CODEC_RESERVED = 6,
+	MSM_ADSP_CODEC_MIDI = 7,
+	MSM_ADSP_CODEC_YADPCM = 8,
+	MSM_ADSP_CODEC_QCELP = 9,
+	MSM_ADSP_CODEC_AMRNB = 10,
+	MSM_ADSP_CODEC_AMRWB = 11,
+	MSM_ADSP_CODEC_EVRC = 12,
+	MSM_ADSP_CODEC_WMAPRO = 13,
+	MSM_ADSP_MODE_TUNNEL = 24,
+	MSM_ADSP_MODE_NONTUNNEL = 25,
+	MSM_ADSP_OP_DMA = 28,
+	MSM_ADSP_OP_DM = 29,
+};
+
+struct msm_adspdec_info {
+	const char *module_name;
+	unsigned module_queueid;
+	int module_decid; /* objid */
+	unsigned nr_codec_support;
+};
+
+struct msm_adspdec_database {
+	unsigned num_dec;
+	unsigned num_concurrency_support;
+	unsigned int *dec_concurrency_table; /* Bit masked entry to *
+					      *	represents codec, mode etc */
+	struct msm_adspdec_info  *dec_info_list;
+};
+
 struct msm_panel_common_pdata {
 	int gpio;
 	int (*backlight_level)(int level, int max, int min);
