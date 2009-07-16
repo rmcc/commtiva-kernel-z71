@@ -1,12 +1,7 @@
 obj-y := msm_fb.o
 
-ifeq ($(CONFIG_FB_MSM_LOGO),y)
-obj-y += logo.o
-endif
-
-ifeq ($(CONFIG_FB_BACKLIGHT),y)
-obj-y += msm_fb_bl.o
-endif
+obj-$(CONFIG_FB_MSM_LOGO) += logo.o
+obj-$(CONFIG_FB_BACKLIGHT) += msm_fb_bl.o
 
 # MDP
 obj-y += mdp.o
