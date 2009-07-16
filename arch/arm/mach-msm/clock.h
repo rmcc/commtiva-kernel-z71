@@ -20,6 +20,7 @@
 #include <linux/list.h>
 
 #include "clock-pcom.h"
+#include "clock-7x30.h"
 
 #define CLKFLAG_INVERT			0x00000001
 #define CLKFLAG_NOINVERT		0x00000002
