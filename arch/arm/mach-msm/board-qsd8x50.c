@@ -618,7 +618,8 @@ static int msm_fb_detect_panel(const char *name)
 			ret = 0;
 		else
 			ret = -ENODEV;
-	}
+	} else if (machine_is_qsd8x50_surf() && !strcmp(name, "lcdc_external"))
+		ret = 0;
 
 	return ret;
 }
