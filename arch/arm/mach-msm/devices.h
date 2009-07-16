@@ -53,6 +53,9 @@ extern unsigned msm_num_clocks_7x25;
 extern struct clk msm_clocks_7x27[];
 extern unsigned msm_num_clocks_7x27;
 
+extern struct clk msm_clocks_7x30[];
+extern unsigned msm_num_clocks_7x30;
+
 extern struct clk msm_clocks_8x50[];
 extern unsigned msm_num_clocks_8x50;
 
