@@ -388,8 +388,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		/* Send Device Volume during stream start. */
 		if (ardsession[session_id]->sess_open_info->cad_open.op_code
 				== CAD_OPEN_OP_READ) {
-			device_id = qdsp6_volume_device_id_mapping(
-						ard_state.def_tx_device);
+			device_id = ard_state.def_tx_device;
 
 			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
 				rc = CAD_RES_FAILURE;
@@ -400,8 +399,7 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			q6_set_dev_mute1->path = CAD_TX_DEVICE;
 		} else if (ardsession[session_id]->sess_open_info->
 				cad_open.op_code == CAD_OPEN_OP_WRITE) {
-			device_id = qdsp6_volume_device_id_mapping(
-						ard_state.def_rx_device);
+			device_id = ard_state.def_rx_device;
 
 			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
 				rc = CAD_RES_FAILURE;
@@ -412,18 +410,10 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			q6_set_dev_mute1->path = CAD_RX_DEVICE;
 		}
 
-		q6_set_dev_mute1 = kmalloc(
-			sizeof(struct qdsp_set_device_mute), GFP_KERNEL);
-		if (!q6_set_dev_mute1) {
-			rc = CAD_RES_FAILURE;
-			goto done;
-		}
-
-		memset(q6_set_dev_mute1, 0,
-			sizeof(struct qdsp_set_device_mute));
-
 		/* 2. Assign values to command buffer. */
-		q6_set_dev_mute1->device = device_id;
+		q6_set_dev_mute1->device = q6_device_id_mapping(device_id);
+
+		device_id = qdsp6_volume_device_id_mapping(device_id);
 
 		if (qdsp6_volume_cache_tbl[device_id].mute == 1)
 			q6_set_dev_mute1->mute = 1;
