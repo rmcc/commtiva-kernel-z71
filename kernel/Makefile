@@ -30,6 +30,7 @@ ifeq ($(CONFIG_ARM),y)
 CFLAGS_REMOVE_workqueue.o = -Werror
 CFLAGS_REMOVE_srcu.o = -Werror
 CFLAGS_REMOVE_cred.o = -Werror
+CFLAGS_REMOVE_kexec.o = -Werror
 endif
 
 obj-$(CONFIG_FREEZER) += freezer.o
