@@ -931,7 +931,7 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 	else
 		goto init_probe_done;
 
-	mdelay(20);
+	msleep(20);
 
 	/* RESET the sensor image part via I2C command */
 	CDBG("mt9p012_sensor_init(): reseting sensor.\n");
@@ -942,7 +942,7 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 		goto init_probe_fail;
 	}
 
-	mdelay(MT9P012_RESET_DELAY_MSECS);
+	msleep(MT9P012_RESET_DELAY_MSECS);
 
 	/* 3. Read sensor Model ID: */
 	rc = mt9p012_i2c_read_w(mt9p012_client->addr,
@@ -980,7 +980,7 @@ static int mt9p012_probe_init_sensor(struct msm_camera_sensor_info *data)
 		goto init_probe_fail;
 	}
 
-	mdelay(MT9P012_RESET_DELAY_MSECS);
+	msleep(MT9P012_RESET_DELAY_MSECS);
 	goto init_probe_done;
 
 init_probe_fail:
