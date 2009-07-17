@@ -57,6 +57,7 @@
 #define MT9T013_REG_RESET_REGISTER   0x301A
 #define MT9T013_RESET_REGISTER_PWON  0x10CC
 #define MT9T013_RESET_REGISTER_PWOFF 0x1008 /* 0x10C8 stop streaming*/
+#define MT9T013_RESET_FAST_TRANSITION 0x0002
 #define REG_READ_MODE                0x3040
 #define REG_GLOBAL_GAIN              0x305E
 #define REG_TEST_PATTERN_MODE        0x3070
@@ -335,31 +336,25 @@ static void mt9t013_get_pict_fps(uint16_t fps, uint16_t *pfps)
 	uint32_t d1;
 	uint32_t d2;
 
-	if (mt9t013_ctrl->prev_res == QTR_SIZE) {
-		d1 =
-			(uint32_t)(
+	d1 =
+		(uint32_t)(
 		(mt9t013_regs.reg_pat[RES_PREVIEW].frame_length_lines *
 		0x00000400) /
 		mt9t013_regs.reg_pat[RES_CAPTURE].frame_length_lines);
 
-		d2 =
-			(uint32_t)(
+	d2 =
+		(uint32_t)(
 		(mt9t013_regs.reg_pat[RES_PREVIEW].line_length_pck *
 		0x00000400) /
 		mt9t013_regs.reg_pat[RES_CAPTURE].line_length_pck);
 
-		divider = (uint32_t) (d1 * d2) / 0x00000400;
+	divider = (uint32_t) (d1 * d2) / 0x00000400;
 
-		pclk_mult =
+	pclk_mult =
 		(uint32_t) ((mt9t013_regs.reg_pat[RES_CAPTURE].pll_multiplier *
 		0x00000400) /
 		(mt9t013_regs.reg_pat[RES_PREVIEW].pll_multiplier));
 
-	} else {
-		/* full size resolution used for preview. */
-		divider   = 0x00000400;  /*1.0 */
-		pclk_mult = 0x00000400;  /*1.0 */
-	}
 
 	/* Verify PCLK settings and frame sizes. */
 	*pfps =
@@ -428,17 +423,11 @@ static int32_t mt9t013_set_fps(struct fps_cfg *fps)
 						frame_length_lines *
 					fps->fps_div/0x00000400));
 
-	CDBG("mt9t013_set_fps: fps_mult is %d, frame_rate is %d\n",
-			fps->f_mult,
-			(uint16_t)(mt9t013_regs.reg_pat[RES_PREVIEW].
-					line_length_pck *
-					fps->f_mult / 0x00000400));
-
 	rc = mt9t013_i2c_write_w(mt9t013_client->addr,
-			REG_LINE_LENGTH_PCK,
+			REG_FRAME_LENGTH_LINES,
 			(uint16_t) (
-			mt9t013_regs.reg_pat[RES_PREVIEW].line_length_pck *
-			fps->f_mult / 0x00000400));
+			mt9t013_regs.reg_pat[RES_PREVIEW].frame_length_lines *
+			fps->f_mult / fps->fps_div));
 	if (rc < 0)
 		return rc;
 
@@ -453,9 +442,7 @@ static int32_t mt9t013_set_fps(struct fps_cfg *fps)
 
 static int32_t mt9t013_write_exp_gain(uint16_t gain, uint32_t line)
 {
-	const uint16_t max_legal_gain = 0x01FF;
-	uint32_t line_length_ratio = 0x00000400;
-	enum mt9t013_setting setting;
+	uint16_t max_legal_gain = 0x01FF;
 	int32_t rc = 0;
 
 	if (mt9t013_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
@@ -466,30 +453,8 @@ static int32_t mt9t013_write_exp_gain(uint16_t gain, uint32_t line)
 	if (gain > max_legal_gain)
 		gain = max_legal_gain;
 
-	/* Verify no overflow */
-	if (mt9t013_ctrl->sensormode != SENSOR_SNAPSHOT_MODE) {
-		line = (uint32_t) (line * mt9t013_ctrl->fps_divider /
-			0x00000400);
-
-		setting = RES_PREVIEW;
-
-	} else {
-		line = (uint32_t) (line * mt9t013_ctrl->pict_fps_divider /
-			0x00000400);
-
-		setting = RES_CAPTURE;
-	}
-
 	/*Set digital gain to 1 */
 	gain |= 0x0200;
-
-	if ((mt9t013_regs.reg_pat[setting].frame_length_lines - 1) < line) {
-
-		line_length_ratio =
-		(uint32_t) (line * 0x00000400) /
-		(mt9t013_regs.reg_pat[setting].frame_length_lines - 1);
-	} else
-		line_length_ratio = 0x00000400;
 
 	/* There used to be PARAMETER_HOLD register write before and
 	 * after REG_GLOBAL_GAIN & REG_COARSE_INIT_TIME. This causes
@@ -500,9 +465,7 @@ static int32_t mt9t013_write_exp_gain(uint16_t gain, uint32_t line)
 		return rc;
 
 	rc = mt9t013_i2c_write_w(mt9t013_client->addr,
-			REG_COARSE_INT_TIME,
-			(uint16_t)((uint32_t) line * 0x00000400 /
-			line_length_ratio));
+			REG_COARSE_INT_TIME, line);
 	if (rc < 0)
 		return rc;
 
@@ -523,7 +486,6 @@ static int32_t mt9t013_set_pict_exp_gain(uint16_t gain, uint32_t line)
 
 	mdelay(5);
 
-	/* camera_timed_wait(snapshot_wait*exposure_ratio); */
 	return rc;
 }
 
@@ -712,7 +674,8 @@ static int32_t mt9t013_setting(enum mt9t013_reg_update rupdate,
 		rc =
 			mt9t013_i2c_write_w(mt9t013_client->addr,
 			MT9T013_REG_RESET_REGISTER,
-			MT9T013_RESET_REGISTER_PWON);
+			MT9T013_RESET_REGISTER_PWON|
+			MT9T013_RESET_FAST_TRANSITION);
 		if (rc < 0)
 			return rc;
 
@@ -995,8 +958,19 @@ static int32_t mt9t013_video_config(int mode, int res)
 	mt9t013_ctrl->curr_res = res;
 	mt9t013_ctrl->sensormode = mode;
 
-	return mt9t013_write_exp_gain(mt9t013_ctrl->my_reg_gain,
+	rc = mt9t013_write_exp_gain(mt9t013_ctrl->my_reg_gain,
 			mt9t013_ctrl->my_reg_line_count);
+	if (rc < 0)
+		return rc;
+
+	rc = mt9t013_i2c_write_w(mt9t013_client->addr,
+		MT9T013_REG_RESET_REGISTER,
+		MT9T013_RESET_REGISTER_PWON|MT9T013_RESET_FAST_TRANSITION);
+	if (rc < 0)
+		return rc;
+
+	msleep(5);
+	return rc;
 }
 
 static int32_t mt9t013_snapshot_config(int mode)
