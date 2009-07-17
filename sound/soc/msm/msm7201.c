@@ -241,7 +241,7 @@ static int msm_new_mixer(struct snd_card *card)
 	unsigned int idx;
 	int err;
 
-	printk(KERN_ERR "msm_soc:ALSA MSM Mixer Setting");
+	pr_err("msm_soc: ALSA MSM Mixer Setting\n");
 	strcpy(card->mixername, "MSM Mixer");
 	for (idx = 0; idx < ARRAY_SIZE(snd_msm_controls); idx++) {
 		err = snd_ctl_add(card,
@@ -258,7 +258,7 @@ static int msm_soc_dai_init(struct snd_soc_codec *codec)
 	int ret = 0;
 	ret = msm_new_mixer(codec->card);
 	if (ret < 0) {
-		printk(KERN_ERR "msm_soc:ALSA MSM Mixer Fail");
+		pr_err("msm_soc: ALSA MSM Mixer Fail\n");
 	}
 
 	return ret;
