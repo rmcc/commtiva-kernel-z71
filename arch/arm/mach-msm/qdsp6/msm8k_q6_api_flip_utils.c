@@ -102,6 +102,8 @@ u32 q6_stream_context_mapping(enum cad_stream_app_enum_type app_type,
 	case CAD_STREAM_APP_RECORD:
 		/* record */
 		return ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	case CAD_STREAM_APP_MIXED_RECORD:
+		return ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
 	case CAD_STREAM_APP_A2DP_MIX_MODE:
 		/* loopback */
 		return ADSP_AUDIO_DEVICE_CONTEXT_PCM_LOOPBACK;
