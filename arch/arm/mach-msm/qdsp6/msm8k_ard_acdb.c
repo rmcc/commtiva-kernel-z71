@@ -157,23 +157,17 @@ u32 ard_acdb_get_sample_rate(u32 session_id, u32 route_id)
 
 	switch (route_id) {
 	case 0:
+	case 2:
+	case 4: /* A2DP */
+	case 5: /* A2DP */
+	case 6: /* I2S RX */
 		sample_rate = ARD_ACDB_SR_48K_HZ;
 		break;
 	case 1:
 		sample_rate = ard_acdb_calculate_sample_rate(session_id);
 		break;
-	case 2:
 	case 3:
 		sample_rate = ARD_ACDB_SR_8K_HZ;
-		break;
-	/* A2DP */
-	case 4:
-	case 5:
-		sample_rate = ARD_ACDB_SR_48K_HZ;
-		break;
-	/* I2S RX */
-	case 6:
-		sample_rate = ARD_ACDB_SR_48K_HZ;
 		break;
 	/* I2S TX */
 	case 7:
