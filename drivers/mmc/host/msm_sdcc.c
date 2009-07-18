@@ -974,10 +974,11 @@ show_polling(struct device *dev, struct device_attribute *attr, char *buf)
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct msmsdcc_host *host = mmc_priv(mmc);
 	int poll;
+	unsigned long flags;
 
-	spin_lock(&host->lock);
+	spin_lock_irqsave(&host->lock, flags);
 	poll = !!(mmc->caps & MMC_CAP_NEEDS_POLL);
-	spin_unlock(&host->lock);
+	spin_unlock_irqrestore(&host->lock, flags);
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", poll);
 }
@@ -989,17 +990,18 @@ set_polling(struct device *dev, struct device_attribute *attr,
 	struct mmc_host *mmc = dev_get_drvdata(dev);
 	struct msmsdcc_host *host = mmc_priv(mmc);
 	int value;
+	unsigned long flags;
 
 	sscanf(buf, "%d", &value);
 
-	spin_lock(&host->lock);
+	spin_lock_irqsave(&host->lock, flags);
 	if (value) {
 		mmc->caps |= MMC_CAP_NEEDS_POLL;
 		mmc_detect_change(host->mmc, 0);
 	} else {
 		mmc->caps &= ~MMC_CAP_NEEDS_POLL;
 	}
-	spin_unlock(&host->lock);
+	spin_unlock_irqrestore(&host->lock, flags);
 	return count;
 }
 
@@ -1019,20 +1021,24 @@ static void msmsdcc_early_suspend(struct early_suspend *h)
 {
 	struct msmsdcc_host *host =
 		container_of(h, struct msmsdcc_host, early_suspend);
-	spin_lock(&host->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&host->lock, flags);
 	polling_enabled = host->mmc->caps & MMC_CAP_NEEDS_POLL;
 	host->mmc->caps &= ~MMC_CAP_NEEDS_POLL;
-	spin_unlock(&host->lock);
+	spin_unlock_irqrestore(&host->lock, flags);
 };
 static void msmsdcc_late_resume(struct early_suspend *h)
 {
 	struct msmsdcc_host *host =
 		container_of(h, struct msmsdcc_host, early_suspend);
+	unsigned long flags;
+
 	if (polling_enabled) {
-		spin_lock(&host->lock);
+		spin_lock_irqsave(&host->lock, flags);
 		host->mmc->caps |= MMC_CAP_NEEDS_POLL;
 		mmc_detect_change(host->mmc, 0);
-		spin_unlock(&host->lock);
+		spin_unlock_irqrestore(&host->lock, flags);
 	}
 };
 #endif
