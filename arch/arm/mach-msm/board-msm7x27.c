@@ -397,8 +397,41 @@ static void lcdc_gordon_config_gpios(int enable)
 		ARRAY_SIZE(lcdc_gpio_table), enable);
 }
 
+static char *msm_fb_lcdc_vreg[] = {
+	"gp5"
+};
+
+#define MSM_FB_LCDC_VREG_OP(name, op) \
+do { \
+	vreg = vreg_get(0, name); \
+	if (vreg_##op(vreg)) \
+		printk(KERN_ERR "%s: %s vreg operation failed \n", \
+			(vreg_##op == vreg_enable) ? "vreg_enable" \
+				: "vreg_disable", name); \
+} while (0)
+
+static void msm_fb_lcdc_power_save(int on)
+{
+	struct vreg *vreg;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(msm_fb_lcdc_vreg); i++) {
+		if (on)
+			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], enable);
+		else{
+			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], disable);
+			gpio_tlmm_config(GPIO_CFG(GPIO_OUT_88, 0,
+			GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE);
+			gpio_set_value(88, 0);
+			mdelay(15);
+			gpio_set_value(88, 1);
+			mdelay(15);
+			}
+		}
+}
 static struct lcdc_platform_data lcdc_pdata = {
-	.lcdc_gpio_config = msm_fb_lcdc_config
+	.lcdc_gpio_config = msm_fb_lcdc_config,
+	.lcdc_power_save   = msm_fb_lcdc_power_save,
 };
 
 static struct msm_panel_common_pdata lcdc_gordon_panel_data = {

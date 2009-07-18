@@ -114,6 +114,9 @@ static int lcdc_off(struct platform_device *pdev)
 	clk_disable(mdp_lcdc_pclk_clk);
 	clk_disable(mdp_lcdc_pad_pclk_clk);
 
+	if (lcdc_pdata && lcdc_pdata->lcdc_power_save)
+		lcdc_pdata->lcdc_power_save(0);
+
 	if (lcdc_pdata && lcdc_pdata->lcdc_gpio_config)
 		ret = lcdc_pdata->lcdc_gpio_config(0);
 
@@ -130,6 +133,8 @@ static int lcdc_on(struct platform_device *pdev)
 	clk_enable(mdp_lcdc_pclk_clk);
 	clk_enable(mdp_lcdc_pad_pclk_clk);
 
+	if (lcdc_pdata && lcdc_pdata->lcdc_power_save)
+		lcdc_pdata->lcdc_power_save(1);
 	if (lcdc_pdata && lcdc_pdata->lcdc_gpio_config)
 		ret = lcdc_pdata->lcdc_gpio_config(1);
 
