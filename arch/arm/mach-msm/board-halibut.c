@@ -128,6 +128,11 @@ static struct platform_device android_usb_device = {
 };
 #endif
 
+static struct platform_device hs_device = {
+	.name   = "msm-handset",
+	.id     = -1,
+};
+
 #ifdef CONFIG_USB_FUNCTION
 static void hsusb_gpio_init(void)
 {
@@ -751,6 +756,7 @@ static struct platform_device *devices[] __initdata = {
 	&mddi_toshiba_device,
 	&mddi_sharp_device,
 	&msm_batt_device,
+	&hs_device,
 };
 
 extern struct sys_timer msm_timer;

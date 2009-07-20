@@ -398,6 +398,14 @@ static struct platform_device android_pmem_gpu1_device = {
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
 };
 
+static struct platform_device hs_device = {
+	.name   = "msm-handset",
+	.id     = -1,
+	.dev    = {
+		.platform_data = "7k_handset",
+	},
+};
+
 #define LCDC_CONFIG_PROC          21
 #define LCDC_UN_CONFIG_PROC       22
 #define LCDC_API_PROG             0x30000066
@@ -938,6 +946,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_adspdec,
 	&msm_bluesleep_device,
 	&msm_device_kgsl,
+	&hs_device,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
