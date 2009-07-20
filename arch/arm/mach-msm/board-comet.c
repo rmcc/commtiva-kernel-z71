@@ -245,6 +245,15 @@ static struct usb_composition usb_func_composition[] = {
 	},
 
 };
+
+static struct platform_device hs_device = {
+	.name   = "msm-handset",
+	.id     = -1,
+	.dev    = {
+		.platform_data = "8k_handset",
+	},
+};
+
 #ifdef CONFIG_USB_FS_HOST
 static int fsusb_gpio_init(void)
 {
@@ -793,6 +802,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&qsd_device_spi,
 	&msm_device_tssc,
+	&hs_device,
 };
 
 #ifdef CONFIG_QSD_SVS

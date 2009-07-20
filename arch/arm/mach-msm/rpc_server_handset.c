@@ -128,7 +128,6 @@ struct msm_handset {
 
 static struct input_dev *kpdev;
 static struct msm_rpc_client *rpc_client;
-static struct platform_device *hs_pdev;
 static struct msm_handset *hs;
 
 static int hs_find_key(uint32_t hscode)
@@ -421,8 +420,11 @@ static int __devinit hs_probe(struct platform_device *pdev)
 
 	hs->ipdev = ipdev;
 
-	ipdev->name		= DRIVER_NAME;
-	ipdev->phys		= "msm-handset/input0";
+	if (pdev->dev.platform_data)
+		ipdev->name = pdev->dev.platform_data;
+	else
+		ipdev->name	= DRIVER_NAME;
+
 	ipdev->id.vendor	= 0x0001;
 	ipdev->id.product	= 1;
 	ipdev->id.version	= 1;
@@ -479,27 +481,13 @@ static struct platform_driver hs_driver = {
 
 static int __init hs_init(void)
 {
-	int rc;
-
-	hs_pdev = platform_device_register_simple(DRIVER_NAME,
-					-1, NULL, 0);
-	if (IS_ERR(hs_pdev))
-		return PTR_ERR(hs_pdev);
-
-	rc = platform_driver_register(&hs_driver);
-	if (rc) {
-		platform_device_unregister(hs_pdev);
-		return rc;
-	}
-
-	return 0;
+	return platform_driver_register(&hs_driver);
 }
 late_initcall(hs_init);
 
 static void __exit hs_exit(void)
 {
 	platform_driver_unregister(&hs_driver);
-	platform_device_unregister(hs_pdev);
 }
 module_exit(hs_exit);
 
