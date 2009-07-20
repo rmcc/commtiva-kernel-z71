@@ -117,23 +117,54 @@ static int snd_vol_info(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int snd_vol_get(struct snd_kcontrol *kcontrol,
+static int snd_rx_vol_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
-	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.volume;
+	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.rx_volume;
 	return 0;
 }
 
-static int snd_vol_put(struct snd_kcontrol *kcontrol,
+static int snd_rx_vol_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
+	struct msm_vol_info vi;
 	int rc = 0;
 
-	rc = audio_set_device_volume(ucontrol->value.integer.value[0]);
+	vi.vol = ucontrol->value.integer.value[0];
+	vi.path = CAD_RX_DEVICE;
+
+	rc = audio_set_device_volume_path(&vi);
+
 	if (rc)
 		printk(KERN_ERR "audio_set_device_volume failed\n");
 	else
-		qsd_glb_ctl.volume = ucontrol->value.integer.value[0];
+		qsd_glb_ctl.rx_volume = ucontrol->value.integer.value[0];
+
+	return rc;
+}
+
+static int snd_tx_vol_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = (uint32_t) qsd_glb_ctl.tx_volume;
+	return 0;
+}
+
+static int snd_tx_vol_put(struct snd_kcontrol *kcontrol,
+			struct snd_ctl_elem_value *ucontrol)
+{
+	struct msm_vol_info vi;
+	int rc = 0;
+
+	vi.vol = ucontrol->value.integer.value[0];
+	vi.path = CAD_TX_DEVICE;
+
+	rc = audio_set_device_volume_path(&vi);
+
+	if (rc)
+		printk(KERN_ERR "audio_set_device_volume failed\n");
+	else
+		qsd_glb_ctl.tx_volume = ucontrol->value.integer.value[0];
 
 	return rc;
 }
@@ -257,13 +288,15 @@ static int snd_strm_vol_put(struct snd_kcontrol *kcontrol,
 static struct snd_kcontrol_new snd_qsd_controls[] = {
 	QSD_EXT("Master Route", 1, snd_qsd_route_info, \
 			 snd_qsd_route_get, snd_qsd_route_put, 0),
-	QSD_EXT("Master Volume", 2, snd_vol_info, \
-			 snd_vol_get, snd_vol_put, 0),
-	QSD_EXT("Master Mute Playback", 3, snd_rx_mute_info, \
+	QSD_EXT("Master Volume Playback", 2, snd_vol_info, \
+			 snd_rx_vol_get, snd_rx_vol_put, 0),
+	QSD_EXT("Master Volume Capture", 3, snd_vol_info, \
+			 snd_tx_vol_get, snd_tx_vol_put, 0),
+	QSD_EXT("Master Mute Playback", 4, snd_rx_mute_info, \
 			 snd_rx_mute_get, snd_rx_mute_put, 0),
-	QSD_EXT("Master Mute Capture", 4, snd_tx_mute_info, \
+	QSD_EXT("Master Mute Capture", 5, snd_tx_mute_info, \
 			 snd_tx_mute_get, snd_tx_mute_put, 0),
-	QSD_EXT("Stream Volume", 5, snd_strm_vol_info, \
+	QSD_EXT("Stream Volume", 6, snd_strm_vol_info, \
 			 snd_strm_vol_get, snd_strm_vol_put, 0),
 };
 
