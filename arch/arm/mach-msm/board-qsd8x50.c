@@ -646,39 +646,24 @@ static struct platform_device msm_fb_device = {
 		.platform_data = &msm_fb_pdata,
 	}
 };
-
-static unsigned msm_bma_gpio_config_data[] = {
-	GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* BMA_IRQ */
+static struct msm_gpio bma_spi_gpio_config_data[] = {
+	{ GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
 };
-
-static void msm_bma_gpio_teardown(struct device *dev)
-{
-	gpio_free(22);
-}
 
 static int msm_bma_gpio_setup(struct device *dev)
 {
-	int i, rc;
+	int rc;
 
-	if (gpio_request(22, "bma_irq")) {
-		pr_err("failed to request gpio bma_irq\n");
-		return -EIO;
-	}
+	rc = msm_gpios_request_enable(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
 
-	for (i = 0; i < ARRAY_SIZE(msm_bma_gpio_config_data); i++) {
-		rc = gpio_tlmm_config(msm_bma_gpio_config_data[i], GPIO_ENABLE);
-		if (rc) {
-			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, msm_bma_gpio_config_data[i], rc);
-			goto err_gpioconfig;
-		}
-	}
-
-	return 0;
-
-err_gpioconfig:
-	msm_bma_gpio_teardown(dev);
 	return rc;
+}
+
+static void msm_bma_gpio_teardown(struct device *dev)
+{
+	msm_gpios_disable_free(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
 }
 
 static struct bma150_platform_data bma_pdata = {
