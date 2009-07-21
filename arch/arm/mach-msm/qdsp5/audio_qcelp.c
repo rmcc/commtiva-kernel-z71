@@ -69,6 +69,8 @@
 #define AUDQCELP_EOS_NONE 0x0 /* No EOS detected */
 #define AUDQCELP_EOS_SET 0x1 /* EOS set in meta field */
 
+#define AUDQCELP_EVENT_NUM 10 /* Default number of pre-allocated event pkts */
+
 struct buffer {
 	void *data;
 	unsigned size;
@@ -139,6 +141,7 @@ struct audio {
 	struct audqcelp_suspend_ctl suspend_ctl;
 #endif
 
+	struct list_head free_event_queue;
 	struct list_head event_queue;
 	wait_queue_head_t event_wait;
 	spinlock_t event_queue_lock;
@@ -565,6 +568,12 @@ static void audqcelp_reset_event_queue(struct audio *audio)
 		list_del(&drv_evt->list);
 		kfree(drv_evt);
 	}
+	list_for_each_safe(ptr, next, &audio->free_event_queue) {
+		drv_evt = list_first_entry(&audio->free_event_queue,
+				struct audqcelp_event, list);
+		list_del(&drv_evt->list);
+		kfree(drv_evt);
+	}
 	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 
 	return;
@@ -611,18 +620,18 @@ static long audqcelp_process_event_req(struct audio *audio, void __user *arg)
 				struct audqcelp_event, list);
 		list_del(&drv_evt->list);
 	}
-	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 
 	if (drv_evt) {
 		usr_evt.event_type = drv_evt->event_type;
 		usr_evt.event_payload = drv_evt->payload;
-
-		if (copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
-			rc = -EFAULT;
-
-		kfree(drv_evt);
+		list_add_tail(&drv_evt->list, &audio->free_event_queue);
 	} else
 		rc = -1;
+	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
+
+	if (!rc && copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
+		rc = -EFAULT;
+
 	return rc;
 }
 
@@ -1164,17 +1173,23 @@ static void audqcelp_post_event(struct audio *audio, int type,
 	struct audqcelp_event *e_node = NULL;
 	unsigned long flags;
 
-	e_node = kmalloc(sizeof(struct audqcelp_event), GFP_KERNEL);
+	spin_lock_irqsave(&audio->event_queue_lock, flags);
 
-	if (!e_node) {
-		pr_err("%s: No mem to post event %d\n", __func__, type);
-		return;
+	if (!list_empty(&audio->free_event_queue)) {
+		e_node = list_first_entry(&audio->free_event_queue,
+				struct audqcelp_event, list);
+		list_del(&e_node->list);
+	} else {
+		e_node = kmalloc(sizeof(struct audqcelp_event), GFP_ATOMIC);
+		if (!e_node) {
+			pr_err("%s: No mem to post event %d\n", __func__, type);
+			return;
+		}
 	}
 
 	e_node->event_type = type;
 	e_node->payload = payload;
 
-	spin_lock_irqsave(&audio->event_queue_lock, flags);
 	list_add_tail(&e_node->list, &audio->event_queue);
 	spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 	wake_up(&audio->event_wait);
@@ -1205,7 +1220,8 @@ static void audqcelp_resume(struct early_suspend *h)
 static int audqcelp_open(struct inode *inode, struct file *file)
 {
 	struct audio *audio = &the_qcelp_audio;
-	int rc;
+	int rc, i;
+	struct audqcelp_event *e_node = NULL;
 
 	mutex_lock(&audio->lock);
 
@@ -1262,6 +1278,15 @@ static int audqcelp_open(struct inode *inode, struct file *file)
 	audio->suspend_ctl.audio = audio;
 	register_early_suspend(&audio->suspend_ctl.node);
 #endif
+	for (i = 0; i < AUDQCELP_EVENT_NUM; i++) {
+		e_node = kmalloc(sizeof(struct audqcelp_event), GFP_KERNEL);
+		if (e_node)
+			list_add_tail(&e_node->list, &audio->free_event_queue);
+		else {
+			pr_info("%s: event pkt alloc failed\n", __func__);
+			break;
+		}
+	}
 	rc = 0;
 done:
 	mutex_unlock(&audio->lock);
@@ -1383,6 +1408,7 @@ static int __init audqcelp_init(void)
 	if (IS_ERR(dentry))
 		pr_err("QCELP:%s:debugfs_create_file failed\n", __func__);
 #endif
+	INIT_LIST_HEAD(&the_qcelp_audio.free_event_queue);
 	INIT_LIST_HEAD(&the_qcelp_audio.event_queue);
 	init_waitqueue_head(&the_qcelp_audio.event_wait);
 	spin_lock_init(&the_qcelp_audio.event_queue_lock);
