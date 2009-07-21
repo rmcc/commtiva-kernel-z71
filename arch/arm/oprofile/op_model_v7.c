@@ -298,25 +298,26 @@ int armv7_setup_pmnc(void)
 		 * Set event (if destined for PMNx counters)
 		 * We don't need to set the event if it's a cycle count
 		 */
-		if (cnt != CCNT)
+		if (cnt != CCNT) {
 			armv7_pmnc_write_evtsel(cnt, event);
-		switch (cnt) {
-		case 1:
-			val = 0x0dc7;
-			break;
-		case 2:
-			val = 0x500dc7;
-			break;
-		case 3:
-			val = 0xa00dc7;
-			break;
-		case 4:
-			val = 0xf00dc7;
-			break;
-		default:
-			printk(KERN_ERR "oprofile: Wrong PMNC counter %d\n",
-						cnt);
+			switch (cnt) {
+			case 1:
+				val = 0x0dc7;
 				break;
+			case 2:
+				val = 0x500dc7;
+				break;
+			case 3:
+				val = 0xa00dc7;
+				break;
+			case 4:
+				val = 0xf00dc7;
+				break;
+			default:
+				printk(KERN_ERR "oprofile: Wrong PMNC "
+						"counter %d\n", cnt);
+				break;
+			}
 		}
 		if (event >= 0x40) {
 			asm volatile("mcr p15, 0, %0, c9, c15, 0" : :
@@ -501,7 +502,7 @@ static int irqs[] = {
 #ifdef CONFIG_ARCH_OMAP3
 	INT_34XX_BENCH_MPU_EMUL,
 #endif
-#ifdef CONFIG_ARCH_QSD
+#ifdef CONFIG_ARCH_QSD8X50
       INT_ARM11_PM,
 #endif
 
