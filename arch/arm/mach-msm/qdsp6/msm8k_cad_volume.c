@@ -677,8 +677,9 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	case CAD_FILTER_CONFIG_DEVICE_MUTE:
 		D("CAD:VOL: Device Mute\n");
 
-		qdsp6_volume_cache_tbl[dev_mute_buf->device_id].mute =
-			dev_mute_buf->mute;
+		device_id = qdsp6_volume_device_id_mapping(
+				dev_mute_buf->device_id);
+		qdsp6_volume_cache_tbl[device_id].mute = dev_mute_buf->mute;
 
 		/* Construct QDSP6 device mute command. */
 		/* 1. Allocate memory for command buffer. */
