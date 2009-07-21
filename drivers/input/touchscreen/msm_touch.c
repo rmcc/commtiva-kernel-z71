@@ -82,11 +82,15 @@ static void __iomem *virt;
 
 static void ts_update_pen_state(struct ts *ts, int x, int y, int pressure)
 {
-	input_report_abs(ts->input, ABS_X, x);
-	input_report_abs(ts->input, ABS_Y, y);
-	input_report_abs(ts->input, ABS_PRESSURE, pressure);
-
-	input_report_key(ts->input, BTN_TOUCH, !!pressure);
+	if (pressure) {
+		input_report_abs(ts->input, ABS_X, x);
+		input_report_abs(ts->input, ABS_Y, y);
+		input_report_abs(ts->input, ABS_PRESSURE, pressure);
+		input_report_key(ts->input, BTN_TOUCH, !!pressure);
+	} else {
+		input_report_abs(ts->input, ABS_PRESSURE, 0);
+		input_report_key(ts->input, BTN_TOUCH, 0);
+	}
 
 	input_sync(ts->input);
 }
