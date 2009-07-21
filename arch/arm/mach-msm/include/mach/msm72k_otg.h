@@ -32,6 +32,7 @@
 #include <linux/usb.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>
+#include <linux/wakelock.h>
 
 #define OTGSC_BSVIE            (1 << 27)
 #define OTGSC_IDIE             (1 << 24)
@@ -57,6 +58,7 @@ struct msm_otg {
 	int			irq;
 	void __iomem		*regs;
 	u8			in_lpm;
+	struct wake_lock	wlock;
 
 	int 			(*rpc_connect)(int);
 	int 			(*phy_reset)(void);
