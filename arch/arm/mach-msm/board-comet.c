@@ -90,6 +90,7 @@
 #define TOUCHPAD_IRQ            42
 
 #define MSM_PMEM_MDP_SIZE	0x800000
+#define MSM_PMEM_ADSP_SIZE	0x2900000
 #define MSM_PMEM_GPU1_SIZE	0x800000
 #define MSM_FB_SIZE             0x500000
 #define MSM_AUDIO_SIZE		0x200000
@@ -323,6 +324,13 @@ static struct android_pmem_platform_data android_pmem_pdata = {
 	.cached = 1,
 };
 
+static struct android_pmem_platform_data android_pmem_adsp_pdata = {
+	.name = "pmem_adsp",
+	.size = MSM_PMEM_ADSP_SIZE,
+	.allocator_type = PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
+	.cached = 0,
+};
+
 static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
 	.name = "pmem_gpu0",
 	.start = MSM_PMEM_GPU0_BASE,
@@ -341,6 +349,12 @@ static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
 	.id = 0,
 	.dev = { .platform_data = &android_pmem_pdata },
+};
+
+static struct platform_device android_pmem_adsp_device = {
+	.name = "android_pmem",
+	.id = 1,
+	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
 static struct platform_device android_pmem_gpu0_device = {
@@ -787,6 +801,7 @@ static struct platform_device *devices[] __initdata = {
 	&smc911x_device,
 	&s1r72v05_device,
 	&android_pmem_device,
+	&android_pmem_adsp_device,
 	&android_pmem_gpu0_device,
 	&android_pmem_gpu1_device,
 	&msm_device_nand,
@@ -1330,6 +1345,13 @@ static void __init comet_allocate_memory_regions(void)
 
 	addr = alloc_bootmem(android_pmem_pdata.size);
 	android_pmem_pdata.start = __pa(addr);
+
+	size = MSM_PMEM_ADSP_SIZE;
+	addr = alloc_bootmem(size);
+	android_pmem_adsp_pdata.start = __pa(addr);
+	android_pmem_adsp_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+	       "for adsp pmem\n", size, addr, __pa(addr));
 
 	size = MSM_PMEM_GPU1_SIZE;
 	addr = alloc_bootmem_aligned(size, 0x100000);
