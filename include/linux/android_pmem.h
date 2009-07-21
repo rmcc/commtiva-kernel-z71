@@ -46,6 +46,18 @@
 #define PMEM_CLEAN_CACHES	_IOW(PMEM_IOCTL_MAGIC, 12, unsigned int)
 #define PMEM_INV_CACHES		_IOW(PMEM_IOCTL_MAGIC, 13, unsigned int)
 
+struct pmem_region {
+	unsigned long offset;
+	unsigned long len;
+};
+
+struct pmem_addr {
+	unsigned long vaddr;
+	unsigned long offset;
+	unsigned long length;
+};
+
+#ifdef __KERNEL__
 int get_pmem_file(unsigned int fd, unsigned long *start, unsigned long *vstart,
 		  unsigned long *end, struct file **filp);
 int get_pmem_fd(int fd, unsigned long *start, unsigned long *end);
@@ -88,23 +100,13 @@ struct android_pmem_platform_data
 	unsigned buffered;
 };
 
-struct pmem_region {
-	unsigned long offset;
-	unsigned long len;
-};
-
-struct pmem_addr {
-	unsigned long vaddr;
-	unsigned long offset;
-	unsigned long length;
-};
-
 int pmem_setup(struct android_pmem_platform_data *pdata,
 	       long (*ioctl)(struct file *, unsigned int, unsigned long),
 	       int (*release)(struct inode *, struct file *));
 
 int pmem_remap(struct pmem_region *region, struct file *file,
 	       unsigned operation);
+#endif /* __KERNEL__ */
 
 #endif //_ANDROID_PPP_H_
 
