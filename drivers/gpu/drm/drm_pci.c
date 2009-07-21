@@ -95,7 +95,7 @@ int drm_get_pci_dev(struct pci_dev *pdev, const struct pci_device_id *ent,
 		goto err_g2;
 	}
 
-	ret = drm_get_minor(dev, &dev->primary, DRM_MINOR_LEGACY)
+	ret = drm_get_minor(dev, &dev->primary, DRM_MINOR_LEGACY);
 	if (ret)
 		goto err_g2;
 

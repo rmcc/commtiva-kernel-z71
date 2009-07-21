@@ -187,7 +187,7 @@ int drm_dropmaster_ioctl(struct drm_device *dev, void *data,
 }
 
 int drm_fill_in_dev(struct drm_device *dev,
-			   struct pci_device_id *ent,
+			   const struct pci_device_id *ent,
 			   struct drm_driver *driver)
 {
 	int retcode = 0;

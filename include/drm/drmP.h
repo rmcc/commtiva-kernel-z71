@@ -1465,8 +1465,9 @@ static inline void *drm_get_device(struct drm_device *dev)
 
 extern int drm_platform_init(struct drm_driver *driver);
 extern int drm_pci_init(struct drm_driver *driver);
-extern int drm_fill_in_dev(struct drm_device *dev, struct pci_device_id *ent,
-			struct drm_driver *driver);
+extern int drm_fill_in_dev(struct drm_device *dev,
+			   const struct pci_device_id *ent,
+			   struct drm_driver *driver);
 int drm_get_minor(struct drm_device *dev, struct drm_minor **minor, int type);
 
 /*@}*/
