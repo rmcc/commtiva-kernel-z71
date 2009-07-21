@@ -206,7 +206,7 @@ static int msm8k_aac_in_ioctl(struct inode *inode, struct file *f,
 		cad_write_aac_fmt.aac.channel_config = 1;
 		cad_write_aac_fmt.aac.block_formats = 0xffff;
 		cad_write_aac_fmt.aac.audio_object_type = 2;
-		cad_write_aac_fmt.aac.bit_rate = 48000;
+		cad_write_aac_fmt.aac.bit_rate = 192000;
 
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
 			&cad_write_aac_fmt,
