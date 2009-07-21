@@ -70,24 +70,12 @@
 #include <mach/qdsp6/msm8k_adsp_audio_command.h>
 #include <mach/qdsp6/msm8k_ardi.h>
 
-static struct cad_device_volume_cache
-		qdsp6_volume_cache_tbl[QDSP6VOLUME_MAX_DEVICE_COUNT];
-
-static s32 stream_volume_cache;
-
-static u32 audio_ctrl_handle;
-
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_vol: " fmt, ##args)
 #else
 #define D(fmt, args...) do {} while (0)
 #endif
-
-void set_audio_ctrl_handle(u32 handle)
-{
-	audio_ctrl_handle = handle;
-}
 
 enum cad_int_device_id {
 
@@ -132,6 +120,18 @@ enum cad_int_device_id {
 
 	INT_CAD_HW_DEVICE_ID_INVALID
 };
+
+static struct cad_device_volume_cache
+		qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_MAX_NUM];
+
+static s32 stream_volume_cache;
+
+static u32 audio_ctrl_handle;
+
+void set_audio_ctrl_handle(u32 handle)
+{
+	audio_ctrl_handle = handle;
+}
 
 enum cad_int_device_id qdsp6_volume_device_id_mapping(u32 device_id)
 {
@@ -419,7 +419,9 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 
 		device_id = qdsp6_volume_device_id_mapping(device_id);
 
-		if (qdsp6_volume_cache_tbl[device_id].mute == 1)
+		if ((qdsp6_volume_cache_tbl[device_id].mute == 1) ||
+			(qdsp6_volume_cache_tbl[device_id].current_volume ==
+				qdsp6_volume_cache_tbl[device_id].min_gain))
 			q6_set_dev_mute1->mute = 1;
 		else
 			q6_set_dev_mute1->mute = 0;
@@ -444,7 +446,9 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			return rc;
 		}
 
-		if (qdsp6_volume_cache_tbl[device_id].mute == 0) {
+		if ((qdsp6_volume_cache_tbl[device_id].mute == 0) &&
+			(qdsp6_volume_cache_tbl[device_id].current_volume !=
+				qdsp6_volume_cache_tbl[device_id].min_gain)) {
 
 			q6_set_dev_vol1 = kmalloc(
 				sizeof(*q6_set_dev_vol1),
@@ -718,6 +722,14 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			q6_device_id_mapping(dev_mute_buf->device_id);
 		q6_set_dev_mute->path = dev_mute_buf->path;
 		q6_set_dev_mute->mute = dev_mute_buf->mute;
+
+		/* If the valid current volume is 0, just mute. */
+		if (qdsp6_volume_cache_tbl[device_id].valid_current_volume
+			&& (qdsp6_volume_cache_tbl[device_id].current_volume
+				== qdsp6_volume_cache_tbl[
+					device_id].min_gain))
+			q6_set_dev_mute->mute = 1;
+
 		rpc_cmd_buf = (u8 *)q6_set_dev_mute;
 		rpc_cmd_buf_len =
 			sizeof(*q6_set_dev_mute);
@@ -868,9 +880,7 @@ done:
 
 int cad_volume_dinit(void)
 {
-	memset(qdsp6_volume_cache_tbl, 0,
-		sizeof(struct cad_device_volume_cache) *
-			QDSP6VOLUME_MAX_DEVICE_COUNT);
+	memset(qdsp6_volume_cache_tbl, 0, sizeof(qdsp6_volume_cache_tbl));
 	stream_volume_cache = 0;
 	return CAD_RES_SUCCESS;
 }
@@ -890,61 +900,59 @@ int cad_volume_init(struct cad_func_tbl_type **func_tbl)
 	*func_tbl = &vtable;
 
 	/* Set up the volume cache table by default values. */
-	memset(qdsp6_volume_cache_tbl, 0,
-		sizeof(struct cad_device_volume_cache)
-			* QDSP6VOLUME_MAX_DEVICE_COUNT);
+	memset(qdsp6_volume_cache_tbl, 0, sizeof(qdsp6_volume_cache_tbl));
 
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HANDSET_SPKR].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HANDSET_SPKR].max_gain
 		= CAD_DEVICE_HANDSET_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HANDSET_SPKR].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HANDSET_SPKR].min_gain
 		= CAD_DEVICE_HANDSET_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO].max_gain
 		= CAD_DEVICE_HEADSET_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO].min_gain
 		= CAD_DEVICE_HEADSET_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO].max_gain
-		= CAD_DEVICE_HEADSET_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO].min_gain
-		= CAD_DEVICE_HEADSET_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_MONO].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO].
+		max_gain = CAD_DEVICE_HEADSET_MAX_GAIN;
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO].
+		min_gain = CAD_DEVICE_HEADSET_MIN_GAIN;
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MONO].max_gain
 		= CAD_DEVICE_SPEAKER_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_MONO].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MONO].min_gain
 		= CAD_DEVICE_SPEAKER_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO].max_gain
 		= CAD_DEVICE_SPEAKER_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO].min_gain
 		= CAD_DEVICE_SPEAKER_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_SCO_SPKR].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_SCO_SPKR].max_gain
 		= CAD_DEVICE_BT_SCO_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_SCO_SPKR].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_SCO_SPKR].min_gain
 		= CAD_DEVICE_BT_SCO_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_A2DP_SPKR].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_A2DP_SPKR].max_gain
 		= CAD_DEVICE_BT_A2DP_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_A2DP_SPKR].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_A2DP_SPKR].min_gain
 		= CAD_DEVICE_BT_A2DP_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR].max_gain
 		= CAD_DEVICE_TTY_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_TTY_HEADSET_SPKR].min_gain
 		= CAD_DEVICE_TTY_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HANDSET_MIC].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HANDSET_MIC].max_gain
 		= CAD_DEVICE_HANDSET_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HANDSET_MIC].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HANDSET_MIC].min_gain
 		= CAD_DEVICE_HANDSET_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_MIC].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_MIC].max_gain
 		= CAD_DEVICE_HEADSET_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_HEADSET_MIC].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_HEADSET_MIC].min_gain
 		= CAD_DEVICE_HEADSET_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_MIC].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MIC].max_gain
 		= CAD_DEVICE_SPEAKER_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_SPKR_PHONE_MIC].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_SPKR_PHONE_MIC].min_gain
 		= CAD_DEVICE_SPEAKER_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_SCO_MIC].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_SCO_MIC].max_gain
 		= CAD_DEVICE_BT_SCO_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_BT_SCO_MIC].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_BT_SCO_MIC].min_gain
 		= CAD_DEVICE_BT_SCO_MIN_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_TTY_HEADSET_MIC].max_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_TTY_HEADSET_MIC].max_gain
 		= CAD_DEVICE_TTY_MAX_GAIN;
-	qdsp6_volume_cache_tbl[CAD_HW_DEVICE_ID_TTY_HEADSET_MIC].min_gain
+	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_TTY_HEADSET_MIC].min_gain
 		= CAD_DEVICE_TTY_MIN_GAIN;
 
 	stream_volume_cache = 0;
