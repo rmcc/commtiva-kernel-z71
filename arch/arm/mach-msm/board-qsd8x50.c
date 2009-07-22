@@ -654,6 +654,7 @@ static struct platform_device msm_fb_device = {
 		.platform_data = &msm_fb_pdata,
 	}
 };
+
 static struct msm_gpio bma_spi_gpio_config_data[] = {
 	{ GPIO_CFG(22, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
 };
@@ -725,37 +726,22 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 	}
 };
 
-static unsigned qsd_spi_gpio_config_data[] = {
-	GPIO_CFG(17, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CLK */
-	GPIO_CFG(18, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MOSI */
-	GPIO_CFG(19, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
-	GPIO_CFG(20, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
-	GPIO_CFG(21, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), /* SPI_PWR */
+static struct msm_gpio qsd_spi_gpio_config_data[] = {
+	{ GPIO_CFG(17, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_clk" },
+	{ GPIO_CFG(18, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_mosi" },
+	{ GPIO_CFG(19, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_miso" },
+	{ GPIO_CFG(20, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_cs0" },
+	{ GPIO_CFG(21, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), "spi_pwr" },
 };
 
 static int msm_qsd_spi_gpio_config(void)
 {
-	int i, rc;
+	int rc;
 
-	if (gpio_request(17, "spi_clk"))
-		pr_err("failed to request gpio spi_clk\n");
-	if (gpio_request(18, "spi_mosi"))
-		pr_err("failed to request gpio spi_mosi\n");
-	if (gpio_request(19, "spi_miso"))
-		pr_err("failed to request gpio spi_miso\n");
-	if (gpio_request(20, "spi_cs0"))
-		pr_err("failed to request gpio spi_cs0\n");
-	if (gpio_request(21, "spi_pwr"))
-		pr_err("failed to request gpio spi_pwr\n");
-
-	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
-		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
-		if (rc) {
-			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, qsd_spi_gpio_config_data[i], rc);
-			return -EIO;
-		}
-	}
+	rc = msm_gpios_request_enable(qsd_spi_gpio_config_data,
+		ARRAY_SIZE(qsd_spi_gpio_config_data));
+	if (rc)
+		return rc;
 
 	/* Set direction for SPI_PWR */
 	gpio_direction_output(21, 1);
@@ -765,11 +751,8 @@ static int msm_qsd_spi_gpio_config(void)
 
 static void msm_qsd_spi_gpio_release(void)
 {
-	gpio_free(17);
-	gpio_free(18);
-	gpio_free(19);
-	gpio_free(20);
-	gpio_free(21);
+	msm_gpios_disable_free(qsd_spi_gpio_config_data,
+		ARRAY_SIZE(qsd_spi_gpio_config_data));
 }
 
 static struct msm_spi_platform_data qsd_spi_pdata = {
