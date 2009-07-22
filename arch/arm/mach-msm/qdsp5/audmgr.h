@@ -155,20 +155,21 @@ struct rpc_audmgr_enable_client_args {
 #define AUDMGR_VERS_COMP_VER2 0x00020001
 
 struct rpc_audmgr_cb_func_ptr {
-	uint32_t cb_id;
+	uint32_t cb_id; /* cb_func */
 	uint32_t status; /* Audmgr status */
 	uint32_t set_to_one;  /* Pointer status (1 = valid, 0  = invalid) */
 	uint32_t disc;
 	/* disc = AUDMGR_STATUS_READY => data=handle
-	   disc = AUDMGR_STATUS_CODEC_CONFIG => data = handle
+	   disc = AUDMGR_STATUS_CODEC_CONFIG => data = volume
 	   disc = AUDMGR_STATUS_DISABLED => data =status_disabled
-	   disc = AUDMGR_STATUS_VOLUME_CHANGE => data = volume-change */
+	   disc = AUDMGR_STATUS_VOLUME_CHANGE => data = volume_change */
 	union {
 		uint32_t handle;
 		uint32_t volume;
 		uint32_t status_disabled;
 		uint32_t volume_change;
 	} u;
+	uint32_t client_data;
 };
 
 #define AUDMGR_CB_FUNC_PTR			1
@@ -182,10 +183,7 @@ struct rpc_audmgr_cb_func_ptr {
 struct audmgr {
 	wait_queue_head_t wait;
 	uint32_t handle;
-	struct msm_rpc_endpoint *ept;
-	struct task_struct *task;
 	int state;
-	uint32_t rpc_version; /* used only by audmgr not the caller */
 };
 
 struct audmgr_config {

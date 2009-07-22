@@ -34,6 +34,19 @@
 #define STATE_DISABLING 4
 #define STATE_ERROR	5
 
+/* store information used across complete audmgr sessions */
+struct audmgr_global {
+	struct mutex *lock;
+	struct msm_rpc_endpoint *ept;
+	struct task_struct *task;
+	uint32_t rpc_version;
+};
+static DEFINE_MUTEX(audmgr_lock);
+
+static struct audmgr_global the_audmgr_state = {
+	.lock = &audmgr_lock,
+};
+
 static void rpc_ack(struct msm_rpc_endpoint *ept, uint32_t xid)
 {
 	uint32_t rep[6];
@@ -48,26 +61,32 @@ static void rpc_ack(struct msm_rpc_endpoint *ept, uint32_t xid)
 	msm_rpc_write(ept, rep, sizeof(rep));
 }
 
-static void process_audmgr_callback(struct audmgr *am,
+static void process_audmgr_callback(struct audmgr_global *amg,
 				   struct rpc_audmgr_cb_func_ptr *args,
 				   int len)
 {
-	if (len < (sizeof(uint32_t) * 3))
+	struct audmgr *am;
+
+	/* Allow only if complete arguments recevied */
+	if (len < (sizeof(struct rpc_audmgr_cb_func_ptr)))
 		return;
+
+	/* Allow only if valid argument */
 	if (be32_to_cpu(args->set_to_one) != 1)
+		return;
+
+	am = (struct audmgr *) be32_to_cpu(args->client_data);
+
+	if (!am)
 		return;
 
 	switch (be32_to_cpu(args->status)) {
 	case RPC_AUDMGR_STATUS_READY:
-		if (len < sizeof(uint32_t) * 4)
-			break;
 		am->handle = be32_to_cpu(args->u.handle);
 		pr_info("audmgr: rpc READY handle=0x%08x\n", am->handle);
 		break;
 	case RPC_AUDMGR_STATUS_CODEC_CONFIG: {
 		uint32_t volume;
-		if (len < sizeof(uint32_t) * 4)
-			break;
 		volume = be32_to_cpu(args->u.volume);
 		pr_info("audmgr: rpc CODEC_CONFIG volume=0x%08x\n", volume);
 		am->state = STATE_ENABLED;
@@ -104,22 +123,13 @@ static void process_audmgr_callback(struct audmgr *am,
 static void process_rpc_request(uint32_t proc, uint32_t xid,
 				void *data, int len, void *private)
 {
-	struct audmgr *am = private;
-	uint32_t *x = data;
-
-	if (0) {
-		int n = len / 4;
-		pr_info("rpc_call proc %d:", proc);
-		while (n--)
-			printk(" %08x", be32_to_cpu(*x++));
-		printk("\n");
-	}
+	struct audmgr_global *amg = private;
 
 	if (proc == AUDMGR_CB_FUNC_PTR)
-		process_audmgr_callback(am, data, len);
+		process_audmgr_callback(amg, data, len);
 	else
 		pr_err("audmgr: unknown rpc proc %d\n", proc);
-	rpc_ack(am->ept, xid);
+	rpc_ack(amg->ept, xid);
 }
 
 #define RPC_TYPE_REQUEST 0
@@ -134,7 +144,7 @@ static void process_rpc_request(uint32_t proc, uint32_t xid,
 
 static int audmgr_rpc_thread(void *data)
 {
-	struct audmgr *am = data;
+	struct audmgr_global *amg = data;
 	struct rpc_request_hdr *hdr = NULL;
 	uint32_t type;
 	int len;
@@ -146,7 +156,7 @@ static int audmgr_rpc_thread(void *data)
 			kfree(hdr);
 			hdr = NULL;
 		}
-		len = msm_rpc_read(am->ept, (void **) &hdr, -1, -1);
+		len = msm_rpc_read(amg->ept, (void **) &hdr, -1, -1);
 		if (len < 0) {
 			pr_err("audmgr: rpc read failed (%d)\n", len);
 			break;
@@ -185,8 +195,7 @@ static int audmgr_rpc_thread(void *data)
 		kfree(hdr);
 		hdr = NULL;
 	}
-	am->task = NULL;
-	wake_up(&am->wait);
+	amg->task = NULL;
 	return 0;
 }
 
@@ -202,55 +211,64 @@ struct audmgr_disable_msg {
 
 int audmgr_open(struct audmgr *am)
 {
+	struct audmgr_global *amg = &the_audmgr_state;
 	int rc;
 
 	if (am->state != STATE_CLOSED)
 		return 0;
 
-	am->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
-			AUDMGR_VERS_COMP_VER2,
-			MSM_RPC_UNINTERRUPTIBLE);
+	mutex_lock(amg->lock);
 
-	if (IS_ERR(am->ept)) {
-		printk(KERN_ERR "%s: connect failed with current VERS = %x, \
-			trying again with another API\n",
-			__func__, AUDMGR_VERS_COMP_VER2);
-		am->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
-				AUDMGR_VERS_COMP,
+	/* connect to audmgr end point and polling thread only once */
+	if (amg->ept == NULL) {
+		amg->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
+				AUDMGR_VERS_COMP_VER2,
 				MSM_RPC_UNINTERRUPTIBLE);
-		if (IS_ERR(am->ept)) {
-			printk(KERN_ERR "%s: connect failed with current \
-			VERS = %x, trying again with another API\n",
-			__func__, AUDMGR_VERS_COMP);
-			am->ept = msm_rpc_connect(AUDMGR_PROG,
-					AUDMGR_VERS,
+
+		if (IS_ERR(amg->ept)) {
+			pr_err("%s: connect failed with current VERS = %x, \
+				trying again with another API\n",
+				__func__, AUDMGR_VERS_COMP_VER2);
+			amg->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
+					AUDMGR_VERS_COMP,
 					MSM_RPC_UNINTERRUPTIBLE);
-			am->rpc_version = AUDMGR_VERS;
+			if (IS_ERR(amg->ept)) {
+				pr_err("%s: connect failed with current VERS \
+					= %x, trying again with another API\n",
+				__func__, AUDMGR_VERS_COMP);
+				amg->ept = msm_rpc_connect(AUDMGR_PROG,
+						AUDMGR_VERS,
+						MSM_RPC_UNINTERRUPTIBLE);
+				amg->rpc_version = AUDMGR_VERS;
+			} else
+				amg->rpc_version = AUDMGR_VERS_COMP;
 		} else
-		am->rpc_version = AUDMGR_VERS_COMP;
-	} else
-		am->rpc_version = AUDMGR_VERS_COMP_VER2;
+			amg->rpc_version = AUDMGR_VERS_COMP_VER2;
 
+		if (IS_ERR(amg->ept)) {
+			rc = PTR_ERR(amg->ept);
+			amg->ept = NULL;
+			pr_err("audmgr: failed to connect to audmgr svc\n");
+			goto done;
+		}
+
+		amg->task = kthread_run(audmgr_rpc_thread, amg, "audmgr_rpc");
+		if (IS_ERR(amg->task)) {
+			rc = PTR_ERR(amg->task);
+			amg->task = NULL;
+			msm_rpc_close(amg->ept);
+			amg->ept = NULL;
+			goto done;
+		}
+	}
+
+	/* Initialize session parameters */
 	init_waitqueue_head(&am->wait);
-
-	if (IS_ERR(am->ept)) {
-		rc = PTR_ERR(am->ept);
-		am->ept = NULL;
-		pr_err("audmgr: failed to connect to audmgr svc\n");
-		return rc;
-	}
-
-	am->task = kthread_run(audmgr_rpc_thread, am, "audmgr_rpc");
-	if (IS_ERR(am->task)) {
-		rc = PTR_ERR(am->task);
-		am->task = NULL;
-		msm_rpc_close(am->ept);
-		am->ept = NULL;
-		return rc;
-	}
-
 	am->state = STATE_DISABLED;
-	return 0;
+	rc = 0;
+done:
+	mutex_unlock(amg->lock);
+	return rc;
 }
 EXPORT_SYMBOL(audmgr_open);
 
@@ -262,6 +280,7 @@ EXPORT_SYMBOL(audmgr_close);
 
 int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg)
 {
+	struct audmgr_global *amg = &the_audmgr_state;
 	struct audmgr_enable_msg msg;
 	int rc;
 
@@ -272,6 +291,7 @@ int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg)
 		pr_err("audmgr: state is DISABLING in enable?\n");
 	am->state = STATE_ENABLING;
 
+	pr_info("%s: session 0x%08x\n", __func__, (int) am);
 	msg.args.set_to_one = cpu_to_be32(1);
 	msg.args.tx_sample_rate = cpu_to_be32(cfg->tx_rate);
 	msg.args.rx_sample_rate = cpu_to_be32(cfg->rx_rate);
@@ -279,18 +299,19 @@ int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg)
 	msg.args.codec_type = cpu_to_be32(cfg->codec);
 	msg.args.snd_method = cpu_to_be32(cfg->snd_method);
 	msg.args.cb_func = cpu_to_be32(0x11111111);
-	msg.args.client_data = cpu_to_be32(0x11223344);
+	msg.args.client_data = cpu_to_be32((int)am);
 
-	msm_rpc_setup_req(&msg.hdr, AUDMGR_PROG, am->rpc_version,
+	msm_rpc_setup_req(&msg.hdr, AUDMGR_PROG, amg->rpc_version,
 			  AUDMGR_ENABLE_CLIENT);
 
-	rc = msm_rpc_write(am->ept, &msg, sizeof(msg));
+	rc = msm_rpc_write(amg->ept, &msg, sizeof(msg));
 	if (rc < 0)
 		return rc;
 
 	rc = wait_event_timeout(am->wait, am->state != STATE_ENABLING, 15 * HZ);
 	if (rc == 0) {
-		pr_err("audmgr_enable: ARM9 did not reply to RPC am->state = %d\n", am->state);
+		pr_err("audmgr_enable: ARM9 did not reply to RPC \
+			am->state = %d\n", am->state);
 		BUG();
 	}
 	if (am->state == STATE_ENABLED)
@@ -303,25 +324,28 @@ EXPORT_SYMBOL(audmgr_enable);
 
 int audmgr_disable(struct audmgr *am)
 {
+	struct audmgr_global *amg = &the_audmgr_state;
 	struct audmgr_disable_msg msg;
 	int rc;
 
 	if (am->state == STATE_DISABLED)
 		return 0;
 
-	msm_rpc_setup_req(&msg.hdr, AUDMGR_PROG, am->rpc_version,
-			  AUDMGR_DISABLE_CLIENT);
+	pr_info("%s: session 0x%08x\n", __func__, (int) am);
 	msg.handle = cpu_to_be32(am->handle);
+	msm_rpc_setup_req(&msg.hdr, AUDMGR_PROG, amg->rpc_version,
+			  AUDMGR_DISABLE_CLIENT);
 
 	am->state = STATE_DISABLING;
 
-	rc = msm_rpc_write(am->ept, &msg, sizeof(msg));
+	rc = msm_rpc_write(amg->ept, &msg, sizeof(msg));
 	if (rc < 0)
 		return rc;
 
 	rc = wait_event_timeout(am->wait, am->state != STATE_DISABLING, 15 * HZ);
 	if (rc == 0) {
-		pr_err("audmgr_disable: ARM9 did not reply to RPC am->state = %d\n", am->state);
+		pr_err("audmgr_disable: ARM9 did not reply to RPC \
+			am->state = %d\n", am->state);
 		BUG();
 	}
 
