@@ -27,7 +27,11 @@
 #include <asm/uaccess.h>
 #include <asm/cacheflush.h>
 
-#define PMEM_MAX_DEVICES (10)
+#define PMEM_MAX_USER_SPACE_DEVICES (10)
+#define PMEM_MAX_KERNEL_SPACE_DEVICES (2)
+#define PMEM_MAX_DEVICES \
+	(PMEM_MAX_USER_SPACE_DEVICES + PMEM_MAX_KERNEL_SPACE_DEVICES)
+
 #define PMEM_MAX_ORDER (128)
 #define PMEM_MIN_ALLOC PAGE_SIZE
 
@@ -139,6 +143,7 @@ struct pmem_info {
 	int (*free)(int, int);
 	unsigned long (*len)(int, struct pmem_data *);
 	unsigned long (*start_addr)(int, struct pmem_data *);
+	int (*kapi_free_index)(const int32_t, int);
 
 	unsigned int quantum; /* actual size, e.g.: (4 << 10) is 4K */
 
@@ -175,6 +180,17 @@ struct pmem_info {
 
 static struct pmem_info pmem[PMEM_MAX_DEVICES];
 static int id_count;
+static struct {
+	const char * const name;
+	const int memtype;
+	const int fallback_memtype;
+	int info_id;
+} kapi_memtypes[] = {
+	{ PMEM_KERNEL_EBI1_DATA_NAME,
+		PMEM_MEMTYPE_EBI1,
+		PMEM_INVALID_MEMTYPE, /* MUST be set invalid if no fallback */
+		-1 },
+};
 
 #define PMEM_IS_FREE_BUDDY(id, index) \
 	(!(pmem[id].buddy_bitmap[index].allocated))
@@ -1162,6 +1178,128 @@ end:
 	up_read(&data->sem);
 }
 
+int32_t pmem_kalloc(const size_t size, const uint32_t flags)
+{
+	int info_id, i, memtype, fallback = 0;
+	enum pmem_align align;
+	int32_t index = -1;
+
+	switch (flags & PMEM_ALIGNMENT_MASK) {
+	case PMEM_ALIGNMENT_4K:
+		align = PMEM_ALIGN_4K;
+		break;
+	case PMEM_ALIGNMENT_1M:
+		align = PMEM_ALIGN_1M;
+		break;
+	default:
+		printk(KERN_ALERT "Invalid alignment %#x\n",
+			(flags & PMEM_ALIGNMENT_MASK));
+		return -EINVAL;
+	}
+
+	memtype = flags & PMEM_MEMTYPE_MASK;
+retry_memalloc:
+	info_id = -1;
+	for (i = 0; i < ARRAY_SIZE(kapi_memtypes); i++)
+		if (kapi_memtypes[i].memtype == memtype) {
+			info_id = kapi_memtypes[i].info_id;
+			break;
+		}
+	if (info_id < 0) {
+		printk(KERN_ERR "Kernel %#x memory arena is"
+			" not initialized. Check board file!\n",
+			(flags & PMEM_MEMTYPE_MASK));
+		return -EINVAL;
+	}
+
+	if (!pmem[info_id].allocate) {
+		printk(KERN_ALERT
+			"Attempt to allocate size %u, alignment %#x "
+			"from non-existent PMEM kernel region %d. "
+			"Driver/board setup is faulty!",
+			size, (flags & PMEM_ALIGNMENT_MASK),
+			info_id);
+		return -ENOMEM;
+	}
+
+	if (align != PMEM_ALIGN_4K &&
+			(pmem[info_id].allocator_type ==
+				PMEM_ALLOCATORTYPE_ALLORNOTHING ||
+			pmem[info_id].allocator_type ==
+				PMEM_ALLOCATORTYPE_BUDDYBESTFIT))
+		printk(KERN_WARNING "Alignment other than on 4K pages not "
+			"supported with %s allocator for PMEM memory region "
+			"'%s'. Memory will be aligned to 4K boundary. Check "
+			"your board file or allocation invocation.\n",
+			(pmem[info_id].allocator_type ==
+				PMEM_ALLOCATORTYPE_ALLORNOTHING ?
+					"'All Or Nothing'"
+					:
+					"'Buddy / Best Fit'"),
+			pmem[info_id].dev.name);
+
+	mutex_lock(&pmem[info_id].arena_mutex);
+	index = pmem[info_id].allocate(info_id, size, align);
+	mutex_unlock(&pmem[info_id].arena_mutex);
+
+	if (index < 0 &&
+		!fallback &&
+		kapi_memtypes[i].fallback_memtype != PMEM_INVALID_MEMTYPE) {
+		fallback = 1;
+		memtype = kapi_memtypes[i].fallback_memtype;
+		goto retry_memalloc;
+	}
+
+	return index >= 0 ?
+		index * pmem[info_id].quantum + pmem[info_id].base : -ENOMEM;
+}
+EXPORT_SYMBOL(pmem_kalloc);
+
+static int pmem_kapi_free_index_allornothing(const int32_t physaddr, int id)
+{
+	return physaddr == pmem[id].base ? 0 : -1;
+}
+
+static int pmem_kapi_free_index_buddybestfit(const int32_t physaddr, int id)
+{
+	return (physaddr >= pmem[id].base &&
+		physaddr < (pmem[id].base + pmem[id].size &&
+		!(physaddr % pmem[id].quantum))) ?
+		(physaddr - pmem[id].base) / pmem[id].quantum : -1;
+}
+
+static int pmem_kapi_free_index_bitmap(const int32_t physaddr, int id)
+{
+	return bit_from_paddr(id, physaddr);
+}
+
+int pmem_kfree(const int32_t physaddr)
+{
+	int i;
+	for (i = 0; i < ARRAY_SIZE(kapi_memtypes); i++) {
+		int id = kapi_memtypes[i].info_id;
+		if (id >= 0) {
+			int index;
+
+			if (!pmem[id].allocate) {
+				printk(KERN_ALERT
+					"Attempt to free physical address %#x "
+					"from unregistered PMEM kernel region"
+					" %d. Driver/board setup is faulty!",
+					physaddr, id);
+				return -EINVAL;
+			}
+
+			index = pmem[id].kapi_free_index(physaddr, id);
+			if (index >= 0)
+				return pmem[id].free(id, index) ?  -EINVAL : 0;
+		}
+	}
+	printk(KERN_ALERT "Failed to free physaddr %#x!", physaddr);
+	return -EINVAL;
+}
+EXPORT_SYMBOL(pmem_kfree);
+
 static int pmem_connect(unsigned long connect, struct file *file)
 {
 	int ret = 0, put_needed;
@@ -1666,8 +1804,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 	       long (*ioctl)(struct file *, unsigned int, unsigned long),
 	       int (*release)(struct inode *, struct file *))
 {
-	int i, index = 0;
-	int id;
+	int i, index = 0, kapi_memtype_idx = -1, id, is_kernel_memtype = 0;
 
 	if (id_count >= PMEM_MAX_DEVICES) {
 		printk(KERN_ALERT
@@ -1676,6 +1813,40 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		goto err_no_mem;
 	}
 	id = id_count++;
+
+	if (pmem[id].allocate) {
+		printk(KERN_ALERT
+			"Unable to register pmem driver - "
+			"duplicate registration of %s!\n",
+			pdata->name);
+		goto err_no_mem;
+	}
+
+	pmem[id].allocator_type = pdata->allocator_type;
+
+	for (i = 0; i < ARRAY_SIZE(kapi_memtypes); i++) {
+		if (!strcmp(kapi_memtypes[i].name, pdata->name)) {
+			if (kapi_memtypes[i].info_id >= 0) {
+				printk(KERN_ALERT
+					"Unable to register pmem driver - "
+					"duplicate registration of %s!\n",
+					pdata->name);
+				goto err_no_mem;
+			}
+			if (pdata->cached) {
+				printk(KERN_ALERT "kernel arena memory must "
+					"NOT be configured as 'cached'. Check "
+					"and fix your board file. Failing "
+					"pmem driver registration!");
+				goto err_no_mem;
+			}
+
+			is_kernel_memtype = 1;
+			kapi_memtypes[i].info_id = id;
+			kapi_memtype_idx = i;
+			break;
+		}
+	}
 
 	/* 'quantum' is a "hidden" variable that defaults to 0 in the board
 	 * files */
@@ -1686,7 +1857,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			"Unable to register pmem driver - "
 			"invalid quantum value (%#x)!\n",
 			pmem[id].quantum);
-		goto err_no_mem;
+		goto err_reset_pmem_info;
 	}
 
 	pmem[id].cached = pdata->cached;
@@ -1696,10 +1867,11 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 
 	pmem[id].num_entries = pmem[id].size / pmem[id].quantum;
 
-	switch (pmem[id].allocator_type = pdata->allocator_type) {
+	switch (pmem[id].allocator_type) {
 	case PMEM_ALLOCATORTYPE_ALLORNOTHING:
 		pmem[id].allocate = pmem_allocator_all_or_nothing;
 		pmem[id].free = pmem_free_all_or_nothing;
+		pmem[id].kapi_free_index = pmem_kapi_free_index_allornothing;
 		pmem[id].len = pmem_len_all_or_nothing;
 		pmem[id].start_addr = pmem_start_addr_all_or_nothing;
 		break;
@@ -1709,7 +1881,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			pmem[id].num_entries * sizeof(struct pmem_bits),
 			GFP_KERNEL);
 		if (!pmem[id].buddy_bitmap)
-			goto err_no_mem;
+			goto err_reset_pmem_info;
 
 		memset(pmem[id].buddy_bitmap, 0,
 			sizeof(struct pmem_bits) * pmem[id].num_entries);
@@ -1721,18 +1893,19 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			}
 		pmem[id].allocate = pmem_allocator_buddy_bestfit;
 		pmem[id].free = pmem_free_buddy_bestfit;
+		pmem[id].kapi_free_index = pmem_kapi_free_index_buddybestfit;
 		pmem[id].len = pmem_len_buddy_bestfit;
 		pmem[id].start_addr = pmem_start_addr_buddy_bestfit;
 		break;
 
-	case PMEM_ALLOCATORTYPE_BITMAP:
+	case PMEM_ALLOCATORTYPE_BITMAP: /* 0, default if not explicit */
 		if (pdata->start % pmem[id].quantum) {
 			/* bad alignment for start! */
 			printk(KERN_ALERT "Unable to register pmem "
 				"driver - unaligned memory region "
 				"start address (%#lx,%#x)!\n",
 				pdata->start, pmem[id].quantum);
-			goto err_no_mem;
+			goto err_reset_pmem_info;
 		}
 		pmem[id].bitm_alloc = kmalloc(
 			PMEM_NUM_BITMAP_ALLOCATIONS *
@@ -1741,7 +1914,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		if (!pmem[id].bitm_alloc) {
 			printk(KERN_ALERT "Unable to register pmem "
 				"driver - can't allocate bitm_alloc!\n");
-			goto err_no_mem;
+			goto err_reset_pmem_info;
 		}
 
 		for (i = 0; i < PMEM_NUM_BITMAP_ALLOCATIONS; i++)
@@ -1751,13 +1924,17 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			kcalloc((pmem[id].num_entries + 31) / 32,
 				sizeof(unsigned int),
 				GFP_KERNEL | __GFP_DMA);
-		if (!pmem[id].bitmap)
+		if (!pmem[id].bitmap) {
+			printk(KERN_ALERT "Unable to register pmem "
+				"driver - can't allocate bitmap!\n");
 			goto err_cant_register_device;
+		}
 
 		pmem[id].bitmap_free = pmem[id].num_entries;
 
 		pmem[id].allocate = pmem_allocator_bitmap;
 		pmem[id].free = pmem_free_bitmap;
+		pmem[id].kapi_free_index = pmem_kapi_free_index_bitmap;
 		pmem[id].len = pmem_len_bitmap;
 		pmem[id].start_addr = pmem_start_addr_bitmap;
 
@@ -1770,7 +1947,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 	default:
 		printk(KERN_ALERT "Invalid allocator type (%d) "
 			"for pmem driver\n", pdata->allocator_type);
-		goto err_no_mem;
+		goto err_reset_pmem_info;
 	}
 
 	pmem[id].ioctl = ioctl;
@@ -1778,18 +1955,24 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 	mutex_init(&pmem[id].arena_mutex);
 	mutex_init(&pmem[id].data_list_mutex);
 	INIT_LIST_HEAD(&pmem[id].data_list);
-	pmem[id].dev.name = pdata->name;
-	pmem[id].dev.minor = id;
-	pmem[id].dev.fops = &pmem_fops;
-	printk(KERN_INFO "%s: %d init\n", pdata->name, pdata->cached);
 
-	if (misc_register(&pmem[id].dev)) {
-		printk(KERN_ALERT "Unable to register pmem driver!\n");
-		goto err_cant_register_device;
+	pmem[id].dev.name = pdata->name;
+	if (!is_kernel_memtype) {
+		pmem[id].dev.minor = id;
+		pmem[id].dev.fops = &pmem_fops;
+		printk(KERN_INFO "%s: %d init\n",
+			pdata->name, pdata->cached);
+
+		if (misc_register(&pmem[id].dev)) {
+			printk(KERN_ALERT "Unable to register pmem driver!\n");
+			goto err_cant_register_device;
+		}
+	} else {
+		pmem[id].dev.minor = -1; /* kernel region, no device */
 	}
+
 	if (pmem[id].cached)
-		pmem[id].vbase = ioremap_cached(pmem[id].base,
-						pmem[id].size);
+		pmem[id].vbase = ioremap_cached(pmem[id].base, pmem[id].size);
 #ifdef ioremap_ext_buffered
 	else if (pmem[id].buffered)
 		pmem[id].vbase = ioremap_ext_buffered(pmem[id].base,
@@ -1806,13 +1989,14 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 
 #if PMEM_DEBUG
 	printk(KERN_INFO "Creating debugfs file %s\n", pdata->name);
-	debugfs_create_file(pdata->name, S_IFREG | S_IRUGO, NULL, (void *)id,
-			    &debug_fops);
+	debugfs_create_file(pdata->name, S_IFREG | S_IRUGO, NULL,
+			(void *)id, &debug_fops);
 #endif
 	return 0;
 
 error_cant_remap:
-	misc_deregister(&pmem[id].dev);
+	if (!is_kernel_memtype)
+		misc_deregister(&pmem[id].dev);
 err_cant_register_device:
 	if (pmem[id].allocator_type == PMEM_ALLOCATORTYPE_BUDDYBESTFIT)
 		kfree(pmem[id].buddy_bitmap);
@@ -1820,6 +2004,11 @@ err_cant_register_device:
 		kfree(pmem[id].bitmap);
 		kfree(pmem[id].bitm_alloc);
 	}
+err_reset_pmem_info:
+	pmem[id].allocate = 0;
+	pmem[id].dev.minor = -1;
+	if (kapi_memtype_idx >= 0)
+		kapi_memtypes[i].info_id = -1;
 err_no_mem:
 	return -1;
 }
@@ -1835,7 +2024,6 @@ static int pmem_probe(struct platform_device *pdev)
 	pdata = pdev->dev.platform_data;
 	return pmem_setup(pdata, NULL, NULL);
 }
-
 
 static int pmem_remove(struct platform_device *pdev)
 {

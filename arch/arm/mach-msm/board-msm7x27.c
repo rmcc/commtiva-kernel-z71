@@ -64,6 +64,8 @@
 #define MSM_FB_SIZE		0x200000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
 
+#define PMEM_KERNEL_EBI1_SIZE	0x200000
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start	= 0x9C004300,
@@ -362,6 +364,17 @@ static struct platform_device msm_device_adspdec = {
 	},
 };
 
+static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
+	.name = PMEM_KERNEL_EBI1_DATA_NAME,
+	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
+	 * the only valid choice at this time. The board structure is
+	 * set to all zeros by the C runtime initialization and that is now
+	 * the enum value of PMEM_ALLOCATORTYPE_BITMAP, now forced to 0 in
+	 * include/linux/android_pmem.h.
+	 */
+	.cached = 0,
+};
+
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.allocator_type = PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
@@ -404,6 +417,12 @@ static struct platform_device hs_device = {
 	.dev    = {
 		.platform_data = "7k_handset",
 	},
+};
+
+static struct platform_device android_pmem_kernel_ebi1_device = {
+	.name = "android_pmem",
+	.id = 4,
+	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
 #define LCDC_CONFIG_PROC          21
@@ -932,6 +951,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&smc91x_device,
 	&msm_device_tssc,
+	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&android_pmem_gpu1_device,
@@ -1344,6 +1364,13 @@ static void __init msm_msm7x27_allocate_memory_regions(void)
 {
 	void *addr;
 	unsigned long size;
+
+	size = PMEM_KERNEL_EBI1_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	android_pmem_kernel_ebi1_pdata.start = __pa(addr);
+	android_pmem_kernel_ebi1_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+	       "for pmem kernel ebi1 arena\n", size, addr, __pa(addr));
 
 	size = MSM_PMEM_MDP_SIZE;
 	addr = alloc_bootmem(size);
