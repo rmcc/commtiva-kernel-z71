@@ -321,7 +321,11 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay,
 	}
 	if (sleep_mode < MSM_PM_SLEEP_MODE_APPS_SLEEP) {
 #ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-		unsigned id = ADM_CLK;
+		/* XXX: Temp workaround that needs to be removed soon. The
+		 * right fix will probably involve the DMA driver taking
+		 * ownership of the ADM clock. */
+		/* id is set to denote ADM clock. */
+		unsigned id = 1;
 		msm_proc_comm(PCOM_CLKCTL_RPC_DISABLE, &id, NULL);
 #endif
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_SMSM_STATE)
@@ -356,7 +360,8 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay,
 				msm_pm_sma.int_info->aArm_wakeup_reason,
 				msm_pm_sma.int_info->aArm_interrupts_pending);
 #ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-		id = ADM_CLK;
+		/* id is set to denote ADM clock. */
+		id = 1;
 		if (msm_proc_comm(PCOM_CLKCTL_RPC_ENABLE, &id, NULL) < 0 ||
 			id < 0)
 			printk(KERN_ERR

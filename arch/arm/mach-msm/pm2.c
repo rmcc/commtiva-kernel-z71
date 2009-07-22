@@ -944,7 +944,11 @@ static int msm_pm_power_collapse
 	}
 
 #ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-	id = ADM_CLK;
+	/* XXX: Temp workaround that needs to be removed soon. The
+	 * right fix will probably involve the DMA driver taking
+	 * ownership of the ADM clock. */
+	/* id is set to denote ADM clock. */
+	id = 1;
 	msm_proc_comm(PCOM_CLKCTL_RPC_DISABLE, &id, NULL);
 #endif
 
@@ -1010,7 +1014,8 @@ static int msm_pm_power_collapse
 			__func__, saved_acpuclk_rate);
 
 #ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-	id = ADM_CLK;
+	/* id is set to denote ADM clock. */
+	id = 1;
 	if (msm_proc_comm(PCOM_CLKCTL_RPC_ENABLE, &id, NULL) < 0 || id < 0)
 		printk(KERN_ERR
 			"%s(): failed to turn on ADM clock\n", __func__);
