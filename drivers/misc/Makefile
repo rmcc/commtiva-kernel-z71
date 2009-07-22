@@ -24,3 +24,8 @@ obj-$(CONFIG_HP_ILO)		+= hpilo.o
 obj-$(CONFIG_UID_STAT)		+= uid_stat.o
 obj-$(CONFIG_C2PORT)		+= c2port/
 obj-y				+= eeprom/
+obj-$(CONFIG_TSIF) += msm_tsif.o
+msm_tsif-objs := tsif.o
+
+obj-$(CONFIG_TSIF_CHRDEV) += tsif_chrdev.o
+
