@@ -794,7 +794,7 @@ comment "MSM Camera And Video"
 
 menuconfig MSM_CAMERA
 	bool "MSM camera and video capture support"
-	depends on VIDEO_V4L2
+	depends on VIDEO_V4L2 && I2C
 	---help---
 	  Say Y here to enable selecting the video adapters for
 	  Qualcomm msm camera and video encoding
