@@ -44,6 +44,8 @@ extern struct platform_device msm_device_nand;
 
 extern struct platform_device msm_device_tssc;
 
+extern struct platform_device msm_device_tsif;
+
 extern struct clk msm_clocks_7x01a[];
 extern unsigned msm_num_clocks_7x01a;
 
