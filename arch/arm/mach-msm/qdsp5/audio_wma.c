@@ -143,9 +143,12 @@ struct audio {
 	int pcm_feedback;
 	int buf_refresh;
 	int teos; /* valid only if tunnel mode & no data left for decoder */
+	enum msm_aud_decoder_state dec_state;	/* Represents decoder state */
 	int reserved; /* A byte is being reserved */
 	char rsv_byte; /* Handle odd length user data */
 
+	const char *module_name;
+	unsigned queue_id;
 	uint16_t dec_id;
 	uint32_t read_ptr_offset;
 
@@ -153,6 +156,11 @@ struct audio {
 	struct audwma_suspend_ctl suspend_ctl;
 #endif
 
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dentry;
+#endif
+
+	wait_queue_head_t wait;
 	struct list_head free_event_queue;
 	struct list_head event_queue;
 	wait_queue_head_t event_wait;
@@ -311,10 +319,20 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			unsigned status = msg[1];
 
 			switch (status) {
-			case AUDPP_DEC_STATUS_SLEEP:
-				pr_debug("decoder status: sleep \n");
+			case AUDPP_DEC_STATUS_SLEEP: {
+				uint16_t reason = msg[2];
+				pr_debug(
+					"decoder status:sleep reason=0x%04x\n",
+					reason);
+				if ((reason == AUDPP_MSG_REASON_MEM)
+					|| (reason ==
+					AUDPP_MSG_REASON_NODECODER)) {
+					audio->dec_state =
+						MSM_AUD_DECODER_STATE_FAILURE;
+					wake_up(&audio->wait);
+				}
 				break;
-
+			}
 			case AUDPP_DEC_STATUS_INIT:
 				pr_debug("decoder status: init \n");
 				audpp_cmd_cfg_routing_mode(audio);
@@ -329,6 +347,9 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 					audplay_config_hostpcm(audio);
 					audplay_buffer_refresh(audio);
 				}
+				audio->dec_state =
+					MSM_AUD_DECODER_STATE_SUCCESS;
+				wake_up(&audio->wait);
 				break;
 			default:
 				pr_debug("unknown decoder status \n");
@@ -382,22 +403,23 @@ static struct msm_adsp_ops audplay_adsp_ops_wma = {
 };
 
 #define audplay_send_queue0(audio, cmd, len) \
-	msm_adsp_write(audio->audplay, QDSP_uPAudPlay0BitStreamCtrlQueue, \
-		       cmd, len)
+	msm_adsp_write(audio->audplay, audio->queue_id, \
+			cmd, len)
 
 static int auddec_dsp_config(struct audio *audio, int enable)
 {
-	audpp_cmd_cfg_dec_type cmd;
+	u16 cfg_dec_cmd[AUDPP_CMD_CFG_DEC_TYPE_LEN / sizeof(unsigned short)];
 
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd_id = AUDPP_CMD_CFG_DEC_TYPE;
+	memset(cfg_dec_cmd, 0, sizeof(cfg_dec_cmd));
+	cfg_dec_cmd[0] = AUDPP_CMD_CFG_DEC_TYPE;
 	if (enable)
-		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC |
-			       AUDPP_CMD_ENA_DEC_V | AUDDEC_DEC_WMA;
+		cfg_dec_cmd[1 + audio->dec_id] = AUDPP_CMD_UPDATDE_CFG_DEC |
+			AUDPP_CMD_ENA_DEC_V | AUDDEC_DEC_WMA;
 	else
-		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC | AUDPP_CMD_DIS_DEC_V;
+		cfg_dec_cmd[1 + audio->dec_id] = AUDPP_CMD_UPDATDE_CFG_DEC |
+			AUDPP_CMD_DIS_DEC_V;
 
-	return audpp_send_queue1(&cmd, sizeof(cmd));
+	return audpp_send_queue1(&cfg_dec_cmd, sizeof(cfg_dec_cmd));
 }
 
 static void audpp_cmd_cfg_adec_params(struct audio *audio)
@@ -791,6 +813,18 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case AUDIO_START:
 		rc = audio_enable(audio);
+		if (!rc) {
+			rc = wait_event_interruptible_timeout(audio->wait,
+				audio->dec_state != MSM_AUD_DECODER_STATE_NONE,
+				msecs_to_jiffies(MSM_AUD_DECODER_WAIT_MS));
+			pr_debug("dec_state %d rc = %d\n", \
+					audio->dec_state, rc);
+
+			if (audio->dec_state != MSM_AUD_DECODER_STATE_SUCCESS)
+				rc = -ENODEV;
+			else
+				rc = 0;
+		}
 		break;
 	case AUDIO_STOP:
 		rc = audio_disable(audio);
@@ -1244,32 +1278,31 @@ static int audio_release(struct inode *inode, struct file *file)
 
 	pr_debug("audio_release()\n");
 
+	pr_info("WMA: audio instance 0x%08x freeing\n", (int)audio);
 	mutex_lock(&audio->lock);
 	audio_disable(audio);
 	audio_flush(audio);
 	audio_flush_pcm_buf(audio);
 	msm_adsp_put(audio->audplay);
-	audio->audplay = NULL;
+	audpp_adec_free(audio->dec_id);
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&audio->suspend_ctl.node);
 #endif
-	audio->opened = 0;
 	audio->event_abort = 1;
 	wake_up(&audio->event_wait);
 	audwma_reset_event_queue(audio);
-	audio->reserved = 0;
 	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
-	audio->data = NULL;
-	if (audio->read_data != NULL) {
+	if (audio->read_data) {
 		dma_free_coherent(NULL,
 				  audio->in[0].size * audio->pcm_buf_count,
 				  audio->read_data, audio->read_phys);
-		audio->read_data = NULL;
 	}
-	audio->pcm_feedback = 0;
-	audio->rflush = 0;
-	audio->wflush = 0;
 	mutex_unlock(&audio->lock);
+#ifdef CONFIG_DEBUG_FS
+	if (audio->dentry)
+		debugfs_remove(audio->dentry);
+#endif
+	kfree(audio);
 	return 0;
 }
 
@@ -1323,124 +1356,6 @@ static void audwma_resume(struct early_suspend *h)
 }
 #endif
 
-static struct audio the_wma_audio;
-
-static int audio_open(struct inode *inode, struct file *file)
-{
-	struct audio *audio = &the_wma_audio;
-	int rc, i;
-	unsigned pmem_sz;
-	struct audwma_event *e_node = NULL;
-
-	mutex_lock(&audio->lock);
-
-	if (audio->opened) {
-		pr_err("audio: busy\n");
-		rc = -EBUSY;
-		goto done;
-	}
-
-	pmem_sz = DMASZ_MAX;
-
-	while (pmem_sz >= DMASZ_MIN) {
-		audio->data = dma_alloc_coherent(NULL, pmem_sz,
-						 &audio->phys, GFP_KERNEL);
-		if (audio->data)
-			break;
-		else if (pmem_sz == DMASZ_MIN) {
-			pr_err("audio: could not allocate DMA buffers\n");
-			rc = -ENOMEM;
-			goto done;
-		} else
-			pmem_sz >>= 1;
-	}
-
-	pr_debug("%s: allocated %d bytes DMA buffer\n", __func__, pmem_sz);
-
-	rc = audmgr_open(&audio->audmgr);
-	if (rc) {
-		dma_free_coherent(NULL, pmem_sz, audio->data, audio->phys);
-		goto done;
-	}
-
-	rc = msm_adsp_get("AUDPLAY0TASK", &audio->audplay,
-			&audplay_adsp_ops_wma, audio);
-	if (rc) {
-		pr_err("audio: failed to get audplay0 dsp module\n");
-		dma_free_coherent(NULL, pmem_sz,
-		audio->data, audio->phys);
-		audmgr_close(&audio->audmgr);
-		goto done;
-	}
-
-	audio->out_dma_sz = pmem_sz;
-	pmem_sz >>= 1; /* Shift by 1 to get size of ping pong buffer */
-
-	audio->out_sample_rate = 44100;
-	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
-	audio->dec_id = 0;
-
-	audio->out[0].data = audio->data + 0;
-	audio->out[0].addr = audio->phys + 0;
-	audio->out[0].size = pmem_sz;
-
-	audio->out[1].data = audio->data + pmem_sz;
-	audio->out[1].addr = audio->phys + pmem_sz;
-	audio->out[1].size = pmem_sz;
-
-	audio->wma_config.armdatareqthr =  1262;
-	audio->wma_config.channelsdecoded = 2;
-	audio->wma_config.wmabytespersec = 6003;
-	audio->wma_config.wmasamplingfreq = 44100;
-	audio->wma_config.wmaencoderopts = 31;
-
-	audio->vol_pan.volume = 0x2000;
-	audio->vol_pan.pan = 0x0;
-	audio->eq_enable = 0;
-
-	audio_flush(audio);
-
-	file->private_data = audio;
-	audio->opened = 1;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
-	audio->suspend_ctl.node.resume = audwma_resume;
-	audio->suspend_ctl.node.suspend = audwma_suspend;
-	audio->suspend_ctl.audio = audio;
-	register_early_suspend(&audio->suspend_ctl.node);
-#endif
-	for (i = 0; i < AUDWMA_EVENT_NUM; i++) {
-		e_node = kmalloc(sizeof(struct audwma_event), GFP_KERNEL);
-		if (e_node)
-			list_add_tail(&e_node->list, &audio->free_event_queue);
-		else {
-			pr_info("%s: event pkt alloc failed\n", __func__);
-			break;
-		}
-	}
-	audio->event_abort = 0;
-done:
-	mutex_unlock(&audio->lock);
-	return rc;
-}
-
-static const struct file_operations audio_wma_fops = {
-	.owner		= THIS_MODULE,
-	.open		= audio_open,
-	.release	= audio_release,
-	.read 		= audio_read,
-	.write		= audio_write,
-	.unlocked_ioctl	= audio_ioctl,
-	.fsync 		= audio_fsync,
-};
-
-struct miscdevice audio_wma_misc = {
-	.minor	= MISC_DYNAMIC_MINOR,
-	.name	= "msm_wma",
-	.fops	= &audio_wma_fops,
-};
-
-
 #ifdef CONFIG_DEBUG_FS
 static ssize_t audwma_debug_open(struct inode *inode, struct file *file)
 {
@@ -1488,6 +1403,8 @@ static ssize_t audwma_debug_read(struct file *file, char __user *buf,
 	n += scnprintf(buffer + n, debug_bufmax - n,
 				   "running %d \n", audio->running);
 	n += scnprintf(buffer + n, debug_bufmax - n,
+			"dec state %d \n", audio->dec_state);
+	n += scnprintf(buffer + n, debug_bufmax - n,
 				   "out_needed %d \n", audio->out_needed);
 	n += scnprintf(buffer + n, debug_bufmax - n,
 				   "out_head %d \n", audio->out_head);
@@ -1506,7 +1423,6 @@ static ssize_t audwma_debug_read(struct file *file, char __user *buf,
 	for (i = 0; i < audio->pcm_buf_count; i++)
 		n += scnprintf(buffer + n, debug_bufmax - n,
 			"in[%d].size %d \n", i, audio->in[i].used);
-	n++;
 	buffer[n] = 0;
 	return simple_read_from_buffer(buf, count, ppos, buffer, n);
 }
@@ -1517,32 +1433,166 @@ static const struct file_operations audwma_debug_fops = {
 };
 #endif
 
+static int audio_open(struct inode *inode, struct file *file)
+{
+	struct audio *audio = NULL;
+	int rc, dec_attrb, decid, i;
+	unsigned pmem_sz = DMASZ_MAX;
+	struct audwma_event *e_node = NULL;
+#ifdef CONFIG_DEBUG_FS
+	/* 4 bytes represents decoder number, 1 byte for terminate string */
+	char name[sizeof "msm_wma_" + 5];
+#endif
+
+	/* Allocate Mem for audio instance */
+	audio = kzalloc(sizeof(struct audio), GFP_KERNEL);
+	if (!audio) {
+		pr_err("%s: no memory to allocate audio instance \n", __func__);
+		rc = -ENOMEM;
+		goto done;
+	}
+	pr_info("WMA: audio instance 0x%08x created\n", (int)audio);
+
+	/* Allocate the decoder */
+	dec_attrb = AUDDEC_DEC_WMA;
+	if (file->f_mode & FMODE_READ)
+		dec_attrb |= MSM_AUD_MODE_NONTUNNEL;
+	else
+		dec_attrb |= MSM_AUD_MODE_TUNNEL;
+
+	decid = audpp_adec_alloc(dec_attrb, &audio->module_name,
+			&audio->queue_id);
+
+	if (decid < 0) {
+		pr_err("%s: No free decoder available\n", __func__);
+		rc = -ENODEV;
+		pr_info("WMA: audio instance 0x%08x freeing\n", (int)audio);
+		kfree(audio);
+		goto done;
+	}
+	audio->dec_id = decid & MSM_AUD_DECODER_MASK;
+
+	while (pmem_sz >= DMASZ_MIN) {
+		pr_info("wma:pmemsz = %d \n", pmem_sz);
+		audio->data = dma_alloc_coherent(NULL, pmem_sz,
+				&audio->phys, GFP_KERNEL);
+		if (audio->data)
+			break;
+		else if (pmem_sz == DMASZ_MIN) {
+			pr_debug("audio: could not allocate DMA buffers\n");
+			rc = -ENOMEM;
+			audpp_adec_free(audio->dec_id);
+			pr_info("WMA: audio instance 0x%08x freeing\n",
+				(int)audio);
+			kfree(audio);
+			goto done;
+		} else
+		pmem_sz >>= 1;
+	}
+	audio->out_dma_sz = pmem_sz;
+
+	rc = audmgr_open(&audio->audmgr);
+	if (rc)
+		goto err;
+
+	rc = msm_adsp_get(audio->module_name, &audio->audplay,
+			&audplay_adsp_ops_wma, audio);
+	if (rc) {
+		pr_err("%s: failed to get %s module\n", __func__,
+			audio->module_name);
+		audmgr_close(&audio->audmgr);
+		goto err;
+	}
+
+	mutex_init(&audio->lock);
+	mutex_init(&audio->write_lock);
+	mutex_init(&audio->read_lock);
+	mutex_init(&audio->get_event_lock);
+	spin_lock_init(&audio->dsp_lock);
+	init_waitqueue_head(&audio->write_wait);
+	init_waitqueue_head(&audio->read_wait);
+	INIT_LIST_HEAD(&audio->free_event_queue);
+	INIT_LIST_HEAD(&audio->event_queue);
+	init_waitqueue_head(&audio->wait);
+	init_waitqueue_head(&audio->event_wait);
+	spin_lock_init(&audio->event_queue_lock);
+
+	audio->out[0].data = audio->data + 0;
+	audio->out[0].addr = audio->phys + 0;
+	audio->out[0].size = audio->out_dma_sz >> 1;
+
+	audio->out[1].data = audio->data + audio->out[0].size;
+	audio->out[1].addr = audio->phys + audio->out[0].size;
+	audio->out[1].size = audio->out[0].size;
+
+	audio->wma_config.armdatareqthr =  1262;
+	audio->wma_config.channelsdecoded = 2;
+	audio->wma_config.wmabytespersec = 6003;
+	audio->wma_config.wmasamplingfreq = 44100;
+	audio->wma_config.wmaencoderopts = 31;
+
+	audio->out_sample_rate = 44100;
+	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
+
+	audio->vol_pan.volume = 0x2000;
+
+	audio_flush(audio);
+
+	file->private_data = audio;
+	audio->opened = 1;
+#ifdef CONFIG_DEBUG_FS
+	snprintf(name, sizeof name, "msm_wma_%04x", audio->dec_id);
+	audio->dentry = debugfs_create_file(name, S_IFREG | S_IRUGO,
+				NULL, (void *) audio,
+				&audwma_debug_fops);
+
+	if (IS_ERR(audio->dentry))
+		pr_debug("WMA:debugfs_create_file failed\n");
+#endif
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	audio->suspend_ctl.node.resume = audwma_resume;
+	audio->suspend_ctl.node.suspend = audwma_suspend;
+	audio->suspend_ctl.audio = audio;
+	register_early_suspend(&audio->suspend_ctl.node);
+#endif
+	for (i = 0; i < AUDWMA_EVENT_NUM; i++) {
+		e_node = kmalloc(sizeof(struct audwma_event), GFP_KERNEL);
+		if (e_node)
+			list_add_tail(&e_node->list, &audio->free_event_queue);
+		else {
+			pr_info("%s: event pkt alloc failed\n", __func__);
+			break;
+		}
+	}
+done:
+	return rc;
+err:
+	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	audpp_adec_free(audio->dec_id);
+	pr_info("WMA: audio instance 0x%08x freeing\n", (int)audio);
+	kfree(audio);
+	return rc;
+}
+
+static const struct file_operations audio_wma_fops = {
+	.owner		= THIS_MODULE,
+	.open		= audio_open,
+	.release	= audio_release,
+	.read 		= audio_read,
+	.write		= audio_write,
+	.unlocked_ioctl	= audio_ioctl,
+	.fsync 		= audio_fsync,
+};
+
+struct miscdevice audio_wma_misc = {
+	.minor	= MISC_DYNAMIC_MINOR,
+	.name	= "msm_wma",
+	.fops	= &audio_wma_fops,
+};
+
 static int __init audio_init(void)
 {
-#ifdef CONFIG_DEBUG_FS
-	struct dentry *dentry;
-#endif
-
-	mutex_init(&the_wma_audio.lock);
-	mutex_init(&the_wma_audio.write_lock);
-	mutex_init(&the_wma_audio.read_lock);
-	mutex_init(&the_wma_audio.get_event_lock);
-	spin_lock_init(&the_wma_audio.dsp_lock);
-	init_waitqueue_head(&the_wma_audio.write_wait);
-	init_waitqueue_head(&the_wma_audio.read_wait);
-	INIT_LIST_HEAD(&the_wma_audio.free_event_queue);
-	INIT_LIST_HEAD(&the_wma_audio.event_queue);
-	init_waitqueue_head(&the_wma_audio.event_wait);
-	spin_lock_init(&the_wma_audio.event_queue_lock);
-	the_wma_audio.read_data = NULL;
-
-#ifdef CONFIG_DEBUG_FS
-	dentry = debugfs_create_file("msm_wma", S_IFREG | S_IRUGO, NULL,
-		(void *) &the_wma_audio, &audwma_debug_fops);
-
-	if (IS_ERR(dentry))
-		pr_err("Wma:%s:debugfs_create_file failed\n", __func__);
-#endif
 	return misc_register(&audio_wma_misc);
 }
 
