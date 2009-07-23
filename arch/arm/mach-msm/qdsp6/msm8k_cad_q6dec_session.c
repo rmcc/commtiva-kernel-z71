@@ -364,8 +364,6 @@ s32 cad_q6dec_session_close(struct q6dec_session_data *self)
 	struct adsp_audio_event ret_status;
 	int rc = 0;
 
-	mutex_lock(&self->session_mutex);
-
 	if (self->need_flush) {
 		if (cad_rpc_ioctl(self->session_id, 1,
 			CAD_IOCTL_CMD_STREAM_FLUSH, NULL, 0, &ret_status)
@@ -375,7 +373,6 @@ s32 cad_q6dec_session_close(struct q6dec_session_data *self)
 		}
 		self->need_flush = 0;
 	}
-	mutex_unlock(&self->session_mutex);
 
 	if (self->used_buf_list != NULL) {
 		rc = down_interruptible(&self->all_buf_done_sem);
@@ -446,7 +443,15 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 		break;
 	case CAD_IOCTL_CMD_STREAM_FLUSH:
 		self->session_state = Q6_DEC_FLUSHING;
-		up(&self->buf_done_sem);
+		mutex_lock(&self->session_mutex);
+		if (self->need_buffer_done)
+			up(&self->buf_done_sem);
+
+		mutex_unlock(&self->session_mutex);
+		result = cad_rpc_ioctl(self->session_id, 1,
+					ADSP_AUDIO_IOCTL_CMD_STREAM_FLUSH,
+					cmd_buf, cmd_len, &ret_status);
+		break;
 	case CAD_IOCTL_CMD_STREAM_PAUSE:
 		result = cad_rpc_ioctl(self->session_id, 1, cmd_code, cmd_buf,
 					cmd_len, &ret_status);
