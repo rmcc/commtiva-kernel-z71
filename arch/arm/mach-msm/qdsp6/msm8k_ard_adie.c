@@ -531,8 +531,6 @@ enum adie_state_ret_enum_type adie_state_digital_active(u32 dev_type,
 				   case when Rx spkr is disabled when LB speaker
 				   is already enabled. */
 				adie_spkr_stereo_ref1_cnt++;
-			} else {
-				pr_err("bad mode: not stereo or mono\n");
 			}
 		} else {
 			pr_err("bad path type\n");
@@ -658,8 +656,6 @@ enum adie_state_ret_enum_type adie_state_digital_analog_active(u32 dev_type,
 
 				/* increment ref count for LB and RX devices */
 				adie_spkr_stereo_ref2_cnt++;
-			} else {
-				pr_err("error: not stereo or mono\n");
 			}
 		} else {
 			D("ARD ADIE Loopback Device\n");
@@ -696,8 +692,6 @@ enum adie_state_ret_enum_type adie_state_digital_analog_active(u32 dev_type,
 						pmic_speaker_cmd(SPKR_MUTE_ON);
 					}
 				}
-			} else {
-				pr_err("error: not stereo or mono\n");
 			}
 		} else {
 			D("ARD ADIE Loopback Device\n");
