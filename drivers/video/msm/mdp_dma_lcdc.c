@@ -155,9 +155,6 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	else
 		dma2_cfg_reg |= DMA_IBUF_FORMAT_xRGB8888_OR_ARGB8888;
 
-	if (mfd->panel_info.bpp != 24)
-		return -ENODEV;
-
 	switch (mfd->panel_info.bpp) {
 	case 24:
 		dma2_cfg_reg |= DMA_DSTC0G_8BITS |
