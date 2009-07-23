@@ -518,6 +518,7 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 	((format == MDP_Y_CBCR_H2V2 || format == MDP_Y_CRCB_H2V2) ?  2 :\
 	(format == MDP_Y_CBCR_H2V1 || format == MDP_Y_CRCB_H2V1) ?  1 : 1)
 
+#ifdef CONFIG_ANDROID_PMEM
 static void get_len(struct mdp_img *img, struct mdp_rect *rect, uint32_t bpp,
 			uint32_t *len0, uint32_t *len1)
 {
@@ -531,7 +532,6 @@ static void get_len(struct mdp_img *img, struct mdp_rect *rect, uint32_t bpp,
 static void flush_imgs(struct mdp_blit_req *req, int src_bpp, int dst_bpp,
 			struct file *p_src_file, struct file *p_dst_file)
 {
-#ifdef CONFIG_ANDROID_PMEM
 	uint32_t src0_len, src1_len, dst0_len, dst1_len;
 
 	/* flush src images to memory before dma to mdp */
@@ -551,8 +551,11 @@ static void flush_imgs(struct mdp_blit_req *req, int src_bpp, int dst_bpp,
 	if (IS_PSEUDOPLNR(req->dst.format))
 		flush_pmem_file(p_dst_file,
 			req->dst.offset + dst0_len, dst1_len);
-#endif
 }
+#else
+static void flush_imgs(struct mdp_blit_req *req, int src_bpp, int dst_bpp,
+			struct file *p_src_file, struct file *p_dst_file) { }
+#endif
 
 static void mdp_start_ppp(struct msm_fb_data_type *mfd, MDPIBUF *iBuf,
 struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
@@ -1200,7 +1203,10 @@ int get_img(struct mdp_img *img, struct fb_info *info, unsigned long *start,
 {
 	int put_needed, ret = 0;
 	struct file *file;
+#ifdef CONFIG_ANDROID_PMEM
 	unsigned long vstart;
+#endif
+
 #ifdef CONFIG_ANDROID_PMEM
 	if (!get_pmem_file(img->memory_id, start, &vstart, len, pp_file))
 		return 0;

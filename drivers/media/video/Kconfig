@@ -794,7 +794,7 @@ comment "Qualcomm MSM Camera And Video"
 
 menuconfig MSM_CAMERA
 	bool "Qualcomm MSM camera and video capture support"
-	depends on ARCH_MSM && VIDEO_V4L2 && I2C
+	depends on ARCH_MSM && VIDEO_V4L2 && I2C && ANDROID_PMEM
 	default y
 	help
 	  Say Y here to enable selecting the video adapters for
