@@ -23,6 +23,9 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <mach/board.h>
+#include <linux/mutex.h>
+#include <linux/remote_spinlock.h>
+#include <linux/pm_qos_params.h>
 
 #define DEBUG 0
 
@@ -58,22 +61,26 @@ enum {
 };
 
 struct msm_i2c_dev {
-	struct device      *dev;
-	void __iomem       *base;		/* virtual */
-	int                 irq;
-	struct clk         *clk;
-	struct i2c_adapter  adapter;
+	struct device                *dev;
+	void __iomem                 *base;	/* virtual */
+	int                          irq;
+	struct clk                   *clk;
+	struct i2c_adapter           adapter;
 
-	spinlock_t          lock;
+	spinlock_t                   lock;
 
-	struct i2c_msg      *msg;
-	int                 rem;
-	int                 pos;
-	int                 cnt;
-	int                 err;
-	int                 flush_cnt;
-	int                 rd_acked;
-	void                *complete;
+	struct i2c_msg               *msg;
+	int                          rem;
+	int                          pos;
+	int                          cnt;
+	int                          err;
+	int                          flush_cnt;
+	int                          rd_acked;
+	remote_spinlock_t            rspin_lock;
+	int                          suspended;
+	struct mutex                 mlock;
+	struct msm_i2c_platform_data *pdata;
+	void                         *complete;
 };
 
 #if DEBUG
@@ -234,6 +241,36 @@ msm_i2c_poll_notbusy(struct msm_i2c_dev *dev)
 	return -ETIMEDOUT;
 }
 
+static void
+msm_i2c_rmutex_lock(struct msm_i2c_dev *dev)
+{
+	int gotlock = 0;
+	unsigned long flags;
+	if (!dev->pdata->rmutex)
+		return;
+	do {
+		remote_spin_lock_irqsave(&dev->rspin_lock, flags);
+		if (*(dev->pdata->rmutex) == 0) {
+			*(dev->pdata->rmutex) = 1;
+			gotlock = 1;
+		}
+		remote_spin_unlock_irqrestore(&dev->rspin_lock, flags);
+		/* wait for 1-byte clock interval */
+		if (!gotlock)
+			udelay(10000000/dev->pdata->clk_freq);
+	} while (!gotlock);
+}
+
+static void
+msm_i2c_rmutex_unlock(struct msm_i2c_dev *dev)
+{
+	unsigned long flags;
+	if (!dev->pdata->rmutex)
+		return;
+	remote_spin_lock_irqsave(&dev->rspin_lock, flags);
+	*(dev->pdata->rmutex) = 0;
+	remote_spin_unlock_irqrestore(&dev->rspin_lock, flags);
+}
 static int
 msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
@@ -246,6 +283,17 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	unsigned long flags;
 	int check_busy = 1;
 
+	mutex_lock(&dev->mlock);
+	if (dev->suspended) {
+		mutex_unlock(&dev->mlock);
+		return -EIO;
+	}
+
+	/* Don't allow power collapse until we release remote spinlock */
+	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
+					dev->pdata->pm_lat);
+	msm_i2c_rmutex_lock(dev);
+	enable_irq(dev->irq);
 	while (rem) {
 		addr = msgs->addr << 1;
 		if (msgs->flags & I2C_M_RD)
@@ -375,6 +423,11 @@ wait_for_int:
 	dev->flush_cnt = 0;
 	dev->cnt = 0;
 	spin_unlock_irqrestore(&dev->lock, flags);
+	disable_irq(dev->irq);
+	msm_i2c_rmutex_unlock(dev);
+	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
+					PM_QOS_DEFAULT_VALUE);
+	mutex_unlock(&dev->mlock);
 	return ret;
 }
 
@@ -399,7 +452,6 @@ msm_i2c_probe(struct platform_device *pdev)
 	int hs_div;
 	int i2c_clk;
 	int clk_ctl;
-	int target_clk;
 	struct clk *clk;
 	struct msm_i2c_platform_data *pdata;
 
@@ -441,9 +493,8 @@ msm_i2c_probe(struct platform_device *pdev)
 		ret = -ENOSYS;
 		goto err_clk_get_failed;
 	}
-	target_clk = pdata->clk_freq;
 	/* We support frequencies upto FAST Mode(400KHz) */
-	if (target_clk <= 0 || target_clk > 400000) {
+	if (pdata->clk_freq <= 0 || pdata->clk_freq > 400000) {
 		dev_err(&pdev->dev, "clock frequency not supported\n");
 		ret = -EIO;
 		goto err_clk_get_failed;
@@ -458,6 +509,7 @@ msm_i2c_probe(struct platform_device *pdev)
 	dev->dev = &pdev->dev;
 	dev->irq = irq->start;
 	dev->clk = clk;
+	dev->pdata = pdata;
 	dev->base = ioremap(mem->start, (mem->end - mem->start) + 1);
 	if (!dev->base) {
 		ret = -ENOMEM;
@@ -469,11 +521,13 @@ msm_i2c_probe(struct platform_device *pdev)
 
 	clk_enable(clk);
 
+	if (pdata->rmutex != NULL)
+		remote_spin_lock_init(&dev->rspin_lock, pdata->rsl_id);
 	/* I2C_HS_CLK = I2C_CLK/(3*(HS_DIVIDER_VALUE+1) */
 	/* I2C_FS_CLK = I2C_CLK/(2*(FS_DIVIDER_VALUE+3) */
 	/* FS_DIVIDER_VALUE = ((I2C_CLK / I2C_FS_CLK) / 2) - 3 */
 	i2c_clk = 19200000; /* input clock */
-	fs_div = ((i2c_clk / target_clk) / 2) - 3;
+	fs_div = ((i2c_clk / pdata->clk_freq) / 2) - 3;
 	hs_div = 3;
 	clk_ctl = ((hs_div & 0x7) << 8) | (fs_div & 0xff);
 	writel(clk_ctl, dev->base + I2C_CLK_CTL);
@@ -499,9 +553,15 @@ msm_i2c_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "request_irq failed\n");
 		goto err_request_irq_failed;
 	}
+	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
+					PM_QOS_DEFAULT_VALUE);
+	disable_irq(dev->irq);
+	dev->suspended = 0;
+	mutex_init(&dev->mlock);
 	/* Config GPIOs for primary and secondary lines */
 	pdata->msm_i2c_config_gpio(dev->adapter.nr, 1);
 	pdata->msm_i2c_config_gpio(dev->adapter.nr + 1, 1);
+
 	return 0;
 
 /*	free_irq(dev->irq, dev); */
@@ -526,6 +586,7 @@ msm_i2c_remove(struct platform_device *pdev)
 	struct resource		*mem;
 
 	platform_set_drvdata(pdev, NULL);
+	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c");
 	free_irq(dev->irq, dev);
 	i2c_del_adapter(&dev->adapter);
 	clk_disable(dev->clk);
@@ -540,16 +601,26 @@ msm_i2c_remove(struct platform_device *pdev)
 static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct msm_i2c_dev *dev = platform_get_drvdata(pdev);
-	if (dev)
+	/* Wait until current transaction finishes
+	 * Make sure remote lock is released before we suspend
+	 */
+	if (dev) {
+		mutex_lock(&dev->mlock);
+		dev->suspended = 1;
+		mutex_unlock(&dev->mlock);
 		clk_disable(dev->clk);
+	}
+
 	return 0;
 }
 
 static int msm_i2c_resume(struct platform_device *pdev)
 {
 	struct msm_i2c_dev *dev = platform_get_drvdata(pdev);
-	if (dev)
+	if (dev) {
 		clk_enable(dev->clk);
+		dev->suspended = 0;
+	}
 	return 0;
 }
 
