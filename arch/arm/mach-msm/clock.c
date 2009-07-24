@@ -46,90 +46,6 @@ static DEFINE_SPINLOCK(clock_map_lock);
 static struct notifier_block axi_freq_notifier_block;
 
 /*
- * glue for the proc_comm interface
- */
-static inline int pc_clk_enable(unsigned id)
-{
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_ENABLE, &id, NULL);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-static inline void pc_clk_disable(unsigned id)
-{
-	msm_proc_comm(PCOM_CLKCTL_RPC_DISABLE, &id, NULL);
-}
-
-static inline int pc_clk_set_rate(unsigned id, unsigned rate)
-{
-	/* The rate _might_ be rounded off to the nearest KHz value by the
-	 * remote function. So a return value of 0 doesn't necessarily mean
-	 * that the exact rate was set successfully.
-	 */
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_SET_RATE, &id, &rate);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-int pc_clk_set_min_rate(unsigned id, unsigned rate)
-{
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_MIN_RATE, &id, &rate);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-static inline int pc_clk_set_max_rate(unsigned id, unsigned rate)
-{
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_MAX_RATE, &id, &rate);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-static inline int pc_clk_set_flags(unsigned id, unsigned flags)
-{
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_SET_FLAGS, &id, &flags);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-static inline unsigned pc_clk_get_rate(unsigned id)
-{
-	if (msm_proc_comm(PCOM_CLKCTL_RPC_RATE, &id, NULL))
-		return 0;
-	else
-		return id;
-}
-
-static inline unsigned pc_clk_is_enabled(unsigned id)
-{
-	if (msm_proc_comm(PCOM_CLKCTL_RPC_ENABLED, &id, NULL))
-		return 0;
-	else
-		return id;
-}
-
-static inline int pc_pll_request(unsigned id, unsigned on)
-{
-	int rc;
-	on = !!on;
-	rc = msm_proc_comm(PCOM_CLKCTL_RPC_PLL_REQUEST, &id, &on);
-	if (rc < 0)
-		return rc;
-	else
-		return (int)id < 0 ? -EINVAL : 0;
-}
-
-/*
  * Standard clock functions defined in include/linux/clk.h
  */
 struct clk *clk_get(struct device *dev, const char *id)
@@ -164,7 +80,7 @@ int clk_enable(struct clk *clk)
 	spin_lock_irqsave(&clocks_lock, flags);
 	clk->count++;
 	if (clk->count == 1) {
-		pc_clk_enable(clk->id);
+		clk->ops->enable(clk->id);
 		spin_lock(&clock_map_lock);
 		clock_map_enabled[BIT_WORD(clk->id)] |= BIT_MASK(clk->id);
 		spin_unlock(&clock_map_lock);
@@ -181,7 +97,7 @@ void clk_disable(struct clk *clk)
 	BUG_ON(clk->count == 0);
 	clk->count--;
 	if (clk->count == 0) {
-		pc_clk_disable(clk->id);
+		clk->ops->disable(clk->id);
 		spin_lock(&clock_map_lock);
 		clock_map_enabled[BIT_WORD(clk->id)] &= ~BIT_MASK(clk->id);
 		spin_unlock(&clock_map_lock);
@@ -192,25 +108,25 @@ EXPORT_SYMBOL(clk_disable);
 
 unsigned long clk_get_rate(struct clk *clk)
 {
-	return pc_clk_get_rate(clk->id);
+	return clk->ops->get_rate(clk->id);
 }
 EXPORT_SYMBOL(clk_get_rate);
 
 int clk_set_rate(struct clk *clk, unsigned long rate)
 {
-	return pc_clk_set_rate(clk->id, rate);
+	return clk->ops->set_rate(clk->id, rate);
 }
 EXPORT_SYMBOL(clk_set_rate);
 
 int clk_set_min_rate(struct clk *clk, unsigned long rate)
 {
-	return pc_clk_set_min_rate(clk->id, rate);
+	return clk->ops->set_min_rate(clk->id, rate);
 }
 EXPORT_SYMBOL(clk_set_min_rate);
 
 int clk_set_max_rate(struct clk *clk, unsigned long rate)
 {
-	return pc_clk_set_max_rate(clk->id, rate);
+	return clk->ops->set_max_rate(clk->id, rate);
 }
 EXPORT_SYMBOL(clk_set_max_rate);
 
@@ -230,7 +146,7 @@ int clk_set_flags(struct clk *clk, unsigned long flags)
 {
 	if (clk == NULL || IS_ERR(clk))
 		return -EINVAL;
-	return pc_clk_set_flags(clk->id, flags);
+	return clk->ops->set_flags(clk->id, flags);
 }
 EXPORT_SYMBOL(clk_set_flags);
 
@@ -398,9 +314,9 @@ static int clock_debug_enable_set(void *data, u64 val)
 	int rc = 0;
 
 	if (val)
-		rc = pc_clk_enable(clock->id);
+		rc = clock->ops->enable(clock->id);
 	else
-		pc_clk_disable(clock->id);
+		clock->ops->disable(clock->id);
 
 	return rc;
 }
@@ -409,7 +325,7 @@ static int clock_debug_enable_get(void *data, u64 *val)
 {
 	struct clk *clock = data;
 
-	*val = pc_clk_is_enabled(clock->id);
+	*val = clock->ops->is_enabled(clock->id);
 
 	return 0;
 }
@@ -466,7 +382,7 @@ static int __init clock_late_init(void)
 			spin_lock_irqsave(&clocks_lock, flags);
 			if (!clk->count) {
 				count++;
-				pc_clk_disable(clk->id);
+				clk->ops->disable(clk->id);
 			}
 			spin_unlock_irqrestore(&clocks_lock, flags);
 		}
