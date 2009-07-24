@@ -462,7 +462,7 @@ static struct logger_tag *get_tag(struct logger_log * const log,
 
 	memcpy(tag->name, tag_name, tag_name_len);
 	tag->log = log;
-	atomic_set(&tag->priority, logger_default_priority);
+	atomic_set(&tag->priority, atomic_read(&log->priority));
 	atomic_set(&tag->enabled, logger_default_enabled);
 	INIT_LIST_HEAD(&tag->list);
 
@@ -492,7 +492,7 @@ out:
 	return ERR_PTR(ret);
 }
 
-int check_tag(struct logger_log * const log,
+static int check_tag_and_priorities(struct logger_log * const log,
 		const unsigned char priority,
 		const char *tag_name,
 		const int tag_name_len)
@@ -505,7 +505,8 @@ int check_tag(struct logger_log * const log,
 		if (!tag || IS_ERR(tag))
 			ret = !tag ? -ENODEV : PTR_ERR(tag);
 		else if (atomic_read(&tag->enabled) &&
-				atomic_read(&tag->priority) <= priority)
+			(priority >= atomic_read(&log->priority) ||
+			 priority >= atomic_read(&tag->priority)))
 			ret = 1;
 	}
 	return ret;
@@ -715,10 +716,7 @@ static ssize_t logger_aio_write(struct kiocb *iocb, const struct iovec *iov,
 		 * earlier, which means that the memory allocation must already
 		 * have been done.
 		 */
-		if (atomic_read(&log->priority) > *(unsigned char *)temp_buf)
-			goto out_free_buf;
-
-		ret = check_tag(log,
+		ret = check_tag_and_priorities(log,
 			*(unsigned char *)temp_buf, /* priority */
 			temp_buf + 1, /* tag name */
 			iov[1].iov_len);
@@ -965,10 +963,20 @@ static ssize_t store_global_priority(struct logger_log * const log,
 {
 	unsigned int priority;
 
-	if (sscanf(buf, "%u", &priority) != 1 || priority > LOG_PRIORITY_SILENT)
+	if (sscanf(buf, "%u", &priority) != 1 ||
+			priority > LOG_PRIORITY_SILENT)
 		return -EINVAL;
 
-	atomic_set(&log->priority, priority);
+	if (priority != atomic_xchg(&log->priority, priority)) {
+		unsigned long flags;
+		struct logger_tag *tag;
+
+		spin_lock_irqsave(&log->taglist_lock, flags);
+		list_for_each_entry(tag, &log->tags, list)
+			atomic_set(&tag->priority, priority);
+
+		spin_unlock_irqrestore(&log->taglist_lock, flags);
+	}
 	return strnlen(buf, count);
 }
 RW_GLOBAL_ATTR(priority);
@@ -1081,11 +1089,10 @@ static int kernel_logger_write(struct logger_log * const log,
 	char *msg;
 
 	if (!atomic_read(&log->enabled) ||
-			atomic_read(&log->priority) > priority ||
-			(ret = check_tag(log,
-					 priority,
-					 tag,
-					 tag_bytes)) <= 0)
+		(ret = check_tag_and_priorities(log,
+			priority,
+			tag,
+			tag_bytes)) <= 0)
 		return ret;
 
 	/*
