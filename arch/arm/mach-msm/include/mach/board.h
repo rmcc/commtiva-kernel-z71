@@ -33,21 +33,6 @@ struct msm_acpu_clock_platform_data {
 	int (*acpu_set_vdd) (int mvolts);
 };
 
-enum msm_camera_flash_t {
-  MSM_CAMERA_FLASH_NONE,
-  MSM_CAMERA_FLASH_LED
-};
-
-struct msm_camera_sensor_info {
-	int sensor_reset;
-	int sensor_pwd;
-	int vcm_pwd;
-	int mclk;
-	const char *sensor_name;
-	enum msm_camera_flash_t flash_type;
-	int (*sensor_probe)(void *, void *);
-};
-
 struct msm_camera_io_ext {
 	uint32_t mdcphy;
 	uint32_t mdcsz;
