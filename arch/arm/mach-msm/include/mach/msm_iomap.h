@@ -143,8 +143,6 @@
 #define MSM_DEBUG_UART_SIZE   SZ_4K
 #endif
 
-#define MSM_I2C_PHYS          0xA9900000
-#define MSM_I2C_SIZE          SZ_4K
 
 #define MSM_MDC_BASE	      IOMEM(0xE0200000)
 #define MSM_MDC_PHYS	      0xAA500000

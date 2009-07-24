@@ -582,7 +582,45 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&msm_fb_device,
+	&msm_device_i2c,
 };
+
+static struct msm_gpio msm_i2c_gpios_hw[] = {
+	{ GPIO_CFG(70, 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_scl" },
+	{ GPIO_CFG(71, 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_sda" },
+};
+
+static struct msm_gpio msm_i2c_gpios_io[] = {
+	{ GPIO_CFG(70, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_scl" },
+	{ GPIO_CFG(71, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_sda" },
+};
+
+static void
+msm_i2c_gpio_config(int adap_id, int config_type)
+{
+	struct msm_gpio *msm_i2c_table;
+	/* Each adapter gets 2 lines from the table */
+	if (adap_id > 0)
+		return;
+	if (config_type)
+		msm_i2c_table = &msm_i2c_gpios_hw[adap_id*2];
+	else
+		msm_i2c_table = &msm_i2c_gpios_io[adap_id*2];
+	msm_gpios_enable(msm_i2c_table, 2);
+}
+
+static struct msm_i2c_platform_data msm_i2c_pdata = {
+	.clk_freq = 100000,
+	.msm_i2c_config_gpio = msm_i2c_gpio_config,
+};
+
+static void __init msm_device_i2c_init(void)
+{
+	if (msm_gpios_request(msm_i2c_gpios_hw, ARRAY_SIZE(msm_i2c_gpios_hw)))
+		pr_err("failed to request I2C gpios\n");
+
+	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
+}
 
 static void __init msm7x30_init_irq(void)
 {
@@ -628,6 +666,7 @@ static void __init msm7x30_init(void)
 		ARRAY_SIZE(msm_spi_board_info));
 	msm_fb_add_devices();
 	msm_pm_set_platform_data(msm_pm_data);
+	msm_device_i2c_init();
 	buses_init();
 
 	if (machine_is_msm7x30_surf())
