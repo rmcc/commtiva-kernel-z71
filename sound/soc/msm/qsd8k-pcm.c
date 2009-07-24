@@ -399,13 +399,6 @@ static int qsd_pcm_capture_copy(struct snd_pcm_substream *substream, int a,
 	mutex_unlock(&the_locks.lock);
 
 	prtd->pcm_buf_pos += fbytes;
-	mutex_lock(&the_locks.mixer_lock);
-	if (qsd_glb_ctl.update) {
-		rc = qsd_audio_volume_update(prtd);
-		qsd_glb_ctl.update = 0;
-	}
-	mutex_unlock(&the_locks.mixer_lock);
-
 	if (xfer < fbytes)
 		return -EIO;
 
