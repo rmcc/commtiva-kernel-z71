@@ -149,11 +149,11 @@ static struct comet_cpld_t {
 	[1] = {
 		.per_reset_all_reset     = 0x00BF,
 		.ext_per_reset_all_reset = 0x0007,
-		.i2c_enable              = 0x07FF,
+		.i2c_enable              = 0x07F7,
 		/* enable all peripherals except microphones and */
 		/* displays                                      */
 		.per_enable_all          = 0xF9B8,
-		.ext_per_enable_all      = 0x007F,
+		.ext_per_enable_all      = 0x007D,
 		.bt_reset_reg            = 0x0048,
 		.bt_reset_mask           = 0x0004,
 	},
