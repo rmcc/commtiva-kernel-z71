@@ -89,6 +89,7 @@
 
 /* SPI_CONFIG fields */
 #define SPI_CONFIG_N                  0x0000001F
+#define SPI_LOOPBACK                  0x00000100
 
 /* SPI_IO_CONTROL fields */
 #define SPI_IO_C_CLK_IDLE_HIGH        0x00000400
@@ -474,6 +475,7 @@ static int msm_spi_setup(struct spi_device *spi)
 	struct msm_spi	*dd;
 	int              rc = 0;
 	u32              spi_ioc;
+	u32              spi_config;
 	u32              mask;
 
 	if (!spi->bits_per_word)
@@ -483,10 +485,11 @@ static int msm_spi_setup(struct spi_device *spi)
 			__func__, spi->bits_per_word);
 		rc = -EINVAL;
 	}
-	if (spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH)) {
+	if (spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH | SPI_LOOP)) {
 		dev_err(&spi->dev, "%s, unsupported mode bits %x\n",
 			__func__,
-			spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH));
+			spi->mode & ~(SPI_CPOL | SPI_CPHA | SPI_CS_HIGH
+							  | SPI_LOOP));
 		rc = -EINVAL;
 	}
 	if (spi->chip_select > SPI_NUM_CHIPSELECTS-1) {
@@ -510,6 +513,15 @@ static int msm_spi_setup(struct spi_device *spi)
 	else
 		spi_ioc &= ~SPI_IO_C_CLK_IDLE_HIGH;
 	writel(spi_ioc, dd->base + SPI_IO_CONTROL);
+
+	spi_config = readl(dd->base + SPI_CONFIG);
+	if ((bool)(spi->mode & SPI_LOOP) != (bool)(spi_config & SPI_LOOPBACK)) {
+		if (spi->mode & SPI_LOOP)
+			spi_config |= SPI_LOOPBACK;
+		else
+			spi_config &= ~SPI_LOOPBACK;
+		writel(spi_config, dd->base + SPI_CONFIG);
+	}
 
 err_setup_exit:
 	return rc;
