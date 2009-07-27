@@ -80,6 +80,7 @@
 #include <mach/msm_serial_hs.h>
 #include <mach/msm_spi.h>
 #include <linux/spi/spi.h>
+#include <mach/ofn_atlab.h>
 #include <mach/s1r72v05.h>
 
 #include "devices.h"
@@ -88,6 +89,10 @@
 
 #define TOUCHPAD_SUSPEND	34
 #define TOUCHPAD_IRQ            42
+
+#define OPTNAV_IRQ             150
+#define OPTNAV_BUTTON_L         35
+#define OPTNAV_BUTTON_R         34
 
 #define MSM_PMEM_MDP_SIZE	0x800000
 #define MSM_PMEM_ADSP_SIZE	0x2900000
@@ -119,6 +124,7 @@
 #define COMET_CPLD_PER_ENABLE_HDD        0x1000
 #define COMET_CPLD_PER_ENABLE_WVGA       0x0400
 #define COMET_CPLD_PER_ENABLE_LVDS       0x0200
+#define COMET_CPLD_PER_ENABLE_OFN        0x0100
 #define COMET_CPLD_PER_ENABLE_IDE        0x0080
 #define COMET_CPLD_PER_ENABLE_WXGA       0x0040
 #define COMET_CPLD_PER_ENABLE_I2C1       0x0010
@@ -1017,6 +1023,70 @@ static struct msm_i2ckbd_platform_data msm_kybd_data = {
 	.hw_reset = kbd_hwreset,
 };
 
+static struct msm_gpio optnav_config_data[] = {
+	{ GPIO_CFG(OPTNAV_BUTTON_L, 0, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA),
+	  "optnav_button_l" },
+	{ GPIO_CFG(OPTNAV_BUTTON_R, 0, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA),
+	  "optnav_button_r" },
+	{ GPIO_CFG(OPTNAV_IRQ, 0, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA),
+	  "optnav_irq" },
+};
+
+static int optnav_gpio_setup(void)
+{
+	int rc = -ENODEV;
+
+	if (cpld_version >= 2)
+		rc = msm_gpios_request_enable(optnav_config_data,
+					      ARRAY_SIZE(optnav_config_data));
+	return rc;
+}
+
+static void optnav_gpio_release(void)
+{
+	msm_gpios_disable_free(optnav_config_data,
+			       ARRAY_SIZE(optnav_config_data));
+}
+
+static char __iomem *optnav_cpld_base;
+
+static int optnav_enable(void)
+{
+	u16 save;
+
+	if (!optnav_cpld_base) {
+		optnav_cpld_base = comet_cpld_base();
+		if (!optnav_cpld_base)
+			return -ENOMEM;
+	}
+
+	save = readw(optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	writew(save | COMET_CPLD_PER_ENABLE_OFN,
+	       optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	return 0;
+}
+
+static void optnav_disable(void)
+{
+	u16 save;
+
+	save = readw(optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	writew(save & ~COMET_CPLD_PER_ENABLE_OFN,
+	       optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+}
+
+static struct ofn_atlab_platform_data optnav_data = {
+	.irq_button_l  = MSM_GPIO_TO_INT(OPTNAV_BUTTON_L),
+	.irq_button_r  = MSM_GPIO_TO_INT(OPTNAV_BUTTON_R),
+	.gpio_button_l = OPTNAV_BUTTON_L,
+	.gpio_button_r = OPTNAV_BUTTON_R,
+	.gpio_setup    = optnav_gpio_setup,
+	.gpio_release  = optnav_gpio_release,
+	.optnav_on     = optnav_enable,
+	.optnav_off    = optnav_disable,
+	.rotate_xy     = 1,
+};
+
 static struct i2c_board_info msm_i2c_board_info[] __initdata = {
 	{
 		I2C_BOARD_INFO("glidesensor", 0x2A),
@@ -1028,6 +1098,11 @@ static struct i2c_board_info msm_i2c_board_info[] __initdata = {
 		.type           = "msm-i2ckbd",
 		.irq            = MSM_GPIO_TO_INT(KBD_IRQ),
 		.platform_data  = &msm_kybd_data
+	},
+	{
+		I2C_BOARD_INFO("fo1w", 0x50),
+		.irq           =  MSM_GPIO_TO_INT(OPTNAV_IRQ),
+		.platform_data = &optnav_data
 	},
 	{
 		I2C_BOARD_INFO("tps65023", 0x48),
