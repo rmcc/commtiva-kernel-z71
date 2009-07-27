@@ -1968,9 +1968,14 @@ static int mdp_calc_scale_params(
 	return 0;
 }
 
-static uint8 *mdp_adjust_rot_addr(MDPIBUF *iBuf, uint8 *addr)
+static uint8 *mdp_adjust_rot_addr(MDPIBUF *iBuf, uint8 *addr, uint32 uv)
 {
 	uint32 dest_ystride = iBuf->ibuf_width * iBuf->bpp;
+	uint32 h_slice = 1;
+
+	if (uv && ((iBuf->ibuf_type == MDP_Y_CBCR_H2V2) ||
+		(iBuf->ibuf_type == MDP_Y_CRCB_H2V2)))
+		h_slice = 2;
 
 	if (MDP_CHKBIT(iBuf->mdpImg.mdpOp, MDPOP_ROT90) ^
 	    MDP_CHKBIT(iBuf->mdpImg.mdpOp, MDPOP_LR)) {
@@ -1980,8 +1985,8 @@ static uint8 *mdp_adjust_rot_addr(MDPIBUF *iBuf, uint8 *addr)
 	}
 	if (MDP_CHKBIT(iBuf->mdpImg.mdpOp, MDPOP_UD)) {
 		addr =
-		    addr + (iBuf->roi.dst_height -
-			    MIN(16, iBuf->roi.dst_height)) * dest_ystride;
+		    addr + ((iBuf->roi.dst_height -
+			MIN(16, iBuf->roi.dst_height))/h_slice) * dest_ystride;
 	}
 
 	return addr;
@@ -2255,7 +2260,7 @@ void mdp_adjust_start_addr(uint8 **src0,
 
 	// if it's dest/bg buffer, we need to adjust it for rotation
 	if (layer != 0)
-		*src0 = mdp_adjust_rot_addr(iBuf, *src0);
+		*src0 = mdp_adjust_rot_addr(iBuf, *src0, 0);
 
 	if (*src1) {
 		// MDP_Y_CBCR_H2V2/MDP_Y_CRCB_H2V2 cosite for now
@@ -2266,7 +2271,7 @@ void mdp_adjust_start_addr(uint8 **src0,
 
 		// if it's dest/bg buffer, we need to adjust it for rotation
 		if (layer != 0)
-			*src1 = mdp_adjust_rot_addr(iBuf, *src1);
+			*src1 = mdp_adjust_rot_addr(iBuf, *src1, 1);
 	}
 }
 
