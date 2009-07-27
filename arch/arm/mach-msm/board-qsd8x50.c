@@ -89,6 +89,7 @@
 #include <mach/memory.h>
 #include <mach/msm_spi.h>
 #include <mach/s1r72v05.h>
+#include <mach/msm_tsif.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -1164,6 +1165,33 @@ static struct platform_device msm_device_pmic_leds = {
 	.id	= -1,
 };
 
+/* TSIF begin */
+#if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
+
+#define TSIF_A_SYNC      GPIO_CFG(106, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA)
+#define TSIF_A_DATA      GPIO_CFG(107, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA)
+#define TSIF_A_EN        GPIO_CFG(108, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA)
+#define TSIF_A_CLK       GPIO_CFG(109, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA)
+
+static const struct msm_gpio tsif_gpios[] = {
+	{ .gpio_cfg = TSIF_A_CLK,  .label =  "tsif_clk", },
+	{ .gpio_cfg = TSIF_A_EN,   .label =  "tsif_en", },
+	{ .gpio_cfg = TSIF_A_DATA, .label =  "tsif_data", },
+	{ .gpio_cfg = TSIF_A_SYNC, .label =  "tsif_sync", },
+#if 0
+	{ .gpio_cfg = 0, .label =  "tsif_error", },
+	{ .gpio_cfg = 0, .label =  "tsif_null", },
+#endif
+};
+
+static struct msm_tsif_platform_data tsif_platform_data = {
+	.num_gpios = ARRAY_SIZE(tsif_gpios),
+	.gpios = tsif_gpios,
+};
+
+#endif /* defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE) */
+/* TSIF end   */
+
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&mddi_toshiba_device,
@@ -1195,6 +1223,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_pmic_leds,
 	&msm_device_kgsl,
 	&hs_device,
+#if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
+	&msm_device_tsif,
+#endif
 };
 
 #ifdef CONFIG_QSD_SVS
@@ -1880,6 +1911,9 @@ static void __init qsd8x50_init(void)
 	msm_acpu_clock_init(&qsd8x50_clock_data);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_uart3.dev.platform_data = &msm_serial_pdata;
+#if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
+	msm_device_tsif.dev.platform_data = &tsif_platform_data;
+#endif
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_fb_add_devices();
 	msm_camera_add_device();
