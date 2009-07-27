@@ -20,8 +20,33 @@ config MT9P012
 	---help---
 	  MICRON 5M Bayer Sensor with Autofocus
 
+choice
+	prompt "AF module"
+	depends on MSM_CAMERA
+	default MSM_CAMERA_AF_FOXCONN
+
+config MSM_CAMERA_AF_FOXCONN
+	bool "FOXCONN Module"
+	depends on MT9P012
+	help
+	  This driver supports FOXCONN AF module for 5M Bayer sensor
+
+config MSM_CAMERA_AF_BAM
+	bool "BAM Module"
+	depends on MT9P012
+	help
+	  This driver supports BAM AF module for 5M Bayer sensor
+endchoice
+
 config S5K3E2FX
 	bool "Sensor s5k3e2fx (Samsung 5M)"
 	depends on MSM_CAMERA
+	default y
 	---help---
 	  Samsung 5M with Autofocus
+
+config VB6801
+	bool "Sensor vb6801"
+	depends on MSM_CAMERA
+	---help---
+	  5M with flash

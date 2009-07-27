@@ -101,8 +101,17 @@
 #define MSM_CAM_IOCTL_CTRL_COMMAND_2 \
 	_IOW(MSM_CAM_IOCTL_MAGIC, 24, struct msm_ctrl_cmd *)
 
+#define MSM_CAM_IOCTL_AF_CTRL \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 25, struct msm_ctrl_cmt_t *)
+#define MSM_CAM_IOCTL_AF_CTRL_DONE \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 26, struct msm_ctrl_cmt_t *)
+
 #define MAX_SENSOR_NUM  3
 #define MAX_SENSOR_NAME 32
+
+#define PP_SNAP  0x01
+#define PP_RAW_SNAP ((0x01)<<1)
+#define PP_PREV  ((0x01)<<2)
 
 #define MSM_CAM_CTRL_CMD_DONE  0
 #define MSM_CAM_SENSOR_VFE_CMD 1
@@ -129,9 +138,9 @@ struct msm_ctrl_cmd {
 };
 
 struct msm_vfe_evt_msg {
-	unsigned short type; /* 1 == event (RPC), 0 == message (adsp) */
+	unsigned short type;	/* 1 == event (RPC), 0 == message (adsp) */
 	unsigned short msg_id;
-	unsigned int len; /* size in, number of bytes out */
+	unsigned int len;	/* size in, number of bytes out */
 	void *data;
 };
 
@@ -179,11 +188,12 @@ struct msm_camera_cfg_cmd {
 #define CMD_SNAP_BUF_RELEASE		11
 #define CMD_SNAP_BUF_CFG		12
 #define CMD_STATS_DISABLE		13
-#define CMD_STATS_ENABLE		14
+#define CMD_STATS_AEC_AWB_ENABLE	14
 #define CMD_STATS_AF_ENABLE		15
 #define CMD_STATS_BUF_RELEASE		16
 #define CMD_STATS_AF_BUF_RELEASE	17
-#define UPDATE_STATS_INVALID		18
+#define CMD_STATS_ENABLE        18
+#define UPDATE_STATS_INVALID		19
 
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
@@ -335,15 +345,12 @@ struct msm_snapshot_pp_status {
 #define CAMERA_EFFECT_MONO		1
 #define CAMERA_EFFECT_NEGATIVE		2
 #define CAMERA_EFFECT_SOLARIZE		3
-#define CAMERA_EFFECT_PASTEL		4
-#define CAMERA_EFFECT_MOSAIC		5
-#define CAMERA_EFFECT_RESIZE		6
-#define CAMERA_EFFECT_SEPIA		7
-#define CAMERA_EFFECT_POSTERIZE		8
-#define CAMERA_EFFECT_WHITEBOARD	9
-#define CAMERA_EFFECT_BLACKBOARD	10
-#define CAMERA_EFFECT_AQUA		11
-#define CAMERA_EFFECT_MAX		12
+#define CAMERA_EFFECT_SEPIA		4
+#define CAMERA_EFFECT_POSTERIZE		5
+#define CAMERA_EFFECT_WHITEBOARD	6
+#define CAMERA_EFFECT_BLACKBOARD	7
+#define CAMERA_EFFECT_AQUA		8
+#define CAMERA_EFFECT_MAX		9
 
 struct sensor_pict_fps {
 	uint16_t prevfps;
@@ -399,5 +406,6 @@ struct sensor_cfg_data {
 struct msm_camsensor_info {
 	char name[MAX_SENSOR_NAME];
 	uint8_t flash_enabled;
+	int8_t total_steps;
 };
 #endif /* __LINUX_MSM_CAMERA_H */

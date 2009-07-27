@@ -486,11 +486,6 @@ static long mt9d112_set_effect(int mode, int effect)
 	}
 		break;
 
-	case CAMERA_EFFECT_PASTEL:
-	case CAMERA_EFFECT_MOSAIC:
-	case CAMERA_EFFECT_RESIZE:
-		return -EINVAL;
-
 	default: {
 		reg_val = 0x6440;
 		rc = mt9d112_i2c_write(mt9d112_client->addr,

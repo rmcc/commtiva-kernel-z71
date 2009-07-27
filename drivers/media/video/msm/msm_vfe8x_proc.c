@@ -25,6 +25,7 @@
 #include <linux/platform_device.h>
 #include "msm_vfe8x_proc.h"
 #include <media/msm_camera.h>
+#include <mach/board.h>
 
 struct msm_vfe8x_ctrl {
 	/* bit 1:0 ENC_IRQ_MASK = 0x11:
@@ -1183,7 +1184,7 @@ vfe_parse_interrupt_status(uint32_t irqStatusIn)
 		ret.camifErrorIrq    ||
 		ret.camifOverflowIrq ||
 		ret.afOverflowIrq    ||
-		ret.awbPingpongIrq   ||
+		ret.awbOverflowIrq   ||
 		ret.busOverflowIrq   ||
 		ret.axiErrorIrq      ||
 		ret.violationIrq;
@@ -1588,10 +1589,6 @@ static void vfe_process_frame_done_irq_no_frag(
 	struct vfe_output_path_combo *in)
 {
 	uint32_t addressToRender[2];
-	static uint32_t fcnt;
-
-	if (fcnt++ < 3)
-		return;
 
 	if (!in->ackPending) {
 		vfe_process_frame_done_irq_no_frag_io(in,
@@ -1832,6 +1829,11 @@ int vfe_cmd_init(struct msm_vfe_callback *presp,
 {
 	struct resource	*vfemem, *vfeirq, *vfeio;
 	int rc;
+	struct msm_camera_sensor_info *s_info;
+	s_info = pdev->dev.platform_data;
+
+	pdev->resource = s_info->resource;
+	pdev->num_resources = s_info->num_resources;
 
 	vfemem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!vfemem) {
@@ -2761,8 +2763,8 @@ void vfe_asf_update(struct vfe_cmd_asf_update *in)
 
 	cmd.smoothEnable     = in->smoothFilterEnabled;
 	cmd.sharpMode        = in->sharpMode;
-	cmd.smoothCoeff1     = in->smoothCoefCenter;
-	cmd.smoothCoeff0     = in->smoothCoefSurr;
+	cmd.smoothCoeff0     = in->smoothCoefCenter;
+	cmd.smoothCoeff1     = in->smoothCoefSurr;
 	cmd.cropEnable       = in->cropEnable;
 	cmd.sharpThresholdE1 = in->sharpThreshE1;
 	cmd.sharpDegreeK1    = in->sharpK1;
@@ -3127,8 +3129,8 @@ void vfe_stats_start_af(struct vfe_cmd_stats_af_start *in)
 	memset(&cmd, 0, sizeof(cmd));
 	memset(&cmd2, 0, sizeof(cmd2));
 
-ctrl->vfeStatsCmdLocal.autoFocusEnable = in->enable;
-ctrl->vfeImaskLocal.afPingpongIrq = TRUE;
+	ctrl->vfeStatsCmdLocal.autoFocusEnable = in->enable;
+	ctrl->vfeImaskLocal.afPingpongIrq = TRUE;
 
 	cmd.windowVOffset = in->windowVOffset;
 	cmd.windowHOffset = in->windowHOffset;

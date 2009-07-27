@@ -20,7 +20,7 @@
 #include <linux/kernel.h>
 
 /*Micron settings from Applications for lower power consumption.*/
-struct reg_struct mt9p012_reg_pat[2] = {
+struct reg_struct const mt9p012_reg_pat[2] = {
 	{ /* Preview */
 		/* vt_pix_clk_div          REG=0x0300 */
 		6,  /* 5 */
@@ -142,7 +142,7 @@ struct reg_struct mt9p012_reg_pat[2] = {
 };
 
 
-struct mt9p012_i2c_reg_conf mt9p012_test_tbl[] = {
+struct mt9p012_i2c_reg_conf const mt9p012_test_tbl[] = {
 	{0x3044, 0x0544 & 0xFBFF},
 	{0x30CA, 0x0004 | 0x0001},
 	{0x30D4, 0x9020 & 0x7FFF},
@@ -154,7 +154,7 @@ struct mt9p012_i2c_reg_conf mt9p012_test_tbl[] = {
 };
 
 
-struct mt9p012_i2c_reg_conf mt9p012_lc_tbl[] = {
+struct mt9p012_i2c_reg_conf const mt9p012_lc_tbl[] = {
 	/* [Lens shading 85 Percent TL84] */
 	/* P_RD_P0Q0 */
 	{0x360A, 0x7FEF},
@@ -364,7 +364,7 @@ struct mt9p012_i2c_reg_conf mt9p012_lc_tbl[] = {
 };
 
 /* rolloff table for illuminant A */
-struct mt9p012_i2c_reg_conf mt9p012_rolloff_tbl[] = {
+struct mt9p012_i2c_reg_conf const mt9p012_rolloff_tbl[] = {
 	/* P_RD_P0Q0 */
 	{0x360A, 0x7FEF},
 	/* P_RD_P0Q1 */

@@ -131,12 +131,18 @@ struct msm_sync {
 	uint8_t opencnt;
 	void *cropinfo;
 	int  croplen;
-	unsigned pict_pp;
+	uint32_t pict_pp;
+	struct mutex pict_pp_lock;
 
 	const char *apps_id;
 
 	struct mutex lock;
 	struct list_head list;
+
+	spinlock_t af_status_lock;
+	struct msm_ctrl_cmd af_status;
+	int af_flag;
+	wait_queue_head_t af_status_wait;
 };
 
 #define MSM_APPS_ID_V4L2 "msm_v4l2"

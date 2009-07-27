@@ -545,7 +545,8 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	struct vfe_cmd_stats_setting *scfg = NULL;
 
 	if (cmd->cmd_type != CMD_FRAME_BUF_RELEASE &&
-	    cmd->cmd_type != CMD_STATS_BUF_RELEASE) {
+		cmd->cmd_type != CMD_STATS_BUF_RELEASE &&
+		cmd->cmd_type != CMD_STATS_AF_BUF_RELEASE) {
 
 		if (copy_from_user(&vfecmd,
 				(void __user *)(cmd->value),
@@ -648,6 +649,17 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 
 		sack.nextWbExpOutputBufferAddr = *(uint32_t *)data;
 		vfe_stats_wb_exp_ack(&sack);
+	}
+		break;
+
+	case CMD_STATS_AF_BUF_RELEASE: {
+		struct vfe_cmd_stats_af_ack ack;
+
+		if (!data)
+			return -EFAULT;
+
+		ack.nextAFOutputBufferAddr = *(uint32_t *)data;
+		vfe_stats_af_ack(&ack);
 	}
 		break;
 

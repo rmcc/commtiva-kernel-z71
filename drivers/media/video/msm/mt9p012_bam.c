@@ -1,18 +1,57 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Code Aurora Forum nor
+ *       the names of its contributors may be used to endorse or promote
+ *       products derived from this software without specific prior written
+ *       permission.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Alternatively, provided that this notice is retained in full, this software
+ * may be relicensed by the recipient under the terms of the GNU General Public
+ * License version 2 ("GPL") and only version 2, in which case the provisions of
+ * the GPL apply INSTEAD OF those given above.  If the recipient relicenses the
+ * software under the GPL, then the identification text in the MODULE_LICENSE
+ * macro must be changed to reflect "GPLv2" instead of "Dual BSD/GPL".  Once a
+ * recipient changes the license terms to the GPL, subsequent recipients shall
+ * not relicense under alternate licensing terms, including the BSD or dual
+ * BSD/GPL terms.  In addition, the following license statement immediately
+ * below and between the words START and END shall also then apply when this
+ * software is relicensed under the GPL:
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA.
+ * START
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 and only version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * END
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
  *
  */
 
@@ -92,11 +131,11 @@ enum mt9p012_setting {
 };
 
 /* actuator's Slave Address */
-#define MT9P012_AF_I2C_ADDR   0x18
+#define MT9P012_AF_I2C_ADDR   0x0A
 
 /* AF Total steps parameters */
-#define MT9P012_STEPS_NEAR_TO_CLOSEST_INF  32
-#define MT9P012_TOTAL_STEPS_NEAR_TO_FAR    32
+#define MT9P012_STEPS_NEAR_TO_CLOSEST_INF  20
+#define MT9P012_TOTAL_STEPS_NEAR_TO_FAR    20
 
 #define MT9P012_MU5M0_PREVIEW_DUMMY_PIXELS 0
 #define MT9P012_MU5M0_PREVIEW_DUMMY_LINES  0
@@ -132,28 +171,30 @@ struct mt9p012_ctrl {
 	enum mt9p012_test_mode set_test;
 };
 
+static uint16_t bam_macro, bam_infinite;
+static uint16_t bam_step_lookup_table[MT9P012_TOTAL_STEPS_NEAR_TO_FAR + 1];
 static struct mt9p012_ctrl *mt9p012_ctrl;
 static DECLARE_WAIT_QUEUE_HEAD(mt9p012_wait_queue);
 DEFINE_MUTEX(mt9p012_mut);
 
 /*=============================================================*/
 
-static int mt9p012_i2c_rxdata(unsigned short saddr, unsigned char *rxdata,
-			      int length)
+static int mt9p012_i2c_rxdata(unsigned short saddr, int slength,
+			      unsigned char *rxdata, int rxlength)
 {
 	struct i2c_msg msgs[] = {
 		{
-		 .addr = saddr,
-		 .flags = 0,
-		 .len = 2,
-		 .buf = rxdata,
-		 },
+			.addr = saddr,
+			.flags = 0,
+			.len = slength,
+			.buf = rxdata,
+		},
 		{
-		 .addr = saddr,
-		 .flags = I2C_M_RD,
-		 .len = length,
-		 .buf = rxdata,
-		 },
+			.addr = saddr,
+			.flags = I2C_M_RD,
+			.len = rxlength,
+			.buf = rxdata,
+		},
 	};
 
 	if (i2c_transfer(mt9p012_client->adapter, msgs, 2) < 0) {
@@ -162,6 +203,20 @@ static int mt9p012_i2c_rxdata(unsigned short saddr, unsigned char *rxdata,
 	}
 
 	return 0;
+}
+static int32_t mt9p012_i2c_read_b(unsigned short saddr, unsigned char raddr,
+				  unsigned short *rdata)
+{
+	int32_t rc = 0;
+	if (!rdata)
+		return -EIO;
+	rc = mt9p012_i2c_rxdata(saddr, 1, &raddr, 1);
+	if (rc < 0)
+		return rc;
+	*rdata = raddr;
+	if (rc < 0)
+		CDBG("mt9p012_i2c_read_b failed!\n");
+	return rc;
 }
 
 static int32_t mt9p012_i2c_read_w(unsigned short saddr, unsigned short raddr,
@@ -178,7 +233,7 @@ static int32_t mt9p012_i2c_read_w(unsigned short saddr, unsigned short raddr,
 	buf[0] = (raddr & 0xFF00) >> 8;
 	buf[1] = (raddr & 0x00FF);
 
-	rc = mt9p012_i2c_rxdata(saddr, buf, 2);
+	rc = mt9p012_i2c_rxdata(saddr, 2, buf, 2);
 	if (rc < 0)
 		return rc;
 
@@ -354,10 +409,11 @@ static void mt9p012_get_pict_fps(uint16_t fps, uint16_t *pfps)
 		     (mt9p012_regs.reg_pat[RES_CAPTURE].frame_length_lines *
 		      mt9p012_regs.reg_pat[RES_CAPTURE].line_length_pck));
 
-		pclk_mult = (uint32_t)
-		    ((mt9p012_regs.reg_pat[RES_CAPTURE].pll_multiplier *
-		      0x00000400) /
-		     (mt9p012_regs.reg_pat[RES_PREVIEW].pll_multiplier));
+		pclk_mult =
+		    (uint32_t) ((mt9p012_regs.reg_pat[RES_CAPTURE].
+				 pll_multiplier * 0x00000400) /
+				(mt9p012_regs.reg_pat[RES_PREVIEW].
+				 pll_multiplier));
 	} else {
 		/* full size resolution used for preview. */
 		divider = 0x00000400;	/*1.0 */
@@ -524,8 +580,8 @@ static int32_t mt9p012_set_pict_exp_gain(uint16_t gain, uint32_t line)
 	return rc;
 }
 
-static int32_t mt9p012_setting(enum mt9p012_reg_update rupdate,
-			       enum mt9p012_setting rt)
+static int32_t mt9p012_setting(enum mt9p012_reg_update_t rupdate,
+			       enum mt9p012_setting_t rt)
 {
 	int32_t rc = 0;
 
@@ -833,11 +889,15 @@ static int32_t mt9p012_power_down(void)
 
 static int32_t mt9p012_move_focus(int direction, int32_t num_steps)
 {
+	int32_t rc;
 	int16_t step_direction;
 	int16_t actual_step;
 	int16_t next_position;
-	uint8_t code_val_msb, code_val_lsb;
+	uint8_t code_val;
+	uint8_t time_out;
+	uint8_t temp_pos;
 
+	uint16_t actual_position_target;
 	if (num_steps > MT9P012_TOTAL_STEPS_NEAR_TO_FAR)
 		num_steps = MT9P012_TOTAL_STEPS_NEAR_TO_FAR;
 	else if (num_steps == 0) {
@@ -846,9 +906,9 @@ static int32_t mt9p012_move_focus(int direction, int32_t num_steps)
 	}
 
 	if (direction == MOVE_NEAR)
-		step_direction = 16;	/* 10bit */
+		step_direction = -1;
 	else if (direction == MOVE_FAR)
-		step_direction = -16;	/* 10 bit */
+		step_direction = 1;
 	else {
 		CDBG("mt9p012_move_focus failed at line %d ...\n", __LINE__);
 		return -EINVAL;
@@ -860,42 +920,76 @@ static int32_t mt9p012_move_focus(int direction, int32_t num_steps)
 	actual_step = (int16_t) (step_direction * (int16_t) num_steps);
 	next_position = (int16_t) (mt9p012_ctrl->curr_lens_pos + actual_step);
 
-	if (next_position > 1023)
-		next_position = 1023;
+	if (next_position > MT9P012_TOTAL_STEPS_NEAR_TO_FAR)
+		next_position = MT9P012_TOTAL_STEPS_NEAR_TO_FAR;
 	else if (next_position < 0)
 		next_position = 0;
 
-	code_val_msb = next_position >> 4;
-	code_val_lsb = (next_position & 0x000F) << 4;
+	if (num_steps >= 10)
+		time_out = 100;
+	else
+		time_out = 30;
+	code_val = next_position;
+	actual_position_target = bam_step_lookup_table[code_val];
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x01, 0x29);
+	if (rc < 0)
+		return rc;
+	temp_pos = (uint8_t) (actual_position_target >> 8);
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x05, temp_pos);
+	if (rc < 0)
+		return rc;
+	temp_pos = (uint8_t) (actual_position_target & 0x00FF);
 	/* code_val_lsb |= mode_mask; */
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x06, temp_pos);
+	if (rc < 0)
+		return rc;
 
-	/* Writing the digital code for current to the actuator */
-	if (mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1,
-				code_val_msb, code_val_lsb) < 0) {
-		CDBG("mt9p012_move_focus failed at line %d ...\n", __LINE__);
-		return -EBUSY;
-	}
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x0B, time_out);
+	if (rc < 0)
+		return rc;
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x07, 0x27);
+	if (rc < 0)
+		return rc;
+
+	mdelay(time_out);
 
 	/* Storing the current lens Position */
 	mt9p012_ctrl->curr_lens_pos = next_position;
 
-	return 0;
+	return rc;
 }
 
 static int32_t mt9p012_set_default_focus(void)
 {
 	int32_t rc = 0;
-	uint8_t code_val_msb, code_val_lsb;
 
-	code_val_msb = 0x00;
-	code_val_lsb = 0x00;
+	uint8_t temp_pos;
 
 	/* Write the digital code for current to the actuator */
-	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1,
-				 code_val_msb, code_val_lsb);
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x01, 0x29);
+	if (rc < 0)
+		return rc;
+	temp_pos = (uint8_t) (bam_infinite >> 8);
 
-	mt9p012_ctrl->curr_lens_pos = 0;
-	mt9p012_ctrl->init_curr_lens_pos = 0;
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x05, temp_pos);
+	if (rc < 0)
+		return rc;
+	temp_pos = (uint8_t) (bam_infinite & 0x00FF);
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x06, temp_pos);
+	if (rc < 0)
+		return rc;
+
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x0B, 0x64);
+	if (rc < 0)
+		return rc;
+
+	rc = mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x07, 0x27);
+	if (rc < 0)
+		return rc;
+
+	mdelay(140);
+
+	mt9p012_ctrl->curr_lens_pos = MT9P012_TOTAL_STEPS_NEAR_TO_FAR;
 
 	return rc;
 }
@@ -920,8 +1014,11 @@ static int mt9p012_probe_init_sensor(const struct msm_camera_sensor_info *data)
 
 	msleep(20);
 
+	/* enable mclk first */
+	msm_camio_clk_rate_set(MT9P012_DEFAULT_CLOCK_RATE);
+
+	msleep(20);
 	/* RESET the sensor image part via I2C command */
-	CDBG("mt9p012_sensor_init(): reseting sensor.\n");
 	rc = mt9p012_i2c_write_w(mt9p012_client->addr,
 				 MT9P012_REG_RESET_REGISTER, 0x10CC | 0x0001);
 	if (rc < 0) {
@@ -939,7 +1036,6 @@ static int mt9p012_probe_init_sensor(const struct msm_camera_sensor_info *data)
 
 	/* 4. Compare sensor ID to MT9T012VC ID: */
 	if (chipid != MT9P012_MODEL_ID) {
-		CDBG("mt9p012 wrong model_id = 0x%x\n", chipid);
 		rc = -ENODEV;
 		goto init_probe_fail;
 	}
@@ -951,7 +1047,6 @@ static int mt9p012_probe_init_sensor(const struct msm_camera_sensor_info *data)
 	}
 
 	/* RESET_REGISTER, enable parallel interface and disable serialiser */
-	CDBG("mt9p012_sensor_init(): enabling parallel interface.\n");
 	rc = mt9p012_i2c_write_w(mt9p012_client->addr, 0x301A, 0x10CC);
 	if (rc < 0) {
 		CDBG("enable parallel interface failed. rc = %d\n", rc);
@@ -978,6 +1073,9 @@ init_probe_done:
 static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 {
 	int32_t rc;
+	unsigned short temp_pos;
+	uint8_t i;
+	uint16_t temp;
 
 	mt9p012_ctrl = kzalloc(sizeof(struct mt9p012_ctrl), GFP_KERNEL);
 	if (!mt9p012_ctrl) {
@@ -1017,7 +1115,6 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 	}
 
 	/* sensor : output enable */
-	CDBG("mt9p012_sensor_open_init(): enabling output.\n");
 	rc = mt9p012_i2c_write_w(mt9p012_client->addr,
 				 MT9P012_REG_RESET_REGISTER,
 				 MT9P012_RESET_REGISTER_PWON);
@@ -1026,10 +1123,7 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 		goto init_fail1;
 	}
 
-	/* TODO: enable AF actuator */
-#if 0
-	CDBG("enable AF actuator, gpio = %d\n",
-	     mt9p012_ctrl->sensordata->vcm_pwd);
+	/* enable AF actuator */
 	rc = gpio_request(mt9p012_ctrl->sensordata->vcm_pwd, "mt9p012");
 	if (!rc)
 		gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 1);
@@ -1037,16 +1131,59 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 		CDBG("mt9p012_ctrl gpio request failed!\n");
 		goto init_fail1;
 	}
+
 	mdelay(20);
 
+	bam_infinite = 0;
+	bam_macro = 0;
+	/*initialize AF actuator */
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x01, 0x09);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x07, 0x2E);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x0A, 0x01);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x17, 0x06);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x16, 0x0A);
+
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x01, 0x29);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x05, 0x00);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x06, 0x00);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x0B, 0x64);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x07, 0x27);
+	mdelay(140);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x01, 0x29);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x05, 0x03);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x06, 0xFF);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x0B, 0x64);
+	mt9p012_i2c_write_b(MT9P012_AF_I2C_ADDR >> 1, 0x07, 0x27);
+	mdelay(140);
+
+	if (mt9p012_i2c_read_b(MT9P012_AF_I2C_ADDR >> 1, 0x12, &temp_pos)
+	    >= 0) {
+		bam_infinite = (uint16_t) temp_pos;
+		if (mt9p012_i2c_read_b
+		    (MT9P012_AF_I2C_ADDR >> 1, 0x13, &temp_pos) >= 0)
+			bam_infinite =
+			    (bam_infinite << 8) | ((uint16_t) temp_pos);
+	} else {
+		bam_infinite = 100;
+	}
+
+	if (mt9p012_i2c_read_b(MT9P012_AF_I2C_ADDR >> 1, 0x14, &temp_pos)
+	    >= 0) {
+		bam_macro = (uint16_t) temp_pos;
+		if (mt9p012_i2c_read_b
+		    (MT9P012_AF_I2C_ADDR >> 1, 0x15, &temp_pos) >= 0)
+			bam_macro = (bam_macro << 8) | ((uint16_t) temp_pos);
+	}
+	temp = (bam_infinite - bam_macro) / MT9P012_TOTAL_STEPS_NEAR_TO_FAR;
+	for (i = 0; i < MT9P012_TOTAL_STEPS_NEAR_TO_FAR; i++)
+		bam_step_lookup_table[i] = bam_macro + temp * i;
+
+	bam_step_lookup_table[MT9P012_TOTAL_STEPS_NEAR_TO_FAR] = bam_infinite;
+
 	rc = mt9p012_set_default_focus();
-#endif
 	if (rc >= 0)
 		goto init_done;
 
-	/* TODO:
-	 * gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 0);
-	 * gpio_free(mt9p012_ctrl->sensordata->vcm_pwd); */
 init_fail1:
 	mt9p012_probe_init_done(data);
 	kfree(mt9p012_ctrl);
@@ -1173,14 +1310,18 @@ int mt9p012_sensor_config(void __user *argp)
 		break;
 
 	case CFG_MOVE_FOCUS:
-		CDBG("mt9p012_ioctl: CFG_MOVE_FOCUS: cdata.cfg.focus.dir=%d \
-				cdata.cfg.focus.steps=%d\n",
-				cdata.cfg.focus.dir, cdata.cfg.focus.steps);
+		CDBG("mt9p012_ioctl: CFG_MOVE_FOCUS: dir=%d steps=%d\n",
+		     cdata.cfg.focus.dir, cdata.cfg.focus.steps);
 		rc = mt9p012_move_focus(cdata.cfg.focus.dir,
 					cdata.cfg.focus.steps);
 		break;
 
 	case CFG_SET_DEFAULT_FOCUS:
+		rc = mt9p012_set_default_focus();
+
+		break;
+
+	case CFG_SET_EFFECT:
 		rc = mt9p012_set_default_focus();
 		break;
 
@@ -1196,7 +1337,6 @@ int mt9p012_sensor_config(void __user *argp)
 			rc = -EFAULT;
 		break;
 
-	case CFG_SET_EFFECT:
 	default:
 		rc = -EINVAL;
 		break;
@@ -1261,18 +1401,26 @@ probe_failure:
 	return rc;
 }
 
+static int __exit mt9p012_remove(struct i2c_client *client)
+{
+	struct mt9p012_work_t *sensorw = i2c_get_clientdata(client);
+	free_irq(client->irq, sensorw);
+	mt9p012_client = NULL;
+	kfree(sensorw);
+	return 0;
+}
+
 static const struct i2c_device_id mt9p012_i2c_id[] = {
-	{"mt9p012", 0},
-	{}
+	{"mt9p012", 0}
 };
 
-static struct i2c_driver mt9p012_i2c_driver = {
+static struct i2c_driver mt9p012_driver = {
 	.id_table = mt9p012_i2c_id,
 	.probe = mt9p012_i2c_probe,
 	.remove = __exit_p(mt9p012_i2c_remove),
 	.driver = {
-		   .name = "mt9p012",
-		   },
+		.name = "mt9p012",
+	},
 };
 
 static int mt9p012_sensor_probe(const struct msm_camera_sensor_info *info,
@@ -1309,9 +1457,9 @@ static int __mt9p012_probe(struct platform_device *pdev)
 static struct platform_driver msm_camera_driver = {
 	.probe = __mt9p012_probe,
 	.driver = {
-		   .name = "msm_camera_mt9p012",
-		   .owner = THIS_MODULE,
-		   },
+		.name = "msm_camera_mt9p012",
+		.owner = THIS_MODULE,
+	},
 };
 
 static int __init mt9p012_init(void)
@@ -1320,3 +1468,7 @@ static int __init mt9p012_init(void)
 }
 
 module_init(mt9p012_init);
+void mt9p012_exit(void)
+{
+	i2c_del_driver(&mt9p012_i2c_driver);
+}

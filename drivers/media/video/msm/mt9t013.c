@@ -138,8 +138,6 @@ static struct mt9t013_ctrl *mt9t013_ctrl;
 static DECLARE_WAIT_QUEUE_HEAD(mt9t013_wait_queue);
 DECLARE_MUTEX(mt9t013_sem);
 
-extern struct mt9t013_reg mt9t013_regs; /* from mt9t013_reg.c */
-
 static int mt9t013_i2c_rxdata(unsigned short saddr,
 	unsigned char *rxdata, int length)
 {
@@ -252,7 +250,8 @@ static int32_t mt9t013_i2c_write_w(unsigned short saddr,
 }
 
 static int32_t mt9t013_i2c_write_w_table(
-	struct mt9t013_i2c_reg_conf *reg_conf_tbl, int num_of_items_in_table)
+	struct mt9t013_i2c_reg_conf const *reg_conf_tbl,
+	int num_of_items_in_table)
 {
 	int i;
 	int32_t rc = -EIO;
@@ -304,7 +303,8 @@ static int32_t mt9t013_set_lc(void)
 {
 	int32_t rc;
 
-	rc = mt9t013_i2c_write_w_table(mt9t013_regs.lctbl, mt9t013_regs.lctbl_size);
+	rc = mt9t013_i2c_write_w_table(mt9t013_regs.lctbl,
+		mt9t013_regs.lctbl_size);
 	if (rc < 0)
 		return rc;
 
@@ -1119,6 +1119,8 @@ static int mt9t013_probe_init_sensor(const struct msm_camera_sensor_info *data)
 	if (rc < 0)
 		goto init_probe_fail;
 
+	msleep(10);
+
 	/* 3. Read sensor Model ID: */
 	rc = mt9t013_i2c_read_w(mt9t013_client->addr,
 		MT9T013_REG_MODEL_ID, &chipid);
@@ -1220,7 +1222,8 @@ int mt9t013_sensor_open_init(const struct msm_camera_sensor_info *data)
 		rc = mt9t013_setting(REG_INIT, RES_CAPTURE);
 
 	if (rc >= 0)
-		rc = mt9t013_poweron_af();
+		if (machine_is_sapphire())
+			rc = mt9t013_poweron_af();
 
 	if (rc < 0)
 		goto init_fail;
@@ -1397,7 +1400,8 @@ int mt9t013_sensor_release(void)
 
 	down(&mt9t013_sem);
 
-	mt9t013_poweroff_af();
+	if (machine_is_sapphire())
+		mt9t013_poweroff_af();
 	mt9t013_power_down();
 
 	gpio_direction_output(mt9t013_ctrl->sensordata->sensor_reset,

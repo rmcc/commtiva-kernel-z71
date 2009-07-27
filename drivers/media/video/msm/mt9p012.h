@@ -21,6 +21,8 @@
 
 #include <linux/types.h>
 
+extern struct mt9p012_reg mt9p012_regs;	/* from mt9p012_reg.c */
+
 struct reg_struct {
 	uint16_t vt_pix_clk_div;     /* 0x0300 */
 	uint16_t vt_sys_clk_div;     /* 0x0302 */
@@ -51,13 +53,13 @@ struct mt9p012_i2c_reg_conf {
 
 
 struct mt9p012_reg {
-	struct reg_struct *reg_pat;
+	struct reg_struct const *reg_pat;
 	uint16_t reg_pat_size;
-	struct mt9p012_i2c_reg_conf *ttbl;
+	struct mt9p012_i2c_reg_conf const *ttbl;
 	uint16_t ttbl_size;
-	struct mt9p012_i2c_reg_conf *lctbl;
+	struct mt9p012_i2c_reg_conf const *lctbl;
 	uint16_t lctbl_size;
-	struct mt9p012_i2c_reg_conf *rftbl;
+	struct mt9p012_i2c_reg_conf const *rftbl;
 	uint16_t rftbl_size;
 };
 

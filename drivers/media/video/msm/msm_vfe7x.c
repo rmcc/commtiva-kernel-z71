@@ -41,6 +41,8 @@
 #define MSG_STATS_AF  8
 #define MSG_STATS_WE  9
 
+#define VFE_ADSP_EVENT 0xFFFF
+
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
 static struct msm_vfe_callback *resp;
@@ -101,7 +103,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	struct msm_vfe_resp *rp;
 	void *data;
 
-	len = (id == (uint16_t)-1) ? 0 : len;
+	len = (id == VFE_ADSP_EVENT) ? 0 : len;
 	data = resp->vfe_alloc(sizeof(struct msm_vfe_resp) + len, vfe_syncdata);
 
 	if (!data) {
@@ -111,7 +113,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 	rp = (struct msm_vfe_resp *)data;
 	rp->evt_msg.len = len;
 
-	if (id == ((uint16_t)-1)) {
+	if (id == VFE_ADSP_EVENT) {
 		/* event */
 		rp->type           = VFE_EVENT;
 		rp->evt_msg.type   = MSM_CAMERA_EVT;
@@ -400,7 +402,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	}
 
 	switch (cmd->cmd_type) {
-	case CMD_STATS_ENABLE:
+	case CMD_STATS_AEC_AWB_ENABLE:
 	case CMD_STATS_AXI_CFG: {
 		axid = data;
 		if (!axid) {
@@ -478,7 +480,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			axid->bufnum1, sfcfg->af_enable);
 
 		if (axid->bufnum1 > 0) {
-			regptr = axid->region;
+			regptr = &axid->region[0];
 
 			for (i = 0; i < axid->bufnum1; i++) {
 
@@ -585,7 +587,6 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			switch (*(uint32_t *)cmd_data) {
 			case VFE_RESET_CMD:
 				msm_camio_vfe_blk_reset();
-				msm_camio_camif_pad_reg_reset_2();
 				vfestopped = 0;
 				break;
 

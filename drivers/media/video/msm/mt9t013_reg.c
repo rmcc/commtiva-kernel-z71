@@ -148,7 +148,7 @@ struct reg_struct const mt9t013_reg_pat[2] = {
 	}
 };
 
-struct mt9t013_i2c_reg_conf mt9t013_test_tbl[] = {
+struct mt9t013_i2c_reg_conf const mt9t013_test_tbl[] = {
 	{ 0x3044, 0x0544 & 0xFBFF },
 	{ 0x30CA, 0x0004 | 0x0001 },
 	{ 0x30D4, 0x9020 & 0x7FFF },
@@ -160,7 +160,7 @@ struct mt9t013_i2c_reg_conf mt9t013_test_tbl[] = {
 };
 
 /* [Lens shading 85 Percent TL84] */
-struct mt9t013_i2c_reg_conf mt9t013_lc_tbl[] = {
+struct mt9t013_i2c_reg_conf const mt9t013_lc_tbl[] = {
 	{ 0x360A, 0x0290 }, /* P_RD_P0Q0 */
 	{ 0x360C, 0xC92D }, /* P_RD_P0Q1 */
 	{ 0x360E, 0x0771 }, /* P_RD_P0Q2 */

@@ -340,7 +340,7 @@ static struct i2c_board_info i2c_devices[] = {
 #endif
 #if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
 	{
-		I2C_BOARD_INFO("mt9t013", 0x6C), // 0x78>>1
+		I2C_BOARD_INFO("mt9t013", 0x6C),
 	},
 #endif
 };
