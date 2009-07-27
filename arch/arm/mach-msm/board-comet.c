@@ -66,6 +66,7 @@
 #include <linux/i2c.h>
 #include <linux/io.h>
 #include <linux/mfd/tps65023.h>
+#include <linux/bma150.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -131,6 +132,8 @@
 #define COMET_CPLD_EXT_PER_ENABLE_WXGA   0x0080
 #define COMET_CPLD_PER_RESET_IDE         0x0004
 #define COMET_CPLD_EXT_PER_ENABLE_I2C1   0x0008
+
+#define COMET_BMA150_GPIO                106
 
 static int                  cpld_version;
 static bool                 wvga_present;
@@ -394,6 +397,31 @@ static struct platform_device android_pmem_kernel_ebi1_device = {
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
+static struct msm_gpio bma_spi_gpio_config_data[] = {
+	{ GPIO_CFG(COMET_BMA150_GPIO, 0, GPIO_INPUT,
+		   GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
+};
+
+static int msm_bma_gpio_setup(struct device *dev)
+{
+	int rc;
+
+	rc = msm_gpios_request_enable(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
+	return rc;
+}
+
+static void msm_bma_gpio_teardown(struct device *dev)
+{
+	msm_gpios_disable_free(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
+}
+
+static struct bma150_platform_data bma_pdata = {
+	.setup    = msm_bma_gpio_setup,
+	.teardown = msm_bma_gpio_teardown,
+};
+
 static struct resource qsd_spi_resources[] = {
 	{
 		.name   = "spi_irq_in",
@@ -432,10 +460,11 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 	{
 		.modalias	= "bma150",
 		.mode		= SPI_MODE_3,
-		.irq		= MSM_GPIO_TO_INT(106),
+		.irq		= MSM_GPIO_TO_INT(COMET_BMA150_GPIO),
 		.bus_num	= 0,
 		.chip_select	= 0,
 		.max_speed_hz	= 10000000,
+		.platform_data	= &bma_pdata,
 	}
 };
 
@@ -444,7 +473,6 @@ static unsigned qsd_spi_gpio_config_data[] = {
 	GPIO_CFG(18,  1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MOSI */
 	GPIO_CFG(19,  1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
 	GPIO_CFG(20,  1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
-	GPIO_CFG(106, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* IRQ_CS0 */
 };
 
 static int msm_qsd_spi_gpio_config(void)
@@ -459,8 +487,6 @@ static int msm_qsd_spi_gpio_config(void)
 		pr_err("failed to request gpio spi_miso\n");
 	if (gpio_request(20, "spi_cs0"))
 		pr_err("failed to request gpio spi_cs0\n");
-	if (gpio_request(106, "spi_irq_cs0"))
-		pr_err("failed to request gpio spi_irq_cs0\n");
 
 	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
 		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
@@ -480,7 +506,6 @@ static void msm_qsd_spi_gpio_release(void)
 	gpio_free(18);
 	gpio_free(19);
 	gpio_free(20);
-	gpio_free(106);
 }
 
 static struct msm_spi_platform_data qsd_spi_pdata = {
