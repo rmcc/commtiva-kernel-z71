@@ -296,7 +296,8 @@ static void configure_endpoints(struct usb_info *ui)
 		ept->head->next = TERMINATE;
 
 		if (ept->ep.maxpacket)
-			INFO("ept #%d %s max:%d head:%p bit:%d\n",
+			dev_dbg(&ui->pdev->dev,
+				"ept #%d %s max:%d head:%p bit:%d\n",
 			       ept->num,
 			       (ept->flags & EPT_FLAG_IN) ? "in" : "out",
 			       ept->ep.maxpacket, ept->head, ept->bit);
@@ -370,10 +371,8 @@ static void usb_ept_enable(struct msm_endpoint *ept, int yes,
 	}
 	writel(n, USB_ENDPTCTRL(ept->num));
 
-#if 1
-	INFO("ept %d %s %s\n",
+	dev_dbg(&ui->pdev->dev, "ept %d %s %s\n",
 	       ept->num, in ? "in" : "out", yes ? "enabled" : "disabled");
-#endif
 }
 
 static void usb_ept_start(struct msm_endpoint *ept)
@@ -580,7 +579,8 @@ static void handle_setup(struct usb_info *ui)
 	flush_endpoint(&ui->ep0out);
 	flush_endpoint(&ui->ep0in);
 
-	INFO("setup: type=%02x req=%02x val=%04x idx=%04x len=%04x\n",
+	dev_dbg(&ui->pdev->dev,
+		"setup: type=%02x req=%02x val=%04x idx=%04x len=%04x\n",
 	       ctl.bRequestType, ctl.bRequest, ctl.wValue,
 	       ctl.wIndex, ctl.wLength);
 
@@ -1718,7 +1718,8 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 
 	device_del(&dev->gadget.dev);
 
-	VDEBUG("unregistered gadget driver '%s'\n", driver->driver.name);
+	dev_dbg(&dev->pdev->dev,
+		"unregistered gadget driver '%s'\n", driver->driver.name);
 	return 0;
 }
 EXPORT_SYMBOL(usb_gadget_unregister_driver);
