@@ -65,21 +65,11 @@
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 
-
-static void (*event_cb)(void);
-
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
 #else
 #define D(fmt, args...) do {} while (0)
 #endif
-
-void register_cb(void *cb)
-{
-	event_cb = cb;
-}
-EXPORT_SYMBOL(register_cb);
-
 
 static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
 							void *data)
@@ -134,11 +124,12 @@ static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
 			D("Signal all buffer done event\n");
 			up(&self->all_buf_done_sem);
 		}
+
+		if (self->cb_data.callback != NULL)
+			self->cb_data.callback(evt->event_id, NULL, 0,
+					 self->cb_data.client_data);
 	}
 	mutex_unlock(&self->session_mutex);
-
-	if (event_cb != NULL)
-		event_cb();
 
 	return;
 }

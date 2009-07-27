@@ -365,6 +365,7 @@ static int __init qsd_audio_init(void)
 	}
 	mutex_init(&the_locks.lock);
 	mutex_init(&the_locks.mixer_lock);
+	init_waitqueue_head(&the_locks.eos_wait);
 
 	return ret;
 }
