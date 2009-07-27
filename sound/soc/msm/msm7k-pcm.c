@@ -330,6 +330,7 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 		runtime->hw = msm_pcm_playback_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_PLAYBACK;
 		prtd->playback_substream = substream;
+		prtd->eos_ack = 0;
 	} else if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
 		runtime->hw = msm_pcm_capture_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_CAPTURE;
@@ -393,6 +394,16 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = runtime->private_data;
+
+	int rc = 0;
+
+	pr_debug("%s()\n", __func__);
+
+	/* pcm dmamiss message is sent continously
+	 * when decoder is starved so no race
+	 * condition concern
+	 */
+	rc = wait_event_interruptible(the_locks.eos_wait, prtd->eos_ack);
 
 	alsa_audio_disable(prtd);
 	audmgr_close(&prtd->audmgr);
