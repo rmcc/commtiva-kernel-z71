@@ -1,0 +1,822 @@
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright
+ *       notice, this list of conditions and the following disclaimer in the
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of Code Aurora Forum nor
+ *       the names of its contributors may be used to endorse or promote
+ *       products derived from this software without specific prior written
+ *       permission.
+ *
+ * Alternatively, provided that this notice is retained in full, this software
+ * may be relicensed by the recipient under the terms of the GNU General Public
+ * License version 2 ("GPL") and only version 2, in which case the provisions of
+ * the GPL apply INSTEAD OF those given above.  If the recipient relicenses the
+ * software under the GPL, then the identification text in the MODULE_LICENSE
+ * macro must be changed to reflect "GPLv2" instead of "Dual BSD/GPL".  Once a
+ * recipient changes the license terms to the GPL, subsequent recipients shall
+ * not relicense under alternate licensing terms, including the BSD or dual
+ * BSD/GPL terms.  In addition, the following license statement immediately
+ * below and between the words START and END shall also then apply when this
+ * software is relicensed under the GPL:
+ *
+ * START
+ *
+ * This program is free software; you can redistribute it and/or modify it under
+ * the terms of the GNU General Public License version 2 and only version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but WITHOUT
+ * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+ * FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more
+ * details.
+ *
+ * You should have received a copy of the GNU General Public License along with
+ * this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ *
+ * END
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+ * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+ * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+ * POSSIBILITY OF SUCH DAMAGE.
+ *
+ */
+/*
+ * Qualcomm PMIC8058 driver
+ *
+ */
+#include <linux/init.h>
+#include <linux/spinlock.h>
+#include <linux/irq.h>
+#include <linux/platform_device.h>
+#include <linux/interrupt.h>
+#include <linux/string.h>
+#include <linux/err.h>
+#include <linux/i2c.h>
+#include <linux/kthread.h>
+#include <linux/mfd/pmic8058.h>
+
+/* PMIC8058 IRQ */
+#define	SSBI_REG_ADDR_IRQ_BASE		0x1BB
+
+#define	SSBI_REG_ADDR_IRQ_ROOT		(SSBI_REG_ADDR_IRQ_BASE + 0)
+#define	SSBI_REG_ADDR_IRQ_M_STATUS1	(SSBI_REG_ADDR_IRQ_BASE + 1)
+#define	SSBI_REG_ADDR_IRQ_M_STATUS2	(SSBI_REG_ADDR_IRQ_BASE + 2)
+#define	SSBI_REG_ADDR_IRQ_M_STATUS3	(SSBI_REG_ADDR_IRQ_BASE + 3)
+#define	SSBI_REG_ADDR_IRQ_M_STATUS4	(SSBI_REG_ADDR_IRQ_BASE + 4)
+#define	SSBI_REG_ADDR_IRQ_BLK_SEL	(SSBI_REG_ADDR_IRQ_BASE + 5)
+#define	SSBI_REG_ADDR_IRQ_IT_STATUS	(SSBI_REG_ADDR_IRQ_BASE + 6)
+#define	SSBI_REG_ADDR_IRQ_CONFIG	(SSBI_REG_ADDR_IRQ_BASE + 7)
+#define	SSBI_REG_ADDR_IRQ_RT_STATUS	(SSBI_REG_ADDR_IRQ_BASE + 8)
+
+#define	PM8058_IRQF_LVL_SEL		0x01	/* level select */
+#define	PM8058_IRQF_MASK_FE		0x02	/* mask falling edge */
+#define	PM8058_IRQF_MASK_RE		0x04	/* mask rising edge */
+#define	PM8058_IRQF_CLR			0x08	/* clear interrupt */
+#define	PM8058_IRQF_BITS_MASK		0x70
+#define	PM8058_IRQF_BITS_SHIFT		4
+#define	PM8058_IRQF_WRITE		0x80
+
+/* GPIO */
+#define	PM8058_GPIO_BANK_MASK		0x70
+#define	PM8058_GPIO_BANK_SHIFT		4
+#define	PM8058_GPIO_WRITE		0x80
+
+/* Bank 0 */
+#define	PM8058_GPIO_VIN_MASK		0x0E
+#define	PM8058_GPIO_VIN_SHIFT		1
+#define	PM8058_GPIO_MODE_ENABLE		0x01
+
+/* Bank 1 */
+#define	PM8058_GPIO_MODE_MASK		0x0C
+#define	PM8058_GPIO_MODE_SHIFT		2
+#define	PM8058_GPIO_OUT_BUFFER		0x02
+#define	PM8058_GPIO_OUT_INVERT		0x01
+
+#define	PM8058_GPIO_MODE_OFF		0x11
+#define	PM8058_GPIO_MODE_OUTPUT		0x10
+#define	PM8058_GPIO_MODE_INPUT		0x00
+#define	PM8058_GPIO_MODE_BOTH		0x01
+
+/* Bank 2 */
+#define	PM8058_GPIO_PULL_MASK		0x0E
+#define	PM8058_GPIO_PULL_SHIFT		1
+
+/* Bank 3 */
+#define	PM8058_GPIO_OUT_STRENGTH_MASK		0x0C
+#define	PM8058_GPIO_OUT_STRENGTH_SHIFT		2
+
+/* Bank 4 */
+#define	PM8058_GPIO_FUNC_MASK		0x0E
+#define	PM8058_GPIO_FUNC_SHIFT		1
+
+/* Bank 5 */
+#define	PM8058_GPIO_INV_INT_POL		0x08
+
+#define	MAX_PM_IRQ		256
+#define	MAX_PM_BLOCKS		(MAX_PM_IRQ / 8 + 1)
+#define	MAX_PM_MASTERS		(MAX_PM_BLOCKS / 8 + 1)
+#define MAX_PM_GPIO		40
+
+struct pm8058_chip {
+	struct pm8058_platform_data	pdata;
+
+	struct completion		irq_completion;
+
+	struct i2c_client		*dev;
+
+	struct task_struct		*pm_task;
+
+	struct mutex			lock;
+
+	u8	irqs_allowed[MAX_PM_BLOCKS];
+	u8	blocks_allowed[MAX_PM_MASTERS];
+	u8	masters_allowed;
+	u8	irq_i2e[MAX_PM_IRQ];	/* Internal to external mapping */
+	int	pm_max_irq;
+	int	pm_max_blocks;
+	int	pm_max_masters;
+
+	u8	config[PM8058_IRQS];
+};
+
+static struct pm8058_chip *pmic_chip;
+
+static void pm8058_int_handler(unsigned int irq, struct irq_desc *desc);
+
+/* Helper Functions */
+static inline int
+ssbi_write(struct i2c_client *client, u16 addr, const u8 *buf, size_t len)
+{
+	int	rc;
+	struct	i2c_msg msg = {
+		.addr           = addr,
+		.flags          = 0x0,
+		.buf            = (u8 *)buf,
+		.len            = len,
+	};
+
+	rc = i2c_transfer(client->adapter, &msg, 1);
+	return (rc == 1) ? 0 : rc;
+}
+
+static inline int
+ssbi_read(struct i2c_client *client, u16 addr, u8 *buf, size_t len)
+{
+	int	rc;
+	struct	i2c_msg msg = {
+		.addr           = addr,
+		.flags          = I2C_M_RD,
+		.buf            = buf,
+		.len            = len,
+	};
+
+	rc = i2c_transfer(client->adapter, &msg, 1);
+	return (rc == 1) ? 0 : rc;
+}
+
+/* External APIs */
+int pm8058_read(u16 addr, u8 *values, unsigned int len)
+{
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	return ssbi_read(pmic_chip->dev, addr, values, len);
+}
+EXPORT_SYMBOL(pm8058_read);
+
+int pm8058_write(u16 addr, u8 *values, unsigned int len)
+{
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	return ssbi_write(pmic_chip->dev, addr, values, len);
+}
+EXPORT_SYMBOL(pm8058_write);
+
+int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
+{
+	int	rc;
+	u8	bank[8];
+	static int	dir_map[] = {
+		PM8058_GPIO_MODE_OFF,
+		PM8058_GPIO_MODE_OUTPUT,
+		PM8058_GPIO_MODE_INPUT,
+		PM8058_GPIO_MODE_BOTH,
+	};
+
+	if (param == NULL)
+		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	mutex_lock(&pmic_chip->lock);
+
+	/* Select banks and configure the gpio */
+	bank[0] = PM8058_GPIO_WRITE |
+		((param->vin_sel << PM8058_GPIO_VIN_SHIFT) &
+			PM8058_GPIO_VIN_MASK) |
+		PM8058_GPIO_MODE_ENABLE;
+	bank[1] = PM8058_GPIO_WRITE |
+		((1 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((dir_map[param->direction] << PM8058_GPIO_MODE_SHIFT) &
+			PM8058_GPIO_MODE_MASK) |
+		((param->direction & PM_GPIO_DIR_OUT) ?
+			PM8058_GPIO_OUT_BUFFER : 0);
+	bank[2] = PM8058_GPIO_WRITE |
+		((2 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((param->pull << PM8058_GPIO_PULL_SHIFT) &
+			PM8058_GPIO_PULL_MASK);
+	bank[3] = PM8058_GPIO_WRITE |
+		((3 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((param->out_strength << PM8058_GPIO_OUT_STRENGTH_SHIFT) &
+			PM8058_GPIO_OUT_STRENGTH_MASK);
+	bank[4] = PM8058_GPIO_WRITE |
+		((4 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((param->function << PM8058_GPIO_FUNC_SHIFT) &
+			PM8058_GPIO_FUNC_MASK);
+	bank[5] = PM8058_GPIO_WRITE |
+		((5 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		(param->inv_int_pol ? PM8058_GPIO_INV_INT_POL : 0);
+
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 6);
+	if (rc) {
+		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+				__func__, rc);
+		goto bail_out;
+	}
+
+bail_out:
+	mutex_unlock(&pmic_chip->lock);
+
+	return rc;
+}
+EXPORT_SYMBOL(pm8058_gpio_config);
+
+int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios)
+{
+	int	rc;
+	struct pm8058_gpio kypd_drv = {
+		.direction	= PM_GPIO_DIR_OUT,
+		.pull		= PM_GPIO_PULL_NO,
+		.vin_sel	= 2,
+		.out_strength	= PM_GPIO_STRENGTH_LOW,
+		.function	= PM_GPIO_FUNC_KEYPAD,
+		.inv_int_pol	= 1,
+	};
+
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > MAX_PM_GPIO)
+		return -EINVAL;
+
+	while (num_gpios--) {
+		rc = pm8058_gpio_config(gpio_start++, &kypd_drv);
+		if (rc) {
+			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
+				__func__, rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(pm8058_gpio_config_kypd_drv);
+
+int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
+{
+	int	rc;
+	struct pm8058_gpio kypd_sns = {
+		.direction	= PM_GPIO_DIR_IN,
+		.pull		= PM_GPIO_PULL_UP,
+		.vin_sel	= 2,
+		.out_strength	= PM_GPIO_STRENGTH_NO,
+		.function	= PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol	= 1,
+	};
+
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > MAX_PM_GPIO)
+		return -EINVAL;
+
+	while (num_gpios--) {
+		rc = pm8058_gpio_config(gpio_start++, &kypd_sns);
+		if (rc) {
+			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
+				__func__, rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(pm8058_gpio_config_kypd_sns);
+
+/* Internal functions */
+static void pm8058_irq_mask(unsigned int irq)
+{
+	int	rc = 0;
+	u8	buf[4];
+	int	block, master, irq_bit;
+	int	pm_irq;
+	struct	pm8058_chip *chip = get_irq_data(irq);
+
+	mutex_lock(&chip->lock);
+
+	irq -= PM8058_FIRST_IRQ;
+	pm_irq = chip->pdata.pm_irqs[irq];
+	block = pm_irq / 8;
+	master = block / 8;
+	irq_bit = pm_irq % 8;
+
+	chip->irqs_allowed[block] &= ~(1 << irq_bit);
+	if (!chip->irqs_allowed[block]) {
+		chip->blocks_allowed[master] &= ~(1 << (block % 8));
+
+		if (!chip->blocks_allowed[master])
+			chip->masters_allowed &= ~(1 << master);
+	}
+
+	/* Select block and configure the bit */
+	buf[0] = block;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] |
+		PM8058_IRQF_MASK_FE | PM8058_IRQF_MASK_RE;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+bail_out:
+	mutex_unlock(&chip->lock);
+
+	return;
+}
+
+static void pm8058_irq_unmask(unsigned int irq)
+{
+	int	rc = 0;
+	u8	buf[4], old_irqs_allowed, old_blocks_allowed;
+	int	block, master, irq_bit;
+	int	pm_irq;
+	struct	pm8058_chip *chip = get_irq_data(irq);
+
+	mutex_lock(&chip->lock);
+
+	irq -= PM8058_FIRST_IRQ;
+	pm_irq = chip->pdata.pm_irqs[irq];
+	block = pm_irq / 8;
+	master = block / 8;
+	irq_bit = pm_irq % 8;
+
+	old_irqs_allowed = chip->irqs_allowed[block];
+	chip->irqs_allowed[block] |= 1 << irq_bit;
+	if (!old_irqs_allowed) {
+		master = block / 8;
+
+		old_blocks_allowed = chip->blocks_allowed[master];
+		chip->blocks_allowed[master] |= 1 << (block % 8);
+
+		if (!old_blocks_allowed)
+			chip->masters_allowed |= 1 << master;
+	}
+
+	/* Select block and configure the bit */
+	buf[0] = block;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	buf[0] = PM8058_IRQF_WRITE | chip->config[irq];
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+bail_out:
+	mutex_unlock(&chip->lock);
+
+	return;
+}
+
+static void pm8058_irq_ack(unsigned int irq)
+{
+	int	rc = 0;
+	u8	buf[4];
+	int	block;
+	int	pm_irq;
+	struct	pm8058_chip *chip = get_irq_data(irq);
+
+	mutex_lock(&chip->lock);
+
+	irq -= PM8058_FIRST_IRQ;
+	pm_irq = chip->pdata.pm_irqs[irq];
+	block = pm_irq / 8;
+
+	/* Select block and configure the bit */
+	buf[0] = block;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] |
+		PM8058_IRQF_CLR;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+bail_out:
+	mutex_unlock(&chip->lock);
+
+	return;
+}
+
+static int pm8058_irq_set_wake(unsigned int irq, unsigned int on)
+{
+	return 0;
+}
+
+static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
+{
+	int	rc = 0;
+	u8	buf[4];
+	int	block, master, irq_bit;
+	int	pm_irq;
+	struct	pm8058_chip *chip = get_irq_data(irq);
+
+	mutex_lock(&chip->lock);
+
+	irq -= PM8058_FIRST_IRQ;
+	pm_irq = chip->pdata.pm_irqs[irq];
+	block = pm_irq / 8;
+	master = block / 8;
+	irq_bit = pm_irq % 8;
+
+	chip->irq_i2e[pm_irq] = irq;
+
+	chip->config[irq] = (irq_bit << PM8058_IRQF_BITS_SHIFT) |
+			PM8058_IRQF_MASK_RE | PM8058_IRQF_MASK_FE;
+	if (flow_type & (IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING)) {
+		if (flow_type & IRQF_TRIGGER_RISING)
+			chip->config[irq] &= ~PM8058_IRQF_MASK_RE;
+		if (flow_type & IRQF_TRIGGER_FALLING)
+			chip->config[irq] &= ~PM8058_IRQF_MASK_FE;
+	} else {
+		chip->config[irq] |= PM8058_IRQF_LVL_SEL;
+
+		if (flow_type & IRQF_TRIGGER_HIGH)
+			chip->config[irq] &= ~PM8058_IRQF_MASK_RE;
+		else
+			chip->config[irq] &= ~PM8058_IRQF_MASK_FE;
+	}
+
+	/* Select block and configure the bit */
+	buf[0] = block;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] | PM8058_IRQF_CLR;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+bail_out:
+	mutex_unlock(&chip->lock);
+
+	return rc;
+}
+
+static void pm8058_handle_isr(struct pm8058_chip *chip)
+{
+	int	rc, i, j, k, m;
+	u8	buf[4];
+	u8	blocks[MAX_PM_MASTERS];
+	u8	master, irq;
+
+	mutex_lock(&chip->lock);
+
+	/* Read root for masters */
+	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_ROOT, buf, 1);
+	if (rc) {
+		pr_err("%s: Failed on (1) ssbi_read(): rc=%d.\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	/* Check allowed masters */
+	if (!(buf[0] & chip->masters_allowed)) {
+		pr_err("%s: Unknown masters=0x%x.\n",
+			__func__, buf[0]);
+		goto bail_out;
+	}
+
+	/* Read allowed masters for blocks. */
+	buf[0] &= chip->masters_allowed;
+	for (i = 0; i < chip->pm_max_masters; i++) {
+		master = i + 1;
+		if (buf[0] & (1 << master)) {
+			rc = ssbi_read(chip->dev,
+				       SSBI_REG_ADDR_IRQ_M_STATUS1+i,
+				       &blocks[i], 1);
+			if (rc) {
+				pr_err("%s: FAIL (2) ssbi_read(): rc=%d.\n",
+					__func__, rc);
+				goto bail_out;
+			}
+
+			buf[0] &= ~(1 << master);
+			blocks[i] &= chip->blocks_allowed[i];
+			if (!buf[0])
+				break;
+		}
+	}
+
+	if (i >= chip->pm_max_masters)
+		goto bail_out;
+
+	/* Select block, read status and call isr */
+	for (; i >= 0; i--) {
+		if (!blocks[i])
+			continue;
+
+		for (j = 0; j < 8; j++) {
+			if (blocks[i] & (1 << j)) {
+				k = i * 8 + j;	/* block # */
+				buf[0] = k;
+				rc = ssbi_write(chip->dev,
+						SSBI_REG_ADDR_IRQ_BLK_SEL,
+						buf, 1);
+				if (rc) {
+					pr_err("%s: FAIL ssbi_write(): "
+					       "rc=%d.\n",
+						__func__, rc);
+					goto bail_out;
+				}
+
+				rc = ssbi_read(chip->dev,
+					       SSBI_REG_ADDR_IRQ_IT_STATUS,
+					       buf, 1);
+				if (rc) {
+					pr_err("%s: FAIL (3) ssbi_read(): "
+					       "rc=%d.\n",
+						__func__, rc);
+					goto bail_out;
+				}
+
+				/* Check IRQ bits */
+				buf[0] &= chip->irqs_allowed[k];
+				if (buf[0]) {
+					for (m = 0; m < 8; m++) {
+						if (!(buf[0] & (1 << m)))
+							continue;
+
+						/* Found one */
+						irq = k * 8 + m;
+						irq = chip->irq_i2e[irq];
+						irq += PM8058_FIRST_IRQ;
+
+						mutex_unlock(&chip->lock);
+
+						generic_handle_irq(irq);
+
+						/* No multiples. Return. */
+						return;
+					}
+				}
+
+				blocks[i] &= ~(1 << j);
+				if (!blocks[i])
+					break;
+			}
+		}
+
+	}
+
+bail_out:
+	mutex_unlock(&chip->lock);
+
+	return;
+}
+
+static int pm8058_ist(void *data)
+{
+	unsigned int irq = (unsigned int)data;
+	struct irq_desc *desc = irq_to_desc(irq);
+	struct pm8058_chip *chip = get_irq_data(irq);
+
+	if (!desc) {
+		pr_err("%s: Invalid IRQ: %d\n", __func__, irq);
+		return -EINVAL;
+	}
+	if (!chip) {
+		pr_err("%s: Invalid chip data: IRQ=%d\n", __func__, irq);
+		return -EINVAL;
+	}
+
+	current->flags |= PF_NOFREEZE;
+
+	while (!kthread_should_stop()) {
+		wait_for_completion_interruptible(&chip->irq_completion);
+
+		pm8058_handle_isr(chip);
+	}
+
+	return 0;
+}
+
+static struct task_struct *pm8058_init_ist(unsigned int irq,
+					   struct completion *irq_completion)
+{
+	struct task_struct *thread;
+
+	init_completion(irq_completion);
+	thread = kthread_run(pm8058_ist, (void *)irq, "pm8058-ist");
+	if (!thread)
+		pr_err("%s: Failed to create kernel thread for (irq=%d)\n",
+			__func__, irq);
+
+	return thread;
+}
+
+static void pm8058_int_handler(unsigned int irq, struct irq_desc *desc)
+{
+	struct pm8058_chip *chip;
+
+	chip = get_irq_data(irq);
+
+	desc->chip->ack(irq);
+	complete(&chip->irq_completion);
+}
+
+static struct irq_chip pm8058_irq_chip = {
+	.name      = "pm8058",
+	.ack       = pm8058_irq_ack,
+	.mask      = pm8058_irq_mask,
+	.unmask    = pm8058_irq_unmask,
+	.set_wake  = pm8058_irq_set_wake,
+	.set_type  = pm8058_irq_set_type,
+};
+
+static int pm8058_probe(struct i2c_client *client,
+			const struct i2c_device_id *id)
+{
+	int	i, pm_irq;
+	struct	pm8058_platform_data *pdata = client->dev.platform_data;
+	struct	pm8058_chip *chip;
+
+	if (pdata == NULL || !client->irq) {
+		pr_err("%s: No platform_data or IRQ.\n",
+			__func__);
+		return -ENODEV;
+	}
+
+	if (i2c_check_functionality(client->adapter, I2C_FUNC_I2C) == 0) {
+		pr_err("%s: i2c_check_functionality failed.\n", __func__);
+		return -ENODEV;
+	}
+
+	chip = kzalloc(sizeof *chip, GFP_KERNEL);
+	if (chip == NULL) {
+		pr_err("%s: kzalloc() failed.\n", __func__);
+		return -ENOMEM;
+	}
+
+	chip->dev = client;
+
+	(void) memcpy((void *)&chip->pdata, (const void *)pdata,
+		      sizeof(chip->pdata));
+
+	chip->pm_task = pm8058_init_ist(chip->dev->irq, &chip->irq_completion);
+	if (chip->pm_task == NULL) {
+		pr_err("%s: pm8058_init_ist() failed\n", __func__);
+		kfree(chip);
+		return -ESRCH;
+	}
+
+	chip->pm_max_irq = 0;
+	for (i = PM8058_FIRST_IRQ; i < (PM8058_FIRST_IRQ + PM8058_IRQS); i++) {
+		pm_irq = chip->pdata.pm_irqs[i];
+		if (pm_irq > 0)
+			chip->irq_i2e[pm_irq] = i;
+		if (pm_irq > chip->pm_max_irq)
+			chip->pm_max_irq = pm_irq;
+	}
+
+	mutex_init(&chip->lock);
+
+	i2c_set_clientdata(client, chip);
+
+	pmic_chip = chip;
+
+	if (chip->pm_max_irq <= 0) {
+		pr_err("%s: No pm_irq[] table.\n", __func__);
+		/* This is the case of no interrupt. */
+		return 0;
+	}
+
+	chip->pm_max_blocks = chip->pm_max_irq / 8 + 1;
+	chip->pm_max_masters = chip->pm_max_blocks / 8 + 1;
+
+	/* Register for all reserved IRQs */
+	for (i = PM8058_FIRST_IRQ; i < (PM8058_FIRST_IRQ + PM8058_IRQS); i++) {
+		set_irq_chip(i, &pm8058_irq_chip);
+		set_irq_handler(i, handle_edge_irq);
+		set_irq_flags(i, IRQF_VALID);
+		set_irq_data(i, (void *)chip);
+	}
+
+	set_irq_chained_handler(chip->dev->irq, pm8058_int_handler);
+	set_irq_data(chip->dev->irq, (void *)chip);
+	set_irq_wake(chip->dev->irq, 1);
+
+	return 0;
+}
+
+static int __devexit pm8058_remove(struct i2c_client *client)
+{
+	struct	pm8058_chip *chip;
+
+	chip = i2c_get_clientdata(client);
+	if (chip) {
+		if (chip->pm_max_irq) {
+			set_irq_wake(chip->dev->irq, 0);
+			set_irq_chained_handler(chip->dev->irq, NULL);
+		}
+
+		if (chip->pm_task != NULL)
+			kthread_stop(chip->pm_task);
+
+		chip->dev = NULL;
+
+		kfree(chip);
+	}
+
+	return 0;
+}
+
+static const struct i2c_device_id pm8058_ids[] = {
+	{ "pmic8058", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(i2c, pm8058_ids);
+
+static struct i2c_driver pm8058_driver = {
+	.driver.name	= "pm8058-core",
+	.id_table	= pm8058_ids,
+	.probe		= pm8058_probe,
+	.remove		= __devexit_p(pm8058_remove),
+};
+
+static int __init pm8058_init(void)
+{
+	return i2c_add_driver(&pm8058_driver);
+}
+
+static void __exit pm8058_exit(void)
+{
+	i2c_del_driver(&pm8058_driver);
+}
+
+subsys_initcall(pm8058_init);
+module_exit(pm8058_exit);
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("PMIC8058 core driver");
+MODULE_VERSION("1.0");
+MODULE_ALIAS("platform:pmic8058-core");
