@@ -309,6 +309,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 	&qsd_device_spi,
+#ifdef CONFIG_I2C_SSBI
+	&msm_device_ssbi6,
+#endif
 };
 
 static void __init msm7x30_init_irq(void)
