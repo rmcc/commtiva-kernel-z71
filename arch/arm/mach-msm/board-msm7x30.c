@@ -63,6 +63,7 @@
 #include <linux/io.h>
 #include <linux/usb/mass_storage_function.h>
 #include <linux/spi/spi.h>
+#include <linux/bma150.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -181,6 +182,31 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 };
 
+static struct msm_gpio bma_spi_gpio_config_data[] = {
+	{ GPIO_CFG(51, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
+};
+
+static int msm_bma_gpio_setup(struct device *dev)
+{
+	int rc;
+
+	rc = msm_gpios_request_enable(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
+
+	return rc;
+}
+
+static void msm_bma_gpio_teardown(struct device *dev)
+{
+	msm_gpios_disable_free(bma_spi_gpio_config_data,
+		ARRAY_SIZE(bma_spi_gpio_config_data));
+}
+
+static struct bma150_platform_data bma_pdata = {
+	.setup    = msm_bma_gpio_setup,
+	.teardown = msm_bma_gpio_teardown,
+};
+
 static struct resource qsd_spi_resources[] = {
 	{
 		.name   = "spi_irq_in",
@@ -213,6 +239,18 @@ static struct platform_device qsd_device_spi = {
 	.id		= 0,
 	.num_resources	= ARRAY_SIZE(qsd_spi_resources),
 	.resource	= qsd_spi_resources,
+};
+
+static struct spi_board_info msm_spi_board_info[] __initdata = {
+	{
+		.modalias	= "bma150",
+		.mode		= SPI_MODE_3,
+		.irq		= MSM_GPIO_TO_INT(51),
+		.bus_num	= 0,
+		.chip_select	= 0,
+		.max_speed_hz	= 10000000,
+		.platform_data	= &bma_pdata,
+	}
 };
 
 static unsigned qsd_spi_gpio_config_data[] = {
@@ -313,6 +351,8 @@ static void __init msm7x30_init(void)
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_qsd_spi_init();
+	spi_register_board_info(msm_spi_board_info,
+		ARRAY_SIZE(msm_spi_board_info));
 	msm_pm_set_platform_data(msm_pm_data);
 }
 
