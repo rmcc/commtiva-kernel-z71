@@ -253,43 +253,23 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 	}
 };
 
-static unsigned qsd_spi_gpio_config_data[] = {
-	GPIO_CFG(45, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CLK */
-	GPIO_CFG(46, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_CS0 */
-	GPIO_CFG(47, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MOSI */
-	GPIO_CFG(48, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),  /* SPI_MISO */
+static struct msm_gpio qsd_spi_gpio_config_data[] = {
+	{ GPIO_CFG(45, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_clk" },
+	{ GPIO_CFG(46, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_cs0" },
+	{ GPIO_CFG(47, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_mosi" },
+	{ GPIO_CFG(48, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_miso" },
 };
 
 static int msm_qsd_spi_gpio_config(void)
 {
-	int i, rc;
-
-	if (gpio_request(45, "spi_clk"))
-		pr_err("failed to request gpio spi_clk\n");
-	if (gpio_request(46, "spi_cs0"))
-		pr_err("failed to request gpio spi_cs0\n");
-	if (gpio_request(47, "spi_mosi"))
-		pr_err("failed to request gpio spi_mosi\n");
-	if (gpio_request(48, "spi_miso"))
-		pr_err("failed to request gpio spi_miso\n");
-
-	for (i = 0; i < ARRAY_SIZE(qsd_spi_gpio_config_data); i++) {
-		rc = gpio_tlmm_config(qsd_spi_gpio_config_data[i], GPIO_ENABLE);
-		if (rc) {
-			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, qsd_spi_gpio_config_data[i], rc);
-			return -EIO;
-		}
-	}
-	return 0;
+	return msm_gpios_request_enable(qsd_spi_gpio_config_data,
+		ARRAY_SIZE(qsd_spi_gpio_config_data));
 }
 
 static void msm_qsd_spi_gpio_release(void)
 {
-	gpio_free(45);
-	gpio_free(46);
-	gpio_free(47);
-	gpio_free(48);
+	msm_gpios_disable_free(qsd_spi_gpio_config_data,
+		ARRAY_SIZE(qsd_spi_gpio_config_data));
 }
 
 static struct msm_spi_platform_data qsd_spi_pdata = {
