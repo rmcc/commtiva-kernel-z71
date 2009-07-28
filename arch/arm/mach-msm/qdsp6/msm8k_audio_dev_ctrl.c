@@ -386,6 +386,10 @@ static int msm8k_audio_dev_ctrl_ioctl(struct inode *inode, struct file *f,
 		rc = audio_set_device_mute(&m);
 
 		break;
+	case AUDIO_SET_MAX_VOL_ALL:
+		rc = volume_set_max_vol_all();
+
+		break;
 	default:
 		rc = -EINVAL;
 	}

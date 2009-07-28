@@ -55,6 +55,7 @@
 #define AUDIO_SET_MBADRC       _IOW(AUDIO_IOCTL_MAGIC, 37, unsigned)
 #define AUDIO_SET_VOLUME_PATH   _IOW(AUDIO_IOCTL_MAGIC, 38, \
 				struct msm_vol_info)
+#define AUDIO_SET_MAX_VOL_ALL _IOW(AUDIO_IOCTL_MAGIC, 39, unsigned)
 
 #define	AUDIO_MAX_COMMON_IOCTL_NUM	100
 

@@ -150,3 +150,5 @@ void set_audio_ctrl_handle(u32 handle);
 int cad_volume_dinit(void);
 int cad_volume_init(struct cad_func_tbl_type **func_tbl);
 
+int volume_set_max_vol_all(void);
+
