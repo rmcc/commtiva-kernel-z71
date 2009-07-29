@@ -107,7 +107,7 @@ static int diagchar_open(struct inode *inode, struct file *file)
 		driver->data_ready[i] |= EVENT_MASKS_TYPE;
 		driver->data_ready[i] |= LOG_MASKS_TYPE;
 
-		if (driver->ref_count == 0)
+		if (driver->ref_count == 0 && driver->count == 0)
 			diagmem_init(driver);
 		driver->ref_count++;
 		mutex_unlock(&driver->diagchar_mutex);
@@ -128,9 +128,7 @@ static int diagchar_close(struct inode *inode, struct file *file)
 			if (driver) {
 				mutex_lock(&driver->diagchar_mutex);
 				driver->ref_count--;
-				if (driver->ref_count == 0)
-					diagmem_exit(driver);
-
+				diagmem_exit(driver);
 				for (i = 0; i < driver->num_clients; i++)
 					if (driver->client_map[i] ==
 					     current->tgid) {
@@ -465,8 +463,7 @@ fail:
 static void __exit diagchar_exit(void)
 {
 	printk(KERN_INFO "diagchar exiting ..\n");
-	if (driver->ref_count)
-		diagmem_exit(driver);
+	diagmem_exit(driver);
 	diagfwd_exit();
 	diagchar_cleanup();
 	printk(KERN_INFO "done diagchar exit\n");
