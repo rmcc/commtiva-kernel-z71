@@ -382,6 +382,19 @@ static void msm_pm_config_hw_before_swfi(void)
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 }
 
+/*
+ * Reset the entire chip.
+ *
+ * NOTE: The function never returns.
+ */
+static void msm_pm_reset_chip(void)
+{
+	printk(KERN_EMERG "%s(): resetting chip\n", __func__);
+	msm_proc_comm(PCOM_RESET_CHIP_IMM, NULL, NULL);
+	for (;;)
+		;
+}
+
 
 /******************************************************************************
  * State Polling Definitions
@@ -450,7 +463,7 @@ static int msm_pm_poll_state(int nr_grps, struct msm_pm_polled_group *grps)
 {
 	int i, k;
 
-	for (i = 0; i < 100000; i++)
+	for (i = 0; i < 500000; i++)
 		for (k = 0; k < nr_grps; k++) {
 			bool all_set, all_clear;
 			bool any_set, any_clear;
@@ -912,11 +925,9 @@ static int msm_pm_power_collapse
 	ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
 
 	if (ret < 0) {
-		MSM_PM_DPRINTK(
-			MSM_PM_DEBUG_SUSPEND|MSM_PM_DEBUG_POWER_COLLAPSE,
-			KERN_INFO,
-			"%s(): msm_pm_poll_state failed, %d\n", __func__, ret);
-		goto power_collapse_restore_gpio_bail;
+		printk(KERN_EMERG "%s(): power collapse entry "
+			"timed out waiting for Modem's response\n", __func__);
+		msm_pm_reset_chip();
 	}
 
 	if (ret == 1) {
@@ -925,8 +936,7 @@ static int msm_pm_power_collapse
 			KERN_INFO,
 			"%s(): msm_pm_poll_state detected Modem reset\n",
 			__func__);
-		ret = -EAGAIN;
-		goto power_collapse_restore_gpio_bail;
+		goto power_collapse_early_exit;
 	}
 
 	/* DEM Master in RSA */
@@ -1028,16 +1038,20 @@ static int msm_pm_power_collapse
 	msm_pm_config_hw_after_power_up();
 	MSM_PM_DEBUG_PRINT_STATE("msm_pm_power_collapse(): post power up");
 
-	do {
-		memset(state_grps, 0, sizeof(state_grps));
-		state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
-		state_grps[0].bits_any_set =
-			DEM_MASTER_SMSM_RSA | DEM_MASTER_SMSM_PWRC_EARLY_EXIT;
-		state_grps[1].group_id = SMSM_MODEM_STATE;
-		state_grps[1].bits_all_set = SMSM_RESET;
+	memset(state_grps, 0, sizeof(state_grps));
+	state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
+	state_grps[0].bits_any_set =
+		DEM_MASTER_SMSM_RSA | DEM_MASTER_SMSM_PWRC_EARLY_EXIT;
+	state_grps[1].group_id = SMSM_MODEM_STATE;
+	state_grps[1].bits_all_set = SMSM_RESET;
 
-		ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
-	} while (ret < 0);
+	ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
+
+	if (ret < 0) {
+		printk(KERN_EMERG "%s(): power collapse exit "
+			"timed out waiting for Modem's response\n", __func__);
+		msm_pm_reset_chip();
+	}
 
 	if (ret == 1) {
 		MSM_PM_DPRINTK(
@@ -1045,8 +1059,7 @@ static int msm_pm_power_collapse
 			KERN_INFO,
 			"%s(): msm_pm_poll_state detected Modem reset\n",
 			__func__);
-		ret = -EAGAIN;
-		goto power_collapse_restore_gpio_bail;
+		goto power_collapse_early_exit;
 	}
 
 	/* Sanity check */
@@ -1066,15 +1079,19 @@ static int msm_pm_power_collapse
 
 	MSM_PM_DEBUG_PRINT_STATE("msm_pm_power_collapse(): WFPI");
 
-	do {
-		memset(state_grps, 0, sizeof(state_grps));
-		state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
-		state_grps[0].bits_all_set = DEM_MASTER_SMSM_RUN;
-		state_grps[1].group_id = SMSM_MODEM_STATE;
-		state_grps[1].bits_all_set = SMSM_RESET;
+	memset(state_grps, 0, sizeof(state_grps));
+	state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
+	state_grps[0].bits_all_set = DEM_MASTER_SMSM_RUN;
+	state_grps[1].group_id = SMSM_MODEM_STATE;
+	state_grps[1].bits_all_set = SMSM_RESET;
 
-		ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
-	} while (ret < 0);
+	ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
+
+	if (ret < 0) {
+		printk(KERN_EMERG "%s(): power collapse WFPI "
+			"timed out waiting for Modem's response\n", __func__);
+		msm_pm_reset_chip();
+	}
 
 	if (ret == 1) {
 		MSM_PM_DPRINTK(
@@ -1116,17 +1133,20 @@ power_collapse_early_exit:
 
 	MSM_PM_DEBUG_PRINT_STATE("msm_pm_power_collapse(): EARLY_EXIT");
 
-	do {
-		memset(state_grps, 0, sizeof(state_grps));
-		state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
-		state_grps[0].bits_all_set = DEM_MASTER_SMSM_PWRC_EARLY_EXIT;
-		state_grps[1].group_id = SMSM_MODEM_STATE;
-		state_grps[1].bits_all_set = SMSM_RESET;
+	memset(state_grps, 0, sizeof(state_grps));
+	state_grps[0].group_id = SMSM_POWER_MASTER_DEM;
+	state_grps[0].bits_all_set = DEM_MASTER_SMSM_PWRC_EARLY_EXIT;
+	state_grps[1].group_id = SMSM_MODEM_STATE;
+	state_grps[1].bits_all_set = SMSM_RESET;
 
-		ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
-	} while (ret < 0);
-
+	ret = msm_pm_poll_state(ARRAY_SIZE(state_grps), state_grps);
 	MSM_PM_DEBUG_PRINT_STATE("msm_pm_power_collapse(): EARLY_EXIT EE");
+
+	if (ret < 0) {
+		printk(KERN_EMERG "%s(): power collapse EARLY_EXIT "
+			"timed out waiting for Modem's response\n", __func__);
+		msm_pm_reset_chip();
+	}
 
 	if (ret == 1) {
 		MSM_PM_DPRINTK(
