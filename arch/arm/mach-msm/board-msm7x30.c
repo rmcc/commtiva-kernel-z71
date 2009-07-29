@@ -60,6 +60,7 @@
 #include <linux/gpio.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
+#include <linux/bootmem.h>
 #include <linux/io.h>
 #include <linux/usb/mass_storage_function.h>
 #include <linux/spi/spi.h>
@@ -74,11 +75,14 @@
 #include <mach/msm_iomap.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_spi.h>
+#include <linux/android_pmem.h>
 
 #include "devices.h"
 #include "timer.h"
 #include "socinfo.h"
 #include "pm.h"
+
+#define MSM_PMEM_SF_SIZE	0x800000
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -282,6 +286,19 @@ static void __init msm_qsd_spi_init(void)
 	qsd_device_spi.dev.platform_data = &qsd_spi_pdata;
 }
 
+static struct android_pmem_platform_data android_pmem_pdata = {
+	.name = "pmem",
+	.size = MSM_PMEM_SF_SIZE,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.cached = 1,
+};
+
+static struct platform_device android_pmem_device = {
+	.name = "android_pmem",
+	.id = 0,
+	.dev = { .platform_data = &android_pmem_pdata },
+};
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc91x_device,
@@ -292,6 +309,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi6,
 #endif
+	&android_pmem_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -339,10 +357,24 @@ static void __init msm7x30_init(void)
 	msm_pm_set_platform_data(msm_pm_data);
 }
 
+static void __init msm7x30_allocate_memory_regions(void)
+{
+	void *addr;
+	unsigned long size;
+
+	size = MSM_PMEM_SF_SIZE;
+	addr = alloc_bootmem(size);
+	android_pmem_pdata.start = __pa(addr);
+	android_pmem_pdata.size = size;
+	pr_info("allocating %lu bytes at %p (%lx physical) "
+	       "for pmem\n", size, addr, __pa(addr));
+}
+
 static void __init msm7x30_map_io(void)
 {
 	msm_shared_ram_phys = 0x00100000;
 	msm_map_msm7x30_io();
+	msm7x30_allocate_memory_regions();
 	msm_clock_init(msm_clocks_7x30, msm_num_clocks_7x30);
 }
 
