@@ -19,9 +19,30 @@
 #include <linux/linkage.h>
 #include <asm/assembler.h>
 
+ENTRY(msm_arch_idle)
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 0   /* flush entire data cache */
+	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
+	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
+	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
+	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
+
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 4   /* dsb                */
+	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
+
+	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
+	mcr     p15, 0, r0, c7, c5, 4    /* isb                */
+
+	mov     pc, lr
+
 ENTRY(msm_pm_collapse)
 	ldr     r0, =saved_state
 	stmia   r0!, {r4-r14}
+
+#if defined(CONFIG_MSM_FIQ_SUPPORT)
+	cpsid   f
+#endif
 	mrc     p15, 0, r1, c1, c0, 0 /* MMU control */
 	mrc     p15, 0, r2, c2, c0, 0 /* ttb */
 	mrc     p15, 0, r3, c3, c0, 0 /* dacr */
@@ -36,28 +57,28 @@ ENTRY(msm_pm_collapse)
 #endif
 	mrc	p15, 0, r1, c1, c0, 2	/* read CACR */
 	stmia   r0!, {r1}
-	/* fall though */
-ENTRY(msm_arch_idle)
-#if defined(CONFIG_MSM_FIQ_SUPPORT)
-	cpsid   f
-#endif
-	mcr     p15, 0, r0, c7, c10, 0   /* flush the cache    */
+
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 0   /* flush entire data cache */
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
 	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
 
-	mov     r0, #0                   /* prepare wfi value
-					  * also used as return value from
-					  * msm_pm_collapse */
-
-	mcr     p15, 0, r0, c7, c10, 4   /* memory barrier     */
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 4   /* dsb                */
 	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
 
 	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
+	mcr     p15, 0, r0, c7, c5, 4    /* isb                */
+
 #if defined(CONFIG_MSM_FIQ_SUPPORT)
 	cpsie   f
 #endif
+
+	ldr     r0, =saved_state         /* restore registers */
+	ldmfd   r0, {r4-r14}
+	mov     r0, #0                   /* return power collapse failed */
 	mov     pc, lr
 
 ENTRY(msm_pm_collapse_exit)
@@ -89,6 +110,8 @@ ENTRY(msm_pm_collapse_exit)
 	mcr     p15, 0, r4, c3, c0, 0 /* dacr */
 	mcr     p15, 0, r3, c2, c0, 0 /* ttb */
 	mcr     p15, 0, r5, c13, c0, 1	/* context ID */
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c5, 4   /* isb */
 	ldmdb   r1!, {r4-r14}
 
 	/* Add 1:1 map in the PMD to allow smooth switch when turning on MMU */
@@ -104,8 +127,10 @@ ENTRY(msm_pm_collapse_exit)
 	orr     r0, r0, #0x400   /* PMD_SECT_AP_WRITE */
 	orr     r0, r0, #0x2     /* PMD_TYPE_SECT|PMD_DOMAIN(DOMAIN_KERNEL) */
 	str     r0, [r3]         /* put new entry into the MMU table */
-	mcr     p15, 0, r3, c7, c10, 1  /* flush_pmd */
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 4  /* dsb */
 	mcr     p15, 0, r2, c1, c0, 0   /* MMU control */
+	mcr     p15, 0, r0, c7, c5, 4   /* isb */
 msm_pm_mapped_pa:
 	/* Switch to virtual */
 	adr     r2, msm_pm_pa_to_va
@@ -116,7 +141,19 @@ msm_pm_pa_to_va:
 	/* Restore r1 in MMU table */
 	add     r3, r3, r0
 	str     r1, [r3]
-	mcr     p15, 0, r3, c7, c10, 1  /* flush_pmd */
+
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 0 /* flush entire data cache */
+	mcr     p15, 0, r0, c7, c10, 4 /* dsb */
+	mcr     p15, 0, r0, c7, c5, 4  /* isb */
+	mcr     p15, 0, r0, c8, c7, 0  /* invalidate entire unified TLB */
+	mcr     p15, 0, r0, c7, c5, 6  /* invalidate entire branch target
+					* cache */
+	mcr     p15, 0, r0, c7, c7, 0  /* invalidate both data and instruction
+					* cache */
+	mcr     p15, 0, r0, c7, c10, 4 /* dsb */
+	mcr     p15, 0, r0, c7, c5, 4  /* isb */
+
 	mov     r0, #1
 	mov     pc, lr
 	nop
