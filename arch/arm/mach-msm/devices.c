@@ -404,11 +404,16 @@ struct platform_device msm_device_smd = {
 	.id	= -1,
 };
 
-#if defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_ARCH_QSD8X50)
 #define MSM_SDC1_BASE         0xA0300000
 #define MSM_SDC2_BASE         0xA0400000
 #define MSM_SDC3_BASE         0xA0500000
 #define MSM_SDC4_BASE         0xA0600000
+#elif defined(CONFIG_ARCH_MSM7X30)
+#define MSM_SDC1_BASE         0xA0400000
+#define MSM_SDC2_BASE         0xA0500000
+#define MSM_SDC3_BASE         0xA3000000
+#define MSM_SDC4_BASE         0xA3100000
 #else
 #define MSM_SDC1_BASE         0xA0400000
 #define MSM_SDC2_BASE         0xA0500000

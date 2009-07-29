@@ -81,6 +81,8 @@
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
 
+#include <asm/mach/mmc.h>
+#include <mach/vreg.h>
 #include "devices.h"
 #include "timer.h"
 #include "socinfo.h"
@@ -627,6 +629,161 @@ static void __init msm7x30_init_irq(void)
 	msm_init_irq();
 }
 
+struct sdcc_gpio {
+	struct msm_gpio *cfg_data;
+	uint32_t size;
+};
+
+static struct msm_gpio sdc1_cfg_data[] = {
+	{GPIO_CFG(38, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_clk"},
+	{GPIO_CFG(39, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_cmd"},
+	{GPIO_CFG(40, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_3"},
+	{GPIO_CFG(41, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_2"},
+	{GPIO_CFG(42, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_1"},
+	{GPIO_CFG(43, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_0"},
+};
+
+static struct msm_gpio sdc2_cfg_data[] = {
+	{GPIO_CFG(64, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_clk"},
+	{GPIO_CFG(65, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_cmd"},
+	{GPIO_CFG(66, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_3"},
+	{GPIO_CFG(67, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_2"},
+	{GPIO_CFG(68, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_1"},
+	{GPIO_CFG(69, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_0"},
+};
+
+static struct msm_gpio sdc3_cfg_data[] = {
+	{GPIO_CFG(110, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_clk"},
+	{GPIO_CFG(111, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_cmd"},
+	{GPIO_CFG(116, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_3"},
+	{GPIO_CFG(117, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_2"},
+	{GPIO_CFG(118, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_1"},
+	{GPIO_CFG(119, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_0"},
+};
+
+static struct msm_gpio sdc4_cfg_data[] = {
+	{GPIO_CFG(58, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_clk"},
+	{GPIO_CFG(59, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_cmd"},
+	{GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_3"},
+	{GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_2"},
+	{GPIO_CFG(62, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_1"},
+	{GPIO_CFG(63, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_0"},
+};
+
+static struct sdcc_gpio sdcc_cfg_data[] = {
+	{
+		.cfg_data = sdc1_cfg_data,
+		.size = ARRAY_SIZE(sdc1_cfg_data),
+	},
+	{
+		.cfg_data = sdc2_cfg_data,
+		.size = ARRAY_SIZE(sdc2_cfg_data),
+	},
+	{
+		.cfg_data = sdc3_cfg_data,
+		.size = ARRAY_SIZE(sdc3_cfg_data),
+	},
+	{
+		.cfg_data = sdc4_cfg_data,
+		.size = ARRAY_SIZE(sdc4_cfg_data),
+	},
+};
+
+static unsigned long vreg_sts, gpio_sts;
+static struct vreg *vreg_mmc;
+
+static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
+{
+	int rc = 0;
+	struct sdcc_gpio *curr;
+
+	curr = &sdcc_cfg_data[dev_id - 1];
+
+	if (!(test_bit(dev_id, &gpio_sts)^enable))
+		return;
+
+	if (enable) {
+		set_bit(dev_id, &gpio_sts);
+		rc = msm_gpios_request_enable(curr->cfg_data, curr->size);
+		if (rc)
+			printk(KERN_ERR "%s: Failed to turn on GPIOs for slot %d\n",
+				__func__,  dev_id);
+	} else {
+		clear_bit(dev_id, &gpio_sts);
+		msm_gpios_disable_free(curr->cfg_data, curr->size);
+	}
+}
+
+static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
+{
+	int rc = 0;
+	struct platform_device *pdev;
+
+	pdev = container_of(dv, struct platform_device, dev);
+	msm_sdcc_setup_gpio(pdev->id, (vdd ? 1 : 0));
+
+	if (vdd == 0) {
+		if (!vreg_sts)
+			return 0;
+
+		clear_bit(pdev->id, &vreg_sts);
+
+		if (!vreg_sts) {
+			rc = vreg_disable(vreg_mmc);
+			if (rc)
+				printk(KERN_ERR "%s: return val: %d \n",
+					__func__, rc);
+		}
+	} else {
+		if (!vreg_sts) {
+			rc = vreg_set_level(vreg_mmc, 2850);
+			if (rc) {
+				printk(KERN_ERR "%s: vreg_set_level() = %d \n",
+						__func__, rc);
+				goto out;
+			}
+			rc = vreg_enable(vreg_mmc);
+			if (rc) {
+				printk(KERN_ERR "%s: vreg_enable() = %d \n",
+						__func__, rc);
+				goto out;
+			}
+		}
+		set_bit(pdev->id, &vreg_sts);
+	}
+out:
+	return rc;
+}
+
+static struct mmc_platform_data msm7x30_sdcc_data = {
+	.ocr_mask	= MMC_VDD_27_28 | MMC_VDD_28_29,
+	.translate_vdd	= msm_sdcc_setup_power,
+};
+
+static void __init msm7x30_init_mmc(void)
+{
+	vreg_mmc = vreg_get(NULL, "mmc");
+	if (IS_ERR(vreg_mmc)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_mmc));
+		return;
+	}
+
+#ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
+	msm_add_sdcc(1, &msm7x30_sdcc_data);
+#endif
+#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
+	msm_add_sdcc(2, &msm7x30_sdcc_data);
+#endif
+#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
+	msm_add_sdcc(3, &msm7x30_sdcc_data);
+#endif
+#ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
+	msm_add_sdcc(4, &msm7x30_sdcc_data);
+#endif
+
+}
+
 static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].supported = 0,
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].suspend_enabled = 0,
@@ -661,6 +818,7 @@ static void __init msm7x30_init(void)
 		       __func__);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+	msm7x30_init_mmc();
 	msm_qsd_spi_init();
 	spi_register_board_info(msm_spi_board_info,
 		ARRAY_SIZE(msm_spi_board_info));
