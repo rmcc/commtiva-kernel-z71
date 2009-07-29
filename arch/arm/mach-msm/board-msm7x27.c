@@ -1336,6 +1336,8 @@ static void __init msm7x27_init(void)
 		msm7x27_clock_data.max_axi_khz = 200000;
 
 	msm_acpu_clock_init(&msm7x27_clock_data);
+
+	msm_hsusb_pdata.max_axi_khz = msm7x27_clock_data.max_axi_khz;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));

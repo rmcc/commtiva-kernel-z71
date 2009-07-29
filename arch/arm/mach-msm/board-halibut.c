@@ -1263,6 +1263,7 @@ static void __init halibut_init(void)
 	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
 			      &msm_device_uart3.dev, 1);
 #endif
+	msm_hsusb_pdata.max_axi_khz = halibut_clock_data.max_axi_khz;
 	msm_hsusb_pdata.soc_version = socinfo_get_version();
 	msm_acpu_clock_init(&halibut_clock_data);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata,

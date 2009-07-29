@@ -549,6 +549,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 #ifdef CONFIG_USB_FS_HOST
 	.config_fs_gpio = msm_fsusb_setup_gpio,
 #endif
+	.max_axi_khz = 128000,
 };
 
 static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
