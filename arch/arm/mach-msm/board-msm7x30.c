@@ -83,6 +83,7 @@
 #include "pm.h"
 
 #define MSM_PMEM_SF_SIZE	0x800000
+#define MSM_FB_SIZE		0x200000
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -299,6 +300,44 @@ static struct platform_device android_pmem_device = {
 	.dev = { .platform_data = &android_pmem_pdata },
 };
 
+static struct resource msm_fb_resources[] = {
+	{
+		.flags  = IORESOURCE_DMA,
+	}
+};
+
+static struct msm_fb_platform_data msm_fb_pdata;
+
+static struct platform_device msm_fb_device = {
+	.name   = "msm_fb",
+	.id     = 0,
+	.num_resources  = ARRAY_SIZE(msm_fb_resources),
+	.resource       = msm_fb_resources,
+	.dev    = {
+		.platform_data = &msm_fb_pdata,
+	}
+};
+
+static int msm_fb_mddi_sel_clk(u32 *clk_rate)
+{
+	*clk_rate *= 2;
+	return 0;
+}
+
+static struct mddi_platform_data mddi_pdata = {
+	.mddi_sel_clk = msm_fb_mddi_sel_clk,
+};
+
+static struct msm_panel_common_pdata mdp_pdata = {
+	.gpio = 92,
+};
+
+static void __init msm_fb_add_devices(void)
+{
+	msm_fb_register_device("mdp", &mdp_pdata);
+	msm_fb_register_device("pmdh", &mddi_pdata);
+}
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc91x_device,
@@ -310,6 +349,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_ssbi6,
 #endif
 	&android_pmem_device,
+	&msm_fb_device,
 };
 
 static void __init msm7x30_init_irq(void)
@@ -354,6 +394,7 @@ static void __init msm7x30_init(void)
 	msm_qsd_spi_init();
 	spi_register_board_info(msm_spi_board_info,
 		ARRAY_SIZE(msm_spi_board_info));
+	msm_fb_add_devices();
 	msm_pm_set_platform_data(msm_pm_data);
 }
 
@@ -368,6 +409,13 @@ static void __init msm7x30_allocate_memory_regions(void)
 	android_pmem_pdata.size = size;
 	pr_info("allocating %lu bytes at %p (%lx physical) "
 	       "for pmem\n", size, addr, __pa(addr));
+
+	size = MSM_FB_SIZE;
+	addr = alloc_bootmem(size);
+	msm_fb_resources[0].start = __pa(addr);
+	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
+	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
+		size, addr, __pa(addr));
 }
 
 static void __init msm7x30_map_io(void)
