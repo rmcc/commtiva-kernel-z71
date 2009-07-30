@@ -157,7 +157,9 @@ void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 			break;
 		}
 	case AUDPP_MSG_PCMDMAMISSED:
-		printk(KERN_ERR "alsa_dsp_event: PCMDMAMISSED %d\n", msg[0]);
+		pr_info("alsa_dsp_event: PCMDMAMISSED %d\n", msg[0]);
+		prtd->eos_ack = 1;
+		wake_up(&the_locks.eos_wait);
 		break;
 	case AUDPP_MSG_CFG_MSG:
 		if (msg[0] == AUDPP_MSG_ENA_ENA) {

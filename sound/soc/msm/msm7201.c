@@ -308,6 +308,7 @@ static int __init msm_audio_init(void)
 	spin_lock_init(&the_locks.read_dsp_lock);
 	spin_lock_init(&the_locks.write_dsp_lock);
 	spin_lock_init(&the_locks.mixer_lock);
+	init_waitqueue_head(&the_locks.eos_wait);
 	init_waitqueue_head(&the_locks.write_wait);
 	init_waitqueue_head(&the_locks.read_wait);
 	msm_vol_ctl.volume = MSM_PLAYBACK_DEFAULT_VOLUME;

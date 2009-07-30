@@ -101,6 +101,7 @@ struct audio_locks {
 	spinlock_t mixer_lock;
 	wait_queue_head_t read_wait;
 	wait_queue_head_t write_wait;
+	wait_queue_head_t eos_wait;
 };
 
 extern struct audio_locks the_locks;
@@ -171,6 +172,7 @@ struct msm_audio {
 	int enabled;
 	int running;
 	int stopped; /* set when stopped, cleared on flush */
+	int eos_ack;
 };
 
 
