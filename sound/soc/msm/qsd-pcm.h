@@ -47,6 +47,7 @@ extern void register_cb(void *);
 struct audio_locks {
 	struct mutex lock;
 	struct mutex mixer_lock;
+	wait_queue_head_t eos_wait;
 };
 
 struct qsd_ctl {
@@ -82,6 +83,7 @@ struct qsd_audio {
 	int enabled;
 	int running;
 	int stopped;		/* set when stopped, cleared on flush */
+	int eos_ack;
 
 	struct cad_open_struct_type cos;
 	uint32_t cad_w_handle;
