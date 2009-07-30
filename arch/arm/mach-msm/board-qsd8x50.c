@@ -100,8 +100,7 @@
 #define TOUCHPAD_SUSPEND 	34
 #define TOUCHPAD_IRQ 		38
 
-#define MSM_PMEM_MDP_SIZE	0x1100000
-#define MSM_PMEM_CAMERA_SIZE   0xa00000
+#define MSM_PMEM_MDP_SIZE	0x1600000
 #define MSM_PMEM_ADSP_SIZE	0x2900000
 #define MSM_PMEM_GPU1_SIZE	0x800000
 #define MSM_FB_SIZE             0x500000
@@ -591,13 +590,6 @@ static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.cached = 0,
 };
 
-static struct android_pmem_platform_data android_pmem_camera_pdata = {
-	.name = "pmem_camera",
-	.size = MSM_PMEM_CAMERA_SIZE,
-	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
-	.cached = 1,
-};
-
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
 	.id = 0,
@@ -620,11 +612,6 @@ static struct platform_device android_pmem_gpu1_device = {
 	.name = "android_pmem",
 	.id = 3,
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
-static struct platform_device android_pmem_camera_device = {
-	.name = "android_pmem",
-	.id = 4,
-	.dev = { .platform_data = &android_pmem_camera_pdata },
 };
 
 static struct platform_device android_pmem_kernel_ebi1_device = {
@@ -1211,7 +1198,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 	&msm_device_tssc,
-	&android_pmem_camera_device,
 	&msm_audio_device,
 	&msm_device_uart_dm1,
 	&msm_bluesleep_device,
@@ -1950,13 +1936,6 @@ static void __init qsd8x50_allocate_memory_regions(void)
 	android_pmem_kernel_ebi1_pdata.size = size;
 	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
 	       "for pmem kernel ebi1 arena\n", size, addr, __pa(addr));
-
-	size = MSM_PMEM_CAMERA_SIZE;
-	addr = alloc_bootmem(size);
-	android_pmem_camera_pdata.start = __pa(addr);
-	android_pmem_camera_pdata.size = size;
-	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
-		"for camera pmem\n", size, addr, __pa(addr));
 
 	size = MSM_PMEM_MDP_SIZE;
 	addr = alloc_bootmem(size);
