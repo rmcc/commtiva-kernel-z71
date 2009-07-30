@@ -57,13 +57,19 @@
 #define AUDIO_SWITCH_DEVICE  _IOW(AUDIO_IOCTL_MAGIC, 32, unsigned)
 #define AUDIO_SET_MUTE     _IOW(AUDIO_IOCTL_MAGIC, 33, unsigned)
 #define AUDIO_GET_STREAM_INFO   _IOR(AUDIO_IOCTL_MAGIC, 34, \
-				struct msm_audio_bitstream_info)
+			       struct msm_audio_bitstream_info)
 #define AUDIO_SET_PAN       _IOW(AUDIO_IOCTL_MAGIC, 35, unsigned)
 #define AUDIO_SET_QCONCERT_PLUS       _IOW(AUDIO_IOCTL_MAGIC, 36, unsigned)
 #define AUDIO_SET_MBADRC       _IOW(AUDIO_IOCTL_MAGIC, 37, unsigned)
 #define AUDIO_SET_VOLUME_PATH   _IOW(AUDIO_IOCTL_MAGIC, 38, \
-				struct msm_vol_info)
+				     struct msm_vol_info)
 #define AUDIO_SET_MAX_VOL_ALL _IOW(AUDIO_IOCTL_MAGIC, 39, unsigned)
+
+/* Google added. Were 34, 35, 36 now 64, 65, 66 */
+#define AUDIO_UPDATE_ACDB    _IOW(AUDIO_IOCTL_MAGIC, 64, unsigned)
+#define AUDIO_START_VOICE    _IOW(AUDIO_IOCTL_MAGIC, 65, unsigned)
+#define AUDIO_STOP_VOICE     _IOW(AUDIO_IOCTL_MAGIC, 66, unsigned)
+
 
 #define AUDIO_SET_STREAM_CONFIG   _IOW(AUDIO_IOCTL_MAGIC, 40, \
 				struct msm_audio_stream_config)
