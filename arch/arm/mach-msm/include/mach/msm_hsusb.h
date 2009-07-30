@@ -51,12 +51,13 @@ struct usb_composition {
 };
 #endif
 
-struct msm_hsusb_platform_data {
-	__u16   version;
-#ifdef CONFIG_USB_ANDROID
+struct msm_hsusb_gadget_platform_data {
 	int *phy_init_seq;
 	void (*phy_reset)(void);
-#endif
+};
+
+struct msm_hsusb_platform_data {
+	__u16   version;
 	unsigned phy_info;
 	__u16   vendor_id;
 	char   	*product_name;
