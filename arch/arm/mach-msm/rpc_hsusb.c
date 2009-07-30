@@ -121,7 +121,8 @@ int msm_hsusb_rpc_connect(void)
 	}
 
 	usb_ep = msm_rpc_connect_compatible(usb_rpc_ids.prog,
-					usb_rpc_ids.vers_comp, 0);
+					usb_rpc_ids.vers_comp,
+					MSM_RPC_UNINTERRUPTIBLE);
 
 	if (IS_ERR(usb_ep)) {
 		printk(KERN_ERR "%s: connect compatible failed vers = %lx\n",
@@ -134,7 +135,8 @@ int msm_hsusb_rpc_connect(void)
 			return -ENODATA;
 		}
 		usb_ep = msm_rpc_connect_compatible(usb_rpc_ids.prog,
-					usb_rpc_ids.vers_comp, 0);
+					usb_rpc_ids.vers_comp,
+					MSM_RPC_UNINTERRUPTIBLE);
 	}
 
 	if (IS_ERR(usb_ep)) {
@@ -170,7 +172,7 @@ int msm_chg_rpc_connect(void)
 	}
 
 	chg_ep = msm_rpc_connect_compatible(chg_rpc_ids.prog,
-				chg_rpc_ids.vers_comp, 0);
+				chg_rpc_ids.vers_comp, MSM_RPC_UNINTERRUPTIBLE);
 
 	if (IS_ERR(chg_ep)) {
 		printk(KERN_ERR "%s: connect compatible failed vers = %lx\n",
