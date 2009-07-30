@@ -204,6 +204,25 @@ struct platform_device msm_device_i2c = {
 	.resource	= resources_i2c,
 };
 
+#ifdef CONFIG_I2C_SSBI
+#define MSM_SSBI6_PHYS	0xAD900000
+static struct resource msm_ssbi6_resources[] = {
+	{
+		.name   = "ssbi_base",
+		.start	= MSM_SSBI6_PHYS,
+		.end	= MSM_SSBI6_PHYS + SZ_4K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+};
+
+struct platform_device msm_device_ssbi6 = {
+	.name		= "i2c_ssbi",
+	.id		= 6,
+	.num_resources	= ARRAY_SIZE(msm_ssbi6_resources),
+	.resource	= msm_ssbi6_resources,
+};
+#endif /* CONFIG_I2C_SSBI */
+
 #ifdef CONFIG_SOC_MSM7X30
 #define MSM_HSUSB_PHYS        0xA3600000
 #else
