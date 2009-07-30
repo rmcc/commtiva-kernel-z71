@@ -35,7 +35,7 @@
 #define PMEM_MAX_ORDER (128)
 #define PMEM_MIN_ALLOC PAGE_SIZE
 
-#define PMEM_NUM_BITMAP_ALLOCATIONS (64)
+#define PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS (64)
 
 #define PMEM_1M 	(1 << 20)
 #define PMEM_1M_MASK 	(0xfff00000)
@@ -149,6 +149,7 @@ struct pmem_info {
 
 	unsigned int bitmap_free; /* # of zero bits in bitmap (# of quanta) */
 	uint32_t *bitmap;
+	int32_t bitmap_allocs;
 	struct {
 		short bit;
 		unsigned short quanta;
@@ -331,7 +332,7 @@ static int pmem_free_bitmap(int id, int bitnum)
 
 	DLOG("bitnum %d\n", bitnum);
 
-	for (i = 0; i < PMEM_NUM_BITMAP_ALLOCATIONS; i++) {
+	for (i = 0; i < pmem[id].bitmap_allocs; i++) {
 		const int curr_bit = pmem[id].bitm_alloc[i].bit;
 
 		if (curr_bit == bitnum) {
@@ -428,8 +429,8 @@ static int pmem_open(struct inode *inode, struct file *file)
 		return -1;
 	data = kmalloc(sizeof(struct pmem_data), GFP_KERNEL);
 	if (!data) {
-		printk(KERN_ALERT "pmem: unable to allocate memory for pmem"
-				" metadata.");
+		printk(KERN_ALERT "pmem: %s: unable to allocate memory for "
+				"pmem metadata.", __func__);
 		return -1;
 	}
 	data->flags = 0;
@@ -517,7 +518,10 @@ static int pmem_allocator_buddy_bestfit(const int id,
 
 	/* if best_fit < 0, there are no suitable slots; return an error */
 	if (best_fit < 0) {
-		printk(KERN_ALERT "pmem: no space left to allocate!\n");
+#if PMEM_DEBUG
+		printk(KERN_ALERT "pmem: %s: no space left to allocate!\n",
+			__func__);
+#endif
 		goto out;
 	}
 
@@ -580,7 +584,7 @@ static int bitmap_bits_are_all_free(int *bitp, int bit_start, int needed)
 	return 1;
 }
 
-static int get_quanta(const unsigned int quanta_needed,
+static int reserve_quanta(const unsigned int quanta_needed,
 		const int id,
 		const enum pmem_align align)
 {
@@ -589,8 +593,8 @@ static int get_quanta(const unsigned int quanta_needed,
 	/* Sanity check */
 	if (quanta_needed > pmem[id].bitmap_free) {
 #if PMEM_DEBUG
-		printk(KERN_ALERT "pmem: get_quanta: request (%d) too big for"
-			" available free (%d)\n", quanta_needed,
+		printk(KERN_ALERT "pmem: %s: request (%d) too big for"
+			" available free (%d)\n", __func__, quanta_needed,
 			pmem[id].bitmap_free);
 #endif
 		return -1;
@@ -602,8 +606,8 @@ static int get_quanta(const unsigned int quanta_needed,
 		if (start_bit <= -1) {
 #if PMEM_DEBUG
 			printk(KERN_ALERT
-				"pmem: get_quanta: bit_from_paddr fails for"
-				" 1M alignment.\n");
+				"pmem: %s: bit_from_paddr fails for"
+				" 1M alignment.\n", __func__);
 #endif
 			return -1;
 		}
@@ -625,7 +629,8 @@ static int get_quanta(const unsigned int quanta_needed,
 		bitmap_bits_set_all(bitp, ret, ret + quanta_needed);
 #if PMEM_DEBUG
 	else
-		printk(KERN_WARNING "No bits free in bitmap!\n");
+		printk(KERN_ALERT "pmem: %s: not enough contiguous bits free "
+			"in bitmap!\n", __func__);
 #endif
 
 	return ret;
@@ -648,29 +653,71 @@ static int pmem_allocator_bitmap(const int id,
 		return -1;
 	}
 
-	for (i = 0; i < PMEM_NUM_BITMAP_ALLOCATIONS; i++)
-		if (pmem[id].bitm_alloc[i].bit == -1)
-			break;
-	if (i >= PMEM_NUM_BITMAP_ALLOCATIONS) {
-#if PMEM_DEBUG
-		printk(KERN_ALERT "pmem: No more free bitmap alloc slots,"
-			" id: %d\n", id);
-#endif
-		return -1;
-	}
-
 	quanta_needed = (len + pmem[id].quantum - 1) / pmem[id].quantum;
 	DLOG("quantum size %u quanta needed %u free %u id %d\n",
 		pmem[id].quantum, quanta_needed, pmem[id].bitmap_free, id);
 
-	bitnum = get_quanta(quanta_needed, id, align);
+	if (pmem[id].bitmap_free < quanta_needed) {
+#if PMEM_DEBUG
+		printk(KERN_ALERT "pmem: memory allocation failure. "
+			"PMEM memory region exhausted, id %d."
+			" Unable to comply with allocation request.\n", id);
+#endif
+		return -1;
+	}
+
+	bitnum = reserve_quanta(quanta_needed, id, align);
+	if (bitnum == -1)
+		goto leave;
+
+	for (i = 0;
+		i < pmem[id].bitmap_allocs &&
+			pmem[id].bitm_alloc[i].bit != -1;
+		i++)
+		;
+
+	if (i >= pmem[id].bitmap_allocs) {
+		void *temp;
+		int32_t new_bitmap_allocs =
+			pmem[id].bitmap_allocs << 1;
+		int j;
+
+		if (!new_bitmap_allocs) { /* failed sanity check!! */
+#if PMEM_DEBUG
+			printk(KERN_ALERT "pmem: bitmap_allocs number"
+				" wrapped around to zero! Something "
+				"is VERY wrong.\n");
+#endif
+			return -1;
+		}
+
+		temp = krealloc(pmem[id].bitm_alloc,
+				sizeof(unsigned int),
+				GFP_KERNEL);
+		if (!temp) {
+#if PMEM_DEBUG
+			printk(KERN_ALERT "pmem: can't realloc bitmap_allocs,"
+				"id %d, current num bitmap allocs %d\n",
+				id, pmem[id].bitmap_allocs);
+#endif
+			return -1;
+		}
+		pmem[id].bitmap_allocs = new_bitmap_allocs;
+		pmem[id].bitm_alloc = temp;
+
+		for (j = i; j < new_bitmap_allocs; j++)
+			pmem[id].bitm_alloc[j].bit = -1;
+
+		DLOG("increased # of allocated regions to %d for id %d\n",
+			pmem[id].bitmap_allocs, id);
+	}
 
 	DLOG("bitnum %d, bitm_alloc index %d\n", bitnum, i);
-	if (bitnum != -1) {
-		pmem[id].bitmap_free -= quanta_needed;
-		pmem[id].bitm_alloc[i].bit = bitnum;
-		pmem[id].bitm_alloc[i].quanta = quanta_needed;
-	}
+
+	pmem[id].bitmap_free -= quanta_needed;
+	pmem[id].bitm_alloc[i].bit = bitnum;
+	pmem[id].bitm_alloc[i].quanta = quanta_needed;
+leave:
 	return bitnum;
 }
 
@@ -727,7 +774,7 @@ static unsigned long pmem_len_bitmap(int id, struct pmem_data *data)
 
 	mutex_lock(&pmem[id].arena_mutex);
 
-	for (i = 0; i < PMEM_NUM_BITMAP_ALLOCATIONS; i++)
+	for (i = 0; i < pmem[id].bitmap_allocs; i++)
 		if (pmem[id].bitm_alloc[i].bit == data->index) {
 			ret = pmem[id].bitm_alloc[i].quanta * pmem[id].quantum;
 			break;
@@ -735,7 +782,7 @@ static unsigned long pmem_len_bitmap(int id, struct pmem_data *data)
 
 	mutex_unlock(&pmem[id].arena_mutex);
 #if PMEM_DEBUG
-	if (i >= PMEM_NUM_BITMAP_ALLOCATIONS)
+	if (i >= pmem[id].bitmap_allocs)
 		printk(KERN_ALERT "pmem: pmem_len: can't find bitnum %d in "
 			"alloc'd array!\n", data->index);
 #endif
@@ -1192,8 +1239,8 @@ int32_t pmem_kalloc(const size_t size, const uint32_t flags)
 		align = PMEM_ALIGN_1M;
 		break;
 	default:
-		printk(KERN_ALERT "Invalid alignment %#x\n",
-			(flags & PMEM_ALIGNMENT_MASK));
+		printk(KERN_ALERT "pmem: %s: Invalid alignment %#x\n",
+			__func__, (flags & PMEM_ALIGNMENT_MASK));
 		return -EINVAL;
 	}
 
@@ -1206,37 +1253,40 @@ retry_memalloc:
 			break;
 		}
 	if (info_id < 0) {
-		printk(KERN_ERR "Kernel %#x memory arena is"
-			" not initialized. Check board file!\n",
-			(flags & PMEM_MEMTYPE_MASK));
+		printk(KERN_ALERT "pmem: %s: Kernel %#x memory arena is not "
+			"initialized. Check board file!\n",
+			__func__, (flags & PMEM_MEMTYPE_MASK));
 		return -EINVAL;
 	}
 
 	if (!pmem[info_id].allocate) {
 		printk(KERN_ALERT
-			"Attempt to allocate size %u, alignment %#x "
-			"from non-existent PMEM kernel region %d. "
+			"pmem: %s: Attempt to allocate size %u, alignment %#x"
+			" from non-existent PMEM kernel region %d. "
 			"Driver/board setup is faulty!",
-			size, (flags & PMEM_ALIGNMENT_MASK),
+			__func__, size, (flags & PMEM_ALIGNMENT_MASK),
 			info_id);
 		return -ENOMEM;
 	}
 
+#if PMEM_DEBUG
 	if (align != PMEM_ALIGN_4K &&
 			(pmem[info_id].allocator_type ==
 				PMEM_ALLOCATORTYPE_ALLORNOTHING ||
 			pmem[info_id].allocator_type ==
 				PMEM_ALLOCATORTYPE_BUDDYBESTFIT))
-		printk(KERN_WARNING "Alignment other than on 4K pages not "
-			"supported with %s allocator for PMEM memory region "
-			"'%s'. Memory will be aligned to 4K boundary. Check "
-			"your board file or allocation invocation.\n",
+		printk(KERN_WARNING "pmem: %s: alignment other than on 4K "
+			"pages not supported with %s allocator for PMEM "
+			"memory region '%s'. Memory will be aligned to 4K "
+			"boundary. Check your board file or allocation "
+			"invocation.\n", __func__,
 			(pmem[info_id].allocator_type ==
 				PMEM_ALLOCATORTYPE_ALLORNOTHING ?
 					"'All Or Nothing'"
 					:
 					"'Buddy / Best Fit'"),
 			pmem[info_id].dev.name);
+#endif
 
 	mutex_lock(&pmem[info_id].arena_mutex);
 	index = pmem[info_id].allocate(info_id, size, align);
@@ -1282,11 +1332,13 @@ int pmem_kfree(const int32_t physaddr)
 			int index;
 
 			if (!pmem[id].allocate) {
-				printk(KERN_ALERT
+#if PMEM_DEBUG
+				printk(KERN_ALERT "pmem: %s: "
 					"Attempt to free physical address %#x "
 					"from unregistered PMEM kernel region"
 					" %d. Driver/board setup is faulty!",
-					physaddr, id);
+					__func__, physaddr, id);
+#endif
 				return -EINVAL;
 			}
 
@@ -1295,7 +1347,11 @@ int pmem_kfree(const int32_t physaddr)
 				return pmem[id].free(id, index) ?  -EINVAL : 0;
 		}
 	}
-	printk(KERN_ALERT "Failed to free physaddr %#x!", physaddr);
+#if PMEM_DEBUG
+	printk(KERN_ALERT "pmem: %s: Failed to free physaddr %#x, does not "
+		"seem be value returned by pmem_kalloc()!",
+		__func__, physaddr);
+#endif
 	return -EINVAL;
 }
 EXPORT_SYMBOL(pmem_kfree);
@@ -1908,7 +1964,7 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			goto err_reset_pmem_info;
 		}
 		pmem[id].bitm_alloc = kmalloc(
-			PMEM_NUM_BITMAP_ALLOCATIONS *
+			PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS *
 				sizeof(*pmem[id].bitm_alloc),
 			GFP_KERNEL);
 		if (!pmem[id].bitm_alloc) {
@@ -1917,13 +1973,15 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			goto err_reset_pmem_info;
 		}
 
-		for (i = 0; i < PMEM_NUM_BITMAP_ALLOCATIONS; i++)
+		for (i = 0; i < PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS; i++)
 			pmem[id].bitm_alloc[i].bit = -1;
+
+		pmem[id].bitmap_allocs = PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS;
 
 		pmem[id].bitmap =
 			kcalloc((pmem[id].num_entries + 31) / 32,
 				sizeof(unsigned int),
-				GFP_KERNEL | __GFP_DMA);
+				GFP_KERNEL);
 		if (!pmem[id].bitmap) {
 			printk(KERN_ALERT "Unable to register pmem "
 				"driver - can't allocate bitmap!\n");
