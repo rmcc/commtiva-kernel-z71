@@ -828,7 +828,9 @@ static void do_read_data(struct work_struct *work)
 	struct rr_packet *pkt;
 	struct rr_fragment *frag;
 	struct msm_rpc_endpoint *ept;
+#if defined(CONFIG_MSM_ONCRPCROUTER_DEBUG)
 	struct rpc_request_hdr *rq;
+#endif
 	uint32_t pm, mid;
 	unsigned long flags;
 
@@ -1030,7 +1032,9 @@ static int msm_rpc_write_pkt(
 	int last
 	)
 {
+#if defined(CONFIG_MSM_ONCRPCROUTER_DEBUG)
 	struct rpc_request_hdr *rq = buffer;
+#endif
 	uint32_t pacmark;
 	unsigned long flags;
 	int needed;
