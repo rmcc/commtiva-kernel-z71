@@ -41,6 +41,7 @@ struct f_gser {
 
 	struct gser_descs		fs;
 	struct gser_descs		hs;
+	u8				online;
 #ifdef CONFIG_MODEM_SUPPORT
 	u8				pending;
 	spinlock_t			lock;
@@ -338,6 +339,7 @@ static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 				gser->hs.out, gser->fs.out);
 	}
 	gserial_connect(&gser->port, gser->port_num);
+	gser->online = 1;
 	return 0;
 }
 
@@ -351,6 +353,7 @@ static void gser_disable(struct usb_function *f)
 #ifdef CONFIG_MODEM_SUPPORT
 	usb_ep_fifo_flush(gser->notify);
 #endif
+	gser->online = 0;
 }
 #ifdef CONFIG_MODEM_SUPPORT
 static int gser_notify(struct f_gser *gser, u8 type, u16 value,
@@ -422,7 +425,7 @@ static void gser_notify_complete(struct usb_ep *ep, struct usb_request *req)
 	gser->notify_req = req;
 	spin_unlock(&gser->lock);
 
-	if (doit)
+	if (doit && gser->online)
 		gser_notify_serial_state(gser);
 }
 static void gser_connect(struct gserial *port)
