@@ -994,6 +994,21 @@ CONFIG_V4L_USB_DRIVERS=y
 # CONFIG_USB_ZR364XX is not set
 # CONFIG_USB_STKWEBCAM is not set
 # CONFIG_USB_S2255 is not set
+
+#
+# Qualcomm MSM Camera And Video
+#
+# CONFIG_MSM_CAMERA_DEBUG is not set
+# CONFIG_MSM_CAMERA_FLASH is not set
+
+#
+# Camera Sensor Selection
+#
+CONFIG_MT9T013=y
+CONFIG_MT9D112=y
+CONFIG_MT9P012=y
+CONFIG_S5K3E2FX=y
+# CONFIG_VB6801 is not set
 # CONFIG_RADIO_ADAPTERS is not set
 CONFIG_DAB=y
 # CONFIG_USB_DABUSB is not set
