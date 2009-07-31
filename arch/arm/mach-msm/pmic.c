@@ -137,6 +137,10 @@
 #define SPKR_ADD_RIGHT_LEFT_CHAN_PROC 60
 #define SPKR_SET_GAIN_PROC 61
 #define SPKR_EN_PROC 62
+#define HSED_SET_PERIOD_PROC 63
+#define HSED_SET_HYSTERESIS_PROC 64
+#define HSED_SET_CURRENT_THRESHOLD_PROC 65
+#define HSED_ENABLE_PROC 66
 
 
 /* rpc related */
@@ -144,7 +148,8 @@
 
 #define PMIC_PDEV_NAME	"rs00010001:00000000"
 #define PMIC_RPC_PROG	0x30000061
-#define PMIC_RPC_VER	0x00010001
+#define PMIC_RPC_VER_1_1	0x00010001
+#define PMIC_RPC_VER_2_1	0x00020001
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
@@ -324,10 +329,16 @@ static int pmic_rpc_req_reply(struct pmic_buf *tbuf, struct pmic_buf *rbuf,
 
 	if (pm->endpoint == NULL) {
 		pm->endpoint = msm_rpc_connect(PMIC_RPC_PROG,
-					PMIC_RPC_VER, 0);
+					PMIC_RPC_VER_1_1, 0);
 		if (pm->endpoint == NULL) {
+			pm->endpoint = msm_rpc_connect(PMIC_RPC_PROG,
+						PMIC_RPC_VER_2_1, 0);
+		}
+
+		if (pm->endpoint == NULL)
 			return -ENODEV;
-		} else if (IS_ERR(pm->endpoint)) {
+
+		if (IS_ERR(pm->endpoint)) {
 			ans  = PTR_ERR(pm->endpoint);
 			printk(KERN_ERR "%s: init rpc failed! ans = %d\n",
 						__func__, ans);
@@ -1039,3 +1050,50 @@ int pmic_spkr_is_stereo_en(uint *enabled)
 				SPKR_IS_STEREO_EN_PROC);
 }
 EXPORT_SYMBOL(pmic_spkr_is_stereo_en);
+
+int pmic_hsed_set_period(
+	enum hsed_controller controller,
+	enum hsed_period_pre_div period_pre_div,
+	enum hsed_period_time period_time
+)
+{
+	return pmic_rpc_set_only(controller, period_pre_div, period_time, 0,
+				 3,
+				 HSED_SET_PERIOD_PROC);
+}
+EXPORT_SYMBOL(pmic_hsed_set_period);
+
+int pmic_hsed_set_hysteresis(
+	enum hsed_controller controller,
+	enum hsed_hyst_pre_div hyst_pre_div,
+	enum hsed_hyst_time hyst_time
+)
+{
+	return pmic_rpc_set_only(controller, hyst_pre_div, hyst_time, 0,
+				 3,
+				 HSED_SET_HYSTERESIS_PROC);
+}
+EXPORT_SYMBOL(pmic_hsed_set_hysteresis);
+
+int pmic_hsed_set_current_threshold(
+	enum hsed_controller controller,
+	enum hsed_switch switch_hsed,
+	uint32_t current_threshold
+)
+{
+	return pmic_rpc_set_only(controller, switch_hsed, current_threshold, 0,
+				 3,
+				 HSED_SET_CURRENT_THRESHOLD_PROC);
+}
+EXPORT_SYMBOL(pmic_hsed_set_current_threshold);
+
+int pmic_hsed_enable(
+	enum hsed_controller controller,
+	enum hsed_enable enable_hsed
+)
+{
+	return pmic_rpc_set_only(controller, enable_hsed, 0, 0,
+				 2,
+				 HSED_ENABLE_PROC);
+}
+EXPORT_SYMBOL(pmic_hsed_enable);

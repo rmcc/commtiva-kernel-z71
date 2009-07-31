@@ -386,6 +386,83 @@ enum rtc_alarm {
 	PM_RTC_ALARM_1,
 };
 
+enum hsed_controller {
+	PM_HSED_CONTROLLER_0,
+	PM_HSED_CONTROLLER_1,
+	PM_HSED_CONTROLLER_2,
+};
+
+enum hsed_switch {
+	PM_HSED_SC_SWITCH_TYPE,
+	PM_HSED_OC_SWITCH_TYPE,
+};
+
+enum hsed_enable {
+	PM_HSED_ENABLE_OFF,
+	PM_HSED_ENABLE_TCXO,
+	PM_HSED_ENABLE_PWM_TCXO,
+	PM_HSED_ENABLE_ALWAYS,
+};
+
+enum hsed_hyst_pre_div {
+	PM_HSED_HYST_PRE_DIV_1,
+	PM_HSED_HYST_PRE_DIV_2,
+	PM_HSED_HYST_PRE_DIV_4,
+	PM_HSED_HYST_PRE_DIV_8,
+	PM_HSED_HYST_PRE_DIV_16,
+	PM_HSED_HYST_PRE_DIV_32,
+	PM_HSED_HYST_PRE_DIV_64,
+	PM_HSED_HYST_PRE_DIV_128,
+};
+
+enum hsed_hyst_time {
+	PM_HSED_HYST_TIME_1_CLK_CYCLES,
+	PM_HSED_HYST_TIME_2_CLK_CYCLES,
+	PM_HSED_HYST_TIME_3_CLK_CYCLES,
+	PM_HSED_HYST_TIME_4_CLK_CYCLES,
+	PM_HSED_HYST_TIME_5_CLK_CYCLES,
+	PM_HSED_HYST_TIME_6_CLK_CYCLES,
+	PM_HSED_HYST_TIME_7_CLK_CYCLES,
+	PM_HSED_HYST_TIME_8_CLK_CYCLES,
+	PM_HSED_HYST_TIME_9_CLK_CYCLES,
+	PM_HSED_HYST_TIME_10_CLK_CYCLES,
+	PM_HSED_HYST_TIME_11_CLK_CYCLES,
+	PM_HSED_HYST_TIME_12_CLK_CYCLES,
+	PM_HSED_HYST_TIME_13_CLK_CYCLES,
+	PM_HSED_HYST_TIME_14_CLK_CYCLES,
+	PM_HSED_HYST_TIME_15_CLK_CYCLES,
+	PM_HSED_HYST_TIME_16_CLK_CYCLES,
+};
+
+enum hsed_period_pre_div {
+	PM_HSED_PERIOD_PRE_DIV_2,
+	PM_HSED_PERIOD_PRE_DIV_4,
+	PM_HSED_PERIOD_PRE_DIV_8,
+	PM_HSED_PERIOD_PRE_DIV_16,
+	PM_HSED_PERIOD_PRE_DIV_32,
+	PM_HSED_PERIOD_PRE_DIV_64,
+	PM_HSED_PERIOD_PRE_DIV_128,
+	PM_HSED_PERIOD_PRE_DIV_256,
+};
+
+enum hsed_period_time {
+	PM_HSED_PERIOD_TIME_1_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_2_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_3_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_4_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_5_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_6_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_7_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_8_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_9_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_10_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_11_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_12_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_13_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_14_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_15_CLK_CYCLES,
+	PM_HSED_PERIOD_TIME_16_CLK_CYCLES,
+};
 
 int pmic_lp_mode_control(enum switch_cmd cmd, enum vreg_lp_id id);
 int pmic_vreg_set_level(enum vreg_id vreg, int level);
@@ -453,5 +530,28 @@ int pmic_vib_mot_set_polarity(enum pm_vib_mot_pol pol);
 int pmic_vid_en(uint enable);
 int pmic_vid_is_en(uint *enabled);
 int pmic_vid_load_detect_en(uint enable);
+
+int pmic_hsed_set_period(
+	enum hsed_controller controller,
+	enum hsed_period_pre_div period_pre_div,
+	enum hsed_period_time period_time
+);
+
+int pmic_hsed_set_hysteresis(
+	enum hsed_controller controller,
+	enum hsed_hyst_pre_div hyst_pre_div,
+	enum hsed_hyst_time hyst_time
+);
+
+int pmic_hsed_set_current_threshold(
+	enum hsed_controller controller,
+	enum hsed_switch switch_hsed,
+	uint32_t current_threshold
+);
+
+int pmic_hsed_enable(
+	enum hsed_controller controller,
+	enum hsed_enable enable
+);
 
 #endif
