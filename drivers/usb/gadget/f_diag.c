@@ -238,6 +238,9 @@ static void diag_function_disable(struct usb_function *f)
 		usb_ep_disable(dev->out);
 		dev->out->driver_data = NULL;
 	}
+	if ((dev->operations) &&
+		(dev->operations->diag_disconnect))
+			dev->operations->diag_disconnect();
 }
 int diag_usb_register(struct diag_operations *func)
 {
