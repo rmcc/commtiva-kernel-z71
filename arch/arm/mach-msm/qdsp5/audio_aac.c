@@ -98,6 +98,7 @@ struct audio {
 	uint8_t out_head;
 	uint8_t out_tail;
 	uint8_t out_needed;	/* number of buffers the dsp is waiting for */
+	unsigned out_dma_sz;
 
 	atomic_t out_bytes;
 
@@ -138,9 +139,12 @@ struct audio {
 	int pcm_feedback;
 	int buf_refresh;
 	int teos; /* valid only if tunnel mode & no data left for decoder */
+	enum msm_aud_decoder_state dec_state;	/* Represents decoder state */
 	int reserved; /* A byte is being reserved */
 	char rsv_byte; /* Handle odd length user data */
 
+	const char *module_name;
+	unsigned queue_id;
 	uint16_t dec_id;
 	uint32_t read_ptr_offset;
 
@@ -148,6 +152,11 @@ struct audio {
 	struct audaac_suspend_ctl suspend_ctl;
 #endif
 
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dentry;
+#endif
+
+	wait_queue_head_t wait;
 	struct list_head free_event_queue;
 	struct list_head event_queue;
 	wait_queue_head_t event_wait;
@@ -205,7 +214,7 @@ static int audio_enable(struct audio *audio)
 
 	if (audpp_enable(audio->dec_id, audio_dsp_event, audio)) {
 		pr_err("audio: audpp_enable() failed\n");
-    msm_adsp_disable(audio->audplay);
+		msm_adsp_disable(audio->audplay);
 		audmgr_disable(&audio->audmgr);
 		return -ENODEV;
 	}
@@ -286,7 +295,7 @@ static void audaac_update_stream_info(struct audio *audio, uint32_t *payload)
 	pr_debug("audio_update_stream_info: chan_info=%d, sample_rate=%d,\
 					bit_stream_info=%d\n",\
 					audio->stream_info.chan_info,\
-					audio->stream_info.sample_rate, \
+					audio->stream_info.sample_rate,\
 					audio->stream_info.bit_stream_info);
 
 	/* send event to ARM to notify steam info coming */
@@ -329,10 +338,20 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			unsigned status = msg[1];
 
 			switch (status) {
-			case AUDPP_DEC_STATUS_SLEEP:
-				pr_debug("decoder status: sleep \n");
+			case AUDPP_DEC_STATUS_SLEEP: {
+				uint16_t reason = msg[2];
+				pr_debug(
+					"decoder status:sleep reason=0x%04x\n",
+					reason);
+				if ((reason == AUDPP_MSG_REASON_MEM)
+					|| (reason ==
+					AUDPP_MSG_REASON_NODECODER)) {
+					audio->dec_state =
+						MSM_AUD_DECODER_STATE_FAILURE;
+					wake_up(&audio->wait);
+				}
 				break;
-
+			}
 			case AUDPP_DEC_STATUS_INIT:
 				pr_debug("decoder status: init \n");
 				audpp_cmd_cfg_routing_mode(audio);
@@ -347,6 +366,9 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 					audplay_config_hostpcm(audio);
 					audplay_buffer_refresh(audio);
 				}
+				audio->dec_state =
+					MSM_AUD_DECODER_STATE_SUCCESS;
+				wake_up(&audio->wait);
 				break;
 			default:
 				pr_debug("unknown decoder status \n");
@@ -402,22 +424,24 @@ struct msm_adsp_ops audplay_adsp_ops_aac = {
 };
 
 #define audplay_send_queue0(audio, cmd, len) \
-	msm_adsp_write(audio->audplay, QDSP_uPAudPlay0BitStreamCtrlQueue, \
-		       cmd, len)
+	msm_adsp_write(audio->audplay, audio->queue_id,\
+			cmd, len)
 
 static int auddec_dsp_config(struct audio *audio, int enable)
 {
-	audpp_cmd_cfg_dec_type cmd;
+	u16 cfg_dec_cmd[AUDPP_CMD_CFG_DEC_TYPE_LEN / sizeof(unsigned short)];
 
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd_id = AUDPP_CMD_CFG_DEC_TYPE;
+	memset(cfg_dec_cmd, 0, sizeof(cfg_dec_cmd));
+	cfg_dec_cmd[0] = AUDPP_CMD_CFG_DEC_TYPE;
+
 	if (enable)
-		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC |
-		    AUDPP_CMD_ENA_DEC_V | AUDDEC_DEC_AAC;
+		cfg_dec_cmd[1 + audio->dec_id] = AUDPP_CMD_UPDATDE_CFG_DEC |
+			AUDPP_CMD_ENA_DEC_V | AUDDEC_DEC_AAC;
 	else
-		cmd.dec0_cfg = AUDPP_CMD_UPDATDE_CFG_DEC | AUDPP_CMD_DIS_DEC_V;
+		cfg_dec_cmd[1 + audio->dec_id] = AUDPP_CMD_UPDATDE_CFG_DEC |
+		AUDPP_CMD_DIS_DEC_V;
 
-	return audpp_send_queue1(&cmd, sizeof(cmd));
+	return audpp_send_queue1(&cfg_dec_cmd, sizeof(cfg_dec_cmd));
 }
 
 static void audpp_cmd_cfg_adec_params(struct audio *audio)
@@ -546,7 +570,7 @@ static void audplay_send_data(struct audio *audio, unsigned needed)
 		frame = audio->out + audio->out_tail;
 		if (frame->used) {
 			BUG_ON(frame->used == 0xffffffff);
-/*                      printk("frame %d busy\n", audio->out_tail); */
+			pr_debug("frame %d busy\n", audio->out_tail);
 			audplay_dsp_send_data_avail(audio, audio->out_tail,
 						    frame->used);
 			frame->used = 0xffffffff;
@@ -862,6 +886,18 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case AUDIO_START:
 		rc = audio_enable(audio);
+		if (!rc) {
+			rc = wait_event_interruptible_timeout(audio->wait,
+				audio->dec_state != MSM_AUD_DECODER_STATE_NONE,
+				msecs_to_jiffies(MSM_AUD_DECODER_WAIT_MS));
+			pr_debug("dec_state %d rc = %d\n",
+					audio->dec_state, rc);
+
+			if (audio->dec_state != MSM_AUD_DECODER_STATE_SUCCESS)
+				rc = -ENODEV;
+			else
+				rc = 0;
+		}
 		break;
 	case AUDIO_STOP:
 		rc = audio_disable(audio);
@@ -918,7 +954,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 	case AUDIO_GET_CONFIG:{
 			struct msm_audio_config config;
-			config.buffer_size = BUFSZ;
+			config.buffer_size = (audio->out_dma_sz >> 1);
 			config.buffer_count = 2;
 			config.sample_rate = audio->out_sample_rate;
 			if (audio->out_channel_mode ==
@@ -1336,7 +1372,7 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		}
 	}
 	pr_debug("audio_write: eos_condition %x buf[0x%x] start[0x%x]\n",
-			eos_condition, (unsigned int)buf, (unsigned int)start);
+				eos_condition, (int) buf, (int) start);
 	if (eos_condition == AUDAAC_EOS_SET)
 		rc = audaac_process_eos(audio, start, mfield_size);
 	mutex_unlock(&audio->write_lock);
@@ -1353,24 +1389,28 @@ static int audio_release(struct inode *inode, struct file *file)
 
 	pr_debug("audio_release()\n");
 
+	pr_info("AAC: audio instance 0x%08x freeing\n", (int)audio);
 	mutex_lock(&audio->lock);
 	audio_disable(audio);
 	audio_flush(audio);
 	audio_flush_pcm_buf(audio);
 	msm_adsp_put(audio->audplay);
-	audio->audplay = NULL;
+	audpp_adec_free(audio->dec_id);
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&audio->suspend_ctl.node);
 #endif
-	audio->opened = 0;
 	audio->event_abort = 1;
 	wake_up(&audio->event_wait);
 	audaac_reset_event_queue(audio);
-	audio->reserved = 0;
-	audio->wflush = 0;
-	audio->rflush = 0;
-	audio->pcm_feedback = 0;
+	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	dma_free_coherent(NULL, audio->in[0].size * audio->pcm_buf_count,
+		audio->read_data, audio->read_phys);
 	mutex_unlock(&audio->lock);
+#ifdef CONFIG_DEBUG_FS
+	if (audio->dentry)
+		debugfs_remove(audio->dentry);
+#endif
+	kfree(audio);
 	return 0;
 }
 
@@ -1402,8 +1442,6 @@ static void audaac_post_event(struct audio *audio, int type,
 	wake_up(&audio->event_wait);
 }
 
-struct audio the_aac_audio;
-
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void audaac_suspend(struct early_suspend *h)
 {
@@ -1425,104 +1463,6 @@ static void audaac_resume(struct early_suspend *h)
 	audaac_post_event(ctl->audio, AUDIO_EVENT_RESUME, payload);
 }
 #endif
-
-static int audio_open(struct inode *inode, struct file *file)
-{
-	struct audio *audio = &the_aac_audio;
-	int rc, i;
-	struct audaac_event *e_node = NULL;
-
-	mutex_lock(&audio->lock);
-
-	if (audio->opened) {
-		pr_err("audio: busy\n");
-		rc = -EBUSY;
-		goto done;
-	}
-
-	rc = audmgr_open(&audio->audmgr);
-	if (rc)
-		goto done;
-
-	rc = msm_adsp_get("AUDPLAY0TASK", &audio->audplay,
-			  &audplay_adsp_ops_aac, audio);
-	if (rc) {
-		pr_err("audio: failed to get audplay0 dsp module\n");
-		goto done;
-	}
-	audio->out_sample_rate = 44100;
-	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
-	audio->aac_config.format = AUDIO_AAC_FORMAT_ADTS;
-	audio->aac_config.audio_object = AUDIO_AAC_OBJECT_LC;
-	audio->aac_config.ep_config = 0;
-	audio->aac_config.aac_section_data_resilience_flag =
-		AUDIO_AAC_SEC_DATA_RES_OFF;
-	audio->aac_config.aac_scalefactor_data_resilience_flag =
-		AUDIO_AAC_SCA_DATA_RES_OFF;
-	audio->aac_config.aac_spectral_data_resilience_flag =
-		AUDIO_AAC_SPEC_DATA_RES_OFF;
-#ifdef CONFIG_AUDIO_AAC_PLUS
-	audio->aac_config.sbr_on_flag = AUDIO_AAC_SBR_ON_FLAG_ON;
-#else
-	audio->aac_config.sbr_on_flag = AUDIO_AAC_SBR_ON_FLAG_OFF;
-#endif
-#ifdef CONFIG_AUDIO_ENHANCED_AAC_PLUS
-	audio->aac_config.sbr_ps_on_flag = AUDIO_AAC_SBR_PS_ON_FLAG_ON;
-#else
-	audio->aac_config.sbr_ps_on_flag = AUDIO_AAC_SBR_PS_ON_FLAG_OFF;
-#endif
-	audio->aac_config.dual_mono_mode = AUDIO_AAC_DUAL_MONO_PL_SR;
-	audio->aac_config.channel_configuration = 2;
-	audio->dec_id = 0;
-
-	audio->vol_pan.volume = 0x2000;
-	audio->vol_pan.pan = 0x0;
-	audio->eq_enable = 0;
-
-	audio_flush(audio);
-
-	file->private_data = audio;
-	audio->opened = 1;
-	audio->event_abort = 0;
-	audio->mfield = 0;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
-	audio->suspend_ctl.node.resume = audaac_resume;
-	audio->suspend_ctl.node.suspend = audaac_suspend;
-	audio->suspend_ctl.audio = audio;
-	register_early_suspend(&audio->suspend_ctl.node);
-#endif
-	for (i = 0; i < AUDAAC_EVENT_NUM; i++) {
-		e_node = kmalloc(sizeof(struct audaac_event), GFP_KERNEL);
-		if (e_node)
-			list_add_tail(&e_node->list, &audio->free_event_queue);
-		else {
-			pr_info("%s: event pkt alloc failed\n", __func__);
-			break;
-		}
-	}
-	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
-	rc = 0;
-done:
-	mutex_unlock(&audio->lock);
-	return rc;
-}
-
-static const struct file_operations audio_aac_fops = {
-	.owner = THIS_MODULE,
-	.open = audio_open,
-	.release = audio_release,
-	.read = audio_read,
-	.write = audio_write,
-	.unlocked_ioctl = audio_ioctl,
-	.fsync = audaac_fsync
-};
-
-struct miscdevice audio_aac_misc = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "msm_aac",
-	.fops = &audio_aac_fops,
-};
 
 #ifdef CONFIG_DEBUG_FS
 static ssize_t audaac_debug_open(struct inode *inode, struct file *file)
@@ -1571,6 +1511,8 @@ static ssize_t audaac_debug_read(struct file *file, char __user *buf,
 	n += scnprintf(buffer + n, debug_bufmax - n,
 			"running %d \n", audio->running);
 	n += scnprintf(buffer + n, debug_bufmax - n,
+			"dec state %d \n", audio->dec_state);
+	n += scnprintf(buffer + n, debug_bufmax - n,
 			"out_needed %d \n", audio->out_needed);
 	n += scnprintf(buffer + n, debug_bufmax - n,
 			"out_head %d \n", audio->out_head);
@@ -1599,85 +1541,217 @@ static const struct file_operations audaac_debug_fops = {
 };
 #endif
 
-static int __init audio_init(void)
+static int audio_open(struct inode *inode, struct file *file)
 {
-
-#ifdef CONFIG_DEBUG_FS
-	struct dentry *dentry;
-#endif
+	struct audio *audio = NULL;
+	int rc, dec_attrb, decid, index, offset = 0;
 	unsigned pmem_sz = DMASZ;
+	struct audaac_event *e_node = NULL;
+#ifdef CONFIG_DEBUG_FS
+	/* 4 bytes represents decoder number, 1 byte for terminate string */
+	char name[sizeof "msm_aac_" + 5];
+#endif
+
+	/* Allocate audio instance, set to zero */
+	audio = kzalloc(sizeof(struct audio), GFP_KERNEL);
+	if (!audio) {
+		pr_err("%s: no memory to allocate audio instance \n", __func__);
+		rc = -ENOMEM;
+		goto done;
+	}
+	pr_info("AAC: audio instance 0x%08x created\n", (int)audio);
+
+	/* Allocate the decoder */
+	dec_attrb = AUDDEC_DEC_AAC;
+	if (file->f_mode & FMODE_READ)
+		dec_attrb |= MSM_AUD_MODE_NONTUNNEL;
+	else
+		dec_attrb |= MSM_AUD_MODE_TUNNEL;
+
+	decid = audpp_adec_alloc(dec_attrb, &audio->module_name,
+			&audio->queue_id);
+
+	if (decid < 0) {
+		pr_err("%s: No free decoder available\n", __func__);
+		rc = -ENODEV;
+		pr_info("AAC: audio instance 0x%08x freeing\n", (int)audio);
+		kfree(audio);
+		goto done;
+	}
+	audio->dec_id = decid & MSM_AUD_DECODER_MASK;
 
 	while (pmem_sz >= DMASZ_MIN) {
-		the_aac_audio.data = dma_alloc_coherent(NULL, pmem_sz,
-				&the_aac_audio.phys, GFP_KERNEL);
-		if (the_aac_audio.data)
+		pr_info("aac: pmemsz = %d \n", pmem_sz);
+		audio->data = dma_alloc_coherent(NULL, pmem_sz,
+				&audio->phys, GFP_KERNEL);
+		if (audio->data)
 			break;
 		else if (pmem_sz == DMASZ_MIN) {
-			pr_err("audio_aac: could not allocate DMA buffers\n");
-			goto fail_nomem;
+			pr_err("%s: could not allocate DMA buffers\n",
+				 __func__);
+			rc = -ENOMEM;
+			audpp_adec_free(audio->dec_id);
+			pr_info("AAC: audio instance 0x%08x freeing\n",
+				(int)audio);
+			kfree(audio);
+			goto done;
 		} else
 			pmem_sz >>= 1;
 	}
+	audio->out_dma_sz = pmem_sz;
 
-	pmem_sz >>= 1; /* Shift by 1 to get size of ping pong buffer */
-	the_aac_audio.out[0].data = the_aac_audio.data + 0;
-	the_aac_audio.out[0].addr = the_aac_audio.phys + 0;
-	the_aac_audio.out[0].size = pmem_sz;
-
-	the_aac_audio.out[1].data = the_aac_audio.data + pmem_sz;
-	the_aac_audio.out[1].addr = the_aac_audio.phys + pmem_sz;
-	the_aac_audio.out[1].size = pmem_sz;
-
-	the_aac_audio.read_data =
-			dma_alloc_coherent(NULL, PCM_BUFSZ_MIN *
-			PCM_BUF_MAX_COUNT,
-			&the_aac_audio.read_phys,
-			GFP_KERNEL);
-	if (!the_aac_audio.read_data) {
-		pr_err("audio_aac: buf alloc fail\n");
-		dma_free_coherent(NULL, DMASZ, the_aac_audio.data,
-						the_aac_audio.phys);
-		the_aac_audio.data = NULL;
-		goto fail_nomem;
-	} else {
-		uint8_t index;
-		uint32_t offset = 0;
-		the_aac_audio.pcm_buf_count = PCM_BUF_MAX_COUNT;
-
-		for (index = 0;
-			index < PCM_BUF_MAX_COUNT; index++) {
-			the_aac_audio.in[index].data =
-				the_aac_audio.read_data + offset;
-			the_aac_audio.in[index].addr =
-				the_aac_audio.read_phys + offset;
-			the_aac_audio.in[index].size = PCM_BUFSZ_MIN;
-			the_aac_audio.in[index].used = 0;
-			offset += PCM_BUFSZ_MIN;
-		}
+	audio->read_data = dma_alloc_coherent(NULL,
+				PCM_BUFSZ_MIN * PCM_BUF_MAX_COUNT,
+				&audio->read_phys, GFP_KERNEL);
+	if (!audio->read_data) {
+		pr_err("%s: could not allocate DMA buffers\n", __func__);
+		rc = -ENOMEM;
+		dma_free_coherent(NULL, audio->out_dma_sz, audio->data,
+			audio->phys);
+		audpp_adec_free(audio->dec_id);
+		pr_info("AAC: audio instance 0x%08x freeing\n", (int)audio);
+		kfree(audio);
+		goto done;
 	}
 
-	mutex_init(&the_aac_audio.lock);
-	mutex_init(&the_aac_audio.write_lock);
-	mutex_init(&the_aac_audio.read_lock);
-	mutex_init(&the_aac_audio.get_event_lock);
-	spin_lock_init(&the_aac_audio.dsp_lock);
-	spin_lock_init(&the_aac_audio.event_queue_lock);
-	INIT_LIST_HEAD(&the_aac_audio.free_event_queue);
-	INIT_LIST_HEAD(&the_aac_audio.event_queue);
-	init_waitqueue_head(&the_aac_audio.write_wait);
-	init_waitqueue_head(&the_aac_audio.read_wait);
-	init_waitqueue_head(&the_aac_audio.event_wait);
-	the_aac_audio.read_data = NULL;
-#ifdef CONFIG_DEBUG_FS
-	dentry = debugfs_create_file("msm_aac", S_IFREG | S_IRUGO, NULL,
-		(void *) &the_aac_audio, &audaac_debug_fops);
-	if (IS_ERR(dentry))
-		pr_err("aac:%s:debugfs_create_file failed\n", __func__);
-#endif
-	return misc_register(&audio_aac_misc);
+	rc = audmgr_open(&audio->audmgr);
+	if (rc)
+		goto err;
 
-fail_nomem:
-	return -ENOMEM;
+	rc = msm_adsp_get(audio->module_name, &audio->audplay,
+			  &audplay_adsp_ops_aac, audio);
+	if (rc) {
+		pr_err("%s: failed to get %s module\n", __func__,
+			audio->module_name);
+		audmgr_close(&audio->audmgr);
+		goto err;
+	}
+
+	mutex_init(&audio->lock);
+	mutex_init(&audio->write_lock);
+	mutex_init(&audio->read_lock);
+	mutex_init(&audio->get_event_lock);
+	spin_lock_init(&audio->dsp_lock);
+	spin_lock_init(&audio->event_queue_lock);
+	INIT_LIST_HEAD(&audio->free_event_queue);
+	INIT_LIST_HEAD(&audio->event_queue);
+	init_waitqueue_head(&audio->write_wait);
+	init_waitqueue_head(&audio->read_wait);
+	init_waitqueue_head(&audio->wait);
+	init_waitqueue_head(&audio->event_wait);
+
+	audio->out[0].data = audio->data + 0;
+	audio->out[0].addr = audio->phys + 0;
+	audio->out[0].size = audio->out_dma_sz >> 1;
+
+	audio->out[1].data = audio->data + audio->out[0].size;
+	audio->out[1].addr = audio->phys + audio->out[0].size;
+	audio->out[1].size = audio->out[0].size;
+
+	audio->pcm_buf_count = PCM_BUF_MAX_COUNT;
+	for (index = 0; index < PCM_BUF_MAX_COUNT; index++) {
+		audio->in[index].data = audio->read_data + offset;
+		audio->in[index].addr = audio->read_phys + offset;
+		audio->in[index].size = PCM_BUFSZ_MIN;
+		audio->in[index].used = 0;
+		offset += PCM_BUFSZ_MIN;
+	}
+
+	audio->out_sample_rate = 44100;
+	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
+	audio->aac_config.format = AUDIO_AAC_FORMAT_ADTS;
+	audio->aac_config.audio_object = AUDIO_AAC_OBJECT_LC;
+	audio->aac_config.ep_config = 0;
+	audio->aac_config.aac_section_data_resilience_flag =
+		AUDIO_AAC_SEC_DATA_RES_OFF;
+	audio->aac_config.aac_scalefactor_data_resilience_flag =
+		AUDIO_AAC_SCA_DATA_RES_OFF;
+	audio->aac_config.aac_spectral_data_resilience_flag =
+		AUDIO_AAC_SPEC_DATA_RES_OFF;
+#ifdef CONFIG_AUDIO_AAC_PLUS
+	audio->aac_config.sbr_on_flag = AUDIO_AAC_SBR_ON_FLAG_ON;
+#else
+	audio->aac_config.sbr_on_flag = AUDIO_AAC_SBR_ON_FLAG_OFF;
+#endif
+#ifdef CONFIG_AUDIO_ENHANCED_AAC_PLUS
+	audio->aac_config.sbr_ps_on_flag = AUDIO_AAC_SBR_PS_ON_FLAG_ON;
+#else
+	audio->aac_config.sbr_ps_on_flag = AUDIO_AAC_SBR_PS_ON_FLAG_OFF;
+#endif
+	audio->aac_config.dual_mono_mode = AUDIO_AAC_DUAL_MONO_PL_SR;
+	audio->aac_config.channel_configuration = 2;
+	audio->vol_pan.volume = 0x2000;
+
+	audio_flush(audio);
+
+	file->private_data = audio;
+	audio->opened = 1;
+#ifdef CONFIG_DEBUG_FS
+	snprintf(name, sizeof name, "msm_aac_%04x", audio->dec_id);
+	audio->dentry = debugfs_create_file(name, S_IFREG | S_IRUGO,
+				NULL, (void *) audio,
+				&audaac_debug_fops);
+
+	if (IS_ERR(audio->dentry))
+		pr_debug("AAC:debugfs_create_file failed\n");
+#endif
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
+	audio->suspend_ctl.node.resume = audaac_resume;
+	audio->suspend_ctl.node.suspend = audaac_suspend;
+	audio->suspend_ctl.audio = audio;
+	register_early_suspend(&audio->suspend_ctl.node);
+#endif
+	for (index = 0; index < AUDAAC_EVENT_NUM; index++) {
+		e_node = kmalloc(sizeof(struct audaac_event), GFP_KERNEL);
+		if (e_node)
+			list_add_tail(&e_node->list, &audio->free_event_queue);
+		else {
+			pr_err("%s: event pkt alloc failed\n", __func__);
+			break;
+		}
+	}
+	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
+done:
+	return rc;
+err:
+	dma_free_coherent(NULL, PCM_BUFSZ_MIN * PCM_BUF_MAX_COUNT,
+			audio->read_data, audio->read_phys);
+	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	audpp_adec_free(audio->dec_id);
+	pr_info("AAC: audio instance 0x%08x freeing\n", (int)audio);
+	kfree(audio);
+	return rc;
 }
 
-device_initcall(audio_init);
+static const struct file_operations audio_aac_fops = {
+	.owner = THIS_MODULE,
+	.open = audio_open,
+	.release = audio_release,
+	.read = audio_read,
+	.write = audio_write,
+	.unlocked_ioctl = audio_ioctl,
+	.fsync = audaac_fsync
+};
+
+struct miscdevice audio_aac_misc = {
+	.minor = MISC_DYNAMIC_MINOR,
+	.name = "msm_aac",
+	.fops = &audio_aac_fops,
+};
+
+static int __init audio_init(void)
+{
+	return misc_register(&audio_aac_misc);
+}
+
+static void __exit audio_exit(void)
+{
+	misc_deregister(&audio_aac_misc);
+}
+
+module_init(audio_init);
+module_exit(audio_exit);
+
+MODULE_DESCRIPTION("MSM AAC driver");
+MODULE_LICENSE("GPL v2");
