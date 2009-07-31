@@ -393,6 +393,24 @@ static int lcdc_gordon_panel_off(struct platform_device *pdev)
 	return 0;
 }
 
+static void lcdc_gordon_set_backlight(struct msm_fb_data_type *mfd)
+{
+		int bl_level = mfd->bl_level;
+
+		if (bl_level <= 1) {
+			/* keep back light ON */
+			serigo(GORDON_REG_LCDIFCTL2, 0x0B);
+			udelay(15);
+			serigo(GORDON_REG_VALTRAN, 0x01);
+			}
+		else {
+			/* keep back light OFF */
+			serigo(GORDON_REG_LCDIFCTL2, 0x7B);
+			udelay(15);
+			serigo(GORDON_REG_VALTRAN, 0x01);
+			}
+}
+
 static int __init gordon_probe(struct platform_device *pdev)
 {
 	if (pdev->id == 0) {
@@ -413,6 +431,7 @@ static struct platform_driver this_driver = {
 static struct msm_fb_panel_data gordon_panel_data = {
 	.on = lcdc_gordon_panel_on,
 	.off = lcdc_gordon_panel_off,
+	.set_backlight = lcdc_gordon_set_backlight,
 };
 
 static struct platform_device this_device = {
@@ -445,6 +464,8 @@ static int __init lcdc_gordon_panel_init(void)
 	pinfo->bpp = 24;
 	pinfo->fb_num = 2;
 	pinfo->clk_rate = 24500000;
+	pinfo->bl_max = 2;
+	pinfo->bl_min = 1;
 
 	pinfo->lcdc.h_back_porch = 84;
 	pinfo->lcdc.h_front_porch = 33;
