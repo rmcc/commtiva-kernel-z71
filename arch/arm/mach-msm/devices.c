@@ -555,11 +555,23 @@ struct platform_device msm_device_tssc = {
 	.resource	= msm_tssc_resources,
 };
 
+#if defined(CONFIG_FB_MSM_MDP40)
+#define MDP_BASE          0xA3F00000
+#define PMDH_BASE         0xAD600000
+#define EMDH_BASE         0xAD700000
+#define TVENC_BASE        0xAD400000
+#else
+#define MDP_BASE          0xAA200000
+#define PMDH_BASE         0xAA600000
+#define EMDH_BASE         0xAA700000
+#define TVENC_BASE        0xAA400000
+#endif
+
 static struct resource msm_mdp_resources[] = {
 	{
 		.name   = "mdp",
-		.start  = 0xAA200000,
-		.end    = 0xAA200000 + 0x000F0000 - 1,
+		.start  = MDP_BASE,
+		.end    = MDP_BASE + 0x000F0000 - 1,
 		.flags  = IORESOURCE_MEM,
 	}
 };
@@ -567,8 +579,8 @@ static struct resource msm_mdp_resources[] = {
 static struct resource msm_mddi_resources[] = {
 	{
 		.name   = "pmdh",
-		.start  = 0xAA600000,
-		.end    = 0xAA600000 + PAGE_SIZE - 1,
+		.start  = PMDH_BASE,
+		.end    = PMDH_BASE + PAGE_SIZE - 1,
 		.flags  = IORESOURCE_MEM,
 	}
 };
@@ -576,8 +588,8 @@ static struct resource msm_mddi_resources[] = {
 static struct resource msm_mddi_ext_resources[] = {
 	{
 		.name   = "emdh",
-		.start  = 0xAA700000,
-		.end    = 0xAA700000 + PAGE_SIZE - 1,
+		.start  = EMDH_BASE,
+		.end    = EMDH_BASE + PAGE_SIZE - 1,
 		.flags  = IORESOURCE_MEM,
 	}
 };
@@ -586,7 +598,7 @@ static struct resource msm_ebi2_lcd_resources[] = {
 	{
 		.name   = "base",
 		.start  = 0xa0d00000,
-		.end    = 0xa0d00000 + 0x1000 - 1,
+		.end    = 0xa0d00000 + PAGE_SIZE - 1,
 		.flags  = IORESOURCE_MEM,
 	},
 	{
@@ -606,8 +618,8 @@ static struct resource msm_ebi2_lcd_resources[] = {
 static struct resource msm_tvenc_resources[] = {
 	{
 		.name   = "tvenc",
-		.start  = 0xaa400000,
-		.end    = 0xaa400000 + 0x1000 - 1,
+		.start  = TVENC_BASE,
+		.end    = TVENC_BASE + PAGE_SIZE - 1,
 		.flags  = IORESOURCE_MEM,
 	}
 };
