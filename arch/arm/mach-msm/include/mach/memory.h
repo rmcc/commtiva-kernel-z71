@@ -51,4 +51,8 @@ void write_to_strongly_ordered_memory(void);
 #endif
 #endif
 
+#ifdef CONFIG_ARCH_MSM_SCORPION
+#define arch_has_speculative_dfetch()	1
+#endif
+
 #endif
