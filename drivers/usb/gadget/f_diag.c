@@ -343,13 +343,9 @@ EXPORT_SYMBOL(diag_close);
 static void diag_free_req_entry(struct usb_ep *ep,
 		struct diag_req_entry *req)
 {
-	struct usb_request *usb_req = req->usb_req;
-
-	if (ep != NULL && req != NULL) {
-		if (req->usb_req != NULL) {
-			kfree(usb_req->buf);
-			usb_ep_free_request(ep, usb_req);
-		}
+	if (req) {
+		if (ep && req->usb_req)
+			usb_ep_free_request(ep, req->usb_req);
 		kfree(req);
 	}
 }
