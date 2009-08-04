@@ -316,7 +316,10 @@ static void audqcelp_dsp_event(void *private, unsigned id, uint16_t *msg)
 			}
 			case AUDPP_DEC_STATUS_INIT:
 				pr_debug("decoder status: init \n");
-				audpp_cmd_cfg_routing_mode(audio);
+				if (audio->pcm_feedback)
+					audpp_cmd_cfg_routing_mode(audio);
+				else
+					audpp_cmd_cfg_adec_params(audio);
 				break;
 
 			case AUDPP_DEC_STATUS_CFG:
