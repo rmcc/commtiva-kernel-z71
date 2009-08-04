@@ -332,15 +332,23 @@ static void mt9t013_get_pict_fps(uint16_t fps, uint16_t *pfps)
 	/* input fps is preview fps in Q8 format */
 	uint32_t divider;   /*Q10 */
 	uint32_t pclk_mult; /*Q10 */
+	uint32_t d1;
+	uint32_t d2;
 
 	if (mt9t013_ctrl->prev_res == QTR_SIZE) {
-		divider =
+		d1 =
 			(uint32_t)(
-		((mt9t013_regs.reg_pat[RES_PREVIEW].frame_length_lines *
-		mt9t013_regs.reg_pat[RES_PREVIEW].line_length_pck) *
+		(mt9t013_regs.reg_pat[RES_PREVIEW].frame_length_lines *
 		0x00000400) /
-		(mt9t013_regs.reg_pat[RES_CAPTURE].frame_length_lines *
-		mt9t013_regs.reg_pat[RES_CAPTURE].line_length_pck));
+		mt9t013_regs.reg_pat[RES_CAPTURE].frame_length_lines);
+
+		d2 =
+			(uint32_t)(
+		(mt9t013_regs.reg_pat[RES_PREVIEW].line_length_pck *
+		0x00000400) /
+		mt9t013_regs.reg_pat[RES_CAPTURE].line_length_pck);
+
+		divider = (uint32_t) (d1 * d2) / 0x00000400;
 
 		pclk_mult =
 		(uint32_t) ((mt9t013_regs.reg_pat[RES_CAPTURE].pll_multiplier *
