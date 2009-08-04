@@ -1551,7 +1551,6 @@ void vfe_stats_start_wb_exp(struct vfe_cmd_stats_wb_exp_start *);
 void vfe_stats_start_af(struct vfe_cmd_stats_af_start *);
 void vfe_stats_setting(struct vfe_cmd_stats_setting *);
 void vfe_axi_input_config(struct vfe_cmd_axi_input_config *);
-void vfe_stats_config(struct vfe_cmd_stats_setting *);
 void vfe_axi_output_config(struct vfe_cmd_axi_output_config *);
 void vfe_camif_config(struct vfe_cmd_camif_config *);
 void vfe_fov_crop_config(struct vfe_cmd_fov_crop_config *);

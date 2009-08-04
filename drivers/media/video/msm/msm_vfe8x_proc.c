@@ -874,18 +874,17 @@ static void vfe_process_camif_sof_irq(void)
 	}
 }
 
-static int vfe_get_af_pingpong_status(void)
+static boolean vfe_get_af_pingpong_status(void)
 {
 	uint32_t busPingPongStatus;
-	int rc = 0;
 
 	busPingPongStatus =
 		readl(ctrl->vfebase + VFE_BUS_PINGPONG_STATUS);
 
 	if ((busPingPongStatus & VFE_AF_PINGPONG_STATUS_BIT) == 0)
-		return -EFAULT;
+		return FALSE;
 
-	return rc;
+	return TRUE;
 }
 
 static uint32_t vfe_read_af_buf_addr(boolean pipo)
@@ -3312,19 +3311,6 @@ void vfe_axi_input_config(struct vfe_cmd_axi_input_config *in)
 
 	writel(busPingpongRdIrqEnable,
 		ctrl->vfebase + VFE_BUS_PINGPONG_IRQ_EN);
-}
-
-void vfe_stats_config(struct vfe_cmd_stats_setting *in)
-{
-	ctrl->afStatsControl.addressBuffer[0] = in->afBuffer[0];
-	ctrl->afStatsControl.addressBuffer[1] = in->afBuffer[1];
-	ctrl->afStatsControl.nextFrameAddrBuf = in->afBuffer[2];
-
-	ctrl->awbStatsControl.addressBuffer[0] = in->awbBuffer[0];
-	ctrl->awbStatsControl.addressBuffer[1] = in->awbBuffer[1];
-	ctrl->awbStatsControl.nextFrameAddrBuf = in->awbBuffer[2];
-
-	vfe_stats_setting(in);
 }
 
 void vfe_axi_output_config(

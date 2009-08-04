@@ -600,11 +600,7 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			}
 		}
 
-		vfe_stats_config(scfg);
-	}
-		break;
-
-	case CMD_STATS_AF_AXI_CFG: {
+		vfe_stats_setting(scfg);
 	}
 		break;
 

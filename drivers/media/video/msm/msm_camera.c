@@ -2150,6 +2150,10 @@ static int msm_sync_init(struct msm_sync *sync,
 	INIT_LIST_HEAD(&sync->pict_frame_q);
 	init_waitqueue_head(&sync->pict_frame_wait);
 
+	spin_lock_init(&sync->af_status_lock);
+	sync->af_flag = 0;
+	init_waitqueue_head(&sync->af_status_wait);
+
 	wake_lock_init(&sync->wake_lock, WAKE_LOCK_IDLE, "msm_camera");
 
 	rc = msm_camio_probe_on(pdev);
