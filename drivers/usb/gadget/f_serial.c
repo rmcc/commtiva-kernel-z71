@@ -178,7 +178,7 @@ static struct usb_endpoint_descriptor gser_hs_notify_desc  = {
 	.bEndpointAddress =	USB_DIR_IN,
 	.bmAttributes =		USB_ENDPOINT_XFER_INT,
 	.wMaxPacketSize =	__constant_cpu_to_le16(GS_NOTIFY_MAXPACKET),
-	.bInterval =		1 << GS_LOG2_NOTIFY_INTERVAL,
+	.bInterval =		GS_LOG2_NOTIFY_INTERVAL+4,
 };
 #endif
 
