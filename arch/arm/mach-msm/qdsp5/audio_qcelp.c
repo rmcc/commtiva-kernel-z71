@@ -32,6 +32,7 @@
 #include <linux/debugfs.h>
 #include <linux/earlysuspend.h>
 #include <linux/list.h>
+#include <linux/android_pmem.h>
 #include <asm/ioctls.h>
 #include <mach/msm_adsp.h>
 #include <linux/msm_audio.h>
@@ -110,7 +111,7 @@ struct audio {
 	struct mutex read_lock;
 	wait_queue_head_t read_wait;    /* Wait queue for read */
 	char *read_data;        /* pointer to reader buffer */
-	dma_addr_t read_phys;   /* physical address of reader buffer */
+	int32_t read_phys;   /* physical address of reader buffer */
 	uint8_t read_next;      /* index to input buffers to be read next */
 	uint8_t fill_next;      /* index to buffer that DSP should be filling */
 	uint8_t pcm_buf_count;  /* number of pcm buffer allocated */
@@ -122,7 +123,7 @@ struct audio {
 
 	/* data allocated for various buffers */
 	char *data;
-	dma_addr_t phys;
+	int32_t phys; /* physical address of write buffer */
 
 	int mfield; /* meta field embedded in data */
 	int rflush; /* Read  flush */
@@ -867,14 +868,24 @@ static long audqcelp_ioctl(struct file *file, unsigned int cmd,
 				pr_debug(
 				"audqcelp_ioctl: allocate PCM buf %d\n",
 				config.buffer_count * config.buffer_size);
-				audio->read_data = dma_alloc_coherent(NULL,
-				config.buffer_size * config.buffer_count,
-				&audio->read_phys, GFP_KERNEL);
+				audio->read_phys = pmem_kalloc(
+							config.buffer_size *
+							config.buffer_count,
+							PMEM_MEMTYPE_EBI1|
+							PMEM_ALIGNMENT_4K);
+				if (IS_ERR((void *)audio->read_phys)) {
+					rc = -ENOMEM;
+					break;
+				}
+				audio->read_data = ioremap(audio->read_phys,
+							config.buffer_size *
+							config.buffer_count);
 				if (!audio->read_data) {
 					pr_err(
-					"audqcelp_ioctl: no mem for pcm buf\n"
+					"audqcelp_ioctl: no mem for read buf\n"
 					);
 					rc = -ENOMEM;
+					pmem_kfree(audio->read_phys);
 				} else {
 					uint8_t index;
 					uint32_t offset = 0;
@@ -897,6 +908,10 @@ static long audqcelp_ioctl(struct file *file, unsigned int cmd,
 						audio->in[index].used = 0;
 						offset += config.buffer_size;
 					}
+					pr_debug("read buf: phy addr 0x%08x \
+						kernel addr 0x%08x\n",
+						audio->read_phys,
+						(int)audio->read_data);
 					rc = 0;
 				}
 			} else {
@@ -1188,11 +1203,11 @@ static int audqcelp_release(struct inode *inode, struct file *file)
 	audio->event_abort = 1;
 	wake_up(&audio->event_wait);
 	audqcelp_reset_event_queue(audio);
-	dma_free_coherent(NULL, DMASZ, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	if (audio->read_data) {
-		dma_free_coherent(NULL,
-				 audio->in[0].size * audio->pcm_buf_count,
-				 audio->read_data, audio->read_phys);
+		iounmap(audio->read_data);
+		pmem_kfree(audio->read_phys);
 	}
 	mutex_unlock(&audio->lock);
 #ifdef CONFIG_DEBUG_FS
@@ -1365,16 +1380,29 @@ static int audqcelp_open(struct inode *inode, struct file *file)
 	}
 	audio->dec_id = decid & MSM_AUD_DECODER_MASK;
 
-	audio->data = dma_alloc_coherent(NULL, DMASZ,
-			 &audio->phys, GFP_KERNEL);
-	if (!audio->data) {
-		pr_err("%s: could not allocate DMA buffers\n", __func__);
+	audio->phys = pmem_kalloc(DMASZ, PMEM_MEMTYPE_EBI1|PMEM_ALIGNMENT_4K);
+	if (IS_ERR((void *)audio->phys)) {
 		rc = -ENOMEM;
 		audpp_adec_free(audio->dec_id);
 		pr_info("%s: audio instance 0x%08x freeing\n", __func__,
 			(int)audio);
 		kfree(audio);
 		goto done;
+	} else {
+		audio->data = ioremap(audio->phys, DMASZ);
+		if (!audio->data) {
+			pr_err("%s: could not allocate write buffers\n",
+					__func__);
+			rc = -ENOMEM;
+			pmem_kfree(audio->phys);
+			audpp_adec_free(audio->dec_id);
+			pr_info("%s: audio instance 0x%08x freeing\n", __func__,
+				(int)audio);
+			kfree(audio);
+			goto done;
+		}
+		pr_debug("write buf: phy addr 0x%08x kernel addr 0x%08x\n",
+				audio->phys, (int)audio->data);
 	}
 
 	rc = audmgr_open(&audio->audmgr);
@@ -1446,7 +1474,8 @@ static int audqcelp_open(struct inode *inode, struct file *file)
 done:
 	return rc;
 err:
-	dma_free_coherent(NULL, DMASZ, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	audpp_adec_free(audio->dec_id);
 	pr_info("%s: audio instance 0x%08x freeing\n", __func__, (int)audio);
 	kfree(audio);

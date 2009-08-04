@@ -171,7 +171,7 @@ struct audio {
 	struct mutex read_lock;
 	wait_queue_head_t read_wait;	/* Wait queue for read */
 	char *read_data;	/* pointer to reader buffer */
-	dma_addr_t read_phys;	/* physical address of reader buffer */
+	int32_t read_phys;	/* physical address of reader buffer */
 	uint8_t read_next;	/* index to input buffers to be read next */
 	uint8_t fill_next;	/* index to buffer that DSP should be filling */
 	uint8_t pcm_buf_count;	/* number of pcm buffer allocated */
@@ -188,7 +188,7 @@ struct audio {
 
 	/* data allocated for various buffers */
 	char *data;
-	dma_addr_t phys;
+	int32_t phys; /* physical address of write buffer */
 
 	uint32_t drv_status;
 	int rflush; /* Read  flush */
@@ -1390,16 +1390,23 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				pr_debug("ioctl: allocate PCM buffer %d\n",
 					config.buffer_count *
 					config.buffer_size);
-				audio->read_data =
-				    dma_alloc_coherent(NULL,
-						       config.buffer_size *
-						       config.buffer_count,
-						       &audio->read_phys,
-						       GFP_KERNEL);
+				audio->read_phys = pmem_kalloc(
+							config.buffer_size *
+							config.buffer_count,
+							PMEM_MEMTYPE_EBI1|
+							PMEM_ALIGNMENT_4K);
+				if (IS_ERR((void *)audio->read_phys)) {
+					rc = -ENOMEM;
+					break;
+				}
+				audio->read_data = ioremap(audio->read_phys,
+							config.buffer_size *
+							config.buffer_count);
 				if (!audio->read_data) {
-					pr_err("audio_mp3: malloc pcm \
-					buf failed\n");
-					rc = -1;
+					pr_err("audio_mp3: malloc read \
+							buf failed\n");
+					rc = -ENOMEM;
+					pmem_kfree(audio->read_phys);
 				} else {
 					uint8_t index;
 					uint32_t offset = 0;
@@ -1423,6 +1430,10 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 						offset += config.buffer_size;
 					}
 					rc = 0;
+					pr_debug("read buf: phy addr 0x%08x \
+							kernel addr 0x%08x\n",
+							audio->read_phys,
+							(int)audio->read_data);
 				}
 			} else {
 				rc = 0;
@@ -1850,12 +1861,11 @@ static int audio_release(struct inode *inode, struct file *file)
 	audio->event_abort = 1;
 	wake_up(&audio->event_wait);
 	audmp3_reset_event_queue(audio);
-
-	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	if (audio->read_data) {
-		dma_free_coherent(NULL,
-				  audio->in[0].size * audio->pcm_buf_count,
-				  audio->read_data, audio->read_phys);
+		iounmap(audio->read_data);
+		pmem_kfree(audio->read_phys);
 	}
 	mutex_unlock(&audio->lock);
 #ifdef CONFIG_DEBUG_FS
@@ -2033,13 +2043,29 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->dec_id = decid & MSM_AUD_DECODER_MASK;
 
 	while (pmem_sz >= DMASZ_MIN) {
-		pr_info("mp3: pmemsz = %d \n", pmem_sz);
-		audio->data = dma_alloc_coherent(NULL, pmem_sz,
-				&audio->phys, GFP_KERNEL);
-		if (audio->data)
+		pr_debug("mp3: pmemsz = %d \n", pmem_sz);
+		audio->phys = pmem_kalloc(pmem_sz, PMEM_MEMTYPE_EBI1|
+					PMEM_ALIGNMENT_4K);
+		if (!IS_ERR((void *)audio->phys)) {
+			audio->data = ioremap(audio->phys, pmem_sz);
+			if (!audio->data) {
+				pr_err("%s: could not allocate \
+					write buffers\n", __func__);
+				rc = -ENOMEM;
+				pmem_kfree(audio->phys);
+				audpp_adec_free(audio->dec_id);
+				pr_info("MP3: audio instance 0x%08x freeing\n",
+					(int)audio);
+				kfree(audio);
+				goto done;
+			}
+			pr_info("write buf: phy addr 0x%08x \
+						kernel addr 0x%08x\n",
+						audio->phys, (int)audio->data);
 			break;
+		}
 		else if (pmem_sz == DMASZ_MIN) {
-			pr_err("%s: could not allocate DMA buffers\n",
+			pr_err("%s: could not allocate write buffers\n",
 				 __func__);
 			rc = -ENOMEM;
 			audpp_adec_free(audio->dec_id);
@@ -2145,7 +2171,8 @@ static int audio_open(struct inode *inode, struct file *file)
 done:
 	return rc;
 err:
-	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	audpp_adec_free(audio->dec_id);
 	pr_info("MP3: audio instance 0x%08x freeing\n", (int)audio);
 	kfree(audio);
