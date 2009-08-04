@@ -860,6 +860,7 @@ CONFIG_SSB_POSSIBLE=y
 # CONFIG_MFD_WM8350_I2C is not set
 # CONFIG_MFD_PCF50633 is not set
 CONFIG_TPS65023=y
+# CONFIG_PMIC8058 is not set
 
 #
 # Multimedia devices
