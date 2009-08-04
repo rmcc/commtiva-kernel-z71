@@ -31,6 +31,7 @@
 
 #include <mach/qdsp6/msm8k_cad_event.h>
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
+#include <mach/qdsp6/msm8k_cad_filter_midi.h>
 
 
 #define CADI_IOCTL_CMD_OPEN             0x0105c3f0
@@ -55,6 +56,7 @@ struct cadi_open_struct_type {
 	struct cad_stream_config_struct_type	cad_config;
 	struct cad_stream_info_struct_type	cad_stream;
 	struct cad_stream_device_struct_type	cad_device;
+	struct cad_filter_dls_table		dls_table;
 };
 
 

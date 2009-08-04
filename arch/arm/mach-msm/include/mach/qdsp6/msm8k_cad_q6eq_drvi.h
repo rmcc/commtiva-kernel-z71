@@ -26,49 +26,24 @@
  *
  */
 
-#ifndef __ADSP_AUDIO_DEVICE_IOCTL_H
-#define __ADSP_AUDIO_DEVICE_IOCTL_H
+#ifndef _QDSP6EQDRVI_H_
+#define _QDSP6EQDRVI_H_
 
-
+#include <mach/qdsp6/msm8k_cad_module.h>
+#include <mach/qdsp6/msm8k_ardi.h>
+#include <mach/qdsp6/msm8k_adsp_audio_device_ioctl.h>
 #include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+#include <mach/qdsp6/msm8k_adsp_audio_command.h>
 
 
-/* Device control session only IOCTL command definitions */
-/* These commands will affect a logical device and all its associated */
-/* streams. */
+#define CAD_EQ_INVALID_DATA       0xFFFFFFFF
 
-
-/* Set device volume. */
-/* This command has data payload struct adsp_audio_set_dev_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
-
-
-/* Set Device stereo volume. This command has data payload, */
-/* struct adsp_audio_set_dev_stereo_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_STEREO_VOL		0x0108df3e
-
-
-/* Set L, R cross channel gain for a Device. This command has */
-/* data payload, struct adsp_audio_set_dev_x_chan_gain_command. */
-
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_XCHAN_GAIN		0x0108df40
-
-
-/* Set device mute state. */
-/* This command has data payload struct adsp_audio_set_dev_mute_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE		0x0107605f
-
-
-/* Configure Equalizer for a device. */
-/* This command has payload struct adsp_audio_set_dev_equalizer_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
-
+struct cad_filter_eq_driver_struct {
+	/* this is the device control session */
+	u32     device_session_id;
+	/* indexed by session id */
+	struct adsp_audio_set_equalizer_command	eq_stream_data[CAD_MAX_SESSION];
+};
 
 
 #endif
-
-

@@ -42,7 +42,7 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 
 s32 cad_q6enc_session_close(struct q6_enc_session_data *self);
 s32 cad_q6enc_session_ioctl(struct q6_enc_session_data *self,
-				u32 cmd,
-				void *cmd_buf);
+				u32 cmd, void *cmd_buf,
+				u32 cmd_buf_len);
 
 #endif

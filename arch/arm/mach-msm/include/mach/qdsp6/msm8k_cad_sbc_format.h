@@ -26,49 +26,47 @@
  *
  */
 
-#ifndef __ADSP_AUDIO_DEVICE_IOCTL_H
-#define __ADSP_AUDIO_DEVICE_IOCTL_H
+#ifndef CAD_WRITE_SBC_FORMAT_H
+#define CAD_WRITE_SBC_FORMAT_H
 
 
-#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+/* indicating SNR/Loudness */
+#define CAD_ENC_SBC_ALLOCATION_METHOD_LOUDNESS		0x0
+#define CAD_ENC_SBC_ALLOCATION_METHOD_SNR		0x1
 
 
-/* Device control session only IOCTL command definitions */
-/* These commands will affect a logical device and all its associated */
-/* streams. */
+/* four or eight sub-bands are supported for SBC */
+#define CAD_SBC_FOUR_SUBBANDS		4
+#define CAD_SBC_EIGHT_SUBBANDS		8
 
 
-/* Set device volume. */
-/* This command has data payload struct adsp_audio_set_dev_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
-
-
-/* Set Device stereo volume. This command has data payload, */
-/* struct adsp_audio_set_dev_stereo_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_STEREO_VOL		0x0108df3e
+/* four different block lengths are supported */
+#define CAD_SBC_BLOCK_LEN_FOUR		4
+#define CAD_SBC_BLOCK_LEN_EIGHT		8
+#define CAD_SBC_BLOCK_LEN_TWELVE	12
+#define CAD_SBC_BLOCK_LEN_SIXTEEN	16
 
 
-/* Set L, R cross channel gain for a Device. This command has */
-/* data payload, struct adsp_audio_set_dev_x_chan_gain_command. */
+/* This structure provides configuration of SBC on QCOM MSM */
+struct cad_sbc_enc_cfg_struct_type {
+	/* Subband number : ( 4 OR 8 ) */
+	u32	num_subbands;
 
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_XCHAN_GAIN		0x0108df40
+	/* Block length: (4, 8, 12, 16) */
+	u32	block_len;
 
+	/* Channel Mode (Mono, Dual, Stereo, or Joint Stereo) */
+	u32	channel_mode;
 
-/* Set device mute state. */
-/* This command has data payload struct adsp_audio_set_dev_mute_command. */
+	/* Allocation method: SNR or Loundness */
+	u32	allocation_method;
 
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE		0x0107605f
-
-
-/* Configure Equalizer for a device. */
-/* This command has payload struct adsp_audio_set_dev_equalizer_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
-
+	/* bits per second */
+	u32	bit_rate;
+};
 
 
 #endif
+
 
 

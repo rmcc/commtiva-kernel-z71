@@ -63,7 +63,8 @@
 #include <mach/qdsp6/msm8k_cad_module.h>
 #include <mach/qdsp6/msm8k_ard_helper.h>
 #include <mach/qdsp6/msm8k_ardi.h>
-#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+#include <mach/qdsp6/msm8k_cad_q6eq_drvi.h>
+#include <mach/qdsp6/msm8k_adsp_audio_error.h>
 
 
 #if 0
@@ -76,17 +77,21 @@ static struct cad_filter_eq_driver_struct cad_filter_eq_data;
 
 s32 cad_filter_eq_send_stream_config(u32 sess_id)
 {
-	static struct adsp_audio_event result;
-	s32 rc = CAD_RES_SUCCESS;
+	static union adsp_audio_event	result;
+	s32				rc = CAD_RES_SUCCESS;
 
-	rc = cad_rpc_ioctl(sess_id,
-		1,
-		ADSP_AUDIO_IOCTL_CMD_SET_STREAM_EQ_CONFIG,
-		(u8 *)&(cad_filter_eq_data.eq_stream_data[sess_id]),
+	if (ardsession[sess_id]->group_id == 0) {
+		pr_err("CAD::EQ=>Can not get group id");
+		return CAD_RES_FAILURE;
+	}
+
+	rc = cad_rpc_control(sess_id, ardsession[sess_id]->group_id,
+		(void *)&cad_filter_eq_data.eq_stream_data[sess_id],
 		sizeof(cad_filter_eq_data.eq_stream_data[sess_id]),
 		&result);
+
 	if ((rc != CAD_RES_SUCCESS) &&
-			(result.status != CAD_RES_SUCCESS)) {
+			(result.no_payload.status != ADSP_AUDIO_SUCCESS)) {
 		pr_err("%s: failed to set eq config\n", __func__);
 		return CAD_RES_FAILURE;
 	}
@@ -95,7 +100,7 @@ s32 cad_filter_eq_send_stream_config(u32 sess_id)
 }
 
 s32 cad_filter_eq_process_stream_config(s32 sess_id,
-		struct adsp_audio_eq_cfg *fesc)
+		struct adsp_audio_set_equalizer_command *fesc)
 {
 	s32 rc = CAD_RES_SUCCESS;
 	u32 i;
@@ -104,21 +109,21 @@ s32 cad_filter_eq_process_stream_config(s32 sess_id,
 	memset(&(cad_filter_eq_data.eq_stream_data[sess_id]), 0,
 		sizeof(cad_filter_eq_data.eq_stream_data[sess_id]));
 
-	cad_filter_eq_data.eq_stream_data[sess_id].ecfg.enable =
+	cad_filter_eq_data.eq_stream_data[sess_id].enable =
 		fesc->enable;
-	cad_filter_eq_data.eq_stream_data[sess_id].ecfg.num_bands =
+	cad_filter_eq_data.eq_stream_data[sess_id].num_bands =
 		fesc->num_bands;
 
 	for (i = 0; i < fesc->num_bands; i++) {
-		cad_filter_eq_data.eq_stream_data[sess_id].ecfg.eq_bands[i].
+		cad_filter_eq_data.eq_stream_data[sess_id].eq_bands[i].
 			band_idx = fesc->eq_bands[i].band_idx;
-		cad_filter_eq_data.eq_stream_data[sess_id].ecfg.eq_bands[i].
+		cad_filter_eq_data.eq_stream_data[sess_id].eq_bands[i].
 			filter_type = fesc->eq_bands[i].filter_type;
-		cad_filter_eq_data.eq_stream_data[sess_id].ecfg.eq_bands[i].
+		cad_filter_eq_data.eq_stream_data[sess_id].eq_bands[i].
 			center_freq_hz = fesc->eq_bands[i].center_freq_hz;
-		cad_filter_eq_data.eq_stream_data[sess_id].ecfg.eq_bands[i].
+		cad_filter_eq_data.eq_stream_data[sess_id].eq_bands[i].
 			filter_gain = fesc->eq_bands[i].filter_gain;
-		cad_filter_eq_data.eq_stream_data[sess_id].ecfg.eq_bands[i].
+		cad_filter_eq_data.eq_stream_data[sess_id].eq_bands[i].
 			q_factor = fesc->eq_bands[i].q_factor;
 	}
 
@@ -150,7 +155,7 @@ s32 cad_filter_eq_process_stream_start(s32 sess_id)
 		return CAD_RES_SUCCESS;
 	}
 	/* skip if no stream eq data */
-	if (cad_filter_eq_data.eq_stream_data[sess_id].ecfg.enable ==
+	if (cad_filter_eq_data.eq_stream_data[sess_id].enable ==
 			CAD_EQ_INVALID_DATA) {
 		D("%s: no valid stream eq data for session (%d)\n",
 				__func__, sess_id);
@@ -170,7 +175,7 @@ static s32 cad_filter_eq_close(s32 sess_id)
 
 	/* this is stream session */
 	/* reset the stream eq table since we don't cache the stream eq data */
-	cad_filter_eq_data.eq_stream_data[sess_id].ecfg.enable =
+	cad_filter_eq_data.eq_stream_data[sess_id].enable =
 		CAD_EQ_INVALID_DATA;
 	return CAD_RES_SUCCESS;
 }
@@ -196,7 +201,8 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 		switch (filt->cmd) {
 		case CAD_FILTER_EQ_DEVICE_CONFIG:
 			if (filt->format_block_len !=
-				sizeof(struct adsp_audio_stream_eq_cfg)) {
+				sizeof(struct
+				adsp_audio_set_equalizer_command)) {
 				D("%s: wrong device config format block\n",
 					__func__);
 				break;
@@ -205,14 +211,16 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 			break;
 		case CAD_FILTER_EQ_STREAM_CONFIG:
 			if (filt->format_block_len !=
-				sizeof(struct adsp_audio_eq_cfg)) {
+				sizeof(struct
+				adsp_audio_set_equalizer_command)) {
+
 				D("%s: wrong stream config format block.\n",
 					__func__);
 				break;
 			}
 			rc = cad_filter_eq_process_stream_config(
 				sess_id,
-				(struct adsp_audio_eq_cfg *)
+				(struct adsp_audio_set_equalizer_command *)
 					filt->format_block);
 			break;
 		}
@@ -240,9 +248,15 @@ s32 cad_filter_eq_init(struct cad_func_tbl_type **func_tbl)
 
 	/* init the stream/device eq tables */
 	/* set stream data to invalid */
-	for (i = 0; i < CAD_MAX_SESSION; i++)
-		cad_filter_eq_data.eq_stream_data[i].ecfg.enable =
+	for (i = 0; i < CAD_MAX_SESSION; i++) {
+		cad_filter_eq_data.eq_stream_data[i].enable =
 			CAD_EQ_INVALID_DATA;
+
+		cad_filter_eq_data.eq_stream_data[i].cmd.op_code =
+			ADSP_AUDIO_IOCTL_SET_SESSION_EQ_CONFIG;
+		cad_filter_eq_data.eq_stream_data[i].cmd.response_type =
+			ADSP_AUDIO_RESPONSE_COMMAND;
+	}
 
 	return CAD_RES_SUCCESS;
 }

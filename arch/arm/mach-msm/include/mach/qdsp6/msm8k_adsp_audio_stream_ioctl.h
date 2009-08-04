@@ -34,92 +34,63 @@
 #include <mach/qdsp6/msm8k_adsp_audio_device.h>
 
 
+
+/* DATA IOCTLs */
+/* Command IOCTLs to Send/Receive data from an audio stream */
+
+
+
+/* Transmit (send) Data to audio stream (playback) */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_DATA_TX			0x0108dd7f
+
+
+/* Receive Data from audio stream (record). */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_DATA_RX			0x0108dd80
+
+
+
+
 /* Stream only IOCTL command definitions. */
 /* These commands will affect only a single stream. */
 
 
 
-/* Start stream for audio device. */
-/* This command has no payload.  */
-/* struct adsp_audio_header can be sent as a payload if desired */
-
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_START		0x010815c6
-
-
 /* Stop stream for audio device. */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
 
 #define ADSP_AUDIO_IOCTL_CMD_STREAM_STOP		0x01075c54
 
 
-/* Pause the data flow for a stream. */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
-
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_PAUSE		0x01075ee8
-
-
-/* Resume the data flow for a stream. */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
-
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_RESUME		0x01075ee9
-
-
-/* Drop any unprocessed data buffers for a stream. */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
-
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_FLUSH		0x01075eea
-
-
 /* End of stream reached. Client will not send any more data. */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
 
 #define ADSP_AUDIO_IOCTL_CMD_STREAM_EOS			0x0108b150
 
 
-/* Start Stream DTMF tone */
-/* This command has payload struct adsp_audio_dtmf_start */
+/* Do sample slipping/stuffing on AAC outputs. The payload of */
+/* this command is struct adsp_audio_slip_sample_command. */
 
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_DTMF_START		0x0108c0dd
-
-
-struct adsp_audio_dtmf_start {
-	/* Associated client data */
-	struct adsp_audio_header	header;
-	/* First tone in Hz */
-	u32				tone1_hz;
-	/* Second tone in Hz */
-	u32				tone2_hz;
-	/* Duration in microseconds */
-	u32				duration_usec;
-	/* Gain in millibels */
-	s32				gain_mb;
-} __attribute__ ((packed));
-
-
-
-/* Stop Stream DTMF tone */
-/* This command has no payload. */
-/* struct adsp_audio_header can be sent as a payload if desired */
-
-#define ADSP_AUDIO_IOCTL_CMD_STREAM_DTMF_STOP		0x01087554
+#define ADSP_AUDIO_IOCTL_CMD_STREAM_SLIPSAMPLE		0x0108d40e
 
 
 /* Set stream volume. */
-/* This command has data payload, struct adsp_audio_set_stream_volume. */
+/* This command has data payload, struct adsp_audio_set_volume_command. */
 
 #define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_VOL		0x0108c0de
 
 
-struct adsp_audio_set_stream_volume {
-	struct adsp_audio_header	header;	/* Associated client data */
-	s32				volume;	/* in mB */
-} __attribute__ ((packed));
+/* Set stream stereo volume. This command has data payload, */
+/* struct adsp_audio_set_stereo_volume_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_STEREO_VOL		0x0108dd7c
 
+
+/* Set L, R cross channel gain for a Stream. This command has */
+/* data payload, struct adsp_audio_set_x_chan_gain_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_XCHAN_GAIN		0x0108dd7d
 
 
 /* Set stream mute state. */
@@ -128,95 +99,110 @@ struct adsp_audio_set_stream_volume {
 #define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE		0x0108c0df
 
 
-struct adsp_audio_set_stream_mute {
-	struct adsp_audio_header	header;	/* Associated client data */
-	u32				mute;	/* 0 == UnMute, 1 == Mute */
-} __attribute__ ((packed));
+/* Reconfigure bit rate information. This command has data */
+/* payload, struct adsp_audio_set_bit_rate_command */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_BITRATE		0x0108ccf1
 
+
+/* Set Channel Mapping. This command has data payload, struct */
+/* This command has data payload struct adsp_audio_set_channel_map_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_CHANNELMAP		0x0108d32a
+
+
+/* Enable/disable AACPlus SBR. */
+/* This command has data payload struct adsp_audio_set_sbr_command */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_SBR			0x0108d416
+
+
+/* Enable/disable WMA Pro Chex and Fex. This command has data payload */
+/* struct adsp_audio_stream_set_wma_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_WMAPRO		0x0108d417
+
+
+
+
+/* SESSION CMD/SET IOCTLs */
+/* These commands affect a group of streams identified by the major address */
+
+
+
+/* Start stream for audio device. */
+/* This command has no payload, use struct adsp_audio_no_payload_command.  */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_START		0x010815c6
+
+
+/* Stop all stream(s) for audio session as indicated by major id. */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_STOP		0x0108dd7e
+
+
+/* Pause the data flow for a session as indicated by major id. */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_PAUSE		0x01075ee8
+
+
+/* Resume the data flow for a session as indicated by major id. */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_RESUME		0x01075ee9
+
+
+/* Drop any unprocessed data buffers for a session as indicated by major id. */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_FLUSH		0x01075eea
+
+
+/* Start Stream DTMF tone */
+/* This command has payload struct adsp_audio_dtmf_start_command */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_DTMF_START		0x0108c0dd
+
+
+/* Stop Stream DTMF tone */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+
+#define ADSP_AUDIO_IOCTL_CMD_SESSION_DTMF_STOP		0x01087554
+
+
+/* Set Session volume. */
+/* This command has data payload, struct adsp_audio_set_volume_command. */
+#define ADSP_AUDIO_IOCTL_SET_SESSION_VOL		0x0108d8bd
+
+
+/* Set session stereo volume. This command has data payload, */
+/* struct adsp_audio_set_stereo_volume_command. */
+#define ADSP_AUDIO_IOCTL_SET_SESSION_STEREO_VOL		0x0108df3d
+
+
+/* Set L, R cross channel gain for a session. This command has */
+/* data payload, struct adsp_audio_set_x_chan_gain_command. */
+#define ADSP_AUDIO_IOCTL_SET_SESSION_XCHAN_GAIN		0x0108df3f
+
+
+/* Set Session mute state. */
+/* This command has data payload, struct adsp_audio_set_mute_command. */
+#define ADSP_AUDIO_IOCTL_SET_SESSION_MUTE		0x0108d8be
 
 
 /* Configure Equalizer for a stream. */
-/* This command has payload struct adsp_audio_stream_eq_cfg. */
+/* This command has payload struct adsp_audio_set_equalizer_command. */
 
-#define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_EQ_CONFIG	0x0108c0e0
-
-
-
-/* Equalizer filter band types */
-#define ADSP_AUDIO_EQUALIZER_TYPE_NONE		0
-#define ADSP_AUDIO_EQUALIZER_BASS_BOOST		1
-#define ADSP_AUDIO_EQUALIZER_BASS_CUT		2
-#define ADSP_AUDIO_EQUALIZER_TREBLE_BOOST	3
-#define ADSP_AUDIO_EQUALIZER_TREBLE_CUT		4
-#define ADSP_AUDIO_EQUALIZER_BAND_BOOST		5
-#define ADSP_AUDIO_EQUALIZER_BAND_CUT		6
-
-
-/* Definition for any one band of Equalizer. */
-
-struct adsp_audio_eq_band {
-	/* The band index, 0 .. 11 */
-	u16	band_idx;
-	/* Filter band type */
-	u32	filter_type;
-	/* Filter band center frequency */
-	u32	center_freq_hz;
-	/* Filter band initial gain (dB) */
-	/* Range is +12 dB to -12 dB with 1dB increments. */
-	s32	filter_gain;
-	/* Filter band quality factor expressed as q-8 number, */
-	/* i.e. fixed point number with q factor of 8, */
-	/* e.g. 3000/(2^8) */
-	s32	q_factor;
-} __attribute__ ((packed));
-
-
-
-#define ADSP_AUDIO_MAX_EQ_BANDS 12
-
-#define ADSP_AUDIO_MAX_EQ_BANDS 12
-
-#define CAD_EQ_INVALID_DATA       0xFFFFFFFF
-
-struct adsp_audio_eq_cfg {
-	u32				enable;
-	/* Number of consequtive bands specified */
-	u32				num_bands;
-	struct adsp_audio_eq_band	eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
-} __attribute__ ((packed));
-
-
-struct adsp_audio_stream_eq_cfg {
-	/* Associated client data */
-	struct adsp_audio_header	header;
-	/* Equalizer band data */
-	struct adsp_audio_eq_cfg	ecfg;
-} __attribute__ ((packed));
-
-
-struct cad_filter_eq_driver_struct {
-	/* this is the device control session */
-	u32     device_session_id;
-	/* indexed by session id */
-	struct adsp_audio_stream_eq_cfg eq_stream_data[CAD_MAX_SESSION];
-};
+#define ADSP_AUDIO_IOCTL_SET_SESSION_EQ_CONFIG		0x0108c0e0
 
 
 /* Set Audio Video sync information. */
-/* This command has data payload, struct adsp_audio_stream_av_sync. */
+/* This command has data payload, struct adsp_audio_set_av_sync_command. */
 
-#define ADSP_AUDIO_IOCTL_CMD_SET_STREAM_AV_SYNC		0x0107605c
-
-
-struct adsp_audio_stream_av_sync {
-	s64	relative_time;	/* Media time */
-	s64	absolute_time;	/* Presentation time */
-} __attribute__ ((packed));
-
+#define ADSP_AUDIO_IOCTL_SET_SESSION_AVSYNC		0x0108d1e2
 
 
 /* Get Audio Media Session time. */
-/* This command returns returns the s64 audioTime in adsp_audio_event_data */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+/* This command returns the audioTime in adsp_audio_unsigned64_event */
 
 #define ADSP_AUDIO_IOCTL_CMD_GET_AUDIO_TIME		0x0108c26c
 

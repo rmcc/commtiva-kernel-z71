@@ -39,6 +39,13 @@
 #include <mach/qdsp6/msm8k_adsp_audio_cfg_ioctl.h>
 
 
+#define ADSP_AUDIO_API_MAJOR_VERSION	2
+#define ADSP_AUDIO_API_MINOR_VERSION	0
+
+#define ADSP_AUDIO_DRIVER_SHARED_MEMORY_ACCESS_FLAG_READ	1
+#define ADSP_AUDIO_DRIVER_SHARED_MEMORY_ACCESS_FLAG_WRITE	2
+
+
 /* This function initializes the ADSP Audio Driver Framework. */
 /* This function must be called only once at the start of the process */
 /* that hosts this driver. */
@@ -66,7 +73,7 @@ extern s32 adsp_audio_driver_release(void);
 /* @return    status of the operation. */
 
 extern s32 adsp_audio_open(u32 handle,
-				struct adsp_audio_open_device *open_param,
+				struct adsp_audio_open_command *open_param,
 				struct adsp_audio_event_cb *cb_data);
 
 

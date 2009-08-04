@@ -38,38 +38,18 @@
 #include <mach/qdsp6/msm8k_adsp_audio_types.h>
 
 
-typedef void (*RPC_CB_FCN)(struct adsp_audio_event *returnEvent,
+typedef void (*RPC_CB_FCN)(union adsp_audio_event *return_event,
 				void *client_data);
 
 s32 cad_rpc_init(u32 processor_id);
 s32 cad_rpc_deinit(void);
-s32 cad_rpc_reg_callback(u32 session_id, RPC_CB_FCN cbFCN, void *client_data);
-s32 cad_rpc_dereg_callback(u32 session_id, RPC_CB_FCN cbFCN);
+s32 cad_rpc_reg_callback(u32 stream_id, RPC_CB_FCN cbFCN, void *client_data);
+s32 cad_rpc_dereg_callback(u32 stream_id, RPC_CB_FCN cbFCN);
 
-s32 cad_rpc_open(u32 session_id,
-		u32 block_flag,        /* 0=none block, 1=block */
-		struct adsp_audio_open_device *open_buf,
-		struct adsp_audio_event *ret_status);
+s32 cad_rpc_data(u32 stream_id, u32 group_id, void *data_buf, u32 data_buf_len,
+	union adsp_audio_event *ret_evt);
 
-s32 cad_rpc_read(u32 session_id,
-		u32 block_flag,        /* 0=none block, 1=block */
-		struct adsp_audio_buffer *read_buf,
-		struct adsp_audio_event *ret_status);
+s32 cad_rpc_control(u32 stream_id, u32 group_id, void *cmd_buf,
+	u32 cmd_buf_len, union adsp_audio_event *ret_evt);
 
-s32 cad_rpc_write(u32 session_id,
-		u32 block_flag,       /* 0=none block, 1=block */
-		struct adsp_audio_buffer *write_buf,
-		struct adsp_audio_event *ret_status);
-
-s32 cad_rpc_ioctl(u32 session_id,
-		u32 block_flag,       /* 0=none block, 1=block */
-		u32 cmd_code,
-		u8  *cmd_buf,
-		u32 cmd_buf_len,
-		struct adsp_audio_event *ret_status);
-
-s32 cad_rpc_close(u32 session_id,
-		u32 block_flag,       /* 0=none block, 1=block */
-		struct adsp_audio_event *ret_status);
-
-#endif /* _MSM8K_CAD_RPC_H_ */
+#endif

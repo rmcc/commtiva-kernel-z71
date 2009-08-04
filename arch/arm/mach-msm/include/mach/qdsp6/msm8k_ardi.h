@@ -78,6 +78,7 @@ struct ard_global_data_struct_type {
 
 struct ard_session_info_struct_type {
 	enum ard_session_enum_type	session_type;
+	u32				group_id;
 	struct cadi_open_struct_type	*sess_open_info;
 	enum sample_rate_type		rx;
 	enum sample_rate_type		tx;
@@ -121,7 +122,7 @@ s32 qdsp6_enable(s32 session_id);
 s32 qdsp6_disable(s32 session_id);
 s32 qdsp6_start(s32 session_id);
 
-void ard_callback_func(struct adsp_audio_event *ev_data,
+void ard_callback_func(union adsp_audio_event *ev_data,
 		       void *client_data);
 enum ard_state_ret_enum_type ard_state_control(s32 session_id,
 					       u32 dev_id);

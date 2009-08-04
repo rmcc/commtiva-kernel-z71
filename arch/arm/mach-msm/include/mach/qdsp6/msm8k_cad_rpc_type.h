@@ -51,10 +51,8 @@ enum cad_rpc_process_type {
 
 
 struct cad_rpc_config_info {
+	u32     domain_id;	/* processor id */
 	void    *cb_evt;
-	u32	local_trigger_evt;
-	u32     session_id;
-	u32     processor_id;
 };
 
 

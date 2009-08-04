@@ -113,7 +113,7 @@ struct cad_write_midi_struct_type {
 
 struct cad_write_midi_format_struct_type {
    u16	ver_id;
-   cad_write_midi_struct_type  midi;
+   struct cad_write_midi_struct_type  midi;
 };
 #endif
 

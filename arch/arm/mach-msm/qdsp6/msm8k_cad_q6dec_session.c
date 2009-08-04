@@ -61,9 +61,11 @@
 #include <linux/uaccess.h>
 
 #include <mach/qdsp6/msm8k_cad.h>
+#include <mach/qdsp6/msm8k_cad_session_ioctl.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_session.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
@@ -71,30 +73,31 @@
 #define D(fmt, args...) do {} while (0)
 #endif
 
-static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
+
+static void cad_q6dec_session_async_callback(union adsp_audio_event *evt,
 							void *data)
 {
-	struct q6dec_session_data *self =
-		(struct q6dec_session_data *)data;
-	struct q6dec_sesson_buffer_node *node = NULL;
-	struct q6dec_sesson_buffer_node *prev_node = NULL;
+	struct q6dec_session_data *self = (struct q6dec_session_data *)data;
+	struct q6dec_sesson_buffer_node		*node = NULL;
+	struct q6dec_sesson_buffer_node		*prev_node = NULL;
 
-	if (CAD_IOCTL_CMD_STREAM_END_OF_STREAM == evt->event_id) {
+	if ((evt->no_payload.event_data.id == ADSP_AUDIO_IOCTL_CMD_STREAM_EOS)
+		&& (self->cb_data.callback != NULL)) {
 
-		if (NULL != self->cb_data.callback)
-			self->cb_data.callback(CAD_EVT_STATUS_EOS, NULL, 0,
-						 self->cb_data.client_data);
+		self->cb_data.callback(CAD_EVT_STATUS_EOS, NULL, 0,
+					 self->cb_data.client_data);
 		return;
 	}
 
-	if (evt->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE)
+
+	if (evt->no_payload.event_data.id != ADSP_AUDIO_EVT_STATUS_BUF_DONE)
 		/* unknow event, and do nothing */
 		return;
 
 	mutex_lock(&self->session_mutex);
 	node = self->used_buf_list;
 	while (node) {
-		if ((u32)node->buf == evt->header.client_data.data) {
+		if ((u32)node->buf == evt->buffer.client_data.data) {
 			if (prev_node == NULL) {
 				/* first node */
 				self->used_buf_list = node->next;
@@ -117,17 +120,18 @@ static void cad_q6dec_session_async_callback(struct adsp_audio_event *evt,
 
 		if (self->need_buffer_done) {
 			D("Signal buffer done event\n");
-			up(&self->buf_done_sem);
+			complete(&self->buf_done_compl);
 		}
 
-		if (self->used_buf_list == NULL) {
+		if ((self->used_buf_list == NULL) && self->need_all_buf_done) {
 			D("Signal all buffer done event\n");
-			up(&self->all_buf_done_sem);
+			complete(&self->all_buf_done_compl);
 		}
 
 		if (self->cb_data.callback != NULL)
-			self->cb_data.callback(evt->event_id, NULL, 0,
-					 self->cb_data.client_data);
+			self->cb_data.callback(evt->
+				no_payload.event_data.id, NULL, 0,
+				self->cb_data.client_data);
 	}
 	mutex_unlock(&self->session_mutex);
 
@@ -158,15 +162,17 @@ static s32 cad_q6dec_session_send_buf(struct q6dec_session_data *self,
 				struct q6dec_sesson_buffer_node *node,
 				u32 buf_len)
 {
-	struct adsp_audio_buffer send_buf;
+	s32				res = CAD_RES_SUCCESS;
 
-	memset(&send_buf, 0, sizeof(struct adsp_audio_buffer));
-	send_buf.buffer.flags = ADSP_AUDIO_BUFFER_FLAG_START_SET |
+	self->q6_data_buf.buffer.flags = ADSP_AUDIO_BUFFER_FLAG_START_SET |
 		ADSP_AUDIO_BUFFER_FLAG_PHYS_ADDR;
-	send_buf.header.client_data.data = (u32)node->buf;
-	send_buf.buffer.buffer_addr = (u32)node->phys_addr;
-	send_buf.buffer.max_size = buf_len;
-	send_buf.buffer.actual_size = buf_len;
+	self->q6_data_buf.client_data.data = (u32)node->buf;
+	self->q6_data_buf.buffer.buffer_addr = (u32)node->phys_addr;
+	self->q6_data_buf.buffer.max_size = buf_len;
+	self->q6_data_buf.buffer.actual_size = buf_len;
+	self->use_counter++;
+	D("==========> use buffer number %d, 0x%x\n",
+		       self->use_counter, (u32)node->buf);
 
 	/* add to the used list */
 	mutex_lock(&self->session_mutex);
@@ -174,10 +180,24 @@ static s32 cad_q6dec_session_send_buf(struct q6dec_session_data *self,
 	self->used_buf_list = node;
 	mutex_unlock(&self->session_mutex);
 	D("----> Send %d byte of data with buffer 0x%x\n",
-			send_buf.buffer.max_size,
-			send_buf.buffer.buffer_addr);
+			self->q6_data_buf.buffer.max_size,
+			self->q6_data_buf.buffer.buffer_addr);
 	/* rpc write*/
-	return cad_rpc_write(self->session_id, 0, &send_buf, NULL);
+	if (cad_rpc_data(self->session_id, self->group_id,
+			(void *)&self->q6_data_buf,
+			sizeof(self->q6_data_buf), NULL) !=
+			CAD_RES_SUCCESS) {
+
+		pr_err("Can not push write buffers to the Q6!!!\n");
+
+		self->use_counter--;
+		self->used_buf_list = self->used_buf_list->next;
+		node->next = self->free_buf_list;
+		self->free_buf_list = node;
+		res = CAD_RES_FAILURE;
+	}
+
+	return res;
 }
 
 
@@ -191,10 +211,6 @@ static s32 cad_q6dec_session_write_buffers(struct q6dec_session_data *self,
 	struct q6dec_sesson_buffer_node		*node = NULL;
 
 	while ((node = cad_q6dec_session_get_free_buf(self)) != NULL) {
-		D("==========> use buffer number %d, 0x%x\n",
-		       self->use_counter, (u32)node);
-
-		self->use_counter++;
 
 		/* copy the data */
 		if (*input_buf_size > self->buffer_size) {
@@ -313,6 +329,10 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 s32 cad_q6dec_session_init(struct q6dec_session_data *self)
 {
 	mutex_init(&self->session_mutex);
+	mutex_init(&self->close_mutex);
+
+	self->q6_data_buf.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
+	self->q6_data_buf.cmd.response_type = ADSP_AUDIO_RESPONSE_ASYNC;
 
 	return CAD_RES_SUCCESS;
 }
@@ -322,7 +342,8 @@ s32 cad_q6dec_session_deinit(struct q6dec_session_data *self)
 	if (self->session_state != Q6_DEC_RESET)
 		cad_q6dec_session_close(self);
 
-	mutex_unlock(&self->session_mutex);
+	mutex_destroy(&self->session_mutex);
+	mutex_destroy(&self->close_mutex);
 	return CAD_RES_SUCCESS;
 }
 
@@ -331,8 +352,8 @@ s32 cad_q6dec_session_open(struct q6dec_session_data *self,
 				s32 session_id,
 				struct cad_open_struct_type *open_param)
 {
-	sema_init(&self->buf_done_sem, 1);
-	sema_init(&self->all_buf_done_sem, 1);
+	init_completion(&self->buf_done_compl);
+	init_completion(&self->all_buf_done_compl);
 
 	if (cad_rpc_reg_callback(session_id,
 		cad_q6dec_session_async_callback, self) ==
@@ -342,8 +363,11 @@ s32 cad_q6dec_session_open(struct q6dec_session_data *self,
 	}
 
 	self->session_id = session_id;
+	self->group_id = open_param->group_id;
 	self->use_counter = 1;
 	self->ret_counter = 1;
+	self->need_buffer_done = 0;
+	self->need_all_buf_done = 0;
 	self->cb_data.client_data = NULL;
 	self->cb_data.callback = NULL;
 	D("Session open successful\n");
@@ -352,39 +376,63 @@ s32 cad_q6dec_session_open(struct q6dec_session_data *self,
 
 s32 cad_q6dec_session_close(struct q6dec_session_data *self)
 {
-	struct adsp_audio_event ret_status;
-	int rc = 0;
+	union adsp_audio_event			ret_status;
+	struct adsp_audio_no_payload_command	q6_cmd;
 
-	if (self->need_flush) {
-		if (cad_rpc_ioctl(self->session_id, 1,
-			CAD_IOCTL_CMD_STREAM_FLUSH, NULL, 0, &ret_status)
-			!= CAD_RES_SUCCESS) {
-
-			pr_err("Error sending ioctl to Q6!\n");
-		}
-		self->need_flush = 0;
-	}
-
-	if (self->used_buf_list != NULL) {
-		rc = down_interruptible(&self->all_buf_done_sem);
-		if (rc)
-			pr_err("down_interruptible() failed\n");
-	}
+	init_completion(&self->all_buf_done_compl);
 
 	mutex_lock(&self->session_mutex);
 
-	cad_q6dec_session_delete_buffer(&self->free_buf_list);
-	cad_q6dec_session_delete_buffer(&self->used_buf_list);
+	if (self->session_state == Q6_DEC_CLOSING) {
+		pr_err("CAD:Q6DEC ===> Session already closing, "
+			"no need to close.\n");
+		mutex_unlock(&self->session_mutex);
+		return CAD_RES_SUCCESS;
+	}
 
-	if (self->shared_buf != NULL)
-		self->shared_buf = NULL;
+	self->session_state = Q6_DEC_CLOSING;
+	if (self->need_buffer_done)
+		complete(&self->buf_done_compl);
 
-	D("Session close successful\n");
+	mutex_unlock(&self->session_mutex);
+
+	if ((self->session_state != Q6_DEC_VOICE) && self->need_flush) {
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_STREAM_STOP;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
+	}
+
+	mutex_lock(&self->close_mutex);
+	mutex_lock(&self->session_mutex);
+
+	if (self->used_buf_list)
+		self->need_all_buf_done = 1;
+
+	mutex_unlock(&self->session_mutex);
+
+	if (self->need_all_buf_done) {
+		D("CAD:Q6DEC ===> wait for all buffer done event\n");
+		wait_for_completion(&self->all_buf_done_compl);
+	}
+
 	cad_rpc_dereg_callback(self->session_id,
 				cad_q6dec_session_async_callback);
+
+	mutex_lock(&self->session_mutex);
+	cad_q6dec_session_delete_buffer(&self->free_buf_list);
+	cad_q6dec_session_delete_buffer(&self->used_buf_list);
+	if (self->shared_buf != NULL)
+		self->shared_buf = NULL;
 	self->session_id = 0;
 	self->session_state = Q6_DEC_RESET;
+	self->need_buffer_done = 0;
+	self->need_all_buf_done = 0;
+	self->need_flush = 0;
 	mutex_unlock(&self->session_mutex);
+	mutex_unlock(&self->close_mutex);
+	D("Decode session close successful\n");
 
 	return CAD_RES_SUCCESS;
 }
@@ -394,9 +442,10 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 				void *cmd_buf,
 				u32 cmd_len)
 {
-	s32				result = CAD_RES_SUCCESS;
-	struct adsp_audio_event	ret_status;
-	struct cad_event_struct_type    *cb_struct;
+	s32					result = CAD_RES_SUCCESS;
+	union adsp_audio_event			ret_status;
+	struct adsp_audio_no_payload_command	q6_cmd;
+	struct cad_event_struct_type		*cb_struct;
 
 	switch (cmd_code) {
 	case CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR:
@@ -416,16 +465,18 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 		self->cb_data.callback = cb_struct->callback;
 		break;
 	case CAD_IOCTL_CMD_STREAM_START:
-		if (self->session_state != Q6_DEC_INIT)
+		if (self->session_state != Q6_DEC_INIT) {
 			pr_err("Cannot start, decoder is in wrong state\n");
-		else
+		} else {
 			self->session_state = Q6_DEC_READY;
+			self->need_flush = 1;
+		}
 		break;
 	case CAD_IOCTL_CMD_SET_STREAM_INFO:
 		/* don't need Q6 decoder for voice call */
 		if (((struct cad_stream_info_struct_type *)cmd_buf)->app_type
 				== CAD_STREAM_APP_VOICE) {
-
+			self->session_state = Q6_DEC_VOICE;
 			break;
 		}
 		result = cad_q6dec_session_create_buffer(self, cmd_buf);
@@ -433,39 +484,61 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 			self->session_state = Q6_DEC_INIT;
 		break;
 	case CAD_IOCTL_CMD_STREAM_FLUSH:
-		self->session_state = Q6_DEC_FLUSHING;
+	case CAD_IOCTL_CMD_SESSION_FLUSH:
 		mutex_lock(&self->session_mutex);
+
+		self->session_state = Q6_DEC_FLUSHING;
 		if (self->need_buffer_done)
-			up(&self->buf_done_sem);
+			complete(&self->buf_done_compl);
 
 		mutex_unlock(&self->session_mutex);
-		result = cad_rpc_ioctl(self->session_id, 1,
-					ADSP_AUDIO_IOCTL_CMD_STREAM_FLUSH,
-					cmd_buf, cmd_len, &ret_status);
-		break;
+
+
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SESSION_FLUSH;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		result = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
+
 	case CAD_IOCTL_CMD_STREAM_PAUSE:
-		result = cad_rpc_ioctl(self->session_id, 1, cmd_code, cmd_buf,
-					cmd_len, &ret_status);
-		mutex_lock(&self->session_mutex);
-		if (!result)
-			self->need_flush = 1;
-		mutex_unlock(&self->session_mutex);
+	case CAD_IOCTL_CMD_SESSION_PAUSE:
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SESSION_PAUSE;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		result = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
+
+		if ((!result) && (cmd_buf != NULL) && (cmd_len == sizeof(u64)))
+			*((u64 *)cmd_buf) = ret_status.unsigned64.value;
 		break;
 	case CAD_IOCTL_CMD_STREAM_END_OF_STREAM:
-		result = cad_rpc_ioctl(self->session_id, 0, cmd_code,
-					cmd_buf, cmd_len, &ret_status);
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_STREAM_EOS;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_ASYNC;
+
+		result = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
 		break;
 	case CAD_IOCTL_CMD_STREAM_RESUME:
+	case CAD_IOCTL_CMD_SESSION_RESUME:
 		if ((self->session_state == Q6_DEC_READY) ||
 			(self->session_state == Q6_DEC_FLUSHING)) {
 
 			self->session_state = Q6_DEC_READY;
-			result = cad_rpc_ioctl(self->session_id, 1, cmd_code,
-					cmd_buf, cmd_len, &ret_status);
-			mutex_lock(&self->session_mutex);
-			if (!result)
-				self->need_flush = 0;
-			mutex_unlock(&self->session_mutex);
+
+			q6_cmd.cmd.op_code =
+				ADSP_AUDIO_IOCTL_CMD_SESSION_RESUME;
+			q6_cmd.cmd.response_type =
+				ADSP_AUDIO_RESPONSE_COMMAND;
+
+			result = cad_rpc_control(self->session_id,
+				self->group_id, (void *)&q6_cmd,
+				sizeof(q6_cmd), &ret_status);
+
+			if ((!result) && (cmd_buf != NULL) &&
+				(cmd_len == sizeof(u64)))
+
+				*((u64 *)cmd_buf) =
+					ret_status.unsigned64.value;
 		} else {
 			result = CAD_RES_FAILURE;
 		}
@@ -480,21 +553,30 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 s32 cad_q6dec_session_write(struct q6dec_session_data *self,
 				struct cad_buf_struct_type *buffer)
 {
-	u8 *buf = (u8 *)buffer->buffer;
-	u32 buf_size = buffer->max_size;
-	s32 err;
-	int rc = 0;
+	u8				*buf;
+	u32				buf_size;
+	s32				err;
 
+	buf = (u8 *)buffer->buffer;
+	buf_size = buffer->max_size;
+
+	self->q6_data_buf.buffer.start = buffer->time_stamp;
+	init_completion(&self->buf_done_compl);
+
+	mutex_lock(&self->close_mutex);
+	mutex_lock(&self->session_mutex);
 	if ((self->session_state != Q6_DEC_READY) &&
 		(self->session_state != Q6_DEC_FLUSHING)) {
 
-		pr_err("Received write command in wrong state\n");
+		pr_err("Received write command in wrong state for ses: %d\n",
+			self->session_id);
+		mutex_unlock(&self->close_mutex);
+		mutex_unlock(&self->session_mutex);
 		return CAD_RES_FAILURE;
 	}
-
 	self->session_state = Q6_DEC_READY;
-	self->need_flush = 0;
-	self->need_buffer_done = 0;
+	mutex_unlock(&self->session_mutex);
+
 	D("========> Start send %d byte buffer data......\n", buf_size);
 	while (buf_size > 0) {
 		err = cad_q6dec_session_write_buffers(self, &buf, &buf_size);
@@ -507,18 +589,20 @@ s32 cad_q6dec_session_write(struct q6dec_session_data *self,
 		}
 
 		D("-------> Wait for buffer done event\n");
-		rc = down_interruptible(&self->buf_done_sem);
-		if (rc)
-			pr_err("down_interruptible() failed\n");
+		wait_for_completion(&self->buf_done_compl);
 
+		mutex_lock(&self->session_mutex);
 		self->need_buffer_done = 0;
-		if (self->session_state == Q6_DEC_FLUSHING) {
-			D("========> data flushed!!!!!!\n");
+		if (self->session_state != Q6_DEC_READY) {
 			mutex_unlock(&self->session_mutex);
+			D("CAD:Q6DEC ===> No need to send the data in "
+				"state %d\n", self->session_state);
 			break;
 		}
+		mutex_unlock(&self->session_mutex);
 	}
 	self->need_buffer_done = 0;
+	mutex_unlock(&self->close_mutex);
 	return CAD_RES_SUCCESS;
 }
 

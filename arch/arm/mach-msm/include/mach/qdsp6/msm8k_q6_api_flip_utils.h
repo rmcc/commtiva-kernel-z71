@@ -36,11 +36,15 @@
 #include <mach/qdsp6/msm8k_cad_devices.h>
 #include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
 #include <mach/qdsp6/msm8k_cad_write_aac_format.h>
+#include <mach/qdsp6/msm8k_cad_write_midi_format.h>
 #include <mach/qdsp6/msm8k_cad_adpcm_format.h>
 #include <mach/qdsp6/msm8k_cad_amr_format.h>
 #include <mach/qdsp6/msm8k_cad_qcelp13k_format.h>
 #include <mach/qdsp6/msm8k_cad_evrc_format.h>
-#include <mach/qdsp6/msm8k_adsp_audio_driver.h>
+#include <mach/qdsp6/msm8k_cad_sbc_format.h>
+#include <mach/qdsp6/msm8k_cad_wma_format.h>
+#include <mach/qdsp6/msm8k_adsp_audio_command.h>
+
 
 /* utility functions */
 u32 q6_stream_context_mapping(enum cad_stream_app_enum_type app_type,
@@ -50,31 +54,43 @@ u32 q6_device_id_mapping(u32 device);
 u8 q6_device_direction_mapping(u8 device);
 
 s32 convert_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_pcm_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_adpcm_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_aac_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_amr_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_dtmf_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_midi_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_v13k_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 s32 convert_evrc_format_block(s32 session_id,
-				struct adsp_audio_open_device *q6_open_struct,
+				struct adsp_audio_open_command *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_mp3_format_block(s32 session_id,
+				struct adsp_audio_open_command *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_wma_std_format_block(s32 session_id,
+				struct adsp_audio_open_command *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_yadpcm_format_block(s32 session_id,
+				struct adsp_audio_open_command *q6_open_struct,
+				struct cadi_open_struct_type *cad_open_struct);
+s32 convert_sbc_format_block(s32 session_id,
+				struct adsp_audio_open_command *q6_open_struct,
 				struct cadi_open_struct_type *cad_open_struct);
 u32 q6_dtx_mode_mapping(u32 dtx_mode);
 u32 q6_band_mode_mapping(u32 mode);

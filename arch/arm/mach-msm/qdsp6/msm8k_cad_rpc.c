@@ -64,13 +64,11 @@
 #include <linux/semaphore.h>
 #include <linux/completion.h>
 
+#include <mach/qdsp6/msm8k_adsp_audio_command.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_cad_rpc_type.h>
 #include <mach/dal.h>
 
-
-#define  SYNC_EVENT_CLEAN_UP_TIMEOUT      1000      /* timeout value in us */
-#define  SYNC_EVENT_WAIT_TIMEOUT          50000000 /* timeout value in us */
 
 /* this will be replace by include file daldeviceid.h later*/
 #define DALDEVICEID_AUDIO_QDSP          0x02000028
@@ -83,13 +81,9 @@
 
 /* rpc table index */
 enum {
-	CAD_RPC_Q6_OPEN = DALDEVICE_FIRST_DEVICE_API_IDX,
-	CAD_RPC_Q6_WRITE,
-	CAD_RPC_Q6_READ,
-	CAD_RPC_Q6_IOCTL,
-	CAD_RPC_Q6_INIT,
-	CAD_RPC_Q6_CLOSE,
-	CAD_RPC_Q6_FLUSH_BUF
+	ADSP_RPC_CONTROL = DALDEVICE_FIRST_DEVICE_API_IDX,
+	ADSP_RPC_DATA,
+	ADSP_RPC_INIT
 };
 
 struct callback_function_node;
@@ -99,58 +93,45 @@ struct callback_function_node {
 	struct callback_function_node	*next;
 };
 
-struct async_evt_node {
-	struct adsp_audio_event		*evt;
-	struct async_evt_node		*next;
-};
-
 struct cad_rpc_data_struct {
 	enum cad_rpc_process_type       processor_id;
 	struct mutex                    resource_mutex;
+	struct mutex                    rpc_cb_mutex;
 	u32                             initialized;
-	void				*remote_handle_list[CAD_MAX_SESSION];
+	void				*remote_handle;
 
 	/* 0 = async wakeup event, 1...CAD_MAX_SESSION = sync wakeup evnt*/
 	struct completion		compl_list[CAD_MAX_SESSION];
 
 	/* sync mutex for each session call */
-	struct mutex			dal_remote_mutex_list[CAD_MAX_SESSION];
+	struct mutex			remote_mutex_list[CAD_MAX_SESSION];
 
-	struct adsp_audio_event	sync_evt_queue[CAD_MAX_SESSION];
+	union adsp_audio_event		sync_evt_queue[CAD_MAX_SESSION];
 
 
 	struct callback_function_node   *dal_callback_list[CAD_MAX_SESSION];
 };
 
-static struct cad_rpc_data_struct cad_rpc_data;
+static struct cad_rpc_data_struct cad_rpc_data_type;
 
-static s32 cad_rpc_async_callback(struct adsp_audio_event *evt)
+static s32 cad_rpc_async_callback(union adsp_audio_event *evt)
 {
 	struct callback_function_node	*node = NULL;
 
 	D("<-------------- ARM Async callback function fired.......\n");
 	D("Get new async event(0x%x), handle: %d!!!!!!\n",
-		evt->event_data.buf_data.buffer_addr,
-		evt->handle);
+		evt->buffer.buffer.buffer_addr,
+		evt->no_payload.source.minor);
 
-	if ((evt->handle <= 0) ||
-		(evt->handle >=
-		CAD_MAX_SESSION)) {
-
-		pr_err("%d not a valid can handle\n",
-			evt->handle);
-		return CAD_RES_FAILURE;
-	}
-
-	mutex_lock(&cad_rpc_data.resource_mutex);
-	node = cad_rpc_data.dal_callback_list[evt->
-		handle];
+	mutex_lock(&cad_rpc_data_type.rpc_cb_mutex);
+	node = cad_rpc_data_type.dal_callback_list[evt->
+		no_payload.source.minor];
 
 	while (node) {
 		node->cb_funct(evt, node->client_data);
 		node = node->next;
 	}
-	mutex_unlock(&cad_rpc_data.resource_mutex);
+	mutex_unlock(&cad_rpc_data_type.rpc_cb_mutex);
 
 	return CAD_RES_SUCCESS;
 }
@@ -158,52 +139,62 @@ static s32 cad_rpc_async_callback(struct adsp_audio_event *evt)
 static void remote_cb_function(void *context, u32 param,
 				void *evt_buf, u32 len)
 {
-	struct cad_rpc_data_struct *self = context;
-	struct adsp_audio_event *evt = evt_buf;
+	struct cad_rpc_data_struct	*self = context;
+	union adsp_audio_event		*evt = evt_buf;
 
-	if (param == (u32)&self->compl_list[0]) {
+	if (evt->no_payload.source.domain !=
+		(u32)cad_rpc_data_type.processor_id) {
+
+		pr_err("CAD:RPC invalid domain: %d\n",
+			evt->no_payload.source.domain);
+		return;
+	}
+
+	if ((evt->no_payload.source.minor >=
+		CAD_MAX_SESSION)) {
+
+		pr_err("CAD:RPC invalid minor number: %d\n",
+			evt->no_payload.source.minor);
+		return;
+	}
+
+	switch (evt->no_payload.event_data.response_type) {
+	case ADSP_AUDIO_RESPONSE_ASYNC:
 		/* async event */
 		D("<-------CB: get async event!!!\n");
 		if (cad_rpc_async_callback(evt) != CAD_RES_SUCCESS)
 			pr_err("Async callback not fired for session %d\n",
-				evt->handle);
-	} else {
-		if (param != (u32)&self->compl_list
-			[evt->handle]) {
+				evt->no_payload.source.minor);
+		break;
 
-			pr_err("wrong sync event received!!!\n");
-			return;
-		}
+	case ADSP_AUDIO_RESPONSE_COMMAND:
 		/* sync event */
-		mutex_lock(&cad_rpc_data.resource_mutex);
-		memcpy(&self->sync_evt_queue[evt->handle],
+		memcpy(&self->sync_evt_queue[evt->no_payload.source.minor],
 			evt, sizeof(*evt));
-		mutex_unlock(&cad_rpc_data.resource_mutex);
-		complete((struct completion *)param);
+
+		/* now wake up the blocking thread */
+		complete(&cad_rpc_data_type.compl_list
+			[evt->no_payload.source.minor]);
 	}
 	return;
 }
 
 
-static s32 cad_rpc_get_remote_handle(u32 session_id)
+static s32 cad_rpc_get_remote_handle(void)
 {
-	s32 err = CAD_RES_SUCCESS;
-	struct cad_rpc_config_info info;
-	if (session_id >= CAD_MAX_SESSION)
-		return CAD_RES_FAILURE;
+	s32				err = CAD_RES_SUCCESS;
+	struct cad_rpc_config_info	info;
 
-	memset(&info, 0, sizeof(struct cad_rpc_config_info));
-
-	mutex_lock(&cad_rpc_data.resource_mutex);
-	if (!cad_rpc_data.initialized) {
+	mutex_lock(&cad_rpc_data_type.resource_mutex);
+	if (!cad_rpc_data_type.initialized) {
 		pr_err("RPC data is not initialized\n");
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+		mutex_unlock(&cad_rpc_data_type.resource_mutex);
 		return CAD_RES_FAILURE;
 	}
 
 	/* already exist the handle */
-	if (cad_rpc_data.remote_handle_list[session_id]) {
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+	if (cad_rpc_data_type.remote_handle) {
+		mutex_unlock(&cad_rpc_data_type.resource_mutex);
 		return CAD_RES_SUCCESS;
 	}
 
@@ -212,30 +203,29 @@ static s32 cad_rpc_get_remote_handle(u32 session_id)
 	err = daldevice_attach(DALDEVICEID_AUDIO_QDSP,
 		"DAL_AQ_AUD",
 		1/*DALRPC_DEST_QDSP*/,
-		&(cad_rpc_data.remote_handle_list[session_id]));
+		&(cad_rpc_data_type.remote_handle));
 	if (err) {
 		pr_err("RPC call to Q6 attach failed\n");
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+		mutex_unlock(&cad_rpc_data_type.resource_mutex);
 		return err;
 	}
 
 	D("Attached for session %d!\n", session_id);
 	/*  get physical addresss of the buffer */
-	info.session_id = session_id;
-	info.processor_id = cad_rpc_data.processor_id;
-	info.cb_evt = dalrpc_alloc_cb(cad_rpc_data.
-		remote_handle_list[session_id],
-		remote_cb_function, &cad_rpc_data);
-	info.local_trigger_evt = (u32) &cad_rpc_data.compl_list[session_id];
+	memset(&info, 0, sizeof(struct cad_rpc_config_info));
+	info.domain_id = cad_rpc_data_type.processor_id;
+	info.cb_evt = dalrpc_alloc_cb(cad_rpc_data_type.
+		remote_handle,
+		&remote_cb_function, &cad_rpc_data_type);
 
 	D("Try to configure the remote session %d!\n", session_id);
 	/* initlize the rpc call */
-	err = dalrpc_fcn_5(CAD_RPC_Q6_INIT,
-		cad_rpc_data.remote_handle_list[session_id],
+	err = dalrpc_fcn_5(ADSP_RPC_INIT,
+		cad_rpc_data_type.remote_handle,
 		(void *)&info,
 		sizeof(struct cad_rpc_config_info));
 	D("Configured remote session %d!\n", session_id);
-	mutex_unlock(&cad_rpc_data.resource_mutex);
+	mutex_unlock(&cad_rpc_data_type.resource_mutex);
 	return err;
 }
 
@@ -243,25 +233,27 @@ static s32 cad_rpc_get_remote_handle(u32 session_id)
 s32 cad_rpc_init(u32 processor_id)
 {
 	u32 i;
-	memset(&cad_rpc_data, 0, sizeof(cad_rpc_data));
+
+	memset(&cad_rpc_data_type, 0, sizeof(cad_rpc_data_type));
 
 	if (processor_id >= CAD_RPC_PROCESSPR_MAX)
 		return CAD_RES_FAILURE;
 
-	cad_rpc_data.processor_id = processor_id;
+	cad_rpc_data_type.processor_id = processor_id;
 
 	/* create mutex for data resource */
-	mutex_init(&cad_rpc_data.resource_mutex);
+	mutex_init(&cad_rpc_data_type.resource_mutex);
+	mutex_init(&cad_rpc_data_type.rpc_cb_mutex);
 
 	for (i = 0; i < CAD_MAX_SESSION; i++) {
-		mutex_init(&cad_rpc_data.dal_remote_mutex_list[i]);
-		init_completion(&cad_rpc_data.compl_list[i]);
+		mutex_init(&cad_rpc_data_type.remote_mutex_list[i]);
+		init_completion(&cad_rpc_data_type.compl_list[i]);
 	}
 
-	cad_rpc_data.initialized = 1;
+	cad_rpc_data_type.initialized = 1;
 
 	/* handle zero for async rpc dh */
-	if (cad_rpc_get_remote_handle(0)) {
+	if (cad_rpc_get_remote_handle()) {
 		pr_err("RPC failed to get Q6 remote handle\n");
 		cad_rpc_deinit();
 		return CAD_RES_FAILURE;
@@ -280,39 +272,46 @@ s32 cad_rpc_deinit()
 
 	D("cad deinit function fired   ....... \n");
 
+	/* release remote device handle*/
+	if (cad_rpc_data_type.remote_handle)
+		daldevice_detach(cad_rpc_data_type.remote_handle);
+
+	mutex_destroy(&cad_rpc_data_type.resource_mutex);
+	mutex_destroy(&cad_rpc_data_type.rpc_cb_mutex);
+
+
 	for (i = 0; i < CAD_MAX_SESSION; i++) {
 
-		/* release remote device handle*/
-		if (cad_rpc_data.remote_handle_list[i])
-			daldevice_detach(cad_rpc_data.remote_handle_list[i]);
+		mutex_destroy(&cad_rpc_data_type.remote_mutex_list[i]);
 
 		/* clean callback  function array */
-		while (cad_rpc_data.dal_callback_list[i]) {
-			node = cad_rpc_data.dal_callback_list[i];
-			cad_rpc_data.dal_callback_list[i] =
-			(cad_rpc_data.dal_callback_list[i])->next;
+		while (cad_rpc_data_type.dal_callback_list[i]) {
+			node = cad_rpc_data_type.dal_callback_list[i];
+			cad_rpc_data_type.dal_callback_list[i] =
+			(cad_rpc_data_type.dal_callback_list[i])->next;
 			kfree(node);
 		}
 	}
 
 	/*free shared memory first, then close file handle */
-
-	memset(&cad_rpc_data, 0, sizeof(cad_rpc_data));
+	memset(&cad_rpc_data_type, 0, sizeof(cad_rpc_data_type));
 	D("DeInit the rpc resource interface!!!!!\n");
 	return CAD_RES_SUCCESS;
 }
 
-s32 cad_rpc_reg_callback(u32 session_id, RPC_CB_FCN cbFCN, void *client_data)
+s32 cad_rpc_reg_callback(u32 stream_id, RPC_CB_FCN cbFCN, void *client_data)
 {
-	s32 err = CAD_RES_SUCCESS;
-	struct callback_function_node  *node = NULL;
-	if (!cbFCN && (session_id >= CAD_MAX_SESSION))
+	s32				err = CAD_RES_SUCCESS;
+	struct callback_function_node	*node = NULL;
+
+
+	if (!cbFCN && (stream_id >= CAD_MAX_SESSION))
 		return CAD_RES_FAILURE;
 
-	mutex_lock(&cad_rpc_data.resource_mutex);
-	if (cad_rpc_data.dal_callback_list[session_id]) {
+	mutex_lock(&cad_rpc_data_type.rpc_cb_mutex);
+	if (cad_rpc_data_type.dal_callback_list[stream_id]) {
 		/* check if duplicated callback registration */
-		node = cad_rpc_data.dal_callback_list[session_id];
+		node = cad_rpc_data_type.dal_callback_list[stream_id];
 		while (node) {
 			if (node->cb_funct == cbFCN) {
 				/* duplicated */
@@ -323,46 +322,47 @@ s32 cad_rpc_reg_callback(u32 session_id, RPC_CB_FCN cbFCN, void *client_data)
 		}
 	}
 	if (err) {
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+		mutex_unlock(&cad_rpc_data_type.rpc_cb_mutex);
 		return err;
 	}
 	node = kmalloc(sizeof(struct callback_function_node),
 				GFP_KERNEL);
 	if (IS_ERR(node)) {
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+		mutex_unlock(&cad_rpc_data_type.rpc_cb_mutex);
 		return CAD_RES_FAILURE;
 	}
 	memset(node, 0, sizeof(struct callback_function_node));
 	node->cb_funct = cbFCN;
 	node->client_data = client_data;
-	if (cad_rpc_data.dal_callback_list[session_id]) {
+	if (cad_rpc_data_type.dal_callback_list[stream_id]) {
 		/* not first one */
-		node->next = cad_rpc_data.dal_callback_list[session_id];
-		cad_rpc_data.dal_callback_list[session_id] = node;
+		node->next = cad_rpc_data_type.dal_callback_list[stream_id];
+		cad_rpc_data_type.dal_callback_list[stream_id] = node;
 	} else {
 		/* first one */
-		cad_rpc_data.dal_callback_list[session_id] = node;
+		cad_rpc_data_type.dal_callback_list[stream_id] = node;
 	}
 
-	mutex_unlock(&cad_rpc_data.resource_mutex);
+	mutex_unlock(&cad_rpc_data_type.rpc_cb_mutex);
 	D("Registered the async callback function!!!\n");
 	return CAD_RES_SUCCESS;
 }
 
-s32 cad_rpc_dereg_callback(u32 session_id, RPC_CB_FCN cbFCN)
+s32 cad_rpc_dereg_callback(u32 stream_id, RPC_CB_FCN cbFCN)
 {
-	struct callback_function_node *node = NULL;
-	struct callback_function_node *prev = NULL;
-	if (!cbFCN && session_id >= CAD_MAX_SESSION)
+	struct callback_function_node	*node = NULL;
+	struct callback_function_node	*prev = NULL;
+
+	if (!cbFCN && stream_id >= CAD_MAX_SESSION)
 		return CAD_RES_FAILURE;
 
-	mutex_lock(&cad_rpc_data.resource_mutex);
-	node = cad_rpc_data.dal_callback_list[session_id];
+	mutex_lock(&cad_rpc_data_type.rpc_cb_mutex);
+	node = cad_rpc_data_type.dal_callback_list[stream_id];
 	while (node) {
 		if (node->cb_funct == cbFCN) {
 			if (prev == NULL) {
 				/* first node */
-				cad_rpc_data.dal_callback_list[session_id] =
+				cad_rpc_data_type.dal_callback_list[stream_id] =
 					node->next;
 				kfree(node);
 				break;
@@ -375,7 +375,7 @@ s32 cad_rpc_dereg_callback(u32 session_id, RPC_CB_FCN cbFCN)
 		prev = node;
 		node = node->next;
 	}
-	mutex_unlock(&cad_rpc_data.resource_mutex);
+	mutex_unlock(&cad_rpc_data_type.rpc_cb_mutex);
 	D("DeRegistered the async callback function!!!\n");
 	return CAD_RES_SUCCESS;
 }
@@ -383,187 +383,102 @@ s32 cad_rpc_dereg_callback(u32 session_id, RPC_CB_FCN cbFCN)
 /*===========================================================================*/
 /* RPC Interface functions: */
 /*===========================================================================*/
-s32 cad_rpc_open(u32 session_id,     /* session handle */
-		u32 block_flag,     /* 0=none block, 1=block */
-		struct adsp_audio_open_device *open_buf,
-		struct adsp_audio_event *ret_status)
+s32 cad_rpc_data(u32 stream_id,
+		u32 group_id,
+		void *data_buf,
+		u32 data_buf_len,
+		union adsp_audio_event *ret_evt)
+
 {
-	s32 err = CAD_RES_SUCCESS;
-	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
+	s32	err = CAD_RES_SUCCESS;
+
+	if (stream_id >= CAD_MAX_SESSION || group_id >= CAD_MAX_SESSION ||
+		!data_buf)
+
 		return CAD_RES_FAILURE;
 
-	if (!open_buf && !ret_status)
+	((union adsp_audio_command *)data_buf)->no_payload.dest.domain =
+		(u8)cad_rpc_data_type.processor_id;
+
+	((union adsp_audio_command *)data_buf)->no_payload.dest.service = 0;
+	((union adsp_audio_command *)data_buf)->no_payload.dest.major =
+		(u8)group_id;
+	((union adsp_audio_command *)data_buf)->no_payload.dest.minor =
+		(u8)stream_id;
+
+	mutex_lock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
+
+	err = dalrpc_fcn_5(ADSP_RPC_DATA,
+		cad_rpc_data_type.remote_handle,
+		data_buf,
+		data_buf_len);
+
+	mutex_unlock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
+
+	if (err)
+		pr_err("CAD:RPC Data rpc call returned err: %d\n", err);
+
+	return err;
+}
+
+
+s32 cad_rpc_control(u32 stream_id,
+		u32 group_id,
+		void *cmd_buf,
+		u32 cmd_buf_len,
+		union adsp_audio_event *ret_evt)
+{
+	s32	err = CAD_RES_SUCCESS;
+
+
+	if (stream_id >= CAD_MAX_SESSION || group_id >= CAD_MAX_SESSION ||
+		!cmd_buf)
+
 		return CAD_RES_FAILURE;
 
-	mutex_lock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
+	((union adsp_audio_command *)cmd_buf)->no_payload.dest.domain =
+		(u8)cad_rpc_data_type.processor_id;
 
-	D("DALRPC Open function entering!!!\n");
+	((union adsp_audio_command *)cmd_buf)->no_payload.dest.service = 0;
+	((union adsp_audio_command *)cmd_buf)->no_payload.dest.major =
+		(u8)group_id;
+	((union adsp_audio_command *)cmd_buf)->no_payload.dest.minor =
+		(u8)stream_id;
 
-	/* clean up any pending signal */
-	init_completion(&cad_rpc_data.compl_list[session_id]);
+	D("CAD:RPC Control stream (%d), Cmd(0x%x)\n",
+		stream_id,
+		((union adsp_audio_command *)data_buf)->no_payload.cmd.op_code);
 
-	/* making rpc open call*/
-	err = dalrpc_fcn_5(CAD_RPC_Q6_OPEN,
-		cad_rpc_data.remote_handle_list[session_id],
-		(void *)open_buf,
-		sizeof(struct adsp_audio_open_device));
-	if (!err) {
+	init_completion(&cad_rpc_data_type.compl_list[stream_id]);
+	mutex_lock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
+
+	err = dalrpc_fcn_5(ADSP_RPC_CONTROL,
+		cad_rpc_data_type.remote_handle,
+		cmd_buf,
+		cmd_buf_len);
+
+	mutex_unlock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
+
+	if (err)
+		pr_err("CAD:RPC Data rpc call returned err: %d\n", err);
+
+	if (!err && ((union adsp_audio_command *)cmd_buf)->no_payload.
+		cmd.response_type == ADSP_AUDIO_RESPONSE_COMMAND) {
+
 		D("DALRPC Open function start wait!!!\n");
-		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
-
-		D("Got wakeup signal for Open blocking!!!\n");
-		mutex_lock(&cad_rpc_data.resource_mutex);
-		memset(ret_status, 0,
-				sizeof(struct adsp_audio_event));
-		memcpy(ret_status,
-				&cad_rpc_data.sync_evt_queue[session_id],
-				sizeof(*ret_status));
-
-		memset(&cad_rpc_data.sync_evt_queue[session_id], 0,
-				sizeof(*ret_status));
-		mutex_unlock(&cad_rpc_data.resource_mutex);
+		wait_for_completion(&cad_rpc_data_type.compl_list[stream_id]);
+		if (ret_evt != NULL)
+			memcpy(ret_evt,
+				&cad_rpc_data_type.sync_evt_queue[stream_id],
+				sizeof(*ret_evt));
 	}
-	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-	return err;
-}
 
-s32 cad_rpc_read(u32 session_id,
-			u32 block_flag,    /* none block, 1=block */
-			struct adsp_audio_buffer *read_buf,
-			struct adsp_audio_event *ret_status)
-{
-	s32 err = CAD_RES_SUCCESS;
-
-	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
-		return CAD_RES_FAILURE;
-
-	if (!read_buf && !ret_status)
-		return CAD_RES_FAILURE;
-
-	mutex_lock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-
-	D("DALRPC READ function Entering!!!\n");
-
-	/* making rpc read call*/
-	err = dalrpc_fcn_5(CAD_RPC_Q6_READ,
-			cad_rpc_data.remote_handle_list[session_id],
-			(void *)read_buf,
-			sizeof(struct adsp_audio_buffer));
-
-	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
+	D("CAD:RPC Control stream (%d), Cmd(0x%x) DONE!\n",
+		stream_id,
+		((union adsp_audio_command *)data_buf)->no_payload.cmd.op_code);
 
 	return err;
 }
 
-s32 cad_rpc_write(u32 session_id,
-			u32 block_flag,   /* 0=none block, 1=block */
-			struct adsp_audio_buffer *write_buf,
-			struct adsp_audio_event *ret_status)
-{
-	s32 err = CAD_RES_SUCCESS;
 
-	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
-		return CAD_RES_FAILURE;
 
-	if (!write_buf && !ret_status)
-		return CAD_RES_FAILURE;
-
-	mutex_lock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-
-	D("DALRPC WRite function Entering!!!\n");
-
-	/* making rpc write call */
-	err = dalrpc_fcn_5(CAD_RPC_Q6_WRITE,
-			cad_rpc_data.remote_handle_list[session_id],
-			(void *)write_buf,
-			sizeof(struct adsp_audio_buffer));
-
-	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-	return err;
-}
-
-s32 cad_rpc_ioctl(u32 session_id,
-			u32 block_flag,   /* 0=none block, 1=block */
-			u32 cmd_code,
-			u8  *cmd_buf,
-			u32 cmd_buf_len,
-			struct adsp_audio_event *ret_status)
-{
-	s32 err = CAD_RES_SUCCESS;
-	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
-		return CAD_RES_FAILURE;
-
-	if (!cmd_buf && !ret_status)
-		return CAD_RES_FAILURE;
-
-	mutex_lock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-
-	D("DALRPC IOCTL function Entering!!!\n");
-
-	/* clean up any delayed signal */
-	init_completion(&cad_rpc_data.compl_list[session_id]);
-
-	err = dalrpc_fcn_6(CAD_RPC_Q6_IOCTL,
-			cad_rpc_data.remote_handle_list[session_id],
-			cmd_code,
-			(void *)cmd_buf,
-			cmd_buf_len);
-	if (!err && block_flag) {
-		D("DALRPC IOCTL function start wait!!!\n");
-		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
-
-		D("Got wake up signal for IOCTL blocking!!!\n");
-		mutex_lock(&cad_rpc_data.resource_mutex);
-		memset(ret_status, 0,
-				sizeof(struct adsp_audio_event));
-		memcpy(ret_status,
-				&cad_rpc_data.sync_evt_queue[session_id],
-				sizeof(*ret_status));
-		memset(&cad_rpc_data.sync_evt_queue[session_id], 0,
-				sizeof(*ret_status));
-		mutex_unlock(&cad_rpc_data.resource_mutex);
-	}
-	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-	return err;
-}
-
-s32 cad_rpc_close(u32 session_id,
-		u32 block_flag,   /* 0=none block, 1=block */
-		struct adsp_audio_event *ret_status)
-{
-	s32 err = CAD_RES_SUCCESS;
-	if ((session_id == 0) || cad_rpc_get_remote_handle(session_id))
-		return CAD_RES_FAILURE;
-
-	if (!ret_status)
-		return CAD_RES_FAILURE;
-
-	mutex_lock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-
-	D("DALRPC CLOSE function Entering!!!\n");
-
-	/* clean up any delayed signal */
-	init_completion(&cad_rpc_data.compl_list[session_id]);
-
-	/* making rpc close call */
-	err = dalrpc_fcn_0(CAD_RPC_Q6_CLOSE,
-			cad_rpc_data.remote_handle_list[session_id],
-			session_id);
-	if (!err) {
-		D("DALRPC Close function start wait!!!\n");
-		wait_for_completion(&cad_rpc_data.compl_list[session_id]);
-
-		D("Got wake up signal for Close blocking!!!\n");
-		mutex_lock(&cad_rpc_data.resource_mutex);
-		memset(ret_status, 0,
-				sizeof(struct adsp_audio_event));
-		memcpy(ret_status,
-				&cad_rpc_data.sync_evt_queue[session_id],
-				sizeof(*ret_status));
-		memset(&cad_rpc_data.sync_evt_queue[session_id], 0,
-				sizeof(*ret_status));
-		mutex_unlock(&cad_rpc_data.resource_mutex);
-	}
-	mutex_unlock(&cad_rpc_data.dal_remote_mutex_list[session_id]);
-	return err;
-}

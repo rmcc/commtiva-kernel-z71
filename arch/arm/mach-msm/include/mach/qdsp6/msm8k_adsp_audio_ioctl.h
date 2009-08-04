@@ -36,34 +36,31 @@
 /* Control and Stream session IOCTL command definitions */
 
 
-/* All device switch protocol IOCTLs have payload struct */
-/* adsp_audio_device_change A device switch requires three IOCTL */
+/* Opcode to open a device stream session to capture audio */
+#define ADSP_AUDIO_IOCTL_CMD_OPEN_READ			0x0108dd79
+
+
+/* Opcode to open a device stream session to render audio */
+#define ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE			0x0108dd7a
+
+
+/* Opcode to open a device session, must open a device */
+#define ADSP_AUDIO_IOCTL_CMD_OPEN_DEVICE		0x0108dd7b
+
+
+/* Close an existing stream or device */
+#define ADSP_AUDIO_IOCTL_CMD_CLOSE			0x0108d8bc
+
+
+
+/* A device switch requires three IOCTL */
 /* commands in the following sequence: */
 /*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_PREPARE */
 /*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_STANDBY */
 /*    ADSP_AUDIO_IOCTL_CMD_DEVICE_SWITCH_COMMIT */
 
-
-/* Device Class */
-/*   DMA 0 - Int RX */
-/*   DMA 1 - Int TX */
-/*   DMA 2 - Ext RX */
-/*   DMA 3 - Ext TX */
-
-struct adsp_audio_device_change {
-	/* Associated client data */
-	struct adsp_audio_header	header;
-	/* DeviceID to switch from */
-	u32				old_device;
-	/* DeviceID to switch to */
-	u32				new_device;
-	/* TBD */
-	u8				device_class;
-	/* 0 == Rx, 1 == Tx and 2 == both */
-	u8				device_type;
-} __attribute__ ((packed));
-
-
+/* adsp_audio_device_switch_command structure is needed for */
+/* DEVICE_SWITCH_PREPARE */
 
 /* Device switch protocol step #1. Pause old device and */
 /* generate silence for the old device. */

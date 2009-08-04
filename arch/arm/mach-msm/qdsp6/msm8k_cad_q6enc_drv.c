@@ -162,8 +162,8 @@ static s32 cad_q6enc_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf,
 
 	while (session != NULL) {
 		if (session_id == session->session_id) {
-			if (cad_q6enc_session_ioctl(session, cmd_code, cmd_buf)
-					!= CAD_RES_SUCCESS)
+			if (cad_q6enc_session_ioctl(session, cmd_code, cmd_buf,
+				cmd_len) != CAD_RES_SUCCESS)
 				return CAD_RES_FAILURE;
 			break;
 		}

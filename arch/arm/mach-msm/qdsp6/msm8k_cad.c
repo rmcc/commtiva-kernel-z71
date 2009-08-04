@@ -396,7 +396,7 @@ s32 cad_read(s32 driver_handle, struct cad_buf_struct_type *buf)
 		data_read = cad.session_info[driver_handle].hw_accel->
 					read(driver_handle, buf);
 
-	return buf->max_size;
+	return buf->actual_size;
 }
 EXPORT_SYMBOL(cad_read);
 

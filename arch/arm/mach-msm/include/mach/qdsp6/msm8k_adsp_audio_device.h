@@ -72,6 +72,7 @@
 #define ADSP_AUDIO_DEVICE_ID_BT_SCO_SPKR			0x1081519
 #define ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_SPKR			0x108151c
 #define ADSP_AUDIO_DEVICE_ID_I2S_SPKR				0x1089bf4
+#define ADSP_AUDIO_DEVICE_ID_NULL_SINK				0x108e512
 
 
 /* BT A2DP playback device. */
@@ -80,15 +81,18 @@
 /* ADSP_AUDIO_DEVICE_USAGE_MIXED_PCM_LOOPBACK mode */
 #define ADSP_AUDIO_DEVICE_ID_BT_A2DP_SPKR	0x108151a
 
+/* Voice Destination identifier - specifically used for */
+/* controlling Voice module from the Device Control Session */
+#define ADSP_AUDIO_DEVICE_ID_VOICE		0x0108df3c
 
 /*  Audio device usage types. */
 /*  This is a bit mask to determine which topology to use in the */
 /* device session */
 #define ADSP_AUDIO_DEVICE_CONTEXT_VOICE			0x01
 #define ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK		0x02
+#define ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD		0x10
 #define ADSP_AUDIO_DEVICE_CONTEXT_RECORD		0x20
 #define ADSP_AUDIO_DEVICE_CONTEXT_PCM_LOOPBACK		0x40
-#define ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD          0x10
 
 #endif
 

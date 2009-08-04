@@ -297,6 +297,10 @@ s32 ard_open(s32 session_id, struct cad_open_struct_type *open_param)
 
 	memcpy(&op->cad_open, open_param, open_parm_len);
 
+	open_param->group_id = session_id;
+
+	ard_session[i].group_id = open_param->group_id;
+
 	/* Init the qdsp6_opened flag */
 	ard_session[i].qdsp6_opened = ARD_FALSE;
 	ard_session[i].qdsp6_started = ARD_FALSE;
@@ -1069,7 +1073,7 @@ s32 ard_write(s32 session_id, struct cad_buf_struct_type *buf)
 	return CAD_RES_SUCCESS;
 }
 
-void ard_callback_func(struct adsp_audio_event *ev_data, void *client_data)
+void ard_callback_func(union adsp_audio_event *ev_data, void *client_data)
 {
 }
 

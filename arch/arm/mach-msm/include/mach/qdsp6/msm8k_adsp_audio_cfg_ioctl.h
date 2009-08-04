@@ -37,97 +37,16 @@
 
 
 /* Set configuration data for an algorithm aspect of a device. */
-/* This command has payload adsp_audio_device_config . */
+/* This command has payload struct adsp_audio_set_dev_cfg_command. */
 
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_CONFIG		0x0108b6cb
-
-struct adsp_phys_mem_type {
-	u32	addr;	/* physical address */
-	u32	total;	/* Length of allocated memory */
-	u32	used;	/* Actual Length of buffer */
-} __attribute__ ((packed));
-
-
-
-struct adsp_audio_device_config {
-	/* Associated client data */
-	struct adsp_audio_header	header;
-	/* ADSP Device ID */
-	u32				device_id;
-	/* Algorithm block ID */
-	u32				block_id;
-	/* Configurable element ID of a MM */
-	u32				interface_id;
-	/* Refer to DCN: TBD */
-	struct adsp_phys_mem_type	phys_mem;
-} __attribute__ ((packed));
-
-
+#define ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG		0x0108b6cb
 
 
 /* Set configuration data for all interfaces of a device. */
-/* This command has payload adsp_audio_device_config_table . */
+/* This command has payload struct adsp_audio_set_dev_cfg_table_command. */
 
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_CONFIG_TABLE	0x0108b6bf
+#define ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG_TABLE	0x0108b6bf
 
-
-struct adsp_audio_device_config_table  {
-	/* Associated client data */
-	struct adsp_audio_header	header;
-	/* ADSP Device ID */
-	u32				device_id;
-	/* Refer to DCN: TBD */
-	struct adsp_phys_mem_type	phys_mem;
-} __attribute__ ((packed));
-
-
-
-/* Configurable Algorithm Aspect IDs */
-#define ADSP_AUDIO_IID_ENABLE_FLAG			0x0108b6b9
-#define ADSP_AUDIO_IID_ADRC_CONFIG_PARAM		0x0108b6ba
-#define ADSP_AUDIO_IID_IIR_PREGAIN			0x0108b6bc
-#define ADSP_AUDIO_IID_IIR_PARAM			0x0108b6be
-#define ADSP_AUDIO_IID_AGC_PARAM			0x0108b6c0
-#define ADSP_AUDIO_IID_AVC_TX_PARAM			0x0108b6c2
-#define ADSP_AUDIO_IID_AVC_RX_PARAM			0x0108b6c3
-#define ADSP_AUDIO_IID_EC_TX_PARAM			0x0108b6c1
-#define ADSP_AUDIO_IID_EC_RX_PARAM			0x0108b6c4
-#define ADSP_AUDIO_IID_VOICEFE_FILTERS_PARAM		0x0108b6c5
-#define ADSP_AUDIO_IID_AUDIO_AGC_CONFIG_PARAMS		0x0108b6c6
-#define ADSP_AUDIO_IID_VOLUME_CONTROL_PARAM		0x0108b6c7
-#define ADSP_AUDIO_IID_AUDIO_MIXER_CONFIG_PARAMS	0x0108b6c8
-#define ADSP_AUDIO_IID_AFE_INT_PARAM			0x0108b6c9
-#define ADSP_AUDIO_IID_AFEI2S_PARAM			0x0108bd61
-#define ADSP_AUDIO_IID_AFEPCM_PARAM			0x0108bd62
-
-
-
-/* Algorithm Block IDs */
-
-/* TX filters */
-#define ADSP_AUDIO_UID_TX_AFE_PCM_SOURCE		0x01073d67
-#define ADSP_AUDIO_UID_TX_AFE_I2S_SOURCE		0x01073d68
-#define ADSP_AUDIO_UID_TX_AFE_INT_SOURCE		0x01073d71
-#define ADSP_AUDIO_UID_TX_GLOBAL_IIR			0x01073d69
-#define ADSP_AUDIO_UID_TX_AUDIO_AGC			0x01073d6a
-#define ADSP_AUDIO_UID_TX_VFE				0x01073d6b
-#define ADSP_AUDIO_UID_TX_EC				0x01073d6c
-#define ADSP_AUDIO_UID_TX_AVC				0x01073d6d
-#define ADSP_AUDIO_UID_TX_AGC				0x01073d6e
-#define ADSP_AUDIO_UID_TX_VOICE_IIR			0x01073d6f
-#define ADSP_AUDIO_UID_TX_VOLUME			0x01073d70
-
-/* RX filters */
-#define ADSP_AUDIO_UID_RX_AFE_PCM_SINK			0x01073d74
-#define ADSP_AUDIO_UID_RX_AFE_I2S_SINK			0x01073d75
-#define ADSP_AUDIO_UID_RX_COMMON_IIR			0x01073d76
-#define ADSP_AUDIO_UID_RX_ADRC				0x01073d78
-#define ADSP_AUDIO_UID_RX_GLOBAL_MIXER			0x01073d79
-#define ADSP_AUDIO_UID_RX_VFE				0x01073d7a
-#define ADSP_AUDIO_UID_RX_EC				0x01073d7b
-#define ADSP_AUDIO_UID_RX_VOICE_IIR			0x01073d7c
-#define ADSP_AUDIO_UID_RX_AVC				0x01073d7d
-#define ADSP_AUDIO_UID_RX_AGC				0x01073d7e
 
 
 #endif

@@ -42,6 +42,9 @@
 /* adsp_audio_format_adpcm type */
 #define ADSP_AUDIO_FORMAT_ADPCM		0x0103d2ff
 
+/* Yamaha PCM format */
+#define ADSP_AUDIO_FORMAT_YADPCM	0x0108dc07
+
 /* ISO/IEC 11172 */
 #define ADSP_AUDIO_FORMAT_MP3		0x0103d308
 
@@ -51,22 +54,34 @@
 /* AMR-NB audio in FS format */
 #define ADSP_AUDIO_FORMAT_AMRNB_FS	0x0105c16c
 
+/* AMR-WB audio in FS format */
+#define ADSP_AUDIO_FORMAT_AMRWB_FS	0x0105c16e
+
 /* QCELP 13k, IS733 */
 #define ADSP_AUDIO_FORMAT_V13K_FS	0x01080b8a
 
 /* EVRC   8k, IS127 */
 #define ADSP_AUDIO_FORMAT_EVRC_FS	0x01080b89
 
+/* EVRC-B   8k, 4GV */
+#define ADSP_AUDIO_FORMAT_EVRCB_FS	0x0108f2a3
+
 /* MIDI command stream */
 #define ADSP_AUDIO_FORMAT_MIDI		0x0103d300
 
+/* A2DP SBC stream */
+#define ADSP_AUDIO_FORMAT_SBC		0x0108c4d8
+
+/* Version 10 Professional */
+#define ADSP_AUDIO_FORMAT_WMA_V10PRO	0x0108ef4f
+
+/* Version 9 Starndard */
+#define ADSP_AUDIO_FORMAT_WMA_V9	0x0108ef50
 
 
 /* Not yet supported audio media formats */
 
 
-/* Yamaha PCM format */
-#define ADSP_AUDIO_FORMAT_YADPCM	0x01089bf8
 
 /* ISO/IEC 13818 */
 #define ADSP_AUDIO_FORMAT_MPEG2_AAC	0x0103d309
@@ -82,9 +97,6 @@
 
 /* 3GPP TS 26.201 */
 #define ADSP_AUDIO_FORMAT_AMRWB_IF2	0x0105c16d
-
-/* AMR-WB audio in FS format */
-#define ADSP_AUDIO_FORMAT_AMRWB_FS	0x0105c16e
 
 /* G.711 */
 #define ADSP_AUDIO_FORMAT_G711		0x0106201d
@@ -136,37 +148,131 @@
 #define ADSP_AUDIO_AAC_FRAMED_RAW	0x0108c1fb
 
 
-/* Raw PCM, DTMF format block */
 
-struct adsp_audio_format_raw_pcm {
+struct adsp_audio_no_payload_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* no payload for this format type */
+} __attribute__ ((packed));
+
+
+/* Maxmum number of bytes allowed in a format block */
+#define ADSP_AUDIO_FORMAT_DATA_MAX 16
+
+
+/* For convenience, to be used as a standard format block */
+/* for various media types that don't need a unique format block */
+/* ie. PCM, DTMF, etc. */
+struct adsp_audio_standard_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
 	u16		channels;
 	u16		bits_per_sample;
 	u32		sampling_rate;
-	bool		is_signed;
-	bool		is_interleaved;
+	u8		is_signed;
+	u8		is_interleaved;
 } __attribute__ ((packed));
 
 
 
 /* ADPCM format block */
+struct adsp_audio_adpcm_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
 
-struct adsp_audio_format_adpcm {
-	struct adsp_audio_format_raw_pcm	base;
-	u32					block_size;
+	/* payload */
+	u16		channels;
+	u16		bits_per_sample;
+	u32		sampling_rate;
+	u8		is_signed;
+	u8		is_interleaved;
+	u32		block_size;
 } __attribute__ ((packed));
 
 
-/* G711 format block */
+/* MIDI format block */
+struct adsp_audio_midi_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
+	u32		sampling_rate;
+	u16		channels;
+	u16		mode;
+} __attribute__ ((packed));
+
 
 #define ADSP_AUDIO_COMPANDING_ALAW	0x10619cd
 #define ADSP_AUDIO_COMPANDING_MLAW	0x10619ce
 
 
-struct adsp_audio_format_g711 {
-	u32	companding;
+/* G711 format block */
+struct adsp_audio_g711_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
+	u32		companding;
 } __attribute__ ((packed));
 
 
+struct adsp_audio_wma_pro_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
+	u16		format_tag;
+	u16		channels;
+	u32		samples_per_sec;
+	u32		avg_bytes_per_sec;
+	u16		block_align;
+	u16		valid_bits_per_sample;
+	u32		channel_mask;
+	u16		encode_opt;
+	u16		advanced_encode_opt;
+	u32		advanced_encode_opt2;
+	u32		drc_peak_reference;
+	u32		drc_peak_target;
+	u32		drc_average_reference;
+	u32		drc_average_target;
+} __attribute__ ((packed));
+
+
+/* Binary Byte Stream Format */
+/* Binary format type that defines a byte stream, */
+/* can be used to specify any format (ie. AAC) */
+struct adsp_audio_binary_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
+	/* number of bytes set in byte stream */
+	u32		num_bytes;
+	/* Byte stream binary data */
+	u8		data[ADSP_AUDIO_FORMAT_DATA_MAX];
+} __attribute__ ((packed));
+
+
+/* Union of all format types */
+union adsp_audio_format {
+	/* Basic format block with no payload */
+	struct adsp_audio_no_payload_format	no_payload;
+	/* Generic format block PCM, DTMF */
+	struct adsp_audio_standard_format	standard;
+	/* ADPCM format block */
+	struct adsp_audio_adpcm_format		adpcm;
+	/* MIDI format block */
+	struct adsp_audio_midi_format		midi;
+	/* G711 format block */
+	struct adsp_audio_g711_format		g711;
+	/* WmaPro format block */
+	struct adsp_audio_wma_pro_format	wma_pro;
+	/* binary (byte stream) format block, used for AAC */
+	struct adsp_audio_binary_format		binary;
+};
 
 #endif
 

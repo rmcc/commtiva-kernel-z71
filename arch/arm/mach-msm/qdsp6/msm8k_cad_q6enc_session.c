@@ -57,9 +57,9 @@
 
 #include <linux/mutex.h>
 #include <linux/slab.h>
-#include <linux/semaphore.h>
 #include <linux/uaccess.h>
 
+#include <mach/qdsp6/msm8k_cad_session_ioctl.h>
 #include <mach/qdsp6/msm8k_cad_q6enc_session.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_cad_q6dec_drvi.h>
@@ -96,7 +96,7 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 	/* limit the buffer size and create buf only in reset state */
 	if (info->ses_buf_max_size == 0  ||
 		info->ses_buf_max_size > Q6_ENC_BUF_MAX_SIZE ||
-		Q6_ENC_STATE_RESET != self->session_state) {
+		self->session_state != Q6_ENC_STATE_RESET) {
 
 		return CAD_RES_FAILURE;
 	}
@@ -104,6 +104,7 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 	self->buf_size = info->ses_buf_max_size;
 	/* for safty, clean all the buffer lists */
 	release_buffers(&self->full_nodes_head);
+	self->full_nodes_head = NULL;
 	self->full_nodes_tail = NULL;
 	release_buffers(&self->used_nodes);
 	release_buffers(&self->free_nodes);
@@ -162,49 +163,62 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 /* push all the free buffers to the Q6 */
 static s32 send_buffers(struct q6_enc_session_data *self)
 {
-	struct adsp_audio_buffer	cad_buf;
 	struct q6_enc_session_buf_node	*node = NULL;
 	s32				res = CAD_RES_SUCCESS;
 
+	mutex_lock(&self->session_mutex);
 	while (self->free_nodes) {
 		node = self->free_nodes;
 		self->free_nodes = node->next;
-		cad_buf.header.client_data.data = (u32)node->buf;
-		cad_buf.buffer.buffer_addr = node->phys_addr;
-		cad_buf.buffer.max_size = self->buf_size;
-		cad_buf.buffer.actual_size = self->buf_size;
 
-		memset(node->buf, -1, self->buf_size);
+		self->q6_data_buf.client_data.data = (u32)node->buf;
+		self->q6_data_buf.buffer.flags =
+			ADSP_AUDIO_BUFFER_FLAG_PHYS_ADDR;
+		self->q6_data_buf.buffer.buffer_addr = node->phys_addr;
+		self->q6_data_buf.buffer.actual_size = self->buf_size;
+		self->q6_data_buf.buffer.max_size = self->buf_size;
+
 		/* add to used list */
-		mutex_lock(&self->session_mutex);
 		node->next = self->used_nodes;
 		self->used_nodes = node;
 		mutex_unlock(&self->session_mutex);
 
-		if (cad_rpc_read(self->session_id, 0, &cad_buf, NULL) !=
+		if (cad_rpc_data(self->session_id, self->group_id,
+			(void *)&self->q6_data_buf,
+			sizeof(self->q6_data_buf), NULL) !=
 			CAD_RES_SUCCESS) {
 
 			pr_err("Can not push read buffers to the Q6!!!\n");
+			mutex_lock(&self->session_mutex);
+			self->used_nodes = self->used_nodes->next;
+			node->next = self->free_nodes;
+			self->free_nodes = node;
+			mutex_unlock(&self->session_mutex);
 			res = CAD_RES_FAILURE;
 			break;
 		}
-		D("Send Buffer (0x%x) to Q6\n", cad_buf.buffer.buffer_addr);
+		D("Send Buffer (0x%x) to Q6\n",
+			self->q6_data_buf.buffer.buffer_addr);
+		/* lock for next loop iteration */
+		mutex_lock(&self->session_mutex);
 	}
+	mutex_unlock(&self->session_mutex);
 	return res;
 }
 
 static void cad_q6enc_session_handle_async_evt(
-	struct adsp_audio_event *return_event, void *clientData)
+	union adsp_audio_event *return_event, void *client_data)
 {
 	struct q6_enc_session_buf_node	*node = NULL;
 	struct q6_enc_session_buf_node	*prev_node = NULL;
-	struct q6_enc_session_data	*self = clientData;
+	struct q6_enc_session_data	*self = client_data;
 
-	if (return_event->event_id != ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
+	if (return_event->no_payload.event_data.id !=
+		ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
 
 		/* unhandled event */
 		pr_err("invalid event ID: %d\n",
-			return_event->event_id);
+			return_event->no_payload.event_data.id);
 		return;
 	}
 
@@ -213,7 +227,7 @@ static void cad_q6enc_session_handle_async_evt(
 
 	while (node) {
 		if ((u32)node->buf ==
-			return_event->header.client_data.data) {
+			return_event->buffer.client_data.data) {
 
 			if (prev_node == NULL) {
 				self->used_nodes = node->next;
@@ -228,11 +242,11 @@ static void cad_q6enc_session_handle_async_evt(
 
 	if (node) {
 		node->buf_len = return_event->
-			event_data.buf_data.actual_size;
+			buffer.buffer.actual_size;
 
 		/* put this node into full list */
 		D("Get full read buffer(0x%x)!\n",
-			return_event->event_data.buf_data.buffer_addr);
+			return_event->buffer.buffer.buffer_addr);
 
 		if (self->full_nodes_head == NULL) {
 			self->full_nodes_head = node;
@@ -244,14 +258,14 @@ static void cad_q6enc_session_handle_async_evt(
 
 		/* signal buf done event */
 		if (self->signal_buf_done)
-			up(&self->buf_done_evt);
+			complete(&self->buf_done_compl);
 		/* check if we need all buf done */
 		if ((self->used_nodes == NULL) && self->signal_all_buf_done)
-			up(&self->all_buf_done_evt);
+			complete(&self->all_buf_done_compl);
 
 		if (self->cb_data.callback != NULL)
-			self->cb_data.callback(return_event->event_id,
-				NULL, 0, self->cb_data.client_data);
+			self->cb_data.callback(return_event->no_payload.
+			event_data.id, NULL, 0, self->cb_data.client_data);
 	}
 	mutex_unlock(&self->session_mutex);
 	return;
@@ -261,8 +275,12 @@ static void cad_q6enc_session_handle_async_evt(
 s32 cad_q6enc_session_init(struct q6_enc_session_data *self)
 {
 	mutex_init(&self->session_mutex);
-	sema_init(&self->all_buf_done_evt, 1);
-	sema_init(&self->buf_done_evt, 1);
+	mutex_init(&self->close_mutex);
+	init_completion(&self->all_buf_done_compl);
+	init_completion(&self->buf_done_compl);
+
+	self->q6_data_buf.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_DATA_TX;
+	self->q6_data_buf.cmd.response_type = ADSP_AUDIO_RESPONSE_ASYNC;
 
 	return CAD_RES_SUCCESS;
 }
@@ -274,6 +292,7 @@ s32 cad_q6enc_session_dinit(struct q6_enc_session_data *self)
 		cad_q6enc_session_close(self);
 
 	mutex_unlock(&self->session_mutex);
+	mutex_unlock(&self->close_mutex);
 
 	return CAD_RES_SUCCESS;
 }
@@ -282,6 +301,12 @@ s32 cad_q6enc_session_dinit(struct q6_enc_session_data *self)
 s32 cad_q6enc_session_open(struct q6_enc_session_data *self, s32 session_id,
 			struct cad_open_struct_type *open_param)
 {
+	if (self->session_state != Q6_ENC_STATE_RESET) {
+		pr_err("wrong state to open read session! state: %d\n",
+			self->session_state);
+		return CAD_RES_FAILURE;
+	}
+
 	/* delay creation of the buffers until IOCTL STREAM CONFIG */
 	/* register async callback for event handle */
 	if (cad_rpc_reg_callback(session_id,
@@ -289,6 +314,10 @@ s32 cad_q6enc_session_open(struct q6_enc_session_data *self, s32 session_id,
 		return CAD_RES_FAILURE;
 
 	self->session_id = session_id;
+	self->group_id = open_param->group_id;
+	self->signal_buf_done = 0;
+	self->signal_all_buf_done = 0;
+	self->need_flush = 0;
 	self->cb_data.client_data = NULL;
 	self->cb_data.callback = NULL;
 	D("Session open successful\n");
@@ -298,17 +327,37 @@ s32 cad_q6enc_session_open(struct q6_enc_session_data *self, s32 session_id,
 
 
 s32 cad_q6enc_session_ioctl(struct q6_enc_session_data *self, u32 cmd,
-			 void *cmd_buf)
+			 void *cmd_buf, u32 cmd_buf_len)
 {
-	struct cad_event_struct_type	*cb_struct;
-	s32				res = CAD_RES_SUCCESS;
+	struct cad_event_struct_type		*cb_struct;
+	union adsp_audio_event			ret_status;
+	struct adsp_audio_no_payload_command	q6_cmd;
+	s32					res = CAD_RES_SUCCESS;
 
 	switch (cmd) {
+	case CAD_IOCTL_CMD_STREAM_PAUSE:
+	case CAD_IOCTL_CMD_SESSION_PAUSE:
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SESSION_PAUSE;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		res = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
+	case CAD_IOCTL_CMD_STREAM_RESUME:
+	case CAD_IOCTL_CMD_SESSION_RESUME:
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SESSION_RESUME;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		res = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
 	case CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR:
 		/* register the session callback function */
 		if (cmd_buf == NULL) {
 			pr_err("Invalid buffer passed to encoder ioctl\n");
 			break;
+		}
+		if (cmd_buf_len != sizeof(*cb_struct)) {
+			pr_err("Buf len dosen't match cad_event_struct_type"
+				" for encoder LSTR event\n");
 		}
 
 		cb_struct = (struct cad_event_struct_type *)cmd_buf;
@@ -325,28 +374,31 @@ s32 cad_q6enc_session_ioctl(struct q6_enc_session_data *self, u32 cmd,
 		if ((self->session_state != Q6_ENC_STATE_INIT) ||
 			(self->free_nodes == NULL)) {
 
-			pr_err("We can not start in wrong state\n");
+			pr_err("CAD:Q6ENC ===> can't start in wrong state!, "
+				"state: %d\n", self->session_state);
 			break;
 		}
 		/* start to push the read buffers */
 		res = send_buffers(self);
 		if (res != CAD_RES_SUCCESS)
-			pr_err("!!!!!!Problems in push the read buffer!\n");
+			pr_err("!!!!!!Problems in pushing the read buffer!\n");
 
 		/* goes to process state no matter if there is problem or not */
 		self->session_state = Q6_ENC_STATE_PROCESS;
+		self->need_flush = 1;
 		break;
 	case CAD_IOCTL_CMD_SET_STREAM_INFO:
 		/* for voice call, we don't need q6 encoder */
-		if (cmd_buf == NULL) {
-			pr_err("Invalid buffer passed to encoder ioctl\n");
-			break;
-		}
-
 		if (((struct cad_stream_info_struct_type *)cmd_buf)->app_type
 			== CAD_STREAM_APP_VOICE) {
 
 			pr_err("ignore stream info for voice call\n");
+			self->session_state = Q6_ENC_STATE_VOICE;
+			break;
+		}
+
+		if (cmd_buf == NULL) {
+			pr_err("Invalid buffer passed to encoder ioctl\n");
 			break;
 		}
 		res = create_buffers(self, cmd_buf);
@@ -363,14 +415,19 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 			struct cad_buf_struct_type *read_buf)
 {
 	struct q6_enc_session_buf_node *node = NULL;
-	int rc = 0;
 
+	init_completion(&self->buf_done_compl);
+
+	mutex_lock(&self->close_mutex);
+	mutex_lock(&self->session_mutex);
 	if (self->session_state != Q6_ENC_STATE_PROCESS) {
-		pr_err("wrong state to handle read!\n");
+		pr_err("wrong state to handle read! state: %d\n",
+			self->session_state);
+		mutex_unlock(&self->close_mutex);
+		mutex_unlock(&self->session_mutex);
 		return CAD_RES_FAILURE;
 	}
 
-	mutex_lock(&self->session_mutex);
 	if (self->full_nodes_head == NULL)
 		self->signal_buf_done = 1;
 
@@ -378,68 +435,110 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 
 	if (self->signal_buf_done) {
 		D("Waiting for new buffer......\n");
-		rc = down_interruptible(&self->buf_done_evt);
-		if (rc)
-			pr_err("down_interruptible() failed\n");
+		wait_for_completion(&self->buf_done_compl);
 	}
 
 	/* now we will have some buffers in the full node list */
 	mutex_lock(&self->session_mutex);
+	if (self->session_state != Q6_ENC_STATE_PROCESS) {
+		pr_err("wrong state to handle read!\n");
+		mutex_unlock(&self->close_mutex);
+		mutex_unlock(&self->session_mutex);
+		return CAD_RES_FAILURE;
+	}
+
 	self->signal_buf_done = 0;
 
 	if (self->full_nodes_head == NULL) {
 		D("No Data to Read!\n");
+		mutex_unlock(&self->close_mutex);
 		mutex_unlock(&self->session_mutex);
 		return CAD_RES_FAILURE;
 	}
 
 	node = self->full_nodes_head;
-	self->full_nodes_head = self->full_nodes_head->next;
-	if (self->full_nodes_head == NULL)
-		self->full_nodes_tail = NULL;
+	if (read_buf->max_size < node->buf_len) {
+		/* copy data from buffer to user data. */
+		if (copy_to_user(read_buf->buffer, node->buf, node->buf_len))
+			pr_err("Error: Could not copy record data into user "
+			"buffer\n");
 
-	node->next = NULL;
-	mutex_unlock(&self->session_mutex);
+		read_buf->actual_size = read_buf->max_size;
+		node->buf_len -= read_buf->max_size;
+		node->read_ptr += read_buf->max_size;
+		D("CAD:Q6ENC1 ===> READ %d bytes of data\n",
+			read_buf->max_size);
+		mutex_unlock(&self->session_mutex);
+	} else {
+		/* Copy the entire node and remove the node from the list*/
+		self->full_nodes_head = self->full_nodes_head->next;
+		if (self->full_nodes_head == NULL)
+			self->full_nodes_tail = NULL;
 
-	/* copy data from buffer to user data. */
-	if (copy_to_user(read_buf->buffer, node->buf, node->buf_len))
-		pr_err("Error: Could not copy record data into user buffer\n");
+		node->next = NULL;
 
-	read_buf->max_size = node->buf_len;
+		/* copy data from buffer to user data. */
+		if (copy_to_user(read_buf->buffer, node->buf, node->buf_len))
+			pr_err("Error: Could not copy record data into user"
+				"buffer\n");
 
-	D("======> READ %d bytes of data\n", node->buf_len);
-	node->buf_len = 0;
-	node->next = self->free_nodes;
-	self->free_nodes = node;
+		read_buf->actual_size = node->buf_len;
+		D("CAD:Q6ENC2 ===> READ %d bytes of data", node->buf_len);
+		node->buf_len = 0;
+		node->next = self->free_nodes;
+		self->free_nodes = node;
+		mutex_unlock(&self->session_mutex);
 
-	send_buffers(self);
-
+		send_buffers(self);
+	}
+	mutex_unlock(&self->close_mutex);
 	return CAD_RES_SUCCESS;
 }
 
 s32 cad_q6enc_session_close(struct q6_enc_session_data *self)
 {
-	int rc = 0;
+	union adsp_audio_event			ret_status;
+	struct adsp_audio_no_payload_command	q6_cmd;
+
+	init_completion(&self->all_buf_done_compl);
+	mutex_lock(&self->session_mutex);
+	if (self->session_state == Q6_ENC_STATE_CLOSING) {
+		pr_err("CAD:Q6ENC ===> Session already closing,"
+			"no need to close.\n");
+		mutex_unlock(&self->session_mutex);
+		return CAD_RES_FAILURE;
+	}
+	self->session_state = Q6_ENC_STATE_CLOSING;
+	mutex_unlock(&self->session_mutex);
+
+	if ((self->session_state != Q6_ENC_STATE_VOICE) && self->need_flush) {
+		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_STREAM_STOP;
+		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+
+		cad_rpc_control(self->session_id, self->group_id,
+			(void *)&q6_cmd, sizeof(q6_cmd), &ret_status);
+	}
+
+	mutex_lock(&self->close_mutex);
 	mutex_lock(&self->session_mutex);
 	if (self->used_nodes) {
+		D("CAD:Q6ENC ===> enable all buf done signal");
 		self->signal_all_buf_done = 1;
-		self->session_state = Q6_ENC_STATE_CLOSING;
 	}
-
 	mutex_unlock(&self->session_mutex);
+
 	if (self->signal_all_buf_done) {
 		D("Wait for all buf gets returned\n");
-		rc = down_interruptible(&self->all_buf_done_evt);
-		if (rc)
-			pr_err("down_interruptible() failed\n");
+		wait_for_completion(&self->all_buf_done_compl);
 	}
 
-	mutex_lock(&self->session_mutex);
-	self->signal_all_buf_done = 0;
 	/* deregister the callback function */
 	cad_rpc_dereg_callback(self->session_id,
 		cad_q6enc_session_handle_async_evt);
 
+	mutex_lock(&self->session_mutex);
+	self->signal_buf_done = 0;
+	self->signal_all_buf_done = 0;
 	/* release all buffers */
 	release_buffers(&self->full_nodes_head);
 	self->full_nodes_tail = NULL;
@@ -452,7 +551,10 @@ s32 cad_q6enc_session_close(struct q6_enc_session_data *self)
 	self->session_id = 0;
 	self->session_state = Q6_ENC_STATE_RESET;
 	self->buf_size = 0;
+	self->need_flush = 0;
 	mutex_unlock(&self->session_mutex);
+	mutex_unlock(&self->close_mutex);
+	D("Encode session close successful\n");
 
 	return CAD_RES_SUCCESS;
 }

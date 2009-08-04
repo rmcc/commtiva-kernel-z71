@@ -26,49 +26,21 @@
  *
  */
 
-#ifndef __ADSP_AUDIO_DEVICE_IOCTL_H
-#define __ADSP_AUDIO_DEVICE_IOCTL_H
+#ifndef _CAD_FILTER_MIDI_H_
+#define _CAD_FILTER_MIDI_H_
+
+#define CAD_FILTER_TYPE_MIDI			0x0108e025
+#define CAD_FILTER_CONFIG_SET_DLS_TABLE		0x0108e02a
 
 
-#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
-
-
-/* Device control session only IOCTL command definitions */
-/* These commands will affect a logical device and all its associated */
-/* streams. */
-
-
-/* Set device volume. */
-/* This command has data payload struct adsp_audio_set_dev_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
-
-
-/* Set Device stereo volume. This command has data payload, */
-/* struct adsp_audio_set_dev_stereo_volume_command. */
-
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_STEREO_VOL		0x0108df3e
-
-
-/* Set L, R cross channel gain for a Device. This command has */
-/* data payload, struct adsp_audio_set_dev_x_chan_gain_command. */
-
-#define ADSP_AUDIO_IOCTL_SET_DEVICE_XCHAN_GAIN		0x0108df40
-
-
-/* Set device mute state. */
-/* This command has data payload struct adsp_audio_set_dev_mute_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE		0x0107605f
-
-
-/* Configure Equalizer for a device. */
-/* This command has payload struct adsp_audio_set_dev_equalizer_command. */
-
-#define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
+struct cad_filter_dls_table {
+	u32	length;
+	u32	addr;
+};
 
 
 
 #endif
+
 
 

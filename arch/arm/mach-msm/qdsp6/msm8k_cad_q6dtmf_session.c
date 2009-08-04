@@ -55,12 +55,12 @@
  *
  */
 
-
 #include <mach/qdsp6/msm8k_cad_q6dtmf_session.h>
 #include <mach/qdsp6/msm8k_cad_rpc.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+#include <mach/qdsp6/msm8k_adsp_audio_command.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_cad: " fmt, ##args)
@@ -100,25 +100,27 @@ s32 cad_dtmf_session_close(struct q6dtmf_session *self)
 s32 cad_dtmf_session_ioctl(struct q6dtmf_session *self, s32 cmd_code,
 				void *cmd_buf, s32 cmd_len)
 {
-	struct adsp_audio_event		return_status;
-	struct adsp_audio_dtmf_start	q6data;
-	struct cad_cmd_gen_dtmf		*data;
-	s32				result = CAD_RES_SUCCESS;
+	union adsp_audio_event			return_status;
+	struct adsp_audio_dtmf_start_command	dtmf_cmd;
+	struct cad_cmd_gen_dtmf			*data;
+	s32					result = CAD_RES_SUCCESS;
 
 	switch (cmd_code) {
 	case CAD_IOCTL_CMD_GEN_DTMF:
 		data = (struct cad_cmd_gen_dtmf *)cmd_buf;
-		q6data.tone1_hz = data->dtmf_hi;
-		q6data.tone2_hz = data->dtmf_low;
-		q6data.duration_usec = data->duration * 1000;
-		q6data.gain_mb = data->rx_gain;
-		D("CAD:DTMF ===> send %d, %d, %d, %d\n", q6data.tone1_hz,
-			q6data.tone2_hz, q6data.duration_usec, q6data.gain_mb);
+		dtmf_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SESSION_DTMF_START;
+		dtmf_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+		dtmf_cmd.tone1_hz = data->dtmf_hi;
+		dtmf_cmd.tone2_hz = data->dtmf_low;
+		dtmf_cmd.duration_usec = data->duration * 1000;
+		dtmf_cmd.gain_mb = data->rx_gain;
+		D("CAD:DTMF ===> send %d, %d, %d, %d\n", dtmf_cmd.tone1_hz,
+			dtmf_cmd.tone2_hz, dtmf_cmd.duration_usec,
+			dtmf_cmd.gain_mb);
 
 		/* send the dtmf start with the configuration */
-		result = cad_rpc_ioctl(self->session_id, 1,
-			ADSP_AUDIO_IOCTL_CMD_STREAM_DTMF_START,
-			(void *)&q6data, sizeof(q6data), &return_status);
+		result = cad_rpc_control(self->session_id, self->group_id,
+			(void *)&dtmf_cmd, sizeof(dtmf_cmd), &return_status);
 		break;
 	}
 

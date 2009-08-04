@@ -43,16 +43,19 @@
 #define CAD_FORMAT_ADPCM	0x01
 #define CAD_FORMAT_MP3		0x02
 #define CAD_FORMAT_RA		0x03
-#define CAD_FORMAT_WMA		0x04
+#define CAD_FORMAT_WMA		0x04	/* WMA std (V9) */
 #define CAD_FORMAT_AAC		0x05
 #define CAD_FORMAT_MIDI		0x07
 #define CAD_FORMAT_YADPCM	0x08
-#define CAD_FORMAT_QCELP	0x09
+#define CAD_FORMAT_QCELP8K	0x09
 #define CAD_FORMAT_AMRWB	0x0A
 #define CAD_FORMAT_AMRNB	0x0B
 #define CAD_FORMAT_EVRC		0x0C
 #define CAD_FORMAT_DTMF		0x0D
 #define CAD_FORMAT_QCELP13K	0x0E
+#define CAD_FORMAT_SBC		0x0F
+#define CAD_FORMAT_WMA_PRO	0x10	/* WMA Pro (V10) */
+#define CAD_FORMAT_EVRCB	0x11
 
 #define CAD_OPEN_OP_READ   0x01
 #define CAD_OPEN_OP_WRITE  0x02
@@ -61,8 +64,11 @@
 
 
 struct cad_open_struct_type {
-	u32  op_code;
-	u32  format;
+	u32	op_code;
+	u32	format;
+	u32	group_id;
+	u32	payload_len;
+	u32	payload;
 };
 
 

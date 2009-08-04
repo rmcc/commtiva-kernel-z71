@@ -37,6 +37,7 @@ struct q6dtmf_session;
 
 struct q6dtmf_session {
 	u32				session_id;
+	u32				group_id;
 	struct q6dtmf_session		*next;
 };
 
