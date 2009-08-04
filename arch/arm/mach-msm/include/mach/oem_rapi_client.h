@@ -33,7 +33,8 @@
  * OEM RAPI CLIENT Driver header file
  */
 
-#include <linux/kernel.h>
+#include <linux/types.h>
+#include <mach/msm_rpcrouter.h>
 
 enum {
 	OEM_RAPI_CLIENT_EVENT_NONE = 0,
