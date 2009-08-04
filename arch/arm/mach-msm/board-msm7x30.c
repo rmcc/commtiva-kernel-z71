@@ -65,6 +65,8 @@
 #include <linux/usb/mass_storage_function.h>
 #include <linux/spi/spi.h>
 #include <linux/bma150.h>
+#include <linux/mfd/pmic8058.h>
+#include <linux/i2c.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -84,6 +86,28 @@
 
 #define MSM_PMEM_SF_SIZE	0x800000
 #define MSM_FB_SIZE		0x200000
+
+static struct pm8058_platform_data pm8058_7x30_data = {
+	.pm_irqs = {
+		[PM8058_IRQ_KEYPAD - PM8058_FIRST_IRQ] = 74,
+		[PM8058_IRQ_KEYSTUCK - PM8058_FIRST_IRQ] = 75,
+	}
+};
+
+static struct i2c_board_info pm8058_boardinfo[] __initdata = {
+	{
+		I2C_BOARD_INFO("pm8058-core", 0),
+		.irq = MSM_GPIO_TO_INT(27),
+		.platform_data = &pm8058_7x30_data,
+	},
+};
+
+static int __init buses_init(void)
+{
+	i2c_register_board_info(6 /* I2C_SSBI ID */, pm8058_boardinfo,
+				ARRAY_SIZE(pm8058_boardinfo));
+	return 0;
+}
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -396,6 +420,7 @@ static void __init msm7x30_init(void)
 		ARRAY_SIZE(msm_spi_board_info));
 	msm_fb_add_devices();
 	msm_pm_set_platform_data(msm_pm_data);
+	buses_init();
 }
 
 static void __init msm7x30_allocate_memory_regions(void)
