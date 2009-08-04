@@ -67,6 +67,7 @@
 #include <linux/delay.h>
 #include <linux/mfd/tps65023.h>
 #include <linux/bma150.h>
+#include <linux/power_supply.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -90,6 +91,7 @@
 #include <mach/msm_spi.h>
 #include <mach/s1r72v05.h>
 #include <mach/msm_tsif.h>
+#include <mach/msm_battery.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -1684,6 +1686,32 @@ static struct platform_device msm_camera_sensor_mt9t013 = {
 #endif
 #endif /*CONFIG_MSM_CAMERA*/
 
+static u32 msm_calculate_batt_capacity(u32 current_voltage);
+
+static struct msm_psy_batt_pdata msm_psy_batt_data = {
+	.voltage_min_design 	= 3200,
+	.voltage_max_design	= 4200,
+	.avail_chg_sources   	= AC_CHG | USB_CHG ,
+	.batt_technology        = POWER_SUPPLY_TECHNOLOGY_LION,
+	.calculate_capacity	= &msm_calculate_batt_capacity,
+};
+
+static u32 msm_calculate_batt_capacity(u32 current_voltage)
+{
+	u32 low_voltage   = msm_psy_batt_data.voltage_min_design;
+	u32 high_voltage  = msm_psy_batt_data.voltage_max_design;
+
+	return (current_voltage - low_voltage) * 100
+		/ (high_voltage - low_voltage);
+}
+
+static struct platform_device msm_batt_device = {
+	.name 		    = "msm-battery",
+	.id		    = -1,
+	.dev.platform_data  = &msm_psy_batt_data,
+};
+
+
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&mddi_toshiba_device,
@@ -1729,6 +1757,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_MT9P012
 	&msm_camera_sensor_mt9p012,
 #endif
+	&msm_batt_device,
 };
 
 static void __init qsd8x50_init_irq(void)

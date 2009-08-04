@@ -22,6 +22,8 @@
 #include <linux/delay.h>
 #include <linux/bootmem.h>
 #include <linux/usb/mass_storage_function.h>
+#include <linux/power_supply.h>
+
 
 #include <mach/hardware.h>
 #include <asm/mach-types.h>
@@ -44,6 +46,8 @@
 #include <mach/rpc_hsusb.h>
 #include <mach/msm_serial_hs.h>
 #include <mach/memory.h>
+#include <mach/msm_battery.h>
+
 
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
@@ -1040,6 +1044,33 @@ static struct platform_device msm_camera_sensor_vb6801 = {
 #endif
 #endif
 
+static u32 msm_calculate_batt_capacity(u32 current_voltage);
+
+static struct msm_psy_batt_pdata msm_psy_batt_data = {
+	.voltage_min_design 	= 3200,
+	.voltage_max_design	= 4200,
+	.avail_chg_sources   	= AC_CHG | USB_CHG ,
+	.batt_technology        = POWER_SUPPLY_TECHNOLOGY_LION,
+	.calculate_capacity	= &msm_calculate_batt_capacity,
+};
+
+static u32 msm_calculate_batt_capacity(u32 current_voltage)
+{
+	u32 low_voltage   = msm_psy_batt_data.voltage_min_design;
+	u32 high_voltage  = msm_psy_batt_data.voltage_max_design;
+
+	return (current_voltage - low_voltage) * 100
+		/ (high_voltage - low_voltage);
+}
+
+static struct platform_device msm_batt_device = {
+	.name 		    = "msm-battery",
+	.id		    = -1,
+	.dev.platform_data  = &msm_psy_batt_data,
+};
+
+
+
 static struct platform_device *devices[] __initdata = {
 #if !defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart3,
@@ -1092,6 +1123,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_bluesleep_device,
 	&msm_device_kgsl,
 	&hs_device,
+	&msm_batt_device,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
