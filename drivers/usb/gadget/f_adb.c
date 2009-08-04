@@ -460,7 +460,6 @@ static ssize_t adb_write(struct file *fp, const char __user *buf,
 
 static int adb_open(struct inode *ip, struct file *fp)
 {
-	printk(KERN_INFO "adb_open\n");
 	if (!_adb_dev)
 		return -EIO;
 
@@ -477,7 +476,6 @@ static int adb_open(struct inode *ip, struct file *fp)
 
 static int adb_release(struct inode *ip, struct file *fp)
 {
-	printk(KERN_INFO "adb_release\n");
 	if (_adb_dev)
 		_unlock(&_adb_dev->open_excl);
 	return 0;
