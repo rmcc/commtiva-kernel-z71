@@ -233,7 +233,7 @@ struct platform_device msm_device_ssbi6 = {
 };
 #endif /* CONFIG_I2C_SSBI */
 
-#ifdef CONFIG_SOC_MSM7X30
+#ifdef CONFIG_ARCH_MSM7X30
 #define MSM_HSUSB_PHYS        0xA3600000
 #else
 #define MSM_HSUSB_PHYS        0xA0800000
