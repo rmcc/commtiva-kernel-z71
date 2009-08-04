@@ -79,7 +79,7 @@ struct diagchar_dev *driver;
 
 /* The following variables can be specified by module options */
 static unsigned int itemsize = 512; /*Size of item in the mempool*/
-static unsigned int poolsize = 10;  /*Number of items in the mempool*/
+static unsigned int poolsize = 50;  /*Number of items in the mempool*/
 /* This is the maximum number of user-space clients supported */
 static unsigned int max_clients = 5;
 
