@@ -1,6 +1,7 @@
 /* include/asm-arm/arch-msm/msm_adsp.h
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -46,5 +47,41 @@ int msm_adsp_disable_event_rsp(struct msm_adsp_module *module);
 int msm_adsp_write(struct msm_adsp_module *module,
 		   unsigned queue_id,
 		   void *data, size_t len);
+
+/* Command Queue Indexes */
+#define QDSP_lpmCommandQueue              0
+#define QDSP_mpuAfeQueue                  1
+#define QDSP_mpuGraphicsCmdQueue          2
+#define QDSP_mpuModmathCmdQueue           3
+#define QDSP_mpuVDecCmdQueue              4
+#define QDSP_mpuVDecPktQueue              5
+#define QDSP_mpuVEncCmdQueue              6
+#define QDSP_rxMpuDecCmdQueue             7
+#define QDSP_rxMpuDecPktQueue             8
+#define QDSP_txMpuEncQueue                9
+#define QDSP_uPAudPPCmd1Queue             10
+#define QDSP_uPAudPPCmd2Queue             11
+#define QDSP_uPAudPPCmd3Queue             12
+#define QDSP_uPAudPlay0BitStreamCtrlQueue 13
+#define QDSP_uPAudPlay1BitStreamCtrlQueue 14
+#define QDSP_uPAudPlay2BitStreamCtrlQueue 15
+#define QDSP_uPAudPlay3BitStreamCtrlQueue 16
+#define QDSP_uPAudPlay4BitStreamCtrlQueue 17
+#define QDSP_uPAudPreProcCmdQueue         18
+#define QDSP_uPAudRecBitStreamQueue       19
+#define QDSP_uPAudRecCmdQueue             20
+#define QDSP_uPDiagQueue                  21
+#define QDSP_uPJpegActionCmdQueue         22
+#define QDSP_uPJpegCfgCmdQueue            23
+#define QDSP_uPVocProcQueue               24
+#define QDSP_vfeCommandQueue              25
+#define QDSP_vfeCommandScaleQueue         26
+#define QDSP_vfeCommandTableQueue         27
+#define QDSP_vfeFtmCmdQueue               28
+#define QDSP_vfeFtmCmdScaleQueue          29
+#define QDSP_vfeFtmCmdTableQueue          30
+#define QDSP_uPJpegFtmCfgCmdQueue         31
+#define QDSP_uPJpegFtmActionCmdQueue      32
+#define QDSP_MAX_NUM_QUEUES               33
 
 #endif

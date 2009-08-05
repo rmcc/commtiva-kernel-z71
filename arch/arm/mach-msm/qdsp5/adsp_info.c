@@ -84,6 +84,7 @@ static struct adsp_module_info module_info[] = {
 	QDSP_MODULE(AUDPPTASK, NULL, 0, NULL, NULL),
 	QDSP_MODULE(AUDRECTASK, NULL, 0, NULL, NULL),
 	QDSP_MODULE(AUDPREPROCTASK, NULL, 0, NULL, NULL),
+#if !defined(CONFIG_ARCH_MSM7X30)
 	QDSP_MODULE(VFETASK, "vfe_clk", 0, adsp_vfe_verify_cmd,
 		adsp_vfe_patch_event),
 	QDSP_MODULE(QCAMTASK, NULL, 0, NULL, NULL),
@@ -99,6 +100,7 @@ static struct adsp_module_info module_info[] = {
 	QDSP_MODULE(VIDEO_AMR_TURBO, NULL, 0, NULL, NULL),
 	QDSP_MODULE(WM_TURBO_MODE, NULL, 0, NULL, NULL),
 	QDSP_MODULE(VDEC_LP_MODE_TURBO, NULL, 0, NULL, NULL),
+#endif
 };
 
 int adsp_init_info(struct adsp_info *info)
