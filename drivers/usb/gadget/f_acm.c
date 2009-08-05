@@ -49,6 +49,7 @@ struct f_acm {
 	u8				port_num;
 
 	u8				pending;
+	u8				online;
 
 	/* lock is mostly for pending and notify_req ... they get accessed
 	 * by callbacks both from tty (open/close/break) under its spinlock,
@@ -417,6 +418,7 @@ static int acm_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 
 	} else
 		return -EINVAL;
+	acm->online = 1;
 
 	return 0;
 }
@@ -430,6 +432,7 @@ static void acm_disable(struct usb_function *f)
 	gserial_disconnect(&acm->port);
 	usb_ep_fifo_flush(acm->notify);
 	usb_ep_disable(acm->notify);
+	acm->online = 0;
 	acm->notify->driver_data = NULL;
 }
 
@@ -523,7 +526,7 @@ static void acm_cdc_notify_complete(struct usb_ep *ep, struct usb_request *req)
 	acm->notify_req = req;
 	spin_unlock(&acm->lock);
 
-	if (doit)
+	if (doit && acm->online)
 		acm_notify_serial_state(acm);
 }
 
