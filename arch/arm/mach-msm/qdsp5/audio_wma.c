@@ -49,9 +49,6 @@
 #include <mach/qdsp5/qdsp5audplaycmdi.h>
 #include <mach/qdsp5/qdsp5audplaymsg.h>
 
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
-
 /* Size must be power of 2 */
 #define BUFSZ_MAX 	2048
 #define BUFSZ_MIN 	1024

@@ -41,9 +41,6 @@
 #include <mach/qdsp5/qdsp5audreccmdi.h>
 #include <mach/qdsp5/qdsp5audrecmsg.h>
 
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
-
 /* FRAME_NUM must be a power of two */
 #define FRAME_NUM		(8)
 #define FRAME_SIZE		(2052 * 2)

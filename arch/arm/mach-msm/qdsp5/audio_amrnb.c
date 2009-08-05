@@ -48,9 +48,6 @@
 #include <mach/qdsp5/qdsp5audplaycmdi.h>
 #include <mach/qdsp5/qdsp5audplaymsg.h>
 
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
-
 #define BUFSZ 1024 /* Hold minimum 700ms voice data and 14 bytes of meta in*/
 #define DMASZ (BUFSZ * 2)
 

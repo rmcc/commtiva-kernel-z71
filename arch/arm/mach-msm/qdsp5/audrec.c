@@ -36,8 +36,6 @@
 #include <mach/qdsp5/qdsp5audrecmsg.h>
 
 #include "audmgr.h"
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
 
 #ifdef DEBUG
 #define dprintk(format, arg...) \

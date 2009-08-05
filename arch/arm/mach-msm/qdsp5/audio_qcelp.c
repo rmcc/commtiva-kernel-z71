@@ -42,8 +42,6 @@
 #include <mach/qdsp5/qdsp5audplaymsg.h>
 
 #include "audmgr.h"
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
 
 #define BUFSZ 1094 /* QCELP 13K Hold 600ms packet data = 36 * 30 and
 		      14 bytes of meta in */

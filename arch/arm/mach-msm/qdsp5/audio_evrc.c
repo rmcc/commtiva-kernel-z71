@@ -42,8 +42,6 @@
 #include <mach/qdsp5/qdsp5audplaycmdi.h>
 #include <mach/qdsp5/qdsp5audplaymsg.h>
 
-#include "adsp.h"
-
 /* Hold 30 packets of 24 bytes each and 14 bytes of meta in */
 #define BUFSZ 			734
 #define DMASZ 			(BUFSZ * 2)

@@ -40,9 +40,6 @@
 #include <mach/qdsp5/qdsp5audplaycmdi.h>
 #include <mach/qdsp5/qdsp5audplaymsg.h>
 
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
-
 #define BUFSZ 32768
 #define DMASZ (BUFSZ * 2)
 #define BUFSZ_MIN 4096

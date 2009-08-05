@@ -22,6 +22,7 @@
 #include <linux/wait.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
+#include <linux/platform_device.h>
 
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
@@ -32,9 +33,6 @@
 
 #include <mach/qdsp5/qdsp5audppcmdi.h>
 #include <mach/qdsp5/qdsp5audppmsg.h>
-
-/* for queue ids - should be relative to module number*/
-#include "adsp.h"
 
 #include "evlog.h"
 
