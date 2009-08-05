@@ -117,6 +117,9 @@
 
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
 
+#define PMIC_VREG_WLAN_LEVEL	2600
+#define PMIC_VREG_GP6_LEVEL	2900
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.flags  = IORESOURCE_MEM,
@@ -1007,7 +1010,6 @@ static unsigned bt_config_power_on[] = {
 	GPIO_CFG(44, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* CTS */
 	GPIO_CFG(45, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* Rx */
 	GPIO_CFG(46, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* Tx */
-	GPIO_CFG(113, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),  /* VDD_FREG */
 };
 static unsigned bt_config_power_off[] = {
 	GPIO_CFG(18, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* SYSRST */
@@ -1018,12 +1020,12 @@ static unsigned bt_config_power_off[] = {
 	GPIO_CFG(44, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* CTS */
 	GPIO_CFG(45, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Rx */
 	GPIO_CFG(46, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* Tx */
-	GPIO_CFG(113, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),  /* VDD_FREG */
 };
 
 static int bluetooth_power(int on)
 {
 	struct vreg *vreg_bt;
+	struct vreg *vreg_wlan;
 	int pin, rc;
 
 	/* do not have vreg bt defined, gp6 is the same */
@@ -1034,6 +1036,14 @@ static int bluetooth_power(int on)
 		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
 		       __func__, PTR_ERR(vreg_bt));
 		return PTR_ERR(vreg_bt);
+	}
+
+	vreg_wlan = vreg_get(NULL, "wlan");
+
+	if (IS_ERR(vreg_wlan)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_wlan));
+		return PTR_ERR(vreg_wlan);
 	}
 
 	if (on) {
@@ -1049,31 +1059,49 @@ static int bluetooth_power(int on)
 		}
 
 		/* units of mV, steps of 50 mV */
-		rc = vreg_set_level(vreg_bt, 2850);
+		rc = vreg_set_level(vreg_bt, PMIC_VREG_GP6_LEVEL);
 		if (rc) {
-			printk(KERN_ERR "%s: vreg set level failed (%d)\n",
+			printk(KERN_ERR "%s: vreg bt set level failed (%d)\n",
 			       __func__, rc);
 			return -EIO;
 		}
 		rc = vreg_enable(vreg_bt);
 		if (rc) {
-			printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+			printk(KERN_ERR "%s: vreg bt enable failed (%d)\n",
 			       __func__, rc);
 			return -EIO;
 		}
 
-		gpio_set_value(113, on); /* VDD_FREG */
+		/* units of mV, steps of 50 mV */
+		rc = vreg_set_level(vreg_wlan, PMIC_VREG_WLAN_LEVEL);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan set level failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
+		rc = vreg_enable(vreg_wlan);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan enable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
+
 		gpio_set_value(22, on); /* VDD_IO */
 		gpio_set_value(18, on); /* SYSRST */
 
 	} else {
 		gpio_set_value(18, on); /* SYSRST */
 		gpio_set_value(22, on); /* VDD_IO */
-		gpio_set_value(113, on); /* VDD_FREG */
 
+		rc = vreg_disable(vreg_wlan);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan disable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
+		}
 		rc = vreg_disable(vreg_bt);
 		if (rc) {
-			printk(KERN_ERR "%s: vreg disable failed (%d)\n",
+			printk(KERN_ERR "%s: vreg bt disable failed (%d)\n",
 			       __func__, rc);
 			return -EIO;
 		}
@@ -1755,7 +1783,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	}
 
 	if (!vreg_sts) {
-		rc = vreg_set_level(vreg_mmc, 2850);
+		rc = vreg_set_level(vreg_mmc, PMIC_VREG_GP6_LEVEL);
 		if (!rc)
 			rc = vreg_enable(vreg_mmc);
 		if (rc)
