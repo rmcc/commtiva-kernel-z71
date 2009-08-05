@@ -65,8 +65,6 @@
 #include <mach/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
 
-#define MSM_RPC_CLIENT_NULL_CB_ID 0xffffffff
-
 struct msm_rpc_client_cb_item {
 	struct list_head list;
 
@@ -510,6 +508,8 @@ EXPORT_SYMBOL(msm_rpc_send_accepted_reply);
  *
  * Return Value:
  *         callback ID on success, otherwise returns an error code.
+ *         If cb_func is NULL, the callback Id returned is 0xffffffff.
+ *         This tells the other processor that no callback is reqested.
  */
 int msm_rpc_add_cb_func(struct msm_rpc_client *client, void *cb_func)
 {
@@ -582,6 +582,9 @@ EXPORT_SYMBOL(msm_rpc_get_cb_func);
 void msm_rpc_remove_cb_func(struct msm_rpc_client *client, void *cb_func)
 {
 	struct msm_rpc_cb_table_item *cb_item, *tmp_cb_item;
+
+	if (cb_func == NULL)
+		return;
 
 	mutex_lock(&client->cb_list_lock);
 	list_for_each_entry_safe(cb_item, tmp_cb_item,

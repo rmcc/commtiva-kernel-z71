@@ -222,7 +222,7 @@ static int oem_rapi_client_streaming_function_arg(struct msm_rpc_client *client,
 
 	/* cb_id */
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
-	if (cb_id < 0)
+	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
 	size += sizeof(uint32_t);
