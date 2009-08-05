@@ -67,6 +67,7 @@
 #include <linux/bma150.h>
 #include <linux/mfd/pmic8058.h>
 #include <linux/i2c.h>
+#include <linux/input.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -78,6 +79,7 @@
 #include <mach/msm_hsusb.h>
 #include <mach/msm_spi.h>
 #include <linux/android_pmem.h>
+#include <mach/pmic8058-keypad.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -86,6 +88,212 @@
 
 #define MSM_PMEM_SF_SIZE	0x800000
 #define MSM_FB_SIZE		0x200000
+
+static const unsigned int surf_keymap[] = {
+	KEY(0, 0, 0),
+	KEY(0, 1, 0),
+	KEY(0, 2, 0),
+	KEY(0, 3, 0),
+	KEY(0, 4, 0),
+	KEY(0, 5, KEY_L),
+	KEY(0, 6, KEY_BACK),
+	KEY(0, 7, KEY_M),
+
+	KEY(1, 0, 0),
+	KEY(1, 1, 0),
+	KEY(1, 2, 0),
+	KEY(1, 3, 0),
+	KEY(1, 4, 0),
+	KEY(1, 5, KEY_MSDOS),
+	KEY(1, 6, KEY_SPACE),
+	KEY(1, 7, KEY_COMMA),
+
+	KEY(2, 0, 0),
+	KEY(2, 1, 0),
+	KEY(2, 2, 0),
+	KEY(2, 3, 0),
+	KEY(2, 4, 0),
+	KEY(2, 5, KEY_UP),
+	KEY(2, 6, KEY_DOWN), /* SYN */
+	KEY(2, 7, KEY_LEFTSHIFT),
+
+	KEY(3, 0, 0),
+	KEY(3, 1, 0),
+	KEY(3, 2, 0),
+	KEY(3, 3, 0),
+	KEY(3, 4, 0),
+	KEY(3, 5, KEY_F1),
+	KEY(3, 6, KEY_F2),
+	KEY(3, 7, KEY_F3),
+
+	KEY(4, 0, 0),
+	KEY(4, 1, 0),
+	KEY(4, 2, 0),
+	KEY(4, 3, 0),
+	KEY(4, 4, 0),
+	KEY(4, 5, KEY_F4),
+	KEY(4, 6, KEY_F5),
+	KEY(4, 7, KEY_F6),
+
+	KEY(5, 0, KEY_R),
+	KEY(5, 1, KEY_T),
+	KEY(5, 2, KEY_Y),
+	KEY(5, 3, KEY_LEFTALT),
+	KEY(5, 4, KEY_HOME),
+	KEY(5, 5, KEY_Q),
+	KEY(5, 6, KEY_W),
+	KEY(5, 7, KEY_E),
+
+	KEY(6, 0, KEY_F),
+	KEY(6, 1, KEY_G),
+	KEY(6, 2, KEY_H),
+	KEY(6, 3, KEY_CAPSLOCK),
+	KEY(6, 4, KEY_PAGEUP),
+	KEY(6, 5, KEY_A),
+	KEY(6, 6, KEY_S),
+	KEY(6, 7, KEY_D),
+
+	KEY(7, 0, KEY_V),
+	KEY(7, 1, KEY_B),
+	KEY(7, 2, KEY_N),
+	KEY(7, 3, KEY_MENU), /* REVISIT - SYM */
+	KEY(7, 4, KEY_PAGEDOWN),
+	KEY(7, 5, KEY_Z),
+	KEY(7, 6, KEY_X),
+	KEY(7, 7, KEY_C),
+
+	KEY(8, 0, KEY_P),
+	KEY(8, 1, KEY_J),
+	KEY(8, 2, KEY_K),
+	KEY(8, 3, KEY_INSERT),
+	KEY(8, 4, KEY_END),
+	KEY(8, 5, KEY_U),
+	KEY(8, 6, KEY_I),
+	KEY(8, 7, KEY_O),
+
+	KEY(9, 0, KEY_4),
+	KEY(9, 1, KEY_5),
+	KEY(9, 2, KEY_6),
+	KEY(9, 3, KEY_7),
+	KEY(9, 4, KEY_8),
+	KEY(9, 5, KEY_1),
+	KEY(9, 6, KEY_2),
+	KEY(9, 7, KEY_3),
+
+	KEY(10, 0, KEY_F7),
+	KEY(10, 1, KEY_F8),
+	KEY(10, 2, KEY_F9),
+	KEY(10, 3, KEY_F10),
+	KEY(10, 4, KEY_FN),
+	KEY(10, 5, KEY_9),
+	KEY(10, 6, KEY_0),
+	KEY(10, 7, KEY_DOT),
+
+	KEY(11, 0, KEY_LEFTCTRL),
+	KEY(11, 1, KEY_F11),  /* START */
+	KEY(11, 2, KEY_ENTER),
+	KEY(11, 3, KEY_SEARCH),
+	KEY(11, 4, KEY_DELETE),
+	KEY(11, 5, KEY_RIGHT),
+	KEY(11, 6, KEY_LEFT),
+	KEY(11, 7, KEY_RIGHTSHIFT),
+};
+
+static const unsigned int ffa_keymap[] = {
+	KEY(0, 0, KEY_7),
+	KEY(0, 1, KEY_DOWN),
+	KEY(0, 2, KEY_UP),
+	KEY(0, 3, KEY_RIGHT),
+	KEY(0, 4, KEY_ENTER),
+
+	KEY(1, 0, KEY_LEFT),
+	KEY(1, 1, KEY_SEND),
+	KEY(1, 2, KEY_1),
+	KEY(1, 3, KEY_4),
+	KEY(1, 4, KEY_CLEAR),
+
+	KEY(2, 0, KEY_6),
+	KEY(2, 1, KEY_5),
+	KEY(2, 2, KEY_8),
+	KEY(2, 3, KEY_3),
+	KEY(2, 4, KEY_NUMERIC_STAR),
+
+	KEY(3, 0, KEY_9),
+	KEY(3, 1, KEY_NUMERIC_POUND),
+	KEY(3, 2, KEY_0),
+	KEY(3, 3, KEY_2),
+	KEY(3, 4, KEY_EDIT), /* REVISIT: R+ */
+
+	KEY(4, 0, KEY_NEW),  /* REVISIT: R- */
+	KEY(4, 1, KEY_HOME), /* REVISIT: L- */
+	KEY(4, 2, KEY_BACK), /* REVISIT: L+ */
+	KEY(4, 3, KEY_VOLUMEUP),
+	KEY(4, 4, KEY_VOLUMEDOWN),
+};
+
+/* REVISIT - this needs to be done through add_subdevice
+ * API
+ */
+static struct resource resources_keypad[] = {
+	{
+		.start	= PM8058_IRQ_KEYPAD,
+		.end	= PM8058_IRQ_KEYPAD,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.start	= PM8058_IRQ_KEYSTUCK,
+		.end	= PM8058_IRQ_KEYSTUCK,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct pmic8058_keypad_data surf_keypad_data = {
+	.input_name		= "surf-keypad",
+	.input_phys_device	= "surf-keypad/input0",
+	.num_rows		= 12,
+	.num_cols		= 8,
+	.rows_gpio_start	= 9,
+	.cols_gpio_start	= 1,
+	.keymap_size		= ARRAY_SIZE(surf_keymap),
+	.keymap			= surf_keymap,
+	.debounce_ms		= 8,
+	.scan_delay_ms		= 32,
+	.wakeup			= 1,
+};
+
+static struct platform_device surf_keypad_device = {
+	.name		= "pmic8058_keypad",
+	.id		= -1,
+	.num_resources  = ARRAY_SIZE(resources_keypad),
+	.resource       = resources_keypad,
+	.dev		= {
+		.platform_data = &surf_keypad_data,
+	},
+};
+
+static struct pmic8058_keypad_data ffa_keypad_data = {
+	.input_name		= "ffa-keypad",
+	.input_phys_device	= "ffa-keypad/input0",
+	.num_rows		= 5,
+	.num_cols		= 5,
+	.rows_gpio_start	= 13,
+	.cols_gpio_start	= 4,
+	.keymap_size		= ARRAY_SIZE(ffa_keymap),
+	.keymap			= ffa_keymap,
+	.debounce_ms		= 8,
+	.scan_delay_ms		= 32,
+	.wakeup			= 1,
+};
+
+static struct platform_device ffa_keypad_device = {
+	.name		= "pmic8058_keypad",
+	.id		= -1,
+	.num_resources  = ARRAY_SIZE(resources_keypad),
+	.resource       = resources_keypad,
+	.dev		= {
+		.platform_data = &ffa_keypad_data,
+	},
+};
 
 static struct pm8058_platform_data pm8058_7x30_data = {
 	.pm_irqs = {
@@ -421,6 +629,11 @@ static void __init msm7x30_init(void)
 	msm_fb_add_devices();
 	msm_pm_set_platform_data(msm_pm_data);
 	buses_init();
+
+	if (machine_is_msm7x30_surf())
+		platform_device_register(&surf_keypad_device);
+	else
+		platform_device_register(&ffa_keypad_device);
 }
 
 static void __init msm7x30_allocate_memory_regions(void)
