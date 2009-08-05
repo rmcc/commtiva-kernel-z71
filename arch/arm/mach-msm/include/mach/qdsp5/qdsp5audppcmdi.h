@@ -274,7 +274,7 @@ typedef struct {
 
 #define AUDPP_CMD_WAV_PCM_WIDTH_8	0x0000
 #define AUDPP_CMD_WAV_PCM_WIDTH_16	0x0001
-#define AUDPP_CMD_WAV_PCM_WIDTH_32	0x0002
+#define AUDPP_CMD_WAV_PCM_WIDTH_24	0x0002
 
 typedef struct {
 	audpp_cmd_cfg_adec_params_common		common;
