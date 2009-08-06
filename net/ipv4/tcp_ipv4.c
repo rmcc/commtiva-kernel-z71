@@ -1859,28 +1859,42 @@ EXPORT_SYMBOL(tcp_v4_destroy_sock);
 void tcp_v4_nuke_addr(__u32 saddr)
 {
 	unsigned int bucket;
+	int done;
 
 	for (bucket = 0; bucket < tcp_hashinfo.ehash_size; bucket++) {
 		struct hlist_nulls_node *node;
-		struct sock *sk;
+		struct sock *sk, *found;
 		spinlock_t *lock = inet_ehash_lockp(&tcp_hashinfo, bucket);
 
-		spin_lock_bh(lock);
-		sk_nulls_for_each(sk, node, &tcp_hashinfo.ehash[bucket].chain) {
-			struct inet_sock *inet = inet_sk(sk);
+		while (1) {
+			found = NULL;
+			spin_lock_bh(lock);
+			sk_nulls_for_each(sk, node,
+					&tcp_hashinfo.ehash[bucket].chain) {
+				struct inet_sock *inet = inet_sk(sk);
 
-			if (inet->rcv_saddr != saddr)
-				continue;
-			if (sysctl_ip_dynaddr && sk->sk_state == TCP_SYN_SENT)
-				continue;
-			if (sock_flag(sk, SOCK_DEAD))
-				continue;
+				if (inet->rcv_saddr != saddr)
+					continue;
+				if (sysctl_ip_dynaddr && sk->sk_state
+							== TCP_SYN_SENT)
+					continue;
+				if (sock_flag(sk, SOCK_DEAD))
+					continue;
 
-			sk->sk_err = ETIMEDOUT;
-			sk->sk_error_report(sk);
-			tcp_done(sk);
+				sk->sk_err = ETIMEDOUT;
+				sk->sk_error_report(sk);
+				found = sk;
+				done = __sk_nulls_del_node_init_rcu(sk);
+				if (done)
+					sock_prot_inuse_add(sock_net(sk),
+						sk->sk_prot, -1);
+				break;
+			}
+			spin_unlock_bh(lock);
+			if (found == NULL)
+				break;
+			tcp_done(found);
 		}
-		spin_unlock_bh(lock);
 	}
 }
 
