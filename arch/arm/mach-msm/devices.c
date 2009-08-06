@@ -184,6 +184,13 @@ struct platform_device msm_device_uart_dm2 = {
 	},
 };
 
+#define MSM_I2C_SIZE          SZ_4K
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_I2C_PHYS          0xACD00000
+#else
+#define MSM_I2C_PHYS          0xA9900000
+#endif
+
 static struct resource resources_i2c[] = {
 	{
 		.start	= MSM_I2C_PHYS,
