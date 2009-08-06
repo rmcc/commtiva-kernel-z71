@@ -493,9 +493,6 @@ static int ehci_msm_run(struct usb_hcd *hcd)
 						ULPI_CONFIG_REG);
 			if (retval)
 				return retval;
-			/* SW workaround, Issue#3 */
-			writel(0x0, USB_AHB_MODE);
-			writel(0x0, USB_AHB_BURST);
 		} else {
 			if (msm_hc->soc_version >= SOC_ROC_2_0)
 				writel(0x02, USB_ROC_AHB_MODE);
@@ -503,6 +500,9 @@ static int ehci_msm_run(struct usb_hcd *hcd)
 				writel(0x01, USB_ROC_AHB_MODE);
 		}
 	}
+	/* SW workaround, Issue#3 */
+	writel(0x0, USB_AHB_MODE);
+	writel(0x0, USB_AHB_BURST);
 
 	ehci_writel(ehci, ehci->periodic_dma, &ehci->regs->frame_list);
 	ehci_writel(ehci, (u32)ehci->async->qh_dma, &ehci->regs->async_next);
