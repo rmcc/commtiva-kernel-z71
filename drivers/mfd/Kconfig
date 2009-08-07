@@ -106,6 +106,15 @@ config TWL4030_CORE
 	  high speed USB OTG transceiver, an audio codec (on most
 	  versions) and many other features.
 
+config MARIMBA_CORE
+	tristate "Marimba Core"
+	depends on I2C && ARCH_MSM7X30
+	default n
+	help
+	  Enables the Marimba Core driver. The core driver provides
+	  read/write capability to registers which are part of the
+	  marimba core.
+
 config MFD_TMIO
 	bool
 	default n
