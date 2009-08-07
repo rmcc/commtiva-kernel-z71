@@ -71,6 +71,7 @@ static struct msm_v4l2_device *g_pmsm_v4l2_dev;
 
 
 static DEFINE_MUTEX(msm_v4l2_opencnt_lock);
+static int cnt;
 
 static int msm_v4l2_open(struct file *f)
 {
@@ -91,14 +92,30 @@ static int msm_v4l2_open(struct file *f)
 static int msm_v4l2_release(struct file *f)
 {
 	int rc = 0;
+	struct msm_ctrl_cmd *ctrlcmd;
 	D("%s\n", __func__);
+
 	mutex_lock(&msm_v4l2_opencnt_lock);
+	g_pmsm_v4l2_dev->opencnt--;
+
 	if (!g_pmsm_v4l2_dev->opencnt) {
-		g_pmsm_v4l2_dev->opencnt--;
-		if (!g_pmsm_v4l2_dev->opencnt) {
-			rc = g_pmsm_v4l2_dev->drv->release(
-					g_pmsm_v4l2_dev->drv->sync);
+		ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
+		if (!ctrlcmd) {
+			CDBG("msm_v4l2_ioctl: cannot allocate buffer\n");
+			mutex_unlock(&msm_v4l2_opencnt_lock);
+			return -ENOMEM;
 		}
+		ctrlcmd->length     = 0;
+		ctrlcmd->value      = NULL;
+		ctrlcmd->timeout_ms = 10000;
+		ctrlcmd->type = (unsigned short)V4L2_CAMERA_EXIT;
+
+		g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
+
+		rc = g_pmsm_v4l2_dev->drv->release(g_pmsm_v4l2_dev->drv->sync);
+		cnt = 0;
+
+		kfree(ctrlcmd);
 	}
 	mutex_unlock(&msm_v4l2_opencnt_lock);
 	return rc;
@@ -295,7 +312,6 @@ static int msm_v4l2_qbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 
 	struct msm_pmem_info meminfo;
 	struct msm_frame frame;
-	static int cnt;
 
 	if ((pb->flags >> 16) & 0x0001) {
 		/* this is for preview */
@@ -464,6 +480,7 @@ static int msm_v4l2_streamoff(struct file *f, void *pctx, enum v4l2_buf_type i)
 		g_pmsm_v4l2_dev->drv->sync,
 		ctrlcmd);
 
+	cnt = 0;
 	return 0;
 }
 
@@ -793,7 +810,7 @@ static void __exit msm_v4l2_exit(void)
 	g_pmsm_v4l2_dev = NULL;
 }
 
-module_init(msm_v4l2_init);
+late_initcall(msm_v4l2_init);
 module_exit(msm_v4l2_exit);
 
 MODULE_DESCRIPTION("MSM V4L2 driver");
