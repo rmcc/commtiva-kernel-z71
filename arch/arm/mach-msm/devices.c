@@ -90,7 +90,10 @@ struct platform_device msm_device_uart3 = {
 	.resource	= resources_uart3,
 };
 
-#if defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_UART1DM_PHYS      0xA3300000
+#define MSM_UART2DM_PHYS      0xA3200000
+#elif defined(CONFIG_ARCH_QSD8X50)
 #define MSM_UART1DM_PHYS      0xA0200000
 #define MSM_UART2DM_PHYS      0xA0900000
 #else

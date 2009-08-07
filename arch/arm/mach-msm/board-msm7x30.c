@@ -585,6 +585,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&msm_fb_device,
 	&msm_device_i2c,
+	&msm_device_uart_dm1,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
