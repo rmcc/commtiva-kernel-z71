@@ -396,12 +396,12 @@ int msm_irq_enter_sleep2(bool modem_wake, int from_idle)
 	pending[0] &= ~(1U << INT_A9_M2A_5);
 
 	for (i = 0; i < VIC_NUM_REGS; i++) {
-		if (pending[i])
-			if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_ABORT) {
+		if (pending[i]) {
+			if (msm_irq_debug_mask & IRQ_DEBUG_SLEEP_ABORT)
 				DPRINT_ARRAY(pending, "%s abort",
 						       __func__);
-				return -EAGAIN;
-			}
+			return -EAGAIN;
+		}
 	}
 
 	msm_irq_write_all_regs(VIC_INT_EN0, 0);
