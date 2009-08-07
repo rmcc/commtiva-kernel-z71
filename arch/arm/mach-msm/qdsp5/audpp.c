@@ -747,16 +747,24 @@ static ssize_t concurrency_store(struct device *dev,
 				 const char *buf, size_t count)
 {
 	struct audpp_state *audpp = &the_audpp_state;
+	unsigned long concurrency;
 	int rc = -1;
 	mutex_lock(audpp->lock_dec);
 	if (audpp->dec_inuse) {
 		pr_err("Can not change profile, while playback in progress\n");
 		goto done;
 	}
-	rc = strict_strtoul(buf, 10, &audpp->concurrency);
-	pr_debug("%s: Concurrency case %ld\n", __func__, audpp->concurrency);
-	if (!rc)
+	rc = strict_strtoul(buf, 10, &concurrency);
+	if (!rc &&
+		(concurrency < audpp->dec_database->num_concurrency_support)) {
+		audpp->concurrency = concurrency;
+		pr_debug("%s: Concurrency case %ld\n",
+				__func__, audpp->concurrency);
 		rc = count;
+	} else {
+		pr_err("%s: Not a valid Concurrency case\n", __func__);
+		rc = -EINVAL;
+	}
 done:
 	mutex_unlock(audpp->lock_dec);
 	return rc;
@@ -764,12 +772,12 @@ done:
 
 static ssize_t decoder_info_show(struct device *dev,
 				 struct device_attribute *attr, char *buf);
-struct device_attribute dev_attr_decoder[AUDPP_MAX_DECODER_CNT] = {
-	__ATTR(decoder0, S_IWUSR | S_IRUGO, decoder_info_show, NULL),
-	__ATTR(decoder1, S_IWUSR | S_IRUGO, decoder_info_show, NULL),
-	__ATTR(decoder2, S_IWUSR | S_IRUGO, decoder_info_show, NULL),
-	__ATTR(decoder3, S_IWUSR | S_IRUGO, decoder_info_show, NULL),
-	__ATTR(decoder4, S_IWUSR | S_IRUGO, decoder_info_show, NULL),
+static struct device_attribute dev_attr_decoder[AUDPP_MAX_DECODER_CNT] = {
+	__ATTR(decoder0, S_IRUGO, decoder_info_show, NULL),
+	__ATTR(decoder1, S_IRUGO, decoder_info_show, NULL),
+	__ATTR(decoder2, S_IRUGO, decoder_info_show, NULL),
+	__ATTR(decoder3, S_IRUGO, decoder_info_show, NULL),
+	__ATTR(decoder4, S_IRUGO, decoder_info_show, NULL),
 };
 
 static ssize_t decoder_info_show(struct device *dev,
@@ -787,7 +795,7 @@ static ssize_t decoder_info_show(struct device *dev,
 	return cpy_sz;
 }
 
-DEVICE_ATTR(concurrency, S_IWUSR | S_IRUGO, concurrency_show,
+static DEVICE_ATTR(concurrency, S_IWUSR | S_IRUGO, concurrency_show,
 	    concurrency_store);
 static int audpp_probe(struct platform_device *pdev)
 {
