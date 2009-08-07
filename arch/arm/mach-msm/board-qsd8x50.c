@@ -97,6 +97,7 @@
 #include "msm-keypad-devices.h"
 #include "pm.h"
 #include "smd_private.h"
+#include "proc_comm.h"
 
 #define TOUCHPAD_SUSPEND 	34
 #define TOUCHPAD_IRQ 		38
@@ -393,35 +394,29 @@ static int ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
 	return 0;
 }
 
-#define APPS_RESET                  (MSM_CLK_CTL_BASE + 0X214)
+#define CLKRGM_APPS_RESET_USBH      37
+#define CLKRGM_APPS_RESET_USB_PHY   34
 static void msm_hsusb_apps_reset_link(int reset)
 {
-	u32 temp;
+	unsigned usb_id = CLKRGM_APPS_RESET_USBH;
 
-	temp = readl(APPS_RESET);
 	if (reset)
-		temp |= USBH;
+		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
+				&usb_id, NULL);
 	else
-		temp &= ~USBH;
-	writel(temp, APPS_RESET);
+		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
+				&usb_id, NULL);
 }
 
 static void msm_hsusb_apps_reset_phy(void)
 {
-	u32 temp;
+	unsigned usb_phy_id = CLKRGM_APPS_RESET_USB_PHY;
 
-	/* assert reset */
-	temp = readl(APPS_RESET);
-	temp |= USB_PHY;
-	writel(temp, APPS_RESET);
-
+	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
+			&usb_phy_id, NULL);
 	msleep(1);
-
-	/* de-assert reset */
-	temp = readl(APPS_RESET);
-	temp &= ~USB_PHY;
-	writel(temp, APPS_RESET);
-
+	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
+			&usb_phy_id, NULL);
 }
 
 #define ULPI_VERIFY_MAX_LOOP_COUNT  3
