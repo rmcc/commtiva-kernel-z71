@@ -623,4 +623,21 @@ config MSM_SLEEP_TIME_OVERRIDE
 	  suspend. The feature is required for automated power management
 	  testing.
 
+choice
+	prompt "Power management timeout action"
+	default MSM_PM_TIMEOUT_HALT
+	help
+	  Selects the Application Processor's action when Power Management
+	  times out waiting for Modem's handshake.
+
+	config MSM_PM_TIMEOUT_HALT
+		bool "Halt the Application Processor"
+
+	config MSM_PM_TIMEOUT_RESET_MODEM
+		bool "Reset the Modem Processor"
+
+	config MSM_PM_TIMEOUT_RESET_CHIP
+		bool "Reset the entire chip"
+endchoice
+
 endif

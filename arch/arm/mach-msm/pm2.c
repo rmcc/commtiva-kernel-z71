@@ -383,14 +383,21 @@ static void msm_pm_config_hw_before_swfi(void)
 }
 
 /*
- * Reset the entire chip.
+ * Respond to timing out waiting for Modem
  *
  * NOTE: The function never returns.
  */
-static void msm_pm_reset_chip(void)
+static void msm_pm_timeout(void)
 {
+#if defined(CONFIG_MSM_PM_TIMEOUT_RESET_CHIP)
 	printk(KERN_EMERG "%s(): resetting chip\n", __func__);
 	msm_proc_comm(PCOM_RESET_CHIP_IMM, NULL, NULL);
+#elif defined(CONFIG_MSM_PM_TIMEOUT_RESET_MODEM)
+	printk(KERN_EMERG "%s(): resetting modem\n", __func__);
+	msm_proc_comm_reset_modem_now();
+#elif defined(CONFIG_MSM_PM_TIMEOUT_HALT)
+	printk(KERN_EMERG "%s(): halting\n", __func__);
+#endif
 	for (;;)
 		;
 }
@@ -927,7 +934,7 @@ static int msm_pm_power_collapse
 	if (ret < 0) {
 		printk(KERN_EMERG "%s(): power collapse entry "
 			"timed out waiting for Modem's response\n", __func__);
-		msm_pm_reset_chip();
+		msm_pm_timeout();
 	}
 
 	if (ret == 1) {
@@ -1050,7 +1057,7 @@ static int msm_pm_power_collapse
 	if (ret < 0) {
 		printk(KERN_EMERG "%s(): power collapse exit "
 			"timed out waiting for Modem's response\n", __func__);
-		msm_pm_reset_chip();
+		msm_pm_timeout();
 	}
 
 	if (ret == 1) {
@@ -1090,7 +1097,7 @@ static int msm_pm_power_collapse
 	if (ret < 0) {
 		printk(KERN_EMERG "%s(): power collapse WFPI "
 			"timed out waiting for Modem's response\n", __func__);
-		msm_pm_reset_chip();
+		msm_pm_timeout();
 	}
 
 	if (ret == 1) {
@@ -1145,7 +1152,7 @@ power_collapse_early_exit:
 	if (ret < 0) {
 		printk(KERN_EMERG "%s(): power collapse EARLY_EXIT "
 			"timed out waiting for Modem's response\n", __func__);
-		msm_pm_reset_chip();
+		msm_pm_timeout();
 	}
 
 	if (ret == 1) {

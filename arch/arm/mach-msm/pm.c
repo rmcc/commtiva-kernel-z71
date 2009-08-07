@@ -215,6 +215,26 @@ msm_pm_wait_state(uint32_t wait_state_all_set, uint32_t wait_state_all_clear,
 	return -ETIMEDOUT;
 }
 
+/*
+ * Respond to timing out waiting for Modem
+ *
+ * NOTE: The function never returns.
+ */
+static void msm_pm_timeout(void)
+{
+#if defined(CONFIG_MSM_PM_TIMEOUT_RESET_CHIP)
+	printk(KERN_EMERG "%s(): resetting chip\n", __func__);
+	msm_proc_comm(PCOM_RESET_CHIP_IMM, NULL, NULL);
+#elif defined(CONFIG_MSM_PM_TIMEOUT_RESET_MODEM)
+	printk(KERN_EMERG "%s(): resetting modem\n", __func__);
+	msm_proc_comm_reset_modem_now();
+#elif defined(CONFIG_MSM_PM_TIMEOUT_HALT)
+	printk(KERN_EMERG "%s(): halting\n", __func__);
+#endif
+	for (;;)
+		;
+}
+
 static int msm_sleep(int sleep_mode, uint32_t sleep_delay,
 	uint32_t sleep_limit, int from_idle)
 {
@@ -286,11 +306,8 @@ static int msm_sleep(int sleep_mode, uint32_t sleep_delay,
 		ret = msm_pm_wait_state(enter_wait_set, enter_wait_clear, 0, 0);
 		if (ret) {
 			printk(KERN_EMERG "msm_sleep(): power collapse entry "
-				"timed out waiting for Modem's response "
-				"-- resetting chip\n");
-			msm_proc_comm(PCOM_RESET_CHIP_IMM, NULL, NULL);
-			for (;;)
-				;
+				"timed out waiting for Modem's response\n");
+			msm_pm_timeout();
 		}
 	}
 	if (msm_irq_enter_sleep2(!!enter_state, from_idle))
@@ -396,11 +413,8 @@ enter_failed:
 		smsm_change_state(SMSM_APPS_STATE, enter_state, exit_state);
 		if (msm_pm_wait_state(exit_wait_set, exit_wait_clear, 0, 0)) {
 			printk(KERN_EMERG "msm_sleep(): power collapse exit "
-				"timed out waiting for Modem's response "
-				"-- resetting chip\n");
-			msm_proc_comm(PCOM_RESET_CHIP_IMM, NULL, NULL);
-			for (;;)
-				;
+				"timed out waiting for Modem's response\n");
+			msm_pm_timeout();
 		}
 		if (msm_pm_debug_mask & MSM_PM_DEBUG_STATE)
 			printk(KERN_INFO "msm_sleep(): sleep exit "
