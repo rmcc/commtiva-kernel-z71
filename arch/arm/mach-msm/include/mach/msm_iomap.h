@@ -78,7 +78,7 @@
 #if defined(CONFIG_ARCH_QSD8X50)
 #define MSM_GPIO1_PHYS        0xA9000000
 #elif defined(CONFIG_ARCH_MSM7X30)
-#define MSM_GPIO1_PHYS        0xABE00000
+#define MSM_GPIO1_PHYS        0xAC001000
 #else
 #define MSM_GPIO1_PHYS        0xA9200000
 #endif
@@ -87,7 +87,7 @@
 #define MSM_GPIO2_BASE        IOMEM(0xE0004000)
 
 #if defined(CONFIG_ARCH_MSM7X30)
-#define MSM_GPIO2_PHYS        0xABF00000
+#define MSM_GPIO2_PHYS        0xAC101000
 #elif defined(CONFIG_ARCH_QSD8X50)
 #define MSM_GPIO2_PHYS        0xA9100000
 #else
