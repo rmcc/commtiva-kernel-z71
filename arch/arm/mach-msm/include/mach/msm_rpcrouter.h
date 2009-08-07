@@ -36,6 +36,9 @@
 #define RPC_VERSION_MAJOR_MASK 0x0fff0000
 #define RPC_VERSION_MINOR_MASK 0x0000ffff
 
+/* callback ID for NULL callback function is -1 */
+#define MSM_RPC_CLIENT_NULL_CB_ID 0xffffffff
+
 struct msm_rpc_endpoint;
 
 struct rpcsvr_platform_device
