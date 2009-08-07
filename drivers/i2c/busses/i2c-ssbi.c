@@ -99,6 +99,20 @@
 #define SSBI_RD_REG_DATA_SHFT		(0x00)
 #define SSBI_RD_REG_DATA_MASK		(0xFF << SSBI_RD_REG_DATA_SHFT)
 
+/* SSBI_MODE2 fields */
+#define SSBI_MODE2_REG_ADDR_15_8_SHFT	0x04
+#define SSBI_MODE2_REG_ADDR_15_8_MASK	(0x7F << SSBI_MODE2_REG_ADDR_15_8_SHFT)
+#define SSBI_MODE2_ADDR_WIDTH_SHFT	0x01
+#define SSBI_MODE2_ADDR_WIDTH_MASK	(0x07 << SSBI_MODE2_ADDR_WIDTH_SHFT)
+#define SSBI_MODE2_SSBI2_MODE		0x00000001
+
+#define SSBI_MODE2_REG_ADDR_15_8(MD, AD) \
+	(((MD) & 0x0F) | ((((AD) >> 8) << SSBI_MODE2_REG_ADDR_15_8_SHFT) & \
+	SSBI_MODE2_REG_ADDR_15_8_MASK))
+
+#define SSBI_MODE2_ADDR_WIDTH(N) \
+	((((N) - 8) << SSBI_MODE2_ADDR_WIDTH_SHFT) & SSBI_MODE2_ADDR_WIDTH_MASK)
+
 #define SSBI_TIMEOUT_US			100
 
 #define SSBI_CMD_READ(AD) \
@@ -122,6 +136,7 @@ struct i2c_ssbi_dev {
 	size_t			 mem_size;
 	bool                     suspended;
 };
+
 
 static inline int
 i2c_ssbi_poll_for_device_ready(struct i2c_ssbi_dev *ssbi)
@@ -180,7 +195,13 @@ i2c_ssbi_read_bytes(struct i2c_ssbi_dev *ssbi, struct i2c_msg *msg)
 	int ret = 0;
 	u8 *buf = msg->buf;
 	u16 len = msg->len;
-	u32 read_cmd = SSBI_CMD_READ(msg->addr);
+	u16 addr = msg->addr;
+	u32 read_cmd = SSBI_CMD_READ(addr);
+	u32 mode2 = readl(ssbi->base + SSBI2_MODE2);
+
+	if (mode2 & SSBI_MODE2_SSBI2_MODE)
+		writel(SSBI_MODE2_REG_ADDR_15_8(mode2, addr),
+				ssbi->base + SSBI2_MODE2);
 
 	while (len) {
 		ret = i2c_ssbi_poll_for_device_ready(ssbi);
@@ -208,14 +229,19 @@ i2c_ssbi_write_bytes(struct i2c_ssbi_dev *ssbi, struct i2c_msg *msg)
 	int ret = 0;
 	u8 *buf = msg->buf;
 	u16 len = msg->len;
+	u16 addr = msg->addr;
+	u32 mode2 = readl(ssbi->base + SSBI2_MODE2);
+
+	if (mode2 & SSBI_MODE2_SSBI2_MODE)
+		writel(SSBI_MODE2_REG_ADDR_15_8(mode2, addr),
+				ssbi->base + SSBI2_MODE2);
 
 	while (len) {
 		ret = i2c_ssbi_poll_for_device_ready(ssbi);
 		if (ret)
 			goto write_failed;
 
-		writel(SSBI_CMD_WRITE(msg->addr, *buf++),
-				ssbi->base + SSBI2_CMD);
+		writel(SSBI_CMD_WRITE(addr, *buf++), ssbi->base + SSBI2_CMD);
 
 		ret = i2c_ssbi_poll_for_transfer_completed(ssbi);
 		if (ret)
@@ -279,7 +305,7 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 	ssbi = kzalloc(sizeof(struct i2c_ssbi_dev), GFP_KERNEL);
 	if (!ssbi) {
 		ret = -ENOMEM;
-		dev_dbg(&pdev->dev, "allocation failed\n");
+		dev_err(&pdev->dev, "allocation failed\n");
 		goto err_probe_exit;
 	}
 
@@ -287,6 +313,7 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 						IORESOURCE_MEM, "ssbi_base");
 	if (!ssbi_res) {
 		ret = -ENXIO;
+		dev_err(&pdev->dev, "get_resource_byname failed\n");
 		goto err_probe_res;
 	}
 
@@ -295,12 +322,15 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 	if (!request_mem_region(ssbi->mem_phys_addr, ssbi->mem_size,
 				SSBI_MSM_NAME)) {
 		ret = -ENXIO;
+		dev_err(&pdev->dev, "request_mem_region failed\n");
 		goto err_probe_reqmem;
 	}
 
 	ssbi->base = ioremap(ssbi->mem_phys_addr, ssbi->mem_size);
-	if (!ssbi->base)
+	if (!ssbi->base) {
+		dev_err(&pdev->dev, "ioremap failed\n");
 		goto err_probe_ioremap;
+	}
 
 	ssbi->dev = &pdev->dev;
 	ssbi->suspended = 0;
@@ -318,7 +348,6 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "i2c_add_numbered_adapter failed\n");
 		goto err_add_adapter_failed;
 	}
-
 	return 0;
 
 err_add_adapter_failed:
