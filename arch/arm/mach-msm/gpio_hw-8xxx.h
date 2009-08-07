@@ -57,7 +57,7 @@
 #define GPIO_IN_4          GPIO1_REG(0x5C)
 #define GPIO_IN_5          GPIO1_REG(0x60)
 #define GPIO_IN_6          GPIO1_REG(0x64)
-#define GPIO_IN_7          GPIO1_REG(0x6C)
+#define GPIO_IN_7          GPIO1_REG(0x68)
 
 /* same pin map as above, 1=edge 0=level interrup */
 #define GPIO_INT_EDGE_0    GPIO1_REG(0x70)
