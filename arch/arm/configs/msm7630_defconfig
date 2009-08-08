@@ -784,6 +784,7 @@ CONFIG_I2C_HELPER_AUTO=y
 #
 # CONFIG_I2C_GPIO is not set
 CONFIG_I2C_MSM=y
+# CONFIG_I2C_SSBI is not set
 # CONFIG_I2C_OCORES is not set
 # CONFIG_I2C_SIMTEC is not set
 
@@ -853,6 +854,7 @@ CONFIG_SSB_POSSIBLE=y
 # CONFIG_MFD_SM501 is not set
 # CONFIG_HTC_PASIC3 is not set
 # CONFIG_TWL4030_CORE is not set
+# CONFIG_MARIMBA_CORE is not set
 # CONFIG_MFD_TMIO is not set
 # CONFIG_MFD_T7L66XB is not set
 # CONFIG_MFD_TC6387XB is not set
