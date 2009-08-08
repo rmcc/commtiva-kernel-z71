@@ -133,6 +133,7 @@ struct msm_sync {
 	int  croplen;
 	uint32_t pict_pp;
 	struct mutex pict_pp_lock;
+	uint8_t pp_sync_flag;
 
 	const char *apps_id;
 
