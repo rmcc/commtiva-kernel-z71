@@ -66,6 +66,7 @@
 #include <linux/spi/spi.h>
 #include <linux/bma150.h>
 #include <linux/mfd/pmic8058.h>
+#include <linux/mfd/marimba.h>
 #include <linux/i2c.h>
 #include <linux/input.h>
 
@@ -533,6 +534,124 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("pmdh", &mddi_pdata);
 }
 
+#ifdef CONFIG_MSM_BT_POWER
+static struct platform_device msm_bt_power_device = {
+	.name = "bt_power",
+};
+
+enum {
+	BT_RFR,
+	BT_CTS,
+	BT_RX,
+	BT_TX,
+};
+
+static struct msm_gpio bt_config_power_on[] = {
+	{ GPIO_CFG(134, 1, GPIO_OUTPUT, GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_RFR" },
+	{ GPIO_CFG(135, 1, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_CTS" },
+	{ GPIO_CFG(136, 1, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_Rx" },
+	{ GPIO_CFG(137, 1, GPIO_OUTPUT, GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_Tx" }
+};
+static struct msm_gpio bt_config_power_off[] = {
+	{ GPIO_CFG(134, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_RFR" },
+	{ GPIO_CFG(135, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_CTS" },
+	{ GPIO_CFG(136, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_Rx" },
+	{ GPIO_CFG(137, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
+		"UART1DM_Tx" }
+};
+
+static int bluetooth_power(int on)
+{
+	int rc;
+	struct marimba config = { .mod_id = MARIMBA_SLAVE_ID_MARIMBA };
+	u8 bt_boot_config = 0x0b;
+	u8 xo_buffer = 0x02;
+	u8 rbias_ctl0 = 0x88;
+	u8 bt_ctl0 = 0x21;
+
+	if (on) {
+		rc = msm_gpios_enable(bt_config_power_on,
+				ARRAY_SIZE(bt_config_power_on));
+
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: gpio config failed: %d\n",
+				rc);
+			return rc;
+		}
+
+		rc = marimba_write_bit_mask(&config, 0xe5, &bt_boot_config, 1,
+				bt_boot_config);
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: boot config failed: %d\n",
+				rc);
+			return rc;
+		}
+		rc = marimba_write_bit_mask(&config, 0x05, &xo_buffer, 1,
+				xo_buffer);
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: xo config failed: %d\n",
+				rc);
+			return rc;
+		}
+		rc = marimba_write_bit_mask(&config, 0x06, &rbias_ctl0, 1,
+				rbias_ctl0);
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: rbias config failed: %d\n",
+				rc);
+			return rc;
+		}
+		rc = marimba_write_bit_mask(&config, 0xe7, &bt_ctl0, 1,
+				bt_ctl0);
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: reset failed: %d\n",
+				rc);
+			return rc;
+		}
+
+	} else {
+		rc = marimba_write_bit_mask(&config, 0xe7, 0, 1, bt_ctl0);
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: reset failed: %d\n",
+				rc);
+			return rc;
+		}
+
+		rc = msm_gpios_enable(bt_config_power_off,
+					ARRAY_SIZE(bt_config_power_off));
+		if (rc) {
+			printk(KERN_ERR
+				"Bluetooth power: gpio config failed: %d\n",
+				rc);
+			return rc;
+		}
+	}
+
+	printk(KERN_DEBUG "Bluetooth power switch: %d\n", on);
+
+	return 0;
+}
+
+static void __init bt_power_init(void)
+{
+	msm_bt_power_device.dev.platform_data = &bluetooth_power;
+}
+#else
+#define bt_power_init(x) do {} while (0)
+#endif
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&smc91x_device,
@@ -548,6 +667,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&msm_device_uart_dm1,
 	&hs_device,
+#ifdef CONFIG_MSM_BT_POWER
+	&msm_bt_power_device,
+#endif
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -791,6 +913,7 @@ static void __init msm7x30_init(void)
 	buses_init();
 
 	platform_device_register(&surf_keypad_device);
+	bt_power_init();
 }
 
 static void __init msm7x30_allocate_memory_regions(void)
