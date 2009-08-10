@@ -886,7 +886,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.sensor_pwd     = 85,
 	.vcm_pwd        = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_NONE
+	.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -904,7 +904,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.sensor_pwd     = 85,
 	.vcm_pwd        = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_NONE
+	.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -922,7 +922,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.sensor_pwd     = 85,
 	.vcm_pwd        = 88,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_NONE
+	.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -940,7 +940,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_pwd     = 85,
 	.vcm_pwd        = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_NONE
+	.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {
@@ -958,7 +958,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_vb6801_data = {
 	.sensor_pwd     = 88,
 	.vcm_pwd        = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_NONE
+	.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_vb6801 = {
