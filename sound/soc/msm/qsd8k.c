@@ -367,6 +367,15 @@ static int __init qsd_audio_init(void)
 	mutex_init(&the_locks.mixer_lock);
 	init_waitqueue_head(&the_locks.eos_wait);
 
+	qsd_glb_ctl.tx_volume = 100;
+	qsd_glb_ctl.rx_volume = 100;
+	qsd_glb_ctl.strm_volume = 100;
+	qsd_glb_ctl.playback_device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
+	qsd_glb_ctl.capture_device = CAD_HW_DEVICE_ID_HANDSET_MIC;
+	qsd_glb_ctl.tx_mute = 0;
+	qsd_glb_ctl.rx_mute = 0;
+	qsd_glb_ctl.update = 0;
+
 	return ret;
 }
 
