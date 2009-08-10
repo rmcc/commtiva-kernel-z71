@@ -1570,7 +1570,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
 	&msm_device_i2c,
 	&qsd_device_spi,
-	&msm_device_hsusb_otg,
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 	&msm_device_tssc,
@@ -1617,10 +1616,11 @@ static void kgsl_phys_memory_init(void)
 
 static void __init qsd8x50_init_host(void)
 {
-	msm_add_host(0, &msm_hsusb_pdata);
-#ifdef CONFIG_USB_FS_HOST
 	if (machine_is_qsd8x50_ffa())
 		return;
+	platform_device_register(&msm_device_hsusb_otg);
+	msm_add_host(0, &msm_hsusb_pdata);
+#ifdef CONFIG_USB_FS_HOST
 	if (fsusb_gpio_init())
 		return;
 	msm_add_host(1, &msm_hsusb_pdata);
