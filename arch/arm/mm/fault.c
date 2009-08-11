@@ -524,11 +524,9 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 	do_translation_fault(addr, 0, regs);
 
 	/*
-	 * Normal handling does not verifiy execution permision.  If
-	 * instruction fault status is a permission fault verify execution
-	 * priviledges. (IFSR & 0x80D) == 0x00D is a permission error.
+	 * Handle execution permission fault
 	 */
-	if ((ifsr & 0x80D) == 0x00D) {
+	if ((ifsr & 0x40D) == 0x00D) {
 		vma = find_vma(current->mm, addr);
 		if (vma && !(vma->vm_flags & VM_EXEC)) {
 			info.si_signo = SIGSEGV;
