@@ -79,6 +79,18 @@
 #include "msm_fb.h"
 #include "mddihost.h"
 
+#ifdef CONFIG_FB_MSM_MDP40
+#define MDP_SYNC_CFG_0		0x100
+#define MDP_SYNC_STATUS_0	0x10c
+#define MDP_PRIM_VSYNC_OUT_CTRL	0x118
+#define MDP_PRIM_VSYNC_INIT_VAL	0x128
+#else
+#define MDP_SYNC_CFG_0		0x300
+#define MDP_SYNC_STATUS_0	0x30c
+#define MDP_PRIM_VSYNC_OUT_CTRL	0x318
+#define MDP_PRIM_VSYNC_INIT_VAL	0x328
+#endif
+
 extern mddi_lcd_type mddi_lcd_idx;
 extern spinlock_t mdp_spin_lock;
 extern struct workqueue_struct *mdp_vsync_wq;
@@ -144,7 +156,7 @@ static void mdp_vsync_handler(void *data)
 	if (mfd->use_mdp_vsync) {
 #ifdef MDP_HW_VSYNC
 		if (mfd->panel_power_on)
-			MDP_OUTP(MDP_BASE + 0x30c, vsync_load_cnt);
+			MDP_OUTP(MDP_BASE + MDP_SYNC_STATUS_0, vsync_load_cnt);
 
 		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, TRUE);
 #endif
@@ -178,7 +190,7 @@ static void mdp_set_sync_cfg_0(struct msm_fb_data_type *mfd, int vsync_cnt)
 		cfg |= MDP_SYNCFG_VSYNC_EXT_EN;
 	cfg |= (MDP_SYNCFG_VSYNC_INT_EN | vsync_cnt);
 
-	MDP_OUTP(MDP_BASE + 0x300, cfg);
+	MDP_OUTP(MDP_BASE + MDP_SYNC_CFG_0, cfg);
 }
 #endif
 
@@ -247,10 +259,16 @@ void mdp_config_vsync(struct msm_fb_data_type *mfd)
 				vsync_load_cnt = mfd->panel_info.yres
 
 				/* line counter init value at the next pulse */
-				MDP_OUTP(MDP_BASE + 0x328, vsync_load_cnt);
+				MDP_OUTP(MDP_BASE + MDP_PRIM_VSYNC_INIT_VAL,
+							vsync_load_cnt);
 
-		/* external vsync source pulse width and polarity flip */
-				MDP_OUTP(MDP_BASE + 0x318, BIT(30) | BIT(0));
+				/*
+				 * external vsync source pulse width and
+				 * polarity flip
+				 */
+				MDP_OUTP(MDP_BASE + MDP_PRIM_VSYN_OUT_CTRL,
+							BIT(30) | BIT(0));
+
 
 				/* threshold */
 				MDP_OUTP(MDP_BASE + 0x200,

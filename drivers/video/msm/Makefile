@@ -10,12 +10,18 @@ endif
 
 # MDP
 obj-y += mdp.o
+
+ifeq ($(CONFIG_FB_MSM_MDP40),y)
+obj-y += mdp4_util.o
+obj-$(CONFIG_DEBUG_FS) += mdp4_debugfs.o
+else
 obj-y += mdp_hw_init.o
 obj-y += mdp_ppp.o
 ifeq ($(CONFIG_FB_MSM_MDP31),y)
 obj-y += mdp_ppp_v31.o
 else
 obj-y += mdp_ppp_v20.o
+endif
 endif
 obj-y += mdp_dma.o
 obj-y += mdp_dma_s.o

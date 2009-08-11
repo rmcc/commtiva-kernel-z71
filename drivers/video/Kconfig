@@ -2171,7 +2171,15 @@ config FB_MSM_MDP31
 	---help---
 	  Support for MSM MDP HW revision 3.1
 	  Say Y here if this is msm8x50 variant platform.
+
+config FB_MSM_MDP40
+	select FB_MSM_LCDC_HW
+	bool "MDP HW ver4.0"
+	---help---
+	  Support for MSM MDP HW revision 4.0
+	  Say Y here if this is msm7x30 variant platform.
 endchoice
+
 
 config FB_MSM_EBI2
 	bool
@@ -2310,12 +2318,12 @@ choice
 	depends on  FB_MSM_MDP31
 	default FB_MSM_SECONDARY_PANEL_NONE
 
-config FB_MSM_LCDC_EXTERNAL_WXGA
+config FB_MSM_LCDC_EXTERNAL_SVGA
 	depends on FB_MSM_MDP31
-	bool "External WXGA on LCDC"
+	bool "External SVGA on LCDC"
 	select FB_MSM_LCDC_PANEL
 	---help---
-	  Support for external WXGA display (1280x720)
+	  Support for external SVGA display (1280x720)
 
 config FB_MSM_SECONDARY_PANEL_NONE
 	bool "NONE"
