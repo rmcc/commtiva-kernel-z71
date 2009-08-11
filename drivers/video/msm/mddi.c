@@ -176,8 +176,8 @@ static int mddi_probe(struct platform_device *pdev)
 		size =  resource_size(&pdev->resource[0]);
 		msm_pmdh_base =  ioremap(pdev->resource[0].start, size);
 
-		MSM_FB_INFO("primary mddi base address = 0x%x\n",
-				pdev->resource[0].start);
+		MSM_FB_INFO("primary mddi base phy_addr = 0x%x virt = 0x%x\n",
+				pdev->resource[0].start, (int) msm_pmdh_base);
 
 		if (unlikely(!msm_pmdh_base))
 			return -ENOMEM;
@@ -204,15 +204,15 @@ static int mddi_probe(struct platform_device *pdev)
 	if (!mdp_dev)
 		return -ENOMEM;
 
-	/////////////////////////////////////////
-	// link to the latest pdev
-	/////////////////////////////////////////
+	/*
+	 * link to the latest pdev
+	 */
 	mfd->pdev = mdp_dev;
 	mfd->dest = DISPLAY_LCD;
 
-	/////////////////////////////////////////
-	// alloc panel device data
-	/////////////////////////////////////////
+	/*
+	 * alloc panel device data
+	 */
 	if (platform_device_add_data
 	    (mdp_dev, pdev->dev.platform_data,
 	     sizeof(struct msm_fb_panel_data))) {
@@ -220,17 +220,17 @@ static int mddi_probe(struct platform_device *pdev)
 		platform_device_put(mdp_dev);
 		return -ENOMEM;
 	}
-	/////////////////////////////////////////
-	// data chain
-	/////////////////////////////////////////
+	/*
+	 * data chain
+	 */
 	pdata = mdp_dev->dev.platform_data;
 	pdata->on = mddi_on;
 	pdata->off = mddi_off;
 	pdata->next = pdev;
 
-	/////////////////////////////////////////
-	// get/set panel specific fb info
-	/////////////////////////////////////////
+	/*
+	 * get/set panel specific fb info
+	 */
 	mfd->panel_info = pdata->panel_info;
 	mfd->fb_imgType = MDP_RGB_565;
 
@@ -246,14 +246,14 @@ static int mddi_probe(struct platform_device *pdev)
 		printk(KERN_ERR "%s: clk_set_max_rate failed\n", __func__);
 	mfd->panel_info.clk_rate = mfd->panel_info.clk_min;
 
-	/////////////////////////////////////////
-	// set driver data
-	/////////////////////////////////////////
+	/*
+	 * set driver data
+	 */
 	platform_set_drvdata(mdp_dev, mfd);
 
-	/////////////////////////////////////////
-	// register in mdp driver
-	/////////////////////////////////////////
+	/*
+	 * register in mdp driver
+	 */
 	rc = platform_device_add(mdp_dev);
 	if (rc)
 		goto mddi_probe_err;
@@ -387,6 +387,7 @@ static int __init mddi_driver_init(void)
 		printk(KERN_ERR "mddi_register_driver() failed!\n");
 		return ret;
 	}
+
 	mddi_init();
 
 	return ret;

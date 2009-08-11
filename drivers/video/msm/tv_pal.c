@@ -96,14 +96,15 @@ static int pal_on(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 
-	TV_OUT(TV_ENC_CTL, 0);	//disable TV encoder
+	TV_OUT(TV_ENC_CTL, 0);	/* disable TV encoder */
 
 	switch (mfd->panel.id) {
 	case PAL_BDGHIN:
-		TV_OUT(TV_GAIN, 0x0088c1a0);	// Cr gain 11, Cb gain C6, y_gain 97
+		/* Cr gain 11, Cb gain C6, y_gain 97 */
+		TV_OUT(TV_GAIN, 0x0088c1a0);
 		TV_OUT(TV_CGMS, 0x00012345);
 		TV_OUT(TV_TEST_MUX, 0x0);
-		//  PAL Timing
+		/*  PAL Timing */
 		TV_OUT(TV_SYNC_1, 0x00180097);
 		TV_OUT(TV_SYNC_2, 0x011f06c0);
 		TV_OUT(TV_SYNC_3, 0x0005000a);
@@ -122,11 +123,12 @@ static int pal_on(struct platform_device *pdev)
 		reg |= TVENC_CTL_TV_MODE_PAL_BDGHIN;
 		break;
 	case PAL_M:
-		TV_OUT(TV_GAIN, 0x0081b697);	// Cr gain 11, Cb gain C6, y_gain 97
+		/* Cr gain 11, Cb gain C6, y_gain 97 */
+		TV_OUT(TV_GAIN, 0x0081b697);
 		TV_OUT(TV_CGMS, 0x000af317);
 		TV_OUT(TV_TEST_MUX, 0x000001c3);
 		TV_OUT(TV_TEST_MODE, 0x00000002);
-		//  PAL Timing
+		/*  PAL Timing */
 		TV_OUT(TV_SYNC_1, 0x0020009e);
 		TV_OUT(TV_SYNC_2, 0x011306b4);
 		TV_OUT(TV_SYNC_3, 0x0006000c);
@@ -145,11 +147,12 @@ static int pal_on(struct platform_device *pdev)
 		reg |= TVENC_CTL_TV_MODE_PAL_M;
 		break;
 	case PAL_N:
-		TV_OUT(TV_GAIN, 0x0081b697);	// Cr gain 11, Cb gain C6, y_gain 97
+		/* Cr gain 11, Cb gain C6, y_gain 97 */
+		TV_OUT(TV_GAIN, 0x0081b697);
 		TV_OUT(TV_CGMS, 0x000af317);
 		TV_OUT(TV_TEST_MUX, 0x000001c3);
 		TV_OUT(TV_TEST_MODE, 0x00000002);
-		//  PAL Timing
+		/*  PAL Timing */
 		TV_OUT(TV_SYNC_1, 0x00180097);
 		TV_OUT(TV_SYNC_2, 0x12006c0);
 		TV_OUT(TV_SYNC_3, 0x0005000a);
@@ -176,7 +179,7 @@ static int pal_on(struct platform_device *pdev)
 	    TVENC_CTL_CR_FILTER_EN |
 	    TVENC_CTL_CB_FILTER_EN | TVENC_CTL_SINX_FILTER_EN;
 
-	TV_OUT(TV_LEVEL, 0x00000000);	// DC offset to 0.
+	TV_OUT(TV_LEVEL, 0x00000000);	/* DC offset to 0. */
 	TV_OUT(TV_OFFSET, 0x008080f0);
 
 #ifdef CONFIG_FB_MSM_MDP31
@@ -192,7 +195,7 @@ static int pal_on(struct platform_device *pdev)
 
 static int pal_off(struct platform_device *pdev)
 {
-	TV_OUT(TV_ENC_CTL, 0);	// disable TV encoder
+	TV_OUT(TV_ENC_CTL, 0);	/* disable TV encoder */
 	return 0;
 }
 

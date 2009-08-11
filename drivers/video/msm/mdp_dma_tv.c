@@ -97,7 +97,7 @@ int mdp_dma3_on(struct platform_device *pdev)
 		return -EINVAL;
 
 	fbi = mfd->fbi;
-	// MDP cmd block enable
+	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
 	bpp = fbi->var.bits_per_pixel / 8;
@@ -105,22 +105,22 @@ int mdp_dma3_on(struct platform_device *pdev)
 	buf +=
 	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
 
-	// starting address[31..8] of Video frame buffer is CS0
+	/* starting address[31..8] of Video frame buffer is CS0 */
 	MDP_OUTP(MDP_BASE + 0xC0008, (uint32) buf >> 3);
 
 	mdp_pipe_ctrl(MDP_DMA3_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
-	MDP_OUTP(MDP_BASE + 0xC0004, 0x4c60674);	//flicker filter enabled
-	MDP_OUTP(MDP_BASE + 0xC0010, 0x20);	//sobel treshold
+	MDP_OUTP(MDP_BASE + 0xC0004, 0x4c60674); /* flicker filter enabled */
+	MDP_OUTP(MDP_BASE + 0xC0010, 0x20);	/* sobel treshold */
 
-	MDP_OUTP(MDP_BASE + 0xC0018, 0xeb0010);	//Y  Max, Y  min
-	MDP_OUTP(MDP_BASE + 0xC001C, 0xf00010);	// Cb Max, Cb min
-	MDP_OUTP(MDP_BASE + 0xC0020, 0xf00010);	// Cb Max, Cb min
+	MDP_OUTP(MDP_BASE + 0xC0018, 0xeb0010);	/* Y  Max, Y  min */
+	MDP_OUTP(MDP_BASE + 0xC001C, 0xf00010);	/* Cb Max, Cb min */
+	MDP_OUTP(MDP_BASE + 0xC0020, 0xf00010);	/* Cb Max, Cb min */
 
-	MDP_OUTP(MDP_BASE + 0xC000C, 0x67686970);	//add a few chars for CC
-	MDP_OUTP(MDP_BASE + 0xC0000, 0x1);	//MDP tv out enable
+	MDP_OUTP(MDP_BASE + 0xC000C, 0x67686970); /* add a few chars for CC */
+	MDP_OUTP(MDP_BASE + 0xC0000, 0x1);	/* MDP tv out enable */
 
-	// MDP cmd block disable
+	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	ret = panel_next_on(pdev);
@@ -136,15 +136,15 @@ int mdp_dma3_off(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	// MDP cmd block enable
+	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	MDP_OUTP(MDP_BASE + 0xC0000, 0x0);
-	// MDP cmd block disable
+	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	mdp_pipe_ctrl(MDP_DMA3_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
-	// delay to make sure the last frame finishes
+	/* delay to make sure the last frame finishes */
 	mdelay(100);
 
 	return ret;
@@ -163,15 +163,15 @@ void mdp_dma3_update(struct msm_fb_data_type *mfd)
 	INIT_COMPLETION(mfd->dma->comp);
 	mfd->dma->waiting = TRUE;
 
-	// no need to power on cmd block since dma3 is running
+	/* no need to power on cmd block since dma3 is running */
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
 	buf +=
 	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
-	// let's enable TV out interrupt
-	// starting address[31..8] of Video frame buffer is CS0
+	/* let's enable TV out interrupt */
+	/* starting address[31..8] of Video frame buffer is CS0 */
 	MDP_OUTP(MDP_BASE + 0xC0008, (uint32) buf >> 3);
 
 	mdp_intr_mask |= TV_OUT_DMA3_START;

@@ -119,10 +119,12 @@ do { \
 	readl((u32)msm_emdh_base + MDDI_##reg) & (mask) : \
 	readl((u32)msm_pmdh_base + MDDI_##reg) & (mask)) \
 
-// Using non-cacheable pmem, so do nothing
+/* Using non-cacheable pmem, so do nothing */
 #define mddi_invalidate_cache_lines(addr_start, num_bytes)
-// Using non-cacheable pmem, so do nothing with cache
-// but, ensure write goes out to memory
+/*
+ * Using non-cacheable pmem, so do nothing with cache
+ * but, ensure write goes out to memory
+ */
 #define mddi_flush_cache_lines(addr_start, num_bytes)  \
     (void) addr_start; \
     (void) num_bytes;  \
@@ -386,7 +388,7 @@ typedef union GCC_PACKED {
 	mddi_register_access_packet_type register_pkt;
 	/* add 48 byte pad to ensure 64 byte llist struct, that can be
 	 * manipulated easily with cache */
-	uint32 alignment_pad[12];	// 48 bytes
+	uint32 alignment_pad[12];	/* 48 bytes */
 } mddi_packet_header_type;
 
 typedef struct GCC_PACKED mddi_host_llist_struct {

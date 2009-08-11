@@ -73,7 +73,7 @@
 #include <asm/system.h>
 #include <asm/mach-types.h>
 
-//#define TMD20QVGA_LCD_18BPP
+/* #define TMD20QVGA_LCD_18BPP */
 #define QVGA_WIDTH        240
 #define QVGA_HEIGHT       320
 
@@ -134,123 +134,128 @@ static void *DISP_DATA_PORT;
 
 #define WAIT_MSEC(msec) mdelay(msec)
 
-/*---------------------------------------------------------------------------
-*                  TMD QVGA Address
-*--------------------------------------------------------------------------*/
-//Display Control
-#define DISP_START_OSCILLATION_ADDR     0x000	//Start Oscillation
+/*
+ * TMD QVGA Address
+ */
+/* Display Control */
+#define DISP_START_OSCILLATION_ADDR     0x000
 DISP_REG(DISP_START_OSCILLATION_ADDR)
-#define DISP_DRIVER_OUTPUT_CTL_ADDR     0x001	//Driver Output Control
+#define DISP_DRIVER_OUTPUT_CTL_ADDR     0x001
     DISP_REG(DISP_DRIVER_OUTPUT_CTL_ADDR)
-#define DISP_LCD_DRIVING_SIG_ADDR     0x002	//LCD driving signal setting
+#define DISP_LCD_DRIVING_SIG_ADDR     0x002
     DISP_REG(DISP_LCD_DRIVING_SIG_ADDR)
-#define DISP_ENTRY_MODE_ADDR            0x003	//Entry Mode
+#define DISP_ENTRY_MODE_ADDR            0x003
     DISP_REG(DISP_ENTRY_MODE_ADDR)
-#define DISP_DISPLAY_CTL_1_ADDR         0x007	//Display Control (1)
+#define DISP_DISPLAY_CTL_1_ADDR         0x007
     DISP_REG(DISP_DISPLAY_CTL_1_ADDR)
-#define DISP_DISPLAY_CTL_2_ADDR         0x008	//Display Control (2)
+#define DISP_DISPLAY_CTL_2_ADDR         0x008
     DISP_REG(DISP_DISPLAY_CTL_2_ADDR)
 
 /* DISPLAY MODE 0x009 partial display not supported */
-#define DISP_POWER_SUPPLY_INTF_ADDR     0x00A	//Power Supply IC Interface Control
+#define DISP_POWER_SUPPLY_INTF_ADDR     0x00A
     DISP_REG(DISP_POWER_SUPPLY_INTF_ADDR)
 
 /* DISPLAY MODE 0x00B xZoom feature is not supported */
-#define DISP_EXT_DISPLAY_CTL_1_ADDR     0x00C	//External Display Interface Control (1)
+#define DISP_EXT_DISPLAY_CTL_1_ADDR     0x00C
     DISP_REG(DISP_EXT_DISPLAY_CTL_1_ADDR)
-#define DISP_FRAME_CYCLE_CTL_ADDR       0x00D	//Frame Frequency Adjustment Control
+
+#define DISP_FRAME_CYCLE_CTL_ADDR       0x00D
     DISP_REG(DISP_FRAME_CYCLE_CTL_ADDR)
-#define DISP_EXT_DISPLAY_CTL_2_ADDR     0x00E	//External Display Interface Control (2)
+
+#define DISP_EXT_DISPLAY_CTL_2_ADDR     0x00E
     DISP_REG(DISP_EXT_DISPLAY_CTL_2_ADDR)
-#define DISP_EXT_DISPLAY_CTL_3_ADDR     0x00F	//External Display Interface Control (3)
+
+#define DISP_EXT_DISPLAY_CTL_3_ADDR     0x00F
     DISP_REG(DISP_EXT_DISPLAY_CTL_3_ADDR)
-#define DISP_LTPS_CTL_1_ADDR            0x012	//LTPS Interface Control (1)
+
+#define DISP_LTPS_CTL_1_ADDR            0x012
     DISP_REG(DISP_LTPS_CTL_1_ADDR)
-#define DISP_LTPS_CTL_2_ADDR            0x013	//LTPS Interface Control (2)
+#define DISP_LTPS_CTL_2_ADDR            0x013
     DISP_REG(DISP_LTPS_CTL_2_ADDR)
-#define DISP_LTPS_CTL_3_ADDR            0x014	//LTPS Interface Control (3)
+#define DISP_LTPS_CTL_3_ADDR            0x014
     DISP_REG(DISP_LTPS_CTL_3_ADDR)
-#define DISP_LTPS_CTL_4_ADDR            0x018	//LTPS Interface Control (4)
+#define DISP_LTPS_CTL_4_ADDR            0x018
     DISP_REG(DISP_LTPS_CTL_4_ADDR)
-#define DISP_LTPS_CTL_5_ADDR            0x019	//LTPS Interface Control (5)
+#define DISP_LTPS_CTL_5_ADDR            0x019
     DISP_REG(DISP_LTPS_CTL_5_ADDR)
-#define DISP_LTPS_CTL_6_ADDR            0x01A	//LTPS Interface Control (6)
+#define DISP_LTPS_CTL_6_ADDR            0x01A
     DISP_REG(DISP_LTPS_CTL_6_ADDR)
-#define DISP_AMP_SETTING_ADDR           0x01C	//AMPLIFY Setting
+#define DISP_AMP_SETTING_ADDR           0x01C
     DISP_REG(DISP_AMP_SETTING_ADDR)
-#define DISP_MODE_SETTING_ADDR          0x01D	//Mode Setting
+#define DISP_MODE_SETTING_ADDR          0x01D
     DISP_REG(DISP_MODE_SETTING_ADDR)
-#define DISP_POFF_LN_SETTING_ADDR       0x01E	//Power Off Setting
+#define DISP_POFF_LN_SETTING_ADDR       0x01E
     DISP_REG(DISP_POFF_LN_SETTING_ADDR)
-//Power Contol
-#define DISP_POWER_CTL_1_ADDR           0x100	//Power Control (1)
+/* Power Contol */
+#define DISP_POWER_CTL_1_ADDR           0x100
     DISP_REG(DISP_POWER_CTL_1_ADDR)
-#define DISP_POWER_CTL_2_ADDR           0x101	//Power Control (2)
+#define DISP_POWER_CTL_2_ADDR           0x101
     DISP_REG(DISP_POWER_CTL_2_ADDR)
-#define DISP_POWER_CTL_3_ADDR           0x102	//Power Control (3)
+#define DISP_POWER_CTL_3_ADDR           0x102
     DISP_REG(DISP_POWER_CTL_3_ADDR)
-#define DISP_POWER_CTL_4_ADDR           0x103	//Power Control (4)
+#define DISP_POWER_CTL_4_ADDR           0x103
     DISP_REG(DISP_POWER_CTL_4_ADDR)
-#define DISP_POWER_CTL_5_ADDR           0x104	//Power Control (5)
+#define DISP_POWER_CTL_5_ADDR           0x104
     DISP_REG(DISP_POWER_CTL_5_ADDR)
-#define DISP_POWER_CTL_6_ADDR           0x105	//Power Control (6)
+#define DISP_POWER_CTL_6_ADDR           0x105
     DISP_REG(DISP_POWER_CTL_6_ADDR)
-#define DISP_POWER_CTL_7_ADDR           0x106	//Power Control (6)
+#define DISP_POWER_CTL_7_ADDR           0x106
     DISP_REG(DISP_POWER_CTL_7_ADDR)
-//RAM Access
-#define DISP_RAM_ADDR_SET_1_ADDR        0x200	//RAM Address Set (1)
+/* RAM Access */
+#define DISP_RAM_ADDR_SET_1_ADDR        0x200
     DISP_REG(DISP_RAM_ADDR_SET_1_ADDR)
-#define DISP_RAM_ADDR_SET_2_ADDR        0x201	//RAM Address Set (2)
+#define DISP_RAM_ADDR_SET_2_ADDR        0x201
     DISP_REG(DISP_RAM_ADDR_SET_2_ADDR)
-#define DISP_CMD_RAMRD                  DISP_CMD_RAMWR	//RAM Data Read
-#define DISP_CMD_RAMWR                  0x202	//RAM Data Write
+#define DISP_CMD_RAMRD                  DISP_CMD_RAMWR
+#define DISP_CMD_RAMWR                  0x202
     DISP_REG(DISP_CMD_RAMWR)
-#define DISP_RAM_DATA_MASK_1_ADDR       0x203	//RAM Write Data Mask (1)
+#define DISP_RAM_DATA_MASK_1_ADDR       0x203
     DISP_REG(DISP_RAM_DATA_MASK_1_ADDR)
-#define DISP_RAM_DATA_MASK_2_ADDR       0x204	//RAM Write Data Mask (2)
+#define DISP_RAM_DATA_MASK_2_ADDR       0x204
     DISP_REG(DISP_RAM_DATA_MASK_2_ADDR)
-//Gamma Control / Contrast / Gray Scale Setting
-#define DISP_GAMMA_CONTROL_1_ADDR       0x300	//Gamma Control (1)
+/* Gamma Control, Contrast, Gray Scale Setting */
+#define DISP_GAMMA_CONTROL_1_ADDR       0x300
     DISP_REG(DISP_GAMMA_CONTROL_1_ADDR)
-#define DISP_GAMMA_CONTROL_2_ADDR       0x301	//Gamma Control (2)
+#define DISP_GAMMA_CONTROL_2_ADDR       0x301
     DISP_REG(DISP_GAMMA_CONTROL_2_ADDR)
-#define DISP_GAMMA_CONTROL_3_ADDR       0x302	//Gamma Control (3)
+#define DISP_GAMMA_CONTROL_3_ADDR       0x302
     DISP_REG(DISP_GAMMA_CONTROL_3_ADDR)
-#define DISP_GAMMA_CONTROL_4_ADDR       0x303	//Gamma Control (4)
+#define DISP_GAMMA_CONTROL_4_ADDR       0x303
     DISP_REG(DISP_GAMMA_CONTROL_4_ADDR)
-#define DISP_GAMMA_CONTROL_5_ADDR       0x304	//Gamma Control (5)
+#define DISP_GAMMA_CONTROL_5_ADDR       0x304
     DISP_REG(DISP_GAMMA_CONTROL_5_ADDR)
-//Coordinate Control
-#define DISP_VERT_SCROLL_CTL_1_ADDR     0x400	//Vertical Scroll Control (1)
+/* Coordinate Control */
+#define DISP_VERT_SCROLL_CTL_1_ADDR     0x400
     DISP_REG(DISP_VERT_SCROLL_CTL_1_ADDR)
-#define DISP_VERT_SCROLL_CTL_2_ADDR     0x401	//Vertical Scroll Control (2)
+#define DISP_VERT_SCROLL_CTL_2_ADDR     0x401
     DISP_REG(DISP_VERT_SCROLL_CTL_2_ADDR)
-#define DISP_SCREEN_1_DRV_POS_1_ADDR    0x402	//First Screen Driving Position (1)
+#define DISP_SCREEN_1_DRV_POS_1_ADDR    0x402
     DISP_REG(DISP_SCREEN_1_DRV_POS_1_ADDR)
-#define DISP_SCREEN_1_DRV_POS_2_ADDR    0x403	//First Screen Driving Position (2)
+#define DISP_SCREEN_1_DRV_POS_2_ADDR    0x403
     DISP_REG(DISP_SCREEN_1_DRV_POS_2_ADDR)
-#define DISP_SCREEN_2_DRV_POS_1_ADDR    0x404	//Second Screen Driving Position (1)
+#define DISP_SCREEN_2_DRV_POS_1_ADDR    0x404
     DISP_REG(DISP_SCREEN_2_DRV_POS_1_ADDR)
-#define DISP_SCREEN_2_DRV_POS_2_ADDR    0x405	//Second Screen Driving Position (2)
+#define DISP_SCREEN_2_DRV_POS_2_ADDR    0x405
     DISP_REG(DISP_SCREEN_2_DRV_POS_2_ADDR)
-#define DISP_HORZ_RAM_ADDR_POS_1_ADDR   0x406	//Horizontal RAM Address Position (1)
+#define DISP_HORZ_RAM_ADDR_POS_1_ADDR   0x406
     DISP_REG(DISP_HORZ_RAM_ADDR_POS_1_ADDR)
-#define DISP_HORZ_RAM_ADDR_POS_2_ADDR   0x407	//Horizontal RAM Address Position (2)
+#define DISP_HORZ_RAM_ADDR_POS_2_ADDR   0x407
     DISP_REG(DISP_HORZ_RAM_ADDR_POS_2_ADDR)
-#define DISP_VERT_RAM_ADDR_POS_1_ADDR   0x408	//Vertical RAM Address Position (1)
+#define DISP_VERT_RAM_ADDR_POS_1_ADDR   0x408
     DISP_REG(DISP_VERT_RAM_ADDR_POS_1_ADDR)
-#define DISP_VERT_RAM_ADDR_POS_2_ADDR   0x409	//Vertical RAM Address Position (2)
+#define DISP_VERT_RAM_ADDR_POS_2_ADDR   0x409
     DISP_REG(DISP_VERT_RAM_ADDR_POS_2_ADDR)
-#define DISP_TMD_700_ADDR               0x700	// 0x700
+#define DISP_TMD_700_ADDR               0x700	/*  0x700 */
     DISP_REG(DISP_TMD_700_ADDR)
-#define DISP_TMD_015_ADDR               0x015	// 0x700
+#define DISP_TMD_015_ADDR               0x015	/*  0x700 */
     DISP_REG(DISP_TMD_015_ADDR)
-#define DISP_TMD_305_ADDR               0x305	// 0x700
+#define DISP_TMD_305_ADDR               0x305	/*  0x700 */
     DISP_REG(DISP_TMD_305_ADDR)
 
-/*---------------------------------------------------------------------------
-*                  TMD QVGA Bit Definations
-*--------------------------------------------------------------------------*/
+/*
+ * TMD QVGA Bit Definations
+ */
+
 #define DISP_BIT_IB15              0x8000
 #define DISP_BIT_IB14              0x4000
 #define DISP_BIT_IB13              0x2000
@@ -267,9 +272,11 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BIT_IB02              0x0004
 #define DISP_BIT_IB01              0x0002
 #define DISP_BIT_IB00              0x0001
-//Display Control
-// DISP_START_OSCILLATION_ADDR     Start Oscillation
-// DISP_DRIVER_OUTPUT_CTL_ADDR     Driver Output Control
+/*
+ * Display Control
+ * DISP_START_OSCILLATION_ADDR     Start Oscillation
+ * DISP_DRIVER_OUTPUT_CTL_ADDR     Driver Output Control
+ */
 #define DISP_BITMASK_SS            DISP_BIT_IB08
 #define DISP_BITMASK_NL5           DISP_BIT_IB05
 #define DISP_BITMASK_NL4           DISP_BIT_IB04
@@ -277,9 +284,9 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_NL2           DISP_BIT_IB02
 #define DISP_BITMASK_NL1           DISP_BIT_IB01
 #define DISP_BITMASK_NL0           DISP_BIT_IB00
-// DISP_LCD_DRIVING_SIG_ADDR       LCD Driving Signal Setting
+/* DISP_LCD_DRIVING_SIG_ADDR       LCD Driving Signal Setting */
 #define DISP_BITMASK_BC            DISP_BIT_IB09
-// DISP_ENTRY_MODE_ADDR            Entry Mode
+/* DISP_ENTRY_MODE_ADDR            Entry Mode */
 #define DISP_BITMASK_TRI           DISP_BIT_IB15
 #define DISP_BITMASK_DFM1          DISP_BIT_IB14
 #define DISP_BITMASK_DFM0          DISP_BIT_IB13
@@ -288,7 +295,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_ID1           DISP_BIT_IB05
 #define DISP_BITMASK_ID0           DISP_BIT_IB04
 #define DISP_BITMASK_AM            DISP_BIT_IB03
-// DISP_DISPLAY_CTL_1_ADDR         Display Control (1)
+/* DISP_DISPLAY_CTL_1_ADDR         Display Control (1) */
 #define DISP_BITMASK_COL1          DISP_BIT_IB15
 #define DISP_BITMASK_COL0          DISP_BIT_IB14
 #define DISP_BITMASK_VLE2          DISP_BIT_IB10
@@ -297,7 +304,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_PT1           DISP_BIT_IB07
 #define DISP_BITMASK_PT0           DISP_BIT_IB06
 #define DISP_BITMASK_REV           DISP_BIT_IB02
-// DISP_DISPLAY_CTL_2_ADDR         Display Control (2)
+/* DISP_DISPLAY_CTL_2_ADDR         Display Control (2) */
 #define DISP_BITMASK_FP3           DISP_BIT_IB11
 #define DISP_BITMASK_FP2           DISP_BIT_IB10
 #define DISP_BITMASK_FP1           DISP_BIT_IB09
@@ -306,20 +313,20 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_BP2           DISP_BIT_IB02
 #define DISP_BITMASK_BP1           DISP_BIT_IB01
 #define DISP_BITMASK_BP0           DISP_BIT_IB00
-// DISP_POWER_SUPPLY_INTF_ADDR     Power Supply IC Interface Control
+/* DISP_POWER_SUPPLY_INTF_ADDR     Power Supply IC Interface Control */
 #define DISP_BITMASK_CSE           DISP_BIT_IB12
 #define DISP_BITMASK_TE            DISP_BIT_IB08
 #define DISP_BITMASK_IX3           DISP_BIT_IB03
 #define DISP_BITMASK_IX2           DISP_BIT_IB02
 #define DISP_BITMASK_IX1           DISP_BIT_IB01
 #define DISP_BITMASK_IX0           DISP_BIT_IB00
-// DISP_EXT_DISPLAY_CTL_1_ADDR     External Display Interface Control (1)
+/* DISP_EXT_DISPLAY_CTL_1_ADDR     External Display Interface Control (1) */
 #define DISP_BITMASK_RM            DISP_BIT_IB08
 #define DISP_BITMASK_DM1           DISP_BIT_IB05
 #define DISP_BITMASK_DM0           DISP_BIT_IB04
 #define DISP_BITMASK_RIM1          DISP_BIT_IB01
 #define DISP_BITMASK_RIM0          DISP_BIT_IB00
-// DISP_FRAME_CYCLE_CTL_ADDR       Frame Frequency Adjustment Control
+/* DISP_FRAME_CYCLE_CTL_ADDR       Frame Frequency Adjustment Control */
 #define DISP_BITMASK_DIVI1         DISP_BIT_IB09
 #define DISP_BITMASK_DIVI0         DISP_BIT_IB08
 #define DISP_BITMASK_RTNI4         DISP_BIT_IB04
@@ -327,7 +334,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_RTNI2         DISP_BIT_IB02
 #define DISP_BITMASK_RTNI1         DISP_BIT_IB01
 #define DISP_BITMASK_RTNI0         DISP_BIT_IB00
-// DISP_EXT_DISPLAY_CTL_2_ADDR     External Display Interface Control (2)
+/* DISP_EXT_DISPLAY_CTL_2_ADDR     External Display Interface Control (2) */
 #define DISP_BITMASK_DIVE1         DISP_BIT_IB09
 #define DISP_BITMASK_DIVE0         DISP_BIT_IB08
 #define DISP_BITMASK_RTNE7         DISP_BIT_IB07
@@ -338,28 +345,28 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_RTNE2         DISP_BIT_IB02
 #define DISP_BITMASK_RTNE1         DISP_BIT_IB01
 #define DISP_BITMASK_RTNE0         DISP_BIT_IB00
-// DISP_EXT_DISPLAY_CTL_3_ADDR     External Display Interface Control (3)
+/* DISP_EXT_DISPLAY_CTL_3_ADDR     External Display Interface Control (3) */
 #define DISP_BITMASK_VSPL          DISP_BIT_IB04
 #define DISP_BITMASK_HSPL          DISP_BIT_IB03
 #define DISP_BITMASK_VPL           DISP_BIT_IB02
 #define DISP_BITMASK_EPL           DISP_BIT_IB01
 #define DISP_BITMASK_DPL           DISP_BIT_IB00
-// DISP_LTPS_CTL_1_ADDR            LTPS Interface Control (1)
+/* DISP_LTPS_CTL_1_ADDR            LTPS Interface Control (1) */
 #define DISP_BITMASK_CLWI3         DISP_BIT_IB11
 #define DISP_BITMASK_CLWI2         DISP_BIT_IB10
 #define DISP_BITMASK_CLWI1         DISP_BIT_IB09
 #define DISP_BITMASK_CLWI0         DISP_BIT_IB08
 #define DISP_BITMASK_CLTI1         DISP_BIT_IB01
 #define DISP_BITMASK_CLTI0         DISP_BIT_IB00
-// DISP_LTPS_CTL_2_ADDR            LTPS Interface Control (2)
+/* DISP_LTPS_CTL_2_ADDR            LTPS Interface Control (2) */
 #define DISP_BITMASK_OEVBI1        DISP_BIT_IB09
 #define DISP_BITMASK_OEVBI0        DISP_BIT_IB08
 #define DISP_BITMASK_OEVFI1        DISP_BIT_IB01
 #define DISP_BITMASK_OEVFI0        DISP_BIT_IB00
-// DISP_LTPS_CTL_3_ADDR            LTPS Interface Control (3)
+/* DISP_LTPS_CTL_3_ADDR            LTPS Interface Control (3) */
 #define DISP_BITMASK_SHI1          DISP_BIT_IB01
 #define DISP_BITMASK_SHI0          DISP_BIT_IB00
-// DISP_LTPS_CTL_4_ADDR            LTPS Interface Control (4)
+/* DISP_LTPS_CTL_4_ADDR            LTPS Interface Control (4) */
 #define DISP_BITMASK_CLWE5         DISP_BIT_IB13
 #define DISP_BITMASK_CLWE4         DISP_BIT_IB12
 #define DISP_BITMASK_CLWE3         DISP_BIT_IB11
@@ -370,7 +377,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_CLTE2         DISP_BIT_IB02
 #define DISP_BITMASK_CLTE1         DISP_BIT_IB01
 #define DISP_BITMASK_CLTE0         DISP_BIT_IB00
-// DISP_LTPS_CTL_5_ADDR            LTPS Interface Control (5)
+/* DISP_LTPS_CTL_5_ADDR            LTPS Interface Control (5) */
 #define DISP_BITMASK_OEVBE3        DISP_BIT_IB11
 #define DISP_BITMASK_OEVBE2        DISP_BIT_IB10
 #define DISP_BITMASK_OEVBE1        DISP_BIT_IB09
@@ -379,24 +386,25 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_OEVFE2        DISP_BIT_IB02
 #define DISP_BITMASK_OEVFE1        DISP_BIT_IB01
 #define DISP_BITMASK_OEVFE0        DISP_BIT_IB00
-// DISP_LTPS_CTL_6_ADDR            LTPS Interface Control (6)
+/* DISP_LTPS_CTL_6_ADDR            LTPS Interface Control (6) */
 #define DISP_BITMASK_SHE3          DISP_BIT_IB03
 #define DISP_BITMASK_SHE2          DISP_BIT_IB02
 #define DISP_BITMASK_SHE1          DISP_BIT_IB01
 #define DISP_BITMASK_SHE0          DISP_BIT_IB00
-// DISP_AMP_SETTING_ADDR           Amplify Setting
+/* DISP_AMP_SETTING_ADDR           Amplify Setting */
 #define DISP_BITMASK_ABSW1         DISP_BIT_IB01
 #define DISP_BITMASK_ABSW0         DISP_BIT_IB00
-// DISP_MODE_SETTING_ADDR          Mode Setting
+/* DISP_MODE_SETTING_ADDR          Mode Setting */
 #define DISP_BITMASK_DSTB          DISP_BIT_IB02
 #define DISP_BITMASK_STB           DISP_BIT_IB00
-// DISP_POFF_LN_SETTING_ADDR       Power Off Line Setting
+/* DISP_POFF_LN_SETTING_ADDR       Power Off Line Setting */
 #define DISP_BITMASK_POFH3         DISP_BIT_IB03
 #define DISP_BITMASK_POFH2         DISP_BIT_IB02
 #define DISP_BITMASK_POFH1         DISP_BIT_IB01
 #define DISP_BITMASK_POFH0         DISP_BIT_IB00
-//Power Contol
-// DISP_POWER_CTL_1_ADDR           Power Control (1)
+
+/* Power Contol */
+/* DISP_POWER_CTL_1_ADDR           Power Control (1) */
 #define DISP_BITMASK_PO            DISP_BIT_IB11
 #define DISP_BITMASK_VCD           DISP_BIT_IB09
 #define DISP_BITMASK_VSC           DISP_BIT_IB08
@@ -408,7 +416,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_FR            DISP_BIT_IB02
 #define DISP_BITMASK_D1            DISP_BIT_IB01
 #define DISP_BITMASK_D0            DISP_BIT_IB00
-// DISP_POWER_CTL_2_ADDR           Power Control (2)
+/* DISP_POWER_CTL_2_ADDR           Power Control (2) */
 #define DISP_BITMASK_DC4           DISP_BIT_IB15
 #define DISP_BITMASK_DC3           DISP_BIT_IB14
 #define DISP_BITMASK_SAP2          DISP_BIT_IB13
@@ -423,7 +431,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_AP2           DISP_BIT_IB04
 #define DISP_BITMASK_AP1           DISP_BIT_IB03
 #define DISP_BITMASK_AP0           DISP_BIT_IB02
-// DISP_POWER_CTL_3_ADDR           Power Control (3)
+/* DISP_POWER_CTL_3_ADDR           Power Control (3) */
 #define DISP_BITMASK_VGL4          DISP_BIT_IB10
 #define DISP_BITMASK_VGL3          DISP_BIT_IB09
 #define DISP_BITMASK_VGL2          DISP_BIT_IB08
@@ -434,11 +442,11 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VGH2          DISP_BIT_IB02
 #define DISP_BITMASK_VGH1          DISP_BIT_IB01
 #define DISP_BITMASK_VGH0          DISP_BIT_IB00
-// DISP_POWER_CTL_4_ADDR           Power Control (4)
+/* DISP_POWER_CTL_4_ADDR           Power Control (4) */
 #define DISP_BITMASK_VC2           DISP_BIT_IB02
 #define DISP_BITMASK_VC1           DISP_BIT_IB01
 #define DISP_BITMASK_VC0           DISP_BIT_IB00
-// DISP_POWER_CTL_5_ADDR           Power Control (5)
+/* DISP_POWER_CTL_5_ADDR           Power Control (5) */
 #define DISP_BITMASK_VRL3          DISP_BIT_IB11
 #define DISP_BITMASK_VRL2          DISP_BIT_IB10
 #define DISP_BITMASK_VRL1          DISP_BIT_IB09
@@ -448,7 +456,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VRH2          DISP_BIT_IB02
 #define DISP_BITMASK_VRH1          DISP_BIT_IB01
 #define DISP_BITMASK_VRH0          DISP_BIT_IB00
-// DISP_POWER_CTL_6_ADDR           Power Control (6)
+/* DISP_POWER_CTL_6_ADDR           Power Control (6) */
 #define DISP_BITMASK_VCOMG         DISP_BIT_IB13
 #define DISP_BITMASK_VDV4          DISP_BIT_IB12
 #define DISP_BITMASK_VDV3          DISP_BIT_IB11
@@ -460,8 +468,8 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VCM2          DISP_BIT_IB02
 #define DISP_BITMASK_VCM1          DISP_BIT_IB01
 #define DISP_BITMASK_VCM0          DISP_BIT_IB00
-//RAM Access
-// DISP_RAM_ADDR_SET_1_ADDR        RAM Address Set (1)
+/* RAM Access */
+/* DISP_RAM_ADDR_SET_1_ADDR        RAM Address Set (1) */
 #define DISP_BITMASK_AD7           DISP_BIT_IB07
 #define DISP_BITMASK_AD6           DISP_BIT_IB06
 #define DISP_BITMASK_AD5           DISP_BIT_IB05
@@ -470,7 +478,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_AD2           DISP_BIT_IB02
 #define DISP_BITMASK_AD1           DISP_BIT_IB01
 #define DISP_BITMASK_AD0           DISP_BIT_IB00
-// DISP_RAM_ADDR_SET_2_ADDR        RAM Address Set (2)
+/* DISP_RAM_ADDR_SET_2_ADDR        RAM Address Set (2) */
 #define DISP_BITMASK_AD16          DISP_BIT_IB08
 #define DISP_BITMASK_AD15          DISP_BIT_IB07
 #define DISP_BITMASK_AD14          DISP_BIT_IB06
@@ -480,9 +488,11 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_AD10          DISP_BIT_IB02
 #define DISP_BITMASK_AD9           DISP_BIT_IB01
 #define DISP_BITMASK_AD8           DISP_BIT_IB00
-// DISP_CMD_RAMWR       RAM Data Read/Write
-//Use Data Bit Configuration
-// DISP_RAM_DATA_MASK_1_ADDR       RAM Write Data Mask (1)
+/*
+ * DISP_CMD_RAMWR       RAM Data Read/Write
+ * Use Data Bit Configuration
+ */
+/* DISP_RAM_DATA_MASK_1_ADDR       RAM Write Data Mask (1) */
 #define DISP_BITMASK_WM11          DISP_BIT_IB13
 #define DISP_BITMASK_WM10          DISP_BIT_IB12
 #define DISP_BITMASK_WM9           DISP_BIT_IB11
@@ -495,43 +505,43 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_WM2           DISP_BIT_IB02
 #define DISP_BITMASK_WM1           DISP_BIT_IB01
 #define DISP_BITMASK_WM0           DISP_BIT_IB00
-// DISP_RAM_DATA_MASK_2_ADDR       RAM Write Data Mask (2)
+/* DISP_RAM_DATA_MASK_2_ADDR       RAM Write Data Mask (2) */
 #define DISP_BITMASK_WM17          DISP_BIT_IB05
 #define DISP_BITMASK_WM16          DISP_BIT_IB04
 #define DISP_BITMASK_WM15          DISP_BIT_IB03
 #define DISP_BITMASK_WM14          DISP_BIT_IB02
 #define DISP_BITMASK_WM13          DISP_BIT_IB01
 #define DISP_BITMASK_WM12          DISP_BIT_IB00
-//Gamma Control
-// DISP_GAMMA_CONTROL_1_ADDR       Gamma Control (1)
+/*Gamma Control */
+/* DISP_GAMMA_CONTROL_1_ADDR       Gamma Control (1) */
 #define DISP_BITMASK_PKP12         DISP_BIT_IB10
 #define DISP_BITMASK_PKP11         DISP_BIT_IB08
 #define DISP_BITMASK_PKP10         DISP_BIT_IB09
 #define DISP_BITMASK_PKP02         DISP_BIT_IB02
 #define DISP_BITMASK_PKP01         DISP_BIT_IB01
 #define DISP_BITMASK_PKP00         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_2_ADDR       Gamma Control (2)
+/* DISP_GAMMA_CONTROL_2_ADDR       Gamma Control (2) */
 #define DISP_BITMASK_PKP32         DISP_BIT_IB10
 #define DISP_BITMASK_PKP31         DISP_BIT_IB09
 #define DISP_BITMASK_PKP30         DISP_BIT_IB08
 #define DISP_BITMASK_PKP22         DISP_BIT_IB02
 #define DISP_BITMASK_PKP21         DISP_BIT_IB01
 #define DISP_BITMASK_PKP20         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_3_ADDR       Gamma Control (3)
+/* DISP_GAMMA_CONTROL_3_ADDR       Gamma Control (3) */
 #define DISP_BITMASK_PKP52         DISP_BIT_IB10
 #define DISP_BITMASK_PKP51         DISP_BIT_IB09
 #define DISP_BITMASK_PKP50         DISP_BIT_IB08
 #define DISP_BITMASK_PKP42         DISP_BIT_IB02
 #define DISP_BITMASK_PKP41         DISP_BIT_IB01
 #define DISP_BITMASK_PKP40         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_4_ADDR       Gamma Control (4)
+/* DISP_GAMMA_CONTROL_4_ADDR       Gamma Control (4) */
 #define DISP_BITMASK_PRP12         DISP_BIT_IB10
 #define DISP_BITMASK_PRP11         DISP_BIT_IB08
 #define DISP_BITMASK_PRP10         DISP_BIT_IB09
 #define DISP_BITMASK_PRP02         DISP_BIT_IB02
 #define DISP_BITMASK_PRP01         DISP_BIT_IB01
 #define DISP_BITMASK_PRP00         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_5_ADDR       Gamma Control (5)
+/* DISP_GAMMA_CONTROL_5_ADDR       Gamma Control (5) */
 #define DISP_BITMASK_VRP14         DISP_BIT_IB12
 #define DISP_BITMASK_VRP13         DISP_BIT_IB11
 #define DISP_BITMASK_VRP12         DISP_BIT_IB10
@@ -541,35 +551,35 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VRP02         DISP_BIT_IB02
 #define DISP_BITMASK_VRP01         DISP_BIT_IB01
 #define DISP_BITMASK_VRP00         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_6_ADDR       Gamma Control (6)
+/* DISP_GAMMA_CONTROL_6_ADDR       Gamma Control (6) */
 #define DISP_BITMASK_PKN12         DISP_BIT_IB10
 #define DISP_BITMASK_PKN11         DISP_BIT_IB08
 #define DISP_BITMASK_PKN10         DISP_BIT_IB09
 #define DISP_BITMASK_PKN02         DISP_BIT_IB02
 #define DISP_BITMASK_PKN01         DISP_BIT_IB01
 #define DISP_BITMASK_PKN00         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_7_ADDR       Gamma Control (7)
+/* DISP_GAMMA_CONTROL_7_ADDR       Gamma Control (7) */
 #define DISP_BITMASK_PKN32         DISP_BIT_IB10
 #define DISP_BITMASK_PKN31         DISP_BIT_IB08
 #define DISP_BITMASK_PKN30         DISP_BIT_IB09
 #define DISP_BITMASK_PKN22         DISP_BIT_IB02
 #define DISP_BITMASK_PKN21         DISP_BIT_IB01
 #define DISP_BITMASK_PKN20         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_8_ADDR       Gamma Control (8)
+/* DISP_GAMMA_CONTROL_8_ADDR       Gamma Control (8) */
 #define DISP_BITMASK_PKN52         DISP_BIT_IB10
 #define DISP_BITMASK_PKN51         DISP_BIT_IB08
 #define DISP_BITMASK_PKN50         DISP_BIT_IB09
 #define DISP_BITMASK_PKN42         DISP_BIT_IB02
 #define DISP_BITMASK_PKN41         DISP_BIT_IB01
 #define DISP_BITMASK_PKN40         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_9_ADDR       Gamma Control (9)
+/* DISP_GAMMA_CONTROL_9_ADDR       Gamma Control (9) */
 #define DISP_BITMASK_PRN12         DISP_BIT_IB10
 #define DISP_BITMASK_PRN11         DISP_BIT_IB08
 #define DISP_BITMASK_PRN10         DISP_BIT_IB09
 #define DISP_BITMASK_PRN02         DISP_BIT_IB02
 #define DISP_BITMASK_PRN01         DISP_BIT_IB01
 #define DISP_BITMASK_PRN00         DISP_BIT_IB00
-// DISP_GAMMA_CONTROL_10_ADDR      Gamma Control (10)
+/* DISP_GAMMA_CONTROL_10_ADDR      Gamma Control (10) */
 #define DISP_BITMASK_VRN14         DISP_BIT_IB12
 #define DISP_BITMASK_VRN13         DISP_BIT_IB11
 #define DISP_BITMASK_VRN12         DISP_BIT_IB10
@@ -579,8 +589,8 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VRN02         DISP_BIT_IB02
 #define DISP_BITMASK_VRN01         DISP_BIT_IB01
 #define DISP_BITMASK_VRN00         DISP_BIT_IB00
-//Coordinate Control
-// DISP_VERT_SCROLL_CTL_1_ADDR     Vertical Scroll Control (1)
+/* Coordinate Control */
+/* DISP_VERT_SCROLL_CTL_1_ADDR     Vertical Scroll Control (1) */
 #define DISP_BITMASK_VL18          DISP_BIT_IB08
 #define DISP_BITMASK_VL17          DISP_BIT_IB07
 #define DISP_BITMASK_VL16          DISP_BIT_IB06
@@ -590,7 +600,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VL12          DISP_BIT_IB02
 #define DISP_BITMASK_VL11          DISP_BIT_IB01
 #define DISP_BITMASK_VL10          DISP_BIT_IB00
-// DISP_VERT_SCROLL_CTL_2_ADDR     Vertical Scroll Control (2)
+/* DISP_VERT_SCROLL_CTL_2_ADDR     Vertical Scroll Control (2) */
 #define DISP_BITMASK_VL28          DISP_BIT_IB08
 #define DISP_BITMASK_VL27          DISP_BIT_IB07
 #define DISP_BITMASK_VL26          DISP_BIT_IB06
@@ -600,7 +610,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VL22          DISP_BIT_IB02
 #define DISP_BITMASK_VL21          DISP_BIT_IB01
 #define DISP_BITMASK_VL20          DISP_BIT_IB00
-// DISP_SCREEN_1_DRV_POS_1_ADDR    First Screen Driving Position (1)
+/* DISP_SCREEN_1_DRV_POS_1_ADDR    First Screen Driving Position (1) */
 #define DISP_BITMASK_SS18          DISP_BIT_IB08
 #define DISP_BITMASK_SS17          DISP_BIT_IB07
 #define DISP_BITMASK_SS16          DISP_BIT_IB06
@@ -610,7 +620,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_SS12          DISP_BIT_IB02
 #define DISP_BITMASK_SS11          DISP_BIT_IB01
 #define DISP_BITMASK_SS10          DISP_BIT_IB00
-// DISP_SCREEN_1_DRV_POS_2_ADDR    First Screen Driving Position (2)
+/* DISP_SCREEN_1_DRV_POS_2_ADDR    First Screen Driving Position (2) */
 #define DISP_BITMASK_SE18          DISP_BIT_IB08
 #define DISP_BITMASK_SE17          DISP_BIT_IB07
 #define DISP_BITMASK_SE16          DISP_BIT_IB06
@@ -620,7 +630,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_SE12          DISP_BIT_IB02
 #define DISP_BITMASK_SE11          DISP_BIT_IB01
 #define DISP_BITMASK_SE10          DISP_BIT_IB00
-// DISP_SCREEN_2_DRV_POS_1_ADDR    Second Screen Driving Position (1)
+/* DISP_SCREEN_2_DRV_POS_1_ADDR    Second Screen Driving Position (1) */
 #define DISP_BITMASK_SS28          DISP_BIT_IB08
 #define DISP_BITMASK_SS27          DISP_BIT_IB07
 #define DISP_BITMASK_SS26          DISP_BIT_IB06
@@ -630,7 +640,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_SS22          DISP_BIT_IB02
 #define DISP_BITMASK_SS21          DISP_BIT_IB01
 #define DISP_BITMASK_SS20          DISP_BIT_IB00
-// DISP_SCREEN_3_DRV_POS_2_ADDR    Second Screen Driving Position (2)
+/* DISP_SCREEN_3_DRV_POS_2_ADDR    Second Screen Driving Position (2) */
 #define DISP_BITMASK_SE28          DISP_BIT_IB08
 #define DISP_BITMASK_SE27          DISP_BIT_IB07
 #define DISP_BITMASK_SE26          DISP_BIT_IB06
@@ -640,7 +650,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_SE22          DISP_BIT_IB02
 #define DISP_BITMASK_SE21          DISP_BIT_IB01
 #define DISP_BITMASK_SE20          DISP_BIT_IB00
-// DISP_HORZ_RAM_ADDR_POS_1_ADDR   Horizontal RAM Address Position (1)
+/* DISP_HORZ_RAM_ADDR_POS_1_ADDR   Horizontal RAM Address Position (1) */
 #define DISP_BITMASK_HSA7          DISP_BIT_IB07
 #define DISP_BITMASK_HSA6          DISP_BIT_IB06
 #define DISP_BITMASK_HSA5          DISP_BIT_IB05
@@ -649,7 +659,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_HSA2          DISP_BIT_IB02
 #define DISP_BITMASK_HSA1          DISP_BIT_IB01
 #define DISP_BITMASK_HSA0          DISP_BIT_IB00
-// DISP_HORZ_RAM_ADDR_POS_2_ADDR   Horizontal RAM Address Position (2)
+/* DISP_HORZ_RAM_ADDR_POS_2_ADDR   Horizontal RAM Address Position (2) */
 #define DISP_BITMASK_HEA7          DISP_BIT_IB07
 #define DISP_BITMASK_HEA6          DISP_BIT_IB06
 #define DISP_BITMASK_HEA5          DISP_BIT_IB05
@@ -658,7 +668,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_HEA2          DISP_BIT_IB02
 #define DISP_BITMASK_HEA1          DISP_BIT_IB01
 #define DISP_BITMASK_HEA0          DISP_BIT_IB00
-// DISP_VERT_RAM_ADDR_POS_1_ADDR   Vertical RAM Address Position (1)
+/* DISP_VERT_RAM_ADDR_POS_1_ADDR   Vertical RAM Address Position (1) */
 #define DISP_BITMASK_VSA8          DISP_BIT_IB08
 #define DISP_BITMASK_VSA7          DISP_BIT_IB07
 #define DISP_BITMASK_VSA6          DISP_BIT_IB06
@@ -668,7 +678,7 @@ DISP_REG(DISP_START_OSCILLATION_ADDR)
 #define DISP_BITMASK_VSA2          DISP_BIT_IB02
 #define DISP_BITMASK_VSA1          DISP_BIT_IB01
 #define DISP_BITMASK_VSA0          DISP_BIT_IB00
-// DISP_VERT_RAM_ADDR_POS_2_ADDR   Vertical RAM Address Position (2)
+/* DISP_VERT_RAM_ADDR_POS_2_ADDR   Vertical RAM Address Position (2) */
 #define DISP_BITMASK_VEA8          DISP_BIT_IB08
 #define DISP_BITMASK_VEA7          DISP_BIT_IB07
 #define DISP_BITMASK_VEA6          DISP_BIT_IB06
@@ -734,7 +744,7 @@ static int tmd20qvga_disp_off(struct platform_device *pdev);
 static int tmd20qvga_disp_on(struct platform_device *pdev);
 static void tmd20qvga_set_revId(int);
 
-// future use
+/* future use */
 void tmd20qvga_disp_clear_screen_area(word start_row, word end_row,
 				      word start_column, word end_column);
 
@@ -795,9 +805,9 @@ static void tmd20qvga_disp_set_display_area(word start_row, word end_row)
 	if (end_driving >= QVGA_HEIGHT)
 		end_driving = QVGA_HEIGHT - 1;
 	if (start_driving > end_driving) {
-		//Probably Backwards Switch
+		/* Probably Backwards Switch */
 		start_driving = end_driving;
-		end_driving = start_row;	//Has not changed
+		end_driving = start_row;	/* Has not changed */
 		if (end_driving >= QVGA_HEIGHT)
 			end_driving = QVGA_HEIGHT - 1;
 	}
@@ -829,23 +839,15 @@ static void tmd20qvga_disp_set_display_area(word start_row, word end_row)
 		       DISP_VAL_IF(start_driving & 0x001, DISP_BITMASK_SS10));
 
 	DISP_WRITE_OUT(DISP_SCREEN_1_DRV_POS_2_ADDR,
-		       DISP_VAL_IF(end_driving & 0x100,
-				   DISP_BITMASK_SE18) | DISP_VAL_IF(end_driving
-								    & 0x080,
-								    DISP_BITMASK_SE17)
-		       | DISP_VAL_IF(end_driving & 0x040,
-				     DISP_BITMASK_SE16) |
-		       DISP_VAL_IF(end_driving & 0x020,
-				   DISP_BITMASK_SE15) | DISP_VAL_IF(end_driving
-								    & 0x010,
-								    DISP_BITMASK_SE14)
-		       | DISP_VAL_IF(end_driving & 0x008,
-				     DISP_BITMASK_SE13) |
-		       DISP_VAL_IF(end_driving & 0x004,
-				   DISP_BITMASK_SE12) | DISP_VAL_IF(end_driving
-								    & 0x002,
-								    DISP_BITMASK_SE11)
-		       | DISP_VAL_IF(end_driving & 0x001, DISP_BITMASK_SE10));
+			DISP_VAL_IF(end_driving & 0x100, DISP_BITMASK_SE18) |
+			DISP_VAL_IF(end_driving & 0x080, DISP_BITMASK_SE17) |
+			DISP_VAL_IF(end_driving & 0x040, DISP_BITMASK_SE16) |
+			DISP_VAL_IF(end_driving & 0x020, DISP_BITMASK_SE15) |
+			DISP_VAL_IF(end_driving & 0x010, DISP_BITMASK_SE14) |
+			DISP_VAL_IF(end_driving & 0x008, DISP_BITMASK_SE13) |
+			DISP_VAL_IF(end_driving & 0x004, DISP_BITMASK_SE12) |
+			DISP_VAL_IF(end_driving & 0x002, DISP_BITMASK_SE11) |
+			DISP_VAL_IF(end_driving & 0x001, DISP_BITMASK_SE10));
 }
 
 static int tmd20qvga_disp_off(struct platform_device *pdev)
@@ -857,34 +859,30 @@ static int tmd20qvga_disp_off(struct platform_device *pdev)
 		if (tmd20qvga_lcd_rev == 2) {
 			DISP_WRITE_OUT(DISP_POFF_LN_SETTING_ADDR, 0x000A);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0xFFEE);
-		} else {
-			DISP_WRITE_OUT(DISP_POFF_LN_SETTING_ADDR, 0x000F);
-			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0BFE);
-			DISP_WRITE_OUT(DISP_POWER_SUPPLY_INTF_ADDR, 0x0100);
-		}
-		WAIT_MSEC(40);
-		if (tmd20qvga_lcd_rev == 2) {
+			WAIT_MSEC(40);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0xF812);
-		} else {
-			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0BED);
-			DISP_WRITE_OUT(DISP_POWER_SUPPLY_INTF_ADDR, 0x0100);
-		}
-		WAIT_MSEC(40);
-		if (tmd20qvga_lcd_rev == 2) {
+			WAIT_MSEC(40);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0xE811);
 			WAIT_MSEC(40);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0xC011);
 			WAIT_MSEC(40);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x4011);
+			WAIT_MSEC(20);
+			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0010);
+
 		} else {
+			DISP_WRITE_OUT(DISP_POFF_LN_SETTING_ADDR, 0x000F);
+			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0BFE);
+			DISP_WRITE_OUT(DISP_POWER_SUPPLY_INTF_ADDR, 0x0100);
+			WAIT_MSEC(40);
+			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0BED);
+			DISP_WRITE_OUT(DISP_POWER_SUPPLY_INTF_ADDR, 0x0100);
+			WAIT_MSEC(40);
 			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x00CD);
 			DISP_WRITE_OUT(DISP_POWER_SUPPLY_INTF_ADDR, 0x0100);
-		}
-		WAIT_MSEC(20);
-		if (tmd20qvga_lcd_rev == 2)
-			DISP_WRITE_OUT(DISP_POWER_CTL_1_ADDR, 0x0010);
-		else
+			WAIT_MSEC(20);
 			DISP_WRITE_OUT(DISP_START_OSCILLATION_ADDR, 0x0);
+		}
 
 		DISP_WRITE_OUT(DISP_MODE_SETTING_ADDR, 0x0004);
 		DISP_WRITE_OUT(DISP_MODE_SETTING_ADDR, 0x0000);
@@ -1064,36 +1062,27 @@ static void tmd20qvga_disp_set_contrast(void)
 	DISP_WRITE_OUT(DISP_GAMMA_CONTROL_1_ADDR, 0x0403);
 
 	DISP_WRITE_OUT(DISP_GAMMA_CONTROL_2_ADDR,
-		       DISP_VAL_IF(newcontrast & 0x0001,
-				   DISP_BITMASK_PKP20) | DISP_VAL_IF(newcontrast
-								     & 0x0002,
-								     DISP_BITMASK_PKP21)
-		       | DISP_VAL_IF(newcontrast & 0x0004,
-				     DISP_BITMASK_PKP22) |
-		       DISP_VAL_IF(newcontrast & 0x0010,
-				   DISP_BITMASK_PKP30) | DISP_VAL_IF(newcontrast
-								     & 0x0020,
-								     DISP_BITMASK_PKP31)
-		       | DISP_VAL_IF(newcontrast & 0x0040, DISP_BITMASK_PKP32));
+			DISP_VAL_IF(newcontrast & 0x0001, DISP_BITMASK_PKP20) |
+			DISP_VAL_IF(newcontrast & 0x0002, DISP_BITMASK_PKP21) |
+			DISP_VAL_IF(newcontrast & 0x0004, DISP_BITMASK_PKP22) |
+			DISP_VAL_IF(newcontrast & 0x0010, DISP_BITMASK_PKP30) |
+			DISP_VAL_IF(newcontrast & 0x0020, DISP_BITMASK_PKP31) |
+			DISP_VAL_IF(newcontrast & 0x0040, DISP_BITMASK_PKP32));
 
 	DISP_WRITE_OUT(DISP_GAMMA_CONTROL_3_ADDR,
-		       DISP_VAL_IF(newcontrast & 0x0010,
-				   DISP_BITMASK_PKP40) | DISP_VAL_IF(newcontrast
-								     & 0x0020,
-								     DISP_BITMASK_PKP41)
-		       | DISP_VAL_IF(newcontrast & 0x0040,
-				     DISP_BITMASK_PKP42) |
-		       DISP_VAL_IF(newcontrast & 0x0001,
-				   DISP_BITMASK_PKP50) | DISP_VAL_IF(newcontrast
-								     & 0x0002,
-								     DISP_BITMASK_PKP51)
-		       | DISP_VAL_IF(newcontrast & 0x0004, DISP_BITMASK_PKP52));
+			DISP_VAL_IF(newcontrast & 0x0010, DISP_BITMASK_PKP40) |
+			DISP_VAL_IF(newcontrast & 0x0020, DISP_BITMASK_PKP41) |
+			DISP_VAL_IF(newcontrast & 0x0040, DISP_BITMASK_PKP42) |
+			DISP_VAL_IF(newcontrast & 0x0001, DISP_BITMASK_PKP50) |
+			DISP_VAL_IF(newcontrast & 0x0002, DISP_BITMASK_PKP51) |
+			DISP_VAL_IF(newcontrast & 0x0004, DISP_BITMASK_PKP52));
+
 	DISP_WRITE_OUT(DISP_GAMMA_CONTROL_4_ADDR, 0x0303);
 	DISP_WRITE_OUT(DISP_GAMMA_CONTROL_5_ADDR, 0x0F07);
 
 #endif /* defined(TMD20QVGA_LCD_18BPP) */
 
-}				/* End disp_set_contrast */
+}	/* End disp_set_contrast */
 
 void tmd20qvga_disp_clear_screen_area
     (word start_row, word end_row, word start_column, word end_column) {

@@ -173,8 +173,6 @@ static boolean display_on = FALSE;
 static void epsonQcif_disp_init(struct platform_device *pdev);
 static void epsonQcif_disp_set_contrast(word contrast);
 static void epsonQcif_disp_set_display_area(word start_row, word end_row);
-static void epsonQcif_disp_clear_screen_area
-    (word start_row, word end_row, word start_column, word end_column);
 static int epsonQcif_disp_off(struct platform_device *pdev);
 static int epsonQcif_disp_on(struct platform_device *pdev);
 static void epsonQcif_disp_set_rect(int x, int y, int xres, int yres);
@@ -209,164 +207,164 @@ static void epsonQcif_disp_init(struct platform_device *pdev)
 
 	/* Set display timing */
 	DISP_CMD_OUT(DISP_CMD_DISCTL);
-	DISP_DATA_OUT(0x1c);	//p1
-	DISP_DATA_OUT(0x02);	//p1
-	DISP_DATA_OUT(0x82);	//p2
-	DISP_DATA_OUT(0x00);	//p3
-	DISP_DATA_OUT(0x00);	//p4
-	DISP_DATA_OUT(0xe0);	//p5
-	DISP_DATA_OUT(0x00);	//p5
-	DISP_DATA_OUT(0xdc);	//p6
-	DISP_DATA_OUT(0x00);	//p6
-	DISP_DATA_OUT(0x02);	//p7
-	DISP_DATA_OUT(0x00);	//p8
+	DISP_DATA_OUT(0x1c);	/* p1 */
+	DISP_DATA_OUT(0x02);	/* p1 */
+	DISP_DATA_OUT(0x82);	/* p2 */
+	DISP_DATA_OUT(0x00);	/* p3 */
+	DISP_DATA_OUT(0x00);	/* p4 */
+	DISP_DATA_OUT(0xe0);	/* p5 */
+	DISP_DATA_OUT(0x00);	/* p5 */
+	DISP_DATA_OUT(0xdc);	/* p6 */
+	DISP_DATA_OUT(0x00);	/* p6 */
+	DISP_DATA_OUT(0x02);	/* p7 */
+	DISP_DATA_OUT(0x00);	/* p8 */
 
 	/* Set 64 gray scale level */
 	DISP_CMD_OUT(DISP_CMD_GCP64);
-	DISP_DATA_OUT(0x08);	//p01
+	DISP_DATA_OUT(0x08);	/* p01 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0x2a);	//p02
+	DISP_DATA_OUT(0x2a);	/* p02 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0x4e);	//p03
+	DISP_DATA_OUT(0x4e);	/* p03 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0x6b);	//p04
+	DISP_DATA_OUT(0x6b);	/* p04 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0x88);	//p05
+	DISP_DATA_OUT(0x88);	/* p05 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0xa3);	//p06
+	DISP_DATA_OUT(0xa3);	/* p06 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0xba);	//p07
+	DISP_DATA_OUT(0xba);	/* p07 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0xd1);	//p08
+	DISP_DATA_OUT(0xd1);	/* p08 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0xe5);	//p09
+	DISP_DATA_OUT(0xe5);	/* p09 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0xf3);	//p10
+	DISP_DATA_OUT(0xf3);	/* p10 */
 	DISP_DATA_OUT(0x00);
-	DISP_DATA_OUT(0x03);	//p11
+	DISP_DATA_OUT(0x03);	/* p11 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x13);	//p12
+	DISP_DATA_OUT(0x13);	/* p12 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x22);	//p13
+	DISP_DATA_OUT(0x22);	/* p13 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x2f);	//p14
+	DISP_DATA_OUT(0x2f);	/* p14 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x3b);	//p15
+	DISP_DATA_OUT(0x3b);	/* p15 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x46);	//p16
+	DISP_DATA_OUT(0x46);	/* p16 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x51);	//p17
+	DISP_DATA_OUT(0x51);	/* p17 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x5b);	//p18
+	DISP_DATA_OUT(0x5b);	/* p18 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x64);	//p19
+	DISP_DATA_OUT(0x64);	/* p19 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x6c);	//p20
+	DISP_DATA_OUT(0x6c);	/* p20 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x74);	//p21
+	DISP_DATA_OUT(0x74);	/* p21 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x7c);	//p22
+	DISP_DATA_OUT(0x7c);	/* p22 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x83);	//p23
+	DISP_DATA_OUT(0x83);	/* p23 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x8a);	//p24
+	DISP_DATA_OUT(0x8a);	/* p24 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x91);	//p25
+	DISP_DATA_OUT(0x91);	/* p25 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x98);	//p26
+	DISP_DATA_OUT(0x98);	/* p26 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x9f);	//p27
+	DISP_DATA_OUT(0x9f);	/* p27 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xa6);	//p28
+	DISP_DATA_OUT(0xa6);	/* p28 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xac);	//p29
+	DISP_DATA_OUT(0xac);	/* p29 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xb2);	//p30
+	DISP_DATA_OUT(0xb2);	/* p30 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xb7);	//p31
+	DISP_DATA_OUT(0xb7);	/* p31 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xbc);	//p32
+	DISP_DATA_OUT(0xbc);	/* p32 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xc1);	//p33
+	DISP_DATA_OUT(0xc1);	/* p33 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xc6);	//p34
+	DISP_DATA_OUT(0xc6);	/* p34 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xcb);	//p35
+	DISP_DATA_OUT(0xcb);	/* p35 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xd0);	//p36
+	DISP_DATA_OUT(0xd0);	/* p36 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xd4);	//p37
+	DISP_DATA_OUT(0xd4);	/* p37 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xd8);	//p38
+	DISP_DATA_OUT(0xd8);	/* p38 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xdc);	//p39
+	DISP_DATA_OUT(0xdc);	/* p39 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xe0);	//p40
+	DISP_DATA_OUT(0xe0);	/* p40 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xe4);	//p41
+	DISP_DATA_OUT(0xe4);	/* p41 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xe8);	//p42
+	DISP_DATA_OUT(0xe8);	/* p42 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xec);	//p43
+	DISP_DATA_OUT(0xec);	/* p43 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xf0);	//p44
+	DISP_DATA_OUT(0xf0);	/* p44 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xf4);	//p45
+	DISP_DATA_OUT(0xf4);	/* p45 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xf8);	//p46
+	DISP_DATA_OUT(0xf8);	/* p46 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xfb);	//p47
+	DISP_DATA_OUT(0xfb);	/* p47 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0xfe);	//p48
+	DISP_DATA_OUT(0xfe);	/* p48 */
 	DISP_DATA_OUT(0x01);
-	DISP_DATA_OUT(0x01);	//p49
+	DISP_DATA_OUT(0x01);	/* p49 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x03);	//p50
+	DISP_DATA_OUT(0x03);	/* p50 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x05);	//p51
+	DISP_DATA_OUT(0x05);	/* p51 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x07);	//p52
+	DISP_DATA_OUT(0x07);	/* p52 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x09);	//p53
+	DISP_DATA_OUT(0x09);	/* p53 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x0b);	//p54
+	DISP_DATA_OUT(0x0b);	/* p54 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x0d);	//p55
+	DISP_DATA_OUT(0x0d);	/* p55 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x0f);	//p56
+	DISP_DATA_OUT(0x0f);	/* p56 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x11);	//p57
+	DISP_DATA_OUT(0x11);	/* p57 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x13);	//p58
+	DISP_DATA_OUT(0x13);	/* p58 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x15);	//p59
+	DISP_DATA_OUT(0x15);	/* p59 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x17);	//p60
+	DISP_DATA_OUT(0x17);	/* p60 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x19);	//p61
+	DISP_DATA_OUT(0x19);	/* p61 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x1b);	//p62
+	DISP_DATA_OUT(0x1b);	/* p62 */
 	DISP_DATA_OUT(0x02);
-	DISP_DATA_OUT(0x1c);	//p63
+	DISP_DATA_OUT(0x1c);	/* p63 */
 	DISP_DATA_OUT(0x02);
 
 	/* Set 16 gray scale level */
 	DISP_CMD_OUT(DISP_CMD_GCP16);
-	DISP_DATA_OUT(0x1a);	//p01
-	DISP_DATA_OUT(0x32);	//p02
-	DISP_DATA_OUT(0x42);	//p03
-	DISP_DATA_OUT(0x4c);	//p04
-	DISP_DATA_OUT(0x58);	//p05
-	DISP_DATA_OUT(0x5f);	//p06
-	DISP_DATA_OUT(0x66);	//p07
-	DISP_DATA_OUT(0x6b);	//p08
-	DISP_DATA_OUT(0x70);	//p09
-	DISP_DATA_OUT(0x74);	//p10
-	DISP_DATA_OUT(0x78);	//p11
-	DISP_DATA_OUT(0x7b);	//p12
-	DISP_DATA_OUT(0x7e);	//p13
-	DISP_DATA_OUT(0x80);	//p14
-	DISP_DATA_OUT(0x82);	//p15
+	DISP_DATA_OUT(0x1a);	/* p01 */
+	DISP_DATA_OUT(0x32);	/* p02 */
+	DISP_DATA_OUT(0x42);	/* p03 */
+	DISP_DATA_OUT(0x4c);	/* p04 */
+	DISP_DATA_OUT(0x58);	/* p05 */
+	DISP_DATA_OUT(0x5f);	/* p06 */
+	DISP_DATA_OUT(0x66);	/* p07 */
+	DISP_DATA_OUT(0x6b);	/* p08 */
+	DISP_DATA_OUT(0x70);	/* p09 */
+	DISP_DATA_OUT(0x74);	/* p10 */
+	DISP_DATA_OUT(0x78);	/* p11 */
+	DISP_DATA_OUT(0x7b);	/* p12 */
+	DISP_DATA_OUT(0x7e);	/* p13 */
+	DISP_DATA_OUT(0x80);	/* p14 */
+	DISP_DATA_OUT(0x82);	/* p15 */
 
 	/* Set DSP column */
 	DISP_CMD_OUT(DISP_CMD_MD_CSET);
@@ -524,8 +522,7 @@ static int epsonQcif_disp_on(struct platform_device *pdev)
 	return 0;
 }
 
-static void epsonQcif_disp_set_contrast(word contrast	/* Contrast value to set */
-    )
+static void epsonQcif_disp_set_contrast(word contrast)
 {
 	if (!disp_initialized)
 		return;
@@ -544,8 +541,8 @@ static void epsonQcif_disp_set_contrast(word contrast	/* Contrast value to set *
 	disp_contrast = (byte) contrast;
 }				/* End disp_set_contrast */
 
-static void epsonQcif_disp_clear_screen_area
-    (word start_row, word end_row, word start_column, word end_column) {
+static void epsonQcif_disp_clear_screen_area(
+	word start_row, word end_row, word start_column, word end_column) {
 	int32 i;
 
 	/* Clear the display screen */

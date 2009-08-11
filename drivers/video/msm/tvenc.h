@@ -50,13 +50,13 @@
 #define PAL_M		3 /* PAL-M */
 #define PAL_N		4 /* Argentina PAL-N */
 
-// 3.57954545 Mhz
+/* 3.57954545 Mhz */
 #define TVENC_CTL_TV_MODE_NTSC_M_PAL60  0
-// 3.57961149 Mhz
+/* 3.57961149 Mhz */
 #define TVENC_CTL_TV_MODE_PAL_M             BIT(0)
-//non-Argintina = 4.3361875 Mhz
+/*non-Argintina = 4.3361875 Mhz */
 #define TVENC_CTL_TV_MODE_PAL_BDGHIN        BIT(1)
-//Argentina = 3.582055625 Mhz
+/*Argentina = 3.582055625 Mhz */
 #define TVENC_CTL_TV_MODE_PAL_N             (BIT(1)|BIT(0))
 
 #define TVENC_CTL_ENC_EN                    BIT(2)

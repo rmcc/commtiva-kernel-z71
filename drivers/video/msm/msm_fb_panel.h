@@ -35,17 +35,13 @@ struct msm_fb_data_type;
 
 typedef void (*msm_fb_vsync_handler_type) (void *arg);
 
-/////////////////////////////////////////////
-// panel id type
-/////////////////////////////////////////////
+/* panel id type */
 typedef struct panel_id_s {
 	uint16 id;
 	uint16 type;
 } panel_id_type;
 
-/////////////////////////////////////////////
-// panel type list
-/////////////////////////////////////////////
+/* panel type list */
 #define NO_PANEL       0xffff	/* No Panel */
 #define MDDI_PANEL     1	/* MDDI */
 #define EBI2_PANEL     2	/* EBI2 */
@@ -53,28 +49,22 @@ typedef struct panel_id_s {
 #define EXT_MDDI_PANEL 4	/* Ext.MDDI */
 #define TV_PANEL       5	/* TV */
 
-/////////////////////////////////////////////
-// panel class
-/////////////////////////////////////////////
+/* panel class */
 typedef enum {
-	DISPLAY_LCD = 0,	// lcd = ebi2/mddi
-	DISPLAY_LCDC,		// lcdc
-	DISPLAY_TV,		// TV Out
-	DISPLAY_EXT_MDDI,	// External MDDI
+	DISPLAY_LCD = 0,	/* lcd = ebi2/mddi */
+	DISPLAY_LCDC,		/* lcdc */
+	DISPLAY_TV,		/* TV Out */
+	DISPLAY_EXT_MDDI,	/* External MDDI */
 } DISP_TARGET;
 
-/////////////////////////////////////////////
-// panel device locaiton
-/////////////////////////////////////////////
+/* panel device locaiton */
 typedef enum {
-	DISPLAY_1 = 0,		// attached as first device
-	DISPLAY_2,		// attached on second device
+	DISPLAY_1 = 0,		/* attached as first device */
+	DISPLAY_2,		/* attached on second device */
 	MAX_PHYS_TARGET_NUM,
 } DISP_TARGET_PHYS;
 
-/////////////////////////////////////////////
-// panel info type
-/////////////////////////////////////////////
+/* panel info type */
 struct lcd_panel_info {
 	__u32 vsync_enable;
 	__u32 refx100;

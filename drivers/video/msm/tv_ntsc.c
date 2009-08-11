@@ -95,17 +95,19 @@ static int ntsc_on(struct platform_device *pdev)
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
 
-	TV_OUT(TV_ENC_CTL, 0);	//disable TV encoder
+	TV_OUT(TV_ENC_CTL, 0);	/* disable TV encoder */
 
 	if (mfd->panel.id == NTSC_M) {
-		TV_OUT(TV_GAIN, 0x0081B697);	// Cr gain 11, Cb gain C6, y_gain 97
+		/* Cr gain 11, Cb gain C6, y_gain 97 */
+		TV_OUT(TV_GAIN, 0x0081B697);
 	} else {
-		TV_OUT(TV_GAIN, 0x008bc4a3);	// Cr gain 11, Cb gain C6, y_gain 97
+		/* Cr gain 11, Cb gain C6, y_gain 97 */
+		TV_OUT(TV_GAIN, 0x008bc4a3);
 		reg |= TVENC_CTL_NTSCJ_MODE;
 	}
 
 	TV_OUT(TV_CGMS, 0x0);
-	//  NTSC Timing
+	/*  NTSC Timing */
 	TV_OUT(TV_SYNC_1, 0x0020009e);
 	TV_OUT(TV_SYNC_2, 0x011306B4);
 	TV_OUT(TV_SYNC_3, 0x0006000C);
@@ -127,7 +129,7 @@ static int ntsc_on(struct platform_device *pdev)
 	    TVENC_CTL_CR_FILTER_EN |
 	    TVENC_CTL_CB_FILTER_EN | TVENC_CTL_SINX_FILTER_EN;
 
-	TV_OUT(TV_LEVEL, 0x00000000);	// DC offset to 0.
+	TV_OUT(TV_LEVEL, 0x00000000);	/* DC offset to 0. */
 	TV_OUT(TV_OFFSET, 0x008080f0);
 
 #ifdef CONFIG_FB_MSM_MDP31
@@ -143,7 +145,7 @@ static int ntsc_on(struct platform_device *pdev)
 
 static int ntsc_off(struct platform_device *pdev)
 {
-	TV_OUT(TV_ENC_CTL, 0);	// disable TV encoder
+	TV_OUT(TV_ENC_CTL, 0);	/* disable TV encoder */
 	return 0;
 }
 

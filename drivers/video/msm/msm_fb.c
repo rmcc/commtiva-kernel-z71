@@ -50,7 +50,6 @@
 extern int load_565rle_image(char *filename);
 #endif
 
-///////////////////////////////////////////
 static unsigned char *fbram;
 static unsigned char *fbram_phys;
 static int fbram_size;
@@ -75,8 +74,11 @@ static u32 msm_fb_pseudo_palette[16] = {
 };
 
 u32 msm_fb_debug_enabled;
-u32 msm_fb_msg_level = 7;	// Setting msm_fb_msg_level to 8 prints out ALL messages
-u32 mddi_msg_level = 5;		// Setting mddi_msg_level to 8 prints out ALL messages
+/* Setting msm_fb_msg_level to 8 prints out ALL messages */
+u32 msm_fb_msg_level = 7;
+
+/* Setting mddi_msg_level to 8 prints out ALL messages */
+u32 mddi_msg_level = 5;
 
 extern int32 mdp_block_power_cnt[MDP_MAX_BLOCK];
 extern unsigned long mdp_timer_duration;
@@ -210,10 +212,9 @@ static int msm_fb_probe(struct platform_device *pdev)
 			printk(KERN_ERR "fbram ioremap failed!\n");
 			return -ENOMEM;
 		}
+		MSM_FB_INFO("msm_fb_probe:  phy_Addr = 0x%x virt = 0x%x\n",
+			     (int)fbram_phys, (int)fbram);
 
-		printk(KERN_INFO
-			"msm_fb_probe: resource fbram = 0x%x phys=0x%x\n",
-			     (int)fbram, (int)fbram_phys);
 		msm_fb_resource_initialized = 1;
 		return 0;
 	}
@@ -285,11 +286,11 @@ static int msm_fb_remove(struct platform_device *pdev)
 	if (mfd->dma_hrtimer.function)
 		hrtimer_cancel(&mfd->dma_hrtimer);
 
-	// remove /dev/fb*
+	/* remove /dev/fb* */
 	unregister_framebuffer(mfd->fbi);
 
 #ifdef CONFIG_FB_BACKLIGHT
-	// remove /sys/class/backlight
+	/* remove /sys/class/backlight */
 	backlight_device_unregister(mfd->fbi->bl_dev);
 #else
 	if (lcd_backlight_registered) {
@@ -344,9 +345,9 @@ static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 	if ((!mfd) || (mfd->key != MFD_KEY))
 		return 0;
 
-	////////////////////////////////////////////////////
-	// suspend this channel
-	////////////////////////////////////////////////////
+	/*
+	 * suspend this channel
+	 */
 	mfd->suspend.sw_refreshing_enable = mfd->sw_refreshing_enable;
 	mfd->suspend.op_enable = mfd->op_enable;
 	mfd->suspend.panel_power_on = mfd->panel_power_on;
@@ -362,15 +363,15 @@ static int msm_fb_suspend_sub(struct msm_fb_data_type *mfd)
 		}
 		mfd->op_enable = FALSE;
 	}
-	////////////////////////////////////////////////////
-	// try to power down
-	////////////////////////////////////////////////////
+	/*
+	 * try to power down
+	 */
 	mdp_pipe_ctrl(MDP_MASTER_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
-	////////////////////////////////////////////////////
-	// detach display channel irq if there's any
-	// or wait until vsync-resync completes
-	////////////////////////////////////////////////////
+	/*
+	 * detach display channel irq if there's any
+	 * or wait until vsync-resync completes
+	 */
 	if ((mfd->dest == DISPLAY_LCD)) {
 		if (mfd->panel_info.lcd.vsync_enable) {
 			if (mfd->panel_info.lcd.hw_vsync_mode) {
@@ -670,30 +671,30 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	int *id;
 	int fbram_offset;
 
-	///////////////////////////////////////////////////////
-	// fb info initialization
-	///////////////////////////////////////////////////////
+	/*
+	 * fb info initialization
+	 */
 	fix = &fbi->fix;
 	var = &fbi->var;
 
-	fix->type_aux = 0;	// if type == FB_TYPE_INTERLEAVED_PLANES
-	fix->visual = FB_VISUAL_TRUECOLOR;	// True Color
-	fix->ywrapstep = 0;	// No support
-	fix->mmio_start = 0;	// No MMIO Address
-	fix->mmio_len = 0;	// No MMIO Address
-	fix->accel = FB_ACCEL_NONE;	// FB_ACCEL_MSM needes to be added in fb.h
+	fix->type_aux = 0;	/* if type == FB_TYPE_INTERLEAVED_PLANES */
+	fix->visual = FB_VISUAL_TRUECOLOR;	/* True Color */
+	fix->ywrapstep = 0;	/* No support */
+	fix->mmio_start = 0;	/* No MMIO Address */
+	fix->mmio_len = 0;	/* No MMIO Address */
+	fix->accel = FB_ACCEL_NONE;/* FB_ACCEL_MSM needes to be added in fb.h */
 
-	var->xoffset = 0,	// Offset from virtual to visible
-	    var->yoffset = 0,	// resolution
-	    var->grayscale = 0,	// No graylevels
-	    var->nonstd = 0,	// standard pixel format
-	    var->activate = FB_ACTIVATE_VBL,	// activate it at vsync
-	    var->height = -1,	// height of picture in mm
-	    var->width = -1,	// width of picture in mm
-	    var->accel_flags = 0,	// acceleration flags
-	    var->sync = 0,	// see FB_SYNC_*
-	    var->rotate = 0,	// angle we rotate counter clockwise
-	    mfd->op_enable = FALSE;
+	var->xoffset = 0,	/* Offset from virtual to visible */
+	var->yoffset = 0,	/* resolution */
+	var->grayscale = 0,	/* No graylevels */
+	var->nonstd = 0,	/* standard pixel format */
+	var->activate = FB_ACTIVATE_VBL,	/* activate it at vsync */
+	var->height = -1,	/* height of picture in mm */
+	var->width = -1,	/* width of picture in mm */
+	var->accel_flags = 0,	/* acceleration flags */
+	var->sync = 0,	/* see FB_SYNC_* */
+	var->rotate = 0,	/* angle we rotate counter clockwise */
+	mfd->op_enable = FALSE;
 
 	switch (mfd->fb_imgType) {
 	case MDP_RGB_565:
@@ -796,10 +797,10 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->yres = panel_info->yres;
 	var->xres_virtual = panel_info->xres;
 	var->yres_virtual = panel_info->yres * mfd->fb_page;
-	var->bits_per_pixel = bpp * 8,	// FrameBuffer color depth
-	    //////////////////////////////////////////
-	    // id field for fb app
-	    //////////////////////////////////////////
+	var->bits_per_pixel = bpp * 8,	/* FrameBuffer color depth */
+		/*
+		 * id field for fb app
+		 */
 	    id = (int *)&mfd->panel;
 
 #if defined(CONFIG_FB_MSM_MDP22)
@@ -958,87 +959,56 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			switch (mfd->dest) {
 			case DISPLAY_LCD:
 				msm_fb_debugfs_file_create(sub_dir,
-							   "vsync_enable",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   vsync_enable);
-				msm_fb_debugfs_file_create(sub_dir, "refx100",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   refx100);
+				"vsync_enable",
+				(u32 *)&mfd->panel_info.lcd.vsync_enable);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_back_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   v_back_porch);
+				"refx100",
+				(u32 *) &mfd->panel_info.lcd. refx100);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_front_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   v_front_porch);
+				"v_back_porch",
+				(u32 *) &mfd->panel_info.lcd.v_back_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_pulse_width",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   v_pulse_width);
+				"v_front_porch",
+				(u32 *) &mfd->panel_info.lcd.v_front_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "hw_vsync_mode",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   hw_vsync_mode);
+				"v_pulse_width",
+				(u32 *) &mfd->panel_info.lcd.v_pulse_width);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "vsync_notifier_period",
-							   (u32 *) &mfd->
-							   panel_info.lcd.
-							   vsync_notifier_period);
+				"hw_vsync_mode",
+				(u32 *) &mfd->panel_info.lcd.hw_vsync_mode);
+				msm_fb_debugfs_file_create(sub_dir,
+				"vsync_notifier_period", (u32 *)
+				&mfd->panel_info.lcd.vsync_notifier_period);
 				break;
 
 			case DISPLAY_LCDC:
 				msm_fb_debugfs_file_create(sub_dir,
-							   "h_back_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   h_back_porch);
+				"h_back_porch",
+				(u32 *) &mfd->panel_info.lcdc.h_back_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "h_front_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   h_front_porch);
+				"h_front_porch",
+				(u32 *) &mfd->panel_info.lcdc.h_front_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "h_pulse_width",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   h_pulse_width);
+				"h_pulse_width",
+				(u32 *) &mfd->panel_info.lcdc.h_pulse_width);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_back_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   v_back_porch);
+				"v_back_porch",
+				(u32 *) &mfd->panel_info.lcdc.v_back_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_front_porch",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   v_front_porch);
+				"v_front_porch",
+				(u32 *) &mfd->panel_info.lcdc.v_front_porch);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "v_pulse_width",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   v_pulse_width);
+				"v_pulse_width",
+				(u32 *) &mfd->panel_info.lcdc.v_pulse_width);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "border_clr",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   border_clr);
+				"border_clr",
+				(u32 *) &mfd->panel_info.lcdc.border_clr);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "underflow_clr",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   underflow_clr);
+				"underflow_clr",
+				(u32 *) &mfd->panel_info.lcdc.underflow_clr);
 				msm_fb_debugfs_file_create(sub_dir,
-							   "hsync_skew",
-							   (u32 *) &mfd->
-							   panel_info.lcdc.
-							   hsync_skew);
+				"hsync_skew",
+				(u32 *) &mfd->panel_info.lcdc.hsync_skew);
 				break;
 
 			default:
@@ -1046,7 +1016,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			}
 		}
 	}
-#endif //MSM_FB_ENABLE_DBGFS
+#endif /* MSM_FB_ENABLE_DBGFS */
 
 	return ret;
 }
@@ -1291,7 +1261,7 @@ static int msm_fb_stop_sw_refresher(struct msm_fb_data_type *mfd)
 		mfd->sw_currently_refreshing = FALSE;
 		up(&mfd->sem);
 
-		// wait until the refresher finishes the last job
+		/* wait until the refresher finishes the last job */
 		wait_for_completion_killable(&mfd->refresher_comp);
 	}
 
@@ -1498,9 +1468,9 @@ void msm_fb_add_device(struct platform_device *pdev)
 		printk(KERN_ERR "msm_fb: no more framebuffer info list!\n");
 		return;
 	}
-	/////////////////////////////////////////
-	// alloc panel device data
-	/////////////////////////////////////////
+	/*
+	 * alloc panel device data
+	 */
 	this_dev = msm_fb_device_alloc(pdata, type, id);
 
 	if (!this_dev) {
@@ -1509,9 +1479,9 @@ void msm_fb_add_device(struct platform_device *pdev)
 		return;
 	}
 
-	/////////////////////////////////////////
-	// alloc framebuffer info + par data
-	/////////////////////////////////////////
+	/*
+	 * alloc framebuffer info + par data
+	 */
 	fbi = framebuffer_alloc(sizeof(struct msm_fb_data_type), NULL);
 	if (fbi == NULL) {
 		platform_device_put(this_dev);
@@ -1527,15 +1497,15 @@ void msm_fb_add_device(struct platform_device *pdev)
 	mfd->fb_page = fb_num;
 	mfd->index = fbi_list_index;
 
-	// link to the latest pdev
+	/* link to the latest pdev */
 	mfd->pdev = this_dev;
 
 	mfd_list[mfd_list_index++] = mfd;
 	fbi_list[fbi_list_index++] = fbi;
 
-	/////////////////////////////////////////
-	// set driver data
-	/////////////////////////////////////////
+	/*
+	 * set driver data
+	 */
 	platform_set_drvdata(this_dev, mfd);
 
 	if (platform_device_add(this_dev)) {

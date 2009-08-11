@@ -88,9 +88,9 @@ typedef enum {
 } mddi_host_type;
 
 typedef enum {
-	MDDI_DRIVER_RESET,	// host core registers have not been written.
-	MDDI_DRIVER_DISABLED,	// registers written, interrupts disabled.
-	MDDI_DRIVER_ENABLED	// registers written, interrupts enabled.
+	MDDI_DRIVER_RESET,	/* host core registers have not been written. */
+	MDDI_DRIVER_DISABLED,	/* registers written, interrupts disabled. */
+	MDDI_DRIVER_ENABLED	/* registers written, interrupts enabled. */
 } mddi_host_driver_state_type;
 
 typedef enum {
@@ -118,15 +118,13 @@ typedef struct {
 	uint32 value;
 } mddi_reg_write_type;
 
-boolean mddi_vsync_set_handler(msm_fb_vsync_handler_type handler,	/* ISR to be executed */
-			       void *arg);
+boolean mddi_vsync_set_handler(msm_fb_vsync_handler_type handler, void *arg);
 
 typedef void (*mddi_llist_done_cb_type) (void);
 
 typedef void (*mddi_rev_handler_type) (void *);
 
-boolean mddi_set_rev_handler(mddi_rev_handler_type handler,	/* ISR to be executed */
-			     uint16 pkt_type);
+boolean mddi_set_rev_handler(mddi_rev_handler_type handler, uint16 pkt_type);
 
 #define MDDI_DEFAULT_PRIM_PIX_ATTR 0xC3
 #define MDDI_DEFAULT_SECD_PIX_ATTR 0xC0

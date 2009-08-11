@@ -1142,19 +1142,30 @@ static void toshiba_sec_start(struct msm_fb_data_type *mfd)
 	write_client_reg(ASY_CMDSET, 0x0000000C, TRUE);
 	mddi_wait(20);
 	write_client_reg(ASY_DATA, 0x80000059, TRUE);
-	write_client_reg(ASY_DATB, 0x00000019, TRUE);	// LTPS I/F control
-	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);	// Direct cmd transfer enable
-	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);	// Direct cmd transfer disable
+	/* LTPS I/F control */
+	write_client_reg(ASY_DATB, 0x00000019, TRUE);
+	/* Direct cmd transfer enable */
+	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);
+	/* Direct cmd transfer disable */
+	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);
 	mddi_wait(20);
-	write_client_reg(ASY_DATA, 0x80000059, TRUE);	// Index setting of SUB LCDD
-	write_client_reg(ASY_DATB, 0x00000079, TRUE);	// LTPS I/F control
-	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);	// Direct cmd transfer enable
-	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);	// Direct cmd transfer disable
+	/* Index setting of SUB LCDD */
+	write_client_reg(ASY_DATA, 0x80000059, TRUE);
+	/* LTPS I/F control */
+	write_client_reg(ASY_DATB, 0x00000079, TRUE);
+	/* Direct cmd transfer enable */
+	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);
+	/* Direct cmd transfer disable */
+	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);
 	mddi_wait(20);
-	write_client_reg(ASY_DATA, 0x80000059, TRUE);	// Index setting of SUB LCDD
-	write_client_reg(ASY_DATB, 0x000003FD, TRUE);	// LTPS I/F control
-	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);	// Direct cmd transfer enable
-	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);	// Direct cmd transfer disable
+	/* Index setting of SUB LCDD */
+	write_client_reg(ASY_DATA, 0x80000059, TRUE);
+	/* LTPS I/F control */
+	write_client_reg(ASY_DATB, 0x000003FD, TRUE);
+	/* Direct cmd transfer enable */
+	write_client_reg(ASY_CMDSET, 0x00000005, TRUE);
+	/* Direct cmd transfer disable */
+	write_client_reg(ASY_CMDSET, 0x00000004, TRUE);
 	mddi_wait(20);
 	mddi_toshiba_state_transition(TOSHIBA_STATE_PRIM_SEC_READY,
 				      TOSHIBA_STATE_SEC_NORMAL_MODE);
@@ -1459,7 +1470,7 @@ static void mddi_toshiba_vsync_set_handler(msm_fb_vsync_handler_type handler,	/*
 
 	/* Disable interrupts */
 	spin_lock_irqsave(&mddi_host_spin_lock, flags);
-	// INTLOCK();
+	/* INTLOCK(); */
 
 	if (mddi_toshiba_vsync_handler != NULL) {
 		error = TRUE;
@@ -1471,7 +1482,7 @@ static void mddi_toshiba_vsync_set_handler(msm_fb_vsync_handler_type handler,	/*
 
 	/* Restore interrupts */
 	spin_unlock_irqrestore(&mddi_host_spin_lock, flags);
-	// MDDI_INTFREE();
+	/* MDDI_INTFREE(); */
 	if (error) {
 		MDDI_MSG_ERR("MDDI: Previous Vsync handler never called\n");
 	} else {
@@ -1485,46 +1496,51 @@ static void mddi_toshiba_vsync_set_handler(msm_fb_vsync_handler_type handler,	/*
 
 static void mddi_toshiba_lcd_vsync_detected(boolean detected)
 {
-	// static timetick_type start_time = 0;
+	/* static timetick_type start_time = 0; */
 	static struct timeval start_time;
 	static boolean first_time = TRUE;
-	// uint32 mdp_cnt_val = 0;
-	// timetick_type elapsed_us;
+	/* uint32 mdp_cnt_val = 0; */
+	/* timetick_type elapsed_us; */
 	struct timeval now;
 	uint32 elapsed_us;
 	uint32 num_vsyncs;
 
 	if ((detected) || (mddi_toshiba_vsync_attempts > 5)) {
 		if ((detected) && (mddi_toshiba_monitor_refresh_value)) {
-			// if (start_time != 0)
+			/* if (start_time != 0) */
 			if (!first_time) {
-				// elapsed_us = timetick_get_elapsed(start_time, T_USEC);
 				jiffies_to_timeval(jiffies, &now);
 				elapsed_us =
 				    (now.tv_sec - start_time.tv_sec) * 1000000 +
 				    now.tv_usec - start_time.tv_usec;
-				/* LCD is configured for a refresh every * usecs, so to
-				 * determine the number of vsyncs that have occurred
-				 * since the last measurement add half that to the
-				 * time difference and divide by the refresh rate. */
+				/*
+				 * LCD is configured for a refresh every usecs,
+				 *  so to determine the number of vsyncs that
+				 *  have occurred since the last measurement
+				 *  add half that to the time difference and
+				 *  divide by the refresh rate.
+				 */
 				num_vsyncs = (elapsed_us +
 					      (mddi_toshiba_usecs_per_refresh >>
 					       1)) /
 				    mddi_toshiba_usecs_per_refresh;
-				/* LCD is configured for * hsyncs (rows) per refresh cycle.
-				 * Calculate new rows_per_second value based upon these
-				 * new measurements. MDP can update with this new value. */
+				/*
+				 * LCD is configured for * hsyncs (rows) per
+				 * refresh cycle. Calculate new rows_per_second
+				 * value based upon these new measurements.
+				 * MDP can update with this new value.
+				 */
 				mddi_toshiba_rows_per_second =
 				    (mddi_toshiba_rows_per_refresh * 1000 *
 				     num_vsyncs) / (elapsed_us / 1000);
 			}
-			// start_time = timetick_get();
+			/* start_time = timetick_get(); */
 			first_time = FALSE;
 			jiffies_to_timeval(jiffies, &start_time);
 			if (mddi_toshiba_report_refresh_measurements) {
 				(void)mddi_queue_register_read_int(VPOS,
 								   &mddi_toshiba_curr_vpos);
-				// mdp_cnt_val = MDP_LINE_COUNT;
+				/* mdp_cnt_val = MDP_LINE_COUNT; */
 			}
 		}
 		/* if detected = TRUE, client initiated wakeup was detected */
@@ -1545,7 +1561,7 @@ static void mddi_toshiba_lcd_vsync_detected(boolean detected)
 			   (mddi_toshiba_report_refresh_measurements)) {
 			MDDI_MSG_NOTICE("  Last Line Counter=%d!\n",
 					mddi_toshiba_curr_vpos);
-			// MDDI_MSG_NOTICE("  MDP Line Counter=%d!\n",mdp_cnt_val);
+		/* MDDI_MSG_NOTICE("  MDP Line Counter=%d!\n",mdp_cnt_val); */
 			MDDI_MSG_NOTICE("  Lines Per Second=%d!\n",
 					mddi_toshiba_rows_per_second);
 		}

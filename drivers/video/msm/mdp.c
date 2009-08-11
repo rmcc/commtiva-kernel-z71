@@ -83,7 +83,7 @@ struct semaphore mdp_ppp_mutex;
 struct semaphore mdp_pipe_ctrl_mutex;
 
 unsigned long mdp_timer_duration = (HZ);   /* 1 sec */
-//unsigned long mdp_mdp_timer_duration=0; //immediate
+/* unsigned long mdp_mdp_timer_duration=0; */
 
 boolean mdp_ppp_waiting = FALSE;
 uint32 mdp_tv_underflow_cnt;
@@ -92,21 +92,23 @@ uint32 mdp_lcdc_underflow_cnt;
 boolean mdp_current_clk_on = FALSE;
 boolean mdp_is_in_isr = FALSE;
 
-// legacy mdp_in_processing is only for DMA2-MDDI
-// this applies to DMA2 block only
+/*
+ * legacy mdp_in_processing is only for DMA2-MDDI
+ * this applies to DMA2 block only
+ */
 uint32 mdp_in_processing = FALSE;
 
 uint32 mdp_intr_mask = MDP_ANY_INTR_MASK;
-/////////////////////////////////////////
+
 MDP_BLOCK_TYPE mdp_debug[MDP_MAX_BLOCK];
 
 int32 mdp_block_power_cnt[MDP_MAX_BLOCK];
 
 spinlock_t mdp_spin_lock;
-struct workqueue_struct *mdp_dma_wq;	//mdp dma wq
-struct workqueue_struct *mdp_vsync_wq;	//mdp vsync wq
+struct workqueue_struct *mdp_dma_wq;	/* mdp dma wq */
+struct workqueue_struct *mdp_vsync_wq;	/* mdp vsync wq */
 
-static struct workqueue_struct *mdp_pipe_ctrl_wq;	//mdp mdp pipe ctrl wq
+static struct workqueue_struct *mdp_pipe_ctrl_wq;/* mdp mdp pipe ctrl wq */
 static struct delayed_work mdp_pipe_ctrl_worker;
 
 static struct mdp_dma_data dma2_data;
@@ -288,9 +290,7 @@ int mdp_ppp_pipe_wait(void)
 
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
-	/*---------------------------------------------------------
-	// kick off PPP engine
-	/---------------------------------------------------------*/
+	/* kick off PPP engine */
 	if (term == MDP_PPP_TERM) {
 		if (mdp_debug[MDP_PPP_BLOCK])
 			jiffies_to_timeval(jiffies, &mdp_ppp_timeval);
@@ -298,10 +298,10 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 		INIT_COMPLETION(mdp_ppp_comp);
 		mdp_ppp_waiting = TRUE;
 
-		// let's turn on PPP block
+		/* let's turn on PPP block */
 		mdp_pipe_ctrl(MDP_PPP_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
-		//HWIO_OUT(MDP_DISPLAY0_START, 0x1000);
+		/* HWIO_OUT(MDP_DISPLAY0_START, 0x1000); */
 		outpdw(MDP_BASE + 0x30, 0x1000);
 		wait_for_completion_killable(&mdp_ppp_comp);
 
@@ -320,12 +320,15 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 				    (int)mdp_dma2_timeval.tv_usec);
 			jiffies_to_timeval(jiffies, &mdp_dma2_timeval);
 		}
-		// DMA update timestamp
+		/* DMA update timestamp */
 		mdp_dma2_last_update_time = ktime_get_real();
-		// let's turn on DMA2 block
-		// mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON,FALSE);
+		/* let's turn on DMA2 block */
+#if 0
+		mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+#endif
+
 #ifdef CONFIG_FB_MSM_MDP22
-		outpdw(MDP_CMD_DEBUG_ACCESS_BASE + 0x0044, 0x0);	// start DMA
+		outpdw(MDP_CMD_DEBUG_ACCESS_BASE + 0x0044, 0x0);/* start DMA */
 #else
 		if (mdp_lut_push) {
 			mutex_lock(&mdp_lut_push_sem);
@@ -334,11 +337,11 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 					(mdp_lut_push_i << 10) | 0x17);
 			mutex_unlock(&mdp_lut_push_sem);
 		}
-		outpdw(MDP_BASE + 0x0044, 0x0);	// start DMA
+		outpdw(MDP_BASE + 0x0044, 0x0);	/* start DMA */
 #endif
 	} else if (term == MDP_DMA_S_TERM) {
 		mdp_pipe_ctrl(MDP_DMA_S_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-		outpdw(MDP_BASE + 0x0048, 0x0);	// start DMA
+		outpdw(MDP_BASE + 0x0048, 0x0);	/* start DMA */
 	}
 }
 
@@ -364,18 +367,17 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 		mdp_block_power_cnt[block]--;
 
 		if (mdp_block_power_cnt[block] < 0) {
-			//////////////////////////////////////////////////////////////////
-			// Master has to serve a request to power off MDP always
-			// It also has a timer to power off.
-			// So, in case of timer expires first and DMA2 finishes later,
-			// master has to power off two times
-			//
-			// There shouldn't be multiple power-off request for other blocks
-			//////////////////////////////////////////////////////////////////
+			/*
+			 * Master has to serve a request to power off MDP always
+			 * It also has a timer to power off.  So, in case of
+			 * timer expires first and DMA2 finishes later, master
+			 * has to power off two times
+			 * There shouldn't be multiple power-off request for
+			 * other blocks
+			 */
 			if (block != MDP_MASTER_BLOCK) {
-				MSM_FB_INFO
-				    ("mdp_block_power_cnt[block=%d] multiple power-off request\n",
-				     block);
+				MSM_FB_INFO("mdp_block_power_cnt[block=%d] \
+				multiple power-off request\n", block);
 			}
 			mdp_block_power_cnt[block] = 0;
 		}
@@ -385,44 +387,44 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 	}
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
-	/////////////////////////////////////////////////////////////////
-	// If it's in isr, we send our request to workqueue.
-	// Otherwise, processing happens in the current context
-	/////////////////////////////////////////////////////////////////
+	/*
+	 * If it's in isr, we send our request to workqueue.
+	 * Otherwise, processing happens in the current context
+	 */
 	if (isr) {
-		////////////////////////////////////////////////////
-		//checking all blocks power state
-		////////////////////////////////////////////////////
+		/* checking all blocks power state */
 		for (i = 0; i < MDP_MAX_BLOCK; i++) {
 			if (mdp_block_power_cnt[i] > 0)
 				mdp_all_blocks_off = FALSE;
 		}
-		////////////////////////////////////////////////////
 
 		if ((mdp_all_blocks_off) && (mdp_current_clk_on)) {
-			//send workqueue to turn off mdp power
+			/* send workqueue to turn off mdp power */
 			queue_delayed_work(mdp_pipe_ctrl_wq,
 					   &mdp_pipe_ctrl_worker,
 					   mdp_timer_duration);
 		}
 	} else {
 		down(&mdp_pipe_ctrl_mutex);
-		////////////////////////////////////////////////////
-		//checking all blocks power state
-		////////////////////////////////////////////////////
+		/* checking all blocks power state */
 		for (i = 0; i < MDP_MAX_BLOCK; i++) {
 			if (mdp_block_power_cnt[i] > 0)
 				mdp_all_blocks_off = FALSE;
 		}
-		////////////////////////////////////////////////////
 
-		//find out whether a delayable work item is currently pending
+		/*
+		 * find out whether a delayable work item is currently
+		 * pending
+		 */
 		if (delayed_work_pending(&mdp_pipe_ctrl_worker)) {
-			// try to cancel the current work ***
-			// if it fails to stop (which means del_timer can't delete it
-			// from the list, it's about to expire and run), we have to
-			// let it run.  queue_delayed_work won't accept the next job
-			// which is same as queue_delayed_work(mdp_timer_duration = 0)
+			/*
+			 * try to cancel the current work if it fails to
+			 * stop (which means del_timer can't delete it
+			 * from the list, it's about to expire and run),
+			 * we have to let it run. queue_delayed_work won't
+			 * accept the next job which is same as
+			 * queue_delayed_work(mdp_timer_duration = 0)
+			 */
 
 			cancel_delayed_work(&mdp_pipe_ctrl_worker);
 		}
@@ -430,7 +432,7 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 		if ((mdp_all_blocks_off) && (mdp_current_clk_on)) {
 			if (block == MDP_MASTER_BLOCK) {
 				mdp_current_clk_on = FALSE;
-				// turn off MDP clk
+				/* turn off MDP clk */
 				if (mdp_clk != NULL) {
 					clk_disable(mdp_clk);
 					disable_irq(INT_MDP);
@@ -438,14 +440,14 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 				}
 
 			} else {
-				//send workqueue to turn off mdp power
+				/* send workqueue to turn off mdp power */
 				queue_delayed_work(mdp_pipe_ctrl_wq,
 						   &mdp_pipe_ctrl_worker,
 						   mdp_timer_duration);
 			}
 		} else if ((!mdp_all_blocks_off) && (!mdp_current_clk_on)) {
 			mdp_current_clk_on = TRUE;
-			// turn on MDP clk
+			/* turn on MDP clk */
 			if (mdp_clk != NULL) {
 				enable_irq(INT_MDP);
 				clk_enable(mdp_clk);
@@ -476,11 +478,9 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 		if (!mdp_interrupt)
 			break;
 
-		///////////////////////////////
-		// DMA3 TV-Out Start
-		///////////////////////////////
+		/* DMA3 TV-Out Start */
 		if (mdp_interrupt & TV_OUT_DMA3_START) {
-			// let's disable TV out interrupt
+			/* let's disable TV out interrupt */
 			mdp_intr_mask &= ~TV_OUT_DMA3_START;
 			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 
@@ -506,17 +506,13 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 			complete(&mdp_hist_comp);
 		}
 
-		///////////////////////////////
-		// LCDC UnderFlow
-		///////////////////////////////
+		/* LCDC UnderFlow */
 		if (mdp_interrupt & LCDC_UNDERFLOW) {
 			mdp_lcdc_underflow_cnt++;
 		}
-		///////////////////////////////
-		// LCDC Frame Start
-		///////////////////////////////
+		/* LCDC Frame Start */
 		if (mdp_interrupt & LCDC_FRAME_START) {
-			// let's disable LCDC interrupt
+			/* let's disable LCDC interrupt */
 			mdp_intr_mask &= ~LCDC_FRAME_START;
 			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 
@@ -527,9 +523,7 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 			}
 		}
 
-		///////////////////////////////
-		// DMA2 LCD-Out Complete
-		///////////////////////////////
+		/* DMA2 LCD-Out Complete */
 		if (mdp_interrupt & MDP_DMA_S_DONE) {
 			dma = &dma_s_data;
 			dma->busy = FALSE;
@@ -539,9 +533,7 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 		}
 #endif
 
-		///////////////////////////////
-		// DMA2 LCD-Out Complete
-		///////////////////////////////
+		/* DMA2 LCD-Out Complete */
 		if (mdp_interrupt & MDP_DMA_P_DONE) {
 			struct timeval now;
 			ktime_t now_k;
@@ -564,9 +556,7 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 				      TRUE);
 			complete(&dma->comp);
 		}
-		///////////////////////////////
-		// PPP Complete
-		///////////////////////////////
+		/* PPP Complete */
 		if (mdp_interrupt & MDP_PPP_DONE) {
 			mdp_pipe_ctrl(MDP_PPP_BLOCK, MDP_BLOCK_POWER_OFF, TRUE);
 			if (mdp_ppp_waiting) {
@@ -589,9 +579,7 @@ static void mdp_drv_init(void)
 		mdp_debug[i] = 0;
 	}
 
-	///////////////////////////////////////////////////////
-	// initialize spin lock and workqueue
-	///////////////////////////////////////////////////////
+	/* initialize spin lock and workqueue */
 	spin_lock_init(&mdp_spin_lock);
 	mdp_dma_wq = create_singlethread_workqueue("mdp_dma_wq");
 	mdp_vsync_wq = create_singlethread_workqueue("mdp_vsync_wq");
@@ -599,9 +587,7 @@ static void mdp_drv_init(void)
 	INIT_DELAYED_WORK(&mdp_pipe_ctrl_worker,
 			  mdp_pipe_ctrl_workqueue_handler);
 
-	///////////////////////////////////////////////////////
-	// initialize semaphore
-	///////////////////////////////////////////////////////
+	/* initialize semaphore */
 	init_completion(&mdp_ppp_comp);
 	init_MUTEX(&mdp_ppp_mutex);
 	init_MUTEX(&mdp_pipe_ctrl_mutex);
@@ -625,16 +611,12 @@ static void mdp_drv_init(void)
 	init_completion(&mdp_hist_comp);
 #endif
 
-	///////////////////////////////////////////////////////
-	// initializing mdp power block counter to 0
-	///////////////////////////////////////////////////////
+	/* initializing mdp power block counter to 0 */
 	for (i = 0; i < MDP_MAX_BLOCK; i++) {
 		mdp_block_power_cnt[i] = 0;
 	}
 
-	///////////////////////////////////////////////////////
-	// initializing mdp hw
-	///////////////////////////////////////////////////////
+	/* initializing mdp hw */
 	mdp_hw_init();
 
 #ifdef MSM_FB_ENABLE_DBGFS
@@ -648,42 +630,33 @@ static void mdp_drv_init(void)
 
 			if (mdp_dir) {
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "dma2_update_time_in_usec",
-							   (u32 *) &
-							   mdp_dma2_update_time_in_usec);
+					"dma2_update_time_in_usec",
+					(u32 *) &mdp_dma2_update_time_in_usec);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "vs_rdcnt_slow",
-							   (u32 *) &
-							   mdp_lcd_rd_cnt_offset_slow);
+					"vs_rdcnt_slow",
+					(u32 *) &mdp_lcd_rd_cnt_offset_slow);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "vs_rdcnt_fast",
-							   (u32 *) &
-							   mdp_lcd_rd_cnt_offset_fast);
+					"vs_rdcnt_fast",
+					(u32 *) &mdp_lcd_rd_cnt_offset_fast);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "mdp_usec_diff_threshold",
-							   (u32 *) &
-							   mdp_usec_diff_threshold);
+					"mdp_usec_diff_threshold",
+					(u32 *) &mdp_usec_diff_threshold);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "mdp_current_clk_on",
-							   (u32 *) &
-							   mdp_current_clk_on);
+					"mdp_current_clk_on",
+					(u32 *) &mdp_current_clk_on);
 #ifdef CONFIG_FB_MSM_LCDC
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "lcdc_start_x",
-							   (u32 *) &
-							   first_pixel_start_x);
+					"lcdc_start_x",
+					(u32 *) &first_pixel_start_x);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "lcdc_start_y",
-							   (u32 *) &
-							   first_pixel_start_y);
+					"lcdc_start_y",
+					(u32 *) &first_pixel_start_y);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "mdp_lcdc_pclk_clk_rate",
-							   (u32 *) &
-							   mdp_lcdc_pclk_clk_rate);
+					"mdp_lcdc_pclk_clk_rate",
+					(u32 *) &mdp_lcdc_pclk_clk_rate);
 				msm_fb_debugfs_file_create(mdp_dir,
-							   "mdp_lcdc_pad_pclk_clk_rate",
-							   (u32 *) &
-							   mdp_lcdc_pad_pclk_clk_rate);
+					"mdp_lcdc_pad_pclk_clk_rate",
+					(u32 *) &mdp_lcdc_pad_pclk_clk_rate);
 #endif
 			}
 		}
@@ -705,9 +678,12 @@ static struct platform_driver mdp_driver = {
 #endif
 	.shutdown = NULL,
 	.driver = {
-		   /* Driver name must match the device name added in platform.c. */
-		   .name = "mdp",
-		   },
+		/*
+		 * Driver name must match the device name added in
+		 * platform.c
+		 */
+		.name = "mdp",
+	},
 };
 
 static int mdp_off(struct platform_device *pdev)
@@ -792,14 +768,10 @@ static int mdp_probe(struct platform_device *pdev)
 	if (!msm_fb_dev)
 		return -ENOMEM;
 
-	/////////////////////////////////////////
-	// link to the latest pdev
-	/////////////////////////////////////////
+	/* link to the latest pdev */
 	mfd->pdev = msm_fb_dev;
 
-	/////////////////////////////////////////
-	// add panel data
-	/////////////////////////////////////////
+	/* add panel data */
 	if (platform_device_add_data
 	    (msm_fb_dev, pdev->dev.platform_data,
 	     sizeof(struct msm_fb_panel_data))) {
@@ -807,9 +779,7 @@ static int mdp_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto mdp_probe_err;
 	}
-	/////////////////////////////////////////
-	// data chain
-	/////////////////////////////////////////
+	/* data chain */
 	pdata = msm_fb_dev->dev.platform_data;
 	pdata->on = mdp_on;
 	pdata->off = mdp_off;
@@ -826,9 +796,11 @@ static int mdp_probe(struct platform_device *pdev)
 		mfd->hw_refresh = FALSE;
 
 		if (mfd->panel.type == EXT_MDDI_PANEL)
-			mfd->refresh_timer_duration = (66 * HZ / 1000);	// 15 fps -> 66 msec
+			/* 15 fps -> 66 msec */
+			mfd->refresh_timer_duration = (66 * HZ / 1000);
 		else
-			mfd->refresh_timer_duration = (42 * HZ / 1000);	// 24 fps -> 42 msec
+			/* 24 fps -> 42 msec */
+			mfd->refresh_timer_duration = (42 * HZ / 1000);
 
 #ifdef CONFIG_FB_MSM_MDP22
 		mfd->dma_fnc = mdp_dma2_update;
@@ -884,9 +856,7 @@ static int mdp_probe(struct platform_device *pdev)
 		goto mdp_probe_err;
 	}
 
-	/////////////////////////////////////////
-	// set driver data
-	/////////////////////////////////////////
+	/* set driver data */
 	platform_set_drvdata(msm_fb_dev, mfd);
 
 	rc = platform_device_add(msm_fb_dev);
@@ -904,20 +874,16 @@ static int mdp_probe(struct platform_device *pdev)
 
 static void mdp_suspend_sub(void)
 {
-	// cancel pipe ctrl worker
+	/* cancel pipe ctrl worker */
 	cancel_delayed_work(&mdp_pipe_ctrl_worker);
 
-	// for workder can't be cancelled...
+	/* for workder can't be cancelled... */
 	flush_workqueue(mdp_pipe_ctrl_wq);
 
-	////////////////////////////////////////////////////
-	// let's wait for PPP completion
-	////////////////////////////////////////////////////
+	/* let's wait for PPP completion */
 	while (mdp_block_power_cnt[MDP_PPP_BLOCK] > 0) ;
 
-	////////////////////////////////////////////////////
-	// try to power down
-	////////////////////////////////////////////////////
+	/* try to power down */
 	mdp_pipe_ctrl(MDP_MASTER_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 

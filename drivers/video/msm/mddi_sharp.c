@@ -67,9 +67,9 @@ static boolean mddi_debug_prim_wait = FALSE;
 static boolean mddi_sharp_vsync_wake = TRUE;
 static boolean mddi_sharp_monitor_refresh_value = TRUE;
 static boolean mddi_sharp_report_refresh_measurements = FALSE;
-static uint32 mddi_sharp_rows_per_second = 13830;	// 5200000/376
+static uint32 mddi_sharp_rows_per_second = 13830;	/* 5200000/376 */
 static uint32 mddi_sharp_rows_per_refresh = 338;
-static uint32 mddi_sharp_usecs_per_refresh = 24440;	// (376+338)/5200000
+static uint32 mddi_sharp_usecs_per_refresh = 24440;	/* (376+338)/5200000 */
 static boolean mddi_sharp_debug_60hz_refresh = FALSE;
 
 extern mddi_gpio_info_type mddi_gpio;
@@ -136,19 +136,19 @@ static void sub_through_write(int sub_rs, uint32 sub_data)
 {
 	mddi_queue_register_write(REG_SUBTCMDD, sub_data, FALSE, 0);
 
-	// CS=1,RD=1,WE=1,RS=sub_rs
+	/* CS=1,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x000e | sub_rs, FALSE, 0);
 
-	// CS=0,RD=1,WE=1,RS=sub_rs
+	/* CS=0,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0006 | sub_rs, FALSE, 0);
 
-	// CS=0,RD=1,WE=0,RS=sub_rs
+	/* CS=0,RD=1,WE=0,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0004 | sub_rs, FALSE, 0);
 
-	// CS=0,RD=1,WE=1,RS=sub_rs
+	/* CS=0,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0006 | sub_rs, FALSE, 0);
 
-	// CS=1,RD=1,WE=1,RS=sub_rs
+	/* CS=1,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x000e | sub_rs, TRUE, 0);
 }
 
@@ -156,21 +156,21 @@ static uint32 sub_through_read(int sub_rs)
 {
 	uint32 sub_data;
 
-	// CS=1,RD=1,WE=1,RS=sub_rs
+	/* CS=1,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x000e | sub_rs, FALSE, 0);
 
-	// CS=0,RD=1,WE=1,RS=sub_rs
+	/* CS=0,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0006 | sub_rs, FALSE, 0);
 
-	// CS=0,RD=1,WE=0,RS=sub_rs
+	/* CS=0,RD=1,WE=0,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0002 | sub_rs, TRUE, 0);
 
 	mddi_queue_register_read(REG_SUBTCMDD, &sub_data, TRUE, 0);
 
-	// CS=0,RD=1,WE=1,RS=sub_rs
+	/* CS=0,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x0006 | sub_rs, FALSE, 0);
 
-	// CS=1,RD=1,WE=1,RS=sub_rs
+	/* CS=1,RD=1,WE=1,RS=sub_rs */
 	mddi_queue_register_write(REG_SUBTCMD, 0x000e | sub_rs, TRUE, 0);
 
 	return sub_data;
@@ -218,7 +218,7 @@ static void mddi_sharp_lcd_powerdown(void)
 	mddi_wait(2);
 	mddi_queue_register_write(REG_CLKDIV1, 0x3, TRUE, 0);
 	mddi_wait(2);
-	mddi_queue_register_write(REG_SSDCTL, 0x0000, TRUE, 0);	//SSDRESET
+	mddi_queue_register_write(REG_SSDCTL, 0x0000, TRUE, 0);	/* SSDRESET */
 	mddi_queue_register_write(REG_SYSCTL, 0x0, TRUE, 0);
 	mddi_wait(2);
 }
@@ -284,7 +284,7 @@ static void mddi_sharp_prim_lcd_init(void)
 
 	mddi_wait(1);
 
-	// vram_color set REG_AGM????
+	/* vram_color set REG_AGM???? */
 	mddi_queue_register_write(REG_AGM, 0x0000, TRUE, 0);
 
 	mddi_queue_register_write(REG_SSDCTL, 0x0000, FALSE, 0);
@@ -294,74 +294,70 @@ static void mddi_sharp_prim_lcd_init(void)
 	mddi_wait(10);
 
 	serigo(0x0701);
-	// software reset
+	/* software reset */
 	mddi_wait(1);
-	// Wait over 50us
+	/* Wait over 50us */
 
 	serigo(0x0400);
-	// DCLK~ACHSYNC~ACVSYNC polarity setting
+	/* DCLK~ACHSYNC~ACVSYNC polarity setting */
 	serigo(0x2900);
-	// EEPROM start read address setting
+	/* EEPROM start read address setting */
 	serigo(0x2606);
-	// EEPROM start read register setting
+	/* EEPROM start read register setting */
 	mddi_wait(20);
-	// Wait over 20ms
+	/* Wait over 20ms */
 
 	serigo(0x0503);
-	// Horizontal timing setting
+	/* Horizontal timing setting */
 	serigo(0x062C);
-	// Veritical timing setting
+	/* Veritical timing setting */
 	serigo(0x2001);
-	// power initialize setting(VDC2)
+	/* power initialize setting(VDC2) */
 	mddi_wait(20);
-	// Wait over 20ms
+	/* Wait over 20ms */
 
 	serigo(0x2120);
-	// Initialize power setting(CPS)
+	/* Initialize power setting(CPS) */
 	mddi_wait(20);
-	// Wait over 20ms
+	/* Wait over 20ms */
 
 	serigo(0x2130);
-	// Initialize power setting(CPS)
+	/* Initialize power setting(CPS) */
 	mddi_wait(20);
-	// Wait over 20ms
+	/* Wait over 20ms */
 
 	serigo(0x2132);
-	// Initialize power setting(CPS)
+	/* Initialize power setting(CPS) */
 	mddi_wait(10);
-	// Wait over 10ms
+	/* Wait over 10ms */
 
 	serigo(0x2133);
-	// Initialize power setting(CPS)
+	/* Initialize power setting(CPS) */
 	mddi_wait(20);
-	// Wait over 20ms
+	/* Wait over 20ms */
 
 	serigo(0x0200);
-	// Panel initialize release(INIT)
+	/* Panel initialize release(INIT) */
 	mddi_wait(1);
-	// Wait over 1ms
+	/* Wait over 1ms */
 
 	serigo(0x0131);
-	// Panel setting(CPS)
+	/* Panel setting(CPS) */
 	mddi_wait(1);
-	// Wait over 1ms
+	/* Wait over 1ms */
 
 	mddi_queue_register_write(REG_PSTCTL1, 0x0003, TRUE, 0);
 
-	//#if (FFA LCD is upside down) -> serigo(0x0100);
+	/* if (FFA LCD is upside down) -> serigo(0x0100); */
 	serigo(0x0130);
 
-	// Black mask release(display ON)
+	/* Black mask release(display ON) */
 	mddi_wait(1);
-	// Wait over 1ms
+	/* Wait over 1ms */
 
 	if (mddi_sharp_vsync_wake) {
 		mddi_queue_register_write(REG_VBLKS, 0x1001, TRUE, 0);
 		mddi_queue_register_write(REG_VBLKE, 0x1002, TRUE, 0);
-		// mddi_queue_register_write(REG_INTR, 0x8100, TRUE, 0);
-		// *(VBLKS) = 0x1001  /* VBLKS: 458h */
-		// *(VBLKE) = 0x1002  /* VBLKE: 45Ah */
-		// *(INTR)  = 0x8100  /* INTR:  006h */
 	}
 
 	/* Set the MDP pixel data attributes for Primary Display */
@@ -391,12 +387,13 @@ void mddi_sharp_sub_lcd_init(void)
 	mddi_queue_register_write(REG_PTVW, 128, FALSE, 0);
 	mddi_queue_register_write(REG_PTVF, 15, FALSE, 0);
 
-	// Now the sub display.....
-	mddi_queue_register_write(REG_SUBCTL, 0x0200, FALSE, 0);	// Reset High
-	// CS=1,RD=1,WE=1,RS=1
+	/* Now the sub display..... */
+	/* Reset High */
+	mddi_queue_register_write(REG_SUBCTL, 0x0200, FALSE, 0);
+	/* CS=1,RD=1,WE=1,RS=1 */
 	mddi_queue_register_write(REG_SUBTCMD, 0x000f, TRUE, 0);
 	mddi_wait(1);
-	// Wait 5us
+	/* Wait 5us */
 
 	if (sharp_subpanel_type == SHARP_SUB_UNKNOWN) {
 		uint32 data;
@@ -423,7 +420,7 @@ void mddi_sharp_sub_lcd_init(void)
 	}
 
 	if (sharp_subpanel_type == SHARP_SUB_HYNIX) {
-		sub_through_write(1, 0x00);	// Display setting 1
+		sub_through_write(1, 0x00);	/* Display setting 1 */
 		sub_through_write(1, 0x04);
 		sub_through_write(1, 0x01);
 		sub_through_write(1, 0x05);
@@ -442,7 +439,7 @@ void mddi_sharp_sub_lcd_init(void)
 		sub_through_write(1, 0x0E00);
 		sub_through_write(1, 0x0F00);
 
-		sub_through_write(1, 0x100B);	// Display setting 2
+		sub_through_write(1, 0x100B);	/* Display setting 2 */
 		sub_through_write(1, 0x1103);
 		sub_through_write(1, 0x1237);
 		sub_through_write(1, 0x1300);
@@ -456,9 +453,9 @@ void mddi_sharp_sub_lcd_init(void)
 		sub_through_write(1, 0x1B00);
 		sub_through_write(1, 0x1C00);
 
-		sub_through_write(1, 0x151A);	// Power setting
+		sub_through_write(1, 0x151A);	/* Power setting */
 
-		sub_through_write(1, 0x2002);	// Gradation Palette setting
+		sub_through_write(1, 0x2002);	/* Gradation Palette setting */
 		sub_through_write(1, 0x2107);
 		sub_through_write(1, 0x220C);
 		sub_through_write(1, 0x2310);
@@ -555,29 +552,29 @@ void mddi_sharp_sub_lcd_init(void)
 		sub_through_write(1, 0x7E6E);
 		sub_through_write(1, 0x7F7D);
 
-		sub_through_write(1, 0x1851);	// Display on
+		sub_through_write(1, 0x1851);	/* Display on */
 
 		mddi_queue_register_write(REG_AGM, 0x0000, TRUE, 0);
 
-		// 1 pixel / 1 post clock
+		/* 1 pixel / 1 post clock */
 		mddi_queue_register_write(REG_CLKDIV2, 0x3b00, FALSE, 0);
 
-		// SUB LCD select
+		/* SUB LCD select */
 		mddi_queue_register_write(REG_PSTCTL2, 0x0080, FALSE, 0);
 
-		// RS=0,command initiate number=0,select master mode
+		/* RS=0,command initiate number=0,select master mode */
 		mddi_queue_register_write(REG_SUBCTL, 0x0202, FALSE, 0);
 
-		// Sub LCD Data transform start
+		/* Sub LCD Data transform start */
 		mddi_queue_register_write(REG_PSTCTL1, 0x0003, FALSE, 0);
 
 	} else if (sharp_subpanel_type == SHARP_SUB_ROHM) {
 
-		sub_through_write(0, 0x01);	// Display setting
+		sub_through_write(0, 0x01);	/* Display setting */
 		sub_through_write(1, 0x00);
 
 		mddi_wait(1);
-		// Wait 100us  <----- ******* Update 2005/01/24
+		/* Wait 100us  <----- ******* Update 2005/01/24 */
 
 		sub_through_write(0, 0xB6);
 		sub_through_write(1, 0x0C);
@@ -610,12 +607,12 @@ void mddi_sharp_sub_lcd_init(void)
 		sub_through_write(1, 0x7F);
 
 		sub_through_write(0, 0x2C);
-		sub_through_write(0, 0x11);	// Sleep mode off
+		sub_through_write(0, 0x11);	/* Sleep mode off */
 
 		mddi_wait(1);
-		// Wait 100 ms <----- ******* Update 2005/01/24
+		/* Wait 100 ms <----- ******* Update 2005/01/24 */
 
-		sub_through_write(0, 0x29);	// Display on
+		sub_through_write(0, 0x29);	/* Display on */
 		sub_through_write(0, 0xB3);
 		sub_through_write(1, 0x20);
 		sub_through_write(1, 0xAA);
@@ -634,18 +631,18 @@ void mddi_sharp_sub_lcd_init(void)
 		sub_through_write(1, 0x9C);
 		sub_through_write(1, 0x8A);
 
-		sub_through_write(0, 0x002C);	// Display on
+		sub_through_write(0, 0x002C);	/* Display on */
 
-		// 1 pixel / 2 post clock
+		/* 1 pixel / 2 post clock */
 		mddi_queue_register_write(REG_CLKDIV2, 0x7b00, FALSE, 0);
 
-		// SUB LCD select
+		/* SUB LCD select */
 		mddi_queue_register_write(REG_PSTCTL2, 0x0080, FALSE, 0);
 
-		// RS=1,command initiate number=0,select master mode
+		/* RS=1,command initiate number=0,select master mode */
 		mddi_queue_register_write(REG_SUBCTL, 0x0242, FALSE, 0);
 
-		// Sub LCD Data transform start
+		/* Sub LCD Data transform start */
 		mddi_queue_register_write(REG_PSTCTL1, 0x0003, FALSE, 0);
 
 	}
@@ -656,44 +653,49 @@ void mddi_sharp_sub_lcd_init(void)
 
 void mddi_sharp_lcd_vsync_detected(boolean detected)
 {
-	// static timetick_type start_time = 0;
+	/* static timetick_type start_time = 0; */
 	static struct timeval start_time;
 	static boolean first_time = TRUE;
-	// uint32 mdp_cnt_val = 0;
-	// timetick_type elapsed_us;
+	/* uint32 mdp_cnt_val = 0; */
+	/* timetick_type elapsed_us; */
 	struct timeval now;
 	uint32 elapsed_us;
 	uint32 num_vsyncs;
 
 	if ((detected) || (mddi_sharp_vsync_attempts > 5)) {
 		if ((detected) && (mddi_sharp_monitor_refresh_value)) {
-			// if (start_time != 0)
+			/* if (start_time != 0) */
 			if (!first_time) {
-				// elapsed_us = timetick_get_elapsed(start_time, T_USEC);
 				jiffies_to_timeval(jiffies, &now);
 				elapsed_us =
 				    (now.tv_sec - start_time.tv_sec) * 1000000 +
 				    now.tv_usec - start_time.tv_usec;
-				/* LCD is configured for a refresh every * usecs, so to
-				 * determine the number of vsyncs that have occurred
-				 * since the last measurement add half that to the
-				 * time difference and divide by the refresh rate. */
+				/*
+				* LCD is configured for a refresh every usecs,
+				* so to determine the number of vsyncs that
+				* have occurred since the last measurement add
+				* half that to the time difference and divide
+				* by the refresh rate.
+				*/
 				num_vsyncs = (elapsed_us +
 					      (mddi_sharp_usecs_per_refresh >>
 					       1)) /
 				    mddi_sharp_usecs_per_refresh;
-				/* LCD is configured for * hsyncs (rows) per refresh cycle.
-				 * Calculate new rows_per_second value based upon these
-				 * new measurements. MDP can update with this new value. */
+				/*
+				 * LCD is configured for * hsyncs (rows) per
+				 * refresh cycle. Calculate new rows_per_second
+				 * value based upon these new measurements.
+				 * MDP can update with this new value.
+				 */
 				mddi_sharp_rows_per_second =
 				    (mddi_sharp_rows_per_refresh * 1000 *
 				     num_vsyncs) / (elapsed_us / 1000);
 			}
-			// start_time = timetick_get();
+			/* start_time = timetick_get(); */
 			first_time = FALSE;
 			jiffies_to_timeval(jiffies, &start_time);
 			if (mddi_sharp_report_refresh_measurements) {
-				// mdp_cnt_val = MDP_LINE_COUNT;
+				/* mdp_cnt_val = MDP_LINE_COUNT; */
 			}
 		}
 		/* if detected = TRUE, client initiated wakeup was detected */
@@ -712,10 +714,10 @@ void mddi_sharp_lcd_vsync_detected(boolean detected)
 			/* give up after 5 failed attempts but show error */
 			MDDI_MSG_NOTICE("Vsync detection failed!\n");
 		} else if ((mddi_sharp_monitor_refresh_value) &&
-			   (mddi_sharp_report_refresh_measurements))
-//      MDDI_MSG_NOTICE("  MDP Line Counter=%d!\n",mdp_cnt_val);
+			(mddi_sharp_report_refresh_measurements)) {
 			MDDI_MSG_NOTICE("  Lines Per Second=%d!\n",
-					mddi_sharp_rows_per_second);
+				mddi_sharp_rows_per_second);
+		}
 	} else
 		/* if detected = FALSE, we woke up from hibernation, but did not
 		 * detect client initiated wakeup.
@@ -723,15 +725,15 @@ void mddi_sharp_lcd_vsync_detected(boolean detected)
 		mddi_sharp_vsync_attempts++;
 }
 
-void mddi_sharp_vsync_set_handler(msm_fb_vsync_handler_type handler,	/* ISR to be executed */
-				  void *arg)
+/* ISR to be executed */
+void mddi_sharp_vsync_set_handler(msm_fb_vsync_handler_type handler, void *arg)
 {
 	boolean error = FALSE;
 	unsigned long flags;
 
 	/* Disable interrupts */
 	spin_lock_irqsave(&mddi_host_spin_lock, flags);
-	// INTLOCK();
+	/* INTLOCK(); */
 
 	if (mddi_sharp_vsync_handler != NULL)
 		error = TRUE;
@@ -742,7 +744,7 @@ void mddi_sharp_vsync_set_handler(msm_fb_vsync_handler_type handler,	/* ISR to b
 
 	/* Restore interrupts */
 	spin_unlock_irqrestore(&mddi_host_spin_lock, flags);
-	// INTFREE();
+	/* INTFREE(); */
 
 	if (error)
 		MDDI_MSG_ERR("MDDI: Previous Vsync handler never called\n");

@@ -169,15 +169,11 @@ static int ebi2_lcd_probe(struct platform_device *pdev)
 	if (!mdp_dev)
 		return -ENOMEM;
 
-	/////////////////////////////////////////
-	// link to the latest pdev
-	/////////////////////////////////////////
+	/* link to the latest pdev */
 	mfd->pdev = mdp_dev;
 	mfd->dest = DISPLAY_LCD;
 
-	/////////////////////////////////////////
-	// add panel data
-	/////////////////////////////////////////
+	/* add panel data */
 	if (platform_device_add_data
 	    (mdp_dev, pdev->dev.platform_data,
 	     sizeof(struct msm_fb_panel_data))) {
@@ -185,17 +181,14 @@ static int ebi2_lcd_probe(struct platform_device *pdev)
 		platform_device_put(mdp_dev);
 		return -ENOMEM;
 	}
-	/////////////////////////////////////////
-	// data chain
-	/////////////////////////////////////////
+
+	/* data chain */
 	pdata = mdp_dev->dev.platform_data;
 	pdata->on = panel_next_on;
 	pdata->off = panel_next_off;
 	pdata->next = pdev;
 
-	/////////////////////////////////////////
-	// get/set panel specific fb info
-	/////////////////////////////////////////
+	/* get/set panel specific fb info */
 	mfd->panel_info = pdata->panel_info;
 
 	if (mfd->panel_info.bpp == 24)
@@ -203,31 +196,35 @@ static int ebi2_lcd_probe(struct platform_device *pdev)
 	else
 		mfd->fb_imgType = MDP_RGB_565;
 
-	/////////////////////////////////////////
-	// config msm ebi2 lcd register
-	/////////////////////////////////////////
+	/* config msm ebi2 lcd register */
 	if (mfd->panel_info.pdest == DISPLAY_1) {
 		outp32(ebi2_base,
 		       (inp32(ebi2_base) & (~(EBI2_PRIM_LCD_CLR))) |
 		       EBI2_PRIM_LCD_SEL);
-		// current design has one set of cfg0/1 register to control both EBI2 channels
-		// so, we're using the PRIM channel to configure for both
-		//
+		/*
+		 * current design has one set of cfg0/1 register to control
+		 * both EBI2 channels. so, we're using the PRIM channel to
+		 * configure both.
+		 */
 		outp32(ebi2_lcd_cfg0, mfd->panel_info.wait_cycle);
 		if (mfd->panel_info.bpp == 18)
 			outp32(ebi2_lcd_cfg1, 0x01000000);
 		else
 			outp32(ebi2_lcd_cfg1, 0x0);
 	} else {
-		// confliting with QCOM SURF FPGA CS.
-		// OEM should enable below for their CS mapping
-		//
-		// outp32(ebi2_base, (inp32(ebi2_base)&(~(EBI2_SECD_LCD_CLR)))|EBI2_SECD_LCD_SEL);
+#ifdef DEBUG_EBI2_LCD
+		/*
+		 * confliting with QCOM SURF FPGA CS.
+		 * OEM should enable below for their CS mapping
+		 */
+		 outp32(ebi2_base, (inp32(ebi2_base)&(~(EBI2_SECD_LCD_CLR)))
+					|EBI2_SECD_LCD_SEL);
+#endif
 	}
 
-	/////////////////////////////////////////
-	// map cs (chip select) address
-	/////////////////////////////////////////
+	/*
+	 * map cs (chip select) address
+	 */
 	if (mfd->panel_info.pdest == DISPLAY_1) {
 		mfd->cmd_port = lcd01_base;
 		mfd->data_port =
@@ -242,14 +239,14 @@ static int ebi2_lcd_probe(struct platform_device *pdev)
 		    (void *)(LCD_SECD_BASE_PHYS + EBI2_SECD_LCD_RS_PIN);
 	}
 
-	/////////////////////////////////////////
-	// set driver data
-	/////////////////////////////////////////
+	/*
+	 * set driver data
+	 */
 	platform_set_drvdata(mdp_dev, mfd);
 
-	/////////////////////////////////////////
-	// register in mdp driver
-	/////////////////////////////////////////
+	/*
+	 * register in mdp driver
+	 */
 	rc = platform_device_add(mdp_dev);
 	if (rc) {
 		goto ebi2_lcd_probe_err;

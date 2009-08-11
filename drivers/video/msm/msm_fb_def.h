@@ -124,7 +124,7 @@ typedef unsigned int boolean;
 #define inpdw(port)            readl(port)
 #define outpdw(port, val)      writel(val, port)
 
-//
+
 #define clk_busy_wait(x) msleep_interruptible((x)/1000)
 
 #define memory_barrier()
@@ -153,16 +153,17 @@ typedef unsigned int boolean;
 
 extern u32 msm_fb_msg_level;
 
-// Message printing priorities:
-// LEVEL 0 KERN_EMERG (highest priority)
-// LEVEL 1 KERN_ALERT
-// LEVEL 2 KERN_CRIT
-// LEVEL 3 KERN_ERR
-// LEVEL 4 KERN_WARNING
-// LEVEL 5 KERN_NOTICE
-// LEVEL 6 KERN_INFO
-// LEVEL 7 KERN_DEBUG (Lowest priority)
-
+/*
+ * Message printing priorities:
+ * LEVEL 0 KERN_EMERG (highest priority)
+ * LEVEL 1 KERN_ALERT
+ * LEVEL 2 KERN_CRIT
+ * LEVEL 3 KERN_ERR
+ * LEVEL 4 KERN_WARNING
+ * LEVEL 5 KERN_NOTICE
+ * LEVEL 6 KERN_INFO
+ * LEVEL 7 KERN_DEBUG (Lowest priority)
+ */
 #define MSM_FB_EMERG(msg, ...)    \
 	if (msm_fb_msg_level > 0)  \
 		printk(KERN_EMERG msg, ## __VA_ARGS__);

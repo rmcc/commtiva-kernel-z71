@@ -86,13 +86,14 @@ mddi_gpio_info_type mddi_gpio;
 
 uint32 mddi_host_core_version;
 boolean mddi_debug_log_statistics = FALSE;
-// #define FEATURE_MDDI_HOST_ENABLE_EARLY_HIBERNATION
+/* #define FEATURE_MDDI_HOST_ENABLE_EARLY_HIBERNATION */
 /* default to TRUE in case MDP does not vote */
 static boolean mddi_host_mdp_active_flag = TRUE;
 static uint32 mddi_log_stats_counter;
 uint32 mddi_log_stats_frequency = 4000;
 
 #define MDDI_DEFAULT_REV_PKT_SIZE            0x20
+
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 static boolean mddi_rev_ptr_workaround = TRUE;
 static uint32 mddi_reg_read_retry;
@@ -107,7 +108,7 @@ static boolean mddi_enable_reg_read_retry_once = FALSE;
 #define MDDI_VIDEO_REV_PKT_SIZE              0x40
 #define MDDI_REV_BUFFER_SIZE  MDDI_MAX_REV_PKT_SIZE
 static byte rev_packet_data[MDDI_MAX_REV_PKT_SIZE];
-#endif // FEATURE_MDDI_DISABLE_REVERSE
+#endif /* FEATURE_MDDI_DISABLE_REVERSE */
 /* leave these variables so graphics will compile */
 
 #define MDDI_MAX_REV_DATA_SIZE  128
@@ -355,7 +356,6 @@ static void mddi_report_state_change(uint32 int_reg)
 	if (int_reg & MDDI_INT_LINK_ACTIVE) {
 		pmhctl->link_state = MDDI_LINK_ACTIVE;
 		pmhctl->log_parms.link_active_cnt++;
-		// rtd_value = MDDI_READ_REG(MDDI_RTD_MEAS_REG);
 		pmhctl->rtd_value = mddi_host_reg_in(RTD_VAL);
 		MDDI_MSG_DEBUG("!!! MDDI Active RTD:0x%x!!!\n",
 			       pmhctl->rtd_value);
@@ -365,12 +365,15 @@ static void mddi_report_state_change(uint32 int_reg)
 				    MDDI_INT_LINK_ACTIVE),
 				   MDDI_INT_IN_HIBERNATION);
 
+#ifdef DEBUG_MDDIHOSTI
 		/* if gpio interrupt is enabled, start polling at fastest
-		 * registered rate */
+		 * registered rate
+		 */
 		if (mddi_gpio.polling_enabled) {
-			// timer_reg(&mddi_gpio_poll_timer, mddi_gpio_poll_timer_cb,
-			//   0, mddi_gpio.polling_interval, 0);
+			timer_reg(&mddi_gpio_poll_timer,
+		mddi_gpio_poll_timer_cb, 0, mddi_gpio.polling_interval, 0);
 		}
+#endif
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 		if (mddi_rev_ptr_workaround) {
 			/* HW CR: need to reset reverse register stuff */
@@ -383,10 +386,12 @@ static void mddi_report_state_change(uint32 int_reg)
 
 		if (host_idx == MDDI_HOST_PRIM) {
 			if (mddi_vsync_detect_enabled) {
-				/* Indicate to client specific code that vsync was enabled, but we
-				 * did not detect a client intiated wakeup. The client specific
-				 * handler can either reassert vsync detection, or treat this
-				 * as a valid vsync.
+				/*
+				 * Indicate to client specific code that vsync
+				 * was enabled, but we did not detect a client
+				 * intiated wakeup. The client specific
+				 * handler can either reassert vsync detection,
+				 * or treat this as a valid vsync.
 				 */
 				mddi_client_lcd_vsync_detected(FALSE);
 				pmhctl->log_parms.vsync_response_cnt++;
@@ -435,9 +440,11 @@ static void mddi_report_state_change(uint32 int_reg)
 		     MDDI_INT_PRI_PTR_READ)) {
 			mddi_linked_list_type *llist_dma;
 			llist_dma = pmhctl->llist_dma_ptr;
-			/* All indications are that we have not received a linked
-			 * list done interrupt, due to an underrun condition.
-			 * Recovery attempt is to send again. */
+			/*
+			 * All indications are that we have not received a
+			 * linked list done interrupt, due to an underrun
+			 * condition. Recovery attempt is to send again.
+			 */
 			/* Write to primary pointer register again */
 			mddi_host_reg_out(PRI_PTR,
 					  &llist_dma[pmhctl->llist_info.
@@ -451,10 +458,12 @@ static void mddi_report_state_change(uint32 int_reg)
 			mddi_vote_to_sleep(host_idx, TRUE);
 		}
 
+#ifdef DEBUG_MDDIHOSTI
 		/* need to stop polling timer */
 		if (mddi_gpio.polling_enabled) {
-			// (void) timer_clr(&mddi_gpio_poll_timer, T_NONE);
+			(void) timer_clr(&mddi_gpio_poll_timer, T_NONE);
 		}
+#endif
 	}
 }
 
@@ -489,10 +498,16 @@ void mddi_host_timer_service(unsigned long data)
 				     MDDI_LINK_HIBERNATING)
 				    && (pmhctl->client_status_cnt >
 					mddi_client_status_frequency)) {
-					/* special case where we are hibernating and mddi_host_isr is not
-					 * firing, so kick the link so that the status can be retrieved */
+					/*
+					 * special case where we are hibernating
+					 * and mddi_host_isr is not firing, so
+					 * kick the link so that the status can
+					 * be retrieved
+					 */
 
-					/* need to wake up link before issuing rev encap command */
+					/* need to wake up link before issuing
+					 * rev encap command
+					 */
 					MDDI_MSG_INFO("wake up link!\n");
 					spin_lock_irqsave(&mddi_host_spin_lock,
 							  flags);
@@ -507,9 +522,13 @@ void mddi_host_timer_service(unsigned long data)
 				} else
 				    if ((pmhctl->link_state == MDDI_LINK_ACTIVE)
 					&& pmhctl->disable_hibernation) {
-					/* special case where we have disabled hibernation and mddi_host_isr
-					   is not firing, so enable interrupt for no pkts pending, which will
-					   generate an interrupt */
+					/*
+					 * special case where we have disabled
+					 * hibernation and mddi_host_isr
+					 * is not firing, so enable interrupt
+					 * for no pkts pending, which will
+					 * generate an interrupt
+					 */
 					MDDI_MSG_INFO("kick isr!\n");
 					spin_lock_irqsave(&mddi_host_spin_lock,
 							  flags);
@@ -522,11 +541,8 @@ void mddi_host_timer_service(unsigned long data)
 				}
 			}
 		}
-#endif // #ifndef FEATURE_MDDI_DISABLE_REVERSE
+#endif /* #ifndef FEATURE_MDDI_DISABLE_REVERSE */
 	}
-
-//   host_idx=MDDI_HOST_PRIM;
-//   pmhctl = &(mhctl[host_idx]);
 
 	/* Check if logging is turned on */
 	for (host_idx = MDDI_HOST_PRIM; host_idx < MDDI_NUM_HOST_CORES;
@@ -540,7 +556,7 @@ void mddi_host_timer_service(unsigned long data)
 			pmhctl->log_parms.vid_cnt = mdp_total_vdopkts;
 
 			if (mddi_log_stats_counter >= mddi_log_stats_frequency) {
-				// mddi_log_stats_counter = 0;
+				/* mddi_log_stats_counter = 0; */
 				if (mddi_debug_log_statistics) {
 					MDDI_MSG_NOTICE
 					    ("MDDI Statistics since last report:\n");
@@ -686,8 +702,11 @@ static void mddi_process_link_list_done(void)
 					pmhctl->llist_notify[idx].next_idx =
 					    UNASSIGNED_INDEX;
 				}
-				/* currently, all linked list packets are register access, so
-				 * we can increment the counter for that packet type here */
+				/*
+				 * currently, all linked list packets are
+				 * register access, so we can increment the
+				 * counter for that packet type here.
+				 */
 				pmhctl->log_parms.reg_acc_cnt++;
 			}
 			if (idx == pmhctl->llist_info.transmitting_end_idx)
@@ -730,10 +749,12 @@ static void mddi_queue_forward_linked_list(void)
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 		if (pmhctl->llist_info.reg_read_waiting) {
 			if (pmhctl->rev_state == MDDI_REV_IDLE) {
-				/* we have a register read to send and can send it now */
+				/*
+				 * we have a register read to send and
+				 * can send it now
+				 */
 				pmhctl->rev_state = MDDI_REV_REG_READ_ISSUED;
 				mddi_reg_read_retry = 0;
-				// mddi_rev_reg_read_attempt++;
 				first_pkt_index =
 				    pmhctl->llist_info.waiting_start_idx;
 				pmhctl->llist_info.reg_read_waiting = FALSE;
@@ -741,8 +762,9 @@ static void mddi_queue_forward_linked_list(void)
 		} else
 #endif
 		{
-			/* not register read to worry about, go ahead and write anything
-			 * that may be on the waiting list.
+			/*
+			 * not register read to worry about, go ahead and write
+			 * anything that may be on the waiting list.
 			 */
 			first_pkt_index = pmhctl->llist_info.waiting_start_idx;
 		}
@@ -994,12 +1016,18 @@ static void mddi_process_rev_packets(void)
 					mddi_reg_read_value_ptr = NULL;
 				}
 
+#ifdef DEBUG_MDDIHOSTI
 				if ((mddi_gpio.polling_enabled) &&
 				    (regacc_pkt_ptr->register_address ==
 				     mddi_gpio.polling_reg)) {
-					//ToDo: need to call Linux GPIO call here...
-					//mddi_client_lcd_gpio_poll(regacc_pkt_ptr->register_data_list);
+					/*
+					 * ToDo: need to call Linux GPIO call
+					 * here...
+					 */
+					 mddi_client_lcd_gpio_poll(
+					 regacc_pkt_ptr->register_data_list);
 				}
+#endif
 				pmhctl->log_parms.reg_read_cnt++;
 			}
 			break;
@@ -1016,7 +1044,7 @@ static void mddi_process_rev_packets(void)
 						(*
 						 (mddi_rev_pkt_handler[hdlr].
 						  handler)) (rev_pkt_ptr);
-						// pmhctl->rev_state = MDDI_REV_IDLE;
+					/* pmhctl->rev_state = MDDI_REV_IDLE; */
 						break;
 					}
 				}
@@ -1043,11 +1071,13 @@ static void mddi_process_rev_packets(void)
 			if ((!mddi_reg_read_successful) &&
 			    (mddi_reg_read_retry < mddi_reg_read_retry_max) &&
 			    (mddi_enable_reg_read_retry)) {
-				/* There is a race condition that can happen where the reverse
-				 * encapsulation message is sent out by the MDDI host before
-				 * the register read packet is sent. As a work-around for that
-				 * problem we issue the reverse encapsulation one more time
-				 * before giving up.
+				/*
+				 * There is a race condition that can happen
+				 * where the reverse encapsulation message is
+				 * sent out by the MDDI host before the register
+				 * read packet is sent. As a work-around for
+				 * that problem we issue the reverse
+				 * encapsulation one more time before giving up.
 				 */
 				if (mddi_enable_reg_read_retry_once)
 					mddi_reg_read_retry =
@@ -1107,7 +1137,7 @@ static void mddi_process_rev_packets(void)
 		pmhctl->rev_state = MDDI_REV_IDLE;
 	}
 
-	// pmhctl->rev_state = MDDI_REV_IDLE;
+	/* pmhctl->rev_state = MDDI_REV_IDLE; */
 
 	/* Re-enable interrupt */
 	mddi_host_reg_outm(INTEN, MDDI_INT_REV_DATA_AVAIL,
@@ -1209,7 +1239,8 @@ static void mddi_issue_reverse_encapsulation(void)
 			mddi_rev_pointer_written = TRUE;
 			mddi_host_reg_out(REV_PTR, mddi_rev_ptr_write_val);
 			mddi_rev_ptr_curr = mddi_rev_ptr_start;
-			mddi_host_reg_out(CMD, 0xC00);	// force new rev ptr command
+			/* force new rev ptr command */
+			mddi_host_reg_out(CMD, 0xC00);
 #else
 			if (!pmhctl->rev_ptr_written) {
 				MDDI_MSG_DEBUG("writing reverse pointer!\n");
@@ -1268,9 +1299,11 @@ static void mddi_process_client_initiated_wakeup(void)
 				mddi_host_reg_out(CMD, MDDI_CMD_LINK_ACTIVE);
 			}
 #endif
-			/* Indicate to client specific code that vsync was enabled, and we
-			 * did not detect a client initiated wakeup. The client specific
-			 * handler can clear the condition if necessary to prevent subsequent
+			/*
+			 * Indicate to client specific code that vsync was
+			 * enabled, and we did not detect a client initiated
+			 * wakeup. The client specific handler can clear the
+			 * condition if necessary to prevent subsequent
 			 * client initiated wakeups.
 			 */
 			mddi_client_lcd_vsync_detected(TRUE);
@@ -1287,7 +1320,7 @@ static void mddi_process_client_initiated_wakeup(void)
 						   &mddi_gpio.polling_val);
 	}
 }
-#endif // FEATURE_MDDI_DISABLE_REVERSE
+#endif /* FEATURE_MDDI_DISABLE_REVERSE */
 
 static void mddi_host_isr(void)
 {
@@ -1315,13 +1348,16 @@ static void mddi_host_isr(void)
 	if ((int_reg & MDDI_INT_MDDI_IN) ||
 	    ((int_en & MDDI_INT_MDDI_IN) &&
 	     ((int_reg == 0) || (status_reg & MDDI_STAT_CLIENT_WAKEUP_REQ)))) {
-		/* The MDDI_IN condition will clear itself, and so it is possible
-		 * that MDDI_IN was the reason for the isr firing, even though the
-		 * interrupt register does not have the MDDI_IN bit set. To check if
-		 * this was the case we need to look at the status register bit that
-		 * signifies a client initiated wakeup. If the status register bit
-		 * is set, as well as the MDDI_IN interrupt enabled, then we treat
-		 * this as a client initiated wakeup.  */
+		/*
+		 * The MDDI_IN condition will clear itself, and so it is
+		 * possible that MDDI_IN was the reason for the isr firing,
+		 * even though the interrupt register does not have the
+		 * MDDI_IN bit set. To check if this was the case we need to
+		 * look at the status register bit that signifies a client
+		 * initiated wakeup. If the status register bit is set, as well
+		 * as the MDDI_IN interrupt enabled, then we treat this as a
+		 * client initiated wakeup.
+		 */
 		if (int_reg & MDDI_INT_MDDI_IN)
 			pmhctl->int_type.in_count++;
 		mddi_process_client_initiated_wakeup();
@@ -2007,7 +2043,7 @@ void mddi_queue_forward_packets(uint16 first_llist_idx,
 			/* This is the special case where the packet is a register read. */
 			pmhctl->rev_state = MDDI_REV_REG_READ_ISSUED;
 			mddi_reg_read_retry = 0;
-			// mddi_rev_reg_read_attempt = 1;
+			/* mddi_rev_reg_read_attempt = 1; */
 		}
 #endif
 		/* assign transmitting index values */
@@ -2028,10 +2064,12 @@ void mddi_queue_forward_packets(uint16 first_llist_idx,
 	} else if (pmhctl->llist_info.waiting_start_idx == UNASSIGNED_INDEX) {
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 		if (first_llist_idx == pmhctl->llist_info.reg_read_idx) {
-			/* we have a register read to send but need to wait for current
-			 * reverse activity to end or there are packets currently
-			 * transmitting */
-			// mddi_rev_reg_read_attempt = 0;
+			/*
+			 * we have a register read to send but need to wait
+			 * for current reverse activity to end or there are
+			 * packets currently transmitting
+			 */
+			/* mddi_rev_reg_read_attempt = 0; */
 			pmhctl->llist_info.reg_read_waiting = TRUE;
 		}
 #endif
@@ -2043,10 +2081,12 @@ void mddi_queue_forward_packets(uint16 first_llist_idx,
 		uint16 prev_end_idx = pmhctl->llist_info.waiting_end_idx;
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 		if (first_llist_idx == pmhctl->llist_info.reg_read_idx) {
-			/* we have a register read to send but need to wait for current
-			 * reverse activity to end or there are packets currently
-			 * transmitting */
-			// mddi_rev_reg_read_attempt = 0;
+			/*
+			 * we have a register read to send but need to wait
+			 * for current reverse activity to end or there are
+			 * packets currently transmitting
+			 */
+			/* mddi_rev_reg_read_attempt = 0; */
 			pmhctl->llist_info.reg_read_waiting = TRUE;
 		}
 #endif
@@ -2119,8 +2159,8 @@ void mddi_queue_reverse_encapsulation(boolean wait)
 #endif
 }
 
-boolean mddi_set_rev_handler(mddi_rev_handler_type handler,	/* ISR to be executed */
-			     uint16 pkt_type)
+/* ISR to be executed */
+boolean mddi_set_rev_handler(mddi_rev_handler_type handler, uint16 pkt_type)
 {
 #ifdef FEATURE_MDDI_DISABLE_REVERSE
 	MDDI_MSG_CRIT("No reverse link available\n");
@@ -2231,5 +2271,3 @@ void mddi_mhctl_remove(mddi_host_type host_idx)
 			  (void *)pmhctl->rev_data_buf,
 			  pmhctl->rev_data_dma_addr);
 }
-
-// #endif // FEATURE_MDDI

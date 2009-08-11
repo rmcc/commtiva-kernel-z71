@@ -64,9 +64,9 @@
 #define MDPOP_DITHER            BIT(10)	/* enable dither */
 #define MDPOP_SHARPENING	BIT(11) /* enable sharpening */
 
-/* -----------------------------------------------------------------------
-** {3x3} + {3} ccs matrix
-** ----------------------------------------------------------------------- */
+/*
+ * {3x3} + {3} ccs matrix
+ */
 typedef struct mdp_ccs_type_ {
 	uint16 ccs1;
 	uint16 ccs2;
@@ -82,9 +82,9 @@ typedef struct mdp_ccs_type_ {
 	uint16 ccs12;
 } MDP_CCS_TYPE;
 
-/* -----------------------------------------------------------------------
-** MDP Image Structure
-** ----------------------------------------------------------------------- */
+/*
+ * MDP Image Structure
+ */
 typedef struct mdpImg_ {
 	uint32 imgType;		/* Image type */
 	uint32 *bmy_addr;	/* bitmap or y addr */
@@ -96,7 +96,6 @@ typedef struct mdpImg_ {
 	int    sp_value;        /* sharpening strength */
 } MDPIMG;
 
-///////////////////////////////////////////////////////////////
 #define MDP_OUTP(addr, data) outpdw((addr), (data))
 #define MDP_KTIME2USEC(kt) (kt.tv.sec*1000000 + kt.tv.nsec/1000)
 
@@ -146,7 +145,7 @@ typedef enum {
 #define MDP_MIN_Y_SCALE_FACTOR (MDP_SCALE_Q_FACTOR/4)
 #endif
 
-//SHIM Q Factor
+/* SHIM Q Factor */
 #define PHI_Q_FACTOR          29
 #define PQF_PLUS_5            (PHI_Q_FACTOR + 5)	/* due to 32 phases */
 #define PQF_PLUS_4            (PHI_Q_FACTOR + 4)
@@ -174,8 +173,9 @@ struct mdp_dirty_region {
 	__u32 height;		/* number of pixels in the y-axis */
 };
 
-//MDP extended data types
-//
+/*
+ * MDP extended data types
+ */
 typedef struct mdp_roi_s {
 	uint32 x;
 	uint32 y;
@@ -270,12 +270,12 @@ struct mdp_dma_data {
 #define CLR_CB CLR_B
 #define CLR_CR CLR_R
 
-// from lsb to msb
+/* from lsb to msb */
 #define MDP_GET_PACK_PATTERN(a,x,y,z,bit) (((a)<<(bit*3))|((x)<<(bit*2))|((y)<<bit)|(z))
 
-//-------------------------------------------------
-// 0x0000 0x0004 0x0008 MDP sync config
-//-------------------------------------------------
+/*
+ * 0x0000 0x0004 0x0008 MDP sync config
+ */
 #ifdef CONFIG_FB_MSM_MDP22
 #define MDP_SYNCFG_HGT_LOC 22
 #define MDP_SYNCFG_VSYNC_EXT_EN BIT(21)
@@ -286,22 +286,22 @@ struct mdp_dma_data {
 #define MDP_SYNCFG_VSYNC_INT_EN BIT(19)
 #endif
 
-//-------------------------------------------------
-// 0x0018 MDP VSYNC THREASH
-//-------------------------------------------------
+/*
+ * 0x0018 MDP VSYNC THREASH
+ */
 #define MDP_PRIM_BELOW_LOC 0
 #define MDP_PRIM_ABOVE_LOC 8
 
-//-------------------------------------------------
-// MDP_PRIMARY_VSYNC_OUT_CTRL
-// 0x0080,84,88 internal vsync pulse config
-//-------------------------------------------------
+/*
+ * MDP_PRIMARY_VSYNC_OUT_CTRL
+ * 0x0080,84,88 internal vsync pulse config
+ */
 #define VSYNC_PULSE_EN BIT(31)
 #define VSYNC_PULSE_INV BIT(30)
 
-//-------------------------------------------------
-// 0x008c MDP VSYNC CONTROL
-//-------------------------------------------------
+/*
+ * 0x008c MDP VSYNC CONTROL
+ */
 #define DISP0_VSYNC_MAP_VSYNC0 0
 #define DISP0_VSYNC_MAP_VSYNC1 BIT(0)
 #define DISP0_VSYNC_MAP_VSYNC2 BIT(0)|BIT(1)
@@ -319,21 +319,21 @@ struct mdp_dma_data {
 #define EXTERNAL_LCD_SYNC_EN BIT(6)
 #define EXTERNAL_LCD_SYNC_DISABLE 0
 
-//-------------------------------------------------
-// 0x101f0 MDP VSYNC Threshold
-//-------------------------------------------------
+/*
+ * 0x101f0 MDP VSYNC Threshold
+ */
 #define VSYNC_THRESHOLD_ABOVE_LOC 0
 #define VSYNC_THRESHOLD_BELOW_LOC 16
 #define VSYNC_ANTI_TEAR_EN BIT(31)
 
-//-------------------------------------------------
-// 0x10004 command config
-//-------------------------------------------------
+/*
+ * 0x10004 command config
+ */
 #define MDP_CMD_DBGBUS_EN BIT(0)
 
-//-------------------------------------------------
-// 0x10124 or 0x101d4PPP source config
-//-------------------------------------------------
+/*
+ * 0x10124 or 0x101d4PPP source config
+ */
 #define PPP_SRC_C0G_8BITS (BIT(1)|BIT(0))
 #define PPP_SRC_C1B_8BITS (BIT(3)|BIT(2))
 #define PPP_SRC_C2R_8BITS (BIT(5)|BIT(4))
@@ -360,10 +360,12 @@ struct mdp_dma_data {
 #define PPP_SRC_INTERLVD_3COMPONENTS BIT(14)
 #define PPP_SRC_INTERLVD_4COMPONENTS (BIT(14)|BIT(13))
 
-// RGB666 unpack format
-// TIGHT means R6+G6+B6 together
-// LOOSE means R6+2 +G6+2+ B6+2 (with MSB)
-//          or 2+R6 +2+G6 +2+B6 (with LSB)
+/*
+ * RGB666 unpack format
+ * TIGHT means R6+G6+B6 together
+ * LOOSE means R6+2 +G6+2+ B6+2 (with MSB)
+ * or 2+R6 +2+G6 +2+B6 (with LSB)
+ */
 #define PPP_SRC_UNPACK_TIGHT BIT(17)
 #define PPP_SRC_UNPACK_LOOSE 0
 #define PPP_SRC_UNPACK_ALIGN_LSB 0
@@ -372,11 +374,11 @@ struct mdp_dma_data {
 #define PPP_SRC_FETCH_PLANES_INTERLVD 0
 #define PPP_SRC_FETCH_PLANES_PSEUDOPLNR BIT(20)
 
-#define PPP_SRC_WMV9_MODE BIT(21)	//window media version 9
+#define PPP_SRC_WMV9_MODE BIT(21)	/* window media version 9 */
 
-//-------------------------------------------------
-// 0x10138 PPP operation config
-//-------------------------------------------------
+/*
+ * 0x10138 PPP operation config
+ */
 #define PPP_OP_SCALE_X_ON BIT(0)
 #define PPP_OP_SCALE_Y_ON BIT(1)
 
@@ -391,7 +393,7 @@ struct mdp_dma_data {
 #define PPP_OP_LUT_C1_ON BIT(6)
 #define PPP_OP_LUT_C2_ON BIT(7)
 
-// rotate or blend enable
+/* rotate or blend enable */
 #define PPP_OP_ROT_ON BIT(8)
 
 #define PPP_OP_ROT_90 BIT(9)
@@ -439,9 +441,9 @@ struct mdp_dma_data {
 
 #define PPP_OP_DST_RGB 0
 #define PPP_OP_DST_YCBCR BIT(30)
-//-------------------------------------------------
-// 0x10150 PPP destination config
-//-------------------------------------------------
+/*
+ * 0x10150 PPP destination config
+ */
 #define PPP_DST_C0G_8BIT (BIT(0)|BIT(1))
 #define PPP_DST_C1B_8BIT (BIT(3)|BIT(2))
 #define PPP_DST_C2R_8BIT (BIT(5)|BIT(4))
@@ -485,9 +487,9 @@ struct mdp_dma_data {
 #define PPP_DST_MDDI_SECONDARY BIT(21)
 #define PPP_DST_MDDI_EXTERNAL BIT(22)
 
-//-------------------------------------------------
-// 0x10180 DMA config
-//-------------------------------------------------
+/*
+ * 0x10180 DMA config
+ */
 #define DMA_DSTC0G_8BITS (BIT(1)|BIT(0))
 #define DMA_DSTC1B_8BITS (BIT(3)|BIT(2))
 #define DMA_DSTC2R_8BITS (BIT(5)|BIT(4))
@@ -503,8 +505,10 @@ struct mdp_dma_data {
 #define DMA_PACK_TIGHT                      BIT(6)
 #define DMA_PACK_LOOSE                      0
 #define DMA_PACK_ALIGN_LSB                  0
-// use DMA_PACK_ALIGN_MSB if the upper 6 bits from 8 bits output
-// from LCDC block maps into 6 pins out to the panel
+/*
+ * use DMA_PACK_ALIGN_MSB if the upper 6 bits from 8 bits output
+ * from LCDC block maps into 6 pins out to the panel
+ */
 #define DMA_PACK_ALIGN_MSB                  BIT(7)
 #define DMA_PACK_PATTERN_RGB \
        (MDP_GET_PACK_PATTERN(0, CLR_R, CLR_G, CLR_B, 2)<<8)
@@ -540,9 +544,9 @@ struct mdp_dma_data {
 #define DMA_IBUF_NONCONTIGUOUS 0
 #endif
 
-//-------------------------------------------------
-// MDDI Register
-//-------------------------------------------------
+/*
+ * MDDI Register
+ */
 #define MDDI_VDO_PACKET_DESC  0x5666
 
 #define MDP_INTR_ENABLE		(msm_mdp_base + 0x0020)

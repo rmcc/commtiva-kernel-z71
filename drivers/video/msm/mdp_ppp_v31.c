@@ -320,8 +320,10 @@ static void mdp_calc_scaleInitPhase_3p1(uint32 in_w,
 	uint64 src_ROI_width;
 	uint64 src_ROI_height;
 
-	/* phase_step_x, phase_step_y, phase_init_x and phase_init_y
-	   are represented in fixed-point, unsigned 3.29 format */
+	/*
+	 * phase_step_x, phase_step_y, phase_init_x and phase_init_y
+	 * are represented in fixed-point, unsigned 3.29 format
+	 */
 	uint32 phase_step_x = 0;
 	uint32 phase_step_y = 0;
 	uint32 phase_init_x = 0;
@@ -432,21 +434,22 @@ static void mdp_calc_scaleInitPhase_3p1(uint32 in_w,
 		denominator = (dst_ROI_height);
 		phase_step_y = (uint32) mdp_do_div(numerator, denominator);
 	}
-	// decide which set of FIR coefficients to use
-	if (phase_step_x > HAL_MDP_PHASE_STEP_2P50)	/* if phase_step_x > ( 1 / 0.40 ) */
+
+	/* decide which set of FIR coefficients to use */
+	if (phase_step_x > HAL_MDP_PHASE_STEP_2P50)
 		xscale_filter_sel = 0;
-	else if (phase_step_x > HAL_MDP_PHASE_STEP_1P66)	/* else if phase_step_x >  ( 1 / 0.60 ) */
+	else if (phase_step_x > HAL_MDP_PHASE_STEP_1P66)
 		xscale_filter_sel = 1;
-	else if (phase_step_x > HAL_MDP_PHASE_STEP_1P25)	/* else if phase_step_x >  ( 1 / 0.80 ) */
+	else if (phase_step_x > HAL_MDP_PHASE_STEP_1P25)
 		xscale_filter_sel = 2;
 	else
 		xscale_filter_sel = 3;
 
-	if (phase_step_y > HAL_MDP_PHASE_STEP_2P50)	/* if phase_step_y > ( 1 / 0.40 ) */
+	if (phase_step_y > HAL_MDP_PHASE_STEP_2P50)
 		yscale_filter_sel = 0;
-	else if (phase_step_y > HAL_MDP_PHASE_STEP_1P66)	/* else if phase_step_y >( 1 / 0.60 ) */
+	else if (phase_step_y > HAL_MDP_PHASE_STEP_1P66)
 		yscale_filter_sel = 1;
-	else if (phase_step_y > HAL_MDP_PHASE_STEP_1P25)	/* else if phase_step_y >( 1 / 0.80 ) */
+	else if (phase_step_y > HAL_MDP_PHASE_STEP_1P25)
 		yscale_filter_sel = 2;
 	else
 		yscale_filter_sel = 3;
@@ -535,8 +538,7 @@ void mdp_set_scale(MDPIBUF *iBuf,
 
 			use_pr = (inputRGB) && (outputRGB);
 
-			// x-direction
-			//
+			/* x-direction */
 			if (dst_roi_width_scale == iBuf->roi.width) {
 				*pppop_reg_ptr &= ~PPP_OP_SCALE_X_ON;
 			} else
@@ -647,8 +649,7 @@ void mdp_set_scale(MDPIBUF *iBuf,
 				ppp_scale_config |= (SCALE_D0_SET << 2);
 			}
 
-			// y-direction
-			//
+			/* y-direction */
 			if (dst_roi_height_scale == iBuf->roi.height)
 				*pppop_reg_ptr &= ~PPP_OP_SCALE_Y_ON;
 			if (((dst_roi_height_scale * 10) / iBuf->roi.height) >

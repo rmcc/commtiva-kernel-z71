@@ -402,13 +402,12 @@ static void lcdc_gordon_set_backlight(struct msm_fb_data_type *mfd)
 			serigo(GORDON_REG_LCDIFCTL2, 0x0B);
 			udelay(15);
 			serigo(GORDON_REG_VALTRAN, 0x01);
-			}
-		else {
+		} else {
 			/* keep back light OFF */
 			serigo(GORDON_REG_LCDIFCTL2, 0x7B);
 			udelay(15);
 			serigo(GORDON_REG_VALTRAN, 0x01);
-			}
+		}
 }
 
 static int __init gordon_probe(struct platform_device *pdev)
