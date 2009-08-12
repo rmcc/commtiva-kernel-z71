@@ -1359,12 +1359,27 @@ EXPORT_SYMBOL(pmem_kfree);
 static int pmem_connect(unsigned long connect, struct file *file)
 {
 	int ret = 0, put_needed;
-	struct file *src_file = fget_light(connect, &put_needed);
+	struct file *src_file;
+
+	if (!file) {
+		printk(KERN_ERR "pmem: NULL file pointer passed in, bailing "
+			"out!\n");
+		ret = -EINVAL;
+		goto leave;
+	}
+
+	src_file = fget_light(connect, &put_needed);
 
 	if (!src_file) {
 		printk(KERN_ERR "pmem: src file not found!\n");
 		ret = -EBADF;
 		goto leave;
+	}
+
+	if (src_file == file) { /* degenerative case, operator error */
+		printk(KERN_ERR "pmem: refusing to connect to self!\n");
+		ret = -EINVAL;
+		goto put_src_file;
 	}
 
 	if (unlikely(!is_pmem_file(src_file))) {
