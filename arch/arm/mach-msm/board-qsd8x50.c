@@ -548,11 +548,46 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.config_gpio    = NULL,
 
 	.phy_reset = msm_hsusb_native_phy_reset,
-#ifdef CONFIG_USB_FS_HOST
-	.config_fs_gpio = msm_fsusb_setup_gpio,
-#endif
 	.max_axi_khz = 128000,
 };
+
+static struct vreg *vreg_usb;
+static void msm_hsusb_vbus_power(unsigned phy_info, int on)
+{
+
+	switch (PHY_TYPE(phy_info)) {
+	case USB_PHY_INTEGRATED:
+		if (on)
+			msm_hsusb_vbus_powerup();
+		else
+			msm_hsusb_vbus_shutdown();
+		break;
+	case USB_PHY_SERIAL_PMIC:
+		if (on)
+			vreg_enable(vreg_usb);
+		else
+			vreg_disable(vreg_usb);
+		break;
+	default:
+		pr_err("%s: undefined phy type ( %X ) \n", __func__,
+						phy_info);
+	}
+
+}
+
+static struct msm_usb_host_platform_data msm_usb_host_pdata = {
+	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
+	.phy_reset = msm_hsusb_native_phy_reset,
+	.vbus_power = msm_hsusb_vbus_power,
+};
+
+#ifdef CONFIG_USB_FS_HOST
+static struct msm_usb_host_platform_data msm_usb_host2_pdata = {
+	.phy_info	= USB_PHY_SERIAL_PMIC,
+	.config_gpio = msm_fsusb_setup_gpio,
+	.vbus_power = msm_hsusb_vbus_power,
+};
+#endif
 
 static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 	.name = PMEM_KERNEL_EBI1_DATA_NAME,
@@ -1631,12 +1666,21 @@ static void __init qsd8x50_init_host(void)
 {
 	if (machine_is_qsd8x50_ffa())
 		return;
+
+	vreg_usb = vreg_get(NULL, "boost");
+
+	if (IS_ERR(vreg_usb)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_usb));
+		return;
+	}
+
 	platform_device_register(&msm_device_hsusb_otg);
-	msm_add_host(0, &msm_hsusb_pdata);
+	msm_add_host(0, &msm_usb_host_pdata);
 #ifdef CONFIG_USB_FS_HOST
 	if (fsusb_gpio_init())
 		return;
-	msm_add_host(1, &msm_hsusb_pdata);
+	msm_add_host(1, &msm_usb_host2_pdata);
 #endif
 }
 static void sdcc_gpio_init(void)

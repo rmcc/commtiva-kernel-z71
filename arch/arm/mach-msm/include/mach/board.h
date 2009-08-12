@@ -20,6 +20,7 @@
 
 #include <linux/types.h>
 #include <linux/input.h>
+#include <linux/usb.h>
 
 /* platform device data structures */
 struct msm_acpu_clock_platform_data {
@@ -175,9 +176,9 @@ struct mmc_platform_data;
 int __init msm_add_sdcc(unsigned int controller,
 		struct mmc_platform_data *plat);
 
-struct msm_hsusb_platform_data;
+struct msm_usb_host_platform_data;
 int __init msm_add_host(unsigned int host,
-		struct msm_hsusb_platform_data *plat);
+		struct msm_usb_host_platform_data *plat);
 #if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) || defined(CONFIG_USB_MSM_72K)
 void msm_hsusb_set_vbus_state(int online);
 #else
