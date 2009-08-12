@@ -93,6 +93,13 @@ unsigned pc_clk_is_enabled(unsigned id)
 		return id;
 }
 
+long pc_clk_round_rate(unsigned id, unsigned rate)
+{
+
+	/* Not supported. */
+	return -EPERM;
+}
+
 struct clk_ops clk_ops_pcom = {
 	.enable = pc_clk_enable,
 	.disable = pc_clk_disable,
@@ -102,4 +109,5 @@ struct clk_ops clk_ops_pcom = {
 	.set_flags = pc_clk_set_flags,
 	.get_rate = pc_clk_get_rate,
 	.is_enabled = pc_clk_is_enabled,
+	.round_rate = pc_clk_round_rate,
 };
