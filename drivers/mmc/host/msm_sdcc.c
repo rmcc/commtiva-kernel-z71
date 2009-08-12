@@ -383,6 +383,7 @@ msmsdcc_start_data(struct msmsdcc_host *host, struct mmc_data *data)
 
 	if (datactrl & MCI_DPSM_DMAENABLE) {
 		host->dma.busy = 1;
+		dsb();
 		msm_dmov_enqueue_cmd(host->dma.channel, &host->dma.hdr);
 	}
 }
