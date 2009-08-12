@@ -421,13 +421,13 @@ int msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while (((ctrl_word = readl(info->write_ctrl)) &
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_M) !=
 		ADSP_RTOS_WRITE_CTRL_WORD_READY_V) {
-		if (cnt > 10) {
+		if (cnt > 50) {
 			pr_err("adsp: timeout waiting for DSP write ready\n");
 			ret_status = -EIO;
 			goto fail;
 		}
 		pr_warning("adsp: waiting for DSP write ready\n");
-		udelay(10);
+		udelay(2);
 		cnt++;
 	}
 
@@ -458,12 +458,12 @@ int msm_adsp_write(struct msm_adsp_module *module, unsigned dsp_queue_addr,
 	while ((readl(info->write_ctrl) &
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_M) ==
 		ADSP_RTOS_WRITE_CTRL_WORD_MUTEX_NAVAIL_V) {
-		if (cnt > 5) {
+		if (cnt > 2500) {
 			pr_err("adsp: timeout waiting for adsp ack\n");
 			ret_status = -EIO;
 			goto fail;
 		}
-		mdelay(1);
+		udelay(2);
 		cnt++;
 	}
 
@@ -860,14 +860,14 @@ static int adsp_get_event(struct adsp_info *info)
 	 * unfortunately.
 	 */
 
-	for (cnt = 0; cnt < 10; cnt++) {
+	for (cnt = 0; cnt < 50; cnt++) {
 		ctrl_word = readl(info->read_ctrl);
 
 		if ((ctrl_word & ADSP_RTOS_READ_CTRL_WORD_FLAG_M) ==
 		    ADSP_RTOS_READ_CTRL_WORD_FLAG_UP_CONT_V)
 			goto ready;
 
-		udelay(10);
+		udelay(2);
 	}
 	pr_warning("adsp: not ready after 100uS\n");
 	rc = -EBUSY;
