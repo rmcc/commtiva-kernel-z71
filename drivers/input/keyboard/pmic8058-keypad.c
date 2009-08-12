@@ -228,8 +228,8 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 		if (!rc) {
 			pmic8058_chk_read_state(kp, 0);
 			for (row = 0; row < kp->pdata->num_rows; row++) {
-				dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
-						 new_data[row]);
+				dev_dbg(kp->dev, "old_data[%d] = %d\n", row,
+						 old_data[row]);
 				old_state[row] = pmic8058_col_state(kp,
 							 old_data[row]);
 			}
@@ -251,11 +251,11 @@ static int __pmic8058_kp_scan_matrix(struct pmic8058_kp *kp, u16 *new_state,
 			continue;
 
 		for (col = 0; col < kp->pdata->num_cols; col++) {
-			if ((bits_changed & (1 << col)) == 0)
+			if (!(bits_changed & (1 << col)))
 				continue;
 
 			dev_dbg(kp->dev, "key [%d:%d] %s\n", row, col,
-					(new_state[row] & (1 << col)) ?
+					!(new_state[row] & (1 << col)) ?
 					"pressed" : "released");
 
 			code = (row << 3) + col;
@@ -335,8 +335,10 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 	int bits, rc;
 	u8 scan_val = 0, ctrl_val = 0;
 
-	ctrl_val = kp->pdata->num_cols << KEYP_CTRL_SCAN_COLS_SHIFT;
-	ctrl_val |= (kp->pdata->num_rows << KEYP_CTRL_SCAN_ROWS_SHIFT);
+	/* hard-code 8columns x 12rows values in register for bringup */
+	ctrl_val = 0x3 << KEYP_CTRL_SCAN_COLS_SHIFT;
+	ctrl_val |= (0x5 << KEYP_CTRL_SCAN_ROWS_SHIFT);
+
 	ctrl_val |= KEYP_CTRL_KEYP_EN;
 
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
@@ -352,10 +354,10 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 	scan_val |= (bits << KEYP_SCAN_PAUSE_SHIFT);
 
 	/*
-	 * 31.25 uS default row hold time. This needs to be
+	 * 250uS default row hold time. This needs to be
 	 * configurable and should come from platform data instead.
 	 */
-	scan_val |= (0x0 << KEYP_SCAN_ROW_HOLD_SHIFT);
+	scan_val |= (0x3 << KEYP_SCAN_ROW_HOLD_SHIFT);
 
 	rc = pmic8058_kp_write_u8(kp, scan_val, KEYP_SCAN);
 
