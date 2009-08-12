@@ -172,10 +172,10 @@ void mddi_queue_image
      int16 num_of_rows,
      int16 num_of_columns, int16 dst_starting_row, int16 dst_starting_column);
 
-void mddi_host_register_read
+int mddi_host_register_read
     (uint32 reg_addr,
      uint32 *reg_value_ptr, boolean wait, mddi_host_type host_idx);
-void mddi_host_register_write
+int mddi_host_register_write
     (uint32 reg_addr,
      uint32 reg_val,
      boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host);
