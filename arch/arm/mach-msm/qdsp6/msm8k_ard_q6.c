@@ -316,7 +316,7 @@ s32 qdsp6_close(s32 session_id)
 	}
 
 	if (ardsession[session_id]->qdsp6_opened == ARD_TRUE) {
-		pr_err("ARD Sending RPC Close, session %d\n", session_id);
+		D("ARD Sending RPC Close, session %d\n", session_id);
 		q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_CLOSE;
 		q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
 

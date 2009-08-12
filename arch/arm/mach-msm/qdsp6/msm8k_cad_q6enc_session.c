@@ -423,8 +423,8 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 	if (self->session_state != Q6_ENC_STATE_PROCESS) {
 		pr_err("wrong state to handle read! state: %d\n",
 			self->session_state);
-		mutex_unlock(&self->close_mutex);
 		mutex_unlock(&self->session_mutex);
+		mutex_unlock(&self->close_mutex);
 		return CAD_RES_FAILURE;
 	}
 
@@ -442,8 +442,8 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 	mutex_lock(&self->session_mutex);
 	if (self->session_state != Q6_ENC_STATE_PROCESS) {
 		pr_err("wrong state to handle read!\n");
-		mutex_unlock(&self->close_mutex);
 		mutex_unlock(&self->session_mutex);
+		mutex_unlock(&self->close_mutex);
 		return CAD_RES_FAILURE;
 	}
 
@@ -451,8 +451,8 @@ s32 cad_q6enc_session_read(struct q6_enc_session_data *self,
 
 	if (self->full_nodes_head == NULL) {
 		D("No Data to Read!\n");
-		mutex_unlock(&self->close_mutex);
 		mutex_unlock(&self->session_mutex);
+		mutex_unlock(&self->close_mutex);
 		return CAD_RES_FAILURE;
 	}
 

@@ -449,15 +449,13 @@ s32 cad_rpc_control(u32 stream_id,
 		stream_id,
 		((union adsp_audio_command *)data_buf)->no_payload.cmd.op_code);
 
-	init_completion(&cad_rpc_data_type.compl_list[stream_id]);
 	mutex_lock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
+	init_completion(&cad_rpc_data_type.compl_list[stream_id]);
 
 	err = dalrpc_fcn_5(ADSP_RPC_CONTROL,
 		cad_rpc_data_type.remote_handle,
 		cmd_buf,
 		cmd_buf_len);
-
-	mutex_unlock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
 
 	if (err)
 		pr_err("CAD:RPC Data rpc call returned err: %d\n", err);
@@ -467,15 +465,19 @@ s32 cad_rpc_control(u32 stream_id,
 
 		D("DALRPC Open function start wait!!!\n");
 		wait_for_completion(&cad_rpc_data_type.compl_list[stream_id]);
-		if (ret_evt != NULL)
+		if (ret_evt != NULL) {
+			mutex_lock(&cad_rpc_data_type.resource_mutex);
 			memcpy(ret_evt,
 				&cad_rpc_data_type.sync_evt_queue[stream_id],
 				sizeof(*ret_evt));
+			mutex_unlock(&cad_rpc_data_type.resource_mutex);
+		}
 	}
+	mutex_unlock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
 
 	D("CAD:RPC Control stream (%d), Cmd(0x%x) DONE!\n",
 		stream_id,
-		((union adsp_audio_command *)data_buf)->no_payload.cmd.op_code);
+		((union adsp_audio_command *)cmd_buf)->no_payload.cmd.op_code);
 
 	return err;
 }
