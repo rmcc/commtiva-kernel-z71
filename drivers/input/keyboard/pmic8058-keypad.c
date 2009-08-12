@@ -533,7 +533,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	}
 
 	/* initialize keypad state */
-	memset(kp->keystate, 1, sizeof(kp->keystate));
+	memset(kp->keystate, 0xff, sizeof(kp->keystate));
 
 	rc = pmic8058_kpd_init(kp);
 	if (rc < 0) {
