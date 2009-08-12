@@ -158,6 +158,10 @@ struct msm_i2c_platform_data {
 	uint32_t *rmutex;
 	int rsl_id;
 	uint32_t pm_lat;
+	int pri_clk;
+	int pri_dat;
+	int aux_clk;
+	int aux_dat;
 	void (*msm_i2c_config_gpio)(int iface, int config_type);
 };
 

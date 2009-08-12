@@ -1335,6 +1335,8 @@ msm_i2c_gpio_config(int adap_id, int config_type)
 
 static struct msm_i2c_platform_data msm_i2c_pdata = {
 	.clk_freq = 100000,
+	.pri_clk = 70,
+	.pri_dat = 71,
 	.msm_i2c_config_gpio = msm_i2c_gpio_config,
 };
 

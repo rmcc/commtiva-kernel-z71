@@ -1426,6 +1426,10 @@ msm_i2c_gpio_config(int iface, int config_type)
 static struct msm_i2c_platform_data msm_i2c_pdata = {
 	.clk_freq = 100000,
 	.rmutex = NULL,
+	.pri_clk = 60,
+	.pri_dat = 61,
+	.aux_clk = 95,
+	.aux_dat = 96,
 	.msm_i2c_config_gpio = msm_i2c_gpio_config,
 };
 
