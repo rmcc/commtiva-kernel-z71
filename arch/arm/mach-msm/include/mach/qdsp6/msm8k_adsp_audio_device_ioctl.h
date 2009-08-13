@@ -67,6 +67,14 @@
 
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_EQ_CONFIG	0x0108b10e
 
+struct adsp_audio_device_eq_cfg {
+	/* Associated client data */
+	struct adsp_audio_header	client_data;
+	/* DeviceID for equalizer config */
+	u32				device;
+	/* Equalizer band data */
+	struct adsp_audio_eq_cfg	eq_config;
+} __attribute__ ((packed));
 
 
 #endif
