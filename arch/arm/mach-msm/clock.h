@@ -40,6 +40,7 @@ struct clk_ops {
 	int (*set_flags)(unsigned id, unsigned flags);
 	unsigned (*get_rate)(unsigned id);
 	unsigned (*is_enabled)(unsigned id);
+	long (*round_rate)(unsigned id, unsigned rate);
 };
 
 struct clk {
