@@ -190,9 +190,32 @@ struct platform_device msm_device_uart_dm2 = {
 #define MSM_I2C_SIZE          SZ_4K
 #if defined(CONFIG_ARCH_MSM7X30)
 #define MSM_I2C_PHYS          0xACD00000
+#define MSM_I2C_2_PHYS        0xACF00000
 #else
 #define MSM_I2C_PHYS          0xA9900000
+#define MSM_I2C_2_PHYS        0xA9900000
+#define INT_PWB_I2C_2         INT_PWB_I2C
 #endif
+
+static struct resource resources_i2c_2[] = {
+	{
+		.start	= MSM_I2C_2_PHYS,
+		.end	= MSM_I2C_2_PHYS + MSM_I2C_SIZE - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_PWB_I2C_2,
+		.end	= INT_PWB_I2C_2,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_i2c_2 = {
+	.name		= "msm_i2c",
+	.id		= 2,
+	.num_resources	= ARRAY_SIZE(resources_i2c_2),
+	.resource	= resources_i2c_2,
+};
 
 static struct resource resources_i2c[] = {
 	{
@@ -944,6 +967,7 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("gp_clk",	GP_CLK,		NULL, 0),
 	CLK_PCOM("grp_clk",	GRP_CLK,	NULL, 0),
 	CLK_PCOM("i2c_clk",	I2C_CLK,	&msm_device_i2c.dev, 0),
+	CLK_PCOM("i2c_clk",	I2C_2_CLK,	&msm_device_i2c_2.dev, 0),
 	CLK_PCOM("imem_clk",	IMEM_CLK,	NULL, OFF),
 	CLK_PCOM("mdc_clk",	MDC_CLK,	NULL, 0),
 	CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, OFF),

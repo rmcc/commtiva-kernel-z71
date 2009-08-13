@@ -785,6 +785,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_device,
 	&msm_fb_device,
 	&msm_device_i2c,
+	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
 	&hs_device,
 #ifdef CONFIG_MSM_BT_POWER
@@ -827,6 +828,16 @@ static void __init msm_device_i2c_init(void)
 		pr_err("failed to request I2C gpios\n");
 
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
+}
+
+static struct msm_i2c_platform_data msm_i2c_2_pdata = {
+	.clk_freq = 100000,
+	.msm_i2c_config_gpio = msm_i2c_gpio_config,
+};
+
+static void __init msm_device_i2c_2_init(void)
+{
+	msm_device_i2c_2.dev.platform_data = &msm_i2c_2_pdata;
 }
 
 static void __init msm7x30_init_irq(void)
@@ -1030,6 +1041,7 @@ static void __init msm7x30_init(void)
 	msm_fb_add_devices();
 	msm_pm_set_platform_data(msm_pm_data);
 	msm_device_i2c_init();
+	msm_device_i2c_2_init();
 	buses_init();
 
 	platform_device_register(&surf_keypad_device);
