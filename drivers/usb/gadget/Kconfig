@@ -733,6 +733,15 @@ config USB_ANDROID_DIAG
 	  Say "y" to link the driver statically, or "m" to build
 	  as a part of "g_android"
 
+config USB_ANDROID_CDC_ECM
+	tristate "cdc ecm function driver"
+	depends on USB_ANDROID
+	default n
+	help
+	  enabling this option adds CDC-ECM support to the
+	  android gadget.
+	  Say "y" to link the CDC-ECM as a part of android gadget
+
 config USB_F_SERIAL
 	tristate "generic serial function driver"
 	depends on USB_ANDROID
