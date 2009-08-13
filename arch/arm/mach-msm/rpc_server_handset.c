@@ -359,13 +359,18 @@ static int __devinit hs_rpc_init(void)
 	int rc;
 
 	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa() ||
-		machine_is_qsd8x50_surf() || machine_is_qsd8x50_ffa()) {
+		machine_is_qsd8x50_surf() || machine_is_qsd8x50_ffa() ||
+		machine_is_msm7x30_surf() || machine_is_msm7x30_ffa()) {
 		rc = hs_rpc_cb_init();
 		if (rc)
 			pr_err("%s: failed to initialize\n", __func__);
 	}
 
-	return msm_rpc_create_server(&hs_rpc_server);
+	rc = msm_rpc_create_server(&hs_rpc_server);
+	if (rc < 0)
+		pr_err("%s: failed to create rpc server\n", __func__);
+
+	return 0;
 }
 
 static void __devexit hs_rpc_deinit(void)
