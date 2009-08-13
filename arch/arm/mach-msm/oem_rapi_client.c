@@ -190,7 +190,13 @@ static int oem_rapi_client_cb(struct msm_rpc_client *client,
 			size += sizeof(uint32_t);
 
 			memcpy(reply, ret.output, *ret.out_len);
+			reply += *ret.out_len;
 			size += *ret.out_len;
+			if (*ret.out_len & 0x3) {
+				memset(reply, 0, 4 - (*ret.out_len & 0x3));
+				reply += 4 - (*ret.out_len & 0x3);
+				size += 4 - (*ret.out_len & 0x3);
+			}
 		} else {
 			*(uint32_t *)reply = cpu_to_be32(0);
 			reply += sizeof(uint32_t);
@@ -245,6 +251,11 @@ static int oem_rapi_client_streaming_function_arg(struct msm_rpc_client *client,
 	memcpy(buf, arg->input, arg->in_len);
 	size += arg->in_len;
 	buf += arg->in_len;
+	if (arg->in_len & 0x3) {
+		memset(buf, 0, 4 - (arg->in_len & 0x3));
+		buf += 4 - (arg->in_len & 0x3);
+		size += 4 - (arg->in_len & 0x3);
+	}
 
 	/* out_len */
 	*((uint32_t *)buf) = cpu_to_be32((uint32_t)(arg->out_len_valid));
@@ -255,9 +266,11 @@ static int oem_rapi_client_streaming_function_arg(struct msm_rpc_client *client,
 	*((uint32_t *)buf) = cpu_to_be32((uint32_t)(arg->output_valid));
 	size += sizeof(uint32_t);
 	buf += sizeof(uint32_t);
-	*((uint32_t *)buf) = cpu_to_be32(arg->output_size);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
+	if (arg->output_valid) {
+		*((uint32_t *)buf) = cpu_to_be32(arg->output_size);
+		size += sizeof(uint32_t);
+		buf += sizeof(uint32_t);
+	}
 
 	return size;
 }
@@ -271,8 +284,10 @@ static int oem_rapi_client_streaming_function_ret(struct msm_rpc_client *client,
 	/* out_len */
 	data_present = be32_to_cpu(*(uint32_t *)buf);
 	buf += sizeof(uint32_t);
-	if (data_present && ret->out_len)
+	if (data_present && ret->out_len) {
 		*ret->out_len = be32_to_cpu(*(uint32_t *)buf);
+		buf += sizeof(uint32_t);
+	}
 
 	/* output */
 	size = be32_to_cpu(*(uint32_t *)buf);
