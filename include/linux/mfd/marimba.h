@@ -34,6 +34,7 @@
 
 #include <linux/types.h>
 #include <linux/i2c.h>
+#include <mach/vreg.h>
 
 #define MARIMBA_NUM_CHILD			4
 
@@ -56,15 +57,15 @@ struct marimba{
 	int mod_id;
 };
 
-
 struct marimba_top_level_platform_data{
 	int slave_id;     /* Member added for eg. */
 };
 
 struct marimba_fm_platform_data{
 	int gpioirq;
-	int (*gpio_setup)(void);
-	int (*gpio_shutdown)(void);
+	int (*gpio_setup)(struct marimba_fm_platform_data *pdata);
+	int (*gpio_shutdown)(struct marimba_fm_platform_data *pdata);
+	struct vreg *vreg_fm;
 };
 
 struct marimba_codec_platform_data{
