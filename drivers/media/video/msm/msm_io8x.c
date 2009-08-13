@@ -41,7 +41,7 @@
 #define EXT_CAM_HSYNC_POL_SEL_SHFT 0x10
 #define EXT_CAM_VSYNC_POL_SEL_SHFT 0xF
 #define MDDI_CLK_CHICKEN_BIT_SHFT  0x7
-#define APPS_RESET_OFFSET 0x00000210
+#define APPS_RESET_OFFSET 0x00000214
 
 static struct clk *camio_vfe_mdc_clk;
 static struct clk *camio_mdc_clk;
@@ -257,14 +257,14 @@ void msm_camio_vfe_blk_reset(void)
 {
 	uint32_t val;
 
-	val = readl(appbase + 0x00000210);
+	val = readl(appbase + APPS_RESET_OFFSET);
 	val |= 0x1;
-	writel(val, appbase + 0x00000210);
+	writel(val, appbase + APPS_RESET_OFFSET);
 	mdelay(10);
 
-	val = readl(appbase + 0x00000210);
+	val = readl(appbase + APPS_RESET_OFFSET);
 	val &= ~0x1;
-	writel(val, appbase + 0x00000210);
+	writel(val, appbase + APPS_RESET_OFFSET);
 	mdelay(10);
 }
 
