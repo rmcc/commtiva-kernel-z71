@@ -41,6 +41,9 @@
 #define PMEM_1M 	(1 << 20)
 #define PMEM_1M_MASK 	(0xfff00000)
 
+#define PMEM_32BIT_WORD_ORDER (5)
+#define PMEM_BITS_PER_WORD_MASK (BITS_PER_LONG - 1)
+
 #ifdef CONFIG_ANDROID_PMEM_DEBUG
 #define PMEM_DEBUG 1
 #else
@@ -582,17 +585,28 @@ static int pmem_free_buddy_bestfit(int id, int index)
 	return 0;
 }
 
-static inline void bitmap_bit_clear(int *bitp, int bitnum)
+static void bitmap_bits_clear_all(uint32_t *bitp, int bit_start, int bit_end)
 {
-	bitp[bitnum / 32] &= ~(1 << (bitnum % 32));
-}
+	int word_index = bit_start >> PMEM_32BIT_WORD_ORDER, total_words;
 
-static void bitmap_bits_clear_all(int *bitp, int bit_start, int bit_end)
-{
-	int i;
-
-	for (i = bit_start; i < bit_end; i++)
-		bitmap_bit_clear(bitp, i);
+	total_words = (bit_end >> PMEM_32BIT_WORD_ORDER) - word_index + 1;
+	if (total_words > 0) {
+		uint32_t start_mask = ~((uint32_t)(~0) <<
+				(bit_start & PMEM_BITS_PER_WORD_MASK)),
+			end_mask = ~((uint32_t)(~0) >> (BITS_PER_LONG -
+				(bit_end & PMEM_BITS_PER_WORD_MASK)));
+		if (total_words == 1) {
+			bitp[word_index] &= (start_mask | end_mask);
+		} else {
+			bitp[word_index++] &= start_mask;
+			if (total_words > 2) {
+				total_words -= 2;
+				memset(&bitp[word_index], 0, total_words << 2);
+				word_index += total_words;
+			}
+			bitp[word_index] &= end_mask;
+		}
+	}
 }
 
 static int pmem_free_bitmap(int id, int bitnum)
@@ -827,43 +841,111 @@ static inline unsigned long bit_from_paddr(const int id,
 	return (paddr - pmem[id].base) / pmem[id].quantum;
 }
 
-static inline int bitmap_bit_is_free(int *bitp, int bitnum)
+static void bitmap_bits_set_all(uint32_t *bitp, int bit_start, int bit_end)
 {
-	return !(bitp[bitnum / 32] & (1 << (bitnum % 32)));
+	int word_index = bit_start >> PMEM_32BIT_WORD_ORDER, total_words;
+
+	total_words = (bit_end >> PMEM_32BIT_WORD_ORDER) - word_index + 1;
+	if (total_words > 0) {
+		uint32_t start_mask = ((uint32_t)(~0) <<
+				(bit_start & PMEM_BITS_PER_WORD_MASK)),
+			end_mask = ((uint32_t)(~0) >> (BITS_PER_LONG -
+				(bit_end & PMEM_BITS_PER_WORD_MASK)));
+		if (total_words == 1) {
+			bitp[word_index] |= start_mask & end_mask;
+		} else {
+			bitp[word_index++] |= start_mask;
+			if (total_words > 2) {
+				total_words -= 2;
+				memset(&bitp[word_index], ~0,
+						total_words << 2);
+				word_index += total_words;
+			}
+			bitp[word_index] |= end_mask;
+		}
+	}
 }
 
-static inline void bitmap_bit_set(int *bitp, int bitnum)
+static int
+bitmap_allocate_contiguous(uint32_t *bitp, int num_bits_to_alloc,
+		int total_bits, int spacing)
 {
-	bitp[bitnum / 32] |= (1 << (bitnum % 32));
-}
+	int word_index, total_words, ret = -1, bit_start, bit_end, last_bit;
+	uint32_t start_mask, end_mask;
 
-static void bitmap_bits_set_all(int *bitp, int bit_start, int bit_end)
-{
-	int i;
+	if (num_bits_to_alloc <= 0)
+		goto leave;
 
-	for (i = bit_start; i < bit_end; i++)
-		bitmap_bit_set(bitp, i);
-}
+	bit_start = 0;
 
-static int bitmap_bits_are_all_free(int *bitp, int bit_start, int needed)
-{
-	int i;
+redo:
+	bit_end = bit_start + num_bits_to_alloc;
+	if (bit_end >= total_bits)
+		goto leave;
 
-	if (!needed)
-		return 1;
+	word_index = bit_start >> PMEM_32BIT_WORD_ORDER;
+	total_words = (bit_end >> PMEM_32BIT_WORD_ORDER) - word_index + 1;
+	if (total_words <= 0)
+		goto leave;
 
-	for (i = bit_start; i < (bit_start + needed); i++)
-		if (!bitmap_bit_is_free(bitp, i))
-			return 0;
+	start_mask = ((uint32_t)(~0) <<
+			(bit_start & PMEM_BITS_PER_WORD_MASK));
+	end_mask = ((uint32_t)(~0) >> (BITS_PER_LONG -
+			(bit_end & PMEM_BITS_PER_WORD_MASK)));
 
-	return 1;
+	if (total_words == 1) {
+		last_bit = fls(bitp[word_index] &
+				(start_mask & end_mask));
+		if (last_bit)
+			goto next_range;
+	} else {
+		int end_word = word_index + (total_words - 2);
+
+		last_bit = fls((bitp[word_index] & start_mask));
+		if (!last_bit)
+			goto allocate;
+		else if (last_bit < BITS_PER_LONG)
+			goto next_range;
+
+		word_index++;
+		if (total_words <= 2)
+			goto no_full_words;
+
+		for (word_index++; word_index < end_word; word_index++) {
+			last_bit = fls(bitp[word_index]);
+			if (!last_bit)
+				goto allocate;
+			else if (last_bit < BITS_PER_LONG)
+				goto next_range;
+		}
+no_full_words:
+		last_bit = fls((bitp[word_index] & end_mask));
+		if (last_bit)
+			goto next_range;
+
+	}
+allocate:
+	bitmap_bits_set_all(bitp, bit_start, bit_end);
+	return bit_start;
+
+next_range:
+	bit_start += ((word_index -
+		(bit_start >> PMEM_32BIT_WORD_ORDER)) <<
+				PMEM_32BIT_WORD_ORDER) +
+			(last_bit -
+			 (bit_start & PMEM_BITS_PER_WORD_MASK)) +
+				(spacing - 1);
+	bit_start &= ~(spacing - 1);
+	goto redo;
+leave:
+	return ret;
 }
 
 static int reserve_quanta(const unsigned int quanta_needed,
 		const int id,
 		const enum pmem_align align)
 {
-	int i, ret = -1, *bitp, start_bit = 0, spacing = 1, bitm_len;
+	int ret = -1, start_bit = 0, spacing = 1;
 
 	/* Sanity check */
 	if (quanta_needed > pmem[id].allocator.bitmap.bitmap_free) {
@@ -889,23 +971,17 @@ static int reserve_quanta(const unsigned int quanta_needed,
 		spacing = PMEM_1M / pmem[id].quantum;
 	}
 
-	bitm_len = (pmem[id].size + pmem[id].quantum - 1) / pmem[id].quantum;
-	for (i = start_bit, bitp = pmem[id].allocator.bitmap.bitmap;
-			i <= (bitm_len - quanta_needed); i += spacing)
-		if (bitmap_bit_is_free(bitp, i) &&
-			bitmap_bits_are_all_free(bitp,
-				i + 1,
-				quanta_needed - 1)) {
-			ret = i;
-			break;
-		}
+	ret = bitmap_allocate_contiguous(pmem[id].allocator.bitmap.bitmap,
+		quanta_needed,
+		(pmem[id].size + pmem[id].quantum - 1) / pmem[id].quantum,
+		spacing);
 
-	if (ret != -1)
-		bitmap_bits_set_all(bitp, ret, ret + quanta_needed);
 #if PMEM_DEBUG
-	else
+	if (ret < 0)
 		printk(KERN_ALERT "pmem: %s: not enough contiguous bits free "
-			"in bitmap!\n", __func__);
+			"in bitmap! Region memory is either too fragmented or"
+			" request is too large for available memory.\n",
+			__func__);
 #endif
 
 	return ret;
