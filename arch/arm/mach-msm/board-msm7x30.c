@@ -272,6 +272,20 @@ static int __init buses_init(void)
 	return 0;
 }
 
+/* Slave id address for FM/CDC/QMEMBIST
+ * Values can be programmed using Marimba slave id 0
+ * should there be a conflict with other I2C devices
+ * */
+#define MARIMBA_SLAVE_ID_FM_ADDR	0x2A
+#define MARIMBA_SLAVE_ID_CDC_ADDR	0x77
+#define MARIMBA_SLAVE_ID_QMEMBIST_ADDR	0X66
+
+static struct marimba_platform_data marimba_pdata = {
+	.slave_id[MARIMBA_SLAVE_ID_FM]       = MARIMBA_SLAVE_ID_FM_ADDR,
+	.slave_id[MARIMBA_SLAVE_ID_CDC]	     = MARIMBA_SLAVE_ID_CDC_ADDR,
+	.slave_id[MARIMBA_SLAVE_ID_QMEMBIST] = MARIMBA_SLAVE_ID_QMEMBIST_ADDR,
+};
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start = 0x8A000300,
@@ -306,6 +320,13 @@ static struct platform_device mass_storage_device = {
 	.dev            = {
 		.platform_data          = &usb_mass_storage_pdata,
 	},
+};
+
+static struct i2c_board_info msm_marimba_board_info[] = {
+	{
+		I2C_BOARD_INFO("marimba", 0xc),
+		.platform_data = &marimba_pdata,
+	}
 };
 
 static struct usb_function_map usb_functions_map[] = {
@@ -1043,6 +1064,8 @@ static void __init msm7x30_init(void)
 	msm_device_i2c_init();
 	msm_device_i2c_2_init();
 	buses_init();
+	i2c_register_board_info(2, msm_marimba_board_info,
+			ARRAY_SIZE(msm_marimba_board_info));
 
 	platform_device_register(&surf_keypad_device);
 	bt_power_init();
