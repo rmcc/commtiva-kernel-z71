@@ -514,6 +514,125 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
+static unsigned wega_reset_gpio =
+	GPIO_CFG(180, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+
+static int mddi_toshiba_power_on(void)
+{
+	int rc;
+	struct vreg *vreg_ldo20, *vreg_ldo12, *vreg_ldo16, *vreg_ldo15;
+
+	/* reset Toshiba WeGA chip -- toggle reset pin -- gpio_180 */
+	rc = gpio_tlmm_config(wega_reset_gpio, GPIO_ENABLE);
+	if (rc) {
+		pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
+			       __func__, wega_reset_gpio, rc);
+		return rc;
+	}
+
+	gpio_set_value(180, 0);	/* bring reset line low to hold reset*/
+
+	/* Toshiba WeGA power -- has 3 power source */
+	/* 1.5V -- LDO20*/
+	vreg_ldo20 = vreg_get(NULL, "gp13");
+
+	if (IS_ERR(vreg_ldo20)) {
+		pr_err("%s: gp13 vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_ldo20));
+		return rc;
+	}
+
+	/* 1.8V -- LDO12 */
+	vreg_ldo12 = vreg_get(NULL, "gp9");
+
+	if (IS_ERR(vreg_ldo12)) {
+		pr_err("%s: gp9 vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_ldo12));
+		return rc;
+	}
+
+	/* 2.6V -- LDO16 */
+	vreg_ldo16 = vreg_get(NULL, "gp10");
+
+	if (IS_ERR(vreg_ldo16)) {
+		pr_err("%s: gp10 vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_ldo16));
+		return rc;
+	}
+
+	/* lcd panel power */
+	/* 3.1V -- LDO15 */
+	vreg_ldo15 = vreg_get(NULL, "gp6");
+
+	if (IS_ERR(vreg_ldo15)) {
+		pr_err("%s: gp6 vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_ldo15));
+		return rc;
+	}
+
+	rc = vreg_set_level(vreg_ldo20, 1500);
+	if (rc) {
+		pr_err("%s: vreg LDO20 set level failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+	rc = vreg_set_level(vreg_ldo12, 1800);
+	if (rc) {
+		pr_err("%s: vreg LDO12 set level failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_set_level(vreg_ldo16, 2600);
+	if (rc) {
+		pr_err("%s: vreg LDO16 set level failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_set_level(vreg_ldo15, 3100);
+	if (rc) {
+		pr_err("%s: vreg LDO15 set level failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_enable(vreg_ldo20);
+	if (rc) {
+		pr_err("%s: LDO20 vreg enable failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_enable(vreg_ldo12);
+	if (rc) {
+		pr_err("%s: LDO12 vreg enable failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_enable(vreg_ldo16);
+	if (rc) {
+		pr_err("%s: LDO16 vreg enable failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	rc = vreg_enable(vreg_ldo15);
+	if (rc) {
+		pr_err("%s: LDO15 vreg enable failed (%d)\n",
+		       __func__, rc);
+		return rc;
+	}
+
+	mdelay(5);		/* ensure power is stable */
+
+	gpio_set_value(180, 1);	/* bring reset line high */
+	mdelay(10);		/* 10 msec before IO can be accessed */
+
+	return 0;
+}
+
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 {
 	*clk_rate *= 2;
@@ -521,6 +640,7 @@ static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 }
 
 static struct mddi_platform_data mddi_pdata = {
+	.mddi_power_on = mddi_toshiba_power_on,
 	.mddi_sel_clk = msm_fb_mddi_sel_clk,
 };
 
