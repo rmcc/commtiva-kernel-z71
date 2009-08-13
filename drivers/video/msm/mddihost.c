@@ -118,12 +118,12 @@ void mddi_init(void)
 	}
 }
 
-void mddi_host_register_read
-    (uint32 reg_addr,
+int mddi_host_register_read(uint32 reg_addr,
      uint32 *reg_value_ptr, boolean wait, mddi_host_type host) {
 	mddi_linked_list_type *curr_llist_ptr;
 	mddi_register_access_packet_type *regacc_pkt_ptr;
 	uint16 curr_llist_idx;
+	int ret = 0;
 
 	if (in_interrupt())
 		MDDI_MSG_CRIT("Called from ISR context\n");
@@ -142,7 +142,7 @@ void mddi_host_register_read
 
 		/* need to change this to some sort of wait */
 		MDDI_MSG_ERR("Attempting to queue up more than 1 reg read\n");
-		return;
+		return -EINVAL;
 	}
 
 	curr_llist_ptr = &llist_extern[host][curr_llist_idx];
@@ -170,25 +170,36 @@ void mddi_host_register_read
 	up(&mddi_host_mutex);
 
 	if (wait) {
+		int wait_ret;
+
 		mddi_linked_list_notify_type *llist_notify_ptr;
 		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
-		wait_for_completion_killable(&
-						  (llist_notify_ptr->
-						   done_comp));
+		wait_ret = wait_for_completion_timeout(
+					&(llist_notify_ptr->done_comp), 5 * HZ);
+
+		if (wait_ret <= 0)
+			ret = -EBUSY;
+
+		if (wait_ret < 0)
+			printk(KERN_ERR "%s: failed to wait for completion!\n",
+				__func__);
+		else if (!wait_ret)
+			printk(KERN_ERR "%s: Timed out waiting!\n", __func__);
 	}
 
 	MDDI_MSG_DEBUG("Reg Read value=0x%x\n", *reg_value_ptr);
 
+	return ret;
 }				/* mddi_host_register_read */
 
-void mddi_host_register_write
-    (uint32 reg_addr,
+int mddi_host_register_write(uint32 reg_addr,
      uint32 reg_val,
      boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host) {
 	mddi_linked_list_type *curr_llist_ptr;
 	mddi_linked_list_type *curr_llist_dma_ptr;
 	mddi_register_access_packet_type *regacc_pkt_ptr;
 	uint16 curr_llist_idx;
+	int ret = 0;
 
 	if (in_interrupt())
 		MDDI_MSG_CRIT("Called from ISR context\n");
@@ -235,13 +246,24 @@ void mddi_host_register_write
 	up(&mddi_host_mutex);
 
 	if (wait) {
+		int wait_ret;
+
 		mddi_linked_list_notify_type *llist_notify_ptr;
 		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
-		wait_for_completion_killable(&
-						  (llist_notify_ptr->
-						   done_comp));
+		wait_ret = wait_for_completion_timeout(
+					&(llist_notify_ptr->done_comp), 5 * HZ);
+
+		if (wait_ret <= 0)
+			ret = -EBUSY;
+
+		if (wait_ret < 0)
+			printk(KERN_ERR "%s: failed to wait for completion!\n",
+				__func__);
+		else if (!wait_ret)
+			printk(KERN_ERR "%s: Timed out waiting!\n", __func__);
 	}
 
+	return ret;
 }				/* mddi_host_register_write */
 
 boolean mddi_host_register_read_int
