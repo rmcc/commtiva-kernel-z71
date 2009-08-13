@@ -315,6 +315,44 @@ int mdp_ppp_pipe_wait(void)
 	return ret;
 }
 
+static DEFINE_SPINLOCK(mdp_lock);
+static int mdp_irq_mask;
+static int mdp_irq_enabled;
+
+void mdp_enable_irq(uint32 term)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&mdp_lock, irq_flags);
+	if (mdp_irq_mask & term) {
+		printk(KERN_ERR "MDP IRQ term-0x%x is already set\n", term);
+	} else {
+		mdp_irq_mask |= term;
+		if (mdp_irq_mask && !mdp_irq_enabled) {
+			mdp_irq_enabled = 1;
+			enable_irq(INT_MDP);
+		}
+	}
+	spin_unlock_irqrestore(&mdp_lock, irq_flags);
+}
+
+void mdp_disable_irq(uint32 term)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&mdp_lock, irq_flags);
+	if (!(mdp_irq_mask & term)) {
+		printk(KERN_ERR "MDP IRQ term-0x%x is not set\n", term);
+	} else {
+		mdp_irq_mask &= ~term;
+		if (!mdp_irq_mask && mdp_irq_enabled) {
+			mdp_irq_enabled = 0;
+			disable_irq(INT_MDP);
+		}
+	}
+	spin_unlock_irqrestore(&mdp_lock, irq_flags);
+}
+
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
 	/* kick off PPP engine */
@@ -322,15 +360,15 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 		if (mdp_debug[MDP_PPP_BLOCK])
 			jiffies_to_timeval(jiffies, &mdp_ppp_timeval);
 
-		INIT_COMPLETION(mdp_ppp_comp);
-		mdp_ppp_waiting = TRUE;
-
 		/* let's turn on PPP block */
 		mdp_pipe_ctrl(MDP_PPP_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
-		/* HWIO_OUT(MDP_DISPLAY0_START, 0x1000); */
+		mdp_enable_irq(term);
+		INIT_COMPLETION(mdp_ppp_comp);
+		mdp_ppp_waiting = TRUE;
 		outpdw(MDP_BASE + 0x30, 0x1000);
 		wait_for_completion_killable(&mdp_ppp_comp);
+		mdp_disable_irq(term);
 
 		if (mdp_debug[MDP_PPP_BLOCK]) {
 			struct timeval now;
@@ -481,7 +519,6 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 				/* turn off MDP clk */
 				if (mdp_clk != NULL) {
 					clk_disable(mdp_clk);
-					disable_irq(INT_MDP);
 					MSM_FB_DEBUG("MDP CLK OFF\n");
 				}
 
@@ -495,7 +532,6 @@ void mdp_pipe_ctrl(MDP_BLOCK_TYPE block, MDP_BLOCK_POWER_STATE state,
 			mdp_current_clk_on = TRUE;
 			/* turn on MDP clk */
 			if (mdp_clk != NULL) {
-				enable_irq(INT_MDP);
 				clk_enable(mdp_clk);
 				MSM_FB_DEBUG("MDP CLK ON\n");
 			}

@@ -219,12 +219,12 @@ struct mdp_dma_data {
 
 #define MDP_DMA2_TERM 0x1
 #define MDP_DMA3_TERM 0x2
-#define MDP_PPP_TERM 0x3
-#define MDP_DMA_S_TERM 0x4
+#define MDP_PPP_TERM 0x4
+#define MDP_DMA_S_TERM 0x8
 #ifdef CONFIG_FB_MSM_MDP40
-#define MDP_DMA_E_TERM 0x5
-#define MDP_OVERLAY0_TERM 0x6
-#define MDP_OVERLAY1_TERM 0x7
+#define MDP_DMA_E_TERM 0x10
+#define MDP_OVERLAY0_TERM 0x20
+#define MDP_OVERLAY1_TERM 0x40
 #endif
 
 #define ACTIVE_START_X_EN BIT(31)
@@ -655,6 +655,8 @@ int mdp_lcdc_on(struct platform_device *pdev);
 int mdp_lcdc_off(struct platform_device *pdev);
 void mdp_lcdc_update(struct msm_fb_data_type *mfd);
 int mdp_hw_cursor_update(struct fb_info *info, struct fb_cursor *cursor);
+void mdp_enable_irq(uint32 term);
+void mdp_disable_irq(uint32 term);
 
 #ifdef MDP_HW_VSYNC
 void mdp_hw_vsync_clk_enable(struct msm_fb_data_type *mfd);

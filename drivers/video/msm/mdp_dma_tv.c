@@ -168,6 +168,7 @@ void mdp_dma3_update(struct msm_fb_data_type *mfd)
 	MDP_OUTP(MDP_BASE + 0xC0008, (uint32) buf >> 3);
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
+	mdp_enable_irq(MDP_DMA3_TERM);
 	INIT_COMPLETION(mfd->dma->comp);
 	mfd->dma->waiting = TRUE;
 
@@ -177,4 +178,5 @@ void mdp_dma3_update(struct msm_fb_data_type *mfd)
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
 	wait_for_completion_killable(&mfd->dma->comp);
+	mdp_disable_irq(MDP_DMA3_TERM);
 }

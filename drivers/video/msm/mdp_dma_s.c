@@ -157,16 +157,17 @@ void mdp_dma_s_update(struct msm_fb_data_type *mfd)
 {
 	down(&mfd->dma->mutex);
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
+		down(&mfd->sem);
+		mdp_enable_irq(MDP_DMA_S_TERM);
 		mfd->dma->busy = TRUE;
 		INIT_COMPLETION(mfd->dma->comp);
-
-		down(&mfd->sem);
 		mfd->ibuf_flushed = TRUE;
 		mdp_dma_s_update_lcd(mfd);
 		up(&mfd->sem);
 
 		/* wait until DMA finishes the current job */
 		wait_for_completion_killable(&mfd->dma->comp);
+		mdp_disable_irq(MDP_DMA_S_TERM);
 
 	/* signal if pan function is waiting for the update completion */
 		if (mfd->pan_waiting) {
