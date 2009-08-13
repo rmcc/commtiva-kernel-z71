@@ -73,7 +73,6 @@
 #define P_VDC_CLK	39  /* Video controller clock */
 #define P_VFE_MDC_CLK	40  /* Camera / Video Front End clock */
 #define P_VFE_CLK	41  /* VFE MDDI client clock */
-
 #define P_MDP_LCDC_PCLK_CLK	42
 #define P_MDP_LCDC_PAD_PCLK_CLK 43
 #define P_MDP_VSYNC_CLK	44
@@ -85,8 +84,45 @@
 #define P_USB_HS3_PCLK	50  /* High speed USB 3 pbus clock */
 #define P_GRP_PCLK	51  /* Graphics pbus clock */
 #define P_USB_PHY_CLK	52  /* USB PHY clock */
+#define P_USB_HS_CORE_CLK	53  /* High speed USB 1 core clock */
+#define P_USB_HS2_CORE_CLK	54  /* High speed USB 2 core clock */
+#define P_USB_HS3_CORE_CLK	55  /* High speed USB 3 core clock */
+#define P_CAM_MCLK_CLK		56
+#define P_CAMIF_PAD_PCLK	57
+#define P_GRP_2D_CLK		58
+#define P_GRP_2D_PCLK		59
+#define P_I2S_CLK		60
+#define P_JPEG_CLK		61
+#define P_JPEG_PCLK		62
+#define P_LPA_CODEC_CLK		63
+#define P_LPA_CORE_CLK		64
+#define P_LPA_PCLK		65
+#define P_MDC_IO_CLK		66
+#define P_MDC_PCLK		67
+#define P_MFC_CLK		68
+#define P_MFC_DIV2_CLK		69
+#define P_MFC_PCLK		70
+#define P_QUP_I2C_CLK		71
+#define P_ROTATOR_IMEM_CLK	72
+#define P_ROTATOR_PCLK		73
+#define P_VFE_CAMIF_CLK		74
+#define P_VFE_PCLK		75
+#define P_VPE_CLK		76
+#define P_I2C_2_CLK		77
+#define P_MI2S_CODEC_RX_SCLK	78
+#define P_MI2S_CODEC_RX_MCLK	79
+#define P_MI2S_CODEC_TX_SCLK	80
+#define P_MI2S_CODEC_TX_MCLK	81
+#define P_PMDH_PCLK		82
+#define P_EMDH_PCLK		83
+#define P_SPI_PCLK		84
+#define P_TSIF_PCLK		85
+#define P_MDP_PCLK		86
+#define P_SDAC_MCLK		87
+#define P_MI2S_HDMI_CLK		88
+#define P_MI2S_HDMI_MCLK	89
 
-#define P_NR_CLKS		53
+#define P_NR_CLKS		90
 
 struct clk_ops;
 extern struct clk_ops clk_ops_pcom;
