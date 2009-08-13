@@ -870,7 +870,7 @@ static void mddi_process_rev_packets(void)
 	mddi_host_reg_out(REV_PKT_CNT, 0x0000);
 #endif
 
-#ifdef CONFIG_FB_MSM_MDP31
+#if defined(CONFIG_FB_MSM_MDP31) || defined(CONFIG_FB_MSM_MDP40)
 	if ((pmhctl->rev_state == MDDI_REV_CLIENT_CAP_ISSUED) &&
 	    (rev_packet_count > 0) &&
 	    (mddi_host_core_version == 0x28 ||
@@ -1116,7 +1116,7 @@ static void mddi_process_rev_packets(void)
 			}
 		}
 	} else if (pmhctl->rev_state == MDDI_REV_CLIENT_CAP_ISSUED) {
-#ifdef CONFIG_FB_MSM_MDP31
+#if defined(CONFIG_FB_MSM_MDP31) || defined(CONFIG_FB_MSM_MDP40)
 		if (mddi_host_core_version == 0x28 ||
 		    mddi_host_core_version == 0x30) {
 			mddi_host_reg_out(FIFO_ALLOC, 0x00);
@@ -1245,7 +1245,7 @@ static void mddi_issue_reverse_encapsulation(void)
 			if (!pmhctl->rev_ptr_written) {
 				MDDI_MSG_DEBUG("writing reverse pointer!\n");
 				pmhctl->rev_ptr_written = TRUE;
-#ifdef CONFIG_FB_MSM_MDP31
+#if defined(CONFIG_FB_MSM_MDP31) || defined(CONFIG_FB_MSM_MDP40)
 				if ((pmhctl->rev_state ==
 				     MDDI_REV_CLIENT_CAP_ISSUED) &&
 				    (mddi_host_core_version == 0x28 ||
@@ -1511,7 +1511,7 @@ static void mddi_host_initialize_registers(mddi_host_type host_idx)
 	mddi_host_reg_out(PAD_CTL, 0xa850f);
 #endif
 
-#ifdef CONFIG_FB_MSM_MDP31
+#if defined(CONFIG_FB_MSM_MDP31) || defined(CONFIG_FB_MSM_MDP40)
 	mddi_host_reg_out(PAD_IO_CTL, 0x00320000);
 	mddi_host_reg_out(PAD_CAL, 0x00220020);
 #endif

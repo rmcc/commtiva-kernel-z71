@@ -127,6 +127,9 @@ typedef enum {
 	MDP_DMA2_BLOCK,
 	MDP_DMA3_BLOCK,
 	MDP_DMA_S_BLOCK,
+	MDP_DMA_E_BLOCK,
+	MDP_OVERLAY0_BLOCK,
+	MDP_OVERLAY1_BLOCK,
 	MDP_MAX_BLOCK
 } MDP_BLOCK_TYPE;
 
@@ -218,6 +221,11 @@ struct mdp_dma_data {
 #define MDP_DMA3_TERM 0x2
 #define MDP_PPP_TERM 0x3
 #define MDP_DMA_S_TERM 0x4
+#ifdef CONFIG_FB_MSM_MDP40
+#define MDP_DMA_E_TERM 0x5
+#define MDP_OVERLAY0_TERM 0x6
+#define MDP_OVERLAY1_TERM 0x7
+#endif
 
 #define ACTIVE_START_X_EN BIT(31)
 #define ACTIVE_START_Y_EN BIT(31)
@@ -549,12 +557,25 @@ struct mdp_dma_data {
  */
 #define MDDI_VDO_PACKET_DESC  0x5666
 
+#ifdef CONFIG_FB_MSM_MDP40
+#define MDP_INTR_ENABLE		(msm_mdp_base + 0x0050)
+#define MDP_INTR_STATUS		(msm_mdp_base + 0x0054)
+#define MDP_INTR_CLEAR		(msm_mdp_base + 0x0058)
+#define MDP_EBI2_LCD0		(msm_mdp_base + 0x0060)
+#define MDP_EBI2_LCD1		(msm_mdp_base + 0x0064)
+#define MDP_EBI2_PORTMAP_MODE	(msm_mdp_base + 0x0070)
+
+#define MDP_DMA_P_HIST_INTR_STATUS 	(msm_mdp_base + 0x95014)
+#define MDP_DMA_P_HIST_INTR_CLEAR 	(msm_mdp_base + 0x95018)
+#define MDP_DMA_P_HIST_INTR_ENABLE 	(msm_mdp_base + 0x9501C)
+#else
 #define MDP_INTR_ENABLE		(msm_mdp_base + 0x0020)
 #define MDP_INTR_STATUS		(msm_mdp_base + 0x0024)
 #define MDP_INTR_CLEAR		(msm_mdp_base + 0x0028)
 #define MDP_EBI2_LCD0		(msm_mdp_base + 0x003c)
 #define MDP_EBI2_LCD1		(msm_mdp_base + 0x0040)
 #define MDP_EBI2_PORTMAP_MODE	(msm_mdp_base + 0x005c)
+#endif
 
 #define MDP_FULL_BYPASS_WORD43  (msm_mdp_base + 0x101ac)
 

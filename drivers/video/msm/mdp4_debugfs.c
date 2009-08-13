@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -54,88 +54,168 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
-
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/sched.h>
 #include <linux/time.h>
 #include <linux/init.h>
 #include <linux/interrupt.h>
+#include <linux/spinlock.h>
 #include <linux/hrtimer.h>
-
+#include <linux/clk.h>
 #include <mach/hardware.h>
-#include <asm/io.h>
+#include <linux/io.h>
+#include <linux/debugfs.h>
 
 #include <asm/system.h>
 #include <asm/mach-types.h>
 #include <linux/semaphore.h>
-#include <linux/spinlock.h>
-
-#include <linux/fb.h>
+#include <linux/uaccess.h>
 
 #include "mdp.h"
 #include "msm_fb.h"
+#include "mdp4.h"
 
-static int cursor_enabled;
 
-int mdp_hw_cursor_update(struct fb_info *info, struct fb_cursor *cursor)
+#define MDP4_DEBUG_BUF	128
+
+
+static char mdp4_debug_buf[MDP4_DEBUG_BUF];
+static ulong mdp4_debug_offset;
+static ulong mdp4_base_addr;
+
+static int mdp4_offset_set(void *data, u64 val)
 {
-	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
-	struct fb_image *img = &cursor->image;
-	int calpha_en, transp_en;
-	int alpha;
-	int ret = 0;
+	mdp4_debug_offset = (int)val;
+	return 0;
+}
 
-	if ((img->width > MDP_CURSOR_WIDTH) ||
-	    (img->height > MDP_CURSOR_HEIGHT) ||
-	    (img->depth != 32))
+static int mdp4_offset_get(void *data, u64 *val)
+{
+	*val = (u64)mdp4_debug_offset;
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(
+			mdp4_offset_fops,
+			mdp4_offset_get,
+			mdp4_offset_set,
+			"%llx\n");
+
+
+static int mdp4_debugfs_open(struct inode *inode, struct file *file)
+{
+	/* non-seekable */
+	file->f_mode &= ~(FMODE_LSEEK | FMODE_PREAD | FMODE_PWRITE);
+	return 0;
+}
+
+static int mdp4_debugfs_release(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static ssize_t mdp4_debugfs_write(
+	struct file *file,
+	const char __user *buff,
+	size_t count,
+	loff_t *ppos)
+{
+	int cnt;
+	unsigned int data;
+
+	printk(KERN_INFO "%s: offset=%d count=%d *ppos=%d\n",
+		__func__, (int)mdp4_debug_offset, (int)count, (int)*ppos);
+
+	if (count > sizeof(mdp4_debug_buf))
+		return -EFAULT;
+
+	if (copy_from_user(mdp4_debug_buf, buff, count))
+		return -EFAULT;
+
+
+	mdp4_debug_buf[count] = 0;	/* end of string */
+
+	cnt = sscanf(mdp4_debug_buf, "%x", &data);
+	if (cnt < 1) {
+		printk(KERN_ERR "%s: sscanf failed cnt=%d" , __func__, cnt);
 		return -EINVAL;
-
-	if (cursor->set & FB_CUR_SETPOS)
-		MDP_OUTP(MDP_BASE + 0x9004c, (img->dy << 16) | img->dx);
-
-	if (cursor->set & FB_CUR_SETIMAGE) {
-		ret = copy_from_user(mfd->cursor_buf, img->data,
-					img->width*img->height*4);
-		if (ret)
-			return ret;
-
-		if (img->bg_color == 0xffffffff)
-			transp_en = 0;
-		else
-			transp_en = 1;
-
-		alpha = (img->fg_color & 0xff000000) >> 24;
-
-		if (alpha)
-			calpha_en = 0x2; /* xrgb */
-		else
-			calpha_en = 0x1; /* argb */
-
-		MDP_OUTP(MDP_BASE + 0x90044, (img->height << 16) | img->width);
-		MDP_OUTP(MDP_BASE + 0x90048, mfd->cursor_buf_phys);
-		MDP_OUTP(MDP_BASE + 0x90060,
-			 (transp_en << 3) | (calpha_en << 1) |
-			 (inp32(MDP_BASE + 0x90060) & 0x1));
-#ifdef CONFIG_FB_MSM_MDP40
-		MDP_OUTP(MDP_BASE + 0x90064, (alpha << 24));
-		MDP_OUTP(MDP_BASE + 0x90068, (0xffffff & img->bg_color));
-		MDP_OUTP(MDP_BASE + 0x9006C, (0xffffff & img->bg_color));
-#else
-		MDP_OUTP(MDP_BASE + 0x90064,
-			 (alpha << 24) | (0xffffff & img->bg_color));
-		MDP_OUTP(MDP_BASE + 0x90068, 0);
-#endif
 	}
 
-	if ((cursor->enable) && (!cursor_enabled)) {
-		cursor_enabled = 1;
-		MDP_OUTP(MDP_BASE + 0x90060, inp32(MDP_BASE + 0x90060) | 0x1);
-	} else if ((!cursor->enable) && (cursor_enabled)) {
-		cursor_enabled = 0;
-		MDP_OUTP(MDP_BASE + 0x90060,
-			 inp32(MDP_BASE + 0x90060) & (~0x1));
+	writel(&data, mdp4_base_addr + mdp4_debug_offset);
+
+	return 0;
+}
+
+static ssize_t mdp4_debugfs_read(
+	struct file *file,
+	char __user *buff,
+	size_t count,
+	loff_t *ppos)
+{
+	int len = 0;
+	unsigned int data;
+
+	printk(KERN_INFO "%s: offset=%d count=%d *ppos=%d\n",
+		__func__, (int)mdp4_debug_offset, (int)count, (int)*ppos);
+
+	if (*ppos)
+		return 0;	/* the end */
+
+	data = readl(mdp4_base_addr + mdp4_debug_offset);
+
+	len = snprintf(mdp4_debug_buf, 4, "%x\n", data);
+
+	if (len > 0) {
+		if (len > count)
+			len = count;
+		if (copy_to_user(buff, mdp4_debug_buf, len))
+			return -EFAULT;
 	}
+
+	printk(KERN_INFO "%s: len=%d\n", __func__, len);
+
+	if (len < 0)
+		return 0;
+
+	*ppos += len;	/* increase offset */
+
+	return len;
+}
+
+static const struct file_operations mdp4_debugfs_fops = {
+	.open = mdp4_debugfs_open,
+	.release = mdp4_debugfs_release,
+	.read = mdp4_debugfs_read,
+	.write = mdp4_debugfs_write,
+};
+
+int mdp4_debugfs_init(void)
+{
+	struct dentry *dent = debugfs_create_dir("mdp4", NULL);
+
+	if (IS_ERR(dent)) {
+		printk(KERN_ERR "%s(%d): debugfs_create_dir fail, error %ld\n",
+			__FILE__, __LINE__, PTR_ERR(dent));
+		return -1;
+	}
+
+	if (debugfs_create_file("offset", 0644, dent, 0, &mdp4_offset_fops)
+			== NULL) {
+		printk(KERN_ERR "%s(%d): debugfs_create_file: offset fail\n",
+			__FILE__, __LINE__);
+		return -1;
+	}
+
+	if (debugfs_create_file("regs", 0644, dent, 0, &mdp4_debugfs_fops)
+			== NULL) {
+		printk(KERN_ERR "%s(%d): debugfs_create_file: regs fail\n",
+			__FILE__, __LINE__);
+		return -1;
+	}
+
+	mdp4_debug_offset = 0;
+	mdp4_base_addr = (ulong) msm_mdp_base;	/* defined at msm_fb_def.h */
 
 	return 0;
 }
