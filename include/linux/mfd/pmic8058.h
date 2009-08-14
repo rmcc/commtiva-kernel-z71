@@ -52,7 +52,8 @@ struct pm8058_platform_data {
 #define	PM_GPIO_DIR_IN			0x02
 #define	PM_GPIO_DIR_BOTH		(PM_GPIO_DIR_OUT | PM_GPIO_DIR_IN)
 
-#define	PM_GPIO_PULL_UP			3
+#define	PM_GPIO_PULL_UP1		2
+#define	PM_GPIO_PULL_UP2		3
 #define	PM_GPIO_PULL_DN			4
 #define	PM_GPIO_PULL_NO			5
 
@@ -62,7 +63,9 @@ struct pm8058_platform_data {
 #define	PM_GPIO_STRENGTH_LOW		3
 
 #define	PM_GPIO_FUNC_NORMAL		0
-#define	PM_GPIO_FUNC_KEYPAD		1
+#define	PM_GPIO_FUNC_PAIRED		1
+#define	PM_GPIO_FUNC_1			2
+#define	PM_GPIO_FUNC_2			3
 
 struct pm8058_gpio {
 	int		direction;
