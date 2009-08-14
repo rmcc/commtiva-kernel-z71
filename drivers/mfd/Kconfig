@@ -260,7 +260,7 @@ config TPS65023
 config PMIC8058
 	tristate "PMIC8058 Power Management chip"
 	depends on I2C && ARCH_MSM7X30
-	default n
+	default y if I2C && ARCH_MSM7X30
 	help
 	  Say yes here for Qualcomm PM8058 chip.
 
