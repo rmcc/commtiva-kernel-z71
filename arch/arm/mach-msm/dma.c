@@ -140,7 +140,7 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr)
 	PRINT_FLOW("dmov_exec_cmdptr(%d, %x) done\n", id, cmdptr);
 	return 0;
 }
-EXPORT_SYMBOL_GPL(msm_dmov_exec_cmd);
+EXPORT_SYMBOL(msm_dmov_exec_cmd);
 
 
 static irqreturn_t msm_datamover_irq_handler(int irq, void *dev_id)
