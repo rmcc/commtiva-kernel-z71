@@ -130,6 +130,7 @@ struct audio {
 	char *data;
 	dma_addr_t phys;
 
+	int teos; /* valid only if tunnel mode & no data left for decoder */
 	int opened;
 	int enabled;
 	int running;
@@ -322,6 +323,8 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 	}
 	case AUDPP_MSG_PCMDMAMISSED:
 		pr_info("audio_dsp_event: PCMDMAMISSED %d\n", msg[0]);
+		audio->teos = 1;
+		wake_up(&audio->wait);
 		break;
 	case AUDPP_MSG_CFG_MSG:
 		if (msg[0] == AUDPP_MSG_ENA_ENA) {
@@ -571,6 +574,39 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = -EINVAL;
 	}
 	mutex_unlock(&audio->lock);
+	return rc;
+}
+
+/* Only useful in tunnel-mode */
+static int audio_fsync(struct file *file, struct dentry *dentry,
+			int datasync)
+{
+	struct audio *audio = file->private_data;
+	int rc = 0;
+
+	if (!audio->running)
+		return -EINVAL;
+
+	mutex_lock(&audio->write_lock);
+
+	rc = wait_event_interruptible(audio->wait,
+		(!audio->out[0].used &&
+		!audio->out[1].used));
+
+	if (rc < 0)
+		goto done;
+
+	/* pcm dmamiss message is sent continously when
+	 * decoder is starved so no race condition concern
+	 */
+
+	audio->teos = 0;
+
+	rc = wait_event_interruptible(audio->wait,
+		audio->teos);
+
+done:
+	mutex_unlock(&audio->write_lock);
 	return rc;
 }
 
@@ -948,6 +984,7 @@ static struct file_operations audio_fops = {
 	.read		= audio_read,
 	.write		= audio_write,
 	.unlocked_ioctl	= audio_ioctl,
+	.fsync		= audio_fsync,
 };
 
 static struct file_operations audpp_fops = {
