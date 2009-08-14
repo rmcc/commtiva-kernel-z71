@@ -1372,6 +1372,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
 				audio->pcm_feedback =
 				(config.pcm_feedback ? 1 : 0);
+				rc = 0;
 				break;
 			}
 
