@@ -109,8 +109,6 @@ static int tvenc_off(struct platform_device *pdev)
 {
 	int ret = 0;
 
-	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ , "tvenc",
-				PM_QOS_DEFAULT_VALUE);
 	ret = panel_next_off(pdev);
 
 	clk_disable(tvenc_clk);
@@ -119,11 +117,12 @@ static int tvenc_off(struct platform_device *pdev)
 	if (tvenc_pdata && tvenc_pdata->pm_vid_en)
 		ret = tvenc_pdata->pm_vid_en(0);
 
-	if (ret) {
+	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ , "tvenc",
+					PM_QOS_DEFAULT_VALUE);
+
+	if (ret)
 		printk(KERN_ERR "%s: pm_vid_en(off) failed! %d\n",
 		__func__, ret);
-		return ret;
-	}
 
 	return ret;
 }
