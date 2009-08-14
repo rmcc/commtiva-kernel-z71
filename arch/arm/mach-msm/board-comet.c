@@ -101,12 +101,15 @@
 #define MSM_FB_SIZE             0x500000
 #define MSM_AUDIO_SIZE		0x200000
 
+#define MSM_GPU_PHYS_SIZE       SZ_2M
+
 #define MSM_SMI_BASE		0x2b00000
 #define MSM_SMI_SIZE		0x1500000
 
-#define MSM_FB_BASE		MSM_SMI_BASE
-#define MSM_PMEM_GPU0_BASE	(MSM_FB_BASE + MSM_FB_SIZE)
-#define MSM_PMEM_GPU0_SIZE	(MSM_SMI_SIZE - MSM_FB_SIZE)
+#define MSM_FB_BASE             MSM_SMI_BASE
+#define MSM_GPU_PHYS_BASE       (MSM_FB_BASE + MSM_FB_SIZE)
+#define MSM_PMEM_GPU0_BASE      (MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
+#define MSM_PMEM_GPU0_SIZE      (MSM_SMI_SIZE - MSM_FB_SIZE - MSM_GPU_PHYS_SIZE)
 
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
 
@@ -827,6 +830,34 @@ static void __init bt_power_init(void)
 #define bt_power_init(x) do {} while (0)
 #endif
 
+static struct resource kgsl_resources[] = {
+       {
+	       .name  = "kgsl_reg_memory",
+	       .start = 0xA0000000,
+	       .end = 0xA001ffff,
+	       .flags = IORESOURCE_MEM,
+       },
+       {
+	       .name   = "kgsl_phys_memory",
+	       .start = MSM_GPU_PHYS_BASE,
+	       .end = MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE - 1,
+	       .flags = IORESOURCE_MEM,
+       },
+       {
+	       .start = INT_GRAPHICS,
+	       .end = INT_GRAPHICS,
+	       .flags = IORESOURCE_IRQ,
+       },
+};
+
+static struct platform_device msm_device_kgsl = {
+	.name = "kgsl",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(kgsl_resources),
+	.resource = kgsl_resources,
+};
+
+
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&msm_device_smd,
@@ -851,6 +882,7 @@ static struct platform_device *devices[] __initdata = {
 	&qsd_device_spi,
 	&msm_device_tssc,
 	&hs_device,
+	&msm_device_kgsl,
 };
 
 #ifdef CONFIG_QSD_SVS
@@ -1120,6 +1152,12 @@ static void __init comet_init_irq(void)
 {
 	msm_init_irq();
 	msm_init_sirc();
+}
+
+static void kgsl_phys_memory_init(void)
+{
+	request_mem_region(kgsl_resources[1].start,
+			resource_size(&kgsl_resources[1]), "kgsl");
 }
 
 static void __init comet_init_host(void)
@@ -1438,6 +1476,7 @@ static void __init comet_init(void)
 	spi_register_board_info(msm_spi_board_info,
 				ARRAY_SIZE(msm_spi_board_info));
 	msm_pm_set_platform_data(msm_pm_data);
+	kgsl_phys_memory_init();
 }
 
 static void __init comet_allocate_memory_regions(void)
