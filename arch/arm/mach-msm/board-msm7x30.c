@@ -425,6 +425,14 @@ static struct msm_gpio bma_spi_gpio_config_data[] = {
 	{ GPIO_CFG(51, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
 };
 
+static struct platform_device hs_device = {
+	.name   = "msm-handset",
+	.id     = -1,
+	.dev    = {
+		.platform_data = "7k_handset",
+	},
+};
+
 static int msm_bma_gpio_setup(struct device *dev)
 {
 	int rc;
@@ -586,6 +594,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&msm_device_i2c,
 	&msm_device_uart_dm1,
+	&hs_device,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
