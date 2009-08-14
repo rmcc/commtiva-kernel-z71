@@ -30,7 +30,7 @@
 #include <mach/msm_smd.h>
 #include "smd_private.h"
 
-#define MAX_SMD_TTYS 53
+#define MAX_SMD_TTYS 37
 
 static DEFINE_MUTEX(smd_tty_lock);
 
@@ -44,65 +44,6 @@ struct smd_tty_info {
 
 static struct smd_tty_info smd_tty[MAX_SMD_TTYS];
 static struct workqueue_struct *smd_tty_wq;
-
-char *tty_map_tbl[] =
-{
-	/*  0 */  "DS",
-	/*  1 */  "DIAG",
-	/*  2 */  "RPCCALL",
-	/*  3 */  "RPCRPY",
-	/*  4 */  "BT",
-	/*  5 */  "CONTROL",
-	/*  6 */  "MCPY_RVD",
-	/*  7 */  "DATA1",
-	/*  8 */  "DATA2",
-	/*  9 */  "DATA3",
-	/* 10 */  "DATA4",
-	/* 11 */  "DATA5",
-	/* 12 */  "DATA6",
-	/* 13 */  "DATA7",
-	/* 14 */  "DATA8",
-	/* 15 */  "DATA9",
-	/* 16 */  "DATA10",
-	/* 17 */  "DATA11",
-	/* 18 */  "DATA12",
-	/* 19 */  "DATA13",
-	/* 20 */  "DATA14",
-	/* 21 */  "DATA15",
-	/* 22 */  "DATA16",
-	/* 23 */  "DATA17",
-	/* 24 */  "DATA18",
-	/* 25 */  "DATA19",
-	/* 26 */  "DATA20",
-	/* 27 */  "GPSNMEA",
-	/* 28 */  "BRG_1",
-	/* 29 */  "BRG_2",
-	/* 30 */  "BRG_3",
-	/* 31 */  "BRG_4",
-	/* 32 */  "BRG_5",
-	/* 33 */  "CS_A2M",
-	/* 34 */  "CS_A2Q6",
-	/* 35 */  "CS_M2Q6",
-	/* 36 */  "LOOPBACK",
-
-	/* new dynamically allocated ctl ports */
-	/* 37 */  "DATA0_CNTL",  /* name does not exist */
-	/* 38 */  "DATA1_CNTL",
-	/* 39 */  "DATA2_CNTL",
-	/* 40 */  "DATA3_CNTL",
-	/* 41 */  "DATA4_CNTL",
-	/* 42 */  "DATA5_CNTL",  /* <- smdcntl0 */
-	/* 43 */  "DATA6_CNTL",  /* <- smdcntl1 */
-	/* 44 */  "DATA7_CNTL",  /* <- smdcntl2 */
-	/* 45 */  "DATA8_CNTL",
-	/* 46 */  "DATA9_CNTL",
-	/* 47 */  "DATA10_CNTL",
-	/* 48 */  "DATA11_CNTL",
-	/* 49 */  "DATA12_CNTL",
-	/* 50 */  "DATA13_CNTL",
-	/* 51 */  "DATA14_CNTL",
-	/* 52 */  "DATA15_CNTL",
-};
 
 static void smd_tty_work_func(struct work_struct *work)
 {
@@ -165,20 +106,31 @@ static int smd_tty_open(struct tty_struct *tty, struct file *f)
 	int res = 0;
 	int n = tty->index;
 	struct smd_tty_info *info;
+	const char *name;
 
-	if ((n < 0) || (n >= MAX_SMD_TTYS))
+	if (n == 0)
+		name = "DS";
+	else if (n == 7)
+		name = "DATA1";
+	else if (n == 21)
+		name = "DATA21";
+	else if (n == 27)
+		name = "GPSNMEA";
+	else if (n == 36)
+		name = "LOOPBACK";
+	else
 		return -ENODEV;
 
 	info = smd_tty + n;
 
 	mutex_lock(&smd_tty_lock);
-	wake_lock_init(&info->wake_lock, WAKE_LOCK_SUSPEND, tty_map_tbl[n]);
+	wake_lock_init(&info->wake_lock, WAKE_LOCK_SUSPEND, name);
 	tty->driver_data = info;
 
 	if (info->open_count++ == 0) {
 		info->tty = tty;
 		if (!info->ch) {
-			if (strncmp(tty_map_tbl[n], "LOOPBACK", 9) == 0) {
+			if (n == 36) {
 				/* set smsm state to SMSM_SMD_LOOPBACK state
 				** and wait allowing enough time for Modem side
 				** to open the loopback port (Currently, this is
@@ -187,10 +139,10 @@ static int smd_tty_open(struct tty_struct *tty, struct file *f)
 				smsm_change_state(SMSM_APPS_STATE,
 						  0, SMSM_SMD_LOOPBACK);
 				msleep(100);
-			} else if (strncmp(tty_map_tbl[n], "DS", 3) == 0) {
+			} else if (n == 0)
 				tty->low_latency = 1;
-			}
-			res = smd_open(tty_map_tbl[n], &info->ch, info,
+
+			res = smd_open(name, &info->ch, info,
 				       smd_tty_notify);
 		}
 	}
@@ -322,14 +274,14 @@ static int __init smd_tty_init(void)
 	tty_register_device(smd_tty_driver, 7, 0);
 	INIT_WORK(&smd_tty[7].tty_work, smd_tty_work_func);
 
-	tty_register_device(smd_tty_driver, 17, 0);
-	INIT_WORK(&smd_tty[27].tty_work, smd_tty_work_func);
-
 	tty_register_device(smd_tty_driver, 27, 0);
 	INIT_WORK(&smd_tty[27].tty_work, smd_tty_work_func);
 
-	tty_register_device(smd_tty_driver, SMD_PORT_LOOPBACK, 0);
-	INIT_WORK(&smd_tty[SMD_PORT_LOOPBACK].tty_work, smd_tty_work_func);
+	tty_register_device(smd_tty_driver, 36, 0);
+	INIT_WORK(&smd_tty[36].tty_work, smd_tty_work_func);
+
+	tty_register_device(smd_tty_driver, 21, 0);
+	INIT_WORK(&smd_tty[21].tty_work, smd_tty_work_func);
 
 	return 0;
 }
