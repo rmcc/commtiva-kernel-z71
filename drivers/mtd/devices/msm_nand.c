@@ -3341,7 +3341,7 @@ static int msm_onenand_erase(struct mtd_info *mtd, struct erase_info *instr)
 #if VERBOSE
 	pr_info("================================================="
 			"================\n");
-	pr_info("%s: addr 0x%x len 0x%x\n",
+	pr_info("%s: addr 0x%llx len 0x%llx\n",
 			__func__, instr->addr, instr->len);
 #endif
 	if (instr->addr & (mtd->erasesize - 1)) {
