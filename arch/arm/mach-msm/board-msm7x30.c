@@ -91,6 +91,8 @@
 #define MSM_PMEM_SF_SIZE	0x800000
 #define MSM_FB_SIZE		0x200000
 
+#define PMIC_GPIO_INT		27
+
 static const unsigned int surf_keymap[] = {
 	KEY(0, 0, 0),
 	KEY(0, 1, 0),
@@ -307,15 +309,21 @@ static struct pm8058_platform_data pm8058_7x30_data = {
 static struct i2c_board_info pm8058_boardinfo[] __initdata = {
 	{
 		I2C_BOARD_INFO("pm8058-core", 0),
-		.irq = MSM_GPIO_TO_INT(27),
+		.irq = MSM_GPIO_TO_INT(PMIC_GPIO_INT),
 		.platform_data = &pm8058_7x30_data,
 	},
 };
 
 static int __init buses_init(void)
 {
+	if (gpio_tlmm_config(GPIO_CFG(PMIC_GPIO_INT, 1, GPIO_INPUT,
+				  GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE))
+		pr_err("%s: gpio_tlmm_config (gpio=%d) failed\n",
+		       __func__, PMIC_GPIO_INT);
+
 	i2c_register_board_info(6 /* I2C_SSBI ID */, pm8058_boardinfo,
 				ARRAY_SIZE(pm8058_boardinfo));
+
 	return 0;
 }
 
