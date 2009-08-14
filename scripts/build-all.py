@@ -161,6 +161,9 @@ def main():
     parser.add_option('-v', '--verbose', action='store_true',
 	    dest='verbose',
 	    help='Output to stdout in addition to log file')
+    parser.add_option('--oldconfig', action='store_true',
+	    dest='oldconfig',
+	    help='Only process "make oldconfig"')
 
     (options, args) = parser.parse_args()
     global all_options
@@ -171,6 +174,10 @@ def main():
 	for target in configs:
 	    print "   %s" % target
 	sys.exit(0)
+
+    if options.oldconfig:
+	global make_command
+	make_command = ["oldconfig"]
 
     if args == ['all']:
 	build_many(configs)
