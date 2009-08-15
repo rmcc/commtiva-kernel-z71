@@ -402,8 +402,6 @@ static int marimba_probe(struct i2c_client *client,
 		return -EBUSY;
 	}
 
-	marimba_init_reg(client);
-
 	for (i = 0; i <= MARIMBA_NUM_CHILD; i++) {
 		marimba = &marimba_modules[i];
 
@@ -433,6 +431,8 @@ static int marimba_probe(struct i2c_client *client,
 	}
 
 	inuse = true;
+
+	marimba_init_reg(client);
 
 	status = marimba_add_child(pdata);
 
