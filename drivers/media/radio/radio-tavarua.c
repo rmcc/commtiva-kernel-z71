@@ -102,6 +102,7 @@ struct tavarua_device {
 	int irqpin;
 	int (*irqpin_setup)(void);
 	int (*irqpin_teardown)(void);
+	struct marimba_fm_platform_data *pdata;
 	/*RDS buffers + Radio event buffer*/
 	struct kfifo *data_buf[TAVARUA_BUF_MAX];
 	/* internal register status */
@@ -386,7 +387,7 @@ static int tavarua_fops_open(struct file *file)
 		return -ENODEV;
 
 	/* initial gpio pin config & Power up */
-	retval = radio->irqpin_setup();
+	retval = radio->irqpin_setup(radio->pdata);
 	if (retval < 0) {
 		printk(KERN_ERR "%s: failed config gpio & pmic\n", __func__);
 		return retval;
@@ -449,7 +450,7 @@ static int tavarua_fops_release(struct file *file)
 		return retval;
 	}
 	/* teardown gpio and pmic */
-	retval = radio->irqpin_teardown();
+	retval = radio->irqpin_teardown(radio->pdata);
 	if (retval < 0) {
 		printk(KERN_ERR "%s: failed to shutdown gpio&pmic\n", __func__);
 		return retval;
@@ -989,7 +990,7 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	radio->irqpin        = tavarua_pdata->gpioirq;
 	radio->irqpin_setup  = tavarua_pdata->gpio_setup;
 	radio->irqpin_teardown  = tavarua_pdata->gpio_shutdown;
-
+	radio->pdata = tavarua_pdata;
 	radio->dev = &pdev->dev;
 	platform_set_drvdata(pdev, radio);
 
@@ -1060,7 +1061,7 @@ static int __exit tavarua_remove(struct platform_device *pdev)
 	for (i = 0; i < TAVARUA_BUF_MAX; i++)
 		kfifo_free(radio->data_buf[i]);
 
-	radio->irqpin_teardown();
+	radio->irqpin_teardown(radio->pdata);
 
 	/* free state struct */
 	kfree(radio);
