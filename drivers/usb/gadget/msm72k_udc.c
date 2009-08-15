@@ -2,6 +2,7 @@
  * Driver for HighSpeed USB Client Controller in MSM7K
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *         Brian Swetland <swetland@google.com>
  *
@@ -92,6 +93,7 @@ struct msm_request {
 #define to_msm_request(r) container_of(r, struct msm_request, req)
 #define to_msm_endpoint(r) container_of(r, struct msm_endpoint, ep)
 #define to_msm_otg(xceiv)  container_of(xceiv, struct msm_otg, otg)
+#define is_b_sess_vld()	((OTGSC_BSV & readl(USB_OTGSC)) ? 1 : 0)
 
 struct msm_endpoint {
 	struct usb_ep ep;
@@ -123,6 +125,7 @@ static void usb_do_work(struct work_struct *w);
 #define USB_FLAG_VBUS_ONLINE    0x0002
 #define USB_FLAG_VBUS_OFFLINE   0x0004
 #define USB_FLAG_RESET          0x0008
+#define USB_FLAG_SUSPEND        0x0010
 
 struct usb_info {
 	/* lock for register/queue/device state changes */
@@ -898,6 +901,8 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	if (n & STS_SLI) {
 		INFO("msm72k_udc: suspend\n");
 		ui->usb_state = USB_STATE_SUSPENDED;
+		ui->flags |= USB_FLAG_SUSPEND;
+		schedule_work(&ui->work);
 	}
 
 	if (n & STS_UI) {
@@ -937,16 +942,6 @@ static void usb_prepare(struct usb_info *ui)
 		usb_ept_alloc_req(&ui->ep0in, SETUP_BUF_SIZE, GFP_KERNEL);
 
 	INIT_WORK(&ui->work, usb_do_work);
-}
-
-static void usb_suspend_phy(struct usb_info *ui)
-{
-	/* clear VBusValid and SessionEnd rising interrupts */
-	ulpi_write(ui, (1 << 1) | (1 << 3), 0x0f);
-	/* clear VBusValid and SessionEnd falling interrupts */
-	ulpi_write(ui, (1 << 1) | (1 << 3), 0x12);
-	/* disable interface protect circuit to drop current consumption */
-	ulpi_write(ui, (1 << 7), 0x08);
 }
 
 static void usb_reset(struct usb_info *ui)
@@ -1104,7 +1099,6 @@ static void usb_do_work(struct work_struct *w)
 					break;
 				}
 				ui->irq = otg->irq;
-				enable_irq_wake(otg->irq);
 				msm72k_pullup(&ui->gadget, 1);
 
 				ui->state = USB_STATE_ONLINE;
@@ -1118,6 +1112,7 @@ static void usb_do_work(struct work_struct *w)
 			if (flags & USB_FLAG_VBUS_OFFLINE) {
 				pr_info("msm72k_udc: ONLINE -> OFFLINE\n");
 
+				otg_set_suspend(ui->xceiv, 0);
 				/* synchronize with irq context */
 				spin_lock_irqsave(&ui->lock, iflags);
 				ui->running = 0;
@@ -1139,12 +1134,14 @@ static void usb_do_work(struct work_struct *w)
 				}
 
 				/* power down phy, clock down usb */
-				spin_lock_irqsave(&ui->lock, iflags);
-				usb_suspend_phy(ui);
-				spin_unlock_irqrestore(&ui->lock, iflags);
+				otg_set_suspend(ui->xceiv, 1);
 
 				ui->state = USB_STATE_OFFLINE;
 				usb_do_work_check_vbus(ui);
+				break;
+			}
+			if (flags & USB_FLAG_SUSPEND) {
+				/* TBD: Not supporting bus suspend */
 				break;
 			}
 			if (flags & USB_FLAG_RESET) {
@@ -1165,6 +1162,8 @@ static void usb_do_work(struct work_struct *w)
 				struct msm_otg *otg = to_msm_otg(ui->xceiv);
 
 				pr_info("msm72k_udc: OFFLINE -> ONLINE\n");
+
+				otg_set_suspend(ui->xceiv, 0);
 				usb_reset(ui);
 				ui->state = USB_STATE_ONLINE;
 				usb_do_work_check_vbus(ui);

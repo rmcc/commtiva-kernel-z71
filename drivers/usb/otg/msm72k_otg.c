@@ -74,7 +74,29 @@
 #define is_host()	((OTGSC_ID & readl(USB_OTGSC)) ? 0 : 1)
 #define is_b_sess_vld()	((OTGSC_BSV & readl(USB_OTGSC)) ? 1 : 0)
 
+static void otg_reset(struct msm_otg *dev);
+
 struct msm_otg *the_msm_otg;
+
+static unsigned ulpi_read(struct msm_otg *dev, unsigned reg)
+{
+	unsigned timeout = 100000;
+
+	/* initiate read operation */
+	writel(ULPI_RUN | ULPI_READ | ULPI_ADDR(reg),
+	       USB_ULPI_VIEWPORT);
+
+	/* wait for completion */
+	while ((readl(USB_ULPI_VIEWPORT) & ULPI_RUN) && (--timeout))
+		cpu_relax();
+
+	if (timeout == 0) {
+		printk(KERN_ERR "ulpi_read: timeout %08x\n",
+			readl(USB_ULPI_VIEWPORT));
+		return 0xffffffff;
+	}
+	return ULPI_DATA_READ(readl(USB_ULPI_VIEWPORT));
+}
 
 static int ulpi_write(struct msm_otg *dev, unsigned val, unsigned reg)
 {
@@ -144,6 +166,104 @@ static void msm_otg_start_host(struct otg_transceiver *xceiv, int on)
 	/* TBD: call host specific start function */
 }
 
+static int msm_otg_suspend(struct msm_otg *dev)
+{
+	unsigned long timeout;
+
+	disable_irq(dev->irq);
+	if (dev->in_lpm)
+		goto out;
+
+	otg_reset(dev);
+
+	ulpi_read(dev, 0x14);/* clear PHY interrupt latch register */
+	ulpi_write(dev, 0x01, 0x30);/* PHY comparators on in LPM */
+	ulpi_write(dev, 0x08, 0x09);/* turn off PLL on integrated phy */
+
+	timeout = jiffies + msecs_to_jiffies(500);
+	disable_phy_clk();
+	while (!is_phy_clk_disabled()) {
+		if (time_after(jiffies, timeout)) {
+			pr_err("%s: Unable to suspend phy\n", __func__);
+			otg_reset(dev);
+			goto out;
+		}
+		msleep(1);
+	}
+
+	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL | ULPI_STP_CTRL, USB_USBCMD);
+	clk_disable(dev->clk);
+	clk_disable(dev->pclk);
+	if (device_may_wakeup(dev->otg.dev))
+		enable_irq_wake(dev->irq);
+	dev->in_lpm = 1;
+	pr_info("%s: usb in low power mode\n", __func__);
+out:
+	enable_irq(dev->irq);
+
+	return 0;
+}
+
+static int msm_otg_resume(struct msm_otg *dev)
+{
+	unsigned temp;
+
+	if (!dev->in_lpm)
+		return 0;
+
+	clk_enable(dev->clk);
+	clk_enable(dev->pclk);
+
+	temp = readl(USB_USBCMD);
+	temp &= ~ASYNC_INTR_CTRL;
+	temp &= ~ULPI_STP_CTRL;
+	writel(temp, USB_USBCMD);
+
+	if (device_may_wakeup(dev->otg.dev))
+		disable_irq_wake(dev->irq);
+
+	dev->in_lpm = 0;
+	pr_info("%s: usb exited from low power mode\n", __func__);
+
+	return 0;
+}
+
+static int msm_otg_set_suspend(struct otg_transceiver *xceiv, int suspend)
+{
+	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
+
+	if (!dev || (dev != the_msm_otg))
+		return -ENODEV;
+
+	if (suspend)
+		msm_otg_suspend(dev);
+	else {
+		unsigned long timeout;
+
+		disable_irq(dev->irq);
+
+		msm_otg_resume(dev);
+
+		if (!is_phy_clk_disabled())
+			goto out;
+
+		timeout = jiffies + msecs_to_jiffies(500);
+		enable_phy_clk();
+		while (is_phy_clk_disabled()) {
+			if (time_after(jiffies, timeout)) {
+				pr_err("%s: Unable to wakeup phy\n", __func__);
+				otg_reset(dev);
+				break;
+			}
+			msleep(1);
+		}
+out:
+		enable_irq(dev->irq);
+	}
+
+	return 0;
+}
+
 static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 			struct usb_gadget *gadget)
 {
@@ -166,6 +286,9 @@ static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 		msm_otg_start_peripheral(&dev->otg, 1);
 	else if (is_host())
 		msm_otg_start_host(&dev->otg, 1);
+	else
+		msm_otg_suspend(dev);
+
 	return 0;
 }
 
@@ -189,6 +312,8 @@ static int msm_otg_set_host(struct otg_transceiver *xceiv, struct usb_bus *host)
 #ifndef CONFIG_USB_GADGET_MSM_72K
 	if (is_host())
 		msm_otg_start_host(&dev->otg, 1);
+	else
+		msm_otg_suspend(dev);
 #endif
 	return 0;
 }
@@ -197,6 +322,11 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 {
 	struct msm_otg *dev = data;
 	u32 otgsc = 0;
+
+	if (dev->in_lpm) {
+		msm_otg_resume(dev);
+		return IRQ_HANDLED;
+	}
 
 	otgsc = readl(USB_OTGSC);
 	if (!otgsc & OTGSC_INTR_STS_MASK)
@@ -260,6 +390,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	dev = kzalloc(sizeof(struct msm_otg), GFP_KERNEL);
 	if (!dev)
 		return -ENOMEM;
+
+	dev->otg.dev = &pdev->dev;
 
 	if (pdev->dev.platform_data) {
 		pdata = pdev->dev.platform_data;
@@ -327,10 +459,13 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	the_msm_otg = dev;
 	dev->otg.set_peripheral = msm_otg_set_peripheral;
 	dev->otg.set_host = msm_otg_set_host;
+	dev->otg.set_suspend = msm_otg_set_suspend;
 	if (otg_set_transceiver(&dev->otg)) {
 		WARN_ON(1);
 		goto free_regs;
 	}
+
+	device_init_wakeup(&pdev->dev, 1);
 
 	return 0;
 free_regs:

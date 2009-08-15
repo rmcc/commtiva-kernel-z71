@@ -43,6 +43,12 @@
 #define ULPI_STP_CTRL   (1 << 30)
 #define ASYNC_INTR_CTRL (1 << 29)
 
+#define PORTSC_PHCD     (1 << 23)
+#define disable_phy_clk() (writel(readl(USB_PORTSC) | PORTSC_PHCD, USB_PORTSC))
+#define enable_phy_clk() (writel(readl(USB_PORTSC) & ~PORTSC_PHCD, USB_PORTSC))
+#define is_phy_clk_disabled() (readl(USB_PORTSC) & PORTSC_PHCD)
+#define is_usb_active()       (!(readl(USB_PORTSC) & PORTSC_SUSP))
+
 struct msm_otg {
 	struct otg_transceiver otg;
 
@@ -50,6 +56,7 @@ struct msm_otg {
 	struct clk		*pclk;
 	int			irq;
 	void __iomem		*regs;
+	u8			in_lpm;
 
 	int 			(*rpc_connect)(int);
 	int 			(*phy_reset)(void);
