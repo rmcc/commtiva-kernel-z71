@@ -705,8 +705,8 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 static struct resource bluesleep_resources[] = {
 	{
 		.name	= "gpio_host_wake",
-		.start	= 21,
-		.end	= 21,
+		.start	= 40,
+		.end	= 40,
 		.flags	= IORESOURCE_IO,
 	},
 	{
@@ -717,8 +717,8 @@ static struct resource bluesleep_resources[] = {
 	},
 	{
 		.name	= "host_wake",
-		.start	= MSM_GPIO_TO_INT(21),
-		.end	= MSM_GPIO_TO_INT(21),
+		.start	= MSM_GPIO_TO_INT(40),
+		.end	= MSM_GPIO_TO_INT(40),
 		.flags	= IORESOURCE_IRQ,
 	},
 };
@@ -752,7 +752,7 @@ enum {
 
 static unsigned bt_config_power_on[] = {
 	GPIO_CFG(29, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* WAKE */
-	GPIO_CFG(21, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* HOST_WAKE */
+	GPIO_CFG(40, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* HOST_WAKE */
 	GPIO_CFG(22, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* PWR_EN */
 	GPIO_CFG(43, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),	/* RFR */
 	GPIO_CFG(44, 2, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),	/* CTS */
@@ -765,7 +765,7 @@ static unsigned bt_config_power_on[] = {
 };
 static unsigned bt_config_power_off[] = {
 	GPIO_CFG(29, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* WAKE */
-	GPIO_CFG(21, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* HOST_WAKE */
+	GPIO_CFG(40, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* HOST_WAKE */
 	GPIO_CFG(22, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* PWR_EN */
 	GPIO_CFG(43, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* RFR */
 	GPIO_CFG(44, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),	/* CTS */
