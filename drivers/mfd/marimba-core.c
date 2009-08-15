@@ -167,7 +167,8 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 	mutex_lock(&marimba->xfer_lock);
 
 	for (i = 0; i < num_bytes; i++)
-		mask_value[i] = value[i] & mask;
+		mask_value[i] = (marimba_shadow[marimba->mod_id][reg + i]
+					& ~mask) | value[i];
 
 	msg = &marimba->xfer_msg[0];
 	msg->addr = marimba->client->addr;
@@ -179,12 +180,22 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 
 	ret = i2c_transfer(marimba->client->adapter, marimba->xfer_msg, 1);
 
-	for (i = 0; i < num_bytes; i++)
-		marimba_shadow[marimba->mod_id][reg + i] |= mask_value[i];
+	/* Try again if the write fails */
+	if (ret != 1)
+		ret = i2c_transfer(marimba->client->adapter,
+						marimba->xfer_msg, 1);
+
+	if (ret == 1) {
+		for (i = 0; i <= num_bytes; i++)
+			marimba_shadow[marimba->mod_id][reg + i]
+							|= mask_value[i];
+	}
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret >= 0)
+	if (ret != 1)
+		return -EIO;
+	else
 		ret = 0;
 
 	return ret;
@@ -242,16 +253,23 @@ int marimba_read_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 
 	ret = i2c_transfer(marimba->client->adapter, marimba->xfer_msg, 2);
 
-	if (ret >= 2) {
+	/* Try again if read fails first time */
+	if (ret != 2)
+		ret = i2c_transfer(marimba->client->adapter,
+						marimba->xfer_msg, 2);
+
+	if (ret == 2) {
 		for (i = 0; i <= num_bytes; i++) {
-			marimba_shadow[marimba->mod_id][reg + i] = *value;
-			*value &= mask;
+			marimba_shadow[marimba->mod_id][reg + i] = value[i];
+			value[i] &= mask;
 		}
 	}
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret >= 0)
+	if (ret != 2)
+		return -EIO;
+	else
 		ret = 0;
 
 	return ret;
@@ -436,6 +454,7 @@ static int __devexit marimba_remove(struct i2c_client *client)
 
 		marimba_modules[i].client = NULL;
 	}
+
 	return 0;
 }
 
