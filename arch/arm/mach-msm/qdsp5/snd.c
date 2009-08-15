@@ -465,11 +465,132 @@ static ssize_t snd_avc_store(struct device *dev,
 	return status ? : size;
 }
 
+static long snd_vol_enable(const char *arg)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	struct snd_set_volume_msg vmsg;
+	struct msm_snd_volume_config vol;
+	int rc = 0;
+
+	rc = sscanf(arg, "%d %d %d", &vol.device, &vol.method, &vol.volume);
+	if (rc != 3) {
+		pr_err("Invalid arguments. Usage: \
+				<device> <method> <volume>\n");
+		rc = -EINVAL;
+		return rc;
+	}
+
+	vmsg.args.device = cpu_to_be32(vol.device);
+	vmsg.args.method = cpu_to_be32(vol.method);
+	if (vol.method != SND_METHOD_VOICE) {
+		pr_err("snd_ioctl set volume: invalid method.\n");
+		rc = -EINVAL;
+		return rc;
+	}
+
+	vmsg.args.volume = cpu_to_be32(vol.volume);
+	vmsg.args.cb_func = -1;
+	vmsg.args.client_data = 0;
+
+	pr_debug("snd_set_volume %d %d %d\n", vol.device,
+			vol.method, vol.volume);
+
+	rc = msm_rpc_call(snd_sys->ept,
+		SND_SET_VOLUME_PROC,
+		&vmsg, sizeof(vmsg), 5 * HZ);
+	return rc;
+}
+
+static long snd_dev_enable(const char *arg)
+{
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	struct snd_set_device_msg dmsg;
+	struct msm_snd_device_config dev;
+	int rc = 0;
+
+	rc = sscanf(arg, "%d %d %d", &dev.device, &dev.ear_mute, &dev.mic_mute);
+	if (rc != 3) {
+		pr_err("Invalid arguments. Usage: \
+				<device> <ear_mute> <mic_mute>\n");
+		rc = -EINVAL;
+		return rc;
+	}
+	dmsg.args.device = cpu_to_be32(dev.device);
+	dmsg.args.ear_mute = cpu_to_be32(dev.ear_mute);
+	dmsg.args.mic_mute = cpu_to_be32(dev.mic_mute);
+	if (check_mute(dev.ear_mute) < 0 ||
+			check_mute(dev.mic_mute) < 0) {
+		pr_err("snd_ioctl set device: invalid mute status.\n");
+		rc = -EINVAL;
+		return rc;
+	}
+	dmsg.args.cb_func = -1;
+	dmsg.args.client_data = 0;
+
+	pr_info("snd_set_device %d %d %d\n", dev.device,
+				 dev.ear_mute, dev.mic_mute);
+
+	rc = msm_rpc_call(snd_sys->ept,
+		SND_SET_DEVICE_PROC,
+		&dmsg, sizeof(dmsg), 5 * HZ);
+	return rc;
+}
+
+static ssize_t snd_dev_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t status;
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
+	rc = snd_sys_open();
+	if (rc)
+		return rc;
+
+	mutex_lock(&snd_sys->lock);
+	status = snd_dev_enable(buf);
+	mutex_unlock(&snd_sys->lock);
+
+	rc = snd_sys_release();
+	if (rc)
+		return rc;
+
+	return status ? : size;
+}
+
+static ssize_t snd_vol_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t size)
+{
+	ssize_t status;
+	struct snd_sys_ctxt *snd_sys = &the_snd_sys;
+	int rc = 0;
+
+	rc = snd_sys_open();
+	if (rc)
+		return rc;
+
+	mutex_lock(&snd_sys->lock);
+	status = snd_vol_enable(buf);
+	mutex_unlock(&snd_sys->lock);
+
+	rc = snd_sys_release();
+	if (rc)
+		return rc;
+
+	return status ? : size;
+}
+
 static DEVICE_ATTR(agc, S_IWUSR | S_IRUGO,
 		NULL, snd_agc_store);
 
 static DEVICE_ATTR(avc, S_IWUSR | S_IRUGO,
 		NULL, snd_avc_store);
+
+static DEVICE_ATTR(device, S_IWUSR | S_IRUGO,
+		NULL, snd_dev_store);
+
+static DEVICE_ATTR(volume, S_IWUSR | S_IRUGO,
+		NULL, snd_vol_store);
 
 static int snd_probe(struct platform_device *pdev)
 {
@@ -495,6 +616,28 @@ static int snd_probe(struct platform_device *pdev)
 	if (rc) {
 		device_remove_file(snd_misc.this_device,
 						&dev_attr_agc);
+		misc_deregister(&snd_misc);
+		return rc;
+	}
+
+	rc = device_create_file(snd_misc.this_device, &dev_attr_device);
+	if (rc) {
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_agc);
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_avc);
+		misc_deregister(&snd_misc);
+		return rc;
+	}
+
+	rc = device_create_file(snd_misc.this_device, &dev_attr_volume);
+	if (rc) {
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_agc);
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_avc);
+		device_remove_file(snd_misc.this_device,
+						&dev_attr_device);
 		misc_deregister(&snd_misc);
 	}
 
