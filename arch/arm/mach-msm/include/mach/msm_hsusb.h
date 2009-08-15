@@ -51,9 +51,20 @@ struct usb_composition {
 };
 #endif
 
+enum chg_type {
+	CHG_TYPE_HOSTPC,
+	CHG_TYPE_WALL_CHARGER,
+	CHG_TYPE_INVALID
+};
+
 struct msm_hsusb_gadget_platform_data {
 	int *phy_init_seq;
 	void (*phy_reset)(void);
+
+	/*charging apis*/
+	int  (*chg_init)(int);
+	void (*chg_connected)(enum chg_type);
+	void (*chg_vbus_draw)(unsigned);
 };
 
 struct msm_hsusb_platform_data {
