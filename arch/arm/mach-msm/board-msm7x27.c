@@ -252,9 +252,53 @@ static int hsusb_rpc_connect(int connect)
 		return msm_hsusb_rpc_close();
 }
 
+static int hsusb_chg_init(int connect)
+{
+	if (connect)
+		return msm_chg_rpc_connect();
+	else
+		return msm_chg_rpc_close();
+}
+
+void hsusb_chg_vbus_draw(unsigned mA)
+{
+	if (mA)
+		msm_chg_usb_i_is_available(mA);
+	else
+		msm_chg_usb_i_is_not_available();
+}
+
+void hsusb_chg_connected(enum chg_type chgtype)
+{
+	switch (chgtype) {
+	case CHG_TYPE_HOSTPC:
+		pr_debug("Charger Type: HOST PC\n");
+		msm_chg_usb_charger_connected(0);
+		msm_chg_usb_i_is_available(100);
+		break;
+	case CHG_TYPE_WALL_CHARGER:
+		pr_debug("Charger Type: WALL CHARGER\n");
+		msm_chg_usb_charger_connected(2);
+		msm_chg_usb_i_is_available(1500);
+		break;
+	case CHG_TYPE_INVALID:
+		pr_debug("Charger Type: DISCONNECTED\n");
+		msm_chg_usb_i_is_not_available();
+		msm_chg_usb_charger_disconnected();
+		break;
+	}
+}
+
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_phy_reset,
+};
+
+static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
+	/* charging apis */
+	.chg_init = hsusb_chg_init,
+	.chg_connected = hsusb_chg_connected,
+	.chg_vbus_draw = hsusb_chg_vbus_draw,
 };
 
 #define SND(desc, num) { .name = #desc, .id = num }
@@ -1409,6 +1453,7 @@ static void __init msm7x27_init(void)
 	msm_hsusb_pdata.max_axi_khz = msm7x27_clock_data.max_axi_khz;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
+	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 #ifdef CONFIG_MSM_CAMERA
