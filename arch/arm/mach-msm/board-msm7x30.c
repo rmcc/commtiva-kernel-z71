@@ -371,6 +371,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 			= ARRAY_SIZE(usb_func_composition),
 	.function_map	= usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
+	.core_clk	= 1,
 };
 
 static struct msm_gpio bma_spi_gpio_config_data[] = {

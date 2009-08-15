@@ -91,6 +91,7 @@ struct msm_hsusb_platform_data {
 	int (*phy_reset)(void __iomem *addr);
 
 	unsigned int max_axi_khz;
+	unsigned int core_clk;
 };
 
 struct msm_otg_platform_data {

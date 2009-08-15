@@ -216,6 +216,7 @@ struct usb_info {
 
 	struct clk *clk;
 	struct clk *pclk;
+	struct clk *cclk;
 	unsigned int clk_enabled;
 
 	struct vreg *vreg;
@@ -411,6 +412,8 @@ static void usb_clk_enable(struct usb_info *ui)
 	if (!ui->clk_enabled) {
 		clk_enable(ui->clk);
 		clk_enable(ui->pclk);
+		if (ui->cclk)
+			clk_enable(ui->cclk);
 		ui->clk_enabled = 1;
 	}
 }
@@ -420,6 +423,8 @@ static void usb_clk_disable(struct usb_info *ui)
 	if (ui->clk_enabled) {
 		clk_disable(ui->pclk);
 		clk_disable(ui->clk);
+		if (ui->cclk)
+			clk_disable(ui->cclk);
 		ui->clk_enabled = 0;
 	}
 }
@@ -2245,6 +2250,8 @@ static int usb_free(struct usb_info *ui, int ret)
 		clk_put(ui->clk);
 	if (ui->pclk)
 		clk_put(ui->pclk);
+	if (ui->cclk)
+		clk_put(ui->cclk);
 	kfree(ui);
 	return ret;
 }
@@ -3155,6 +3162,14 @@ static int __init usb_probe(struct platform_device *pdev)
 		return usb_init_err;
 	}
 
+	if (ui->pdata->core_clk) {
+		ui->cclk = clk_get(&pdev->dev, "usb_hs_core_clk");
+		if (IS_ERR(ui->cclk)) {
+			usb_free(ui, PTR_ERR(ui->cclk));
+			usb_init_err = PTR_ERR(ui->cclk);
+			return usb_init_err;
+		}
+	}
 
 	ui->vreg = vreg_get(NULL, "usb");
 	if (IS_ERR(ui->vreg) || (!ui->vreg)) {
