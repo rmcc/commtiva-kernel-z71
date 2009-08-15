@@ -194,6 +194,7 @@ struct usb_info {
 static const struct usb_ep_ops msm72k_ep_ops;
 
 
+static int msm72k_wakeup(struct usb_gadget *_gadget);
 static int msm72k_pullup(struct usb_gadget *_gadget, int is_active);
 static int msm72k_set_halt(struct usb_ep *_ep, int value);
 static void flush_endpoint(struct msm_endpoint *ept);
@@ -1444,6 +1445,7 @@ msm72k_queue(struct usb_ep *_ep, struct usb_request *req, gfp_t gfp_flags)
 {
 	struct msm_endpoint *ep = to_msm_endpoint(_ep);
 	struct usb_info *ui = ep->ui;
+	int ret;
 
 	if (ep == &ui->ep0in) {
 		struct msm_request *r = to_msm_request(req);
@@ -1456,7 +1458,15 @@ msm72k_queue(struct usb_ep *_ep, struct usb_request *req, gfp_t gfp_flags)
 		req->complete = ep0_queue_ack_complete;
 		if (ui->ep0_dir == USB_DIR_OUT)
 			ep = &ui->ep0out;
+		goto ep_queue_done;
 	}
+
+	if (ui->usb_state == USB_STATE_SUSPENDED) {
+		ret = msm72k_wakeup(&ui->gadget);
+		if (ret)
+			return ret;
+	}
+
 ep_queue_done:
 	return usb_ept_queue_xfer(ep, req);
 }
@@ -1611,7 +1621,7 @@ static int msm72k_pullup(struct usb_gadget *_gadget, int is_active)
 static int msm72k_wakeup(struct usb_gadget *_gadget)
 {
 	struct usb_info *ui = container_of(_gadget, struct usb_info, gadget);
-	unsigned long flags;
+	struct msm_otg *otg = to_msm_otg(ui->xceiv);
 
 	if (!ui->remote_wakeup) {
 		pr_err("%s: remote wakeup not supported\n", __func__);
@@ -1623,12 +1633,14 @@ static int msm72k_wakeup(struct usb_gadget *_gadget)
 		return -ENODEV;
 	}
 
-	spin_lock_irqsave(&ui->lock, flags);
-	if ((readl(USB_PORTSC) & PORTSC_SUSP) == PORTSC_SUSP) {
-		pr_info("%s: enabling force resume\n", __func__);
+	otg_set_suspend(ui->xceiv, 0);
+
+	disable_irq(otg->irq);
+
+	if (!is_usb_active())
 		writel(readl(USB_PORTSC) | PORTSC_FPR, USB_PORTSC);
-	}
-	spin_unlock_irqrestore(&ui->lock, flags);
+
+	enable_irq(otg->irq);
 
 	return 0;
 }
