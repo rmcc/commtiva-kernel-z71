@@ -41,6 +41,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/msm_rpcrouter.h>
 #include <mach/msm_hsusb.h>
+#include <mach/rpc_hsusb.h>
 #include <mach/msm_serial_hs.h>
 #include <mach/memory.h>
 
@@ -241,6 +242,19 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
 #endif
+};
+
+static int hsusb_rpc_connect(int connect)
+{
+	if (connect)
+		return msm_hsusb_rpc_connect();
+	else
+		return msm_hsusb_rpc_close();
+}
+
+static struct msm_otg_platform_data msm_otg_pdata = {
+	.rpc_connect	= hsusb_rpc_connect,
+	.phy_reset	= msm_hsusb_phy_reset,
 };
 
 #define SND(desc, num) { .name = #desc, .id = num }
@@ -976,6 +990,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_smd,
 	&msm_device_nand,
+	&msm_device_otg,
 	&msm_device_hsusb_otg,
 	&msm_device_hsusb_host,
 	&msm_device_hsusb_peripheral,
@@ -1393,6 +1408,7 @@ static void __init msm7x27_init(void)
 
 	msm_hsusb_pdata.max_axi_khz = msm7x27_clock_data.max_axi_khz;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
+	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 #ifdef CONFIG_MSM_CAMERA
