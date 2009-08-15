@@ -46,6 +46,8 @@
 static struct class *msm_class;
 static dev_t msm_devno;
 static LIST_HEAD(msm_sensors);
+struct  msm_control_device *g_v4l2_control_device;
+int g_v4l2_opencnt;
 
 #define __CONTAINS(r, v, l, field) ({				\
 	typeof(r) __r = r;					\
@@ -1901,6 +1903,7 @@ static int msm_release_control(struct inode *node, struct file *filep)
 	struct msm_control_device *ctrl_pmsm = filep->private_data;
 	struct msm_device *pmsm = ctrl_pmsm->pmsm;
 	CDBG("msm_camera: RELEASE %s\n", filep->f_path.dentry->d_name.name);
+	g_v4l2_opencnt--;
 	rc = __msm_release(pmsm->sync);
 	if (!rc) {
 		MSM_DRAIN_QUEUE(&ctrl_pmsm->ctrl_q, ctrl_status_q);
@@ -2086,7 +2089,8 @@ static int __msm_open(struct msm_sync *sync, const char *const apps_id)
 	int rc = 0;
 
 	mutex_lock(&sync->lock);
-	if (sync->apps_id && strcmp(sync->apps_id, apps_id)) {
+	if (sync->apps_id && strcmp(sync->apps_id, apps_id)
+				&& (!strcmp(MSM_APPS_ID_V4L2, apps_id))) {
 		pr_err("msm_camera(%s): sensor %s is already opened for %s\n",
 			apps_id,
 			sync->sdata->sensor_name,
@@ -2186,6 +2190,10 @@ static int msm_open_control(struct inode *inode, struct file *filep)
 	spin_lock_init(&ctrl_pmsm->ctrl_q.ctrl_status_q_lock);
 	INIT_LIST_HEAD(&ctrl_pmsm->ctrl_q.ctrl_status_q);
 	init_waitqueue_head(&ctrl_pmsm->ctrl_q.ctrl_status_wait);
+	if (!g_v4l2_opencnt)
+		g_v4l2_control_device = ctrl_pmsm;
+
+	g_v4l2_opencnt++;
 
 	CDBG("msm_open() open: rc = %d\n", rc);
 	return rc;
@@ -2198,7 +2206,8 @@ static int __msm_v4l2_control(struct msm_sync *sync,
 
 	struct msm_queue_cmd *qcmd = NULL, *rcmd = NULL;
 	struct msm_ctrl_cmd *ctrl;
-	struct msm_control_device_queue FIXME;
+	struct msm_control_device_queue
+			*v4l2_ctrl_q = &g_v4l2_control_device->ctrl_q;
 
 	/* wake up config thread, 4 is for V4L2 application */
 	qcmd = kmalloc(sizeof(struct msm_queue_cmd), GFP_KERNEL);
@@ -2210,7 +2219,15 @@ static int __msm_v4l2_control(struct msm_sync *sync,
 	qcmd->type = MSM_CAM_Q_V4L2_REQ;
 	qcmd->command = out;
 
-	rcmd = __msm_control(sync, &FIXME, qcmd, out->timeout_ms);
+	if (out->type == V4L2_CAMERA_EXIT) {
+		rcmd = __msm_control(sync, NULL, qcmd, out->timeout_ms);
+		if (rcmd == NULL) {
+			rc = PTR_ERR(rcmd);
+			goto end;
+		}
+	}
+
+	rcmd = __msm_control(sync, v4l2_ctrl_q, qcmd, out->timeout_ms);
 	if (IS_ERR(rcmd)) {
 		rc = PTR_ERR(rcmd);
 		goto end;

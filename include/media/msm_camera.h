@@ -284,6 +284,7 @@ struct msm_stats_buf {
 #define MSM_V4L2_QUERY		7
 #define MSM_V4L2_MAX		8
 
+#define V4L2_CAMERA_EXIT 	43
 struct crop_info {
 	void *info;
 	int len;
