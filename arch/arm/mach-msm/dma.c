@@ -14,11 +14,15 @@
  *
  */
 
+#include <linux/clk.h>
+#include <linux/err.h>
 #include <linux/io.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
 #include <mach/dma.h>
 
+#define MODULE_NAME "msm_dmov"
 #define MSM_DMOV_CHANNEL_COUNT 16
 
 enum {
@@ -27,11 +31,19 @@ enum {
 	MSM_DMOV_PRINT_FLOW = 4
 };
 
+enum {
+	CLK_DIS,
+	CLK_TO_BE_DIS,
+	CLK_EN
+};
+
 static DEFINE_SPINLOCK(msm_dmov_lock);
+static struct clk *msm_dmov_clk;
 static unsigned int channel_active;
 static struct list_head ready_commands[MSM_DMOV_CHANNEL_COUNT];
 static struct list_head active_commands[MSM_DMOV_CHANNEL_COUNT];
 unsigned int msm_dmov_print_mask = MSM_DMOV_PRINT_ERRORS;
+unsigned int clk_ctl = CLK_DIS;
 
 #define MSM_DMOV_DPRINTF(mask, format, args...) \
 	do { \
@@ -51,12 +63,32 @@ void msm_dmov_stop_cmd(unsigned id, struct msm_dmov_cmd *cmd, int graceful)
 }
 EXPORT_SYMBOL(msm_dmov_stop_cmd);
 
+static void timer_func(unsigned long func_paramter)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&msm_dmov_lock, irq_flags);
+	if (clk_ctl == CLK_TO_BE_DIS) {
+		BUG_ON(channel_active);
+		clk_disable(msm_dmov_clk);
+		clk_ctl = CLK_DIS;
+	}
+	spin_unlock_irqrestore(&msm_dmov_lock, irq_flags);
+}
+DEFINE_TIMER(timer, timer_func, 0, 0);
+
 void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 {
 	unsigned long irq_flags;
 	unsigned int status;
 
 	spin_lock_irqsave(&msm_dmov_lock, irq_flags);
+	if (clk_ctl == CLK_DIS)
+		clk_enable(msm_dmov_clk);
+	else if (clk_ctl == CLK_TO_BE_DIS)
+		del_timer(&timer);
+	clk_ctl = CLK_EN;
+
 	status = readl(DMOV_STATUS(id));
 	if (list_empty(&ready_commands[id]) &&
 		(status & DMOV_STATUS_CMD_PTR_RDY)) {
@@ -73,6 +105,10 @@ void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 		channel_active |= 1U << id;
 		writel(cmd->cmdptr, DMOV_CMD_PTR(id));
 	} else {
+		if (!channel_active) {
+			clk_ctl = CLK_TO_BE_DIS;
+			mod_timer(&timer, jiffies + HZ);
+		}
 		if (list_empty(&active_commands[id]))
 			PRINT_ERROR("msm_dmov_enqueue_cmd(%d), error datamover stalled, status %x\n", id, status);
 
@@ -237,26 +273,60 @@ static irqreturn_t msm_datamover_irq_handler(int irq, void *dev_id)
 		PRINT_FLOW("msm_datamover_irq_handler id %d, status %x\n", id, ch_status);
 	}
 
-	if (!channel_active)
+	if (!channel_active) {
 		disable_irq(INT_ADM_AARM);
+		clk_ctl = CLK_TO_BE_DIS;
+		mod_timer(&timer, jiffies + HZ);
+	}
 
 	spin_unlock_irqrestore(&msm_dmov_lock, irq_flags);
 	return IRQ_HANDLED;
 }
 
+static int msm_dmov_suspend_late(struct platform_device *pdev,
+			    pm_message_t state)
+{
+	unsigned long irq_flags;
+
+	spin_lock_irqsave(&msm_dmov_lock, irq_flags);
+	if (clk_ctl == CLK_TO_BE_DIS) {
+		BUG_ON(channel_active);
+		del_timer(&timer);
+		clk_disable(msm_dmov_clk);
+		clk_ctl = CLK_DIS;
+	}
+	spin_unlock_irqrestore(&msm_dmov_lock, irq_flags);
+	return 0;
+}
+
+static struct platform_driver msm_dmov_driver = {
+	.suspend_late = msm_dmov_suspend_late,
+	.driver = {
+		.name = MODULE_NAME,
+		.owner = THIS_MODULE,
+	},
+};
+
 static int __init msm_init_datamover(void)
 {
 	int i;
 	int ret;
+
 	for (i = 0; i < MSM_DMOV_CHANNEL_COUNT; i++) {
 		INIT_LIST_HEAD(&ready_commands[i]);
 		INIT_LIST_HEAD(&active_commands[i]);
 		writel(DMOV_CONFIG_IRQ_EN | DMOV_CONFIG_FORCE_TOP_PTR_RSLT | DMOV_CONFIG_FORCE_FLUSH_RSLT, DMOV_CONFIG(i));
 	}
+	msm_dmov_clk = clk_get(NULL, "adm_clk");
+	if (IS_ERR(msm_dmov_clk))
+		return PTR_ERR(msm_dmov_clk);
 	ret = request_irq(INT_ADM_AARM, msm_datamover_irq_handler, 0, "msmdatamover", NULL);
 	if (ret)
 		return ret;
 	disable_irq(INT_ADM_AARM);
+	ret = platform_driver_register(&msm_dmov_driver);
+	if (ret)
+		return ret;
 	return 0;
 }
 

@@ -876,6 +876,7 @@ static struct platform_device msm_device_kgsl = {
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&msm_device_smd,
+	&msm_device_dmov,
 	&smc911x_device,
 	&s1r72v05_device,
 	&android_pmem_kernel_ebi1_device,

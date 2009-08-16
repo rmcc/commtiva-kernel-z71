@@ -891,6 +891,7 @@ static void __init bt_power_init(void)
 
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
+	&msm_device_dmov,
 	&smc91x_device,
 	&msm_device_nand,
 	&msm_device_hsusb_peripheral,
