@@ -721,7 +721,7 @@ static int bluetooth_power(int on)
 		rc = msm_gpios_enable(bt_config_power_on,
 				ARRAY_SIZE(bt_config_power_on));
 
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: gpio config failed: %d\n",
 				rc);
@@ -730,7 +730,7 @@ static int bluetooth_power(int on)
 
 		rc = marimba_write_bit_mask(&config, 0xe5, &bt_boot_config, 1,
 				bt_boot_config);
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: boot config failed: %d\n",
 				rc);
@@ -738,7 +738,7 @@ static int bluetooth_power(int on)
 		}
 		rc = marimba_write_bit_mask(&config, 0x05, &xo_buffer, 1,
 				xo_buffer);
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: xo config failed: %d\n",
 				rc);
@@ -746,7 +746,7 @@ static int bluetooth_power(int on)
 		}
 		rc = marimba_write_bit_mask(&config, 0x06, &rbias_ctl0, 1,
 				rbias_ctl0);
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: rbias config failed: %d\n",
 				rc);
@@ -754,7 +754,7 @@ static int bluetooth_power(int on)
 		}
 		rc = marimba_write_bit_mask(&config, 0xe7, &bt_ctl0, 1,
 				bt_ctl0);
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: reset failed: %d\n",
 				rc);
@@ -763,7 +763,7 @@ static int bluetooth_power(int on)
 
 	} else {
 		rc = marimba_write_bit_mask(&config, 0xe7, 0, 1, bt_ctl0);
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: reset failed: %d\n",
 				rc);
@@ -772,7 +772,7 @@ static int bluetooth_power(int on)
 
 		rc = msm_gpios_enable(bt_config_power_off,
 					ARRAY_SIZE(bt_config_power_off));
-		if (rc) {
+		if (rc < 0) {
 			printk(KERN_ERR
 				"Bluetooth power: gpio config failed: %d\n",
 				rc);
