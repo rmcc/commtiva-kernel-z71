@@ -90,7 +90,7 @@
 #include "smd_private.h"
 
 #define TOUCHPAD_SUSPEND	34
-#define TOUCHPAD_IRQ            42
+#define TOUCHPAD_IRQ           144
 
 #define OPTNAV_IRQ             150
 #define OPTNAV_BUTTON_L         35
@@ -134,9 +134,11 @@
 #define COMET_CPLD_PER_ENABLE_OFN        0x0100
 #define COMET_CPLD_PER_ENABLE_IDE        0x0080
 #define COMET_CPLD_PER_ENABLE_WXGA       0x0040
+#define COMET_CPLD_PER_ENABLE_I2C2       0x0020
 #define COMET_CPLD_PER_ENABLE_I2C1       0x0010
 #define COMET_CPLD_EXT_PER_ENABLE_WXGA   0x0080
 #define COMET_CPLD_PER_RESET_IDE         0x0004
+#define COMET_CPLD_EXT_PER_ENABLE_I2C2   0x0010
 #define COMET_CPLD_EXT_PER_ENABLE_I2C1   0x0008
 
 #define COMET_BMA150_GPIO                106
@@ -161,7 +163,7 @@ static struct comet_cpld_t {
 		.per_reset_all_reset     = 0x00FF,
 		/* enable all peripherals except microphones and */
 		/* reset line for i2c touchpad                   */
-		.per_enable_all          = 0xFFD8,
+		.per_enable_all          = 0xFFE8,
 		.bt_reset_reg            = 0x0018,
 		.bt_reset_mask           = 0x0001,
 	},
@@ -172,7 +174,7 @@ static struct comet_cpld_t {
 		/* enable all peripherals except microphones and */
 		/* displays                                      */
 		.per_enable_all          = 0xF9B8,
-		.ext_per_enable_all      = 0x007D,
+		.ext_per_enable_all      = 0x0075,
 		.bt_reset_reg            = 0x0048,
 		.bt_reset_mask           = 0x0004,
 	},
@@ -998,7 +1000,7 @@ static struct msm_touchpad_platform_data msm_touchpad_data = {
 };
 
 
-#define KBD_IRQ 144
+#define KBD_IRQ 42
 
 static void kbd_gpio_release(void)
 {
@@ -1051,25 +1053,25 @@ static void kbd_hwreset(int kbd_mclrpin)
 		/* COMET2 */
 		/* Reset the pin */
 		ext_per_en = readw(cpld_base + COMET_CPLD_EXT_PER_ENABLE);
-		ext_per_en = ext_per_en & (~COMET_CPLD_EXT_PER_ENABLE_I2C1);
+		ext_per_en = ext_per_en & (~COMET_CPLD_EXT_PER_ENABLE_I2C2);
 		writew(ext_per_en, cpld_base + COMET_CPLD_EXT_PER_ENABLE);
 
 		msleep(2);
 
 		/* Set the pin */
-		ext_per_en = ext_per_en | COMET_CPLD_EXT_PER_ENABLE_I2C1;
+		ext_per_en = ext_per_en | COMET_CPLD_EXT_PER_ENABLE_I2C2;
 		writew(ext_per_en, cpld_base + COMET_CPLD_EXT_PER_ENABLE);
 	} else {
 		/* COMET1 */
 		/* Reset the pin */
 		per_en = readw(cpld_base + COMET_CPLD_PER_ENABLE);
-		per_en = per_en & (~COMET_CPLD_PER_ENABLE_I2C1);
+		per_en = per_en & (~COMET_CPLD_PER_ENABLE_I2C2);
 		writew(per_en, cpld_base + COMET_CPLD_PER_ENABLE);
 
 		msleep(1);
 
 		/* Set the pin */
-		per_en = per_en | COMET_CPLD_PER_ENABLE_I2C1;
+		per_en = per_en | COMET_CPLD_PER_ENABLE_I2C2;
 		writew(per_en, cpld_base + COMET_CPLD_PER_ENABLE);
 	}
 }
