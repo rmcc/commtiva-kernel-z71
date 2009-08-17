@@ -282,7 +282,9 @@ struct msm_stats_buf {
 #define MSM_V4L2_GET_CTRL	5
 #define MSM_V4L2_SET_CTRL	6
 #define MSM_V4L2_QUERY		7
-#define MSM_V4L2_MAX		8
+#define MSM_V4L2_GET_CROP	8
+#define MSM_V4L2_SET_CROP	9
+#define MSM_V4L2_MAX		10
 
 #define V4L2_CAMERA_EXIT 	43
 struct crop_info {
