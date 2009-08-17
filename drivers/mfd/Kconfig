@@ -115,6 +115,14 @@ config MARIMBA_CORE
 	  read/write capability to registers which are part of the
 	  marimba core.
 
+config MARIMBA_CODEC
+	tristate "Marimba Codec"
+	depends on MARIMBA_CORE
+	default n
+	help
+	 This driver programs Marimba Wideband Codec for input/output of
+	 audio signal.
+
 config MFD_TMIO
 	bool
 	default n
