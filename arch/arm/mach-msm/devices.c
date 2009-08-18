@@ -299,6 +299,19 @@ static struct resource resources_hsusb_peripheral[] = {
 	},
 };
 
+static struct resource resources_gadget_peripheral[] = {
+	{
+		.start	= MSM_HSUSB_PHYS,
+		.end	= MSM_HSUSB_PHYS + SZ_1K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_USB_HS,
+		.end	= INT_USB_HS,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
 struct platform_device msm_device_hsusb_peripheral = {
 	.name		= "msm_hsusb_peripheral",
 	.id		= -1,
@@ -313,8 +326,8 @@ struct platform_device msm_device_hsusb_peripheral = {
 struct platform_device msm_device_gadget_peripheral = {
 	.name		= "msm_hsusb",
 	.id		= -1,
-	.num_resources	= ARRAY_SIZE(resources_hsusb_peripheral),
-	.resource	= resources_hsusb_peripheral,
+	.num_resources	= ARRAY_SIZE(resources_gadget_peripheral),
+	.resource	= resources_gadget_peripheral,
 	.dev		= {
 		.dma_mask 		= &dma_mask,
 		.coherent_dma_mask	= 0xffffffffULL,
