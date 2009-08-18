@@ -426,7 +426,7 @@ static struct resource resources_nand[] = {
 static struct resource resources_otg[] = {
 	{
 		.start	= 0xA0800000,
-		.end	= 0xA0800000 + SZ_1K,
+		.end	= 0xA0800000 + SZ_1K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
 	{
