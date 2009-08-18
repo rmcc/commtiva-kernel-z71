@@ -799,22 +799,6 @@ menuconfig MSM_CAMERA
 	  Say Y here to enable selecting the video adapters for
 	  Qualcomm msm camera and video encoding
 
-choice
-	prompt "AF module"
-	depends on MSM_CAMERA
-	default MSM_CAMERA_AF_FOXCONN
-
-config MSM_CAMERA_AF_FOXCONN
-	bool "FOXCONN Module"
-	help
-	  This driver supports FOXCONN AF module for 5M Bayer sensor
-
-config MSM_CAMERA_AF_BAM
-	bool "BAM Module"
-	help
-	  This driver supports BAM AF module for 5M Bayer sensor
-endchoice
-
 config VIDEO_SH_MOBILE_CEU
 	tristate "SuperH Mobile CEU Interface driver"
 	depends on VIDEO_DEV && SOC_CAMERA && HAS_DMA && HAVE_CLK
