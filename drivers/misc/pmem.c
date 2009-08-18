@@ -1387,32 +1387,55 @@ static int pmem_connect(unsigned long connect, struct file *file)
 		ret = -EINVAL;
 		goto put_src_file;
 	} else {
-		struct pmem_data *data = file->private_data;
+		struct pmem_data *src_data = src_file->private_data;
 
-		down_write(&data->sem);
+		if (!src_data) {
+			printk(KERN_ERR "pmem(%s): src file pointer has no"
+				"private data, bailing out!\n", __func__);
+			ret = -EINVAL;
+			goto put_src_file;
+		}
+
+		down_read(&src_data->sem);
+
 		if (unlikely(!has_allocation(src_file))) {
+			up_read(&src_data->sem);
 			printk(KERN_ERR "pmem: src file has no alloc!\n");
 			ret = -EINVAL;
 		} else {
-			struct pmem_data *src_data = src_file->private_data;
-			down_read(&src_data->sem);
+			struct pmem_data *data;
+			int src_index = src_data->index;
 
+			up_read(&src_data->sem);
+
+			data = file->private_data;
+			if (!data) {
+				printk(KERN_ERR "pmem: %s: passed in file "
+					"pointer has no private data, bailing"
+					" out!\n", __func__);
+				ret = -EINVAL;
+				goto put_src_file;
+			}
+
+			down_write(&data->sem);
 			if (has_allocation(file) &&
-					(data->index != src_data->index)) {
+					(data->index != src_index)) {
+				up_write(&data->sem);
+
 				printk(KERN_ERR "pmem: file is already mapped"
 					"but doesn't match this src_file!\n");
 				ret = -EINVAL;
 			} else {
-				DLOG("connect %p to %p\n", file, src_file);
-
-				data->index = src_data->index;
+				data->index = src_index;
 				data->flags |= PMEM_FLAGS_CONNECTED;
 				data->master_fd = connect;
 				data->master_file = src_file;
+
+				up_write(&data->sem);
+
+				DLOG("connect %p to %p\n", file, src_file);
 			}
-			up_read(&src_data->sem);
 		}
-		up_write(&data->sem);
 	}
 put_src_file:
 	fput_light(src_file, put_needed);
