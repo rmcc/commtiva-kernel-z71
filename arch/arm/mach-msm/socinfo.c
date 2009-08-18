@@ -86,9 +86,6 @@ static union {
 } *socinfo;
 
 static enum msm_cpu cpu_of_id[] = {
-	/* Uninitialized IDs are not known to run Linux.
-	 * MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
-	 * considered as unknown CPUs. */
 
 	/* 7x01 IDs */
 	[1]  = MSM_CPU_7X01,
@@ -124,8 +121,13 @@ static enum msm_cpu cpu_of_id[] = {
 	[37] = MSM_CPU_8X50,
 	[38] = MSM_CPU_8X50,
 
-	/* Last known ID. */
-	[53] = MSM_CPU_UNKNOWN,
+	/* 7x30 IDs */
+	[59] = MSM_CPU_7X30,
+	[60] = MSM_CPU_7X30,
+
+	/* Uninitialized IDs are not known to run Linux.
+	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
+	   considered as unknown CPU. Any ID > 60 is invalid.  */
 };
 
 static enum msm_cpu cur_cpu;
