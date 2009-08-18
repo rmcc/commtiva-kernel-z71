@@ -156,9 +156,12 @@ extern unsigned long msm_nand_phys;
 #define ONENAND_STARTADDR1_RES		0x07FF
 #define ONENAND_STARTADDR3_RES		0x07FF
 
-#define DEVICE_FLASHCORE_0		0
-#define DEVICE_BUFFERRAM_0		0
 #define DATARAM0_0			0x8
+#define DEVICE_FLASHCORE_0              (0 << 15)
+#define DEVICE_FLASHCORE_1              (1 << 15)
+#define DEVICE_BUFFERRAM_0              (0 << 15)
+#define DEVICE_BUFFERRAM_1              (1 << 15)
+#define ONENAND_DEVICE_IS_DDP		(1 << 3)
 
 #define CLEAN_DATA_16			0xFFFF
 #define CLEAN_DATA_32			0xFFFFFFFF
