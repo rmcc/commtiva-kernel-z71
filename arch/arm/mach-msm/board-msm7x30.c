@@ -802,6 +802,7 @@ static struct platform_device *devices[] __initdata = {
 	&qsd_device_spi,
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi6,
+	&msm_device_ssbi7,
 #endif
 	&android_pmem_device,
 	&msm_fb_device,
