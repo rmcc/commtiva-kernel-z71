@@ -53,6 +53,7 @@ extern struct platform_device msm_device_tsif;
 
 #ifdef CONFIG_I2C_SSBI
 extern struct platform_device msm_device_ssbi6;
+extern struct platform_device msm_device_ssbi7;
 #endif
 
 extern struct clk msm_clocks_7x01a[];
