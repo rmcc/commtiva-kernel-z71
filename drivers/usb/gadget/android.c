@@ -33,6 +33,9 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+#include "u_ether.h"
+#endif
 
 #include "f_mass_storage.h"
 #include "f_adb.h"
@@ -61,6 +64,9 @@ MODULE_LICENSE("GPL");
 MODULE_VERSION("1.0");
 
 static const char longname[] = "Gadget Android";
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+static u8 hostaddr[ETH_ALEN];
+#endif
 
 /* Default vendor and product IDs, overridden by platform data */
 #define VENDOR_ID		0x18D1
@@ -181,6 +187,13 @@ static int  android_bind_config(struct usb_configuration *c)
 			gser_func_cnt++;
 			break;
 #endif
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+		case ANDROID_CDC_ECM:
+			ret = ecm_bind_config(c, hostaddr);
+			if (ret)
+				return ret;
+			break;
+#endif
 		default:
 			ret = -EINVAL;
 			return ret;
@@ -208,6 +221,9 @@ static int android_unbind(struct usb_composite_dev *cdev)
 		dev->adb_enabled = 0;
 	if (acm_func_cnt || gser_func_cnt)
 		gserial_cleanup();
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	gether_cleanup();
+#endif
 
 	return 0;
 }
@@ -287,6 +303,12 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		device_desc.bDeviceSubClass      = 0;
 		device_desc.bDeviceProtocol      = 0;
 	}
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	/* set up network link layer */
+	ret = gether_setup(cdev->gadget, hostaddr);
+	if (ret < 0)
+		return ret;
+#endif
 
 	return 0;
 }
