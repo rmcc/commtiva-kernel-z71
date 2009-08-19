@@ -2109,11 +2109,20 @@ int msm_onenand_read_oob(struct mtd_info *mtd,
 
 		cmd = dma_buffer->cmd;
 
-		onenand_startaddr1 = DEVICE_FLASHCORE_0 |
+		if ((onenand_info.device_id & ONENAND_DEVICE_IS_DDP)
+			&& (from_curr >= (mtd->size>>1))) { /* DDP Device */
+				onenand_startaddr1 = DEVICE_FLASHCORE_1 |
+					(((uint32_t)(from_curr-(mtd->size>>1))
+					/ mtd->erasesize));
+				onenand_startaddr2 = DEVICE_BUFFERRAM_1;
+		} else {
+				onenand_startaddr1 = DEVICE_FLASHCORE_0 |
 				((uint32_t)from_curr / mtd->erasesize) ;
+				onenand_startaddr2 = DEVICE_BUFFERRAM_0;
+		}
+
 		onenand_startaddr8 = (((uint32_t)from_curr &
 				(mtd->erasesize - 1)) / mtd->writesize) << 2;
-		onenand_startaddr2 = DEVICE_BUFFERRAM_0 << 15;
 		onenand_startbuffer = DATARAM0_0 << 8;
 		onenand_sysconfig1 = (ops->mode == MTD_OOB_RAW) ?
 			ONENAND_SYSCFG1_ECCDIS : ONENAND_SYSCFG1_ECCENA;
@@ -2809,11 +2818,20 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 	while (page_count-- > 0) {
 		cmd = dma_buffer->cmd;
 
-		onenand_startaddr1 = DEVICE_FLASHCORE_0 |
-					((uint32_t)to_curr / mtd->erasesize);
+		if ((onenand_info.device_id & ONENAND_DEVICE_IS_DDP)
+			&& (to_curr >= (mtd->size>>1))) { /* DDP Device */
+				onenand_startaddr1 = DEVICE_FLASHCORE_1 |
+					(((uint32_t)(to_curr-(mtd->size>>1))
+					/ mtd->erasesize));
+				onenand_startaddr2 = DEVICE_BUFFERRAM_1;
+		} else {
+				onenand_startaddr1 = DEVICE_FLASHCORE_0 |
+					((uint32_t)to_curr / mtd->erasesize) ;
+				onenand_startaddr2 = DEVICE_BUFFERRAM_0;
+		}
+
 		onenand_startaddr8 = (((uint32_t)to_curr &
 				(mtd->erasesize - 1)) / mtd->writesize) << 2;
-		onenand_startaddr2 = DEVICE_BUFFERRAM_0 << 15;
 		onenand_startbuffer = DATARAM0_0 << 8;
 		onenand_sysconfig1 = (ops->mode == MTD_OOB_RAW) ?
 			ONENAND_SYSCFG1_ECCDIS : ONENAND_SYSCFG1_ECCENA;
@@ -3393,10 +3411,20 @@ static int msm_onenand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	cmd = dma_buffer->cmd;
 
 	temp = instr->addr;
-	do_div(temp, mtd->erasesize);
-	onenand_startaddr1 = DEVICE_FLASHCORE_0 | temp;
+
+	if ((onenand_info.device_id & ONENAND_DEVICE_IS_DDP)
+		&& (temp >= (mtd->size>>1))) { /* DDP Device */
+			onenand_startaddr1 = DEVICE_FLASHCORE_1 |
+				(((uint32_t)(temp-(mtd->size>>1))
+						/ mtd->erasesize));
+			onenand_startaddr2 = DEVICE_BUFFERRAM_1;
+	} else {
+		onenand_startaddr1 = DEVICE_FLASHCORE_0 |
+			((uint32_t)temp / mtd->erasesize) ;
+		onenand_startaddr2 = DEVICE_BUFFERRAM_0;
+	}
+
 	onenand_startaddr8 = 0x0000;
-	onenand_startaddr2 = DEVICE_BUFFERRAM_0 << 15;
 	onenand_startbuffer = DATARAM0_0 << 8;
 
 	dma_buffer->data.sfbcfg = SFLASH_BCFG;
@@ -3788,10 +3816,10 @@ int msm_onenand_scan(struct mtd_info *mtd, int maxchips)
 	if (flash_onenand_probe(chip))
 		return -ENODEV;
 
-	mtd->size      = (256<<20);
-	mtd->writesize = (2048);
-	mtd->oobsize   = (64);
-	mtd->erasesize = (2048<<6);
+	mtd->size = 0x1000000 << ((onenand_info.device_id & 0xF0) >> 4);
+	mtd->writesize = onenand_info.data_buf_size;
+	mtd->oobsize = mtd->writesize >> 5;
+	mtd->erasesize = mtd->writesize << 6;
 	mtd->oobavail = msm_onenand_oob_64.oobavail;
 	mtd->ecclayout = &msm_onenand_oob_64;
 
