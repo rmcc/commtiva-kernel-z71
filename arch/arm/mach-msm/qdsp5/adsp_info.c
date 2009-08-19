@@ -100,6 +100,8 @@ static struct adsp_module_info module_info[] = {
 	QDSP_MODULE(VIDEO_AMR_TURBO, NULL, 0, NULL, NULL),
 	QDSP_MODULE(WM_TURBO_MODE, NULL, 0, NULL, NULL),
 	QDSP_MODULE(VDEC_LP_MODE_TURBO, NULL, 0, NULL, NULL),
+#else
+	QDSP_MODULE(AFETASK , NULL, 0, NULL, NULL),
 #endif
 };
 
