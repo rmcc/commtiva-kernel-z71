@@ -3234,7 +3234,7 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 
 #if VERBOSE
 		pr_info("\n%s: sflash status %x %x %x %x %x %x %x"
-				" %x %x\n", __func__,
+				" %x %x %x\n", __func__,
 					dma_buffer->data.sfstat[0],
 					dma_buffer->data.sfstat[1],
 					dma_buffer->data.sfstat[2],
