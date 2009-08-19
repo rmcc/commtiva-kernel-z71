@@ -145,6 +145,11 @@ static struct usb_composition usb_func_composition[] = {
 		.product_id         = 0x9018,
 		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
 		.functions	    = 0x27614,
+	},
+	{
+		.product_id         = 0xF009,
+		/* CDC-ECM*/
+		.functions	    = 0x08,
 	}
 };
 static struct android_usb_platform_data android_usb_pdata = {
