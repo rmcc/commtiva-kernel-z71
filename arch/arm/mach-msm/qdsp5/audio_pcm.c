@@ -173,7 +173,7 @@ struct audio {
 
 	/* data allocated for various buffers */
 	char *data;
-	dma_addr_t phys;
+	int32_t phys;
 
 	uint32_t drv_status;
 	int wflush; /* Write flush */
@@ -1287,7 +1287,8 @@ static int audio_release(struct inode *inode, struct file *file)
 	wake_up(&audio->event_wait);
 	audpcm_reset_event_queue(audio);
 
-	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	mutex_unlock(&audio->lock);
 #ifdef CONFIG_DEBUG_FS
 	if (audio->dentry)
@@ -1451,12 +1452,28 @@ static int audio_open(struct inode *inode, struct file *file)
 
 	while (pmem_sz >= DMASZ_MIN) {
 		pr_debug("pcm: pmemsz = %d \n", pmem_sz);
-		audio->data = dma_alloc_coherent(NULL, pmem_sz,
-				&audio->phys, GFP_KERNEL);
-		if (audio->data)
+		audio->phys = pmem_kalloc(pmem_sz, PMEM_MEMTYPE_EBI1|
+				PMEM_ALIGNMENT_4K);
+		if (!IS_ERR((void *)audio->phys)) {
+			audio->data = ioremap(audio->phys, pmem_sz);
+			if (!audio->data) {
+				pr_err("%s: could not allocate \
+						write buffers\n", __func__);
+				rc = -ENOMEM;
+				pmem_kfree(audio->phys);
+				audpp_adec_free(audio->dec_id);
+				pr_debug("PCM: audio instance 0x%08x freeing\n",
+						(int)audio);
+				kfree(audio);
+				goto done;
+			}
+			pr_debug("write buf: phy addr 0x%08x \
+					kernel addr 0x%08x\n",
+					audio->phys, (int)audio->data);
 			break;
+		}
 		else if (pmem_sz == DMASZ_MIN) {
-			pr_err("%s: could not allocate DMA buffers\n",
+			pr_err("%s: could not allocate write buffers\n",
 					__func__);
 			rc = -ENOMEM;
 			audpp_adec_free(audio->dec_id);
@@ -1553,7 +1570,8 @@ static int audio_open(struct inode *inode, struct file *file)
 done:
 	return rc;
 err:
-	dma_free_coherent(NULL, audio->out_dma_sz, audio->data, audio->phys);
+	iounmap(audio->data);
+	pmem_kfree(audio->phys);
 	audpp_adec_free(audio->dec_id);
 	pr_debug("PCM: audio instance 0x%08x freeing\n", (int)audio);
 	kfree(audio);
