@@ -208,6 +208,17 @@ void mdp4_hw_init(void)
 	/* enable histogram interrupts */
 	outpdw(MDP_BASE + 0x9501c, INTR_HIST_DONE);
 
+	/* For the max read pending cmd config below, if the MDP clock     */
+	/* is less than the AXI clock, then we must use 3 pending          */
+	/* pending requests.  Otherwise, we should use 8 pending requests. */
+	/* In the future we should do this detection automatically.	   */
+
+	/* max read pending cmd config */
+	outpdw(MDP_BASE + 0x004c, 0x02222);	/* 3 pending requests */
+
+	/* dma_p fetch config */
+	outpdw(MDP_BASE + 0x91004, 0x27);	/* burst size of 8 */
+
 	mdp4_overlay_cfg(OVERLAY0_MIXER, OVERLAY_MODE_BLT,
 			OVERLAY_REFRESH_ON_DEMAND, OVERLAY_FRAMEBUF);
 
