@@ -66,7 +66,8 @@ struct msm_i2c_dev {
 	void __iomem                 *base;	/* virtual */
 	int                          irq;
 	struct clk                   *clk;
-	struct i2c_adapter           adapter;
+	struct i2c_adapter           adap_pri;
+	struct i2c_adapter           adap_aux;
 
 	spinlock_t                   lock;
 
@@ -365,6 +366,11 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
 					dev->pdata->pm_lat);
 	msm_i2c_rmutex_lock(dev);
+	if (adap == &dev->adap_pri)
+		writel(0, dev->base + I2C_INTERFACE_SELECT);
+	else
+		writel(I2C_INTERFACE_SELECT_INTF_SELECT,
+				dev->base + I2C_INTERFACE_SELECT);
 	enable_irq(dev->irq);
 	while (rem) {
 		addr = msgs->addr << 1;
@@ -611,19 +617,32 @@ msm_i2c_probe(struct platform_device *pdev)
 	printk(KERN_INFO "msm_i2c_probe: clk_ctl %x, %d Hz\n",
 	       clk_ctl, i2c_clk / (2 * ((clk_ctl & 0xff) + 3)));
 
-	i2c_set_adapdata(&dev->adapter, dev);
-	dev->adapter.algo = &msm_i2c_algo;
-	strncpy(dev->adapter.name,
-		"MSM I2C adapter",
-		sizeof(dev->adapter.name));
+	i2c_set_adapdata(&dev->adap_pri, dev);
+	dev->adap_pri.algo = &msm_i2c_algo;
+	strlcpy(dev->adap_pri.name,
+		"MSM I2C adapter-PRI",
+		sizeof(dev->adap_pri.name));
 
-	dev->adapter.nr = pdev->id;
-	ret = i2c_add_numbered_adapter(&dev->adapter);
+	dev->adap_pri.nr = pdev->id;
+	ret = i2c_add_numbered_adapter(&dev->adap_pri);
 	if (ret) {
-		dev_err(&pdev->dev, "i2c_add_adapter failed\n");
+		dev_err(&pdev->dev, "Primary i2c_add_adapter failed\n");
 		goto err_i2c_add_adapter_failed;
 	}
 
+	i2c_set_adapdata(&dev->adap_aux, dev);
+	dev->adap_aux.algo = &msm_i2c_algo;
+	strlcpy(dev->adap_aux.name,
+		"MSM I2C adapter-AUX",
+		sizeof(dev->adap_aux.name));
+
+	dev->adap_aux.nr = pdev->id + 1;
+	ret = i2c_add_numbered_adapter(&dev->adap_aux);
+	if (ret) {
+		dev_err(&pdev->dev, "auxiliary i2c_add_adapter failed\n");
+		i2c_del_adapter(&dev->adap_pri);
+		goto err_i2c_add_adapter_failed;
+	}
 	ret = request_irq(dev->irq, msm_i2c_interrupt,
 			IRQF_TRIGGER_RISING, pdev->name, dev);
 	if (ret) {
@@ -636,14 +655,15 @@ msm_i2c_probe(struct platform_device *pdev)
 	dev->suspended = 0;
 	mutex_init(&dev->mlock);
 	/* Config GPIOs for primary and secondary lines */
-	pdata->msm_i2c_config_gpio(dev->adapter.nr, 1);
-	pdata->msm_i2c_config_gpio(dev->adapter.nr + 1, 1);
+	pdata->msm_i2c_config_gpio(dev->adap_pri.nr, 1);
+	pdata->msm_i2c_config_gpio(dev->adap_aux.nr, 1);
 
 	return 0;
 
 /*	free_irq(dev->irq, dev); */
 err_request_irq_failed:
-	i2c_del_adapter(&dev->adapter);
+	i2c_del_adapter(&dev->adap_pri);
+	i2c_del_adapter(&dev->adap_aux);
 err_i2c_add_adapter_failed:
 	clk_disable(clk);
 	iounmap(dev->base);
@@ -665,7 +685,8 @@ msm_i2c_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c");
 	free_irq(dev->irq, dev);
-	i2c_del_adapter(&dev->adapter);
+	i2c_del_adapter(&dev->adap_pri);
+	i2c_del_adapter(&dev->adap_aux);
 	clk_disable(dev->clk);
 	clk_put(dev->clk);
 	iounmap(dev->base);
