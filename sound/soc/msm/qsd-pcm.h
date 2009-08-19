@@ -56,8 +56,7 @@ struct qsd_ctl {
 	int32_t strm_volume; /* stream volume*/
 	uint16_t update;
 	int16_t pan;
-	uint16_t capture_device; /* Device parameter */
-	uint16_t playback_device; /* Device  parameter */
+	uint16_t device; /* Device  parameter */
 	uint16_t tx_mute;		 /* Mute  parameter */
 	uint16_t rx_mute;		 /* Mute  parameter */
 };

@@ -43,8 +43,8 @@ static int snd_qsd_route_info(struct snd_kcontrol *kcontrol,
 {
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 1; /* Device */
-	uinfo->value.integer.min = CAD_HW_DEVICE_ID_HANDSET_MIC;
-	uinfo->value.integer.max = CAD_HW_DEVICE_ID_DEFAULT_RX;
+	uinfo->value.integer.min = (int)CAD_HW_DEVICE_ID_HANDSET_MIC;
+	uinfo->value.integer.max = (int)CAD_HW_DEVICE_ID_MAX_NUM;
 	return 0;
 }
 
@@ -52,46 +52,17 @@ static int snd_qsd_route_get(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
 	ucontrol->value.integer.value[0] =
-			(uint32_t) qsd_glb_ctl.playback_device;
-	ucontrol->value.integer.value[1] =
-			(uint32_t) qsd_glb_ctl.capture_device;
+			(uint32_t) qsd_glb_ctl.device;
 	return 0;
-}
-
-static int snd_get_device_type(int device)
-{
-	switch (device) {
-	case CAD_HW_DEVICE_ID_HANDSET_MIC:
-	case CAD_HW_DEVICE_ID_HEADSET_MIC:
-	case CAD_HW_DEVICE_ID_BT_SCO_MIC:
-	case CAD_HW_DEVICE_ID_DEFAULT_TX:
-		return CAD_TX_DEVICE;
-	case CAD_HW_DEVICE_ID_HANDSET_SPKR:
-	case CAD_HW_DEVICE_ID_HEADSET_SPKR_MONO:
-	case CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO:
-	case CAD_HW_DEVICE_ID_SPKR_PHONE_MIC:
-	case CAD_HW_DEVICE_ID_SPKR_PHONE_MONO:
-	case CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO:
-	case CAD_HW_DEVICE_ID_BT_SCO_SPKR:
-	case CAD_HW_DEVICE_ID_BT_A2DP_SPKR:
-	case CAD_HW_DEVICE_ID_DEFAULT_RX:
-		return CAD_RX_DEVICE;
-	default:
-		return -ENODEV;
-	}
 }
 
 static int snd_qsd_route_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int rc = 0;
-	int device, direction;
+	int device;
 
 	device = ucontrol->value.integer.value[0];
-	direction = snd_get_device_type(device);
-
-	if (direction < 0)
-		return direction;
 
 	rc = audio_switch_device(device);
 	if (rc < 0) {
@@ -99,10 +70,7 @@ static int snd_qsd_route_put(struct snd_kcontrol *kcontrol,
 		return rc;
 	}
 
-	if (CAD_RX_DEVICE == direction)
-		qsd_glb_ctl.playback_device = device;
-	else /* CAD_TX_DEVICE */
-		qsd_glb_ctl.capture_device = device;
+	qsd_glb_ctl.device = device;
 
 	return 0;
 }
@@ -370,8 +338,7 @@ static int __init qsd_audio_init(void)
 	qsd_glb_ctl.tx_volume = 100;
 	qsd_glb_ctl.rx_volume = 100;
 	qsd_glb_ctl.strm_volume = 100;
-	qsd_glb_ctl.playback_device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
-	qsd_glb_ctl.capture_device = CAD_HW_DEVICE_ID_HANDSET_MIC;
+	qsd_glb_ctl.device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
 	qsd_glb_ctl.tx_mute = 0;
 	qsd_glb_ctl.rx_mute = 0;
 	qsd_glb_ctl.update = 0;
