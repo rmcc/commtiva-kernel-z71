@@ -62,6 +62,7 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/msm_audio.h>
+#include <linux/sched.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
@@ -86,6 +87,10 @@ struct pcm {
 	u32 cad_w_handle;
 	struct msm_audio_config cfg;
 	u32 volume;
+	struct mutex write_lock;
+	wait_queue_head_t eos_wait;
+	u16 eos_ack;
+	u16 flush_rcvd;
 };
 
 
@@ -110,6 +115,12 @@ static int msm8k_pcm_open(struct inode *inode, struct file *f)
 	pcm->cfg.channel_count = 1;
 	pcm->cfg.sample_rate = 48000;
 
+	pcm->eos_ack = 0;
+	pcm->flush_rcvd = 0;
+
+	mutex_init(&pcm->write_lock);
+	init_waitqueue_head(&pcm->eos_wait);
+
 	cos.format = CAD_FORMAT_PCM;
 	cos.op_code = CAD_OPEN_OP_WRITE;
 
@@ -119,6 +130,26 @@ static int msm8k_pcm_open(struct inode *inode, struct file *f)
 		return CAD_RES_FAILURE;
 
 	return CAD_RES_SUCCESS;
+}
+
+static int msm8k_pcm_fsync(struct file *f, struct dentry *dentry, int datasync)
+{
+	int ret = CAD_RES_SUCCESS;
+	struct pcm *pcm = f->private_data;
+
+	mutex_lock(&pcm->write_lock);
+	ret = cad_ioctl(pcm->cad_w_handle,
+		CAD_IOCTL_CMD_STREAM_END_OF_STREAM, NULL, 0);
+	mutex_unlock(&pcm->write_lock);
+
+	ret = wait_event_interruptible(pcm->eos_wait, pcm->eos_ack
+		|| pcm->flush_rcvd);
+
+	pcm->eos_ack = 0;
+	pcm->flush_rcvd = 0;
+
+	return ret;
+
 }
 
 static int msm8k_pcm_release(struct inode *inode, struct file *f)
@@ -140,6 +171,19 @@ static ssize_t msm8k_pcm_read(struct file *f, char __user *buf, size_t cnt,
 	return -EINVAL;
 }
 
+void msm8k_pcm_eos_event_cb(u32 event, void *evt_packet,
+				u32 evt_packet_len, void *client_data)
+{
+	struct pcm *pcm = client_data;
+
+	if (event == CAD_EVT_STATUS_EOS) {
+
+		pcm->eos_ack = 1;
+		wake_up(&pcm->eos_wait);
+	}
+}
+
+
 static ssize_t msm8k_pcm_write(struct file *f, const char __user *buf,
 		size_t cnt, loff_t *pos)
 {
@@ -154,7 +198,9 @@ static ssize_t msm8k_pcm_write(struct file *f, const char __user *buf,
 	cbs.max_size = cnt;
 	cbs.actual_size = cnt;
 
+	mutex_lock(&pcm->write_lock);
 	cad_write(pcm->cad_w_handle, &cbs);
+	mutex_unlock(&pcm->write_lock);
 
 	return cnt;
 }
@@ -173,6 +219,7 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 	struct cad_filter_struct flt;
 	struct adsp_audio_eq_cfg eq;
 	u32 percentage;
+	struct cad_event_struct_type eos_event;
 
 	D("%s\n", __func__);
 
@@ -262,6 +309,18 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
+		eos_event.callback = &msm8k_pcm_eos_event_cb;
+		eos_event.client_data = p;
+
+		rc = cad_ioctl(p->cad_w_handle,
+			CAD_IOCTL_CMD_SET_STREAM_EVENT_LSTR,
+			&eos_event, sizeof(struct cad_event_struct_type));
+
+		if (rc) {
+			pr_err("cad_ioctl() SET_STREAM_EVENT_LSTR failed\n");
+			break;
+		}
+
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
 			NULL, 0);
 		if (rc) {
@@ -274,8 +333,11 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 			NULL, 0);
 		break;
 	case AUDIO_FLUSH:
+		p->flush_rcvd = 1;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
 			NULL, 0);
+		wake_up(&p->eos_wait);
+		p->flush_rcvd = 0;
 		break;
 	case AUDIO_GET_CONFIG:
 		if (copy_to_user((void *)arg, &p->cfg,
@@ -351,6 +413,7 @@ static const struct file_operations msm8k_pcm_fops = {
 	.write = msm8k_pcm_write,
 	.ioctl = msm8k_pcm_ioctl,
 	.llseek = no_llseek,
+	.fsync = msm8k_pcm_fsync,
 };
 
 
