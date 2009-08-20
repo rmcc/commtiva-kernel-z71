@@ -1418,25 +1418,6 @@ static void __init msm_device_i2c_init(void)
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
 
-static unsigned msm_uart_csr_code[] = {
-	0x22,		/* 	300 bits per second	*/
-	0x33,		/* 	600 bits per second	*/
-	0x44,		/* 	1200 bits per second	*/
-	0x55,		/* 	2400 bits per second	*/
-	0x77,		/* 	4800 bits per second	*/
-	0x99,		/* 	9600 bits per second	*/
-	0xAA,		/* 	14.4K bits per second	*/
-	0xBB,		/* 	19.2K bits per second	*/
-	0xCC,		/* 	28.8K bits per second	*/
-	0xDD,		/* 	38.4K bits per second	*/
-	0xEE,		/* 	57.6K bits per second	*/
-	0xFF,		/* 	115.2K bits per second	*/
-};
-
-static struct msm_serial_platform_data msm_serial_pdata = {
-	.uart_csr_code = msm_uart_csr_code,
-};
-
 static void __init comet_init(void)
 {
 	char __iomem *cpld_base;
@@ -1487,7 +1468,6 @@ static void __init comet_init(void)
 	msm_acpu_clock_init(&comet_clock_data);
 
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
-	msm_device_uart3.dev.platform_data = &msm_serial_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 	bt_power_init();

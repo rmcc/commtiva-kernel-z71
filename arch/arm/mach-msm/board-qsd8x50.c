@@ -1937,25 +1937,6 @@ static void __init msm_device_i2c_init(void)
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
 
-static unsigned msm_uart_csr_code[] = {
-	0x22,		/* 	300 bits per second	*/
-	0x33,		/* 	600 bits per second	*/
-	0x44,		/* 	1200 bits per second	*/
-	0x55,		/* 	2400 bits per second	*/
-	0x77,		/* 	4800 bits per second	*/
-	0x99,		/* 	9600 bits per second	*/
-	0xAA,		/* 	14.4K bits per second	*/
-	0xBB,		/* 	19.2K bits per second	*/
-	0xCC,		/* 	28.8K bits per second	*/
-	0xDD,		/* 	38.4K bits per second	*/
-	0xEE,		/* 	57.6K bits per second	*/
-	0xFF,		/* 	115.2K bits per second	*/
-};
-
-static struct msm_serial_platform_data msm_serial_pdata = {
-	.uart_csr_code = msm_uart_csr_code,
-};
-
 static void __init qsd8x50_init(void)
 {
 	if (socinfo_init() < 0)
@@ -1964,7 +1945,6 @@ static void __init qsd8x50_init(void)
 	qsd8x50_cfg_smc91x();
 	msm_acpu_clock_init(&qsd8x50_clock_data);
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
-	msm_device_uart3.dev.platform_data = &msm_serial_pdata;
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
 	msm_device_tsif.dev.platform_data = &tsif_platform_data;
 #endif

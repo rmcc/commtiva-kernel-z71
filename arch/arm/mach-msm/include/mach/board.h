@@ -160,10 +160,6 @@ struct msm_i2c_platform_data {
 	void (*msm_i2c_config_gpio)(int iface, int config_type);
 };
 
-struct msm_serial_platform_data {
-	unsigned int *uart_csr_code;
-};
-
 /* common init routines for use by arch/arm/mach-msm/board-*.c */
 
 void __init msm_add_devices(void);
