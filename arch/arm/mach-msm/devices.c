@@ -687,28 +687,6 @@ int __init msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat)
 	return platform_device_register(pdev);
 }
 
-static struct resource msm_tssc_resources[] = {
-	{
-		.start	= 0xAA300000,
-		.end	= 0xAA300000 + SZ_4K - 1,
-		.flags	= IORESOURCE_MEM,
-		.name	= "tssc_phys",
-	},
-	{
-		.start	= INT_TCHSCRN1,
-		.end	= INT_TCHSCRN2,
-		.flags	= IORESOURCE_IRQ,
-		.name	= "tssc_irq",
-	},
-};
-
-struct platform_device msm_device_tssc = {
-	.name		= "msm_touch",
-	.id		= 0,
-	.num_resources	= ARRAY_SIZE(msm_tssc_resources),
-	.resource	= msm_tssc_resources,
-};
-
 #if defined(CONFIG_FB_MSM_MDP40)
 #define MDP_BASE          0xA3F00000
 #define PMDH_BASE         0xAD600000
@@ -880,7 +858,7 @@ static struct resource resources_tssc[] = {
 	},
 };
 
-struct platform_device msm_device_touchscreen = {
+struct platform_device msm_device_tssc = {
 	.name = "msm_touchscreen",
 	.id = 0,
 	.num_resources = ARRAY_SIZE(resources_tssc),

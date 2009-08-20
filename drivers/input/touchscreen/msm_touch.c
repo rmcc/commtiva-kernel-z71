@@ -63,7 +63,7 @@
 #define TSSC_NUMBER_OF_OPERATIONS 2
 #define TS_PENUP_TIMEOUT_MS 20
 
-#define TS_DRIVER_NAME "msm_touch"
+#define TS_DRIVER_NAME "msm_touchscreen"
 
 #define X_MAX	1024
 #define Y_MAX	1024
@@ -312,4 +312,4 @@ module_exit(ts_exit);
 
 MODULE_DESCRIPTION("MSM Touch Screen driver");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:msm_touch");
+MODULE_ALIAS("platform:msm_touchscreen");
