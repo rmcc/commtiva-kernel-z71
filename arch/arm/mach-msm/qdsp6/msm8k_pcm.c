@@ -70,6 +70,7 @@
 #include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
+#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_pcm: " fmt, ##args)
@@ -170,7 +171,7 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_filter_struct flt;
-	struct cad_filter_struct cfs;
+	struct adsp_audio_eq_cfg eq;
 
 	D("%s\n", __func__);
 
@@ -306,11 +307,17 @@ static int msm8k_pcm_ioctl(struct inode *inode, struct file *f,
 		}
 		break;
 	case AUDIO_SET_EQ:
-		rc = copy_from_user(&cfs, (void *)arg,
-				sizeof(struct cad_filter_struct));
+		rc = copy_from_user(&eq, (void *)arg,
+				sizeof(struct adsp_audio_eq_cfg));
+
+		flt.filter_type = CAD_DEVICE_FILTER_TYPE_EQ;
+		flt.cmd = CAD_FILTER_EQ_STREAM_CONFIG;
+		flt.format_block_len = sizeof(struct adsp_audio_eq_cfg);
+		flt.format_block = &eq;
+
 		rc = cad_ioctl(p->cad_w_handle,
 			CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
-			&cfs,
+			&flt,
 			sizeof(struct cad_filter_struct));
 		if (rc)
 			pr_err("cad_ioctl() set equalizer failed\n");

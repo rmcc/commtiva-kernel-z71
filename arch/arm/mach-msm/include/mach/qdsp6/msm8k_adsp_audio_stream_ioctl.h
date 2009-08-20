@@ -206,6 +206,25 @@
 
 #define ADSP_AUDIO_IOCTL_CMD_GET_AUDIO_TIME		0x0108c26c
 
+#define ADSP_AUDIO_MAX_EQ_BANDS 12
+
+#define CAD_EQ_INVALID_DATA       0xFFFFFFFF
+
+struct adsp_audio_eq_cfg {
+	u32                             enable;
+	/* Number of consequtive bands specified */
+	u32                             num_bands;
+	struct adsp_audio_eq_band       eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
+} __attribute__ ((packed));
+
+
+struct adsp_audio_stream_eq_cfg {
+	/* Associated client data */
+	struct adsp_audio_header        header;
+	/* Equalizer band data */
+	struct adsp_audio_eq_cfg        ecfg;
+} __attribute__ ((packed));
+
 
 #endif
 

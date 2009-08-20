@@ -97,6 +97,17 @@ struct adsp_audio_client_data {
 	u32	data;		/* Associated data */
 } __attribute__ ((packed));
 
+/* This structure allows for future expansion of information that */
+/* the client needs but ADSP is not concerned about. This header is */
+/* passed back to the client in the event corresponding to the command */
+/* received.*/
+
+struct adsp_audio_header {
+	/* Client specified data */
+	struct adsp_audio_client_data   client_data;
+	/* Room for expansion */
+} __attribute__ ((packed));
+
 
 /* Data that defines a physical memory address into shared memory */
 struct adsp_phys_mem_type {
