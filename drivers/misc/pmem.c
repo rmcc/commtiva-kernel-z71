@@ -1954,6 +1954,24 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		goto err_reset_pmem_info;
 	}
 
+	if (pdata->start % pmem[id].quantum) {
+		/* bad alignment for start! */
+		printk(KERN_ALERT "pmem: %s: Unable to register driver - "
+			"improperly aligned memory region start address "
+			"(%#lx) as checked against quantum value of %#x!\n",
+			__func__, pdata->start, pmem[id].quantum);
+		goto err_reset_pmem_info;
+	}
+
+	if (pdata->size % pmem[id].quantum) {
+		/* bad alignment for size! */
+		printk(KERN_ALERT "pmem: %s: Unable to register driver - "
+			"memory region size (%#lx) is not a multiple of "
+			"quantum size(%#x)!\n", __func__, pdata->size,
+			pmem[id].quantum);
+		goto err_reset_pmem_info;
+	}
+
 	pmem[id].cached = pdata->cached;
 	pmem[id].buffered = pdata->buffered;
 	pmem[id].base = pdata->start;
@@ -1993,14 +2011,6 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		break;
 
 	case PMEM_ALLOCATORTYPE_BITMAP: /* 0, default if not explicit */
-		if (pdata->start % pmem[id].quantum) {
-			/* bad alignment for start! */
-			printk(KERN_ALERT "Unable to register pmem "
-				"driver - unaligned memory region "
-				"start address (%#lx,%#x)!\n",
-				pdata->start, pmem[id].quantum);
-			goto err_reset_pmem_info;
-		}
 		pmem[id].bitm_alloc = kmalloc(
 			PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS *
 				sizeof(*pmem[id].bitm_alloc),
