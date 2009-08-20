@@ -321,6 +321,7 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 
 	/* enable LCDC irq */
 	spin_lock_irqsave(&mdp_spin_lock, flag);
+	mdp_enable_irq(MDP_DMA2_TERM);
 	INIT_COMPLETION(mfd->dma->comp);
 	mfd->dma->waiting = TRUE;
 #ifdef CONFIG_FB_MSM_MDP40
@@ -336,4 +337,5 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
 	wait_for_completion_killable(&mfd->dma->comp);
+	mdp_disable_irq(MDP_DMA2_TERM);
 }
