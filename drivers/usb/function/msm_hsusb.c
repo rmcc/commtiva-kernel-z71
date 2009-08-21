@@ -410,7 +410,6 @@ static inline int usb_msm_get_remotewakeup(void)
 static void usb_clk_enable(struct usb_info *ui)
 {
 	if (!ui->clk_enabled) {
-		clk_enable(ui->clk);
 		clk_enable(ui->pclk);
 		if (ui->cclk)
 			clk_enable(ui->cclk);
@@ -422,7 +421,6 @@ static void usb_clk_disable(struct usb_info *ui)
 {
 	if (ui->clk_enabled) {
 		clk_disable(ui->pclk);
-		clk_disable(ui->clk);
 		if (ui->cclk)
 			clk_disable(ui->cclk);
 		ui->clk_enabled = 0;
@@ -1738,6 +1736,7 @@ static int usb_hw_reset(struct usb_info *ui)
 
 	pdata = ui->pdev->dev.platform_data;
 
+	clk_enable(ui->clk);
 	/* reset the phy before resetting link */
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
@@ -1816,6 +1815,8 @@ static int usb_hw_reset(struct usb_info *ui)
 	ulpi_write(ui, val, ULPI_INT_FALL_CLR);
 
 	writel(ui->dma, USB_ENDPOINTLISTADDR);
+
+	clk_disable(ui->clk);
 
 	return 0;
 }
@@ -2679,6 +2680,8 @@ static void usb_vbus_offline(struct usb_info *ui)
 	 * of h/w bugs and to flush any resource that
 	 * h/w might be holding
 	 */
+	clk_enable(ui->clk);
+
 	if (readl(USB_PORTSC) & PORTSC_PHCD)
 		usb_wakeup_phy(ui);
 
@@ -2713,6 +2716,8 @@ static void usb_vbus_offline(struct usb_info *ui)
 	}
 	ulpi_write(ui, val, ULPI_INT_RISE_CLR);
 	ulpi_write(ui, val, ULPI_INT_FALL_CLR);
+
+	clk_disable(ui->clk);
 }
 
 static void usb_lpm_wakeup_phy(struct work_struct *w)
