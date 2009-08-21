@@ -149,7 +149,11 @@
 #define MSM_MDC_SIZE	      SZ_1M
 
 #define MSM_AD5_BASE          IOMEM(0xE0300000)
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_AD5_PHYS          0xA7000000
+#else
 #define MSM_AD5_PHYS          0xAC000000
+#endif
 #define MSM_AD5_SIZE          (SZ_1M*13)
 
 #define MSM_SSBI_BASE         IOMEM(0xE1004000)
