@@ -922,13 +922,13 @@ static irqreturn_t adsp_irq_handler(int irq, void *data)
 {
 	struct adsp_info *info = &adsp_info;
 	int cnt = 0;
-	for (cnt = 0; cnt < 10; cnt++)
+	for (cnt = 0; cnt < 15; cnt++)
 		if (adsp_get_event(info) < 0)
 			break;
 	if (cnt > info->event_backlog_max)
 		info->event_backlog_max = cnt;
 	info->events_received += cnt;
-	if (cnt == 10)
+	if (cnt == 15)
 		pr_err("adsp: too many (%d) events for single irq!\n", cnt);
 	return IRQ_HANDLED;
 }
