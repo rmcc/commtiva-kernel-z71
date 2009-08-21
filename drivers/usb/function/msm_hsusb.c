@@ -1892,7 +1892,7 @@ static struct msm_otg_ops dcd_ops = {
 
 void usb_start(struct usb_info *ui)
 {
-	int i;
+	int i, ret;
 
 	for (i = 0; i < ui->num_funcs; i++) {
 		struct usb_function_info *fi = ui->func[i];
@@ -1913,25 +1913,34 @@ void usb_start(struct usb_info *ui)
 		queue_delayed_work(usb_work, &ui->work, 0);
 	} else {
 		/*Initialize pm app RPC */
-		if (msm_pm_app_rpc_init() == 0) {
-			pr_info("%s: pm_app_rpc connect success\n", __func__);
-			if (msm_pm_app_register_vbus_sn() == 0) {
-				pr_info("%s:PMIC VBUS SN notif supported\n",
-								__func__);
-				ui->vbus_sn_notif = 1;
-				msm_pm_app_enable_usb_ldo(1);
-			} else {
-				pr_info("%s:PMIC VBUS SN notif not supported\n"
-								, __func__);
-				ui->vbus_sn_notif = 0;
-				msm_pm_app_unregister_vbus_sn();
-				msm_pm_app_rpc_deinit();
-			}
-		} else {
-			pr_info("%s: pm_app_rpc connect failed\n", __func__);
-			msm_pm_app_rpc_deinit();
+		ret = msm_pm_app_rpc_init();
+		if (ret) {
+			pr_err("%s: pm_app_rpc connect failed\n", __func__);
+			goto out;
 		}
+		pr_info("%s: pm_app_rpc connect success\n", __func__);
 
+		ret = msm_pm_app_register_vbus_sn(&msm_hsusb_set_vbus_state);
+		if (ret) {
+			pr_err("%s:PMIC VBUS SN notif not supported\n", \
+					__func__);
+			msm_pm_app_rpc_deinit();
+			goto out;
+		}
+		pr_info("%s:PMIC VBUS SN notif supported\n", \
+					__func__);
+
+		ret = msm_pm_app_enable_usb_ldo(1);
+		if (ret) {
+			pr_err("%s: unable to turn on internal LDO", \
+					__func__);
+			msm_pm_app_unregister_vbus_sn(
+					&msm_hsusb_set_vbus_state);
+			msm_pm_app_rpc_deinit();
+			goto out;
+		}
+		ui->vbus_sn_notif = 1;
+out:
 		ui->active = 1;
 		ui->flags |= (USB_FLAG_START | USB_FLAG_RESET);
 		queue_delayed_work(usb_work, &ui->work, 0);
@@ -2468,6 +2477,7 @@ void msm_hsusb_set_vbus_state(int online)
 	struct usb_info *ui = the_usb_info;
 
 	if (ui && online) {
+		msm_pm_app_enable_usb_ldo(1);
 		usb_lpm_exit(ui);
 		/* Turn on PHY comparators */
 		if (!(ulpi_read(ui, 0x30) & 0x01))
@@ -3405,7 +3415,7 @@ static void usb_exit(void)
 	platform_driver_unregister(&usb_driver);
 	msm_hsusb_rpc_close();
 	msm_chg_rpc_close();
-	msm_pm_app_unregister_vbus_sn();
+	msm_pm_app_unregister_vbus_sn(&msm_hsusb_set_vbus_state);
 	msm_pm_app_rpc_deinit();
 }
 
