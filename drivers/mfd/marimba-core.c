@@ -424,6 +424,9 @@ static int marimba_probe(struct i2c_client *client,
 
 	inuse = true;
 
+	if (pdata->marimba_setup != NULL)
+		pdata->marimba_setup();
+
 	marimba_init_reg(client);
 
 	status = marimba_add_child(pdata);
@@ -437,7 +440,9 @@ fail:
 static int __devexit marimba_remove(struct i2c_client *client)
 {
 	int i;
+	struct marimba_platform_data *pdata;
 
+	pdata = client->dev.platform_data;
 	for (i = 0; i <= MARIMBA_NUM_CHILD; i++) {
 		struct marimba *marimba = &marimba_modules[i];
 
@@ -446,6 +451,9 @@ static int __devexit marimba_remove(struct i2c_client *client)
 
 		marimba_modules[i].client = NULL;
 	}
+
+	if (pdata->marimba_shutdown != NULL)
+		pdata->marimba_shutdown();
 
 	return 0;
 }
