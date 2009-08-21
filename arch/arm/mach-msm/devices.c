@@ -265,11 +265,11 @@ static struct resource msm_ssbi7_resources[] = {
 	},
 };
 
-static struct platform_device msm_device_ssbi7 = {
-	.name           = "i2c_ssbi",
-	.id             = 7,
-	.num_resource   = ARRAY_SIZE(msm_ssbi7_resources),
-	.resource       = msm_ssbi7_resources,
+struct platform_device msm_device_ssbi7 = {
+	.name		= "i2c_ssbi",
+	.id		= 7,
+	.num_resources	= ARRAY_SIZE(msm_ssbi7_resources),
+	.resource	= msm_ssbi7_resources,
 };
 #endif /* CONFIG_I2C_SSBI */
 
