@@ -80,12 +80,12 @@ struct clkctl_acpu_speed {
 	unsigned int	a11clk_src_div;
 	unsigned int	ahbclk_khz;
 	unsigned int	ahbclk_div;
-	unsigned int 	axiclk_khz;
 	int		vdd;
+	unsigned int 	axiclk_khz;
 	unsigned long	lpj; /* loops_per_jiffy */
-/* Index in acpu_freq_tbl[] for steppings. */
-	short		down;
-	short		up;
+/* Pointers in acpu_freq_tbl[] for max up/down steppings. */
+	struct clkctl_acpu_speed *down[3];
+	struct clkctl_acpu_speed *up[3];
 };
 
 static remote_spinlock_t pll_lock;
@@ -99,123 +99,120 @@ static void __init acpuclk_init(void);
  * ACPU freq tables used for different PLLs frequency combinations. The
  * correct table is selected during init.
  *
- * Table stepping up/down is calculated during boot to choose the largest
- * frequency jump that's less than max_speed_delta_khz and preferrably on the
- * same PLL. If no frequencies using the same PLL are within
- * max_speed_delta_khz, then the farthest frequency that is within
- * max_speed_delta_khz is chosen.
+ * Table stepping up/down entries are calculated during boot to choose the
+ * largest frequency jump that's less than max_speed_delta_khz on each PLL.
  */
 
 /* 7x01/7x25 normal with GSM capable modem */
 static struct clkctl_acpu_speed pll0_245_pll1_768_pll2_1056[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
-	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
-	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1,  61440, 3 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  61440, 3 },
-	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2,  61440, 4 },
-	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 128000, 5 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 128000, 5 },
-	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 128000, 6 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 128000, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1, 3,  61440 },
+	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1, 3,  61440 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1, 3,  61440 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2, 4,  61440 },
+	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 5, 128000 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 5, 128000 },
+	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 6, 128000 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 128000 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x01/7x25 normal with CDMA-only modem */
 static struct clkctl_acpu_speed pll0_196_pll1_768_pll2_1056[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
-	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1,  24576, 3 },
-	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1,  24576, 3 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  24576, 3 },
-	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  24576, 4 },
-	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 128000, 5 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 128000, 5 },
-	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 128000, 6 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 128000, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 24576 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1, 3,  24576 },
+	{ 0, 128000, ACPU_PLL_1, 1, 5,  64000, 1, 3,  24576 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1, 3,  24576 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2, 4,  24576 },
+	{ 1, 256000, ACPU_PLL_1, 1, 2, 128000, 1, 5, 128000 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 5, 128000 },
+	{ 1, 384000, ACPU_PLL_1, 1, 1, 128000, 2, 6, 128000 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 128000 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x01/7x25 turbo with GSM capable modem */
 static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1056[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
-	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  61440, 3 },
-	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  61440, 3 },
-	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2,  61440, 4 },
-	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 120000, 5 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 120000, 5 },
-	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 120000, 6 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 122880, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1, 3,  61440 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1, 3,  61440 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1, 3,  61440 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0,  81920, 2, 4,  61440 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 5, 120000 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 5, 120000 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 6, 120000 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 122880 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x01/7x25 turbo with CDMA-only modem */
 static struct clkctl_acpu_speed pll0_196_pll1_960_pll2_1056[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
-	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1,  24576, 3 },
-	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  24576, 3 },
-	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1,  24576, 3 },
-	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  24576, 4 },
-	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 120000, 5 },
-	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 120000, 5 },
-	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 120000, 6 },
-	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 120000, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 24576 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  49152, 1, 3,  24576 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1, 3,  24576 },
+	{ 0, 176000, ACPU_PLL_2, 2, 5,  88000, 1, 3,  24576 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2, 4,  24576 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 107000, 2, 5, 120000 },
+	{ 0, 352000, ACPU_PLL_2, 2, 2,  88000, 3, 5, 120000 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 120000, 3, 6, 120000 },
+	{ 1, 528000, ACPU_PLL_2, 2, 1, 132000, 3, 7, 120000 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x27 normal with GSM capable modem */
 static struct clkctl_acpu_speed pll0_245_pll1_960_pll2_1200[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
-	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  61440, 3 },
-	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1,  61440, 3 },
-	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  61440, 4 },
-	{ 1, 245760, ACPU_PLL_0, 4, 0, 122880, 1,  61440, 4 },
-	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 122880, 5 },
-	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 122880, 5 },
-	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 122880, 6 },
-	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 122880, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1, 3,  61440 },
+	{ 1, 122880, ACPU_PLL_0, 4, 1,  61440, 1, 3,  61440 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2, 4,  61440 },
+	{ 1, 245760, ACPU_PLL_0, 4, 0, 122880, 1, 4,  61440 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 5, 122880 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 122880 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 6, 122880 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x27 normal with CDMA-only modem */
 static struct clkctl_acpu_speed pll0_196_pll1_960_pll2_1200[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
-	{ 1,  98304, ACPU_PLL_0, 4, 1,  98304, 0,  49152, 3 },
-	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1,  49152, 3 },
-	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2,  98304, 4 },
-	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  98304, 4 },
-	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 120000, 5 },
-	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 120000, 5 },
-	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 120000, 6 },
-	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 120000, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 24576 },
+	{ 1,  98304, ACPU_PLL_0, 4, 1,  98304, 0, 3,  49152 },
+	{ 0, 120000, ACPU_PLL_1, 1, 7,  60000, 1, 3,  49152 },
+	{ 1, 196608, ACPU_PLL_0, 4, 0,  65536, 2, 4,  98304 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2, 4,  98304 },
+	{ 1, 320000, ACPU_PLL_1, 1, 2, 160000, 1, 5, 120000 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 120000 },
+	{ 1, 480000, ACPU_PLL_1, 1, 1, 160000, 2, 6, 120000 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 120000 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x27 normal with GSM capable modem - PLL0 and PLL1 swapped */
 static struct clkctl_acpu_speed pll0_960_pll1_245_pll2_1200[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 30720, 0 },
-	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1,  61440, 3 },
-	{ 1, 122880, ACPU_PLL_1, 1, 1,  61440, 1,  61440, 3 },
-	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  61440, 4 },
-	{ 1, 245760, ACPU_PLL_1, 1, 0, 122880, 1,  61440, 4 },
-	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 122880, 5 },
-	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 122880, 5 },
-	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 122880, 6 },
-	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 122880, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 30720 },
+	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1, 3,  61440 },
+	{ 1, 122880, ACPU_PLL_1, 1, 1,  61440, 1, 3,  61440 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2, 4,  61440 },
+	{ 1, 245760, ACPU_PLL_1, 1, 0, 122880, 1, 4,  61440 },
+	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 5, 122880 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 122880 },
+	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 6, 122880 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 /* 7x27 normal with CDMA-only modem - PLL0 and PLL1 swapped */
 static struct clkctl_acpu_speed pll0_960_pll1_196_pll2_1200[] = {
-	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 24576, 0 },
-	{ 1,  98304, ACPU_PLL_1, 1, 1,  98304, 0,  49152, 3 },
-	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1,  49152, 3 },
-	{ 1, 196608, ACPU_PLL_1, 1, 0,  65536, 2,  98304, 4 },
-	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2,  98304, 4 },
-	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 120000, 5 },
-	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 120000, 5 },
-	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 120000, 6 },
-	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 120000, 7 },
-	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 19200, 0, 0, 24576 },
+	{ 1,  98304, ACPU_PLL_1, 1, 1,  98304, 0, 3,  49152 },
+	{ 0, 120000, ACPU_PLL_0, 4, 7,  60000, 1, 3,  49152 },
+	{ 1, 196608, ACPU_PLL_1, 1, 0,  65536, 2, 4,  98304 },
+	{ 0, 200000, ACPU_PLL_2, 2, 5,  66667, 2, 4,  98304 },
+	{ 1, 320000, ACPU_PLL_0, 4, 2, 160000, 1, 5, 120000 },
+	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 120000 },
+	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 6, 120000 },
+	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 120000 },
+	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
 #define PLL_196_MHZ	10
@@ -332,9 +329,9 @@ static int pc_pll_request(unsigned id, unsigned on)
 
 #if PERF_SWITCH_DEBUG
 	if (on)
-		printk(KERN_DEBUG "PLL %d enabled\n", id);
+		printk(KERN_DEBUG "PLL enabled\n");
 	else
-		printk(KERN_DEBUG "PLL %d disabled\n", id);
+		printk(KERN_DEBUG "PLL disabled\n");
 #endif
 	return res;
 }
@@ -501,16 +498,33 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		 */
 		int d = abs((int)(cur_s->a11clk_khz - tgt_s->a11clk_khz));
 		if (d > drv_state.max_speed_delta_khz) {
-			/* Step up or down depending on target vs current. */
-			int clk_index = tgt_s->a11clk_khz > cur_s->a11clk_khz ?
-				cur_s->up : cur_s->down;
-			if (clk_index < 0) { /* This should not happen. */
-				printk(KERN_ERR "cur:%u target: %u\n",
-					cur_s->a11clk_khz, tgt_s->a11clk_khz);
+
+			if (tgt_s->a11clk_khz > cur_s->a11clk_khz) {
+				/* Step up: jump to target PLL as early as
+				 * possible so indexing using TCXO (up[-1])
+				 * never occurs. */
+				if (likely(cur_s->up[tgt_s->pll]))
+					cur_s = cur_s->up[tgt_s->pll];
+				else
+					cur_s = cur_s->up[cur_s->pll];
+			} else {
+				/* Step down: stay on current PLL as long as
+				 * possible so indexing using TCXO (down[-1])
+				 * never occurs. */
+				if (likely(cur_s->down[cur_s->pll]))
+					cur_s = cur_s->down[cur_s->pll];
+				else
+					cur_s = cur_s->down[tgt_s->pll];
+			}
+
+			if (cur_s == NULL) { /* This should not happen. */
+				pr_err("No stepping frequencies found. "
+					"strt_s:%u tgt_s:%u\n",
+					strt_s->a11clk_khz, tgt_s->a11clk_khz);
 				rc = -EINVAL;
 				goto out;
 			}
-			cur_s = &acpu_freq_tbl[clk_index];
+
 		} else {
 			cur_s = tgt_s;
 		}
@@ -747,7 +761,7 @@ static void __init lpj_init(void)
 
 static void __init precompute_stepping(void)
 {
-	int i, step_idx, step_same_pll_idx;
+	int i, step_idx;
 
 #define cur_freq acpu_freq_tbl[i].a11clk_khz
 #define step_freq acpu_freq_tbl[step_idx].a11clk_khz
@@ -756,59 +770,32 @@ static void __init precompute_stepping(void)
 
 	for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
 
-		/* Calculate "Up" step. */
+		/* Calculate max "up" step for each destination PLL */
 		step_idx = i + 1;
-		step_same_pll_idx = -1;
 		while (step_freq && (step_freq - cur_freq)
 					<= drv_state.max_speed_delta_khz) {
-			if (step_pll == cur_pll)
-				step_same_pll_idx = step_idx;
+			acpu_freq_tbl[i].up[step_pll] =
+						&acpu_freq_tbl[step_idx];
 			step_idx++;
 		}
-
-		/* Highest freq within max_speed_delta_khz. No step needed. */
-		if (step_freq == 0)
-			acpu_freq_tbl[i].up = -1;
-		else if (step_idx == (i + 1)) {
+		if (step_idx == (i + 1) && step_freq) {
 			pr_crit("Delta between freqs %u KHz and %u KHz is"
 				" too high!\n", cur_freq, step_freq);
 			BUG();
-		} else {
-			/* There is only one TCXO freq. So don't complain. */
-			if (cur_pll == ACPU_PLL_TCXO)
-				step_same_pll_idx = step_idx - 1;
-			if (step_same_pll_idx == -1) {
-				pr_warning("Suboptimal up stepping for CPU "
-					   "freq %u KHz.\n", cur_freq);
-				acpu_freq_tbl[i].up = step_idx - 1;
-			} else
-				acpu_freq_tbl[i].up = step_same_pll_idx;
 		}
 
-		/* Calculate "Down" step. */
+		/* Calculate max "down" step for each destination PLL */
 		step_idx = i - 1;
-		step_same_pll_idx = -1;
 		while (step_idx >= 0 && (cur_freq - step_freq)
 					<= drv_state.max_speed_delta_khz) {
-			if (step_pll == cur_pll)
-				step_same_pll_idx = step_idx;
+			acpu_freq_tbl[i].down[step_pll] =
+						&acpu_freq_tbl[step_idx];
 			step_idx--;
 		}
-
-		/* Lowest freq within max_speed_delta_khz. No step needed. */
-		if (step_idx == -1)
-			acpu_freq_tbl[i].down = -1;
-		else if (step_idx == (i - 1)) {
+		if (step_idx == (i - 1) && i > 0) {
 			pr_crit("Delta between freqs %u KHz and %u KHz is"
 				" too high!\n", cur_freq, step_freq);
 			BUG();
-		} else {
-			if (step_same_pll_idx == -1) {
-				pr_warning("Suboptimal down stepping for CPU "
-					   "freq %u KHz.\n", cur_freq);
-				acpu_freq_tbl[i].down = step_idx + 1;
-			} else
-				acpu_freq_tbl[i].down = step_same_pll_idx;
 		}
 	}
 }
@@ -816,12 +803,31 @@ static void __init precompute_stepping(void)
 static void __init print_acpu_freq_tbl(void)
 {
 	struct clkctl_acpu_speed *t;
-	pr_info("CPU-Freq  PLL  DIV  AHB-Freq  ADIV  AXI-Freq Dn Up\n");
-	for (t = &acpu_freq_tbl[0]; t->a11clk_khz != 0; t++)
-		pr_info("%8d  %3d  %3d  %8d  %4d  %8d %2d %2d\n",
-			t->a11clk_khz, t->pll, t->a11clk_src_div + 1,
+	short down_idx[3];
+	short up_idx[3];
+	int i, j;
+
+#define FREQ_IDX(freq_ptr) (freq_ptr - acpu_freq_tbl)
+	pr_info("Id CPU-KHz PLL DIV AHB-KHz ADIV AXI-KHz "
+		"D0 D1 D2 U0 U1 U2\n");
+
+	t = &acpu_freq_tbl[0];
+	for (i = 0; t->a11clk_khz != 0; i++) {
+
+		for (j = 0; j < 3; j++) {
+			down_idx[j] = t->down[j] ? FREQ_IDX(t->down[j]) : -1;
+			up_idx[j] = t->up[j] ? FREQ_IDX(t->up[j]) : -1;
+		}
+
+		pr_info("%2d %7d %3d %3d %7d %4d %7d "
+			"%2d %2d %2d %2d %2d %2d\n",
+			i, t->a11clk_khz, t->pll, t->a11clk_src_div + 1,
 			t->ahbclk_khz, t->ahbclk_div + 1, t->axiclk_khz,
-			t->down, t->up);
+			down_idx[0], down_idx[1], down_idx[2],
+			up_idx[0], up_idx[1], up_idx[2]);
+
+		t++;
+	}
 }
 
 static void msm7x25_acpu_pll_hw_bug_fix(void)
