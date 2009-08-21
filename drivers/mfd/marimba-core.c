@@ -180,7 +180,7 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 						marimba->xfer_msg, 1);
 
 	if (ret == 1) {
-		for (i = 0; i <= num_bytes; i++)
+		for (i = 0; i < num_bytes; i++)
 			marimba_shadow[marimba->mod_id][reg + i]
 							|= mask_value[i];
 	}
@@ -248,7 +248,7 @@ int marimba_read_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 						marimba->xfer_msg, 2);
 
 	if (ret == 2) {
-		for (i = 0; i <= num_bytes; i++) {
+		for (i = 0; i < num_bytes; i++) {
 			marimba_shadow[marimba->mod_id][reg + i] = value[i];
 			value[i] &= mask;
 		}
