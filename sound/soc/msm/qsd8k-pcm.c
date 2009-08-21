@@ -146,13 +146,13 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	u32 stream_device[1];
 
-	if (prtd->enabled)
-		return 0;
-
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 	prtd->pcm_buf_pos = 0;
+
+	if (prtd->enabled)
+		return 0;
 
 	cad_stream_info.app_type = CAD_STREAM_APP_PLAYBACK;
 	cad_stream_info.priority = 0;
@@ -200,12 +200,8 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	mutex_unlock(&the_locks.lock);
 	if (rc)
 		printk(KERN_ERR "cad ioctl failed\n");
-	else {
+	else
 		prtd->enabled = 1;
-		mutex_lock(&the_locks.mixer_lock);
-		qsd_glb_ctl.update = 1; /* Update Volume, with Cached value */
-		mutex_unlock(&the_locks.mixer_lock);
-	}
 	return rc;
 }
 
