@@ -70,7 +70,7 @@
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start	= 0x9C004300,
-		.end	= 0x9C004400,
+		.end	= 0x9C0043ff,
 		.flags	= IORESOURCE_MEM,
 	},
 	[1] = {
@@ -1434,7 +1434,7 @@ static void __init msm7x27_init(void)
 #endif
 	if (machine_is_msm7x27_ffa()) {
 		smc91x_resources[0].start = 0x98000300;
-		smc91x_resources[0].end = 0x98000400;
+		smc91x_resources[0].end = 0x980003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(85);
 		smc91x_resources[1].end = MSM_GPIO_TO_INT(85);
 		if (gpio_tlmm_config(GPIO_CFG(85, 0,

@@ -1841,12 +1841,12 @@ static void __init qsd8x50_cfg_smc91x(void)
 
 	if (machine_is_qsd8x50_surf()) {
 		smc91x_resources[0].start = 0x70000300;
-		smc91x_resources[0].end = 0x70000400;
+		smc91x_resources[0].end = 0x700003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(156);
 		smc91x_resources[1].end = MSM_GPIO_TO_INT(156);
 	} else if (machine_is_qsd8x50_ffa()) {
 		smc91x_resources[0].start = 0x84000300;
-		smc91x_resources[0].end = 0x84000400;
+		smc91x_resources[0].end = 0x840003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(87);
 		smc91x_resources[1].end = MSM_GPIO_TO_INT(87);
 
