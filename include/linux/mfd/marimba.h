@@ -86,6 +86,8 @@ struct marimba_platform_data {
 	struct marimba_codec_platform_data	*codec;
 	struct marimba_tsadc_platform_data	*tsadc;
 	u8 slave_id[MARIMBA_NUM_CHILD];
+	u32 (*marimba_setup) (void);
+	void (*marimba_shutdown) (void);
 };
 
 /*
