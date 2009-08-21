@@ -429,7 +429,7 @@ static void usb_clk_disable(struct usb_info *ui)
 
 static void usb_vreg_enable(struct usb_info *ui)
 {
-	if (!IS_ERR(ui->vreg) && !ui->vreg_enabled) {
+	if (ui->vreg && !IS_ERR(ui->vreg) && !ui->vreg_enabled) {
 		vreg_enable(ui->vreg);
 		ui->vreg_enabled = 1;
 	}
@@ -437,7 +437,7 @@ static void usb_vreg_enable(struct usb_info *ui)
 
 static void usb_vreg_disable(struct usb_info *ui)
 {
-	if (!IS_ERR(ui->vreg) && ui->vreg_enabled) {
+	if (ui->vreg && !IS_ERR(ui->vreg) && ui->vreg_enabled) {
 		vreg_disable(ui->vreg);
 		ui->vreg_enabled = 0;
 	}
@@ -3176,14 +3176,17 @@ static int __init usb_probe(struct platform_device *pdev)
 		}
 	}
 
-	ui->vreg = vreg_get(NULL, "usb");
-	if (IS_ERR(ui->vreg) || (!ui->vreg)) {
-		pr_err("%s: vreg get failed\n", __func__);
-		ui->vreg = NULL;
-		usb_free(ui, PTR_ERR(ui->pclk));
-		usb_init_err = PTR_ERR(ui->pclk);
-		return usb_init_err;
+	if (ui->pdata->vreg5v_required) {
+		ui->vreg = vreg_get(NULL, "boost");
+		if (IS_ERR(ui->vreg) || (!ui->vreg)) {
+			pr_err("%s: vreg get failed\n", __func__);
+			ui->vreg = NULL;
+			usb_free(ui, PTR_ERR(ui->vreg));
+			usb_init_err = PTR_ERR(ui->vreg);
+			return usb_init_err;
+		}
 	}
+
 	/* memory barrier initialization in non-interrupt context */
 	dmb();
 

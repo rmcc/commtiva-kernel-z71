@@ -92,6 +92,8 @@ struct msm_hsusb_platform_data {
 
 	unsigned int max_axi_khz;
 	unsigned int core_clk;
+
+	int vreg5v_required;
 };
 
 struct msm_otg_platform_data {
