@@ -78,7 +78,7 @@
 
 #define CAD_SESSION_INUSE 1
 #define CAD_SESSION_FREE  0
-
+#define HWIO_AUDIO_WB_CTL_RX_RESET_BMSK 0x01000000
 
 struct cad_session_info_struct_type {
 	s8				status;
@@ -132,6 +132,7 @@ static struct cad_singleton_info_struct_type cad_singleton;
 u8 *g_audio_mem;
 u32 g_audio_base;
 u32 g_audio_size;
+void __iomem *g_audio_reg_base;
 
 static s32 get_gpios(struct platform_device *pdev);
 static s32 get_i2s_gpios(struct platform_device *pdev);
@@ -142,6 +143,7 @@ static int __init cad_probe(struct platform_device *pdev)
 {
 	u8			ref_count;
 	s32			rc;
+	struct resource		*res;
 
 	rc = CAD_RES_SUCCESS;
 
@@ -179,6 +181,16 @@ static int __init cad_probe(struct platform_device *pdev)
 		rc = CAD_RES_FAILURE;
 		goto done;
 	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+						"audio_base_addr");
+	if  (!res) {
+		pr_err("%s: failed to get audio base address\n", __func__);
+		return -ENODEV;
+	}
+	g_audio_reg_base = ioremap(res->start, 4);
+	if (g_audio_reg_base == NULL)
+		return -ENOMEM;
 
 	rc = cad_audio_dec_init(&cad.audiodec);
 	if (rc != CAD_RES_SUCCESS) {
@@ -699,6 +711,21 @@ u8 release_ref_count(void)
 	D("release_ref_count(cad_ref_ct = %d)\n", cad_singleton.cad_ref_ct);
 
 	return cad_singleton.cad_ref_ct;
+}
+
+int audio_resync_afe_clk()
+{
+	uint32_t	reg;
+
+	reg = readl(g_audio_reg_base);
+	reg |= HWIO_AUDIO_WB_CTL_RX_RESET_BMSK;
+	writel(reg, g_audio_reg_base);
+	mdelay(10);
+	reg = readl(g_audio_reg_base);
+	reg &= ~HWIO_AUDIO_WB_CTL_RX_RESET_BMSK;
+	writel(reg, g_audio_reg_base);
+
+	return 0;
 }
 
 module_init(cad_init);

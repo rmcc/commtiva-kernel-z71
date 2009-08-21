@@ -918,6 +918,12 @@ static struct resource msm_audio_resources[] = {
 		.end    = 146,
 		.flags  = IORESOURCE_IO,
 	},
+	{
+		.name	= "audio_base_addr",
+		.start	= 0xa0700000,
+		.end	= 0xa0700000 + 4,
+		.flags	= IORESOURCE_MEM,
+	},
 
 };
 
