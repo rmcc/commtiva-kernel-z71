@@ -1019,6 +1019,7 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("sdc_clk",	SDC4_CLK,	&msm_device_sdc4.dev, OFF),
 	CLK_PCOM("sdc_pclk",	SDC4_PCLK,	&msm_device_sdc4.dev, OFF),
 	CLK_PCOM("spi_clk",	SPI_CLK,	NULL, 0),
+	CLK_PCOM("spi_pclk",	SPI_PCLK,	NULL, 0),
 	CLK_PCOM("uart_clk",	UART1_CLK,	&msm_device_uart1.dev, OFF),
 	CLK_PCOM("uart_clk",	UART2_CLK,	&msm_device_uart2.dev, 0),
 	CLK_PCOM("uart_clk",	UART3_CLK,	&msm_device_uart3.dev, OFF),
@@ -1038,6 +1039,14 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("vfe_clk",	VFE_CLK,	NULL, OFF),
 	CLK_PCOM("vfe_mdc_clk",	VFE_MDC_CLK,	NULL, OFF),
 	CLK_PCOM("grp_pclk",	GRP_PCLK,	NULL, 0),
+	CLK_PCOM("lpa_codec_clk",	LPA_CODEC_CLK,		NULL, 0),
+	CLK_PCOM("lpa_core_clk",	LPA_CORE_CLK,		NULL, 0),
+	CLK_PCOM("lpa_pclk",		LPA_PCLK,		NULL, 0),
+	CLK_PCOM("mfc_clk",		MFC_CLK,		NULL, 0),
+	CLK_PCOM("mfc_div2_clk",	MFC_DIV2_CLK,		NULL, 0),
+	CLK_PCOM("mfc_pclk",		MFC_PCLK,		NULL, 0),
+	CLK_PCOM("grp_2d_clk",	GRP_2D_CLK,	NULL, 0),
+	CLK_PCOM("grp_2d_pclk",	GRP_2D_PCLK,	NULL, 0),
 };
 
 unsigned msm_num_clocks_7x30 = ARRAY_SIZE(msm_clocks_7x30);
