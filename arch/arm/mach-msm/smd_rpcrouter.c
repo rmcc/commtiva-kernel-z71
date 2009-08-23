@@ -1230,6 +1230,30 @@ static struct msm_rpc_reply *get_pend_reply(struct msm_rpc_endpoint *ept,
 	return NULL;
 }
 
+void get_requesting_client(struct msm_rpc_endpoint *ept, uint32_t xid,
+			   struct msm_rpc_client_info *clnt_info)
+{
+	unsigned long flags;
+	struct msm_rpc_reply *reply;
+
+	if (!clnt_info)
+		return;
+
+	spin_lock_irqsave(&ept->reply_q_lock, flags);
+	list_for_each_entry(reply, &ept->reply_pend_q, list) {
+		if (reply->xid == xid) {
+			clnt_info->pid = reply->pid;
+			clnt_info->cid = reply->cid;
+			clnt_info->prog = reply->prog;
+			clnt_info->vers = reply->vers;
+			spin_unlock_irqrestore(&ept->reply_q_lock, flags);
+			return;
+		}
+	}
+	spin_unlock_irqrestore(&ept->reply_q_lock, flags);
+	return;
+}
+
 static void set_avail_reply(struct msm_rpc_endpoint *ept,
 			    struct msm_rpc_reply *reply)
 {
@@ -1594,6 +1618,8 @@ int __msm_rpc_read(struct msm_rpc_endpoint *ept,
 		reply->cid = pkt->hdr.src_cid;
 		reply->pid = pkt->hdr.src_pid;
 		reply->xid = rq->xid;
+		reply->prog = rq->prog;
+		reply->vers = rq->vers;
 		set_pend_reply(ept, reply);
 	}
 

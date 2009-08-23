@@ -143,6 +143,8 @@ struct msm_rpc_reply {
 	struct list_head list;
 	uint32_t pid;
 	uint32_t cid;
+	uint32_t prog; /* be32 */
+	uint32_t vers; /* be32 */
 	uint32_t xid; /* be32 */
 };
 
@@ -203,6 +205,9 @@ int msm_rpcrouter_create_server_pdev(struct rr_server *server);
 
 int msm_rpcrouter_init_devices(void);
 void msm_rpcrouter_exit_devices(void);
+
+void get_requesting_client(struct msm_rpc_endpoint *ept, uint32_t xid,
+			   struct msm_rpc_client_info *clnt_info);
 
 extern dev_t msm_rpcrouter_devno;
 extern struct class *msm_rpcrouter_class;
