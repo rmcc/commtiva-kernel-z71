@@ -15,6 +15,7 @@ obj-y += pmic.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-8x50.o
+obj-$(CONFIG_MSM_CPU_AVS) += avs.o avs_hw.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
 obj-$(CONFIG_CPU_V7) += idle-v7.o
 obj-$(CONFIG_MSM_JTAG_V7) += jtag-v7.o

@@ -67,6 +67,7 @@
 #include <mach/msm_iomap.h>
 
 #include "acpuclock.h"
+#include "avs.h"
 #include "clock.h"
 
 #define SHOT_SWITCH 4
@@ -404,6 +405,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
 	struct clkctl_acpu_speed *tgt_s, *strt_s;
 	int rc = 0;
+	int freq_index = 0;
 
 	if (reason == SETRATE_CPUFREQ)
 		mutex_lock(&drv_state.lock);
@@ -416,6 +418,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	for (tgt_s = acpu_freq_tbl; tgt_s->a11clk_khz != 0; tgt_s++) {
 		if (tgt_s->a11clk_khz == (rate / 1000))
 			break;
+		freq_index++;
 	}
 
 	if (tgt_s->a11clk_khz == 0) {
@@ -424,6 +427,16 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	}
 
 	if (reason == SETRATE_CPUFREQ) {
+#ifdef CONFIG_MSM_CPU_AVS
+		/* Notify avs before changing frequency */
+		rc = avs_adjust_freq(freq_index, 1);
+		if (rc) {
+			printk(KERN_ERR
+				"acpuclock: Unable to increase ACPU "
+				"vdd.\n");
+			goto out;
+		}
+#endif
 		/* Increase VDD if needed. */
 		if (tgt_s->vdd > strt_s->vdd) {
 			rc = acpuclk_set_vdd_level(tgt_s->vdd);
@@ -469,6 +482,14 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	/* Nothing else to do for power collapse */
 	if (reason == SETRATE_PC)
 		goto out;
+
+#ifdef CONFIG_MSM_CPU_AVS
+	/* notify avs after changing frequency */
+	rc = avs_adjust_freq(freq_index, 0);
+	if (rc)
+		printk(KERN_ERR
+			"acpuclock: Unable to drop ACPU vdd.\n");
+#endif
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
@@ -652,10 +673,26 @@ static void __init lpj_init(void)
 	}
 }
 
+#ifdef CONFIG_MSM_CPU_AVS
+static int __init acpu_avs_init(int (*set_vdd) (int), int khz)
+{
+	int i;
+	int freq_count = 0;
+	int freq_index = -1;
+
+	for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
+		freq_count++;
+		if (acpu_freq_tbl[i].a11clk_khz == khz)
+			freq_index = i;
+	}
+
+	return avs_init(set_vdd, freq_count, freq_index);
+}
+#endif
+
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	mutex_init(&drv_state.lock);
-
 	drv_state.acpu_switch_time_us = clkdata->acpu_switch_time_us;
 	drv_state.max_speed_delta_khz = clkdata->max_speed_delta_khz;
 	drv_state.vdd_switch_time_us = clkdata->vdd_switch_time_us;
@@ -671,5 +708,11 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	cpufreq_table_init();
 	cpufreq_frequency_table_get_attr(freq_table, smp_processor_id());
 #endif
-
+#ifdef CONFIG_MSM_CPU_AVS
+	if (!acpu_avs_init(drv_state.acpu_set_vdd,
+		drv_state.current_speed->a11clk_khz)) {
+		/* avs init successful. avs will handle voltage changes */
+		drv_state.acpu_set_vdd = NULL;
+	}
+#endif
 }
