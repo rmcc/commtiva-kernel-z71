@@ -954,6 +954,12 @@ int cad_volume_init(struct cad_func_tbl_type **func_tbl)
 		= CAD_DEVICE_TTY_MAX_GAIN;
 	qdsp6_volume_cache_tbl[INT_CAD_HW_DEVICE_ID_TTY_HEADSET_MIC].min_gain
 		= CAD_DEVICE_TTY_MIN_GAIN;
+	qdsp6_volume_cache_tbl[
+		INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX]
+			.max_gain = CAD_DEVICE_HEADSET_MAX_GAIN;
+	qdsp6_volume_cache_tbl[
+		INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX]
+			.min_gain = CAD_DEVICE_HEADSET_MIN_GAIN;
 
 	stream_volume_cache = 0;
 
@@ -964,7 +970,7 @@ int volume_set_max_vol_all(void)
 {
 	int i;
 
-	for (i = 0; i < CAD_HW_DEVICE_ID_MAX_NUM; i++) {
+	for (i = 0; i < INT_CAD_HW_DEVICE_ID_MAX_NUM; i++) {
 		qdsp6_volume_cache_tbl[i].valid_current_volume = 1;
 		qdsp6_volume_cache_tbl[i].current_volume =
 			qdsp6_volume_cache_tbl[i].max_gain;
