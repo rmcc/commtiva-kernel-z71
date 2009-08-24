@@ -3043,7 +3043,7 @@ static DEVICE_ATTR(composition, 0664,
 		msm_hsusb_show_compswitch, msm_hsusb_store_compswitch);
 static DEVICE_ATTR(func_enable, S_IWUSR,
 		NULL, msm_hsusb_store_func_enable);
-static DEVICE_ATTR(autoresume, S_IWUSR,
+static DEVICE_ATTR(autoresume, 0222,
 		NULL, msm_hsusb_store_autoresume);
 static DEVICE_ATTR(state, 0664, msm_hsusb_show_state, NULL);
 static DEVICE_ATTR(lpm, 0664, msm_hsusb_show_lpm, NULL);
