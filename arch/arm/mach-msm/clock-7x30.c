@@ -430,10 +430,9 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_1RATE(UART1,	0x00E0, B(5), B(4),	clk_tbl_tcxo),
 	CLK_1RATE(UART3,	0x0468, B(5), B(4),	clk_tbl_tcxo),
 
-	CLK_BASIC(EMDH,		0x0050,    0, B(11),	clk_tbl_mdh, NONE),
-	CLK_BASIC(PMDH,		0x008C,    0, B(11),	clk_tbl_mdh, NONE),
-	CLK_BASIC(MDP,		0x014C, B(9), B(11),	clk_tbl_mdp_core,
-								AXI_MDP),
+	CLK_BASIC(EMDH,	0x0050,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
+	CLK_BASIC(PMDH,	0x008C,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
+	CLK_BASIC(MDP,	0x014C, B(9), B(11),	clk_tbl_mdp_core, AXI_MDP),
 
 	CLK_MND8_P(VPE, 0x015C, 22, 15, B(9), B(11), clk_tbl_vpe,
 							AXI_VPE, NULL),
@@ -447,8 +446,8 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_MND8(SDC4,	0x00BC, 20, 13, B(9), B(11),	clk_tbl_sdc2_4,	NULL),
 	CLK_MND8(SPI,	0x02C8, 19, 12, B(9), B(11),	clk_tbl_spi,	NULL),
 	CLK_MND8(MIDI,	0x02D0, 19, 12, B(9), B(11),	clk_tbl_midi,	NULL),
-	CLK_MND8(USB_HS_SRC, USBH_NS, 23, 16, 0, B(11), clk_tbl_usb,
-							chld_usb_src),
+	CLK_MND8_P(USB_HS_SRC, USBH_NS, 23, 16, 0, B(11), clk_tbl_usb,
+					AXI_LI_ADSP_A,	chld_usb_src),
 	CLK_SLAVE(USB_HS,	USBH_NS,	B(9),	USB_HS_SRC),
 	CLK_SLAVE(USB_HS_CORE,	USBH_NS,	B(13),	USB_HS_SRC),
 	CLK_SLAVE(USB_HS2,	USBH2_NS,	B(9),	USB_HS_SRC),
@@ -508,6 +507,7 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_GLBL(GRP_2D_P,	GLBL_CLK_ENA_SC,	B(24)),
 	CLK_GLBL(GRP_3D_P,	GLBL_CLK_ENA_2_SC,	B(17)),
 	CLK_GLBL(JPEG_P,	GLBL_CLK_ENA_2_SC,	B(24)),
+	CLK_GLBL(LPA_P,		GLBL_CLK_ENA_2_SC,	B(7)),
 	CLK_GLBL(MDP_P,		GLBL_CLK_ENA_2_SC,	B(6)),
 	CLK_GLBL(MFC_P,		GLBL_CLK_ENA_2_SC,	B(26)),
 	CLK_GLBL(PMDH_P,	GLBL_CLK_ENA_2_SC,	B(4)),
@@ -523,10 +523,10 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_GLBL(USB_HS3_P,	GLBL_CLK_ENA_2_SC,	B(9)),
 	CLK_GLBL(USB_HS_P,	GLBL_CLK_ENA_SC,	B(25)),
 	CLK_GLBL(VFE_P,		GLBL_CLK_ENA_2_SC,	B(27)),
-	CLK_GLBL(LPA_P,		GLBL_CLK_ENA_2_SC,	B(7)),
 
 	/* AXI bridge clocks. */
 	CLK_BRIDGE(AXI_LI_APPS,	GLBL_CLK_ENA_SC,	B(2),	NONE),
+	CLK_BRIDGE(AXI_LI_ADSP_A, GLBL_CLK_ENA_2_SC,	B(14),	AXI_LI_APPS),
 	CLK_BRIDGE(AXI_LI_JPEG,	GLBL_CLK_ENA_2_SC,	B(19),	AXI_LI_APPS),
 	CLK_BRIDGE(AXI_LI_VFE,	GLBL_CLK_ENA_SC,	B(23),	AXI_LI_APPS),
 	CLK_BRIDGE(AXI_MDP,	GLBL_CLK_ENA_2_SC,	B(29),	AXI_LI_APPS),
@@ -875,6 +875,8 @@ static struct reg_init {
 	/* TODO: Remove next line from commercial code. */
 	{REG(PLL_ENA_REG), 0x7F, 0x7F}, /* Turn on all PLLs. */
 
+	/* Enable UMDX_P clock. Known to causes issues, so never turn off. */
+	{REG(GLBL_CLK_ENA_2_SC), B(2), B(2)},
 	{REG(0x0050), 0x3 << 17, 0x3}, /* EMDH RX div = div-4. */
 	{REG(0x008C), 0x3 << 17, 0x3}, /* PMDH RX div = div-4. */
 	/* MI2S_CODEC_RX_S src = MI2S_CODEC_RX_M. */
