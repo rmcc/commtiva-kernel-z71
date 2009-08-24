@@ -122,12 +122,6 @@ u32 get_path_id(u32 dev_id)
 	case CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX:
 		adie_path_id = DAL_ADIE_CODEC_SPKR_MONO_HDPH_MONO_RX;
 		break;
-	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX:
-		adie_path_id = DAL_ADIE_CODEC_SPKR_MONO_HDPH_STEREO_RX;
-		break;
-	case CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX:
-		adie_path_id = DAL_ADIE_CODEC_SPKR_STEREO_HDPH_STEREO_RX;
-		break;
 	case CAD_HW_DEVICE_ID_HEADSET_SPKR_STEREO_LB:
 		adie_path_id = DAL_ADIE_CODEC_AUXPGA_HDPH_STEREO_LB;
 		break;
@@ -424,8 +418,7 @@ static int is_speaker_mono(u32 dev_id)
 {
 	if ((dev_id == CAD_HW_DEVICE_ID_SPKR_PHONE_MONO) ||
 		(dev_id == CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB) ||
-		(dev_id == CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX) ||
-		(dev_id == CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_MONO_RX))
+		(dev_id == CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX))
 		return 1;
 	else
 		return 0;
@@ -436,8 +429,6 @@ static int is_speaker_stereo(u32 dev_id)
 	if ((CAD_HW_DEVICE_ID_SPKR_PHONE_STEREO == dev_id) ||
 		(CAD_HW_DEVICE_ID_SPEAKER_SPKR_STEREO_LB == dev_id) ||
 		(CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX
-				== dev_id) ||
-		(CAD_HW_DEVICE_ID_HEADSET_STEREO_PLUS_SPKR_STEREO_RX
 				== dev_id))
 		return 1;
 	else
