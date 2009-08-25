@@ -94,7 +94,7 @@ struct callback_function_node {
 };
 
 struct cad_rpc_data_struct {
-	enum cad_rpc_process_type       processor_id;
+	u32				processor_id;
 	struct mutex                    resource_mutex;
 	struct mutex                    rpc_cb_mutex;
 	u32                             initialized;
@@ -143,7 +143,7 @@ static void remote_cb_function(void *context, u32 param,
 	union adsp_audio_event		*evt = evt_buf;
 
 	if (evt->no_payload.source.domain !=
-		(u32)cad_rpc_data_type.processor_id) {
+		cad_rpc_data_type.processor_id) {
 
 		pr_err("CAD:RPC invalid domain: %d\n",
 			evt->no_payload.source.domain);
@@ -236,7 +236,7 @@ s32 cad_rpc_init(u32 processor_id)
 
 	memset(&cad_rpc_data_type, 0, sizeof(cad_rpc_data_type));
 
-	if (processor_id >= CAD_RPC_PROCESSPR_MAX)
+	if (processor_id >= ADSP_AUDIO_MAX_DOMAIN)
 		return CAD_RES_FAILURE;
 
 	cad_rpc_data_type.processor_id = processor_id;

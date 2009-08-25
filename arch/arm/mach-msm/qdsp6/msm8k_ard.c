@@ -72,6 +72,7 @@
 #include <mach/qdsp6/msm8k_cad_q6enc_drvi.h>
 #include <mach/qdsp6/msm8k_cad_write_pcm_format.h>
 #include <mach/qdsp6/msm8k_cad_write_aac_format.h>
+#include <mach/qdsp6/msm8k_adsp_audio_types.h>
 
 static struct ard_session_info_struct_type	ard_session
 							[ARD_AUDIO_MAX_CLIENT];
@@ -159,7 +160,7 @@ s32 cad_ard_init(struct cad_func_tbl_type **func_ptr_tbl)
 		goto done;
 	}
 
-	dal_rc = cad_rpc_init(CAD_RPC_ARM11);
+	dal_rc = cad_rpc_init(ADSP_AUDIO_ADDRESS_DOMAIN_APP);
 	if (dal_rc != CAD_RES_SUCCESS) {
 		pr_err("ARD RPC Interface Attach Init failed\n");
 		rc = CAD_RES_FAILURE;
