@@ -900,12 +900,12 @@ static struct msm_gpio sdc3_cfg_data[] = {
 };
 
 static struct msm_gpio sdc4_cfg_data[] = {
-	{GPIO_CFG(58, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_clk"},
-	{GPIO_CFG(59, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_cmd"},
-	{GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_3"},
-	{GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_2"},
-	{GPIO_CFG(62, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_1"},
-	{GPIO_CFG(63, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc4_dat_0"},
+	{GPIO_CFG(58, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc4_clk"},
+	{GPIO_CFG(59, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc4_cmd"},
+	{GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc4_dat_3"},
+	{GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc4_dat_2"},
+	{GPIO_CFG(62, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc4_dat_1"},
+	{GPIO_CFG(63, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc4_dat_0"},
 };
 
 static struct sdcc_gpio sdcc_cfg_data[] = {
