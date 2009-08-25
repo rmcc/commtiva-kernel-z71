@@ -88,8 +88,9 @@
 #define SPI_INPUT_FIFO                0x0200
 
 /* SPI_CONFIG fields */
-#define SPI_CONFIG_N                  0x0000001F
-#define SPI_LOOPBACK                  0x00000100
+#define SPI_CFG_INPUT_FIRST           0x00000200
+#define SPI_CFG_LOOPBACK              0x00000100
+#define SPI_CFG_N                     0x0000001F
 
 /* SPI_IO_CONTROL fields */
 #define SPI_IO_C_CLK_IDLE_HIGH        0x00000400
@@ -362,9 +363,17 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	dd->bytes_per_word = (bpw + 7) / 8;
 
 	spi_config = readl(dd->base + SPI_CONFIG);
-	if ((bpw - 1) != (spi_config & SPI_CONFIG_N))
-		writel((spi_config & ~SPI_CONFIG_N) | (bpw - 1),
-		       dd->base + SPI_CONFIG);
+	if ((bpw - 1) != (spi_config & SPI_CFG_N))
+		spi_config = (spi_config & ~SPI_CFG_N) | (bpw - 1);
+	if (dd->cur_msg->spi->mode & SPI_CPHA)
+		spi_config &= ~SPI_CFG_INPUT_FIRST;
+	else
+		spi_config |= SPI_CFG_INPUT_FIRST;
+	if (dd->cur_msg->spi->mode & SPI_LOOP)
+		spi_config |= SPI_CFG_LOOPBACK;
+	else
+		spi_config &= ~SPI_CFG_LOOPBACK;
+	writel(spi_config, dd->base + SPI_CONFIG);
 	if (dd->cur_transfer->speed_hz)
 		max_speed = dd->cur_transfer->speed_hz;
 	else
@@ -515,13 +524,15 @@ static int msm_spi_setup(struct spi_device *spi)
 	writel(spi_ioc, dd->base + SPI_IO_CONTROL);
 
 	spi_config = readl(dd->base + SPI_CONFIG);
-	if ((bool)(spi->mode & SPI_LOOP) != (bool)(spi_config & SPI_LOOPBACK)) {
-		if (spi->mode & SPI_LOOP)
-			spi_config |= SPI_LOOPBACK;
-		else
-			spi_config &= ~SPI_LOOPBACK;
-		writel(spi_config, dd->base + SPI_CONFIG);
-	}
+	if (spi->mode & SPI_LOOP)
+		spi_config |= SPI_CFG_LOOPBACK;
+	else
+		spi_config &= ~SPI_CFG_LOOPBACK;
+	if (spi->mode & SPI_CPHA)
+		spi_config &= ~SPI_CFG_INPUT_FIRST;
+	else
+		spi_config |= SPI_CFG_INPUT_FIRST;
+	writel(spi_config, dd->base + SPI_CONFIG);
 
 err_setup_exit:
 	return rc;
