@@ -84,6 +84,7 @@
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
 #include <mach/qdsp5v2/snddev_icodec.h>
+#include <mach/msm_ts.h>
 
 #include <asm/mach/mmc.h>
 #include <mach/vreg.h>
@@ -1533,6 +1534,17 @@ static struct platform_device msm_device_pmic_leds = {
 	.id = -1,
 };
 
+static struct msm_ts_platform_data msm_ts_data = {
+	.min_x          = 296,
+	.max_x          = 3800,
+	.min_y          = 296,
+	.max_y          = 3800,
+	.min_press      = 0,
+	.max_press      = 256,
+	.inv_x          = 4096,
+	.inv_y          = 4096,
+};
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
@@ -1577,6 +1589,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_uart2,
 #endif
 	&msm_device_pmic_leds,
+	&msm_device_tssc,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -1991,6 +2004,7 @@ static void __init msm7x30_init(void)
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	msm7x30_init_uart2();
 #endif
+	msm_device_tssc.dev.platform_data = &msm_ts_data;
 }
 
 static unsigned pmem_sf_size = MSM_PMEM_SF_SIZE;
