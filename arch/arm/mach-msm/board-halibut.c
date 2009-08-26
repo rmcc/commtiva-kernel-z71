@@ -1269,25 +1269,6 @@ static void __init msm_device_i2c_init(void)
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
 
-static unsigned msm_uart_csr_code[] = {
-	0x00,		/* 	300 bits per second	*/
-	0x11,		/* 	600 bits per second	*/
-	0x22,		/* 	1200 bits per second	*/
-	0x33,		/* 	2400 bits per second	*/
-	0x44,		/* 	4800 bits per second	*/
-	0x55,		/* 	9600 bits per second	*/
-	0x66,		/* 	14.4K bits per second	*/
-	0x77,		/* 	19.2K bits per second	*/
-	0x88,		/* 	28.8K bits per second	*/
-	0x99,		/* 	38.4K bits per second	*/
-	0xAA,		/* 	57.6K bits per second	*/
-	0xCC,		/* 	115.2K bits per second	*/
-};
-
-static struct msm_serial_platform_data msm_serial_pdata = {
-	.uart_csr_code = msm_uart_csr_code,
-};
-
 static void __init halibut_init(void)
 {
 	if (socinfo_init() < 0)
@@ -1306,7 +1287,6 @@ static void __init halibut_init(void)
 	    && SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2)
 		halibut_clock_data.max_axi_khz = 160000;
 
-	msm_device_uart3.dev.platform_data = &msm_serial_pdata;
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
 			      &msm_device_uart3.dev, 1);

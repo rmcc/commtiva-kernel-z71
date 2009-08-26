@@ -29,7 +29,6 @@
 
 #include <mach/system.h>
 #include <mach/fiq.h>
-#include <mach/board.h>
 
 #include "msm_serial.h"
 
@@ -43,7 +42,6 @@ static struct {
 	int		irq;
 	struct device	*clk_device;
 	int		signal_irq;
-	unsigned int	*uart_csr_code;
 } init_data;
 
 static inline void msm_write(unsigned int val, unsigned int off)
@@ -58,8 +56,6 @@ static inline unsigned int msm_read(unsigned int off)
 
 static void debug_port_init(void)
 {
-	unsigned int baud = init_data.uart_csr_code[UART_BAUD_115200];
-
 	/* reset everything */
 	msm_write(UART_CR_CMD_RESET_RX, UART_CR);
 	msm_write(UART_CR_CMD_RESET_TX, UART_CR);
@@ -74,7 +70,7 @@ static void debug_port_init(void)
 	msm_write(0x7D, UART_DREG);
 	msm_write(0x1C, UART_MNDREG);
 
-	msm_write(baud, UART_CSR);
+	msm_write(UART_CSR_115200, UART_CSR);
 
 	/* rx interrupt on every character -- keep it simple */
 	msm_write(0, UART_RFWR);
@@ -347,10 +343,6 @@ void msm_serial_debug_init(unsigned int base, int irq,
 {
 	int ret;
 	void *port;
-	struct msm_serial_platform_data *pdata = clk_device.platform_data;
-
-	if (!pdata)
-		return;
 
 	debug_clk = clk_get(clk_device, "uart_clk");
 	if (debug_clk)
@@ -364,7 +356,6 @@ void msm_serial_debug_init(unsigned int base, int irq,
 	init_data.irq = irq;
 	init_data.clk_device = clk_device;
 	init_data.signal_irq = signal_irq;
-	init_data.uart_csr_code = pdata->uart_csr_code;
 	debug_port_base = (unsigned int) port;
 	debug_signal_irq = signal_irq;
 	debug_port_init();
