@@ -102,9 +102,6 @@ int marimba_ssbi_write(struct marimba *marimba, u16 reg , u8 *value, int len)
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret >= 0)
-		ret = 0;
-
 	return ret;
 }
 EXPORT_SYMBOL(marimba_ssbi_write);
@@ -137,9 +134,6 @@ int marimba_ssbi_read(struct marimba *marimba, u16 reg, u8 *value, int len)
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret >= 0)
-		ret = 0;
-
 	return ret;
 }
 EXPORT_SYMBOL(marimba_ssbi_read);
@@ -152,7 +146,7 @@ EXPORT_SYMBOL(marimba_ssbi_read);
  * @param num_bytes: n bytes to write
  * @param mask: bit mask corresponding to the registers
  *
- * @returns result of the operation. 0 is success.
+ * @returns result of the operation.
  */
 int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 						unsigned num_bytes, u8 mask)
@@ -193,11 +187,6 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret != 1)
-		return -EIO;
-	else
-		ret = 0;
-
 	return ret;
 }
 EXPORT_SYMBOL(marimba_write_bit_mask);
@@ -209,7 +198,7 @@ EXPORT_SYMBOL(marimba_write_bit_mask);
  * @param value: buffer values to be written
  * @param num_bytes: n bytes to write
  *
- * @returns result of the operation. 0 is success.
+ * @returns result of the operation.
  */
 int marimba_write(struct marimba *marimba, u8 reg, u8 *value,
 							unsigned num_bytes)
@@ -226,7 +215,7 @@ EXPORT_SYMBOL(marimba_write);
  * @param num_bytes: n bytes to be read.
  * @param mask: bit mask concerning its register
  *
- * @returns result of the operation. 0 is success.
+ * @returns result of the operation.
 */
 int marimba_read_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 						unsigned num_bytes, u8 mask)
@@ -267,11 +256,6 @@ int marimba_read_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 
 	mutex_unlock(&marimba->xfer_lock);
 
-	if (ret != 2)
-		return -EIO;
-	else
-		ret = 0;
-
 	return ret;
 }
 EXPORT_SYMBOL(marimba_read_bit_mask);
@@ -284,7 +268,7 @@ EXPORT_SYMBOL(marimba_read_bit_mask);
  * @param num_bytes: n bytes to read.
  * @param mask: bit mask concerning its register
  *
- * @returns result of the operation. 0 is success.
+ * @returns result of the operation.
 */
 int marimba_read(struct marimba *marimba, u8 reg, u8 *value, unsigned num_bytes)
 {
