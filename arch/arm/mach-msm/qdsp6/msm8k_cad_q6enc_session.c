@@ -374,8 +374,10 @@ s32 cad_q6enc_session_ioctl(struct q6_enc_session_data *self, u32 cmd,
 		if ((self->session_state != Q6_ENC_STATE_INIT) ||
 			(self->free_nodes == NULL)) {
 
-			pr_err("CAD:Q6ENC ===> can't start in wrong state!, "
-				"state: %d\n", self->session_state);
+			if (self->session_state != Q6_ENC_STATE_VOICE)
+				pr_err("CAD:Q6ENC ===> can't start in wrong "
+					"state!,  state: %d\n",
+					self->session_state);
 			break;
 		}
 		/* start to push the read buffers */
@@ -392,7 +394,7 @@ s32 cad_q6enc_session_ioctl(struct q6_enc_session_data *self, u32 cmd,
 		if (((struct cad_stream_info_struct_type *)cmd_buf)->app_type
 			== CAD_STREAM_APP_VOICE) {
 
-			pr_err("ignore stream info for voice call\n");
+			D("ignore stream info for voice call\n");
 			self->session_state = Q6_ENC_STATE_VOICE;
 			break;
 		}
