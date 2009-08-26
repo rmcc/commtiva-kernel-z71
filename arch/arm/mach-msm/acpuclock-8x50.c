@@ -325,7 +325,8 @@ static void config_pll(struct clkctl_acpu_speed *s)
 
 	if (s->pll == ACPU_PLL_3)
 		scpll_set_freq(s->sc_l_value, HOP_SWITCH);
-	else {
+	/* Configure the PLL divider mux if we plan to use it. */
+	else if (s->sc_core_src_sel_mask == 0) {
 		/* get the current clock source selection */
 		regval = readl(SPSS_CLK_SEL_ADDR) & 0x1;
 
