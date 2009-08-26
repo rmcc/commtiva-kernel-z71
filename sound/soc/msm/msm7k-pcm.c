@@ -403,7 +403,9 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	 * when decoder is starved so no race
 	 * condition concern
 	 */
-	rc = wait_event_interruptible(the_locks.eos_wait, prtd->eos_ack);
+	if (prtd->enabled)
+		rc = wait_event_interruptible(the_locks.eos_wait,
+					prtd->eos_ack);
 
 	alsa_audio_disable(prtd);
 	audmgr_close(&prtd->audmgr);
