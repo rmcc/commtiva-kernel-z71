@@ -1342,13 +1342,14 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 			pr_debug("%s: append reserved byte %x\n",
 				__func__, audio->rsv_byte);
 			*cpy_ptr = audio->rsv_byte;
-			xfer = (count > (frame->size - 1)) ?
-				frame->size - 1 : count;
+			xfer = (count > ((frame->size - mfield_size) - 1)) ?
+				(frame->size - mfield_size) - 1 : count;
 			cpy_ptr++;
 			dsize += 1;
 			audio->reserved = 0;
 		} else
-			xfer = (count > frame->size) ? frame->size : count;
+			xfer = (count > (frame->size - mfield_size)) ?
+				(frame->size - mfield_size) : count;
 
 		if (copy_from_user(cpy_ptr, buf, xfer)) {
 			rc = -EFAULT;
