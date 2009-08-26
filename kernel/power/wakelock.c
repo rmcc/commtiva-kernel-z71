@@ -222,7 +222,7 @@ static void expire_wake_lock(struct wake_lock *lock)
 		pr_info("expired wake lock %s\n", lock->name);
 }
 
-/* the caller must hold the list_lock before calling this function */
+/* Caller must acquire the list_lock spinlock */
 static void print_active_locks(int type)
 {
 	struct wake_lock *lock;
