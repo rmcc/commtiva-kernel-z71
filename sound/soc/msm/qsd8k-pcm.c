@@ -364,16 +364,20 @@ static int qsd_pcm_playback_close(struct snd_pcm_substream *substream)
 	struct qsd_audio *prtd = runtime->private_data;
 	int ret = 0;
 
-	mutex_lock(&the_locks.lock);
-	cad_ioctl(prtd->cad_w_handle,
+	if (prtd->enabled) {
+		mutex_lock(&the_locks.lock);
+		cad_ioctl(prtd->cad_w_handle,
 			CAD_IOCTL_CMD_STREAM_END_OF_STREAM,
 			NULL, 0);
-	mutex_unlock(&the_locks.lock);
+		mutex_unlock(&the_locks.lock);
 
-	ret = wait_event_interruptible(the_locks.eos_wait, prtd->eos_ack);
+		ret = wait_event_interruptible(the_locks.eos_wait,
+					prtd->eos_ack);
 
-	if (!prtd->eos_ack)
-		pr_err("EOS Failed\n");
+		if (!prtd->eos_ack)
+			pr_err("EOS Failed\n");
+
+	}
 
 	prtd->eos_ack = 0;
 	mutex_lock(&the_locks.lock);
