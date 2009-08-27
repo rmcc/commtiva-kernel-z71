@@ -147,6 +147,7 @@ static unsigned long        vreg_sts, gpio_sts;
 static struct vreg         *vreg_mmc;
 static int                  gp6_enabled;
 
+static char __iomem        *cpld_base;
 static int                  cpld_version;
 static bool                 wvga_present;
 static bool                 wxga_present;
@@ -646,13 +647,9 @@ cpld_base_exit:
 static int comet_init_s1r72v05(void)
 {
 	int rc;
-	char __iomem *cpld_base;
 	u16 per_enable;
 	u8 irq_gpio = S1R72V05_IRQ_GPIO;
 
-	cpld_base = comet_cpld_base();
-	if (!cpld_base)
-		return -ENOMEM;
 	per_enable = readw(cpld_base + COMET_CPLD_PER_ENABLE);
 	per_enable |= COMET_CPLD_PER_ENABLE_HDD | COMET_CPLD_PER_ENABLE_IDE;
 	writew(per_enable,
@@ -800,13 +797,8 @@ static unsigned bt_config_power_off[] = {
 static int bluetooth_power(int on)
 {
 	int pin, rc;
-	char __iomem *cpld_base;
 
 	printk(KERN_DEBUG "%s\n", __func__);
-
-	cpld_base = comet_cpld_base();
-	if (!cpld_base)
-		return -ENOMEM;
 
 	if (on) {
 		for (pin = 0; pin < ARRAY_SIZE(bt_config_power_on); pin++) {
@@ -1037,17 +1029,8 @@ err_gpioconfig:
 /* use CPLD register to toggle keyboard external reset pin */
 static void kbd_hwreset(int kbd_mclrpin)
 {
-	char __iomem *cpld_base;
 	int per_en;
 	int ext_per_en;
-
-	cpld_base = comet_cpld_base();
-
-	if (!cpld_base)
-		return;
-
-	cpld_version = (readw(cpld_base + COMET_CPLD_VERSION)
-			& COMET_CPLD_VERSION_MAJOR) >> 8;
 
 	if (cpld_version >= 2) {
 		/* COMET2 */
@@ -1110,21 +1093,13 @@ static void optnav_gpio_release(void)
 			       ARRAY_SIZE(optnav_config_data));
 }
 
-static char __iomem *optnav_cpld_base;
-
 static int optnav_enable(void)
 {
 	u16 save;
 
-	if (!optnav_cpld_base) {
-		optnav_cpld_base = comet_cpld_base();
-		if (!optnav_cpld_base)
-			return -ENOMEM;
-	}
-
-	save = readw(optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	save = readw(cpld_base + COMET_CPLD_PER_ENABLE);
 	writew(save | COMET_CPLD_PER_ENABLE_OFN,
-	       optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	       cpld_base + COMET_CPLD_PER_ENABLE);
 	return 0;
 }
 
@@ -1132,9 +1107,9 @@ static void optnav_disable(void)
 {
 	u16 save;
 
-	save = readw(optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	save = readw(cpld_base + COMET_CPLD_PER_ENABLE);
 	writew(save & ~COMET_CPLD_PER_ENABLE_OFN,
-	       optnav_cpld_base + COMET_CPLD_PER_ENABLE);
+	       cpld_base + COMET_CPLD_PER_ENABLE);
 }
 
 static struct ofn_atlab_platform_data optnav_data = {
@@ -1420,7 +1395,6 @@ static void __init msm_device_i2c_init(void)
 
 static void __init comet_init(void)
 {
-	char __iomem *cpld_base;
 	int           per_enable;
 	int           ext_per_enable;
 
