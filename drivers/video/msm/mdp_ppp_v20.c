@@ -85,6 +85,146 @@ static long long mdp_do_div(long long num, long long den)
 	return num;
 }
 
+struct mdp_table_entry mdp_gaussian_blur_table[] = {
+	/* max variance */
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50280, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50284, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50288, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5028c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50290, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50294, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50298, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5029c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502a0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502a4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502a8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502ac, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502b0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502b4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502b8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502bc, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502c0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502c4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502c8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502cc, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502d0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502d4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502d8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502dc, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502e0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502e4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502e8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502ec, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502f0, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502f4, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502f8, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x502fc, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50300, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50304, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50308, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5030c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50310, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50314, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50318, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5031c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50320, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50324, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50328, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5032c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50330, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50334, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50338, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5033c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50340, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50344, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50348, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5034c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50350, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50354, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50358, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5035c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50360, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50364, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50368, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5036c, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50370, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50374, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x50378, 0x20000080 },
+	{ 0x5fffc, 0x20000080 },
+	{ 0x5037c, 0x20000080 },
+};
+
+static void load_scale_table(
+	struct mdp_table_entry *table, int len)
+{
+	int i;
+	for (i = 0; i < len; i++)
+		MDP_OUTP(MDP_BASE + table[i].reg, table[i].val);
+}
+
 static void mdp_load_pr_upscale_table(void)
 {
 	MDP_OUTP(MDP_BASE + 0x5fffc, 0x0);
@@ -2060,6 +2200,7 @@ void mdp_set_scale(MDPIBUF *iBuf,
 	uint32 lines_dup = 0;
 	uint32 lines_dup_bg = 0;
 	uint32 dummy;
+	uint32 mdp_blur = 0;
 
 	if (iBuf->mdpImg.mdpOp & MDPOP_ASCALE) {
 		if (iBuf->mdpImg.mdpOp & MDPOP_ROT90) {
@@ -2070,8 +2211,11 @@ void mdp_set_scale(MDPIBUF *iBuf,
 			dst_roi_height_scale = dst_roi_height;
 		}
 
+		mdp_blur = iBuf->mdpImg.mdpOp & MDPOP_BLUR;
+
 		if ((dst_roi_width_scale != iBuf->roi.width) ||
-		    (dst_roi_height_scale != iBuf->roi.height)) {
+		    (dst_roi_height_scale != iBuf->roi.height) ||
+			mdp_blur) {
 			*pppop_reg_ptr |=
 			    (PPP_OP_SCALE_Y_ON | PPP_OP_SCALE_X_ON);
 
@@ -2129,8 +2273,17 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					mdp_curr_up_scale_xy = MDP_BC_SCALE_UP;
 				}
 			}
+
+			if (mdp_blur) {
+				load_scale_table(mdp_gaussian_blur_table,
+					ARRAY_SIZE(mdp_gaussian_blur_table));
+				mdp_curr_down_scale_x = MDP_SCALE_BLUR;
+				mdp_curr_down_scale_y = MDP_SCALE_BLUR;
+			}
+
 			/* 0.2 < x <= 1 scaling factor */
-			if (dst_roi_width_scale <= iBuf->roi.width) {
+			if ((dst_roi_width_scale <= iBuf->roi.width) &&
+				!mdp_blur) {
 				if (((dst_roi_width_scale * 10) /
 				     iBuf->roi.width) > 8) {
 					if ((use_pr)
@@ -2206,7 +2359,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 				}
 			}
 			/* 0.2 < y <= 1 scaling factor */
-			if (dst_roi_height_scale <= iBuf->roi.height) {
+			if ((dst_roi_height_scale <= iBuf->roi.height) &&
+				!mdp_blur) {
 				if (((dst_roi_height_scale * 10) /
 				     iBuf->roi.height) > 8) {
 					if ((use_pr)
