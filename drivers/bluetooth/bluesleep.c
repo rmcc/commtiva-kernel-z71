@@ -162,9 +162,7 @@ void bluesleep_sleep_wakeup(void)
 		BT_DBG("waking up...");
 		wake_lock(&bsi->wake_lock);
 		/* Start the timer */
-		tx_timer.expires =
-			 jiffies + (TX_TIMER_INTERVAL * HZ);
-		add_timer(&tx_timer);
+		mod_timer(&tx_timer, jiffies + (TX_TIMER_INTERVAL * HZ));
 		gpio_set_value(bsi->ext_wake, 0);
 		clear_bit(BT_ASLEEP, &flags);
 		/*Activating UART */
@@ -195,9 +193,8 @@ static void bluesleep_sleep_work(struct work_struct *work)
 			 */
 			wake_lock_timeout(&bsi->wake_lock, HZ / 2);
 		} else {
-			tx_timer.expires = jiffies +
-			    (TX_TIMER_INTERVAL * HZ);
-			add_timer(&tx_timer);
+
+		  mod_timer(&tx_timer, jiffies + (TX_TIMER_INTERVAL * HZ));
 			return;
 		}
 	} else {
@@ -304,8 +301,7 @@ static void bluesleep_tx_timer_expire(unsigned long data)
 		bluesleep_tx_idle();
 	} else {
 		BT_DBG("Tx data during last period");
-		tx_timer.expires = jiffies + (TX_TIMER_INTERVAL*HZ);
-		add_timer(&tx_timer);
+		mod_timer(&tx_timer, jiffies + (TX_TIMER_INTERVAL*HZ));
 	}
 
 	/* clear the incoming data flag */
@@ -354,8 +350,8 @@ static int bluesleep_start(void)
 	}
 
 	/* start the timer */
-	tx_timer.expires = jiffies + (TX_TIMER_INTERVAL*HZ);
-	add_timer(&tx_timer);
+
+	mod_timer(&tx_timer, jiffies + (TX_TIMER_INTERVAL*HZ));
 
 	/* assert BT_WAKE */
 	gpio_set_value(bsi->ext_wake, 0);
