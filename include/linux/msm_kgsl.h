@@ -100,6 +100,10 @@ struct kgsl_shadowprop {
 	unsigned int flags; /* contains KGSL_FLAGS_ values */
 };
 
+struct kgsl_platform_data {
+	unsigned int max_axi_freq;
+};
+
 /* ioctls */
 #define KGSL_IOC_TYPE 0x09
 

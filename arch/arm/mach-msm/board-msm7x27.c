@@ -58,6 +58,7 @@
 #include <linux/usb/android.h>
 #endif
 #include "pm.h"
+#include <linux/msm_kgsl.h>
 
 #define MSM_PMEM_MDP_SIZE	0x1800000
 #define MSM_PMEM_ADSP_SIZE	0x99A000
@@ -799,11 +800,16 @@ static struct resource kgsl_resources[] = {
 	},
 };
 
+static struct kgsl_platform_data kgsl_pdata;
+
 static struct platform_device msm_device_kgsl = {
 	.name = "kgsl",
 	.id = -1,
 	.num_resources = ARRAY_SIZE(kgsl_resources),
 	.resource = kgsl_resources,
+	.dev = {
+		.platform_data = &kgsl_pdata,
+	},
 };
 
 static struct platform_device msm_device_pmic_leds = {
@@ -1434,6 +1440,7 @@ static void __init msm7x27_init(void)
 		msm7x27_clock_data.max_axi_khz = 200000;
 
 	msm_acpu_clock_init(&msm7x27_clock_data);
+	kgsl_pdata.max_axi_freq = msm7x27_clock_data.max_axi_khz;
 
 	msm_hsusb_pdata.max_axi_khz = msm7x27_clock_data.max_axi_khz;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
