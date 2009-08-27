@@ -69,6 +69,7 @@
 #include <mach/qdsp6/msm8k_ard.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
 #include <mach/qdsp6/msm8k_cad_write_amr_format.h>
+#include <mach/qdsp6/msm8k_cad_volume.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_voice: " fmt, ##args)
@@ -83,6 +84,7 @@
 struct voice {
 	u32 cad_r_handle;
 	u32 cad_w_handle;
+	u32 volume;
 };
 
 
@@ -230,9 +232,16 @@ static int msm8k_voice_ioctl(struct inode *inode, struct file *f,
 	int rc;
 	struct voice *voice = f->private_data;
 	struct cad_stream_info_struct_type cad_stream_info;
+	struct cad_flt_cfg_strm_vol cad_strm_volume;
+	struct cad_flt_cfg_strm_mute cad_strm_mute;
+	struct msm_mute_info mi;
+	struct cad_filter_struct flt;
+	u32 percentage;
+
 	D("%s\n", __func__);
 
 	memset(&cad_stream_info, 0, sizeof(struct cad_stream_info_struct_type));
+	memset(&flt, 0, sizeof(struct cad_filter_struct));
 
 	switch (cmd) {
 	case AUDIO_START:
@@ -253,6 +262,51 @@ static int msm8k_voice_ioctl(struct inode *inode, struct file *f,
 					" failed\n");
 
 		break;
+	case AUDIO_SET_VOLUME:
+		rc = copy_from_user(&percentage, (void *)arg, sizeof(u32));
+		voice->volume = qdsp6_stream_volume_mapping(percentage);
+
+		memset(&cad_strm_volume, 0,
+				sizeof(struct cad_flt_cfg_strm_vol));
+		cad_strm_volume.volume = voice->volume;
+		flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+		flt.format_block = &cad_strm_volume;
+		flt.cmd = CAD_FILTER_CONFIG_STREAM_VOLUME;
+		flt.format_block_len =
+			sizeof(struct cad_flt_cfg_strm_vol);
+
+		rc = cad_ioctl(voice->cad_w_handle,
+			CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
+			&flt,
+			sizeof(struct cad_filter_struct));
+		if (rc) {
+			pr_err("cad_ioctl() set volume failed\n");
+			break;
+		}
+		break;
+	case AUDIO_SET_MUTE:
+		rc = copy_from_user(&mi, (void *)arg,
+				sizeof(struct msm_mute_info));
+
+		memset(&cad_strm_mute, 0,
+				sizeof(struct cad_flt_cfg_strm_mute));
+		cad_strm_mute.mute = mi.mute;
+		flt.filter_type = CAD_DEVICE_FILTER_TYPE_VOL;
+		flt.format_block = &cad_strm_mute;
+		flt.cmd = CAD_FILTER_CONFIG_STREAM_MUTE;
+		flt.format_block_len =
+			sizeof(struct cad_flt_cfg_strm_mute);
+
+		rc = cad_ioctl(voice->cad_w_handle,
+			CAD_IOCTL_CMD_SET_STREAM_FILTER_CONFIG,
+			&flt,
+			sizeof(struct cad_filter_struct));
+		if (rc) {
+			pr_err("cad_ioctl() set mute failed\n");
+			break;
+		}
+		break;
+
 	default:
 		rc = -EINVAL;
 	}

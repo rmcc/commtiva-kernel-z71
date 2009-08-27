@@ -104,6 +104,7 @@ struct cad_device_volume_cache {
 	and the array index is device ID.
 */
 
+s32 qdsp6_stream_volume_mapping(s32 percentage);
 s32 qdsp6_volume_mapping(u32 deviceId, s32 percentage);
 
 
