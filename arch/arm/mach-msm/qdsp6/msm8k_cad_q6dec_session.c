@@ -466,7 +466,9 @@ s32 cad_q6dec_session_ioctl(struct q6dec_session_data *self,
 		break;
 	case CAD_IOCTL_CMD_STREAM_START:
 		if (self->session_state != Q6_DEC_INIT) {
-			pr_err("Cannot start, decoder is in wrong state\n");
+			if (self->session_state != Q6_DEC_VOICE)
+				pr_err("Cannot start, decoder is in "
+					"wrong state\n");
 		} else {
 			self->session_state = Q6_DEC_READY;
 			self->need_flush = 1;
