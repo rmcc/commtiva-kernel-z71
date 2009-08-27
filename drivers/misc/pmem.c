@@ -23,6 +23,7 @@
 #include <linux/debugfs.h>
 #include <linux/android_pmem.h>
 #include <linux/mempolicy.h>
+#include <linux/kobject.h>
 #include <asm/io.h>
 #include <asm/uaccess.h>
 #include <asm/cacheflush.h>
@@ -130,10 +131,6 @@ struct pmem_info {
 	unsigned long garbage_pfn;
 	/* index of the garbage page in the pmem space */
 	int garbage_index;
-	/* the buddy allocator bitmap for the region indicating which entries
-	 * are allocated and which are free.
-	 */
-	struct pmem_bits *buddy_bitmap;
 
 	enum pmem_allocator_type allocator_type;
 
@@ -145,24 +142,44 @@ struct pmem_info {
 	unsigned long (*start_addr)(int, struct pmem_data *);
 	int (*kapi_free_index)(const int32_t, int);
 
-	unsigned int quantum; /* actual size, e.g.: (4 << 10) is 4K */
-
-	unsigned int bitmap_free; /* # of zero bits in bitmap (# of quanta) */
-	uint32_t *bitmap;
-	int32_t bitmap_allocs;
-	struct {
-		short bit;
-		unsigned short quanta;
-	} *bitm_alloc;
+	/* actual size of memory element, e.g.: (4 << 10) is 4K */
+	unsigned int quantum;
 
 	/* indicates maps of this region should be cached, if a mix of
 	 * cached and uncached is desired, set this and open the device with
 	 * O_SYNC to get an uncached region */
 	unsigned cached;
 	unsigned buffered;
-	/* in all_or_nothing allocator mode the first mapper gets the whole
-	 * space and sets this flag */
-	unsigned allocated;
+	union {
+		struct {
+			/* in all_or_nothing allocator mode the first mapper
+			 * gets the whole space and sets this flag */
+			unsigned allocated;
+		} all_or_nothing;
+
+		struct {
+			/* the buddy allocator bitmap for the region
+			 * indicating which entries are allocated and which
+			 * are free.
+			 */
+
+			struct pmem_bits *buddy_bitmap;
+		} buddy_bestfit;
+
+		struct {
+			unsigned int bitmap_free; /* # of zero bits/quanta */
+			uint32_t *bitmap;
+			int32_t bitmap_allocs;
+			struct {
+				short bit;
+				unsigned short quanta;
+			} *bitm_alloc;
+		} bitmap;
+	} allocator;
+
+	int id;
+	struct kobject kobj;
+
 	/* for debugging, creates a list of pmem file structs, the
 	 * data_list_mutex should be taken before pmem_data->sem if both are
 	 * needed */
@@ -178,6 +195,7 @@ struct pmem_info {
 	long (*ioctl)(struct file *, unsigned int, unsigned long);
 	int (*release)(struct inode *, struct file *);
 };
+#define to_pmem_info_id(a) (container_of(a, struct pmem_info, kobj)->id)
 
 static struct pmem_info pmem[PMEM_MAX_DEVICES];
 static int id_count;
@@ -193,9 +211,13 @@ static struct {
 		-1 },
 };
 
+#define PMEM_SYSFS_DIR_NAME "pmem_regions" /* under /sys/kernel/ */
+static struct kset *pmem_kset;
+
 #define PMEM_IS_FREE_BUDDY(id, index) \
-	(!(pmem[id].buddy_bitmap[index].allocated))
-#define PMEM_BUDDY_ORDER(id, index) (pmem[id].buddy_bitmap[index].order)
+	(!(pmem[id].allocator.buddy_bestfit.buddy_bitmap[index].allocated))
+#define PMEM_BUDDY_ORDER(id, index) \
+	(pmem[id].allocator.buddy_bestfit.buddy_bitmap[index].order)
 #define PMEM_BUDDY_INDEX(id, index) \
 	(index ^ (1 << PMEM_BUDDY_ORDER(id, index)))
 #define PMEM_BUDDY_NEXT_INDEX(id, index) \
@@ -227,6 +249,253 @@ struct file_operations pmem_fops = {
 	.mmap = pmem_mmap,
 	.open = pmem_open,
 	.unlocked_ioctl = pmem_ioctl,
+};
+
+#define PMEM_ATTR(_name, _mode, _show, _store) {            \
+	.attr = {.name = __stringify(_name), .mode = _mode }, \
+	.show = _show,                                        \
+	.store = _store,                                      \
+}
+
+struct pmem_attr {
+	struct attribute attr;
+	ssize_t(*show) (const int id, char * const);
+	ssize_t(*store) (const int id, const char * const, const size_t count);
+};
+#define to_pmem_attr(a) container_of(a, struct pmem_attr, attr)
+
+#define RW_PMEM_ATTR(name)  \
+static struct pmem_attr pmem_attr_## name = \
+ PMEM_ATTR(name, S_IRUGO | S_IWUSR, show_pmem_## name, store_pmem_## name)
+
+#define RO_PMEM_ATTR(name)  \
+static struct pmem_attr pmem_attr_## name = \
+ PMEM_ATTR(name, S_IRUGO, show_pmem_## name, NULL)
+
+#define WO_PMEM_ATTR(name)  \
+static struct pmem_attr pmem_attr_## name = \
+ PMEM_ATTR(name, S_IWUSR, NULL, store_pmem_## name)
+
+static ssize_t show_pmem(struct kobject *kobj,
+			struct attribute *attr,
+			char *buf)
+{
+	struct pmem_attr *a = to_pmem_attr(attr);
+	return a->show ? a->show(to_pmem_info_id(kobj), buf) : -EIO;
+}
+
+static ssize_t store_pmem(struct kobject *kobj, struct attribute *attr,
+		     const char *buf, size_t count)
+{
+	struct pmem_attr *a = to_pmem_attr(attr);
+	return a->store ? a->store(to_pmem_info_id(kobj), buf, count) : -EIO;
+}
+
+static struct sysfs_ops pmem_ops = {
+	.show = show_pmem,
+	.store = store_pmem,
+};
+
+static ssize_t show_pmem_base(int id, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%lu(%#lx)\n",
+		pmem[id].base, pmem[id].base);
+}
+RO_PMEM_ATTR(base);
+
+static ssize_t show_pmem_size(int id, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%lu(%#lx)\n",
+		pmem[id].size, pmem[id].size);
+}
+RO_PMEM_ATTR(size);
+
+static ssize_t show_pmem_allocator_type(int id, char *buf)
+{
+	switch (pmem[id].allocator_type) {
+	case  PMEM_ALLOCATORTYPE_ALLORNOTHING:
+		return scnprintf(buf, PAGE_SIZE, "%s\n", "All or Nothing");
+	case  PMEM_ALLOCATORTYPE_BUDDYBESTFIT:
+		return scnprintf(buf, PAGE_SIZE, "%s\n", "Buddy Bestfit");
+	case  PMEM_ALLOCATORTYPE_BITMAP:
+		return scnprintf(buf, PAGE_SIZE, "%s\n", "Bitmap");
+	default:
+		return scnprintf(buf, PAGE_SIZE,
+			"??? Invalid allocator type (%d) for this region! "
+			"Something isn't right.\n",
+			pmem[id].allocator_type);
+	}
+}
+RO_PMEM_ATTR(allocator_type);
+
+static ssize_t show_pmem_mapped_regions(int id, char *buf)
+{
+	struct list_head *elt;
+	int ret;
+
+	ret = scnprintf(buf, PAGE_SIZE,
+		      "pid #: mapped regions (offset, len) (offset,len)...\n");
+
+	mutex_lock(&pmem[id].data_list_mutex);
+	list_for_each(elt, &pmem[id].data_list) {
+		struct pmem_data *data =
+			list_entry(elt, struct pmem_data, list);
+		struct list_head *elt2;
+
+		down_read(&data->sem);
+		ret += scnprintf(buf + ret, PAGE_SIZE - ret, "pid %u:",
+				data->pid);
+		list_for_each(elt2, &data->region_list) {
+			struct pmem_region_node *region_node = list_entry(elt2,
+					struct pmem_region_node,
+					list);
+			ret += scnprintf(buf + ret, PAGE_SIZE - ret,
+					"(%lx,%lx) ",
+					region_node->region.offset,
+					region_node->region.len);
+		}
+		up_read(&data->sem);
+		ret += scnprintf(buf + ret, PAGE_SIZE - ret, "\n");
+	}
+	mutex_unlock(&pmem[id].data_list_mutex);
+	return ret;
+}
+RO_PMEM_ATTR(mapped_regions);
+
+#define PMEM_COMMON_SYSFS_ATTRS \
+	&pmem_attr_base.attr, \
+	&pmem_attr_size.attr, \
+	&pmem_attr_allocator_type.attr, \
+	&pmem_attr_mapped_regions.attr
+
+
+static ssize_t show_pmem_allocated(int id, char *buf)
+{
+	ssize_t ret;
+
+	mutex_lock(&pmem[id].arena_mutex);
+	ret = scnprintf(buf, PAGE_SIZE, "%s\n",
+		pmem[id].allocator.all_or_nothing.allocated ?
+		"is allocated" : "is NOT allocated");
+	mutex_unlock(&pmem[id].arena_mutex);
+	return ret;
+}
+RO_PMEM_ATTR(allocated);
+
+static struct attribute *pmem_allornothing_attrs[] = {
+	PMEM_COMMON_SYSFS_ATTRS,
+
+	&pmem_attr_allocated.attr,
+
+	NULL
+};
+
+static struct kobj_type pmem_allornothing_ktype = {
+	.sysfs_ops = &pmem_ops,
+	.default_attrs = pmem_allornothing_attrs,
+};
+
+static ssize_t show_pmem_total_entries(int id, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%lu\n", pmem[id].num_entries);
+}
+RO_PMEM_ATTR(total_entries);
+
+static ssize_t show_pmem_quantum_size(int id, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u (%#x)\n",
+		pmem[id].quantum, pmem[id].quantum);
+}
+RO_PMEM_ATTR(quantum_size);
+
+static ssize_t show_pmem_buddy_bitmap_dump(int id, char *buf)
+{
+	int ret, i;
+
+	mutex_lock(&pmem[id].data_list_mutex);
+	ret = scnprintf(buf, PAGE_SIZE, "index\torder\tlength\tallocated\n");
+
+	for (i = 0; i < pmem[id].num_entries && (PAGE_SIZE - ret);
+			i = PMEM_BUDDY_NEXT_INDEX(id, i))
+		ret += scnprintf(buf + ret, PAGE_SIZE - ret, "%d\t%d\t%d\t%d\n",
+			i, PMEM_BUDDY_ORDER(id, i),
+			PMEM_BUDDY_LEN(id, i),
+			!PMEM_IS_FREE_BUDDY(id, i));
+
+	mutex_unlock(&pmem[id].data_list_mutex);
+	return ret;
+}
+RO_PMEM_ATTR(buddy_bitmap_dump);
+
+#define PMEM_BITMAP_BUDDY_BESTFIT_COMMON_SYSFS_ATTRS \
+	&pmem_attr_quantum_size.attr, \
+	&pmem_attr_total_entries.attr
+
+static struct attribute *pmem_buddy_bestfit_attrs[] = {
+	PMEM_COMMON_SYSFS_ATTRS,
+
+	PMEM_BITMAP_BUDDY_BESTFIT_COMMON_SYSFS_ATTRS,
+
+	&pmem_attr_buddy_bitmap_dump.attr,
+
+	NULL
+};
+
+static struct kobj_type pmem_buddy_bestfit_ktype = {
+	.sysfs_ops = &pmem_ops,
+	.default_attrs = pmem_buddy_bestfit_attrs,
+};
+
+static ssize_t show_pmem_free_quanta(int id, char *buf)
+{
+	ssize_t ret;
+
+	mutex_lock(&pmem[id].arena_mutex);
+	ret = scnprintf(buf, PAGE_SIZE, "%u\n",
+		pmem[id].allocator.bitmap.bitmap_free);
+	mutex_unlock(&pmem[id].arena_mutex);
+	return ret;
+}
+RO_PMEM_ATTR(free_quanta);
+
+static ssize_t show_pmem_bits_allocated(int id, char *buf)
+{
+	ssize_t ret;
+	unsigned int i;
+
+	mutex_lock(&pmem[id].arena_mutex);
+
+	ret = scnprintf(buf, PAGE_SIZE,
+		"id: %d\nbitnum\tindex\tquanta allocated\n", id);
+
+	for (i = 0; i < pmem[id].allocator.bitmap.bitmap_allocs; i++)
+		if (pmem[id].allocator.bitmap.bitm_alloc[i].bit != -1)
+			ret += scnprintf(buf + ret, PAGE_SIZE - ret,
+				"%u\t%u\t%u\n",
+				i,
+				pmem[id].allocator.bitmap.bitm_alloc[i].bit,
+				pmem[id].allocator.bitmap.bitm_alloc[i].quanta
+				);
+
+	mutex_unlock(&pmem[id].arena_mutex);
+	return ret;
+}
+RO_PMEM_ATTR(bits_allocated);
+
+static struct attribute *pmem_bitmap_attrs[] = {
+	PMEM_COMMON_SYSFS_ATTRS,
+
+	PMEM_BITMAP_BUDDY_BESTFIT_COMMON_SYSFS_ATTRS,
+
+	&pmem_attr_free_quanta.attr,
+	&pmem_attr_bits_allocated.attr,
+
+	NULL
+};
+
+static struct kobj_type pmem_bitmap_ktype = {
+	.sysfs_ops = &pmem_ops,
+	.default_attrs = pmem_bitmap_attrs,
 };
 
 static int get_id(struct file *file)
@@ -279,7 +548,7 @@ static int pmem_free_all_or_nothing(int id, int index)
 	/* caller should hold the lock on arena_mutex! */
 	DLOG("index %d\n", index);
 
-	pmem[id].allocated = 0;
+	pmem[id].allocator.all_or_nothing.allocated =  0;
 	return 0;
 }
 
@@ -291,7 +560,7 @@ static int pmem_free_buddy_bestfit(int id, int index)
 
 
 	/* clean up the bitmap, merging any buddies */
-	pmem[id].buddy_bitmap[curr].allocated = 0;
+	pmem[id].allocator.buddy_bestfit.buddy_bitmap[curr].allocated = 0;
 	/* find a slots buddy Buddy# = Slot# ^ (1 << order)
 	 * if the buddy is also free merge them
 	 * repeat until the buddy is not free or end of the bitmap is reached
@@ -332,16 +601,18 @@ static int pmem_free_bitmap(int id, int bitnum)
 
 	DLOG("bitnum %d\n", bitnum);
 
-	for (i = 0; i < pmem[id].bitmap_allocs; i++) {
-		const int curr_bit = pmem[id].bitm_alloc[i].bit;
+	for (i = 0; i < pmem[id].allocator.bitmap.bitmap_allocs; i++) {
+		const int curr_bit =
+			pmem[id].allocator.bitmap.bitm_alloc[i].bit;
 
 		if (curr_bit == bitnum) {
-			const int curr_quanta = pmem[id].bitm_alloc[i].quanta;
+			const int curr_quanta =
+				pmem[id].allocator.bitmap.bitm_alloc[i].quanta;
 
-			bitmap_bits_clear_all(pmem[id].bitmap,
+			bitmap_bits_clear_all(pmem[id].allocator.bitmap.bitmap,
 				curr_bit, curr_bit + curr_quanta);
-			pmem[id].bitmap_free += curr_quanta;
-			pmem[id].bitm_alloc[i].bit = -1;
+			pmem[id].allocator.bitmap.bitmap_free += curr_quanta;
+			pmem[id].allocator.bitmap.bitm_alloc[i].bit = -1;
 			return 0;
 		}
 	}
@@ -472,9 +743,10 @@ static int pmem_allocator_all_or_nothing(const int id,
 {
 	/* caller should hold the lock on arena_mutex! */
 	DLOG("all or nothing\n");
-	if ((len > pmem[id].size) || pmem[id].allocated)
+	if ((len > pmem[id].size) ||
+		pmem[id].allocator.all_or_nothing.allocated)
 		return -1;
-	pmem[id].allocated = 1;
+	pmem[id].allocator.all_or_nothing.allocated = 1;
 	return len;
 }
 
@@ -535,7 +807,7 @@ static int pmem_allocator_buddy_bestfit(const int id,
 		buddy = PMEM_BUDDY_INDEX(id, best_fit);
 		PMEM_BUDDY_ORDER(id, buddy) = PMEM_BUDDY_ORDER(id, best_fit);
 	}
-	pmem[id].buddy_bitmap[best_fit].allocated = 1;
+	pmem[id].allocator.buddy_bestfit.buddy_bitmap[best_fit].allocated = 1;
 out:
 	return best_fit;
 }
@@ -591,11 +863,11 @@ static int reserve_quanta(const unsigned int quanta_needed,
 	int i, ret = -1, *bitp, start_bit = 0, spacing = 1, bitm_len;
 
 	/* Sanity check */
-	if (quanta_needed > pmem[id].bitmap_free) {
+	if (quanta_needed > pmem[id].allocator.bitmap.bitmap_free) {
 #if PMEM_DEBUG
 		printk(KERN_ALERT "pmem: %s: request (%d) too big for"
 			" available free (%d)\n", __func__, quanta_needed,
-			pmem[id].bitmap_free);
+			pmem[id].allocator.bitmap.bitmap_free);
 #endif
 		return -1;
 	}
@@ -615,7 +887,7 @@ static int reserve_quanta(const unsigned int quanta_needed,
 	}
 
 	bitm_len = (pmem[id].size + pmem[id].quantum - 1) / pmem[id].quantum;
-	for (i = start_bit, bitp = pmem[id].bitmap;
+	for (i = start_bit, bitp = pmem[id].allocator.bitmap.bitmap;
 			i <= (bitm_len - quanta_needed); i += spacing)
 		if (bitmap_bit_is_free(bitp, i) &&
 			bitmap_bits_are_all_free(bitp,
@@ -645,7 +917,7 @@ static int pmem_allocator_bitmap(const int id,
 	unsigned int quanta_needed;
 
 	DLOG("bitmap id %d, len %ld, align %d\n", id, len, align);
-	if (!pmem[id].bitm_alloc) {
+	if (!pmem[id].allocator.bitmap.bitm_alloc) {
 #if PMEM_DEBUG
 		printk(KERN_ALERT "pmem: bitm_alloc not present! id: %d\n",
 			id);
@@ -655,9 +927,10 @@ static int pmem_allocator_bitmap(const int id,
 
 	quanta_needed = (len + pmem[id].quantum - 1) / pmem[id].quantum;
 	DLOG("quantum size %u quanta needed %u free %u id %d\n",
-		pmem[id].quantum, quanta_needed, pmem[id].bitmap_free, id);
+		pmem[id].quantum, quanta_needed,
+		pmem[id].allocator.bitmap.bitmap_free, id);
 
-	if (pmem[id].bitmap_free < quanta_needed) {
+	if (pmem[id].allocator.bitmap.bitmap_free < quanta_needed) {
 #if PMEM_DEBUG
 		printk(KERN_ALERT "pmem: memory allocation failure. "
 			"PMEM memory region exhausted, id %d."
@@ -671,15 +944,15 @@ static int pmem_allocator_bitmap(const int id,
 		goto leave;
 
 	for (i = 0;
-		i < pmem[id].bitmap_allocs &&
-			pmem[id].bitm_alloc[i].bit != -1;
+		i < pmem[id].allocator.bitmap.bitmap_allocs &&
+			pmem[id].allocator.bitmap.bitm_alloc[i].bit != -1;
 		i++)
 		;
 
-	if (i >= pmem[id].bitmap_allocs) {
+	if (i >= pmem[id].allocator.bitmap.bitmap_allocs) {
 		void *temp;
 		int32_t new_bitmap_allocs =
-			pmem[id].bitmap_allocs << 1;
+			pmem[id].allocator.bitmap.bitmap_allocs << 1;
 		int j;
 
 		if (!new_bitmap_allocs) { /* failed sanity check!! */
@@ -691,32 +964,32 @@ static int pmem_allocator_bitmap(const int id,
 			return -1;
 		}
 
-		temp = krealloc(pmem[id].bitm_alloc,
+		temp = krealloc(pmem[id].allocator.bitmap.bitm_alloc,
 				sizeof(unsigned int),
 				GFP_KERNEL);
 		if (!temp) {
 #if PMEM_DEBUG
 			printk(KERN_ALERT "pmem: can't realloc bitmap_allocs,"
 				"id %d, current num bitmap allocs %d\n",
-				id, pmem[id].bitmap_allocs);
+				id, pmem[id].allocator.bitmap.bitmap_allocs);
 #endif
 			return -1;
 		}
-		pmem[id].bitmap_allocs = new_bitmap_allocs;
-		pmem[id].bitm_alloc = temp;
+		pmem[id].allocator.bitmap.bitmap_allocs = new_bitmap_allocs;
+		pmem[id].allocator.bitmap.bitm_alloc = temp;
 
 		for (j = i; j < new_bitmap_allocs; j++)
-			pmem[id].bitm_alloc[j].bit = -1;
+			pmem[id].allocator.bitmap.bitm_alloc[j].bit = -1;
 
 		DLOG("increased # of allocated regions to %d for id %d\n",
-			pmem[id].bitmap_allocs, id);
+			pmem[id].allocator.bitmap.bitmap_allocs, id);
 	}
 
 	DLOG("bitnum %d, bitm_alloc index %d\n", bitnum, i);
 
-	pmem[id].bitmap_free -= quanta_needed;
-	pmem[id].bitm_alloc[i].bit = bitnum;
-	pmem[id].bitm_alloc[i].quanta = quanta_needed;
+	pmem[id].allocator.bitmap.bitmap_free -= quanta_needed;
+	pmem[id].allocator.bitmap.bitm_alloc[i].bit = bitnum;
+	pmem[id].allocator.bitmap.bitm_alloc[i].quanta = quanta_needed;
 leave:
 	return bitnum;
 }
@@ -774,15 +1047,17 @@ static unsigned long pmem_len_bitmap(int id, struct pmem_data *data)
 
 	mutex_lock(&pmem[id].arena_mutex);
 
-	for (i = 0; i < pmem[id].bitmap_allocs; i++)
-		if (pmem[id].bitm_alloc[i].bit == data->index) {
-			ret = pmem[id].bitm_alloc[i].quanta * pmem[id].quantum;
+	for (i = 0; i < pmem[id].allocator.bitmap.bitmap_allocs; i++)
+		if (pmem[id].allocator.bitmap.bitm_alloc[i].bit ==
+				data->index) {
+			ret = pmem[id].allocator.bitmap.bitm_alloc[i].quanta *
+				pmem[id].quantum;
 			break;
 		}
 
 	mutex_unlock(&pmem[id].arena_mutex);
 #if PMEM_DEBUG
-	if (i >= pmem[id].bitmap_allocs)
+	if (i >= pmem[id].allocator.bitmap.bitmap_allocs)
 		printk(KERN_ALERT "pmem: pmem_len: can't find bitnum %d in "
 			"alloc'd array!\n", data->index);
 #endif
@@ -1835,65 +2110,6 @@ static long pmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	return 0;
 }
 
-#if PMEM_DEBUG
-static ssize_t debug_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
-static ssize_t debug_read(struct file *file, char __user *buf, size_t count,
-			  loff_t *ppos)
-{
-	struct list_head *elt, *elt2;
-	struct pmem_data *data;
-	struct pmem_region_node *region_node;
-	int id = (int)file->private_data;
-	const int debug_bufmax = 4096;
-	static char buffer[4096];
-	int n = 0;
-
-	DLOG("debug open\n");
-	n = scnprintf(buffer, debug_bufmax,
-		      "pid #: mapped regions (offset, len) (offset,len)...\n");
-
-	mutex_lock(&pmem[id].data_list_mutex);
-	list_for_each(elt, &pmem[id].data_list) {
-		data = list_entry(elt, struct pmem_data, list);
-		down_read(&data->sem);
-		n += scnprintf(buffer + n, debug_bufmax - n, "pid %u:",
-				data->pid);
-		list_for_each(elt2, &data->region_list) {
-			region_node = list_entry(elt2, struct pmem_region_node,
-				      list);
-			n += scnprintf(buffer + n, debug_bufmax - n,
-					"(%lx,%lx) ",
-					region_node->region.offset,
-					region_node->region.len);
-		}
-		n += scnprintf(buffer + n, debug_bufmax - n, "\n");
-		up_read(&data->sem);
-	}
-	mutex_unlock(&pmem[id].data_list_mutex);
-
-	n++;
-	buffer[n] = 0;
-	return simple_read_from_buffer(buf, count, ppos, buffer, n);
-}
-
-static struct file_operations debug_fops = {
-	.read = debug_read,
-	.open = debug_open,
-};
-#endif
-
-#if 0
-static struct miscdevice pmem_dev = {
-	.name = "pmem",
-	.fops = &pmem_fops,
-};
-#endif
-
 int pmem_setup(struct android_pmem_platform_data *pdata,
 	       long (*ioctl)(struct file *, unsigned int, unsigned long),
 	       int (*release)(struct inode *, struct file *))
@@ -1907,6 +2123,8 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		goto err_no_mem;
 	}
 	id = id_count++;
+
+	pmem[id].id = id;
 
 	if (pmem[id].allocate) {
 		printk(KERN_ALERT
@@ -1979,6 +2197,9 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 
 	pmem[id].num_entries = pmem[id].size / pmem[id].quantum;
 
+	memset(&pmem[id].kobj, 0, sizeof(pmem[0].kobj));
+	pmem[id].kobj.kset = pmem_kset;
+
 	switch (pmem[id].allocator_type) {
 	case PMEM_ALLOCATORTYPE_ALLORNOTHING:
 		pmem[id].allocate = pmem_allocator_all_or_nothing;
@@ -1986,16 +2207,25 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		pmem[id].kapi_free_index = pmem_kapi_free_index_allornothing;
 		pmem[id].len = pmem_len_all_or_nothing;
 		pmem[id].start_addr = pmem_start_addr_all_or_nothing;
+		pmem[id].num_entries = 1;
+		pmem[id].quantum = pmem[id].size;
+		pmem[id].allocator.all_or_nothing.allocated = 0;
+
+		if (kobject_init_and_add(&pmem[id].kobj,
+				&pmem_allornothing_ktype, NULL,
+				"%s", pdata->name))
+			goto out_put_kobj;
+
 		break;
 
 	case PMEM_ALLOCATORTYPE_BUDDYBESTFIT:
-		pmem[id].buddy_bitmap = kmalloc(
+		pmem[id].allocator.buddy_bestfit.buddy_bitmap = kmalloc(
 			pmem[id].num_entries * sizeof(struct pmem_bits),
 			GFP_KERNEL);
-		if (!pmem[id].buddy_bitmap)
+		if (!pmem[id].allocator.buddy_bestfit.buddy_bitmap)
 			goto err_reset_pmem_info;
 
-		memset(pmem[id].buddy_bitmap, 0,
+		memset(pmem[id].allocator.buddy_bestfit.buddy_bitmap, 0,
 			sizeof(struct pmem_bits) * pmem[id].num_entries);
 
 		for (i = sizeof(pmem[id].num_entries) * 8 - 1; i >= 0; i--)
@@ -2008,35 +2238,45 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		pmem[id].kapi_free_index = pmem_kapi_free_index_buddybestfit;
 		pmem[id].len = pmem_len_buddy_bestfit;
 		pmem[id].start_addr = pmem_start_addr_buddy_bestfit;
+		if (kobject_init_and_add(&pmem[id].kobj,
+				&pmem_buddy_bestfit_ktype, NULL,
+				"%s", pdata->name))
+			goto out_put_kobj;
+
 		break;
 
 	case PMEM_ALLOCATORTYPE_BITMAP: /* 0, default if not explicit */
-		pmem[id].bitm_alloc = kmalloc(
+		pmem[id].allocator.bitmap.bitm_alloc = kmalloc(
 			PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS *
-				sizeof(*pmem[id].bitm_alloc),
+				sizeof(*pmem[id].allocator.bitmap.bitm_alloc),
 			GFP_KERNEL);
-		if (!pmem[id].bitm_alloc) {
+		if (!pmem[id].allocator.bitmap.bitm_alloc) {
 			printk(KERN_ALERT "Unable to register pmem "
 				"driver - can't allocate bitm_alloc!\n");
 			goto err_reset_pmem_info;
 		}
 
+		if (kobject_init_and_add(&pmem[id].kobj,
+				&pmem_bitmap_ktype, NULL,
+				"%s", pdata->name))
+			goto out_put_kobj;
+
 		for (i = 0; i < PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS; i++)
-			pmem[id].bitm_alloc[i].bit = -1;
+			pmem[id].allocator.bitmap.bitm_alloc[i].bit = -1;
 
-		pmem[id].bitmap_allocs = PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS;
+		pmem[id].allocator.bitmap.bitmap_allocs =
+			PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS;
 
-		pmem[id].bitmap =
+		pmem[id].allocator.bitmap.bitmap =
 			kcalloc((pmem[id].num_entries + 31) / 32,
 				sizeof(unsigned int),
 				GFP_KERNEL);
-		if (!pmem[id].bitmap) {
+		if (!pmem[id].allocator.bitmap.bitmap) {
 			printk(KERN_ALERT "Unable to register pmem "
 				"driver - can't allocate bitmap!\n");
 			goto err_cant_register_device;
 		}
-
-		pmem[id].bitmap_free = pmem[id].num_entries;
+		pmem[id].allocator.bitmap.bitmap_free = pmem[id].num_entries;
 
 		pmem[id].allocate = pmem_allocator_bitmap;
 		pmem[id].free = pmem_free_bitmap;
@@ -2091,24 +2331,20 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		goto error_cant_remap;
 
 	pmem[id].garbage_pfn = page_to_pfn(alloc_page(GFP_KERNEL));
-	pmem[id].allocated = 0;
 
-#if PMEM_DEBUG
-	printk(KERN_INFO "Creating debugfs file %s\n", pdata->name);
-	debugfs_create_file(pdata->name, S_IFREG | S_IRUGO, NULL,
-			(void *)id, &debug_fops);
-#endif
 	return 0;
 
 error_cant_remap:
 	if (!is_kernel_memtype)
 		misc_deregister(&pmem[id].dev);
 err_cant_register_device:
+out_put_kobj:
+	kobject_put(&pmem[id].kobj);
 	if (pmem[id].allocator_type == PMEM_ALLOCATORTYPE_BUDDYBESTFIT)
-		kfree(pmem[id].buddy_bitmap);
+		kfree(pmem[id].allocator.buddy_bestfit.buddy_bitmap);
 	else if (pmem[id].allocator_type == PMEM_ALLOCATORTYPE_BITMAP) {
-		kfree(pmem[id].bitmap);
-		kfree(pmem[id].bitm_alloc);
+		kfree(pmem[id].allocator.bitmap.bitmap);
+		kfree(pmem[id].allocator.bitmap.bitm_alloc);
 	}
 err_reset_pmem_info:
 	pmem[id].allocate = 0;
@@ -2148,6 +2384,15 @@ static struct platform_driver pmem_driver = {
 
 static int __init pmem_init(void)
 {
+	/* create /sys/kernel/<PMEM_SYSFS_DIR_NAME> directory */
+	pmem_kset = kset_create_and_add(PMEM_SYSFS_DIR_NAME,
+		NULL, kernel_kobj);
+	if (!pmem_kset) {
+		printk(KERN_ERR "pmem(%s):kset_create_and_add fail\n",
+			__func__);
+		return -ENOMEM;
+	}
+
 	return platform_driver_register(&pmem_driver);
 }
 
