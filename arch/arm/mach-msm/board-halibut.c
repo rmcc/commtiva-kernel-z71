@@ -623,6 +623,9 @@ static void msm_fb_mddi_power_save(int on)
 	struct vreg *vreg;
 	int i;
 
+	if (machine_is_msm7201a_ffa())
+		gpio_direction_output(88, !!on);
+
 	for (i = 0; i < ARRAY_SIZE(msm_fb_vreg); i++) {
 		if (on)
 			MSM_FB_VREG_OP(msm_fb_vreg[i], enable);

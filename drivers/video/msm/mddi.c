@@ -123,8 +123,8 @@ static int mddi_off(struct platform_device *pdev)
 
 	ret = panel_next_off(pdev);
 
-	if (machine_is_msm7201a_ffa())
-		gpio_direction_output(88, 0);
+	if (mddi_pdata && mddi_pdata->mddi_power_save)
+		mddi_pdata->mddi_power_save(0);
 
 	return ret;
 }
@@ -137,8 +137,8 @@ static int mddi_on(struct platform_device *pdev)
 
 	mfd = platform_get_drvdata(pdev);
 
-	if (machine_is_msm7201a_ffa())
-		gpio_direction_output(88, 1);
+	if (mddi_pdata && mddi_pdata->mddi_power_save)
+		mddi_pdata->mddi_power_save(1);
 
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
@@ -304,9 +304,6 @@ void mddi_disable(int lock)
 
 	clk_disable(mddi_clk);
 	disable_irq(INT_MDDI_PRI);
-
-	if (mddi_pdata && mddi_pdata->mddi_power_save)
-		mddi_pdata->mddi_power_save(0);
 }
 
 static int mddi_suspend(struct platform_device *pdev, pm_message_t state)
@@ -330,9 +327,6 @@ static int mddi_resume(struct platform_device *pdev)
 
 	if (mddi_power_locked)
 		return 0;
-
-	if (mddi_pdata && mddi_pdata->mddi_power_save)
-		mddi_pdata->mddi_power_save(1);
 
 	enable_irq(INT_MDDI_PRI);
 	clk_enable(mddi_clk);
