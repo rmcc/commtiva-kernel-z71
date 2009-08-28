@@ -190,6 +190,8 @@ enum cad_int_device_id qdsp6_volume_device_id_mapping(u32 device_id)
 		return INT_CAD_HW_DEVICE_ID_SPEAKER_SPKR_MONO_LB;
 
 	default:
+		pr_err("%s: invalid device id %d\n", __func__,
+					device_id);
 		return INT_CAD_HW_DEVICE_ID_INVALID;
 	}
 }
@@ -199,9 +201,8 @@ s32 qdsp6_volume_mapping(u32 device_id, s32 percentage)
 {
 	s32 max_gain = 0;
 	s32 min_gain = 0;
-	u32 tmp_device_id = qdsp6_volume_device_id_mapping(device_id);
 
-	if (tmp_device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+	if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
 		pr_err("%s: invalid device\n", __func__);
 		return 0xFFFFFFFF;
 	}
@@ -393,24 +394,10 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		if (ardsession[session_id]->sess_open_info->cad_open.op_code
 				== CAD_OPEN_OP_READ) {
 			device_id = ard_state.def_tx_device;
-
-			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
-				rc = CAD_RES_FAILURE;
-				pr_err("%s: invalid device id %d\n", __func__,
-					ard_state.def_tx_device);
-				goto done;
-			}
 			q6_set_dev_mute1->path = CAD_TX_DEVICE;
 		} else if (ardsession[session_id]->sess_open_info->
 				cad_open.op_code == CAD_OPEN_OP_WRITE) {
 			device_id = ard_state.def_rx_device;
-
-			if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
-				rc = CAD_RES_FAILURE;
-				pr_err("%s: invalid device id %d\n", __func__,
-						ard_state.def_rx_device);
-				goto done;
-			}
 			q6_set_dev_mute1->path = CAD_RX_DEVICE;
 		}
 
@@ -418,6 +405,10 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		q6_set_dev_mute1->device_id = q6_device_id_mapping(device_id);
 
 		device_id = qdsp6_volume_device_id_mapping(device_id);
+		if (device_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+			rc = CAD_RES_FAILURE;
+			goto done;
+		}
 
 		if ((qdsp6_volume_cache_tbl[device_id].mute == 1) ||
 			(qdsp6_volume_cache_tbl[device_id].current_volume ==
@@ -633,14 +624,16 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 
 		}
 
+		/* Convert to internal device structure */
+		device_id = qdsp6_volume_device_id_mapping(
+				dev_vol_buf->device_id);
+
 		/* Map the device volume to QDSP6. */
 		device_volume = qdsp6_volume_mapping(
-			dev_vol_buf->device_id,
+			device_id,
 			dev_vol_buf->volume);
 
 		/* Cache the device volume. */
-		device_id = qdsp6_volume_device_id_mapping(
-				dev_vol_buf->device_id);
 		qdsp6_volume_cache_tbl[device_id]
 			.current_volume = device_volume;
 		qdsp6_volume_cache_tbl[device_id]
