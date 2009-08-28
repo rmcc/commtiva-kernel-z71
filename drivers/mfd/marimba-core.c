@@ -75,6 +75,12 @@ static bool inuse;
 
 struct marimba marimba_modules[MARIMBA_NUM_CHILD + 1];
 
+#ifdef CONFIG_I2C_SSBI
+#define NUM_ADD	MARIMBA_NUM_CHILD
+#else
+#define NUM_ADD	(MARIMBA_NUM_CHILD - 1)
+#endif
+
 /**
  * marimba_ssbi_write - Writes a n bit TSADC register in Marimba
  * @param mariba: marimba structure pointer passed by client
@@ -337,10 +343,12 @@ static int marimba_add_child(struct marimba_platform_data *pdata)
 	if (IS_ERR(child))
 		return PTR_ERR(child);
 
+#ifdef CONFIG_I2C_SSBI
 	child = add_child(MARIMBA_ID_TSADC, "marimba_tsadc",
 					  pdata->tsadc, sizeof(*pdata->tsadc));
 	if (IS_ERR(child))
 		return PTR_ERR(child);
+#endif
 
 	return 0;
 }
@@ -386,7 +394,7 @@ static int marimba_probe(struct i2c_client *client,
 		return -EBUSY;
 	}
 
-	for (i = 0; i <= MARIMBA_NUM_CHILD; i++) {
+	for (i = 0; i <= NUM_ADD; i++) {
 		marimba = &marimba_modules[i];
 
 		if (i == 0)
