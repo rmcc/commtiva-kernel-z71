@@ -450,6 +450,12 @@ static void build_regsave_cmds(struct kgsl_drawctxt *drawctxt,
 	unsigned int *start = ctx->cmd;
 	unsigned int *cmd = start;
 
+	/* Insert a wait for idle packet before reading the registers.
+	 * This is to fix a hang/reset seen during stress testing.
+	 */
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0x0;
+
 	/* H/w registers are already shadowed; just need to disable shadowing
 	 * to prevent corruption.
 	 */

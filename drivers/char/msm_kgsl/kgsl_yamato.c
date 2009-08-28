@@ -503,6 +503,8 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	}
 	kgsl_sharedmem_set(&device->memstore, 0, 0, device->memstore.size);
 
+	kgsl_yamato_regwrite(device, REG_RBBM_DEBUG, 0x00080000);
+
 	device->flags |= KGSL_FLAGS_INITIALIZED;
 	return 0;
 
