@@ -5,3 +5,4 @@ obj-y += pcm_in.o
 obj-y += mp3.o
 obj-y += routing.o
 obj-y += audio_ctl.o
+obj-y += msm_q6vdec.o
