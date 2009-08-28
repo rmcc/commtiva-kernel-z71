@@ -546,6 +546,14 @@ config MSM_ADSP_REPORT_EVENTS
 	  Normally, only messages from the aDSP are reported to userspace.
 	  With this option, we report events from the aDSP as well.
 
+config MSM7KV2_AUDIO
+	bool "MSM7K v2 audio"
+	depends on (ARCH_MSM7X30 && MSM_ADSP)
+	default y
+	help
+	  Enables QDSP5V2-based audio drivers for audio playbacks and
+	  voice call.
+
 config MSM_VREG_SWITCH_INVERTED
 	bool "Reverse vreg switch polarity"
 	default n

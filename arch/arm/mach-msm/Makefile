@@ -37,6 +37,7 @@ obj-$(CONFIG_MSM_RPCSERVERS) += rpc_server_time_remote.o
 obj-$(CONFIG_MSM_DALRPC) += dal.o
 obj-$(CONFIG_MSM_DALRPC_TEST) += dal_remotetest.o
 obj-$(CONFIG_MSM_ADSP) += qdsp5/
+obj-$(CONFIG_MSM7KV2_AUDIO) += qdsp5v2/
 obj-$(CONFIG_MSM_RPCSERVER_HANDSET) += rpc_server_handset.o
 obj-$(CONFIG_MSM_HW3D) += hw3d.o
 ifdef CONFIG_MSM_N_WAY_SMSM
