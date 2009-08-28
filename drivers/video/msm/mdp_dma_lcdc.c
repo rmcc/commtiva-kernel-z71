@@ -192,7 +192,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	/* active window width and height */
 	MDP_OUTP(MDP_BASE + 0x90004, ((fbi->var.yres) << 16) | (fbi->var.xres));
 	/* buffer ystride */
-	MDP_OUTP(MDP_BASE + 0x9000c, fbi->var.xres * bpp);
+	MDP_OUTP(MDP_BASE + 0x9000c, fbi->var.xres_virtual * bpp);
 	/* x/y coordinate = always 0 for lcdc */
 	MDP_OUTP(MDP_BASE + 0x90010, 0);
 	/* dma config */
