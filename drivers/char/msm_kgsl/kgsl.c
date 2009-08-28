@@ -66,6 +66,7 @@
 #include <linux/io.h>
 #include <linux/mm.h>
 #include <linux/android_pmem.h>
+#include <linux/pm_qos_params.h>
 
 #include <asm/atomic.h>
 
@@ -74,6 +75,9 @@
 #include "kgsl_ringbuffer.h"
 #include "kgsl_log.h"
 #include "kgsl_drm.h"
+
+static int max_axi_freq_set;
+static unsigned int max_axi_freq;
 
 struct kgsl_file_private {
 	struct list_head list;
@@ -90,6 +94,23 @@ struct device *kgsl_driver_getdevnode(void)
 	return &kgsl_driver.pdev->dev;
 }
 
+/*Suspend function*/
+static int kgsl_suspend(struct platform_device *dev, pm_message_t state)
+{
+	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+			PM_QOS_DEFAULT_VALUE);
+	return 0;
+}
+
+/*Resume function*/
+static int kgsl_resume(struct platform_device *dev)
+{
+	if (max_axi_freq_set) {
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+			max_axi_freq);
+	}
+	return 0;
+}
 
 /* file operations */
 static int kgsl_first_open_locked(void)
@@ -98,6 +119,12 @@ static int kgsl_first_open_locked(void)
 
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
+
+	if (max_axi_freq) {
+		max_axi_freq_set = 1;
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+				max_axi_freq);
+	}
 
 	if (kgsl_driver.grp_pclk)
 		clk_enable(kgsl_driver.grp_pclk);
@@ -147,6 +174,10 @@ static int kgsl_last_release_locked(void)
 	clk_disable(kgsl_driver.grp_clk);
 
 	clk_disable(kgsl_driver.imem_clk);
+
+	max_axi_freq_set = 0;
+	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+			PM_QOS_DEFAULT_VALUE);
 
 	return 0;
 }
@@ -760,6 +791,8 @@ static void kgsl_driver_cleanup(void)
 		kgsl_driver.interrupt_num = 0;
 	}
 
+	pm_qos_remove_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME);
+
 	if (kgsl_driver.grp_pclk) {
 		clk_put(kgsl_driver.grp_pclk);
 		kgsl_driver.grp_pclk = NULL;
@@ -785,6 +818,7 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	int result = 0;
 	struct clk *clk;
 	struct resource *res = NULL;
+	struct kgsl_platform_data *pdata = NULL;
 
 	kgsl_debug_init();
 
@@ -815,6 +849,13 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 		goto done;
 	}
 	kgsl_driver.imem_clk = clk;
+
+	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+				PM_QOS_DEFAULT_VALUE);
+
+	pdata = pdev->dev.platform_data;
+	if (pdata)
+		max_axi_freq = pdata->max_axi_freq;
 
 	/*acquire interrupt */
 	kgsl_driver.interrupt_num = platform_get_irq(pdev, 0);
@@ -871,6 +912,8 @@ static int kgsl_platform_remove(struct platform_device *pdev)
 static struct platform_driver kgsl_platform_driver = {
 	.probe = kgsl_platform_probe,
 	.remove = __devexit_p(kgsl_platform_remove),
+	.suspend = kgsl_suspend,
+	.resume = kgsl_resume,
 	.driver = {
 		.owner = THIS_MODULE,
 		.name = DRIVER_NAME
