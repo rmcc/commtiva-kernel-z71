@@ -345,24 +345,27 @@ static void mt9p012_get_pict_fps(uint16_t fps, uint16_t *pfps)
 	/* input fps is preview fps in Q8 format */
 	uint32_t divider;	/*Q10 */
 	uint32_t pclk_mult;	/*Q10 */
+	uint32_t d1;
+	uint32_t d2;
 
-	if (mt9p012_ctrl->prev_res == QTR_SIZE) {
-		divider = (uint32_t)
-		    (((mt9p012_regs.reg_pat[RES_PREVIEW].frame_length_lines *
-		       mt9p012_regs.reg_pat[RES_PREVIEW].line_length_pck) *
-		      0x00000400) /
-		     (mt9p012_regs.reg_pat[RES_CAPTURE].frame_length_lines *
-		      mt9p012_regs.reg_pat[RES_CAPTURE].line_length_pck));
+	d1 =
+		(uint32_t)(
+		(mt9p012_regs.reg_pat[RES_PREVIEW].frame_length_lines *
+		0x00000400) /
+		mt9p012_regs.reg_pat[RES_CAPTURE].frame_length_lines);
 
-		pclk_mult = (uint32_t)
-		    ((mt9p012_regs.reg_pat[RES_CAPTURE].pll_multiplier *
-		      0x00000400) /
-		     (mt9p012_regs.reg_pat[RES_PREVIEW].pll_multiplier));
-	} else {
-		/* full size resolution used for preview. */
-		divider = 0x00000400;	/*1.0 */
-		pclk_mult = 0x00000400;	/*1.0 */
-	}
+	d2 =
+		(uint32_t)(
+		(mt9p012_regs.reg_pat[RES_PREVIEW].line_length_pck *
+		0x00000400) /
+		mt9p012_regs.reg_pat[RES_CAPTURE].line_length_pck);
+
+	divider = (uint32_t) (d1 * d2) / 0x00000400;
+
+	pclk_mult =
+		(uint32_t) ((mt9p012_regs.reg_pat[RES_CAPTURE].pll_multiplier *
+		0x00000400) /
+		(mt9p012_regs.reg_pat[RES_PREVIEW].pll_multiplier));
 
 	/* Verify PCLK settings and frame sizes. */
 	*pfps = (uint16_t) (fps * divider * pclk_mult / 0x00000400 /
