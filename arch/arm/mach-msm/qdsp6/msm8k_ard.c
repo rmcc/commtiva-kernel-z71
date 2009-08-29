@@ -912,7 +912,9 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 		else
 			dev_id = strm_dev->device[0];
 
+		mutex_lock(&local_ard_state->ard_state_machine_mutex);
 		ard_acdb_send_cal(session_id, dev_id, 0);
+		mutex_unlock(&local_ard_state->ard_state_machine_mutex);
 		print_data(session_id);
 		break;
 
