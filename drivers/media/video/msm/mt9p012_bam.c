@@ -580,8 +580,8 @@ static int32_t mt9p012_set_pict_exp_gain(uint16_t gain, uint32_t line)
 	return rc;
 }
 
-static int32_t mt9p012_setting(enum mt9p012_reg_update_t rupdate,
-			       enum mt9p012_setting_t rt)
+static int32_t mt9p012_setting(enum mt9p012_reg_update rupdate,
+			       enum mt9p012_setting rt)
 {
 	int32_t rc = 0;
 
@@ -1414,7 +1414,7 @@ static const struct i2c_device_id mt9p012_i2c_id[] = {
 	{"mt9p012", 0}
 };
 
-static struct i2c_driver mt9p012_driver = {
+static struct i2c_driver mt9p012_i2c_driver = {
 	.id_table = mt9p012_i2c_id,
 	.probe = mt9p012_i2c_probe,
 	.remove = __exit_p(mt9p012_i2c_remove),
