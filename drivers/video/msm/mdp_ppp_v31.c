@@ -539,7 +539,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 			use_pr = (inputRGB) && (outputRGB);
 
 			/* x-direction */
-			if (dst_roi_width_scale == iBuf->roi.width) {
+			if ((dst_roi_width_scale == iBuf->roi.width) &&
+				!(iBuf->mdpImg.mdpOp & MDPOP_SHARPENING)) {
 				*pppop_reg_ptr &= ~PPP_OP_SCALE_X_ON;
 			} else
 			    if (((dst_roi_width_scale * 10) / iBuf->roi.width) >
@@ -650,10 +651,11 @@ void mdp_set_scale(MDPIBUF *iBuf,
 			}
 
 			/* y-direction */
-			if (dst_roi_height_scale == iBuf->roi.height)
+			if ((dst_roi_height_scale == iBuf->roi.height) &&
+				!(iBuf->mdpImg.mdpOp & MDPOP_SHARPENING)) {
 				*pppop_reg_ptr &= ~PPP_OP_SCALE_Y_ON;
-			if (((dst_roi_height_scale * 10) / iBuf->roi.height) >
-			    8) {
+			} else if (((dst_roi_height_scale * 10) /
+					iBuf->roi.height) > 8) {
 				if ((use_pr)
 				    && (mdp_scale_0p8_to_8p0_mode !=
 					MDP_SCALE_PR)) {
