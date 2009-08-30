@@ -567,7 +567,8 @@ static int pmem_free_buddy_bestfit(int id, int index)
 	 */
 	do {
 		int buddy = PMEM_BUDDY_INDEX(id, curr);
-		if (PMEM_IS_FREE_BUDDY(id, buddy) &&
+		if (buddy < pmem[id].num_entries &&
+		    PMEM_IS_FREE_BUDDY(id, buddy) &&
 		    PMEM_BUDDY_ORDER(id, buddy) ==
 				PMEM_BUDDY_ORDER(id, curr)) {
 			PMEM_BUDDY_ORDER(id, buddy)++;
