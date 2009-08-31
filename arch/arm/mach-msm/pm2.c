@@ -1619,6 +1619,7 @@ static int __init msm_pm_init(void)
 #ifdef CONFIG_MSM_IDLE_STATS
 	struct proc_dir_entry *d_entry;
 #endif
+	int ret;
 
 	pm_power_off = msm_pm_power_off;
 	arm_pm_restart = msm_pm_restart;
@@ -1646,6 +1647,17 @@ static int __init msm_pm_init(void)
 		return -ENODEV;
 	}
 #endif /* CONFIG_ARCH_MSM_SCORPION */
+
+	ret = msm_timer_init_time_sync();
+	if (ret)
+		return ret;
+
+	ret = smsm_change_intr_mask(SMSM_POWER_MASTER_DEM, 0xFFFFFFFF, 0);
+	if (ret) {
+		printk(KERN_ERR "%s: failed to clear interrupt mask, %d\n",
+			__func__, ret);
+		return ret;
+	}
 
 	BUG_ON(msm_pm_modes == NULL);
 

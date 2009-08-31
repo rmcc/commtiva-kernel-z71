@@ -624,6 +624,21 @@ int64_t msm_timer_get_smem_clock_time(int64_t *period)
 	return tmp;
 }
 
+int __init msm_timer_init_time_sync(void)
+{
+#if defined(CONFIG_MSM_N_WAY_SMSM)
+	int ret = smsm_change_intr_mask(SMSM_TIME_MASTER_DEM, 0xFFFFFFFF, 0);
+
+	if (ret) {
+		printk(KERN_ERR	"%s: failed to clear interrupt mask, %d\n",
+			__func__, ret);
+		return ret;
+	}
+#endif
+
+	return 0;
+}
+
 unsigned long long sched_clock(void)
 {
 	static cycle_t saved_ticks;
