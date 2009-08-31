@@ -127,6 +127,7 @@ struct audpcm_pmem_region {
 	struct list_head list;
 	struct file *file;
 	int fd;
+	void *vaddr_ref;
 	void *vaddr;
 	unsigned long paddr;
 	unsigned long kvaddr;
@@ -717,6 +718,7 @@ static int audpcm_pmem_add(struct audio *audio,
 	unsigned long paddr, kvaddr, len;
 	struct file *file;
 	struct audpcm_pmem_region *region;
+	struct vm_area_struct *vma;
 	int rc = -EINVAL;
 
 	pr_debug("%s()\n", __func__);
@@ -729,14 +731,28 @@ static int audpcm_pmem_add(struct audio *audio,
 		return -EINVAL;
 	}
 
-	rc = audpcm_pmem_check(audio, info->vaddr, len);
-	if (rc < 0) {
+	vma = find_vma_intersection(current->active_mm,
+		(unsigned long) info->vaddr, (unsigned long) info->vaddr+1);
+
+	if (vma && ((vma->vm_end - vma->vm_start) == len)) {
+		rc = audpcm_pmem_check(audio, (void *) vma->vm_start, len);
+		if (rc < 0) {
+			put_pmem_file(file);
+			kfree(region);
+			return rc;
+		}
+		region->vaddr = (void *) vma->vm_start;
+		region->vaddr_ref = info->vaddr;
+		pr_debug("[%s:%s]: Valid VMA region vma->vm_start = 0x%8x \
+			vma->vm_end = 0x%8x \n", __FILE__, __func__, \
+			(int) vma->vm_start, (int) vma->vm_end);
+	} else {
+		pr_err("[%s:%s]: No valid VMA region found\n", \
+			__FILE__, __func__);
 		put_pmem_file(file);
 		kfree(region);
 		return rc;
 	}
-
-	region->vaddr = info->vaddr;
 	region->fd = info->fd;
 	region->paddr = paddr;
 	region->kvaddr = kvaddr;
@@ -763,7 +779,7 @@ static int audpcm_pmem_remove(struct audio *audio,
 		region = list_entry(ptr, struct audpcm_pmem_region, list);
 
 		if ((region->fd == info->fd) &&
-		    (region->vaddr == info->vaddr)) {
+		    (region->vaddr_ref == info->vaddr)) {
 			if (region->ref_cnt) {
 				pr_debug("%s: region %p in use ref_cnt %d\n",
 				__func__, region, region->ref_cnt);
