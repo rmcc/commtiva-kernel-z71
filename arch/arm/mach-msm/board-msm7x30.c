@@ -272,6 +272,46 @@ static int __init buses_init(void)
 	return 0;
 }
 
+static struct vreg *vreg_marimba_1;
+static struct vreg *vreg_marimba_2;
+
+static unsigned int msm_marimba_setup_power(void)
+{
+	int rc;
+
+	rc = vreg_enable(vreg_marimba_1);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		goto out;
+	}
+	rc = vreg_enable(vreg_marimba_2);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		goto out;
+	}
+
+out:
+	return rc;
+};
+
+static void msm_marimba_shutdown_power(void)
+{
+	int rc;
+
+	rc = vreg_disable(vreg_marimba_1);
+	if (rc) {
+		printk(KERN_ERR "%s: return val: %d \n",
+					__func__, rc);
+	}
+	rc = vreg_disable(vreg_marimba_2);
+	if (rc) {
+		printk(KERN_ERR "%s: return val: %d \n",
+					__func__, rc);
+	}
+};
+
 /* Slave id address for FM/CDC/QMEMBIST
  * Values can be programmed using Marimba slave id 0
  * should there be a conflict with other I2C devices
@@ -284,7 +324,25 @@ static struct marimba_platform_data marimba_pdata = {
 	.slave_id[MARIMBA_SLAVE_ID_FM]       = MARIMBA_SLAVE_ID_FM_ADDR,
 	.slave_id[MARIMBA_SLAVE_ID_CDC]	     = MARIMBA_SLAVE_ID_CDC_ADDR,
 	.slave_id[MARIMBA_SLAVE_ID_QMEMBIST] = MARIMBA_SLAVE_ID_QMEMBIST_ADDR,
+	.marimba_setup = msm_marimba_setup_power,
+	.marimba_shutdown = msm_marimba_shutdown_power,
 };
+
+static void __init msm7x30_init_marimba(void)
+{
+	vreg_marimba_1 = vreg_get(NULL, "s2");
+	if (IS_ERR(vreg_marimba_1)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(vreg_marimba_1));
+		return;
+	}
+	vreg_marimba_2 = vreg_get(NULL, "gp16");
+	if (IS_ERR(vreg_marimba_1)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(vreg_marimba_1));
+		return;
+	}
+}
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -1065,6 +1123,7 @@ static void __init msm7x30_init(void)
 	msm_device_i2c_init();
 	msm_device_i2c_2_init();
 	buses_init();
+	msm7x30_init_marimba();
 	i2c_register_board_info(2, msm_marimba_board_info,
 			ARRAY_SIZE(msm_marimba_board_info));
 
