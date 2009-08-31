@@ -841,11 +841,6 @@ write_proc_failed:
 #define DEM_SLAVE_SMSM_RESET                (0x0100)
 #define DEM_SLAVE_SMSM_PWRC_SUSPEND         (0x0200)
 
-/* Time Slave State Bits */
-#define DEM_TIME_SLAVE_TIME_REQUEST         (0x0400)
-#define DEM_TIME_SLAVE_TIME_POLL            (0x0800)
-#define DEM_TIME_SLAVE_TIME_INIT            (0x1000)
-
 
 /******************************************************************************
  * Shared Memory Data
@@ -916,10 +911,6 @@ static int msm_pm_power_collapse
 
 	msm_pm_smem_data->sleep_time = sleep_delay;
 	msm_pm_smem_data->resources_used = sleep_limit;
-
-	smsm_change_state(SMSM_APPS_DEM,
-		DEM_TIME_SLAVE_TIME_REQUEST | DEM_TIME_SLAVE_TIME_POLL,
-		DEM_TIME_SLAVE_TIME_INIT);
 
 	/* Enter PWRC/PWRC_SUSPEND */
 

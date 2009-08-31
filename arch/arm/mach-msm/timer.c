@@ -64,6 +64,18 @@ module_param_named(debug_mask, msm_timer_debug_mask, int, S_IRUGO | S_IWUSR | S_
 #endif
 #define SCLK_HZ 32768
 
+#if defined(CONFIG_MSM_N_WAY_SMSM)
+/* Time Master State Bits */
+#define MASTER_BITS_PER_CPU        1
+#define MASTER_TIME_PENDING \
+	(0x01UL << (MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
+
+/* Time Slave State Bits */
+#define SLAVE_TIME_REQUEST         0x0400
+#define SLAVE_TIME_POLL            0x0800
+#define SLAVE_TIME_INIT            0x1000
+#endif
+
 enum {
 	MSM_CLOCK_FLAGS_UNSTABLE_COUNT = 1U << 0,
 	MSM_CLOCK_FLAGS_ODD_MATCH_WRITE = 1U << 1,
@@ -243,16 +255,6 @@ static uint32_t msm_timer_sync_sclk(
 	void (*update)(struct msm_timer_sync_data_t *data, uint32_t clk_val),
 	struct msm_timer_sync_data_t *data)
 {
-	/* Time Master State Bits */
-	#define MASTER_BITS_PER_CPU        1
-	#define MASTER_TIME_PENDING \
-		(0x01UL << (MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
-
-	/* Time Slave State Bits */
-	#define SLAVE_TIME_REQUEST         0x0400
-	#define SLAVE_TIME_POLL            0x0800
-	#define SLAVE_TIME_INIT            0x1000
-
 	uint32_t *smem_clock;
 	uint32_t smem_clock_val;
 	uint32_t state;
@@ -634,6 +636,9 @@ int __init msm_timer_init_time_sync(void)
 			__func__, ret);
 		return ret;
 	}
+
+	smsm_change_state(SMSM_APPS_DEM,
+		SLAVE_TIME_REQUEST | SLAVE_TIME_POLL, SLAVE_TIME_INIT);
 #endif
 
 	return 0;
