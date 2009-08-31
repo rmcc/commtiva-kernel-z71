@@ -45,7 +45,13 @@
 #define AUDIO_ASYNC_WRITE _IOW(AUDIO_IOCTL_MAGIC, 17, unsigned)
 #define AUDIO_ASYNC_READ _IOW(AUDIO_IOCTL_MAGIC, 18, unsigned)
 #define AUDIO_SET_INCALL _IOW(AUDIO_IOCTL_MAGIC, 19, struct msm_voicerec_mode)
-
+#define AUDIO_GET_NUM_SND_DEVICE _IOR(AUDIO_IOCTL_MAGIC, 20, unsigned)
+#define AUDIO_GET_SND_DEVICES _IOWR(AUDIO_IOCTL_MAGIC, 21, \
+				struct msm_snd_device_list)
+#define AUDIO_ENABLE_SND_DEVICE _IOW(AUDIO_IOCTL_MAGIC, 22, unsigned)
+#define AUDIO_DISABLE_SND_DEVICE _IOW(AUDIO_IOCTL_MAGIC, 23, unsigned)
+#define AUDIO_ROUTE_STREAM _IOW(AUDIO_IOCTL_MAGIC, 24, \
+				struct msm_audio_route_config)
 #define AUDIO_GET_PCM_CONFIG _IOR(AUDIO_IOCTL_MAGIC, 30, unsigned)
 #define AUDIO_SET_PCM_CONFIG _IOW(AUDIO_IOCTL_MAGIC, 31, unsigned)
 #define AUDIO_SWITCH_DEVICE  _IOW(AUDIO_IOCTL_MAGIC, 32, unsigned)
@@ -240,5 +246,31 @@ struct msm_audio_event {
 	int event_type;
 	int timeout_ms;
 	union msm_audio_event_payload event_payload;
+};
+
+#define MSM_SNDDEV_CAP_RX 0x1
+#define MSM_SNDDEV_CAP_TX 0x2
+#define MSM_SNDDEV_CAP_VOICE 0x4
+
+struct msm_snd_device_info {
+	uint32_t dev_id;
+	uint32_t dev_cap; /* bitmask describe capability of device */
+	char dev_name[64];
+};
+
+struct msm_snd_device_list {
+	uint32_t  num_dev; /* Indicate number of device info to be retrieved */
+	struct msm_snd_device_info *list;
+};
+
+#define AUDIO_ROUTE_STREAM_VOICE_RX 0
+#define AUDIO_ROUTE_STREAM_VOICE_TX 1
+#define AUDIO_ROUTE_STREAM_PLAYBACK 2
+#define AUDIO_ROUTE_STREAM_REC      3
+
+struct msm_audio_route_config {
+	uint32_t stream_type;
+	uint32_t stream_id;
+	uint32_t dev_id;
 };
 #endif
