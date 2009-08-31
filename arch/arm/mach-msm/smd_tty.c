@@ -139,7 +139,7 @@ static int smd_tty_open(struct tty_struct *tty, struct file *f)
 				smsm_change_state(SMSM_APPS_STATE,
 						  0, SMSM_SMD_LOOPBACK);
 				msleep(100);
-			} else if (n == 0)
+			} else if ((n == 0) || (n == 7))
 				tty->low_latency = 1;
 
 			res = smd_open(name, &info->ch, info,
