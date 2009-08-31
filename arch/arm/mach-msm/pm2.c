@@ -372,6 +372,7 @@ static void msm_pm_config_hw_before_power_down(void)
 static void msm_pm_config_hw_after_power_up(void)
 {
 	writel(0, APPS_PWRDOWN);
+	writel(0, APPS_CLK_SLEEP_EN);
 }
 
 /*
@@ -379,7 +380,11 @@ static void msm_pm_config_hw_after_power_up(void)
  */
 static void msm_pm_config_hw_before_swfi(void)
 {
+#ifdef CONFIG_ARCH_MSM_SCORPION
 	writel(0x1f, APPS_CLK_SLEEP_EN);
+#else
+	writel(0x0f, APPS_CLK_SLEEP_EN);
+#endif
 }
 
 /*
