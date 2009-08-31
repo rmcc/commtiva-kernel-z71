@@ -47,8 +47,8 @@
 #define KEY_ROW(val)	(((val) >> 24) & 0xff)
 #define KEY_VAL(val)	((val) & 0xffff)
 
-#define KEY(row, col, val)	(((row % (MATRIX_MAX_ROWS - 1)) << 24) |\
-				 ((col % (MATRIX_MAX_COLS - 1)) << 16)  |\
+#define KEY(row, col, val)	(((row % (MATRIX_MAX_ROWS)) << 24) |\
+				 ((col % (MATRIX_MAX_COLS)) << 16)  |\
 				 (val & 0xffff))
 
 struct pmic8058_keypad_data {
@@ -63,6 +63,7 @@ struct pmic8058_keypad_data {
 
 	unsigned int debounce_ms;
 	unsigned int scan_delay_ms;
+	unsigned int row_hold_us;
 
 	int keymap_size;
 	const unsigned int *keymap;
