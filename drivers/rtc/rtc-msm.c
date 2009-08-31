@@ -99,7 +99,10 @@ msmrtc_timeremote_set_time(struct device *dev, struct rtc_time *tm)
 				&req, sizeof(req),
 				&rep, sizeof(rep),
 				5 * HZ);
-	return rc;
+	if (rc < 0)
+		return rc;
+
+	return 0;
 }
 
 static int
