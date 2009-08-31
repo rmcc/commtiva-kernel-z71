@@ -168,7 +168,7 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 
 	for (i = 0; i < num_bytes; i++)
 		mask_value[i] = (marimba_shadow[marimba->mod_id][reg + i]
-					& ~mask) | value[i];
+					& ~mask) | (value[i] & mask);
 
 	msg = &marimba->xfer_msg[0];
 	msg->addr = marimba->client->addr;
@@ -188,7 +188,7 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 	if (ret == 1) {
 		for (i = 0; i < num_bytes; i++)
 			marimba_shadow[marimba->mod_id][reg + i]
-							|= mask_value[i];
+							= mask_value[i];
 	}
 
 	mutex_unlock(&marimba->xfer_lock);
