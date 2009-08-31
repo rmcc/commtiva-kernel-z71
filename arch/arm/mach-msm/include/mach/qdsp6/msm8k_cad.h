@@ -103,4 +103,6 @@ int audio_set_device_volume_path(struct msm_vol_info *v);
 
 int audio_set_device_mute(struct msm_mute_info *m);
 
+int audio_resync_afe_clk(void);
+
 #endif
