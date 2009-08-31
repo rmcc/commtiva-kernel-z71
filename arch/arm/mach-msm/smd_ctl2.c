@@ -214,17 +214,6 @@ ssize_t smd_ctl_read(struct file *file,
 	D(KERN_ERR "%s: read %i bytes\n",
 	  __func__, count);
 
-	if (count > MAX_BUF_SIZE) {
-		printk(KERN_ERR "ERROR:%s:%i:%s: "
-		       "count = %i > MAX_BUF_SIZE = %i\n",
-		       __FILE__,
-		       __LINE__,
-		       __func__,
-		       count,
-		       MAX_BUF_SIZE);
-		return -EINVAL;
-	}
-
 	smd_ctl_devp = file->private_data;
 
 	if (!smd_ctl_devp->ctl_ch)
