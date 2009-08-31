@@ -160,6 +160,7 @@ struct usb_info {
 
 	/* single request used for handling setup transactions */
 	struct usb_request *setup_req;
+	struct usb_request *ep0out_req;
 
 	struct platform_device *pdev;
 	struct msm_hsusb_platform_data *pdata;
@@ -1018,6 +1019,12 @@ static void ep0_setup_stall(struct usb_info *ui)
 	writel((1<<16) | (1<<0), USB_ENDPTCTRL(0));
 }
 
+static void ep0_setup_receive(struct usb_info *ui, unsigned len)
+{
+	ui->ep0out_req->length = len;
+	usb_ept_queue_xfer(&ui->ep0out, ui->ep0out_req);
+}
+
 static void ep0_setup_send(struct usb_info *ui, unsigned wlen)
 {
 	struct usb_request *req = ui->setup_req;
@@ -1078,8 +1085,11 @@ static void handle_setup(struct usb_info *ui)
 			} else {
 				int ret = func->setup(&ctl, NULL, 0,
 							func->context);
-				if (ret >= 0) {
+				if (ret == 0) {
 					ep0_setup_ack(ui);
+					return;
+				} else if (ret > 0) {
+					ep0_setup_receive(ui, ret);
 					return;
 				}
 			}
@@ -1604,6 +1614,7 @@ static void usb_prepare(struct usb_info *ui)
 	ui->ep0out.alloced = 1;
 
 	ui->setup_req = usb_ept_alloc_req(&ui->ep0in, SETUP_BUF_SIZE);
+	ui->ep0out_req = usb_ept_alloc_req(&ui->ep0out, ui->ep0out.max_pkt);
 
 	INIT_WORK(&ui->chg_stop, usb_chg_stop);
 	INIT_WORK(&ui->li.detach_int_h, usb_lpm_detach_int_h);
@@ -2010,6 +2021,10 @@ int usb_function_register(struct usb_function *driver)
 	fi->func = driver;
 	list_add(&fi->list, &usb_function_list);
 	ui->func[index] = fi;
+	fi->func->ep0_out_req = ui->ep0out_req;
+	fi->func->ep0_in_req = ui->setup_req;
+	fi->func->ep0_out = &ui->ep0out;
+	fi->func->ep0_in = &ui->ep0in;
 	pr_info("%s: name = '%s',  map = %d\n", __func__, driver->name, index);
 
 	usb_try_to_bind();

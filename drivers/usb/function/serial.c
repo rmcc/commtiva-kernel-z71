@@ -1547,6 +1547,39 @@ static void /* __init_or_exit */ gs_unbind(void *_ctxt)
 	pr_debug("%s: %s %s\n", __func__, GS_LONG_NAME, GS_VERSION_STR);
 }
 
+static void gser_complete_set_line_coding(struct usb_endpoint *ep,
+		struct usb_request *req)
+{
+	struct gs_dev *dev = (struct gs_dev *)req->device;
+	struct gs_port *port;
+	struct usb_cdc_line_coding *value;
+	struct usb_request *in_req;
+
+	port = dev->dev_port[0];
+	if (!(dev && dev->dev_port[0])) {
+		printk(KERN_ERR "%s(): dev or dev_port is null\n", __func__);
+		usb_ept_set_halt(dev->func->ep0_in);
+		return;
+	}
+	if (req->actual != sizeof(port->port_line_coding)) {
+		printk(KERN_ERR "%s(): received wrong data\n", __func__);
+		usb_ept_set_halt(dev->func->ep0_in);
+		return;
+	}
+
+	port = dev->dev_port[0];
+
+	/* Use Host assigned port_line setting */
+	value = req->buf;
+	port->port_line_coding = *value;
+
+	/* Send ACK on EP0 IN */
+	in_req = dev->func->ep0_in_req;
+	in_req->length = 0;
+	in_req->complete = 0;
+	usb_ept_queue_xfer(dev->func->ep0_in, in_req);
+}
+
 static int gs_setup(struct usb_ctrlrequest *ctrl,
 		void *buf, int len, void *_ctxt)
 {
@@ -1568,17 +1601,21 @@ static int gs_setup(struct usb_ctrlrequest *ctrl,
 		return 0;
 	}
 	switch (ctrl->bRequest) {
-#if 0
+
 	case USB_CDC_REQ_SET_LINE_CODING:
-		ret = min(wLength,
-		(u16)sizeof(struct usb_cdc_line_coding));
 		if (port) {
-			spin_lock(&port->port_lock);
-			memcpy(&port->port_line_coding, buf , ret);
-			spin_unlock(&port->port_lock);
-		}
-	break;
-#endif
+			struct usb_request *req = dev->func->ep0_out_req;
+			ret = min(wLength,
+				(u16) sizeof(struct usb_cdc_line_coding));
+			if (ret != sizeof(struct usb_cdc_line_coding))
+				ret = -EOPNOTSUPP;
+			else {
+				req->device = dev;
+				req->complete = gser_complete_set_line_coding;
+				}
+		} else
+			ret = -ENODEV;
+		break;
 
 	case USB_CDC_REQ_GET_LINE_CODING:
 		port = dev->dev_port[0];/* ACM only has one port */
