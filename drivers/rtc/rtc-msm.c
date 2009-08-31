@@ -224,6 +224,12 @@ msmrtc_timeremote_read_time_secure(struct device *dev, struct rtc_time *tm)
 	tm->tm_sec = be32_to_cpu(rep.time.second);
 	tm->tm_wday = be32_to_cpu(rep.time.day_of_week);
 
+#if RTC_DEBUG
+	printk(KERN_DEBUG "%s: %.2u/%.2u/%.4u %.2u:%.2u:%.2u (%.2u)\n",
+	       __func__, tm->tm_mon, tm->tm_mday, tm->tm_year,
+	       tm->tm_hour, tm->tm_min, tm->tm_sec, tm->tm_wday);
+#endif
+
 	tm->tm_year -= 1900;	/* RTC layer expects years to start at 1900 */
 	tm->tm_mon--;		/* RTC layer expects mons to be 0 based */
 
