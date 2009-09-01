@@ -76,7 +76,12 @@
 #define KEYP_CTRL_EVNTS_MASK		0x3
 
 #define KEYP_CTRL_SCAN_COLS_SHIFT	5
+#define KEYP_CTRL_SCAN_COLS_MIN		5
+#define KEYP_CTRL_SCAN_COLS_BITS	0x3
+
 #define KEYP_CTRL_SCAN_ROWS_SHIFT	2
+#define KEYP_CTRL_SCAN_ROWS_MIN		5
+#define KEYP_CTRL_SCAN_ROWS_BITS	0x7
 
 #define KEYP_CTRL_KEYP_EN		BIT(7)
 
@@ -104,6 +109,11 @@
 #define KEYP_RECENT_DATA		0x14B
 #define KEYP_OLD_DATA			0x14C
 
+#define KEYP_CLOCK_FREQ			32768
+
+/* Internal flags */
+#define KEYF_FIX_LAST_ROW		0x01
+
 /* ---------------------------------------------------------------------*/
 struct pmic8058_kp {
 	const struct pmic8058_keypad_data *pdata;
@@ -115,6 +125,8 @@ struct pmic8058_kp {
 
 	struct device *dev;
 	u16 keystate[MATRIX_MAX_ROWS];
+
+	u32	flags;
 };
 
 /* REVISIT - this should have come from pm8058_read/write */
@@ -207,12 +219,18 @@ static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
 static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 					 u16 *old_state)
 {
-	int rc, row;
+	int rc, row, read_rows;
 	u8 new_data[MATRIX_MAX_ROWS];
 	u8 old_data[MATRIX_MAX_ROWS];
 
+	if (kp->flags & KEYF_FIX_LAST_ROW)
+		read_rows = MATRIX_MAX_ROWS;
+	else
+		read_rows = kp->pdata->num_rows;
+
 	rc = pmic8058_kp_read(kp, new_data, KEYP_RECENT_DATA,
-					 kp->pdata->num_rows);
+			      read_rows);
+
 	if (!rc) {
 		pmic8058_chk_read_state(kp, 1);
 		for (row = 0; row < kp->pdata->num_rows; row++) {
@@ -224,7 +242,7 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 
 	if (old_state) {
 		rc = pmic8058_kp_read(kp, old_data, KEYP_OLD_DATA,
-				kp->pdata->num_rows);
+				read_rows);
 		if (!rc) {
 			pmic8058_chk_read_state(kp, 0);
 			for (row = 0; row < kp->pdata->num_rows; row++) {
@@ -263,6 +281,7 @@ static int __pmic8058_kp_scan_matrix(struct pmic8058_kp *kp, u16 *new_state,
 			input_report_key(kp->input,
 					kp->keycodes[code],
 					!(new_state[row] & (1 << col)));
+
 			input_sync(kp->input);
 		}
 	}
@@ -332,12 +351,32 @@ static irqreturn_t pmic8058_kp_irq(int irq, void *data)
 
 static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 {
-	int bits, rc;
+	int bits, rc, cycles;
 	u8 scan_val = 0, ctrl_val = 0;
+	static u8 row_bits[] = {
+		0, 1, 2, 3, 4, 4, 5, 5, 6, 6, 6, 7, 7, 7,
+	};
 
-	/* hard-code 8columns x 12rows values in register for bringup */
-	ctrl_val = 0x3 << KEYP_CTRL_SCAN_COLS_SHIFT;
-	ctrl_val |= (0x5 << KEYP_CTRL_SCAN_ROWS_SHIFT);
+	/* Find column bits */
+	if (kp->pdata->num_cols < KEYP_CTRL_SCAN_COLS_MIN)
+		bits = 0;
+	else
+		bits = kp->pdata->num_cols - KEYP_CTRL_SCAN_COLS_MIN;
+	ctrl_val = (bits & KEYP_CTRL_SCAN_COLS_BITS) <<
+		KEYP_CTRL_SCAN_COLS_SHIFT;
+
+	/* Find row bits */
+	if (kp->pdata->num_rows < KEYP_CTRL_SCAN_ROWS_MIN)
+		bits = 0;
+	else if (kp->pdata->num_rows > MATRIX_MAX_ROWS)
+		bits = KEYP_CTRL_SCAN_ROWS_BITS;
+	else
+		bits = row_bits[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN];
+
+	/* Use max rows to fix last row problem if actual rows are less */
+	if (kp->flags & KEYF_FIX_LAST_ROW)
+		bits = KEYP_CTRL_SCAN_ROWS_BITS;
+	ctrl_val |= (bits << KEYP_CTRL_SCAN_ROWS_SHIFT);
 
 	ctrl_val |= KEYP_CTRL_KEYP_EN;
 
@@ -353,11 +392,16 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 	bits = fls(kp->pdata->scan_delay_ms) - 1;
 	scan_val |= (bits << KEYP_SCAN_PAUSE_SHIFT);
 
-	/*
-	 * 250uS default row hold time. This needs to be
-	 * configurable and should come from platform data instead.
-	 */
-	scan_val |= (0x3 << KEYP_SCAN_ROW_HOLD_SHIFT);
+	/* Row hold time is a multiple of 32KHz cycles. */
+	cycles = kp->pdata->row_hold_us * KEYP_CLOCK_FREQ / USEC_PER_SEC;
+	bits = 3; /* Max : b11 */
+	while (bits) {
+		if (cycles >= (2 << bits))
+			break;
+
+		bits--;
+	}
+	scan_val |= (bits << KEYP_SCAN_ROW_HOLD_SHIFT);
 
 	rc = pmic8058_kp_write_u8(kp, scan_val, KEYP_SCAN);
 
@@ -450,6 +494,10 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	kp->pdata	= pdata;
 	kp->dev		= &pdev->dev;
 	kp->keycodes	= keycodes;
+
+	/* REVISIT: actual revision with the fix */
+	if (rev <= PMIC8058_REV_B0)
+		kp->flags |= KEYF_FIX_LAST_ROW;
 
 	kp->input = input_allocate_device();
 	if (!kp->input) {
