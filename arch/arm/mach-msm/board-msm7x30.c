@@ -230,7 +230,8 @@ static struct pmic8058_keypad_data surf_keypad_data = {
 	.keymap_size		= ARRAY_SIZE(surf_keymap),
 	.keymap			= surf_keymap,
 	.debounce_ms		= 8,
-	.scan_delay_ms		= 64,
+	.scan_delay_ms		= 32,
+	.row_hold_us		= 125,
 	.wakeup			= 1,
 };
 
