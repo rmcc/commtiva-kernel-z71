@@ -192,8 +192,6 @@ static struct adie_codec_action_unit debug_tx_actions[] = {
 	ADIE_CODEC_PACK_ENTRY(0x86, 0xff, 0x00)},
 	{ ADIE_CODEC_ACTION_ENTRY,
 	ADIE_CODEC_PACK_ENTRY(0x8A, 0x50, 0x40)},
-	{ ADIE_CODEC_ACTION_ENTRY,
-	ADIE_CODEC_PACK_ENTRY(0x91, 0xFF, 0x01)}, /* Start loop back */
 	{ ADIE_CODEC_ACTION_STAGE_REACHED, ADIE_CODEC_DIGITAL_ANALOG_READY},
 	{ ADIE_CODEC_ACTION_ENTRY,
 	ADIE_CODEC_PACK_ENTRY(0x8A, 0x10, 0x30)},
@@ -270,6 +268,9 @@ struct snddev_icodec_drv_state {
 	struct clk *rx_sclk;
 	struct clk *tx_mclk;
 	struct clk *tx_sclk;
+	struct clk *lpa_codec_clk;
+	struct clk *lpa_core_clk;
+	struct clk *lpa_p_clk;
 	struct vreg *vreg_gp16;
 	struct vreg *vreg_ncp;
 	struct vreg *vreg_msme;
@@ -300,7 +301,10 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 		goto error_invalid_freq;
 	clk_enable(drv->rx_mclk);
 	clk_enable(drv->rx_sclk);
-
+	/* clk_set_rate(drv->lpa_codec_clk, 1); */ /* Remove if use pcom */
+	clk_enable(drv->lpa_p_clk);
+	clk_enable(drv->lpa_codec_clk);
+	clk_enable(drv->lpa_core_clk);
 	/* Set audio interconnect reg to ADSP */
 	audio_interct_codec(AUDIO_INTERCT_ADSP);
 	/* Set MI2S */
@@ -349,7 +353,7 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;;
 
-	pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_PWM_TCXO);
+	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_PWM_TCXO);
 	/* Voltage regulator voting
 	 * Vote GP16, NCP, MSME, RF2
 	 */
@@ -384,7 +388,7 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	afe_config.sample_rate = icodec->sample_rate / 1000;
 	afe_config.channel_mode = icodec->data->channel_mode;
 	afe_config.volume = AFE_VOLUME_UNITY;
-	trc = afe_enable(AFE_HW_PATH_CODEC_RX, &afe_config);
+	trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
 	if (IS_ERR_VALUE(trc))
 		goto error_afe;
 	icodec->enabled = 1;
@@ -447,7 +451,7 @@ static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 	clk_disable(drv->tx_mclk);
 
 	/* Disable mic bias */
-	pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_OFF);
+	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_ncp);
 	vreg_disable(drv->vreg_msme);
@@ -511,9 +515,9 @@ static int snddev_icodec_close(struct msm_snddev_info *dev_info)
 
 	if (icodec->data->capability & SNDDEV_CAP_RX) {
 		mutex_lock(&drv->rx_lock);
-		if (drv->rx_active) {
+		if (!drv->rx_active) {
 			mutex_unlock(&drv->rx_lock);
-			rc = -EBUSY;
+			rc = -EPERM;
 			goto error;
 		}
 		rc = snddev_icodec_close_rx(icodec);
@@ -522,9 +526,9 @@ static int snddev_icodec_close(struct msm_snddev_info *dev_info)
 		mutex_unlock(&drv->rx_lock);
 	} else {
 		mutex_lock(&drv->tx_lock);
-		if (drv->tx_active) {
+		if (!drv->tx_active) {
 			mutex_unlock(&drv->tx_lock);
-			rc = -EBUSY;
+			rc = -EPERM;
 			goto error;
 		}
 		rc = snddev_icodec_close_tx(icodec);
@@ -658,7 +662,7 @@ static void debugfs_adie_loopback(u32 loop)
 		ADIE_CODEC_DIGITAL_ANALOG_READY);
 
 		pr_info("%s: Enable Handset Mic bias\n", __func__);
-		pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_PWM_TCXO);
+		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_PWM_TCXO);
 		/* enable MI2S TX master block */
 		/* enable MI2S TX bit clock */
 		clk_set_rate(drv->tx_mclk,
@@ -681,7 +685,7 @@ static void debugfs_adie_loopback(u32 loop)
 		ADIE_CODEC_DIGITAL_OFF);
 		adie_codec_close(debugfs_tx_adie);
 
-		pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_OFF);
+		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 
 		vreg_disable(drv->vreg_gp16);
 		vreg_disable(drv->vreg_ncp);
@@ -720,6 +724,9 @@ static void debugfs_afe_loopback(u32 loop)
 			pr_err("%s: failed to set clk rate\n", __func__);
 		clk_enable(drv->rx_mclk);
 		clk_enable(drv->rx_sclk);
+		clk_enable(drv->lpa_codec_clk);
+		clk_enable(drv->lpa_core_clk);
+		clk_enable(drv->lpa_p_clk);
 		/* Set audio interconnect reg to ADSP */
 		audio_interct_codec(AUDIO_INTERCT_ADSP);
 		/* Set MI2S */
@@ -739,7 +746,7 @@ static void debugfs_afe_loopback(u32 loop)
 		ADIE_CODEC_DIGITAL_ANALOG_READY);
 
 		pr_info("%s: Enable Handset Mic bias\n", __func__);
-		pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_PWM_TCXO);
+		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_PWM_TCXO);
 		/* enable MI2S TX master block */
 		/* enable MI2S TX bit clock */
 		clk_set_rate(drv->tx_mclk,
@@ -758,9 +765,9 @@ static void debugfs_afe_loopback(u32 loop)
 		afe_config.sample_rate = 0x8;
 		afe_config.channel_mode = 1;
 		afe_config.volume = AFE_VOLUME_UNITY;
-		trc = afe_enable(AFE_HW_PATH_CODEC_RX, &afe_config);
+		trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
 		if (IS_ERR_VALUE(trc))
-			pr_err("%s: failed to enable AFE RX\n", __func__);
+			pr_err("%s: failed to enable AFE TX\n", __func__);
 	} else {
 		/* Disable ADIE */
 		adie_codec_proceed_stage(debugfs_rx_adie,
@@ -770,7 +777,7 @@ static void debugfs_afe_loopback(u32 loop)
 		ADIE_CODEC_DIGITAL_OFF);
 		adie_codec_close(debugfs_tx_adie);
 
-		pmic_hsed_enable(PM_HSED_CONTROLLER_1, PM_HSED_ENABLE_OFF);
+		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 
 		vreg_disable(drv->vreg_gp16);
 		vreg_disable(drv->vreg_ncp);
@@ -849,6 +856,15 @@ static int __init snddev_icodec_init(void)
 	icodec_drv->tx_sclk = clk_get(NULL, "mi2s_codec_tx_s_clk");
 	if (IS_ERR(icodec_drv->tx_sclk))
 		goto error_tx_sclk;
+	icodec_drv->lpa_codec_clk = clk_get(NULL, "lpa_codec_clk");
+	if (IS_ERR(icodec_drv->lpa_codec_clk))
+		goto error_lpa_codec_clk;
+	icodec_drv->lpa_core_clk = clk_get(NULL, "lpa_core_clk");
+	if (IS_ERR(icodec_drv->lpa_core_clk))
+		goto error_lpa_core_clk;
+	icodec_drv->lpa_p_clk = clk_get(NULL, "lpa_pclk");
+	if (IS_ERR(icodec_drv->lpa_p_clk))
+		goto error_lpa_p_clk;
 	icodec_drv->vreg_gp16 = vreg_get(NULL, "gp16");
 	if (IS_ERR(icodec_drv->vreg_gp16))
 		goto error_vreg_gp16;
@@ -886,6 +902,12 @@ error_vreg_msme:
 error_vreg_ncp:
 	vreg_put(icodec_drv->vreg_gp16);
 error_vreg_gp16:
+	clk_put(icodec_drv->lpa_p_clk);
+error_lpa_p_clk:
+	clk_put(icodec_drv->lpa_core_clk);
+error_lpa_core_clk:
+	clk_put(icodec_drv->lpa_codec_clk);
+error_lpa_codec_clk:
 	clk_put(icodec_drv->tx_sclk);
 error_tx_sclk:
 	clk_put(icodec_drv->tx_mclk);
