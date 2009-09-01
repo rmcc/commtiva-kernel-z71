@@ -72,7 +72,7 @@ struct reg_struct const mt9p012_reg_pat[2] = {
 		3784,
 
 		/* frame_length_lines      REG=0x300A */
-		1057,
+		1074,
 
 		/* coarse_integration_time REG=0x3012 */
 		16,
