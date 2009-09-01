@@ -159,6 +159,7 @@ struct msm_spi {
 	struct spi_transfer     *cur_transfer;
 	struct completion        transfer_complete;
 	struct clk              *clk;
+	struct clk              *pclk;
 	unsigned long            mem_phys_addr;
 	size_t                   mem_size;
 	u32                      rx_bytes_remaining;
@@ -544,6 +545,7 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	struct msm_spi	       *dd;
 	struct resource	       *resmem;
 	int			rc = 0;
+	struct clk	       *pclk;
 	struct msm_spi_platform_data *pdata = pdev->dev.platform_data;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(struct msm_spi));
@@ -615,6 +617,17 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 			__func__);
 		goto err_probe_clk_enable;
 	}
+	pclk = clk_get(&pdev->dev, "spi_pclk");
+	if (!IS_ERR(pclk)) {
+		dd->pclk = pclk;
+		rc = clk_enable(dd->pclk);
+		if (rc) {
+			dev_err(&pdev->dev, "%s: unable to enable spi_pclk\n",
+				__func__);
+			goto err_probe_pclk_enable;
+		}
+	}
+
 	msm_spi_clock_set(dd, SPI_CLOCK_MAX);
 	msm_spi_calculate_fifo_size(dd);
 	writel(0x00000000, dd->base + SPI_OPERATIONAL);
@@ -659,6 +672,11 @@ err_probe_irq2:
 	free_irq(dd->irq_in, dd);
 err_probe_irq1:
 err_probe_state:
+	if (dd->pclk)
+		clk_disable(dd->pclk);
+err_probe_pclk_enable:
+	if (dd->pclk)
+		clk_put(dd->pclk);
 	clk_disable(dd->clk);
 err_probe_clk_enable:
 	clk_put(dd->clk);
@@ -754,6 +772,10 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 	release_mem_region(dd->mem_phys_addr, dd->mem_size);
 	clk_disable(dd->clk);
 	clk_put(dd->clk);
+	if (dd->pclk) {
+		clk_disable(dd->pclk);
+		clk_put(dd->pclk);
+	}
 	destroy_workqueue(dd->workqueue);
 	platform_set_drvdata(pdev, 0);
 	spi_unregister_master(master);
