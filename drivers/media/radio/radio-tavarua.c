@@ -100,8 +100,8 @@ struct tavarua_device {
 	struct device *dev;
 	/* gpio managment */
 	int irqpin;
-	int (*irqpin_setup)(void);
-	int (*irqpin_teardown)(void);
+	int (*irqpin_setup)(struct marimba_fm_platform_data *pdata);
+	int (*irqpin_teardown)(struct marimba_fm_platform_data *pdata);
 	struct marimba_fm_platform_data *pdata;
 	/*RDS buffers + Radio event buffer*/
 	struct kfifo *data_buf[TAVARUA_BUF_MAX];
@@ -132,7 +132,8 @@ module_param(rds_buf, uint, 0);
 MODULE_PARM_DESC(rds_buf, "RDS buffer entries: *100*");
 
 /* forward declerations */
-static int tavarua_start(struct tavarua_device *radio, int state);
+static int tavarua_start(struct tavarua_device *radio,
+			enum radio_state_t state);
 static int tavarua_request_irq(struct tavarua_device *radio);
 /* work function */
 static void read_int_stat(struct work_struct *work);
@@ -266,15 +267,16 @@ static int tavarua_request_irq(struct tavarua_device *radio)
 
 	retval = request_irq(irq, tavarua_isr, IRQ_TYPE_EDGE_FALLING,
 				"fm interrupt", radio);
-	if (retval < 0)
-		FMDBG("Couldn't acquire FM gpio \n");
-	else
-		FMDBG("FM GPIO registered \n");
-
+	if (retval < 0) {
+		FMDBG("Couldn't acquire FM gpio %d\n", irq);
+		return retval;
+	} else {
+		FMDBG("FM GPIO %d registered \n", irq);
+	}
 	retval = enable_irq_wake(irq);
 	if (retval < 0) {
 		FMDBG("Could not enable FM interrupt\n ");
-		free_irq(irq , NULL);
+		free_irq(irq , radio);
 	}
 	return retval;
 }
@@ -288,8 +290,9 @@ static int tavarua_disable_irq(struct tavarua_device *radio)
 	if (!radio)
 		return -EINVAL;
 	irq = radio->irqpin;
+	disable_irq_wake(irq);
 	flush_scheduled_work();
-	free_irq(irq, NULL);
+	free_irq(irq, radio);
 	return 0;
 }
 
@@ -305,7 +308,8 @@ static unsigned int tavarua_get_freq(struct tavarua_device *radio,
 {
 	int retval;
 	unsigned short chan;
-	int band_bottom, spacing;
+	unsigned int band_bottom = 87.5 * FREQ_MUL;
+	unsigned int spacing = 0.100 * FREQ_MUL;
 
 	switch (radio->zone) {
 	/* 0: 200 kHz (USA, Australia) */
@@ -338,7 +342,8 @@ static unsigned int tavarua_get_freq(struct tavarua_device *radio,
 
 static int tavarua_set_freq(struct tavarua_device *radio, unsigned int freq)
 {
-	unsigned int spacing, band_bottom;
+	unsigned int spacing = 0.100 * FREQ_MUL;
+	unsigned int band_bottom = 87.5 * FREQ_MUL;
 	unsigned char chan;
 	unsigned char cmd[2];
 
@@ -398,7 +403,6 @@ static int tavarua_fops_open(struct file *file)
 		printk(KERN_ERR "%s: failed to request irq\n", __func__);
 		return retval;
 	}
-
 	/* call top level marimba interface here to enable FM core */
 	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
 	value = FM_ENABLE;
@@ -416,7 +420,6 @@ static int tavarua_fops_open(struct file *file)
 		printk(KERN_ERR "%s: failed to bring up FM Core \n", __func__);
 		return retval;
 	}
-
 	return 0;
 }
 
@@ -431,22 +434,23 @@ static int tavarua_fops_release(struct file *file)
 	unsigned char value;
 	if (!radio)
 		return -ENODEV;
-
-	/* disable fm core */
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
-	value = 0x00;
-	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
-							&value, 1, value);
-
-	if (retval < 0) {
-		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed \n", __func__);
-		return retval;
-	}
+	/* disable radio ctrl */
+	retval = tavarua_write_register(radio, RDCTRL, 0x00);
 
 	/* disable irq */
 	retval = tavarua_disable_irq(radio);
 	if (retval < 0) {
 		printk(KERN_ERR "%s: failed to disable irq\n", __func__);
+		return retval;
+	}
+
+	/* disable fm core */
+	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+	value = 0x00;
+	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
+							&value, 1, FM_ENABLE);
+	if (retval < 0) {
+		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed \n", __func__);
 		return retval;
 	}
 	/* teardown gpio and pmic */
@@ -677,9 +681,9 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 	case V4L2_CID_PRIVATE_TAVARUA_STATE:
 		/* check if already on */
 		if ((ctrl->value == 1) && !(radio->registers[RDCTRL] &
-							FM_RECV_ON)) {
+							FM_RECV)) {
 			FMDBG("turning on...\n");
-			retval = tavarua_start(radio, FM_RECV_ON);
+			retval = tavarua_start(radio, FM_RECV);
 		}
 		/* check if off */
 		else if ((ctrl->value == 0) && radio->registers[RDCTRL]) {
@@ -815,6 +819,7 @@ static int tavarua_vidioc_s_frequency(struct file *file, void *priv,
 	if (retval < 0)
 		printk(KERN_WARNING DRIVER_NAME
 			": set frequency failed with %d\n", retval);
+	msleep(500);
 	return retval;
 }
 
@@ -901,7 +906,8 @@ static struct video_device tavarua_viddev_template = {
 };
 
 
-static int tavarua_start(struct tavarua_device *radio, int state)
+static int tavarua_start(struct tavarua_device *radio,
+				enum radio_state_t state)
 {
 
 	int retval;
@@ -927,7 +933,7 @@ static int tavarua_start(struct tavarua_device *radio, int state)
 	if (retval < 0)
 		return retval;
 
-	if (state == FM_RECV_ON) {
+	if (state == FM_RECV) {
 		retval = tavarua_write_register(radio, STATUS_REG2, RDSRT);
 	} else {
 		retval = tavarua_write_register(radio, STATUS_REG2, RDSRT |
@@ -940,7 +946,7 @@ static int tavarua_start(struct tavarua_device *radio, int state)
 	if (retval < 0)
 		return retval;
 
-	if (state == FM_RECV_ON) {
+	if (state == FM_RECV) {
 		retval = tavarua_write_register(radio, ADVCTRL, RDSRTEN);
 		if (retval < 0)
 			return retval;
@@ -976,8 +982,7 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	unsigned int buf_size;
 	int retval;
 	int i;
-
-
+	FMDBG("%s: probe called\n", __func__);
 	/* private data allocation */
 	radio = kzalloc(sizeof(struct tavarua_device), GFP_KERNEL);
 	if (!radio) {
@@ -995,7 +1000,6 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, radio);
 
 	device_init_wakeup(radio->dev, 0);
-
 	/* video device allocation */
 	radio->videodev = video_device_alloc();
 	if (!radio->videodev)
@@ -1020,7 +1024,8 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	}
 
 	radio->users = 0;
-
+	/* init lock */
+	mutex_init(&radio->lock);
 	/* initialize wait queue for event read */
 	init_waitqueue_head(&radio->event_queue);
 
