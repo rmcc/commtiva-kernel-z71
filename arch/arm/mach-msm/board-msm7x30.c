@@ -93,6 +93,7 @@
 #define MSM_FB_SIZE		0x200000
 
 #define PMIC_GPIO_INT		27
+#define PMIC_VREG_WLAN_LEVEL	2900
 
 static const unsigned int surf_keymap[] = {
 	KEY(0, 0, KEY_7),
@@ -734,7 +735,8 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("pmdh", &mddi_pdata);
 }
 
-#ifdef CONFIG_MSM_BT_POWER
+#if defined(CONFIG_MARIMBA_CORE) && \
+   (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 static struct platform_device msm_bt_power_device = {
 	.name = "bt_power",
 };
@@ -767,74 +769,109 @@ static struct msm_gpio bt_config_power_off[] = {
 		"UART1DM_Tx" }
 };
 
+static int marimba_bt(int on)
+{
+	int rc;
+	int i;
+	struct marimba config = { .mod_id = MARIMBA_SLAVE_ID_MARIMBA };
+
+	struct marimba_config_register {
+		u8 reg;
+		u8 value;
+		u8 mask;
+	} *p;
+
+	size_t config_size;
+
+	struct marimba_config_register bt_on[] = {
+		{ 0xE5, 0x0B, 0x0F },
+		{ 0x05, 0x02, 0x07 },
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x21, 0x21 },
+	};
+
+	struct marimba_config_register bt_off[] = {
+		{ 0xE5, 0x0B, 0x0F },
+		{ 0x05, 0x02, 0x07 },
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x00, 0x21 },
+	};
+
+	p = on ? bt_on : bt_off;
+	config_size = on ? ARRAY_SIZE(bt_on) : ARRAY_SIZE(bt_off);
+
+	for (i = 0; i < config_size; i++) {
+		rc = marimba_write_bit_mask(&config,
+			(p+i)->reg,
+			&((p+i)->value),
+			sizeof((p+i)->value),
+			(p+i)->mask);
+		if (rc < 0) {
+			printk(KERN_ERR
+				"%s: reg %d write failed: %d\n",
+				__func__, (p+i)->reg, rc);
+			return rc;
+		}
+	}
+	return 0;
+}
+
 static int bluetooth_power(int on)
 {
 	int rc;
-	struct marimba config = { .mod_id = MARIMBA_SLAVE_ID_MARIMBA };
-	u8 bt_boot_config = 0x0b;
-	u8 xo_buffer = 0x02;
-	u8 rbias_ctl0 = 0x88;
-	u8 bt_ctl0 = 0x21;
+	struct vreg *vreg_wlan;
+
+	vreg_wlan = vreg_get(NULL, "wlan");
+
+	if (IS_ERR(vreg_wlan)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_wlan));
+		return PTR_ERR(vreg_wlan);
+	}
 
 	if (on) {
 		rc = msm_gpios_enable(bt_config_power_on,
-				ARRAY_SIZE(bt_config_power_on));
+			ARRAY_SIZE(bt_config_power_on));
 
 		if (rc < 0) {
 			printk(KERN_ERR
-				"Bluetooth power: gpio config failed: %d\n",
-				rc);
+				"%s: gpio config failed: %d\n",
+				__func__, rc);
 			return rc;
 		}
 
-		rc = marimba_write_bit_mask(&config, 0xe5, &bt_boot_config, 1,
-				bt_boot_config);
-		if (rc < 0) {
-			printk(KERN_ERR
-				"Bluetooth power: boot config failed: %d\n",
-				rc);
-			return rc;
+		rc = vreg_set_level(vreg_wlan, PMIC_VREG_WLAN_LEVEL);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan set level failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
 		}
-		rc = marimba_write_bit_mask(&config, 0x05, &xo_buffer, 1,
-				xo_buffer);
-		if (rc < 0) {
-			printk(KERN_ERR
-				"Bluetooth power: xo config failed: %d\n",
-				rc);
-			return rc;
+		rc = vreg_enable(vreg_wlan);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan enable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
 		}
-		rc = marimba_write_bit_mask(&config, 0x06, &rbias_ctl0, 1,
-				rbias_ctl0);
-		if (rc < 0) {
-			printk(KERN_ERR
-				"Bluetooth power: rbias config failed: %d\n",
-				rc);
-			return rc;
-		}
-		rc = marimba_write_bit_mask(&config, 0xe7, &bt_ctl0, 1,
-				bt_ctl0);
-		if (rc < 0) {
-			printk(KERN_ERR
-				"Bluetooth power: reset failed: %d\n",
-				rc);
-			return rc;
-		}
-
+		rc = marimba_bt(on);
+		if (rc)
+			return -EIO;
 	} else {
-		rc = marimba_write_bit_mask(&config, 0xe7, 0, 1, bt_ctl0);
-		if (rc < 0) {
-			printk(KERN_ERR
-				"Bluetooth power: reset failed: %d\n",
-				rc);
-			return rc;
+		rc = marimba_bt(on);
+		if (rc)
+			return -EIO;
+		rc = vreg_disable(vreg_wlan);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg wlan disable failed (%d)\n",
+			       __func__, rc);
+			return -EIO;
 		}
 
 		rc = msm_gpios_enable(bt_config_power_off,
 					ARRAY_SIZE(bt_config_power_off));
 		if (rc < 0) {
 			printk(KERN_ERR
-				"Bluetooth power: gpio config failed: %d\n",
-				rc);
+				"%s: gpio config failed: %d\n",
+				__func__, rc);
 			return rc;
 		}
 	}
@@ -869,7 +906,8 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
 	&hs_device,
-#ifdef CONFIG_MSM_BT_POWER
+#if defined(CONFIG_MARIMBA_CORE) && \
+   (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 	&msm_bt_power_device,
 #endif
 };
