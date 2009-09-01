@@ -63,6 +63,12 @@
 #define MDPOP_TRANSP            BIT(9)	/* enable transparency */
 #define MDPOP_DITHER            BIT(10)	/* enable dither */
 #define MDPOP_SHARPENING	BIT(11) /* enable sharpening */
+#define MDPOP_BLUR		BIT(12) /* enable blur */
+
+struct mdp_table_entry {
+	uint32_t reg;
+	uint32_t val;
+};
 
 /*
  * {3x3} + {3} ccs matrix
@@ -112,6 +118,7 @@ typedef enum {
 	MDP_PR_SCALE_POINT6_POINT8,
 	MDP_PR_SCALE_POINT8_1,
 	MDP_PR_SCALE_UP,
+	MDP_SCALE_BLUR,
 	MDP_INIT_SCALE
 } MDP_SCALE_MODE;
 
