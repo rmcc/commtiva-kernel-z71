@@ -184,9 +184,9 @@ static int ping_mdm_data_cb(struct msm_rpc_client *client,
 			struct ping_mdm_register_data_cb_cb_ret *))
 		      cb_func)(&arg, &ret);
 		if (rc)
-			accept_status = RPC_ACCEPTSTAT_SUCCESS;
-		else
 			accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
+		else
+			accept_status = RPC_ACCEPTSTAT_SUCCESS;
 	} else
 		accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
 
