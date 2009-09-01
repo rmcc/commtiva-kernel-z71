@@ -469,6 +469,11 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 			}
 			plls_enabled |= 1 << tgt_s->pll;
 		}
+	}
+	/* Need to do this when coming out of power collapse since some modem
+	 * firmwares reset the VDD when the application processor enters power
+	 * collapse. */
+	if (reason == SETRATE_CPUFREQ || reason == SETRATE_PC) {
 		/* Increase VDD if needed. */
 		if (tgt_s->vdd > cur_s->vdd) {
 			if ((rc = acpuclk_set_vdd_level(tgt_s->vdd)) < 0) {
