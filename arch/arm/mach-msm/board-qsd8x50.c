@@ -855,11 +855,17 @@ static void msm_fb_vreg_config(const char *name, int on)
 static void msm_fb_mddi_power_save(int on)
 {
 	int flag_on = !!on;
+	int ret;
 
 	if (!flag_on && machine_is_qsd8x50_ffa()) {
 		gpio_set_value(MDDI_RST_OUT_GPIO, 0);
 		mdelay(1);
 	}
+
+	ret = pmic_lp_mode_control(flag_on ? OFF_CMD : ON_CMD,
+		PM_VREG_LP_MSME2_ID);
+	if (ret)
+		printk(KERN_ERR "%s: pmic_lp_mode_control failed!\n", __func__);
 
 	msm_fb_vreg_config("gp5", flag_on);
 	msm_fb_vreg_config("boost", flag_on);
