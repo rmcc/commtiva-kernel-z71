@@ -372,6 +372,7 @@ static void msm_pm_config_hw_before_power_down(void)
 static void msm_pm_config_hw_after_power_up(void)
 {
 	writel(0, APPS_PWRDOWN);
+	writel(0, APPS_CLK_SLEEP_EN);
 }
 
 /*
@@ -379,7 +380,11 @@ static void msm_pm_config_hw_after_power_up(void)
  */
 static void msm_pm_config_hw_before_swfi(void)
 {
+#ifdef CONFIG_ARCH_MSM_SCORPION
 	writel(0x1f, APPS_CLK_SLEEP_EN);
+#else
+	writel(0x0f, APPS_CLK_SLEEP_EN);
+#endif
 }
 
 /*
@@ -805,7 +810,7 @@ write_proc_failed:
  * Shared Memory Bits
  *****************************************************************************/
 
-#define DEM_MASTER_BITS_PER_CPU             5
+#define DEM_MASTER_BITS_PER_CPU             6
 
 /* Power Master State Bits - Per CPU */
 #define DEM_MASTER_SMSM_RUN \
@@ -818,6 +823,8 @@ write_proc_failed:
 	(0x08UL << (DEM_MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
 #define DEM_MASTER_SMSM_READY \
 	(0x10UL << (DEM_MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
+#define DEM_MASTER_SMSM_SLEEP \
+	(0x20UL << (DEM_MASTER_BITS_PER_CPU * SMSM_APPS_STATE))
 
 /* Power Slave State Bits */
 #define DEM_SLAVE_SMSM_RUN                  (0x0001)
@@ -1311,7 +1318,7 @@ void arch_idle(void)
 		struct msm_pm_platform_data *mode = &msm_pm_modes[i];
 		if (!mode->supported || !mode->idle_enabled ||
 			mode->latency >= latency_qos ||
-			mode->residency >= timer_expiration)
+			mode->residency * 1000ULL >= timer_expiration)
 			allow[i] = false;
 	}
 
@@ -1327,8 +1334,8 @@ void arch_idle(void)
 #endif
 
 	MSM_PM_DPRINTK(MSM_PM_DEBUG_IDLE, KERN_INFO,
-		"%s(): next timer %lld, sleep limit %u\n",
-		__func__, timer_expiration, sleep_limit);
+		"%s(): latency qos %d, next timer %lld, sleep limit %u\n",
+		__func__, latency_qos, timer_expiration, sleep_limit);
 
 	for (i = 0; i < ARRAY_SIZE(allow); i++)
 		MSM_PM_DPRINTK(MSM_PM_DEBUG_IDLE, KERN_INFO,
@@ -1444,6 +1451,9 @@ static int msm_pm_enter(suspend_state_t state)
 		sleep_limit = SLEEP_LIMIT_NO_TCXO_SHUTDOWN;
 #endif
 
+	MSM_PM_DPRINTK(MSM_PM_DEBUG_SUSPEND, KERN_INFO,
+		"%s(): sleep limit %u\n", __func__, sleep_limit);
+
 	for (i = 0; i < ARRAY_SIZE(allow); i++)
 		allow[i] = true;
 
@@ -1527,6 +1537,9 @@ static int msm_pm_enter(suspend_state_t state)
 	} else if (allow[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT]) {
 		msm_pm_swfi(false);
 	}
+
+	MSM_PM_DPRINTK(MSM_PM_DEBUG_SUSPEND, KERN_INFO,
+		"%s(): return %d\n", __func__, ret);
 
 	return ret;
 }
