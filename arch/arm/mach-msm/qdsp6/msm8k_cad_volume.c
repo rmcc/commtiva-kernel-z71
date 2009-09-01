@@ -947,6 +947,12 @@ int cad_volume_init(struct cad_func_tbl_type **func_tbl)
 	qdsp6_volume_cache_tbl[
 		INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_MONO_RX]
 			.min_gain = CAD_DEVICE_HEADSET_MIN_GAIN;
+	qdsp6_volume_cache_tbl[
+		INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX]
+		.max_gain = CAD_DEVICE_HEADSET_MAX_GAIN;
+	qdsp6_volume_cache_tbl[
+		INT_CAD_HW_DEVICE_ID_HEADSET_MONO_PLUS_SPKR_STEREO_RX]
+		.min_gain = CAD_DEVICE_HEADSET_MIN_GAIN;
 
 	stream_volume_cache = 0;
 
