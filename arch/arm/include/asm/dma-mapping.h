@@ -297,6 +297,52 @@ static inline dma_addr_t dma_map_single(struct device *dev, void *cpu_addr,
 }
 
 /**
+ * dma_cache_pre_ops - clean or invalidate cache before dma transfer is
+ *                     initiated and perform a barrier operation.
+ * @virtual_addr: A kernel logical or kernel virtual address
+ * @size: size of buffer to map
+ * @dir: DMA transfer direction
+ *
+ * Ensure that any data held in the cache is appropriately discarded
+ * or written back.
+ *
+ */
+static inline void dma_cache_pre_ops(void *virtual_addr,
+		size_t size, enum dma_data_direction dir)
+{
+	BUG_ON(!valid_dma_direction(dir));
+
+	if (!arch_is_coherent())
+		dma_cache_maint(virtual_addr, size, dir);
+}
+
+/**
+ * dma_cache_post_ops - clean or invalidate cache after dma transfer is
+ *                     initiated and perform a barrier operation.
+ * @virtual_addr: A kernel logical or kernel virtual address
+ * @size: size of buffer to map
+ * @dir: DMA transfer direction
+ *
+ * Ensure that any data held in the cache is appropriately discarded
+ * or written back.
+ *
+ */
+static inline void dma_cache_post_ops(void *virtual_addr,
+		size_t size, enum dma_data_direction dir)
+{
+	BUG_ON(!valid_dma_direction(dir));
+
+	if (arch_has_speculative_dfetch() && !arch_is_coherent()
+	 && dir != DMA_TO_DEVICE)
+		/*
+		 * Treat DMA_BIDIRECTIONAL and DMA_FROM_DEVICE
+		 * identically: invalidate
+		 */
+		dma_cache_maint(virtual_addr,
+				size, DMA_FROM_DEVICE);
+}
+
+/**
  * dma_map_page - map a portion of a page for streaming DMA
  * @dev: valid struct device pointer, or NULL for ISA and EISA-like devices
  * @page: page that buffer resides in
