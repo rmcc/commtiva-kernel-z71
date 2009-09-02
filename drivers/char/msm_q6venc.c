@@ -180,7 +180,7 @@ static struct class *q6venc_class;
 static void q6venc_callback(void *context, uint32_t param, void *data,
 			    uint32_t len)
 {
-	unsigned int id;
+	unsigned int id, end_addr;
 	struct q6venc_dev *q6venc_devp = context;
 
 	struct q6_frame_type *q6_frame_type = data;
@@ -211,6 +211,10 @@ static void q6venc_callback(void *context, uint32_t param, void *data,
 
 	q6venc_devp->rlc_buf_ptr = q6venc_devp->rlc_buf_map[id].virt_address;
 
+	end_addr = q6venc_devp->rlc_buf_ptr + q6venc_devp->rlc_buf_len - 1;
+	DBG("Cache invalidate:start_vaddr:0x%08x, end_vaddr: 0x%08x \n",
+	    q6venc_devp->rlc_buf_ptr, end_addr);
+	v7_dma_inv_range(q6venc_devp->rlc_buf_ptr, end_addr);
 	wake_up_interruptible(&q6venc_devp->encode_wq);
 }
 
@@ -386,7 +390,7 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 	DBG("Invalidate phy_addr: 0x%08x, virt_addr:0x%08x, len:0x%08x \n",
 	    q6venc_devp->rlc_buf_map[0].phy_address, vaddr,
 	    q6venc_devp->rlc_buf_len);
-	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len);
+	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len - 1);
 
 	q6venc_devp->rlc_buf_map[0].file = file;
 	q6venc_devp->rlc_buf_map[0].venc_buf = init_config->rlc_buf1;
@@ -417,7 +421,7 @@ static int convert_to_q6_init_config(struct q6venc_dev *q6venc_devp,
 	    q6venc_devp->rlc_buf_map[1].phy_address, vaddr,
 	    q6venc_devp->rlc_buf_len);
 
-	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len);
+	v7_dma_inv_range(vaddr, vaddr + q6venc_devp->rlc_buf_len - 1);
 
 	q6venc_devp->rlc_buf_map[1].file = file;
 
@@ -573,7 +577,7 @@ static int q6venc_ioctl(struct inode *inode, struct file *file,
 		else
 			start_addr = q6venc_devp->rlc_buf_map[0].virt_address;
 
-		end_addr = start_addr + q6venc_devp->rlc_buf_len;
+		end_addr = start_addr + q6venc_devp->rlc_buf_len - 1;
 		DBG("Cache invalidate:start_vaddr:0x%08x, end_vaddr: 0x%08x \n",
 		    start_addr, end_addr);
 		v7_dma_inv_range(start_addr, end_addr);
