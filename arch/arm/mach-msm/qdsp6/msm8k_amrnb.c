@@ -164,6 +164,7 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 	struct cad_write_amr_format_struct_type cad_write_amr_fmt;
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_filter_struct flt;
+	u32 percentage;
 
 	D("%s\n", __func__);
 
@@ -238,7 +239,8 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 				sizeof(struct msm_audio_config));
 		break;
 	case AUDIO_SET_VOLUME:
-		rc = copy_from_user(&p->volume, (void *)arg, sizeof(u32));
+		rc = copy_from_user(&percentage, (void *)arg, sizeof(u32));
+		p->volume = qdsp6_stream_volume_mapping(percentage);
 
 		memset(&cad_strm_volume, 0,
 				sizeof(struct cad_flt_cfg_strm_vol));

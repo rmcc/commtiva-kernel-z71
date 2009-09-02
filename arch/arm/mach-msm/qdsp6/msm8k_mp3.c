@@ -210,6 +210,7 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 	struct cad_filter_struct flt;
 	struct cad_event_struct_type eos_event;
 	struct adsp_audio_eq_cfg eq;
+	u32 percentage;
 	D("%s\n", __func__);
 
 	memset(&cad_dev, 0, sizeof(struct cad_device_struct_type));
@@ -303,7 +304,8 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 			cad_arg, sizeof(u32));
 		break;
 	case AUDIO_SET_VOLUME:
-		rc = copy_from_user(&p->volume, (void *)arg, sizeof(u32));
+		rc = copy_from_user(&percentage, (void *)arg, sizeof(u32));
+		p->volume = qdsp6_stream_volume_mapping(percentage);
 
 		memset(&cad_strm_volume, 0,
 				sizeof(struct cad_flt_cfg_strm_vol));
