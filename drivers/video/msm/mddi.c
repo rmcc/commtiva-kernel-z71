@@ -296,6 +296,9 @@ void mddi_disable(int lock)
 	if (lock)
 		mddi_power_locked = 1;
 
+	if (mddi_host_timer.function)
+		del_timer_sync(&mddi_host_timer);
+
 	mddi_pad_ctrl = mddi_host_reg_in(PAD_CTL);
 	mddi_host_reg_out(PAD_CTL, 0x0);
 
@@ -335,6 +338,9 @@ static int mddi_resume(struct platform_device *pdev)
 	clk_enable(mddi_clk);
 	mddi_host_reg_out(PAD_CTL, mddi_pad_ctrl);
 
+	if (mddi_host_timer.function)
+		mddi_host_timer_service(0);
+
 	return 0;
 }
 
@@ -356,8 +362,6 @@ static void mddi_early_resume(struct early_suspend *h)
 	mddi_resume(mfd->pdev);
 }
 #endif
-
-extern struct timer_list mddi_host_timer;
 
 static int mddi_remove(struct platform_device *pdev)
 {
