@@ -327,22 +327,18 @@ static int pmic_rpc_req_reply(struct pmic_buf *tbuf, struct pmic_buf *rbuf,
 	int	ans, len;
 
 
-	if (pm->endpoint == NULL) {
-		pm->endpoint = msm_rpc_connect(PMIC_RPC_PROG,
-					PMIC_RPC_VER_1_1, 0);
-		if (pm->endpoint == NULL) {
-			pm->endpoint = msm_rpc_connect(PMIC_RPC_PROG,
-						PMIC_RPC_VER_2_1, 0);
+	if ((pm->endpoint == NULL) || IS_ERR(pm->endpoint)) {
+		pm->endpoint = msm_rpc_connect_compatible(PMIC_RPC_PROG,
+					PMIC_RPC_VER_2_1, 0);
+		if (IS_ERR(pm->endpoint)) {
+			pm->endpoint = msm_rpc_connect_compatible(PMIC_RPC_PROG,
+						PMIC_RPC_VER_1_1, 0);
 		}
-
-		if (pm->endpoint == NULL)
-			return -ENODEV;
 
 		if (IS_ERR(pm->endpoint)) {
 			ans  = PTR_ERR(pm->endpoint);
 			printk(KERN_ERR "%s: init rpc failed! ans = %d\n",
 						__func__, ans);
-			pm->endpoint = NULL;
 			return ans;
 		}
 	}
