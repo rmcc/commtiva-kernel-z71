@@ -94,7 +94,7 @@ struct msm_hs_rx {
 	unsigned char *buffer;
 	struct dma_pool *pool;
 	struct wake_lock wake_lock;
-	struct work_struct work;
+	struct tasklet_struct tlet;
 };
 
 /* optional low power wakeup, typically on a GPIO RX irq */
@@ -578,22 +578,81 @@ static void msm_hs_start_rx_locked(struct uart_port *uport)
 	msm_hs_write(uport, UARTDM_IMR_ADDR, msm_uport->imr_reg);
 }
 
-static void msm_serial_hs_rx_work(struct work_struct *w)
+static void msm_serial_hs_rx_tlet(unsigned long tlet_ptr)
 {
+	int retval;
+	int rx_count;
+	unsigned long status;
+	unsigned long flags;
+	unsigned int error_f = 0;
 	struct uart_port *uport;
 	struct msm_hs_port *msm_uport;
 	unsigned int flush;
+	struct tty_struct *tty;
 
-	msm_uport = container_of(w, struct msm_hs_port, rx.work);
 
+	msm_uport = container_of((struct tasklet_struct *)tlet_ptr,
+				struct msm_hs_port, rx.tlet);
+	uport = &msm_uport->uport;
+	tty = uport->info->port.tty;
+
+	status = msm_hs_read(uport, UARTDM_SR_ADDR);
+
+	spin_lock_irqsave(&uport->lock, flags);
+
+	clk_enable(msm_uport->clk);
+	msm_hs_write(uport, UARTDM_CR_ADDR, STALE_EVENT_DISABLE);
+
+	/* overflow is not connect to data in a FIFO */
+	if (unlikely((status & UARTDM_SR_OVERRUN_BMSK) &&
+		     (uport->read_status_mask & CREAD))) {
+		tty_insert_flip_char(tty, 0, TTY_OVERRUN);
+		uport->icount.buf_overrun++;
+		error_f = 1;
+	}
+
+	if (!(uport->ignore_status_mask & INPCK))
+		status = status & ~(UARTDM_SR_PAR_FRAME_BMSK);
+
+	if (unlikely(status & UARTDM_SR_PAR_FRAME_BMSK)) {
+		/* Can not tell difference between parity & frame error */
+		uport->icount.parity++;
+		error_f = 1;
+		if (uport->ignore_status_mask & IGNPAR)
+			tty_insert_flip_char(tty, 0, TTY_PARITY);
+	}
+
+	if (error_f)
+		msm_hs_write(uport, UARTDM_CR_ADDR, RESET_ERROR_STATUS);
 	flush = msm_uport->rx.flush;
+	if (flush == FLUSH_IGNORE)
+		msm_hs_start_rx_locked(uport);
 	if (flush == FLUSH_STOP) {
 		msm_uport->rx.flush = FLUSH_SHUTDOWN;
 		wake_up(&msm_uport->rx.wait);
-		return;
 	}
-	uport = &msm_uport->uport;
+	if (flush >= FLUSH_DATA_INVALID)
+		goto out;
+
+	rx_count = msm_hs_read(uport, UARTDM_RX_TOTAL_SNAP_ADDR);
+
+	if (0 != (uport->read_status_mask & CREAD)) {
+		retval = tty_insert_flip_string(tty, msm_uport->rx.buffer,
+						rx_count);
+		BUG_ON(retval != rx_count);
+	}
+
 	msm_hs_start_rx_locked(uport);
+
+out:
+	clk_disable(msm_uport->clk);
+	/* release wakelock in 500ms, not immediately, because higher layers
+	 * don't always take wakelocks when they should */
+	wake_lock_timeout(&msm_uport->rx.wake_lock, HZ / 2);
+	/* tty_flip_buffer_push() might call msm_hs_start(), so unlock */
+	spin_unlock_irqrestore(&uport->lock, flags);
+	if (flush < FLUSH_DATA_INVALID)
+		tty_flip_buffer_push(tty);
 }
 
 /* Enable the transmitter Interrupt */
@@ -647,76 +706,11 @@ static void msm_hs_dmov_rx_callback(struct msm_dmov_cmd *cmd_ptr,
 					unsigned int result,
 					struct msm_dmov_errdata *err)
 {
-	int retval;
-	int rx_count;
-	unsigned long status;
-	unsigned int error_f = 0;
-	unsigned int flush;
-	struct tty_struct *tty;
-	struct uart_port *uport;
 	struct msm_hs_port *msm_uport;
 
 	msm_uport = container_of(cmd_ptr, struct msm_hs_port, rx.xfer);
-	uport = &msm_uport->uport;
 
-	clk_enable(msm_uport->clk);
-
-	tty = uport->info->port.tty;
-
-	msm_hs_write(uport, UARTDM_CR_ADDR, STALE_EVENT_DISABLE);
-
-	status = msm_hs_read(uport, UARTDM_SR_ADDR);
-
-	/* overflow is not connect to data in a FIFO */
-	if (unlikely((status & UARTDM_SR_OVERRUN_BMSK) &&
-		     (uport->read_status_mask & CREAD))) {
-		tty_insert_flip_char(tty, 0, TTY_OVERRUN);
-		uport->icount.buf_overrun++;
-		error_f = 1;
-	}
-
-	if (!(uport->ignore_status_mask & INPCK))
-		status = status & ~(UARTDM_SR_PAR_FRAME_BMSK);
-
-	if (unlikely(status & UARTDM_SR_PAR_FRAME_BMSK)) {
-		/* Can not tell difference between parity & frame error */
-		uport->icount.parity++;
-		error_f = 1;
-		if (uport->ignore_status_mask & IGNPAR)
-			tty_insert_flip_char(tty, 0, TTY_PARITY);
-	}
-
-	if (error_f)
-		msm_hs_write(uport, UARTDM_CR_ADDR, RESET_ERROR_STATUS);
-
-	flush = msm_uport->rx.flush;
-	if (flush == FLUSH_IGNORE)
-		schedule_work(&msm_uport->rx.work);
-	if (flush == FLUSH_STOP) {
-		msm_uport->rx.flush = FLUSH_SHUTDOWN;
-		wake_up(&msm_uport->rx.wait);
-	}
-	if (flush >= FLUSH_DATA_INVALID)
-		goto out;
-
-	rx_count = msm_hs_read(uport, UARTDM_RX_TOTAL_SNAP_ADDR);
-
-	if (0 != (uport->read_status_mask & CREAD)) {
-		retval = tty_insert_flip_string(tty, msm_uport->rx.buffer,
-						rx_count);
-		BUG_ON(retval != rx_count);
-	}
-
-	schedule_work(&msm_uport->rx.work);
-
-out:
-	clk_disable(msm_uport->clk);
-	/* release wakelock in 500ms, not immediately, because higher layers
-	 * don't always take wakelocks when they should */
-	wake_lock_timeout(&msm_uport->rx.wake_lock, HZ / 2);
-
-	if (flush < FLUSH_DATA_INVALID)
-		tty_flip_buffer_push(tty);
+	tasklet_schedule(&msm_uport->rx.tlet);
 }
 
 /*
@@ -1193,7 +1187,8 @@ static int uartdm_init_port(struct uart_port *uport)
 
 	init_waitqueue_head(&rx->wait);
 	wake_lock_init(&rx->wake_lock, WAKE_LOCK_SUSPEND, "msm_serial_hs_rx");
-	INIT_WORK(&rx->work, msm_serial_hs_rx_work);
+	tasklet_init(&rx->tlet, msm_serial_hs_rx_tlet,
+			(unsigned long) &rx->tlet);
 
 	rx->pool = dma_pool_create("rx_buffer_pool", uport->dev,
 				   UARTDM_RX_BUF_SIZE, 16, 0);
@@ -1350,6 +1345,8 @@ static void msm_hs_shutdown(struct uart_port *uport)
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 
 	BUG_ON(msm_uport->rx.flush < FLUSH_STOP);
+	tasklet_kill(&msm_uport->rx.tlet);
+	wait_event(msm_uport->rx.wait, msm_uport->rx.flush == FLUSH_SHUTDOWN);
 
 	spin_lock_irqsave(&uport->lock, flags);
 	clk_enable(msm_uport->clk);
@@ -1376,7 +1373,6 @@ static void msm_hs_shutdown(struct uart_port *uport)
 	free_irq(uport->irq, msm_uport);
 	if (use_low_power_wakeup(msm_uport))
 		free_irq(msm_uport->wakeup.irq, msm_uport);
-	wait_event(msm_uport->rx.wait, msm_uport->rx.flush == FLUSH_SHUTDOWN);
 }
 
 static void __exit msm_serial_hs_exit(void)
