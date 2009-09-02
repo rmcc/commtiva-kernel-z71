@@ -144,8 +144,6 @@ MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.2");
 MODULE_ALIAS("platform:spi_qsd");
 
-#define SPI_CLOCK_MAX            19200000
-
 struct msm_spi {
 	u8                      *read_buf;
 	const u8                *write_buf;
@@ -379,7 +377,7 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 		max_speed = dd->cur_transfer->speed_hz;
 	else
 		max_speed = dd->cur_msg->spi->max_speed_hz;
-	if (max_speed < dd->clock_speed)
+	if (!dd->clock_speed || max_speed < dd->clock_speed)
 		msm_spi_clock_set(dd, max_speed);
 
 	/* read_count cannot exceed fifo_size, and only one READ COUNT
@@ -627,8 +625,8 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 			goto err_probe_pclk_enable;
 		}
 	}
-
-	msm_spi_clock_set(dd, SPI_CLOCK_MAX);
+	if (pdata && pdata->max_clock_speed)
+		msm_spi_clock_set(dd, pdata->max_clock_speed);
 	msm_spi_calculate_fifo_size(dd);
 	writel(0x00000000, dd->base + SPI_OPERATIONAL);
 	writel(0x00000000, dd->base + SPI_CONFIG);
