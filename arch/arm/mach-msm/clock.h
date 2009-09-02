@@ -88,6 +88,7 @@ enum clkvote_client {
 int msm_clock_require_tcxo(unsigned long *reason, int nbits);
 int msm_clock_get_name(uint32_t id, char *name, uint32_t size);
 int ebi1_clk_set_min_rate(enum clkvote_client client, unsigned long rate);
+unsigned long clk_get_max_axi_khz(void);
 
 #endif
 

@@ -174,7 +174,8 @@ int ebi1_clk_set_min_rate(enum clkvote_client client, unsigned long rate)
 
 	spin_lock_irqsave(&ebi1_vote_lock, flags);
 
-	ebi1_min_rate[client] = rate;
+	ebi1_min_rate[client] = (rate == MSM_AXI_MAX_FREQ_KHZ) ?
+				clk_get_max_axi_khz() : rate;
 
 	new_val = ebi1_min_rate[0];
 	for (i = 1; i < CLKVOTE_MAX; i++)
