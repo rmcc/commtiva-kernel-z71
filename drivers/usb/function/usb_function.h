@@ -132,6 +132,9 @@ struct usb_function {
 
 	struct usb_descriptor_header **fs_descriptors;
 	struct usb_descriptor_header **hs_descriptors;
+
+	struct usb_request *ep0_out_req, *ep0_in_req;
+	struct usb_endpoint *ep0_out, *ep0_in;
 };
 
 int usb_function_register(struct usb_function *driver);
