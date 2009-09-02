@@ -636,9 +636,9 @@ static int process_control_msg(union rr_control_msg *msg, int len)
 
 	case RPCROUTER_CTRL_CMD_NEW_SERVER:
 		if (msg->srv.vers == 0) {
-			printk(KERN_ERR
-			"rpcrouter:Server create rejected, version = 0"
-			"program (%08x)\n", msg->srv.prog);
+			pr_err(
+			"rpcrouter: Server create rejected, version = 0, "
+			"program = %08x\n", msg->srv.prog);
 			break;
 		}
 
