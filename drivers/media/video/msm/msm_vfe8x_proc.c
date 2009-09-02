@@ -1104,8 +1104,6 @@ static inline void vfe_read_irq_status(struct vfe_irq_thread_msg *out)
 
 	temp = (uint32_t *)(ctrl->vfebase + CAMIF_STATUS);
 	out->camifStatus = readl(temp);
-	writel(0x7, ctrl->vfebase + CAMIF_COMMAND);
-	writel(0x3, ctrl->vfebase + CAMIF_COMMAND);
 	CDBG("camifStatus  = 0x%x\n", out->camifStatus);
 
 /*
