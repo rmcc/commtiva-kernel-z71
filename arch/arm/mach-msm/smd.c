@@ -1123,7 +1123,7 @@ void *smem_find(unsigned id, unsigned size_in)
 static int smem_init(void)
 {
 	struct smem_shared *shared = (void *) MSM_SHARED_RAM_BASE;
-	uint32_t *smsm;
+	uint32_t *smsm, i;
 
 	smsm = smem_alloc(ID_SHARED_STATE,
 			  SMSM_NUM_ENTRIES * sizeof(uint32_t));
@@ -1137,14 +1137,9 @@ static int smem_init(void)
 	smsm = smem_alloc(SMEM_SMSM_CPU_INTR_MASK,
 			  SMSM_NUM_ENTRIES * SMSM_NUM_HOSTS * sizeof(uint32_t));
 
-	if (smsm) {
-		smsm[SMSM_APPS_STATE * SMSM_NUM_HOSTS + SMSM_MODEM] =
-								0xffffffff;
-		smsm[SMSM_APPS_DEM_I * SMSM_NUM_HOSTS + SMSM_MODEM] =
-								0xffffffff;
-		smsm[SMSM_APPS_STATE * SMSM_NUM_HOSTS + SMSM_Q6_I] = 0xffffffff;
-		smsm[SMSM_APPS_DEM_I * SMSM_NUM_HOSTS + SMSM_Q6_I] = 0xffffffff;
-	}
+	if (smsm)
+		for (i = 0; i < SMSM_NUM_ENTRIES; i++)
+			smsm[i * SMSM_NUM_HOSTS + SMSM_APPS] = 0xffffffff;
 
 	return 0;
 }
@@ -1274,6 +1269,58 @@ int smsm_change_state(uint32_t smsm_entry,
 		printk(KERN_ERR "smsm_change_state <SM NO STATE>\n");
 		return -EIO;
 	}
+	return 0;
+}
+
+int smsm_change_intr_mask(uint32_t smsm_entry,
+			  uint32_t clear_mask, uint32_t set_mask)
+{
+	uint32_t  *smsm;
+
+	if (smsm_entry >= SMSM_NUM_ENTRIES) {
+		printk(KERN_ERR "smsm_change_state: Invalid entry %d\n",
+		       smsm_entry);
+		return -EINVAL;
+	}
+
+	smsm = smem_alloc(SMEM_SMSM_CPU_INTR_MASK,
+			  SMSM_NUM_ENTRIES * SMSM_NUM_HOSTS * sizeof(uint32_t));
+
+	if (smsm) {
+		smsm[smsm_entry * SMSM_NUM_HOSTS + SMSM_APPS] =
+			(smsm[smsm_entry * SMSM_NUM_HOSTS + SMSM_APPS] &
+			 ~clear_mask) | set_mask;
+		SMSM_INFO("smsm_entry %d, new intr_mask %x\n", smsm_entry,
+			  smsm[smsm_entry * SMSM_NUM_HOSTS + SMSM_APPS]);
+	} else {
+		printk(KERN_ERR "smsm_change_intr_mask <SM NO INTR_MASK>\n");
+		return -EIO;
+	}
+
+	return 0;
+}
+
+int smsm_get_intr_mask(uint32_t smsm_entry, uint32_t *intr_mask)
+{
+	uint32_t  *smsm;
+
+	if ((smsm_entry >= SMSM_NUM_ENTRIES) || (!intr_mask)) {
+		printk(KERN_ERR "smsm_change_state: Invalid input "
+		       "entry %d, mask 0x%x\n",
+		       smsm_entry, (unsigned int)intr_mask);
+		return -EINVAL;
+	}
+
+	smsm = smem_alloc(SMEM_SMSM_CPU_INTR_MASK,
+			  SMSM_NUM_ENTRIES * SMSM_NUM_HOSTS * sizeof(uint32_t));
+
+	if (smsm) {
+		*intr_mask = smsm[smsm_entry * SMSM_NUM_HOSTS + SMSM_APPS];
+	} else {
+		printk(KERN_ERR "smsm_change_intr_mask <SM NO INTR_MASK>\n");
+		return -EIO;
+	}
+
 	return 0;
 }
 

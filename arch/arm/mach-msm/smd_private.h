@@ -153,6 +153,9 @@ void *smem_alloc(unsigned id, unsigned size);
 void *smem_get_entry(unsigned id, unsigned *size);
 int smsm_change_state(uint32_t smsm_entry,
 		      uint32_t clear_mask, uint32_t set_mask);
+int smsm_change_intr_mask(uint32_t smsm_entry,
+			  uint32_t clear_mask, uint32_t set_mask);
+int smsm_get_intr_mask(uint32_t smsm_entry, uint32_t *intr_mask);
 uint32_t smsm_get_state(uint32_t smsm_entry);
 void smsm_print_sleep_info(uint32_t sleep_delay, uint32_t sleep_limit,
 	uint32_t irq_mask, uint32_t wakeup_reason, uint32_t pending_irqs);
