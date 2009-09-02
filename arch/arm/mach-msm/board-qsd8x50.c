@@ -853,10 +853,17 @@ static void msm_fb_vreg_config(const char *name, int on)
 
 #define MDDI_RST_OUT_GPIO 100
 
+static int mddi_power_save_on;
 static void msm_fb_mddi_power_save(int on)
 {
 	int flag_on = !!on;
 	int ret;
+
+
+	if (mddi_power_save_on == flag_on)
+		return;
+
+	mddi_power_save_on = flag_on;
 
 	if (!flag_on && machine_is_qsd8x50_ffa()) {
 		gpio_set_value(MDDI_RST_OUT_GPIO, 0);
