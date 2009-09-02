@@ -2123,6 +2123,14 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 			"no more devices available!\n");
 		goto err_no_mem;
 	}
+
+	if (!pdata->size) {
+		printk(KERN_ALERT
+			"pmem: %s: unable to register pmem driver(%s) - zero "
+			"size passed in!\n", __func__, pdata->name);
+		goto err_no_mem;
+	}
+
 	id = id_count++;
 
 	pmem[id].id = id;
