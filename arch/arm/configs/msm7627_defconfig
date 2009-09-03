@@ -957,7 +957,7 @@ CONFIG_MSM_CAMERA=y
 #
 # Qualcomm MSM Camera And Video
 #
-CONFIG_MSM_CAMERA_DEBUG=y
+# CONFIG_MSM_CAMERA_DEBUG is not set
 
 #
 # Camera Sensor Selection
