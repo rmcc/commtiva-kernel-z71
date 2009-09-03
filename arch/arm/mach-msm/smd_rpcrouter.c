@@ -710,6 +710,10 @@ static int process_control_msg(union rr_control_msg *msg, int len)
 		rc = -ENOSYS;
 
 		break;
+	case RPCROUTER_CTRL_CMD_PING:
+		/* No action needed for ping messages received */
+		RR("o PING\n");
+		break;
 	default:
 		RR("o UNKNOWN(%08x)\n", msg->cmd);
 		rc = -ENOSYS;
