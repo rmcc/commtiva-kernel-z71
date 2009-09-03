@@ -1882,6 +1882,7 @@ static void usb_enable(void *handle, int enable)
 		ui->active = 0;
 		spin_unlock_irqrestore(&ui->lock, flags);
 		usb_clk_disable(ui);
+		msm_hsusb_suspend_locks_acquire(ui, 0);
 	}
 }
 
