@@ -239,6 +239,8 @@ int drm_lastclose(struct drm_device * dev)
 
 int drm_init(struct drm_driver *driver)
 {
+	INIT_LIST_HEAD(&driver->device_list);
+
 	if (driver->driver_features & DRIVER_USE_PLATFORM_DEVICE)
 		return drm_platform_init(driver);
 	else
