@@ -579,6 +579,7 @@ static struct msm_usb_host_platform_data msm_usb_host_pdata = {
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
 	.phy_reset = msm_hsusb_native_phy_reset,
 	.vbus_power = msm_hsusb_vbus_power,
+	.max_axi_khz = 128000,
 };
 
 #ifdef CONFIG_USB_FS_HOST
@@ -586,6 +587,7 @@ static struct msm_usb_host_platform_data msm_usb_host2_pdata = {
 	.phy_info	= USB_PHY_SERIAL_PMIC,
 	.config_gpio = msm_fsusb_setup_gpio,
 	.vbus_power = msm_hsusb_vbus_power,
+	.max_axi_khz = 128000,
 };
 #endif
 
