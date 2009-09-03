@@ -16,6 +16,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/uaccess.h>
@@ -83,35 +84,35 @@ static void process_audmgr_callback(struct audmgr_global *amg,
 	switch (be32_to_cpu(args->status)) {
 	case RPC_AUDMGR_STATUS_READY:
 		am->handle = be32_to_cpu(args->u.handle);
-		pr_info("audmgr: rpc READY handle=0x%08x\n", am->handle);
+		MM_INFO("rpc READY handle=0x%08x\n", am->handle);
 		break;
 	case RPC_AUDMGR_STATUS_CODEC_CONFIG: {
 		uint32_t volume;
 		volume = be32_to_cpu(args->u.volume);
-		pr_info("audmgr: rpc CODEC_CONFIG volume=0x%08x\n", volume);
+		MM_INFO("rpc CODEC_CONFIG volume=0x%08x\n", volume);
 		am->state = STATE_ENABLED;
 		wake_up(&am->wait);
 		break;
 	}
 	case RPC_AUDMGR_STATUS_PENDING:
-		pr_err("audmgr: PENDING?\n");
+		MM_ERR("PENDING?\n");
 		break;
 	case RPC_AUDMGR_STATUS_SUSPEND:
-		pr_err("audmgr: SUSPEND?\n");
+		MM_ERR("SUSPEND?\n");
 		break;
 	case RPC_AUDMGR_STATUS_FAILURE:
-		pr_err("audmgr: FAILURE\n");
+		MM_ERR("FAILURE\n");
 		break;
 	case RPC_AUDMGR_STATUS_VOLUME_CHANGE:
-		pr_err("audmgr: VOLUME_CHANGE?\n");
+		MM_ERR("VOLUME_CHANGE?\n");
 		break;
 	case RPC_AUDMGR_STATUS_DISABLED:
-		pr_err("audmgr: DISABLED\n");
+		MM_ERR("DISABLED\n");
 		am->state = STATE_DISABLED;
 		wake_up(&am->wait);
 		break;
 	case RPC_AUDMGR_STATUS_ERROR:
-		pr_err("audmgr: ERROR?\n");
+		MM_ERR("ERROR?\n");
 		am->state = STATE_ERROR;
 		wake_up(&am->wait);
 		break;
@@ -128,7 +129,7 @@ static void process_rpc_request(uint32_t proc, uint32_t xid,
 	if (proc == AUDMGR_CB_FUNC_PTR)
 		process_audmgr_callback(amg, data, len);
 	else
-		pr_err("audmgr: unknown rpc proc %d\n", proc);
+		MM_ERR("unknown rpc proc %d\n", proc);
 	rpc_ack(amg->ept, xid);
 }
 
@@ -149,7 +150,7 @@ static int audmgr_rpc_thread(void *data)
 	uint32_t type;
 	int len;
 
-	pr_info("audmgr_rpc_thread() start\n");
+	MM_INFO("start\n");
 
 	while (!kthread_should_stop()) {
 		if (hdr) {
@@ -158,7 +159,7 @@ static int audmgr_rpc_thread(void *data)
 		}
 		len = msm_rpc_read(amg->ept, (void **) &hdr, -1, -1);
 		if (len < 0) {
-			pr_err("audmgr: rpc read failed (%d)\n", len);
+			MM_ERR("rpc read failed (%d)\n", len);
 			break;
 		}
 		if (len < RPC_COMMON_HDR_SZ)
@@ -173,9 +174,9 @@ static int audmgr_rpc_thread(void *data)
 			status = be32_to_cpu(rep->reply_stat);
 			if (status == RPCMSG_REPLYSTAT_ACCEPTED) {
 				status = be32_to_cpu(rep->data.acc_hdr.accept_stat);
-				pr_info("audmgr: rpc_reply status %d\n", status);
+				MM_INFO("rpc_reply status %d\n", status);
 			} else {
-				pr_info("audmgr: rpc_reply denied!\n");
+				MM_INFO("rpc_reply denied!\n");
 			}
 			/* process reply */
 			continue;
@@ -190,7 +191,7 @@ static int audmgr_rpc_thread(void *data)
 				    len - sizeof(*hdr),
 				    data);
 	}
-	pr_info("audmgr_rpc_thread() exit\n");
+	MM_INFO("exit\n");
 	if (hdr) {
 		kfree(hdr);
 		hdr = NULL;
@@ -226,16 +227,16 @@ int audmgr_open(struct audmgr *am)
 				MSM_RPC_UNINTERRUPTIBLE);
 
 		if (IS_ERR(amg->ept)) {
-			pr_err("%s: connect failed with current VERS = %x, \
-				trying again with another API\n",
-				__func__, AUDMGR_VERS_COMP_VER2);
+			MM_ERR("connect failed with current VERS \
+				= %x, trying again with another API\n",
+				AUDMGR_VERS_COMP_VER2);
 			amg->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
 					AUDMGR_VERS_COMP,
 					MSM_RPC_UNINTERRUPTIBLE);
 			if (IS_ERR(amg->ept)) {
-				pr_err("%s: connect failed with current VERS \
-					= %x, trying again with another API\n",
-				__func__, AUDMGR_VERS_COMP);
+				MM_ERR("connect failed with current \
+					VERS=%x, trying again with another \
+					API\n", AUDMGR_VERS_COMP);
 				amg->ept = msm_rpc_connect(AUDMGR_PROG,
 						AUDMGR_VERS,
 						MSM_RPC_UNINTERRUPTIBLE);
@@ -248,7 +249,7 @@ int audmgr_open(struct audmgr *am)
 		if (IS_ERR(amg->ept)) {
 			rc = PTR_ERR(amg->ept);
 			amg->ept = NULL;
-			pr_err("audmgr: failed to connect to audmgr svc\n");
+			MM_ERR("failed to connect to audmgr svc\n");
 			goto done;
 		}
 
@@ -288,10 +289,10 @@ int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg)
 		return 0;
 
 	if (am->state == STATE_DISABLING)
-		pr_err("audmgr: state is DISABLING in enable?\n");
+		MM_ERR("state is DISABLING in enable?\n");
 	am->state = STATE_ENABLING;
 
-	pr_info("%s: session 0x%08x\n", __func__, (int) am);
+	MM_INFO("session 0x%08x\n", (int) am);
 	msg.args.set_to_one = cpu_to_be32(1);
 	msg.args.tx_sample_rate = cpu_to_be32(cfg->tx_rate);
 	msg.args.rx_sample_rate = cpu_to_be32(cfg->rx_rate);
@@ -310,14 +311,13 @@ int audmgr_enable(struct audmgr *am, struct audmgr_config *cfg)
 
 	rc = wait_event_timeout(am->wait, am->state != STATE_ENABLING, 15 * HZ);
 	if (rc == 0) {
-		pr_err("audmgr_enable: ARM9 did not reply to RPC \
-			am->state = %d\n", am->state);
+		MM_ERR("ARM9 did not reply to RPC am->state = %d\n", am->state);
 		BUG();
 	}
 	if (am->state == STATE_ENABLED)
 		return 0;
 
-	pr_err("audmgr: unexpected state %d while enabling?!\n", am->state);
+	MM_ERR("unexpected state %d while enabling?!\n", am->state);
 	return -ENODEV;
 }
 EXPORT_SYMBOL(audmgr_enable);
@@ -331,7 +331,7 @@ int audmgr_disable(struct audmgr *am)
 	if (am->state == STATE_DISABLED)
 		return 0;
 
-	pr_info("%s: session 0x%08x\n", __func__, (int) am);
+	MM_INFO("session 0x%08x\n", (int) am);
 	msg.handle = cpu_to_be32(am->handle);
 	msm_rpc_setup_req(&msg.hdr, AUDMGR_PROG, amg->rpc_version,
 			  AUDMGR_DISABLE_CLIENT);
@@ -344,15 +344,14 @@ int audmgr_disable(struct audmgr *am)
 
 	rc = wait_event_timeout(am->wait, am->state != STATE_DISABLING, 15 * HZ);
 	if (rc == 0) {
-		pr_err("audmgr_disable: ARM9 did not reply to RPC \
-			am->state = %d\n", am->state);
+		MM_ERR("ARM9 did not reply to RPC am->state = %d\n", am->state);
 		BUG();
 	}
 
 	if (am->state == STATE_DISABLED)
 		return 0;
 
-	pr_err("audmgr: unexpected state %d while disabling?!\n", am->state);
+	MM_ERR("unexpected state %d while disabling?!\n", am->state);
 	return -ENODEV;
 }
 EXPORT_SYMBOL(audmgr_disable);

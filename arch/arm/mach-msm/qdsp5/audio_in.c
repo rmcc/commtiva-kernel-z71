@@ -17,6 +17,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -182,11 +183,11 @@ static int audio_in_enable(struct audio_in *audio)
 		return rc;
 
 	if (msm_adsp_enable(audio->audpre)) {
-		pr_err("audrec: msm_adsp_enable(audpre) failed\n");
+		MM_ERR("msm_adsp_enable(audpre) failed\n");
 		return -ENODEV;
 	}
 	if (msm_adsp_enable(audio->audrec)) {
-		pr_err("audrec: msm_adsp_enable(audrec) failed\n");
+		MM_ERR("msm_adsp_enable(audrec) failed\n");
 		return -ENODEV;
 	}
 
@@ -222,12 +223,16 @@ static void audpre_dsp_event(void *data, unsigned id, size_t len,
 
 	switch (id) {
 	case AUDPREPROC_MSG_CMD_CFG_DONE_MSG:
-		pr_info("audpre: type %d, status_flag %d\n", msg[0], msg[1]);
+		MM_INFO("type %d, status_flag %d\n", msg[0], msg[1]);
 		break;
 	case AUDPREPROC_MSG_ERROR_MSG_ID:
-		pr_info("audpre: err_index %d\n", msg[0]);
+		MM_INFO("err_index %d\n", msg[0]);
+		break;
+	case ADSP_MESSAGE_ID:
+		MM_DBG("Received ADSP event: module enable(audpreproctask)\n");
+		break;
 	default:
-		pr_err("audpre: unknown event %d\n", id);
+		MM_ERR("unknown event %d\n", id);
 	}
 }
 
@@ -279,21 +284,21 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 	case AUDREC_MSG_CMD_CFG_DONE_MSG:
 		if (msg[0] & AUDREC_MSG_CFG_DONE_TYPE_0_UPDATE) {
 			if (msg[0] & AUDREC_MSG_CFG_DONE_TYPE_0_ENA) {
-				pr_info("audpre: CFG ENABLED\n");
+				MM_INFO("CFG ENABLED\n");
 				audio_in_encoder_config(audio);
 			} else {
-				pr_info("audrec: CFG SLEEP\n");
+				MM_INFO("CFG SLEEP\n");
 				audio->running = 0;
 				audio->tx_agc_enable = 0;
 				audio->ns_enable = 0;
 				audio->iir_enable = 0;
 			}
 		} else {
-			pr_info("audrec: CMD_CFG_DONE %x\n", msg[0]);
+			MM_INFO("CMD_CFG_DONE %x\n", msg[0]);
 		}
 		break;
 	case AUDREC_MSG_CMD_AREC_PARAM_CFG_DONE_MSG: {
-		pr_info("audrec: PARAM CFG DONE\n");
+		MM_INFO("PARAM CFG DONE\n");
 		audio->running = 1;
 		audio_dsp_set_tx_agc(audio);
 		audio_dsp_set_ns(audio);
@@ -301,14 +306,18 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 		break;
 	}
 	case AUDREC_MSG_FATAL_ERR_MSG:
-		pr_err("audrec: ERROR %x\n", msg[0]);
+		MM_ERR("ERROR %x\n", msg[0]);
 		break;
 	case AUDREC_MSG_PACKET_READY_MSG:
 /* REC_DBG("type %x, count %d", msg[0], (msg[1] | (msg[2] << 16))); */
 		audio_in_get_dsp_frames(audio);
 		break;
+	case ADSP_MESSAGE_ID:
+		MM_DBG("Received ADSP event: module \
+				enable/disable(audrectask)\n");
+		break;
 	default:
-		pr_err("audrec: unknown event %d\n", id);
+		MM_ERR("unknown event %d\n", id);
 	}
 }
 
@@ -680,7 +689,7 @@ static ssize_t audio_in_read(struct file *file,
 			count -= size;
 			buf += size;
 		} else {
-			pr_err("audio_in: short read\n");
+			MM_ERR("short read\n");
 			break;
 		}
 		if (audio->type == AUDREC_CMD_TYPE_0_INDEX_AAC)
@@ -854,8 +863,7 @@ static int __init audio_in_init(void)
 	the_audio_in.data = dma_alloc_coherent(NULL, DMASZ,
 					       &the_audio_in.phys, GFP_KERNEL);
 	if (!the_audio_in.data) {
-		printk(KERN_ERR "%s: Unable to allocate DMA buffer\n",
-		       __func__);
+		MM_ERR("Unable to allocate DMA buffer\n");
 		return -ENOMEM;
 	}
 

@@ -144,4 +144,6 @@ struct audrec_msg_cmd_arec_mem_cfg_done_msg {
 	unsigned short	audrec_obj_idx;
 } __attribute__((packed));
 
+#define ADSP_MESSAGE_ID 0xFFFF
+
 #endif

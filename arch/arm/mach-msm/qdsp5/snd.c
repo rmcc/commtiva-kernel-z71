@@ -16,6 +16,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -119,13 +120,13 @@ static int get_endpoint(struct snd_ctxt *snd, unsigned long arg)
 	struct msm_snd_endpoint ept;
 
 	if (copy_from_user(&ept, (void __user *)arg, sizeof(ept))) {
-		pr_err("snd_ioctl get endpoint: invalid read pointer.\n");
+		MM_ERR("snd_ioctl get endpoint: invalid read pointer\n");
 		return -EFAULT;
 	}
 
 	index = ept.id;
 	if (index < 0 || index >= snd->snd_epts->num) {
-		pr_err("snd_ioctl get endpoint: invalid index!\n");
+		MM_ERR("snd_ioctl get endpoint: invalid index!\n");
 		return -EINVAL;
 	}
 
@@ -135,7 +136,7 @@ static int get_endpoint(struct snd_ctxt *snd, unsigned long arg)
 		sizeof(ept.name));
 
 	if (copy_to_user((void __user *)arg, &ept, sizeof(ept))) {
-		pr_err("snd_ioctl get endpoint: invalid write pointer.\n");
+		MM_ERR("snd_ioctl get endpoint: invalid write pointer\n");
 		rc = -EFAULT;
 	}
 
@@ -160,7 +161,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 	case SND_SET_DEVICE:
 		if (copy_from_user(&dev, (void __user *) arg, sizeof(dev))) {
-			pr_err("snd_ioctl set device: invalid pointer.\n");
+			MM_ERR("set device: invalid pointer\n");
 			rc = -EFAULT;
 			break;
 		}
@@ -170,15 +171,15 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		dmsg.args.mic_mute = cpu_to_be32(dev.mic_mute);
 		if (check_mute(dev.ear_mute) < 0 ||
 				check_mute(dev.mic_mute) < 0) {
-			pr_err("snd_ioctl set device: invalid mute status.\n");
+			MM_ERR("set device: invalid mute status\n");
 			rc = -EINVAL;
 			break;
 		}
 		dmsg.args.cb_func = -1;
 		dmsg.args.client_data = 0;
 
-		pr_info("snd_set_device %d %d %d\n", dev.device,
-						 dev.ear_mute, dev.mic_mute);
+		MM_INFO("snd_set_device %d %d %d\n", dev.device,
+				dev.ear_mute, dev.mic_mute);
 
 		rc = msm_rpc_call(snd->ept,
 			SND_SET_DEVICE_PROC,
@@ -187,7 +188,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case SND_SET_VOLUME:
 		if (copy_from_user(&vol, (void __user *) arg, sizeof(vol))) {
-			pr_err("snd_ioctl set volume: invalid pointer.\n");
+			MM_ERR("set volume: invalid pointer\n");
 			rc = -EFAULT;
 			break;
 		}
@@ -195,7 +196,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		vmsg.args.device = cpu_to_be32(vol.device);
 		vmsg.args.method = cpu_to_be32(vol.method);
 		if (vol.method != SND_METHOD_VOICE) {
-			pr_err("snd_ioctl set volume: invalid method.\n");
+			MM_ERR("set volume: invalid method\n");
 			rc = -EINVAL;
 			break;
 		}
@@ -204,8 +205,8 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		vmsg.args.cb_func = -1;
 		vmsg.args.client_data = 0;
 
-		pr_info("snd_set_volume %d %d %d\n", vol.device,
-						vol.method, vol.volume);
+		MM_INFO("snd_set_volume %d %d %d\n", vol.device,
+				vol.method, vol.volume);
 
 		rc = msm_rpc_call(snd->ept,
 			SND_SET_VOLUME_PROC,
@@ -226,7 +227,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		vmsg.args.cb_func = -1;
 		vmsg.args.client_data = 0;
 
-		pr_info("snd_avc_ctl %d\n", avc);
+		MM_INFO("snd_avc_ctl %d\n", avc);
 
 		rc = msm_rpc_call(snd->ept,
 			SND_AVC_CTL_PROC,
@@ -246,7 +247,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		agc_msg.args.cb_func = -1;
 		agc_msg.args.client_data = 0;
 
-		pr_info("snd_agc_ctl %d\n", agc);
+		MM_INFO("snd_agc_ctl %d\n", agc);
 
 		rc = msm_rpc_call(snd->ept,
 			SND_AGC_CTL_PROC,
@@ -256,7 +257,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case SND_GET_NUM_ENDPOINTS:
 		if (copy_to_user((void __user *)arg,
 				&snd->snd_epts->num, sizeof(unsigned))) {
-			pr_err("snd_ioctl get endpoint: invalid pointer.\n");
+			MM_ERR("get endpoint: invalid pointer\n");
 			rc = -EFAULT;
 		}
 		break;
@@ -266,7 +267,7 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	default:
-		pr_err("snd_ioctl unknown command.\n");
+		MM_ERR("unknown command\n");
 		rc = -EINVAL;
 		break;
 	}
@@ -283,7 +284,7 @@ static int snd_release(struct inode *inode, struct file *file)
 	mutex_lock(&snd->lock);
 	rc = msm_rpc_close(snd->ept);
 	if (rc < 0)
-		pr_err("snd_release: msm_rpc_close failed\n");
+		MM_ERR("msm_rpc_close failed\n");
 	snd->ept = NULL;
 	snd->opened = 0;
 	mutex_unlock(&snd->lock);
@@ -297,7 +298,7 @@ static int snd_sys_release(void)
 	mutex_lock(&snd_sys->lock);
 	rc = msm_rpc_close(snd_sys->ept);
 	if (rc < 0)
-		pr_err("snd_sys_release: msm_rpc_close failed\n");
+		MM_ERR("msm_rpc_close failed\n");
 	snd_sys->ept = NULL;
 	mutex_unlock(&snd_sys->lock);
 	return rc;
@@ -315,14 +316,14 @@ static int snd_open(struct inode *inode, struct file *file)
 			if (IS_ERR(snd->ept)) {
 				rc = PTR_ERR(snd->ept);
 				snd->ept = NULL;
-				pr_err("snd: failed to connect snd svc\n");
+				MM_ERR("failed to connect snd svc\n");
 				goto err;
 			}
 		}
 		file->private_data = snd;
 		snd->opened = 1;
 	} else {
-		pr_err("snd already opened.\n");
+		MM_ERR("snd already opened\n");
 		rc = -EBUSY;
 	}
 
@@ -342,11 +343,11 @@ static int snd_sys_open(void)
 		if (IS_ERR(snd_sys->ept)) {
 			rc = PTR_ERR(snd_sys->ept);
 			snd_sys->ept = NULL;
-			pr_err("snd_sys_open: failed to connect snd svc\n");
+			MM_ERR("failed to connect snd svc\n");
 			goto err;
 		}
 	} else
-		pr_debug("snd already opened.\n");
+		MM_DBG("snd already opened\n");
 
 err:
 	mutex_unlock(&snd_sys->lock);
@@ -379,7 +380,7 @@ static long snd_agc_enable(unsigned long arg)
 	agc_msg.args.cb_func = -1;
 	agc_msg.args.client_data = 0;
 
-	pr_debug("snd_agc_ctl %ld,%d\n", arg, agc_msg.args.agc_ctl);
+	MM_DBG("snd_agc_ctl %ld,%d\n", arg, agc_msg.args.agc_ctl);
 
 	rc = msm_rpc_call(snd_sys->ept,
 		SND_AGC_CTL_PROC,
@@ -401,7 +402,7 @@ static long snd_avc_enable(unsigned long arg)
 	avc_msg.args.cb_func = -1;
 	avc_msg.args.client_data = 0;
 
-	pr_debug("snd_avc_ctl %ld,%d\n", arg, avc_msg.args.avc_ctl);
+	MM_DBG("snd_avc_ctl %ld,%d\n", arg, avc_msg.args.avc_ctl);
 
 	rc = msm_rpc_call(snd_sys->ept,
 		SND_AVC_CTL_PROC,
@@ -474,8 +475,8 @@ static long snd_vol_enable(const char *arg)
 
 	rc = sscanf(arg, "%d %d %d", &vol.device, &vol.method, &vol.volume);
 	if (rc != 3) {
-		pr_err("Invalid arguments. Usage: \
-				<device> <method> <volume>\n");
+		MM_ERR("Invalid arguments. Usage: <device> <method> \
+				<volume>\n");
 		rc = -EINVAL;
 		return rc;
 	}
@@ -483,7 +484,7 @@ static long snd_vol_enable(const char *arg)
 	vmsg.args.device = cpu_to_be32(vol.device);
 	vmsg.args.method = cpu_to_be32(vol.method);
 	if (vol.method != SND_METHOD_VOICE) {
-		pr_err("snd_ioctl set volume: invalid method.\n");
+		MM_ERR("snd_ioctl set volume: invalid method\n");
 		rc = -EINVAL;
 		return rc;
 	}
@@ -492,8 +493,8 @@ static long snd_vol_enable(const char *arg)
 	vmsg.args.cb_func = -1;
 	vmsg.args.client_data = 0;
 
-	pr_debug("snd_set_volume %d %d %d\n", vol.device,
-			vol.method, vol.volume);
+	MM_DBG("snd_set_volume %d %d %d\n", vol.device, vol.method,
+			vol.volume);
 
 	rc = msm_rpc_call(snd_sys->ept,
 		SND_SET_VOLUME_PROC,
@@ -510,8 +511,8 @@ static long snd_dev_enable(const char *arg)
 
 	rc = sscanf(arg, "%d %d %d", &dev.device, &dev.ear_mute, &dev.mic_mute);
 	if (rc != 3) {
-		pr_err("Invalid arguments. Usage: \
-				<device> <ear_mute> <mic_mute>\n");
+		MM_ERR("Invalid arguments. Usage: <device> <ear_mute> \
+				<mic_mute>\n");
 		rc = -EINVAL;
 		return rc;
 	}
@@ -520,15 +521,15 @@ static long snd_dev_enable(const char *arg)
 	dmsg.args.mic_mute = cpu_to_be32(dev.mic_mute);
 	if (check_mute(dev.ear_mute) < 0 ||
 			check_mute(dev.mic_mute) < 0) {
-		pr_err("snd_ioctl set device: invalid mute status.\n");
+		MM_ERR("snd_ioctl set device: invalid mute status\n");
 		rc = -EINVAL;
 		return rc;
 	}
 	dmsg.args.cb_func = -1;
 	dmsg.args.client_data = 0;
 
-	pr_info("snd_set_device %d %d %d\n", dev.device,
-				 dev.ear_mute, dev.mic_mute);
+	MM_INFO("snd_set_device %d %d %d\n", dev.device, dev.ear_mute,
+			dev.mic_mute);
 
 	rc = msm_rpc_call(snd_sys->ept,
 		SND_SET_DEVICE_PROC,
