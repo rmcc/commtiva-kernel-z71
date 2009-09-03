@@ -31,9 +31,39 @@
 
 #include <linux/platform_device.h>
 
+#include "drm.h"
+#include "drmP.h"
+
 #ifdef CONFIG_MSM_KGSL_DRM
+
+#define DRM_KGSL_GEM_CREATE 0x00
+#define DRM_KGSL_GEM_PREP   0x01
+
+#define DRM_IOCTL_KGSL_GEM_CREATE \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_CREATE, struct drm_kgsl_gem_create)
+
+#define DRM_IOCTL_KGSL_GEM_PREP \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_PREP, struct drm_kgsl_gem_prep)
+
+struct drm_kgsl_gem_object {
+	struct drm_gem_object *obj;
+	uint32_t pmem_phys;
+	uint64_t mmap_offset;
+};
+
+struct drm_kgsl_gem_create {
+	uint32_t size;
+	uint32_t handle;
+};
+
+struct drm_kgsl_gem_prep {
+	uint32_t handle;
+	uint32_t phys;
+	uint64_t offset;
+};
+
 extern int kgsl_drm_init(struct platform_device *dev);
-extern int kgsl_drm_exit(void);
+extern void kgsl_drm_exit(void);
 #else
 static inline int kgsl_drm_init(struct platform_device *dev)
 {
