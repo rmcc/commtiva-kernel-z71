@@ -52,8 +52,6 @@ static uint32_t bytes_per_pixel[] = {
 	[MDP_BGR_565] = 2
 };
 
-extern MDP_CCS_TYPE mdp_ccs_yuv2rgb;
-extern MDP_CCS_TYPE mdp_ccs_rgb2yuv;
 extern uint32 mdp_plv[];
 extern struct semaphore mdp_ppp_mutex;
 

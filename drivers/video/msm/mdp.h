@@ -70,23 +70,8 @@ struct mdp_table_entry {
 	uint32_t val;
 };
 
-/*
- * {3x3} + {3} ccs matrix
- */
-typedef struct mdp_ccs_type_ {
-	uint16 ccs1;
-	uint16 ccs2;
-	uint16 ccs3;
-	uint16 ccs4;
-	uint16 ccs5;
-	uint16 ccs6;
-	uint16 ccs7;
-	uint16 ccs8;
-	uint16 ccs9;
-	uint16 ccs10;
-	uint16 ccs11;
-	uint16 ccs12;
-} MDP_CCS_TYPE;
+extern struct mdp_ccs mdp_ccs_yuv2rgb ;
+extern struct mdp_ccs mdp_ccs_rgb2yuv ;
 
 /*
  * MDP Image Structure

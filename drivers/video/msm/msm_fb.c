@@ -44,6 +44,7 @@
 #include "msm_fb.h"
 #include "mddihosti.h"
 #include "tvenc.h"
+#include "mdp.h"
 
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/logo.rle"
@@ -1344,6 +1345,45 @@ DECLARE_MUTEX(msm_fb_ioctl_ppp_sem);
 DEFINE_MUTEX(msm_fb_ioctl_lut_sem);
 DEFINE_MUTEX(msm_fb_ioctl_hist_sem);
 
+/*Set color conversion matrix from user space */
+
+#ifndef CONFIG_FB_MSM_MDP40
+static void msmfb_set_color_conv(struct mdp_ccs *p)
+{
+	int i;
+
+	if (p->direction == MDP_CCS_RGB2YUV) {
+		/* MDP cmd block enable */
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+		/* RGB->YUV primary forward matrix */
+		for (i = 0; i < MDP_CCS_SIZE; i++)
+			writel(p->ccs[i], MDP_CSC_PFMVn(i));
+
+		#ifdef CONFIG_FB_MSM_MDP31
+		for (i = 0; i < MDP_BV_SIZE; i++)
+			writel(p->bv[i], MDP_CSC_POST_BV2n(i));
+		#endif
+
+		/* MDP cmd block disable */
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	} else {
+		/* MDP cmd block enable */
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+		/* YUV->RGB primary reverse matrix */
+		for (i = 0; i < MDP_CCS_SIZE; i++)
+			writel(p->ccs[i], MDP_CSC_PRMVn(i));
+		for (i = 0; i < MDP_BV_SIZE; i++)
+			writel(p->bv[i], MDP_CSC_PRE_BV1n(i));
+
+		/* MDP cmd block disable */
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	}
+}
+#endif
+
+
 static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
 {
@@ -1352,7 +1392,9 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct fb_cursor cursor;
 	struct fb_cmap cmap;
 	struct mdp_histogram hist;
-
+#ifndef CONFIG_FB_MSM_MDP40
+	struct mdp_ccs ccs_matrix;
+#endif
 	int ret = 0;
 
 	if (!mfd->op_enable)
@@ -1363,6 +1405,63 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		down(&msm_fb_ioctl_ppp_sem);
 		ret = msmfb_blit(info, argp);
 		up(&msm_fb_ioctl_ppp_sem);
+
+		break;
+
+	/* Ioctl for setting ccs matrix from user space */
+	case MSMFB_SET_CCS_MATRIX:
+#ifndef CONFIG_FB_MSM_MDP40
+		ret = copy_from_user(&ccs_matrix, argp, sizeof(ccs_matrix));
+		if (ret) {
+			printk(KERN_ERR
+				"%s:MSMFB_SET_CCS_MATRIX ioctl failed \n",
+				__func__);
+			return ret;
+		}
+
+		down(&msm_fb_ioctl_ppp_sem);
+		if (ccs_matrix.direction == MDP_CCS_RGB2YUV)
+			mdp_ccs_rgb2yuv = ccs_matrix;
+		else
+			mdp_ccs_yuv2rgb = ccs_matrix;
+
+		msmfb_set_color_conv(&ccs_matrix) ;
+		up(&msm_fb_ioctl_ppp_sem);
+#else
+		ret = -EINVAL;
+#endif
+
+		break;
+
+	/* Ioctl for getting ccs matrix to user space */
+	case MSMFB_GET_CCS_MATRIX:
+#ifndef CONFIG_FB_MSM_MDP40
+		ret = copy_from_user(&ccs_matrix, argp, sizeof(ccs_matrix)) ;
+		if (ret) {
+			printk(KERN_ERR
+				"%s:MSMFB_GET_CCS_MATRIX ioctl failed \n",
+				 __func__);
+			return ret;
+		}
+
+		down(&msm_fb_ioctl_ppp_sem);
+		if (ccs_matrix.direction == MDP_CCS_RGB2YUV)
+			ccs_matrix = mdp_ccs_rgb2yuv;
+		 else
+			ccs_matrix =  mdp_ccs_yuv2rgb;
+
+		ret = copy_to_user(argp, &ccs_matrix, sizeof(ccs_matrix));
+
+		if (ret)	{
+			printk(KERN_ERR
+				"%s:MSMFB_GET_CCS_MATRIX ioctl failed \n",
+				 __func__);
+			return ret ;
+		}
+		up(&msm_fb_ioctl_ppp_sem);
+#else
+		ret = -EINVAL;
+#endif
 
 		break;
 

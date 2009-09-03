@@ -61,43 +61,52 @@
 uint32 mdp_plv[] = { 0x10, 0xeb, 0x10, 0xf0 };
 
 /* Color Coefficient matrix for YUV -> RGB */
-MDP_CCS_TYPE mdp_ccs_yuv2rgb = {
-	0x254,			/* 0 */
-	0x000,			/* 1 */
-	0x331,			/* 2 */
-	0x254,			/* 3 */
-	0xff38,			/* 4 */
-	0xfe61,			/* 5 */
-	0x254,			/* 6 */
-	0x409,			/* 7 */
-	0x000,			/* 8 */
-
+struct mdp_ccs mdp_ccs_yuv2rgb = {
+	MDP_CCS_YUV2RGB,
+	{
+		0x254,
+		0x000,
+		0x331,
+		0x254,
+		0xff38,
+		0xfe61,
+		0x254,
+		0x409,
+		0x000,
+	},
+	{
 #ifdef CONFIG_FB_MSM_MDP31
-	0x1f0,			/* 9 */
-	0x180,			/* 10 */
-	0x180			/* 11 */
+		0x1f0,
+		0x180,
+		0x180
 #else
-	0x10,			/* 9 */
-	0x80,			/* 10 */
-	0x80			/* 11 */
+		0x10,
+		0x80,
+		0x80
 #endif
+	}
 };
 
 /* Color Coefficient matrix for RGB -> YUV */
-MDP_CCS_TYPE mdp_ccs_rgb2yuv = {
-	0x83,
-	0x102,
-	0x32,
-	0xffb5,
-	0xff6c,
-	0xe1,
-	0xe1,
-	0xff45,
-	0xffdc,
+struct mdp_ccs mdp_ccs_rgb2yuv = {
+	MDP_CCS_RGB2YUV,
+	{
+		0x83,
+		0x102,
+		0x32,
+		0xffb5,
+		0xff6c,
+		0xe1,
+		0xe1,
+		0xff45,
+		0xffdc,
+	},
 #ifdef CONFIG_FB_MSM_MDP31
-	0x10,
-	0x80,
-	0x80
+	{
+		0x10,
+		0x80,
+		0x80
+	}
 #endif
 };
 
@@ -621,6 +630,8 @@ static void mdp_load_lut_param(void)
 
 void mdp_hw_init(void)
 {
+	int i;
+
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
@@ -709,39 +720,23 @@ void mdp_hw_init(void)
 #endif
 
 	/* primary forward matrix */
-	writel(mdp_ccs_rgb2yuv.ccs1, MDP_CSC_PFMVn(0));
-	writel(mdp_ccs_rgb2yuv.ccs2, MDP_CSC_PFMVn(1));
-	writel(mdp_ccs_rgb2yuv.ccs3, MDP_CSC_PFMVn(2));
-	writel(mdp_ccs_rgb2yuv.ccs4, MDP_CSC_PFMVn(3));
-	writel(mdp_ccs_rgb2yuv.ccs5, MDP_CSC_PFMVn(4));
-	writel(mdp_ccs_rgb2yuv.ccs6, MDP_CSC_PFMVn(5));
-	writel(mdp_ccs_rgb2yuv.ccs7, MDP_CSC_PFMVn(6));
-	writel(mdp_ccs_rgb2yuv.ccs8, MDP_CSC_PFMVn(7));
-	writel(mdp_ccs_rgb2yuv.ccs9, MDP_CSC_PFMVn(8));
+	for (i = 0; i < MDP_CCS_SIZE; i++)
+		writel(mdp_ccs_rgb2yuv.ccs[i], MDP_CSC_PFMVn(i));
 
 #ifdef CONFIG_FB_MSM_MDP31
-	writel(mdp_ccs_rgb2yuv.ccs10, MDP_CSC_POST_BV2n(0));
-	writel(mdp_ccs_rgb2yuv.ccs11, MDP_CSC_POST_BV2n(1));
-	writel(mdp_ccs_rgb2yuv.ccs12, MDP_CSC_POST_BV2n(2));
+	for (i = 0; i < MDP_BV_SIZE; i++)
+		writel(mdp_ccs_rgb2yuv.bv[i], MDP_CSC_POST_BV2n(i));
 
 	writel(0, MDP_CSC_PRE_BV2n(0));
 	writel(0, MDP_CSC_PRE_BV2n(1));
 	writel(0, MDP_CSC_PRE_BV2n(2));
 #endif
 	/* primary reverse matrix */
-	writel(mdp_ccs_yuv2rgb.ccs1, MDP_CSC_PRMVn(0));
-	writel(mdp_ccs_yuv2rgb.ccs2, MDP_CSC_PRMVn(1));
-	writel(mdp_ccs_yuv2rgb.ccs3, MDP_CSC_PRMVn(2));
-	writel(mdp_ccs_yuv2rgb.ccs4, MDP_CSC_PRMVn(3));
-	writel(mdp_ccs_yuv2rgb.ccs5, MDP_CSC_PRMVn(4));
-	writel(mdp_ccs_yuv2rgb.ccs6, MDP_CSC_PRMVn(5));
-	writel(mdp_ccs_yuv2rgb.ccs7, MDP_CSC_PRMVn(6));
-	writel(mdp_ccs_yuv2rgb.ccs8, MDP_CSC_PRMVn(7));
-	writel(mdp_ccs_yuv2rgb.ccs9, MDP_CSC_PRMVn(8));
+	for (i = 0; i < MDP_CCS_SIZE; i++)
+		writel(mdp_ccs_yuv2rgb.ccs[i], MDP_CSC_PRMVn(i));
 
-	writel(mdp_ccs_yuv2rgb.ccs10, MDP_CSC_PRE_BV1n(0));
-	writel(mdp_ccs_yuv2rgb.ccs11, MDP_CSC_PRE_BV1n(1));
-	writel(mdp_ccs_yuv2rgb.ccs12, MDP_CSC_PRE_BV1n(2));
+	for (i = 0; i < MDP_BV_SIZE; i++)
+		writel(mdp_ccs_yuv2rgb.bv[i], MDP_CSC_PRE_BV1n(i));
 
 #ifdef CONFIG_FB_MSM_MDP31
 	writel(0, MDP_CSC_POST_BV1n(0));
