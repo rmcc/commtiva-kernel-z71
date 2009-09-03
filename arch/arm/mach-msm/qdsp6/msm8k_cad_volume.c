@@ -190,6 +190,18 @@ enum cad_int_device_id qdsp6_volume_device_id_mapping(u32 device_id)
 	}
 }
 
+/* This computes linear mapping stream volume. */
+s32 qdsp6_stream_volume_mapping(s32 percentage)
+{
+	if (percentage < 0 || percentage > 100) {
+		pr_err("%s: invalid percentage\n", __func__);
+		return 0xFFFFFFFF;
+	}
+
+	return CAD_STREAM_MIN_GAIN + (((CAD_STREAM_MAX_GAIN -
+			CAD_STREAM_MIN_GAIN) * percentage) / 100);
+}
+
 /* This computes linear mapping device volume. */
 s32 qdsp6_volume_mapping(u32 device_id, s32 percentage)
 {
