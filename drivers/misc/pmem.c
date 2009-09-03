@@ -634,16 +634,18 @@ static int pmem_release(struct inode *inode, struct file *file)
 	/* if this file is a master, revoke all the memory in the connected
 	 *  files */
 	if (PMEM_FLAGS_MASTERMAP & data->flags) {
-		struct pmem_data *sub_data;
 		list_for_each(elt, &pmem[id].data_list) {
-			sub_data = list_entry(elt, struct pmem_data, list);
+			struct pmem_data *sub_data =
+				list_entry(elt, struct pmem_data, list);
+			int is_master;
+
 			down_read(&sub_data->sem);
-			if (PMEM_IS_SUBMAP(sub_data) &&
-			    file == sub_data->master_file) {
-				up_read(&sub_data->sem);
+			is_master = (PMEM_IS_SUBMAP(sub_data) &&
+				file == sub_data->master_file);
+			up_read(&sub_data->sem);
+
+			if (is_master)
 				pmem_revoke(file, sub_data);
-			}  else
-				up_read(&sub_data->sem);
 		}
 	}
 	list_del(&data->list);
@@ -1099,16 +1101,17 @@ static int pmem_map_pfn_range(int id, struct vm_area_struct *vma,
 			      struct pmem_data *data, unsigned long offset,
 			      unsigned long len)
 {
-	int ret = 0;
+	int ret;
 	DLOG("map offset %lx len %lx\n", offset, len);
 	BUG_ON(!PMEM_IS_PAGE_ALIGNED(vma->vm_start));
 	BUG_ON(!PMEM_IS_PAGE_ALIGNED(vma->vm_end));
 	BUG_ON(!PMEM_IS_PAGE_ALIGNED(len));
 	BUG_ON(!PMEM_IS_PAGE_ALIGNED(offset));
 
-	if (io_remap_pfn_range(vma, vma->vm_start + offset,
+	ret = io_remap_pfn_range(vma, vma->vm_start + offset,
 		(pmem[id].start_addr(id, data) + offset) >> PAGE_SHIFT,
-		len, vma->vm_page_prot)) {
+		len, vma->vm_page_prot);
+	if (ret) {
 #if PMEM_DEBUG
 		printk(KERN_ALERT "pmem: %s: io_remap_pfn_range fails with "
 			"return value: %d!\n",	__func__, ret);
@@ -1604,25 +1607,26 @@ int pmem_kfree(const int32_t physaddr)
 {
 	int i;
 	for (i = 0; i < ARRAY_SIZE(kapi_memtypes); i++) {
+		int index;
 		int id = kapi_memtypes[i].info_id;
-		if (id >= 0) {
-			int index;
 
-			if (!pmem[id].allocate) {
+		if (id < 0)
+			continue;
+
+		if (!pmem[id].allocate) {
 #if PMEM_DEBUG
-				printk(KERN_ALERT "pmem: %s: "
-					"Attempt to free physical address %#x "
-					"from unregistered PMEM kernel region"
-					" %d. Driver/board setup is faulty!",
-					__func__, physaddr, id);
+			printk(KERN_ALERT "pmem: %s: "
+				"Attempt to free physical address %#x "
+				"from unregistered PMEM kernel region"
+				" %d. Driver/board setup is faulty!",
+				__func__, physaddr, id);
 #endif
-				return -EINVAL;
-			}
-
-			index = pmem[id].kapi_free_index(physaddr, id);
-			if (index >= 0)
-				return pmem[id].free(id, index) ?  -EINVAL : 0;
+			return -EINVAL;
 		}
+
+		index = pmem[id].kapi_free_index(physaddr, id);
+		if (index >= 0)
+			return pmem[id].free(id, index) ?  -EINVAL : 0;
 	}
 #if PMEM_DEBUG
 	printk(KERN_ALERT "pmem: %s: Failed to free physaddr %#x, does not "
