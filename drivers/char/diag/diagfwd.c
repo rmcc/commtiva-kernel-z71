@@ -445,7 +445,7 @@ int diagfwd_write_complete(unsigned char *buf, int len, int status)
 		driver->in_busy_qdsp = 0;
 		diag_smd_qdsp_send_req();
 	} else
-		diagmem_free(driver, buf);
+		diagmem_free(driver, buf, POOL_TYPE_HDLC);
 
 	return 0;
 }
