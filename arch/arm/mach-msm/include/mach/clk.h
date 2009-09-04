@@ -28,6 +28,12 @@
 #ifndef __MACH_CLK_H
 #define __MACH_CLK_H
 
+/* Magic rate value for use with PM QOS to request the board's maximum
+ * supported AXI rate. This value is chosen to not collide with
+ * PM_QOS_DEFAULT_VALUE which may also be used to vote on the AXI rate.
+ */
+#define MSM_AXI_MAX_FREQ_KHZ -2
+
 struct clk;
 
 /* Rate is minimum clock rate in Hz */

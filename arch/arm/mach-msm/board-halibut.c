@@ -60,6 +60,7 @@
 
 #include "devices.h"
 #include "socinfo.h"
+#include "clock.h"
 #include "msm-keypad-devices.h"
 #include "pm.h"
 
@@ -1291,13 +1292,14 @@ static void __init halibut_init(void)
 	    && SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2)
 		halibut_clock_data.max_axi_khz = 160000;
 
+	msm_acpu_clock_init(&halibut_clock_data);
+
 #if defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
 			      &msm_device_uart3.dev, 1);
 #endif
-	msm_hsusb_pdata.max_axi_khz = halibut_clock_data.max_axi_khz;
+	msm_hsusb_pdata.max_axi_khz = clk_get_max_axi_khz();
 	msm_hsusb_pdata.soc_version = socinfo_get_version();
-	msm_acpu_clock_init(&halibut_clock_data);
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
 #endif

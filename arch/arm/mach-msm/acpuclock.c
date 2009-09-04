@@ -51,7 +51,7 @@ struct clock_state
 	uint32_t			vdd_switch_time_us;
 	unsigned long			power_collapse_khz;
 	unsigned long			wait_for_irq_khz;
-	unsigned int			max_axi_khz;
+	unsigned long			max_axi_khz;
 };
 
 #define PLL_BASE	7
@@ -281,6 +281,12 @@ static void __init cpufreq_table_init(void)
 	pr_info("%d scaling frequencies supported.\n", freq_cnt);
 }
 #endif
+
+unsigned long clk_get_max_axi_khz(void)
+{
+	return drv_state.max_axi_khz;
+}
+EXPORT_SYMBOL(clk_get_max_axi_khz);
 
 static int pc_pll_request(unsigned id, unsigned on)
 {
@@ -705,13 +711,15 @@ static void __init acpu_freq_tbl_fixup(void)
 			t->axiclk_khz = 200000;
 	}
 
+	t--;
+	drv_state.max_axi_khz = t->axiclk_khz;
+
 	/* The default 7x27 ACPU clock plan supports running the AXI bus at
 	 * 200 MHz. So we don't classify it as Turbo mode.
 	 */
 	if (cpu_is_msm7x27())
 		return;
 
-	t--;
 	if (!axi_160mhz)
 		pr_info("Turbo mode not supported.\n");
 	else if (t->axiclk_khz == 160000)

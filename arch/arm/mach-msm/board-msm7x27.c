@@ -53,6 +53,7 @@
 
 #include "devices.h"
 #include "socinfo.h"
+#include "clock.h"
 #include "msm-keypad-devices.h"
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android.h>
@@ -1444,9 +1445,9 @@ static void __init msm7x27_init(void)
 		msm7x27_clock_data.max_axi_khz = 200000;
 
 	msm_acpu_clock_init(&msm7x27_clock_data);
-	kgsl_pdata.max_axi_freq = msm7x27_clock_data.max_axi_khz;
 
-	msm_hsusb_pdata.max_axi_khz = msm7x27_clock_data.max_axi_khz;
+	kgsl_pdata.max_axi_freq = clk_get_max_axi_khz();
+	msm_hsusb_pdata.max_axi_khz = clk_get_max_axi_khz();
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
