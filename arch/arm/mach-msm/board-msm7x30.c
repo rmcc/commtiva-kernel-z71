@@ -586,6 +586,43 @@ struct platform_device msm_mi2s_device = {
 	.resource = msm_mi2s_resources,
 };
 
+#define DEC0_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
+	(1<<MSM_ADSP_CODEC_AAC)|(1<<MSM_ADSP_CODEC_WMA)| \
+	(1<<MSM_ADSP_CODEC_WMAPRO)|(1<<MSM_ADSP_CODEC_AMRWB)| \
+	(1<<MSM_ADSP_CODEC_AMRNB)|(1<<MSM_ADSP_CODEC_WAV)| \
+	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
+	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
+
+static unsigned int dec_concurrency_table[] = {
+	/* Audio LP */
+	(DEC0_FORMAT|(1<<MSM_ADSP_MODE_TUNNEL)|(1<<MSM_ADSP_OP_DM)), 0,
+	0, 0, 0,
+};
+
+#define DEC_INFO(name, queueid, decid, nr_codec) { .module_name = name, \
+	.module_queueid = queueid, .module_decid = decid, \
+	.nr_codec_support = nr_codec}
+
+static struct msm_adspdec_info dec_info_list[] = {
+	DEC_INFO("AUDPLAY0TASK", 13, 0, 11), /* AudPlay0BitStreamCtrlQueue */
+};
+
+static struct msm_adspdec_database msm_device_adspdec_database = {
+	.num_dec = ARRAY_SIZE(dec_info_list),
+	.num_concurrency_support = (ARRAY_SIZE(dec_concurrency_table) / \
+					ARRAY_SIZE(dec_info_list)),
+	.dec_concurrency_table = dec_concurrency_table,
+	.dec_info_list = dec_info_list,
+};
+
+static struct platform_device msm_device_adspdec = {
+	.name = "msm_adspdec",
+	.id = -1,
+	.dev    = {
+		.platform_data = &msm_device_adspdec_database
+	},
+};
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.start = 0x8A000300,
@@ -1229,6 +1266,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_mi2s_device,
 	&msm_iearpiece_device,
 	&msm_imic_device,
+	&msm_device_adspdec,
 #if defined(CONFIG_MARIMBA_CORE) && \
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 	&msm_bt_power_device,
