@@ -83,6 +83,7 @@
 #include <linux/spi/spi.h>
 #include <mach/ofn_atlab.h>
 #include <mach/s1r72v05.h>
+#include <mach/rpc_hsusb.h>
 
 #include "devices.h"
 #include "timer.h"
@@ -336,10 +337,44 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
-#ifdef CONFIG_USB_FS_HOST
-	.config_fs_gpio = msm_fsusb_setup_gpio,
-#endif
 };
+
+static struct vreg *vreg_usb;
+static void msm_hsusb_vbus_power(unsigned phy_info, int on)
+{
+
+	switch (PHY_TYPE(phy_info)) {
+	case USB_PHY_INTEGRATED:
+		if (on)
+			msm_hsusb_vbus_powerup();
+		else
+			msm_hsusb_vbus_shutdown();
+		break;
+	case USB_PHY_SERIAL_PMIC:
+		if (on)
+			vreg_enable(vreg_usb);
+		else
+			vreg_disable(vreg_usb);
+		break;
+	default:
+		pr_err("%s: undefined phy type ( %X ) \n", __func__,
+						phy_info);
+	}
+
+}
+
+static struct msm_usb_host_platform_data msm_usb_host_pdata = {
+	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
+	.vbus_power = msm_hsusb_vbus_power,
+};
+
+#ifdef CONFIG_USB_FS_HOST
+static struct msm_usb_host_platform_data msm_usb_host2_pdata = {
+	.phy_info	= USB_PHY_SERIAL_PMIC,
+	.config_gpio = msm_fsusb_setup_gpio,
+	.vbus_power = msm_hsusb_vbus_power,
+};
+#endif
 
 static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 	.name = PMEM_KERNEL_EBI1_DATA_NAME,
@@ -1161,11 +1196,11 @@ static void kgsl_phys_memory_init(void)
 
 static void __init comet_init_host(void)
 {
-	msm_add_host(0, &msm_hsusb_pdata);
+	msm_add_host(0, &msm_usb_host_pdata);
 #ifdef CONFIG_USB_FS_HOST
 	if (fsusb_gpio_init())
 		return;
-	msm_add_host(1, &msm_hsusb_pdata);
+	msm_add_host(1, &msm_usb_host2_pdata);
 #endif
 }
 static void sdcc_gpio_init(void)

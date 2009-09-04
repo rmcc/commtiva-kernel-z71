@@ -20,7 +20,8 @@
 
 #include <linux/types.h>
 
-#define PHY_TYPE_MASK		0xFF
+#define PHY_TYPE_MASK		0x0F
+#define PHY_TYPE_MODE		0xF0
 #define PHY_MODEL_MASK		0xFF00
 #define PHY_TYPE(x)		((x) & PHY_TYPE_MASK)
 #define PHY_MODEL(x)		((x) & PHY_MODEL_MASK)
@@ -31,6 +32,11 @@
 #define USB_PHY_UNDEFINED	0x00
 #define USB_PHY_INTEGRATED	0x01
 #define USB_PHY_EXTERNAL	0x02
+#define USB_PHY_SERIAL_PMIC     0x04
+
+#define REQUEST_STOP		0
+#define REQUEST_START		1
+#define REQUEST_RESUME		2
 
 enum hsusb_phy_type {
 	UNDEFINED,
@@ -83,8 +89,6 @@ struct msm_hsusb_platform_data {
 	unsigned ulpi_data_3_pin;
 	/* gpio mux function used for LPM */
 	int (*config_gpio)(int config);
-	/* gpio function for FSUSB */
-	void (*config_fs_gpio) (unsigned int);
 	/* ROC info for AHB Mode */
 	unsigned int soc_version;
 
@@ -100,4 +104,12 @@ struct msm_otg_platform_data {
 	int (*rpc_connect)(int);
 	int (*phy_reset)(void);
 };
+
+struct msm_usb_host_platform_data {
+	unsigned phy_info;
+	int (*phy_reset)(void __iomem *addr);
+	void (*config_gpio)(unsigned int config);
+	void (*vbus_power) (unsigned phy_info, int on);
+};
+
 #endif

@@ -409,7 +409,7 @@ static struct platform_device *msm_host_devices[] = {
 #endif
 };
 
-int msm_add_host(unsigned int host, struct msm_hsusb_platform_data *plat)
+int msm_add_host(unsigned int host, struct msm_usb_host_platform_data *plat)
 {
 	struct platform_device	*pdev;
 

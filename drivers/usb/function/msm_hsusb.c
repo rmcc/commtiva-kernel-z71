@@ -1867,9 +1867,9 @@ static void usb_reset(struct usb_info *ui)
 	spin_unlock_irqrestore(&ui->lock, flags);
 }
 
-static void usb_enable(int enable)
+static void usb_enable(void *handle, int enable)
 {
-	struct usb_info *ui = the_usb_info;
+	struct usb_info *ui = handle;
 	unsigned long flags;
 	spin_lock_irqsave(&ui->lock, flags);
 
@@ -1886,7 +1886,7 @@ static void usb_enable(int enable)
 }
 
 static struct msm_otg_ops dcd_ops = {
-	.status_change = usb_enable,
+	.request = usb_enable,
 };
 
 void usb_start(struct usb_info *ui)
@@ -2309,6 +2309,7 @@ static void usb_do_work(struct work_struct *w)
 		switch (ui->state) {
 		case USB_STATE_IDLE:
 			if (flags & USB_FLAG_REG_OTG) {
+				dcd_ops.handle = (void *) ui;
 				ret = ui->xceiv->set_peripheral(ui->xceiv,
 								&dcd_ops);
 				if (ret)

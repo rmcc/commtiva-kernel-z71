@@ -14,6 +14,8 @@
 #ifndef __ARCH_ARM_MACH_MSM_OTG_H
 #define __ARCH_ARM_MACH_MSM_OTG_H
 
+#include <linux/workqueue.h>
+
 /*
  * The otg driver needs to interact with both device side and host side
  * usb controllers.  it decides which controller is active at a given
@@ -47,7 +49,8 @@ struct msm_otg_transceiver {
 };
 
 struct msm_otg_ops {
-	void		(*status_change)(int);
+	void		(*request)(void *, int);
+	void		*handle;
 };
 
 /* for usb host and peripheral controller drivers */

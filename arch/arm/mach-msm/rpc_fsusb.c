@@ -56,7 +56,9 @@
  */
 #include <linux/err.h>
 #include <mach/rpc_hsusb.h>
+#include <mach/msm_hsusb.h>
 #include <mach/msm_rpcrouter.h>
+#include <mach/board.h>
 
 #define PM_APP_OTG_PROG		0x30000080
 #define PM_APP_OTG_VERS		0x00010001
@@ -78,7 +80,7 @@
 
 #define NUM_OF_CALLBACKS			11
 static struct msm_rpc_client *client;
-static struct msm_fsusb_rpc_ops *fsusb_ops;
+static struct msm_otg_ops *host_ops;
 
 static int msm_fsusb_rpc_arg(struct msm_rpc_client *client,
 			     void *buf, void *data)
@@ -234,27 +236,20 @@ static int msm_fsusb_cb_func(struct msm_rpc_client *client,
 	}
 	case PM_APP_OTG_HOST_INIT_CB_PROC: {
 		pr_debug("pm_app_otg_host_init_cb_proc callback received");
-		if (fsusb_ops->lpm_exit != NULL)
-			fsusb_ops->lpm_exit();
-		if (fsusb_ops->start_host != NULL)
-			fsusb_ops->start_host(1);
+		host_ops->request(host_ops->handle, REQUEST_START);
 		break;
 	}
 	case PM_APP_OTG_REMOTE_DEV_LOST_CB_PROC: {
 		pr_debug("pm_app_otg_remote_dev_lost_cb_proc"
 				" callback received");
 		msm_fsusb_acquire_bus();
-		if (fsusb_ops->lpm_exit)
-			fsusb_ops->lpm_exit();
-		if (fsusb_ops->start_host)
-			fsusb_ops->start_host(0);
+		host_ops->request(host_ops->handle, REQUEST_STOP);
 		break;
 	}
 	case PM_APP_OTG_REMOTE_DEV_RESUMED_CB_PROC: {
 		pr_debug("pm_app_otg_remote_dev_resumed_cb_proc"
 				"callback received");
-		if (fsusb_ops->lpm_exit != NULL)
-			fsusb_ops->lpm_exit();
+		host_ops->request(host_ops->handle, REQUEST_RESUME);
 		break;
 	}
 	case PM_APP_OTG_ERROR_NOTIFY_CB_PROC: {
@@ -268,9 +263,9 @@ static int msm_fsusb_cb_func(struct msm_rpc_client *client,
 	return 0;
 }
 
-int msm_fsusb_rpc_init(struct msm_fsusb_rpc_ops *ops)
+int msm_fsusb_rpc_init(struct msm_otg_ops *ops)
 {
-	fsusb_ops = ops;
+	host_ops = ops;
 	client = msm_rpc_register_client("fsusb",
 			PM_APP_OTG_PROG,
 			PM_APP_OTG_VERS, 1,

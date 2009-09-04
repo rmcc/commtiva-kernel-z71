@@ -22,6 +22,7 @@
 #define __ASM_ARCH_MSM_RPC_HSUSB_H
 
 #include <mach/msm_rpcrouter.h>
+#include <mach/msm_otg.h>
 
 int msm_hsusb_rpc_connect(void);
 int msm_hsusb_phy_reset(void);
@@ -42,12 +43,7 @@ int msm_chg_usb_i_is_not_available(void);
 int msm_chg_usb_charger_disconnected(void);
 int msm_chg_rpc_close(void);
 
-struct msm_fsusb_rpc_ops {
-	void (*start_host) (int on);
-	void (*lpm_exit) (void);
-};
-
-int msm_fsusb_rpc_init(struct msm_fsusb_rpc_ops *ops);
+int msm_fsusb_rpc_init(struct msm_otg_ops *ops);
 int msm_fsusb_init_phy(void);
 int msm_fsusb_reset_phy(void);
 int msm_fsusb_suspend_phy(void);
