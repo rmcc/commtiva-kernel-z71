@@ -76,6 +76,7 @@
 #define TVENC_CTL_TPG_CLRBAR                0
 #define TVENC_CTL_TPG_MODRAMP               BIT(15)
 #define TVENC_CTL_TPG_REDCLR                BIT(16)
+#define TVENC_CTL_S_VIDEO_EN                BIT(19)
 
 #ifdef TVENC_C
 void *tvenc_base;

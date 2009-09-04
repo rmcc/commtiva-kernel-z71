@@ -178,6 +178,9 @@ static int pal_on(struct platform_device *pdev)
 	reg |= TVENC_CTL_Y_FILTER_EN |
 	    TVENC_CTL_CR_FILTER_EN |
 	    TVENC_CTL_CB_FILTER_EN | TVENC_CTL_SINX_FILTER_EN;
+#ifdef CONFIG_FB_MSM_TVOUT_SVIDEO
+	reg |= TVENC_CTL_S_VIDEO_EN;
+#endif
 
 	TV_OUT(TV_LEVEL, 0x00000000);	/* DC offset to 0. */
 	TV_OUT(TV_OFFSET, 0x008080f0);

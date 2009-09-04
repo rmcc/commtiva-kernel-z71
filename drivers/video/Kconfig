@@ -2382,6 +2382,14 @@ config FB_MSM_TVOUT_NONE
 	  This will disable TV Out functionality.
 endchoice
 
+config FB_MSM_TVOUT_SVIDEO
+	bool "TVOut on S-video"
+	depends on FB_MSM_TVOUT
+	default n
+	---help---
+	  Selects whether the TVOut signal uses S-video.
+	  Choose n for composite output.
+
 choice
 	depends on  FB_MSM_MDP22
 	prompt "External MDDI"
