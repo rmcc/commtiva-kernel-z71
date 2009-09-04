@@ -85,6 +85,7 @@ static void msm_otg_enable(void)
 		xceiv->state = B_DEVICE;
 	}
 	xceiv->active = 1;
+	wake_lock_timeout(&xceiv->wlock, HZ/2);
 	enable_irq(xceiv->irq);
 }
 
@@ -149,6 +150,7 @@ static void msm_otg_do_work(struct work_struct *w)
 		}
 		break;
 	}
+	wake_lock_timeout(&xceiv->wlock, HZ/2);
 	enable_irq(xceiv->irq);
 }
 
@@ -166,6 +168,7 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	otgsc = readl(USB_OTGSC);
 	temp = otgsc & ~OTGSC_INTR_STS_MASK;
 	if (otgsc & OTGSC_IDIS) {
+		wake_lock(&xceiv->wlock);
 		if (is_host()) {
 			xceiv->flags = B_TO_A;
 			schedule_work(&xceiv->work);
@@ -304,6 +307,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 
 	INIT_WORK(&xceiv->work, msm_otg_do_work);
 	spin_lock_init(&xceiv->lock);
+	wake_lock_init(&xceiv->wlock, WAKE_LOCK_SUSPEND, "usb_otg");
+	wake_lock(&xceiv->wlock);
 
 	xceiv->set_host = msm_otg_set_host;
 	xceiv->set_peripheral = msm_otg_set_peripheral;

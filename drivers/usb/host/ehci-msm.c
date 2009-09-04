@@ -34,6 +34,7 @@
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_otg.h>
 #include <linux/wakelock.h>
+#include <linux/pm_qos_params.h>
 
 #define MSM_USB_BASE (hcd->regs)
 
@@ -60,6 +61,23 @@ static inline struct msmusb_hcd *hcd_to_mhcd(struct usb_hcd *hcd)
 static inline struct usb_hcd *mhcd_to_hcd(struct msmusb_hcd *mhcd)
 {
 	return container_of((void *) mhcd, struct usb_hcd, hcd_priv);
+}
+
+static void msm_xusb_pm_qos_update(struct msmusb_hcd *mhcd, int vote)
+{
+	struct usb_hcd *hcd = mhcd_to_hcd(mhcd);
+
+	if (vote) {
+		if (mhcd->pdata->max_axi_khz)
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+					(char *)hcd->self.bus_name,
+					mhcd->pdata->max_axi_khz);
+	} else {
+		if (mhcd->pdata->max_axi_khz)
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+					(char *) hcd->self.bus_name,
+					PM_QOS_DEFAULT_VALUE);
+	}
 }
 
 static void msm_xusb_enable_clks(struct msmusb_hcd *mhcd)
@@ -530,6 +548,7 @@ static void msm_hsusb_request_host(void *handle, int request)
 		if (mhcd->running)
 			break;
 		wake_lock(&mhcd->wlock);
+		msm_xusb_pm_qos_update(mhcd, 1);
 		msm_xusb_enable_clks(mhcd);
 		if (pdata->vbus_power)
 			pdata->vbus_power(pdata->phy_info, 1);
@@ -553,6 +572,7 @@ static void msm_hsusb_request_host(void *handle, int request)
 			pdata->vbus_power(pdata->phy_info, 0);
 		msm_xusb_disable_clks(mhcd);
 		wake_lock_timeout(&mhcd->wlock, HZ/2);
+		msm_xusb_pm_qos_update(mhcd, 0);
 		break;
 	}
 }
@@ -721,6 +741,8 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	INIT_WORK(&mhcd->lpm_exit_work, usb_lpm_exit_w);
 
 	wake_lock_init(&mhcd->wlock, WAKE_LOCK_SUSPEND, pdev->dev.bus_id);
+	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, pdev->dev.bus_id,
+					PM_QOS_DEFAULT_VALUE);
 
 	/* Register with otg driver. If registration fails, start usb host */
 	mhcd->otg_ops.request = msm_hsusb_request_host;
@@ -758,6 +780,8 @@ static int __exit ehci_msm_remove(struct platform_device *pdev)
 	clk_put(mhcd->pclk);
 
 	wake_lock_destroy(&mhcd->wlock);
+	pm_qos_remove_requirement(PM_QOS_SYSTEM_BUS_FREQ, pdev->dev.bus_id);
+
 	return retval;
 }
 
