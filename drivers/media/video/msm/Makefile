@@ -7,5 +7,6 @@ obj-$(CONFIG_MT9D112) += mt9d112.o mt9d112_reg.o
 obj-$(CONFIG_MT9P012) += mt9p012_reg.o
 obj-$(CONFIG_MSM_CAMERA_AF_FOXCONN) += mt9p012_fox.o
 obj-$(CONFIG_MSM_CAMERA_AF_BAM) += mt9p012_bam.o
+obj-$(CONFIG_MSM_CAMERA_AF_KM) += mt9p012_km.o
 obj-$(CONFIG_S5K3E2FX) += s5k3e2fx.o
 obj-$(CONFIG_VB6801) += vb6801.o
