@@ -603,36 +603,36 @@ void smd_sleep_exit(void)
 	list_for_each_entry(ch, &smd_ch_list, ch_list) {
 		if (ch_is_open(ch)) {
 			if (ch->recv->fHEAD) {
-				SMD_INFO("smd_sleep_exit ch %d fHEAD "
-					 "%x %x %x\n",
-					 ch->n,
-					 ch->recv->fHEAD,
-					 ch->recv->head, ch->recv->tail);
+				SMD_DBG("smd_sleep_exit ch %d fHEAD "
+					"%x %x %x\n",
+					ch->n,
+					ch->recv->fHEAD,
+					ch->recv->head, ch->recv->tail);
 				need_int = 1;
 				break;
 			}
 			if (ch->recv->fTAIL) {
-				SMD_INFO("smd_sleep_exit ch %d fTAIL "
-					 "%x %x %x\n",
-					 ch->n,
-					 ch->recv->fTAIL,
-					 ch->send->head, ch->send->tail);
+				SMD_DBG("smd_sleep_exit ch %d fTAIL "
+					"%x %x %x\n",
+					ch->n,
+					ch->recv->fTAIL,
+					ch->send->head, ch->send->tail);
 				need_int = 1;
 				break;
 			}
 			if (ch->recv->fSTATE) {
-				SMD_INFO("smd_sleep_exit ch %d fSTATE %x"
-					 "\n", ch->n,
-					 ch->recv->fSTATE);
+				SMD_DBG("smd_sleep_exit ch %d fSTATE %x"
+					"\n", ch->n,
+					ch->recv->fSTATE);
 				need_int = 1;
 				break;
 			}
 			tmp = ch->recv->state;
 			if (tmp != ch->last_state) {
-				SMD_INFO("smd_sleep_exit ch %d "
-					 "state %x != %x\n",
-					 ch->n, tmp,
-					 ch->last_state);
+				SMD_DBG("smd_sleep_exit ch %d "
+					"state %x != %x\n",
+					ch->n, tmp,
+					ch->last_state);
 				need_int = 1;
 				break;
 			}
@@ -641,7 +641,7 @@ void smd_sleep_exit(void)
 	spin_unlock_irqrestore(&smd_lock, flags);
 	do_smd_probe();
 	if (need_int) {
-		SMD_INFO("smd_sleep_exit need interrupt\n");
+		SMD_DBG("smd_sleep_exit need interrupt\n");
 		tasklet_schedule(&smd_fake_irq_tasklet);
 	}
 }
@@ -1199,7 +1199,7 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 
 		old_apps = apps = smsm[SMSM_APPS_STATE];
 
-		SMSM_INFO("<SM %08x %08x>\n", apps, modm);
+		SMSM_DBG("<SM %08x %08x>\n", apps, modm);
 		if (apps & SMSM_RESET) {
 			/* If we get an interrupt and the apps SMSM_RESET
 			   bit is already set, the modem is acking the
@@ -1228,7 +1228,7 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 		}
 
 		if (smsm[SMSM_APPS_STATE] != apps) {
-			SMSM_INFO("<SM %08x NOTIFY>\n", apps);
+			SMSM_DBG("<SM %08x NOTIFY>\n", apps);
 			smsm[SMSM_APPS_STATE] = apps;
 			do_smd_probe();
 			notify_other_smsm(SMSM_APPS_STATE, old_apps, apps);
@@ -1259,7 +1259,7 @@ int smsm_change_state(uint32_t smsm_entry,
 	if (smsm) {
 		old_state = smsm[smsm_entry];
 		smsm[smsm_entry] = (smsm[smsm_entry] & ~clear_mask) | set_mask;
-		SMSM_INFO("smsm_change_state %x\n", smsm[smsm_entry]);
+		SMSM_DBG("smsm_change_state %x\n", smsm[smsm_entry]);
 		notify_other_smsm(SMSM_APPS_STATE, old_state, smsm[smsm_entry]);
 	}
 
