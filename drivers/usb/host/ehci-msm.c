@@ -33,6 +33,7 @@
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_otg.h>
+#include <linux/wakelock.h>
 
 #define MSM_USB_BASE (hcd->regs)
 
@@ -43,6 +44,7 @@ struct msmusb_hcd {
 	unsigned in_lpm;
 	struct work_struct lpm_exit_work;
 	spinlock_t lock;
+	struct wake_lock wlock;
 	unsigned int clk_enabled;
 	struct msm_usb_host_platform_data *pdata;
 	unsigned running;
@@ -527,6 +529,7 @@ static void msm_hsusb_request_host(void *handle, int request)
 	case REQUEST_START:
 		if (mhcd->running)
 			break;
+		wake_lock(&mhcd->wlock);
 		msm_xusb_enable_clks(mhcd);
 		if (pdata->vbus_power)
 			pdata->vbus_power(pdata->phy_info, 1);
@@ -549,6 +552,7 @@ static void msm_hsusb_request_host(void *handle, int request)
 		if (pdata->vbus_power)
 			pdata->vbus_power(pdata->phy_info, 0);
 		msm_xusb_disable_clks(mhcd);
+		wake_lock_timeout(&mhcd->wlock, HZ/2);
 		break;
 	}
 }
@@ -716,6 +720,8 @@ static int __init ehci_msm_probe(struct platform_device *pdev)
 	mhcd->pdata = pdata;
 	INIT_WORK(&mhcd->lpm_exit_work, usb_lpm_exit_w);
 
+	wake_lock_init(&mhcd->wlock, WAKE_LOCK_SUSPEND, pdev->dev.bus_id);
+
 	/* Register with otg driver. If registration fails, start usb host */
 	mhcd->otg_ops.request = msm_hsusb_request_host;
 	mhcd->otg_ops.handle = (void *) mhcd;
@@ -751,6 +757,7 @@ static int __exit ehci_msm_remove(struct platform_device *pdev)
 	clk_put(mhcd->clk);
 	clk_put(mhcd->pclk);
 
+	wake_lock_destroy(&mhcd->wlock);
 	return retval;
 }
 
