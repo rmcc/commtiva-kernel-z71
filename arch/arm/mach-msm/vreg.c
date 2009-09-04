@@ -90,7 +90,7 @@ static struct vreg vregs[] = {
 	VREG("wlan2",	45, 0, 0),
 	VREG("xo_out",	46, 0, 0),
 	VREG("lvsw0",	47, 0, 0),
-	VREG("lvsw0",	48, 0, 0),
+	VREG("lvsw1",	48, 0, 0),
 };
 
 struct vreg *vreg_get(struct device *dev, const char *id)
