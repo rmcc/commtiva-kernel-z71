@@ -692,7 +692,7 @@ static int msm_spi_suspend(struct platform_device *pdev, pm_message_t state)
 		goto suspend_exit;
 	dd->suspended = 1;
 	while ((!list_empty(&dd->queue) || dd->transfer_in_progress) &&
-	       limit < 5) {
+	       limit < 50) {
 		limit++;
 		msleep(1);
 	}
@@ -700,6 +700,7 @@ static int msm_spi_suspend(struct platform_device *pdev, pm_message_t state)
 	disable_irq(dd->irq_in);
 	disable_irq(dd->irq_out);
 	disable_irq(dd->irq_err);
+	clk_disable(dd->clk);
 
 suspend_exit:
 	return 0;
@@ -709,12 +710,21 @@ static int msm_spi_resume(struct platform_device *pdev)
 {
 	struct spi_master *master = platform_get_drvdata(pdev);
 	struct msm_spi    *dd;
+	int rc;
 
 	if (!master)
 		goto resume_exit;
 	dd = spi_master_get_devdata(master);
 	if (!dd)
 		goto resume_exit;
+
+	rc = clk_enable(dd->clk);
+	if (rc) {
+		dev_err(dd->dev, "%s: unable to enable spi_clk\n",
+			__func__);
+		goto resume_exit;
+	}
+
 	enable_irq(dd->irq_in);
 	enable_irq(dd->irq_out);
 	enable_irq(dd->irq_err);
