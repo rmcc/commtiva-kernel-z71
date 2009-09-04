@@ -289,7 +289,7 @@ static int qsd_soc_dai_init(struct snd_soc_codec *codec)
 	int ret = 0;
 	ret = qsd_new_mixer(codec->card);
 	if (ret < 0) {
-		printk(KERN_ERR "msm_soc:ALSA MSM Mixer Fail");
+		pr_err("msm_soc: ALSA MSM Mixer Fail\n");
 	}
 
 	return ret;
