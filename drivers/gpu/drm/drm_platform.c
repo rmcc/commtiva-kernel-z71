@@ -74,6 +74,8 @@ int drm_platform_init(struct drm_driver *driver)
 	if (ret)
 		goto err_g1;
 
+	list_add_tail(&dev->driver_item, &driver->device_list);
+
 	DRM_INFO("Initialized %s %d.%d.%d %s on minor %d\n",
 		 driver->name, driver->major, driver->minor, driver->patchlevel,
 		 driver->date, dev->primary->index);
