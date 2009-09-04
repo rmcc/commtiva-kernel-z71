@@ -129,6 +129,7 @@ static int rpc_clients_thread(void *data)
 	struct msm_rpc_client *client;
 	int rc = 0;
 	struct msm_rpc_client_cb_item *cb_item;
+	struct rpc_request_hdr *req;
 
 	client = data;
 	for (;;) {
@@ -152,7 +153,12 @@ static int rpc_clients_thread(void *data)
 			}
 
 			if (client->cb_thread == NULL) {
-				client->cb_func(client, buffer, rc);
+				req = (struct rpc_request_hdr *)buffer;
+
+				if ((be32_to_cpu(req->rpc_vers) == 2) &&
+				    (be32_to_cpu(req->prog) ==
+				     (client->prog | 0x01000000)))
+					client->cb_func(client, buffer, rc);
 				kfree(buffer);
 			} else {
 				INIT_LIST_HEAD(&cb_item->list);
