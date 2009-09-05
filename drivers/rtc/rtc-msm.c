@@ -36,6 +36,7 @@ extern void msm_pm_set_max_sleep_time(int64_t sleep_time_ns);
 #define TIMEREMOTE_PROCEEDURE_GET_JULIAN	7
 #if CONFIG_RTC_SECURE_TIME_SUPPORT
 #define TIMEREMOTE_PROCEEDURE_GET_SECURE_JULIAN	11
+#define TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN	16
 #endif
 #define TIMEREMOTE_PROG_NUMBER 0x30000048
 #define TIMEREMOTE_PROG_VER 0x00010001
@@ -190,6 +191,53 @@ static struct rtc_class_ops msm_rtc_ops = {
 
 #if CONFIG_RTC_SECURE_TIME_SUPPORT
 static int
+msmrtc_timeremote_set_time_secure(struct device *dev, struct rtc_time *tm)
+{
+	int rc;
+
+	struct timeremote_set_julian_req {
+		struct rpc_request_hdr hdr;
+		uint32_t opt_arg;
+
+		struct rpc_time_julian time;
+	} req;
+
+	struct timeremote_set_julian_rep {
+		struct rpc_reply_hdr hdr;
+	} rep;
+
+	if (tm->tm_year < 1900)
+		tm->tm_year += 1900;
+
+	if (tm->tm_year < 1970)
+		return -EINVAL;
+
+#if RTC_DEBUG
+	printk(KERN_DEBUG "%s: %.2u/%.2u/%.4u %.2u:%.2u:%.2u (%.2u)\n",
+	       __func__, tm->tm_mon, tm->tm_mday, tm->tm_year,
+	       tm->tm_hour, tm->tm_min, tm->tm_sec, tm->tm_wday);
+#endif
+
+	req.opt_arg = cpu_to_be32(1);
+	req.time.year = cpu_to_be32(tm->tm_year);
+	req.time.month = cpu_to_be32(tm->tm_mon + 1);
+	req.time.day = cpu_to_be32(tm->tm_mday);
+	req.time.hour = cpu_to_be32(tm->tm_hour);
+	req.time.minute = cpu_to_be32(tm->tm_min);
+	req.time.second = cpu_to_be32(tm->tm_sec);
+	req.time.day_of_week = cpu_to_be32(tm->tm_wday);
+
+
+	rc = msm_rpc_call_reply(ep, TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN,
+				&req, sizeof(req),
+				&rep, sizeof(rep),
+				5 * HZ);
+	if (rc < 0)
+		return rc;
+
+	return 0;
+}
+static int
 msmrtc_timeremote_read_time_secure(struct device *dev, struct rtc_time *tm)
 {
 	int rc;
@@ -246,6 +294,7 @@ msmrtc_timeremote_read_time_secure(struct device *dev, struct rtc_time *tm)
 
 static struct rtc_class_ops msm_rtc_ops_secure = {
 	.read_time	= msmrtc_timeremote_read_time_secure,
+	.set_time	= msmrtc_timeremote_set_time_secure,
 };
 #endif
 
