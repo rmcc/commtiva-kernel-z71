@@ -18,6 +18,7 @@
 #ifdef CONFIG_MEMORY_HOTPLUG
 #include <linux/memory_hotplug.h>
 #endif
+#include <linux/sort.h>
 
 #include <asm/mach-types.h>
 #include <asm/sections.h>
@@ -350,11 +351,42 @@ static void map_reserved_memory(void)
 }
 #endif
 
+#ifndef CONFIG_SPARSEMEM
+int pfn_valid(unsigned long pfn)
+{
+	struct meminfo *mi = &meminfo;
+	unsigned int left = 0, right = mi->nr_banks;
+
+	do {
+		unsigned int mid = (right + left) / 2;
+		struct membank *bank = &mi->bank[mid];
+
+		if (pfn < bank_pfn_start(bank))
+			right = mid;
+		else if (pfn >= bank_pfn_end(bank))
+			left = mid + 1;
+		else
+			return 1;
+	} while (left < right);
+	return 0;
+}
+EXPORT_SYMBOL(pfn_valid);
+#endif
+
+static int __init meminfo_cmp(const void *_a, const void *_b)
+{
+	const struct membank *a = _a, *b = _b;
+	long cmp = bank_pfn_start(a) - bank_pfn_start(b);
+	return cmp < 0 ? -1 : cmp > 0 ? 1 : 0;
+}
+
 void __init bootmem_init(void)
 {
 	struct meminfo *mi = &meminfo;
 	unsigned long memend_pfn = 0;
 	int node, initrd_node;
+
+	sort(&mi->bank, mi->nr_banks, sizeof(mi->bank[0]), meminfo_cmp, NULL);
 
 	/*
 	 * Locate which node contains the ramdisk image, if any.
