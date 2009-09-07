@@ -1289,6 +1289,14 @@ static void __init msm7x30_init_irq(void)
 	msm_init_irq();
 }
 
+struct vreg *vreg_s3;
+struct vreg *vreg_mmc;
+
+#if (defined(CONFIG_MMC_MSM_SDC1_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC2_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC3_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC4_SUPPORT))
+
 struct sdcc_gpio {
 	struct msm_gpio *cfg_data;
 	uint32_t size;
@@ -1354,8 +1362,6 @@ struct sdcc_vreg {
 	unsigned level;
 };
 
-struct vreg *vreg_s3;
-struct vreg *vreg_mmc;
 static struct sdcc_vreg sdcc_vreg_data[4];
 
 static unsigned long vreg_sts, gpio_sts;
@@ -1432,6 +1438,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 out:
 	return rc;
 }
+#endif
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data msm7x30_sdc1_data = {
