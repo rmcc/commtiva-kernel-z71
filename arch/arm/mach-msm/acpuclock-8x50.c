@@ -405,22 +405,25 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	struct clkctl_acpu_speed *tgt_s, *strt_s;
 	int rc = 0;
 
+	if (reason == SETRATE_CPUFREQ)
+		mutex_lock(&drv_state.lock);
+
 	strt_s = drv_state.current_speed;
 
 	if (rate == (strt_s->a11clk_khz * 1000))
-		return 0;
+		goto out;
 
 	for (tgt_s = acpu_freq_tbl; tgt_s->a11clk_khz != 0; tgt_s++) {
 		if (tgt_s->a11clk_khz == (rate / 1000))
 			break;
 	}
 
-	if (tgt_s->a11clk_khz == 0)
-		return -EINVAL;
+	if (tgt_s->a11clk_khz == 0) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	if (reason == SETRATE_CPUFREQ) {
-		mutex_lock(&drv_state.lock);
-
 		/* Increase VDD if needed. */
 		if (tgt_s->vdd > strt_s->vdd) {
 			rc = acpuclk_set_vdd_level(tgt_s->vdd);
@@ -454,7 +457,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Nothing else to do for SWFI. */
 	if (reason == SETRATE_SWFI)
-		return 0;
+		goto out;
 
 	if (strt_s->axiclk_khz != tgt_s->axiclk_khz) {
 		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
@@ -465,7 +468,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Nothing else to do for power collapse */
 	if (reason == SETRATE_PC)
-		return 0;
+		goto out;
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
@@ -477,7 +480,6 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 out:
 	if (reason == SETRATE_CPUFREQ)
 		mutex_unlock(&drv_state.lock);
-
 	return rc;
 }
 
