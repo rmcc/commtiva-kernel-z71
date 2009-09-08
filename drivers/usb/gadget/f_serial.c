@@ -395,8 +395,9 @@ static int gser_notify(struct f_gser *gser, u8 type, u16 value,
 static int gser_notify_serial_state(struct f_gser *gser)
 {
 	int			 status;
+	unsigned long flags;
 
-	spin_lock(&gser->lock);
+	spin_lock_irqsave(&gser->lock, flags);
 	if (gser->notify_req) {
 		printk(KERN_ERR "gser ttyGS%d serial state %04x\n",
 				gser->port_num, gser->serial_state);
@@ -407,7 +408,7 @@ static int gser_notify_serial_state(struct f_gser *gser)
 		gser->pending = true;
 		status = 0;
 	}
-	spin_unlock(&gser->lock);
+	spin_unlock_irqrestore(&gser->lock, flags);
 	return status;
 }
 
@@ -415,15 +416,16 @@ static void gser_notify_complete(struct usb_ep *ep, struct usb_request *req)
 {
 	struct f_gser *gser = req->context;
 	u8	      doit = false;
+	unsigned long flags;
 
 	/* on this call path we do NOT hold the port spinlock,
 	 * which is why ACM needs its own spinlock
 	 */
-	spin_lock(&gser->lock);
+	spin_lock_irqsave(&gser->lock, flags);
 	if (req->status != -ESHUTDOWN)
 		doit = gser->pending;
 	gser->notify_req = req;
-	spin_unlock(&gser->lock);
+	spin_unlock_irqrestore(&gser->lock, flags);
 
 	if (doit && gser->online)
 		gser_notify_serial_state(gser);
