@@ -605,7 +605,8 @@ static void msm_hs_start_tx_locked(struct uart_port *uport )
 
 	if (msm_uport->tx.tx_ready_int_en == 0) {
 		msm_uport->tx.tx_ready_int_en = 1;
-		msm_hs_submit_tx_locked(uport);
+		if (msm_uport->tx.dma_in_flight == 0)
+			msm_hs_submit_tx_locked(uport);
 	}
 
 	clk_disable(msm_uport->clk);
