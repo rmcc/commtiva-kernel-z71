@@ -89,9 +89,12 @@
 #include "timer.h"
 #include "socinfo.h"
 #include "pm.h"
+#include <linux/msm_kgsl.h>
 
-#define MSM_PMEM_SF_SIZE	0x800000
+#define MSM_PMEM_SF_SIZE	0x1000000
 #define MSM_FB_SIZE		0x200000
+#define MSM_PMEM_GPU1_SIZE      0x1000000
+#define MSM_GPU_PHYS_SIZE       SZ_2M
 
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
@@ -788,6 +791,52 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
+static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
+	.name = "pmem_gpu1",
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.cached = 0,
+};
+
+static struct platform_device android_pmem_gpu1_device = {
+	.name = "android_pmem",
+	.id = 3,
+	.dev = { .platform_data = &android_pmem_gpu1_pdata },
+};
+
+static struct kgsl_platform_data kgsl_pdata = {
+	.max_axi_freq = 0, /*7x30 bringup, no request to made now*/
+};
+
+static struct resource kgsl_resources[] = {
+	{
+		.name = "kgsl_reg_memory",
+		.start = 0xA3500000, /* 3D GRP address */
+		.end = 0xA351ffff,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name   = "kgsl_phys_memory",
+		.start = 0,
+		.end = 0,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.start = INT_GRP_3D,
+		.end = INT_GRP_3D,
+		.flags = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device msm_device_kgsl = {
+	.name = "kgsl",
+	.id = -1,
+	.num_resources = ARRAY_SIZE(kgsl_resources),
+	.resource = kgsl_resources,
+	.dev = {
+		.platform_data = &kgsl_pdata,
+	},
+};
+
 static unsigned wega_reset_gpio =
 	GPIO_CFG(180, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
 
@@ -1108,6 +1157,8 @@ static struct platform_device *devices[] __initdata = {
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 	&msm_bt_power_device,
 #endif
+	&android_pmem_gpu1_device,
+	&msm_device_kgsl,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -1386,6 +1437,20 @@ static void __init msm7x30_allocate_memory_regions(void)
 	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
+
+	size = MSM_PMEM_GPU1_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	android_pmem_gpu1_pdata.start = __pa(addr);
+	android_pmem_gpu1_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+		"for gpu1 pmem\n", size, addr, __pa(addr));
+
+	size = MSM_GPU_PHYS_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	kgsl_resources[1].start = __pa(addr);
+	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+		"for KGSL pmem\n", size, addr, __pa(addr));
 }
 
 static void __init msm7x30_map_io(void)
