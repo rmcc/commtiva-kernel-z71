@@ -1052,6 +1052,10 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("mfc_pclk",		MFC_PCLK,		NULL, 0),
 	CLK_PCOM("grp_2d_clk",	GRP_2D_CLK,	NULL, 0),
 	CLK_PCOM("grp_2d_pclk",	GRP_2D_PCLK,	NULL, 0),
+	CLK_PCOM("mi2s_codec_rx_m_clk",	MI2S_CODEC_RX_MCLK,  NULL, 0),
+	CLK_PCOM("mi2s_codec_rx_s_clk",	MI2S_CODEC_RX_SCLK,  NULL, 0),
+	CLK_PCOM("mi2s_codec_tx_m_clk",	MI2S_CODEC_TX_MCLK,  NULL, 0),
+	CLK_PCOM("mi2s_codec_tx_s_clk",	MI2S_CODEC_TX_SCLK,  NULL, 0),
 };
 
 unsigned msm_num_clocks_7x30 = ARRAY_SIZE(msm_clocks_7x30);
