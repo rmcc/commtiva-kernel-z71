@@ -322,6 +322,44 @@ static void msm_marimba_shutdown_power(void)
 	}
 };
 
+static int msm_fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
+{
+	int rc;
+	uint32_t irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_PULL_UP,
+					GPIO_2MA);
+	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
+	if (rc) {
+		printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, irqcfg, rc);
+		return -EIO;
+	}
+	printk(KERN_INFO "%s\n", __func__);
+	return 0;
+};
+
+static int msm_fm_radio_setup(struct marimba_fm_platform_data *pdata)
+{
+	int rc;
+	uint32_t irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_NO_PULL,
+					GPIO_2MA);
+	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
+	if (rc) {
+		printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, irqcfg, rc);
+		return -EIO;
+	}
+	printk(KERN_INFO "%s\n", __func__);
+	return 0;
+};
+
+static struct marimba_fm_platform_data marimba_fm_pdata = {
+	.gpio_shutdown = msm_fm_radio_shutdown,
+	.gpio_setup =  msm_fm_radio_setup,
+	.gpioirq = MSM_GPIO_TO_INT(147),
+	.vreg_fm = NULL,
+};
+
+
 /* Slave id address for FM/CDC/QMEMBIST
  * Values can be programmed using Marimba slave id 0
  * should there be a conflict with other I2C devices
@@ -336,6 +374,7 @@ static struct marimba_platform_data marimba_pdata = {
 	.slave_id[MARIMBA_SLAVE_ID_QMEMBIST] = MARIMBA_SLAVE_ID_QMEMBIST_ADDR,
 	.marimba_setup = msm_marimba_setup_power,
 	.marimba_shutdown = msm_marimba_shutdown_power,
+	.fm = &marimba_fm_pdata,
 };
 
 static void __init msm7x30_init_marimba(void)
