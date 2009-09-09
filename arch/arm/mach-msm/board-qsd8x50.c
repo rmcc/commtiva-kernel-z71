@@ -1483,6 +1483,23 @@ static uint32_t camera_on_gpio_table[] = {
 	GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), /* MCLK */
 };
 
+static uint32_t camera_on_gpio_ffa_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(95,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* I2C_SCL */
+	GPIO_CFG(96,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* I2C_SDA */
+	/* FFA front Sensor Reset */
+	GPIO_CFG(137,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+	/* FFA front Sensor Standby */
+	GPIO_CFG(134,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+};
+
+static uint32_t camera_off_gpio_ffa_table[] = {
+	/* FFA front Sensor Reset */
+	GPIO_CFG(137,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+	/* FFA front Sensor Standby */
+	GPIO_CFG(134,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+};
+
 static void config_gpio_table(uint32_t *table, int len)
 {
 	int n, rc;
@@ -1496,15 +1513,71 @@ static void config_gpio_table(uint32_t *table, int len)
 	}
 }
 
+static void msm_camera_vreg_config(void)
+{
+	struct vreg *vreg_gp2, *vreg_gp3;
+	int rc;
+
+	vreg_gp2 = vreg_get(NULL, "gp2");
+	if (IS_ERR(vreg_gp2)) {
+		printk(KERN_ERR "%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp2", PTR_ERR(vreg_gp2));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_gp2, 1800);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg gp2 set level failed (%d)\n",
+			__func__, rc);
+	}
+
+	rc = vreg_enable(vreg_gp2);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+			 __func__, rc);
+	}
+
+	vreg_gp3 = vreg_get(NULL, "gp3");
+	if (IS_ERR(vreg_gp3)) {
+		printk(KERN_ERR "%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp3", PTR_ERR(vreg_gp3));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_gp3, 2800);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg gp3 set level failed (%d)\n",
+			__func__, rc);
+	}
+
+	rc = vreg_enable(vreg_gp3);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+			__func__, rc);
+	}
+}
+
 static void config_camera_on_gpios(void)
 {
+	if (machine_is_qsd8x50_ffa()) {
+		config_gpio_table(camera_on_gpio_ffa_table,
+		ARRAY_SIZE(camera_on_gpio_ffa_table));
+
+		msm_camera_vreg_config();
+		gpio_set_value(137, 0);
+		gpio_set_value(134, 1);
+	}
 	config_gpio_table(camera_on_gpio_table,
 		ARRAY_SIZE(camera_on_gpio_table));
 }
 
 static void config_camera_off_gpios(void)
 {
-  config_gpio_table(camera_off_gpio_table,
+	if (machine_is_qsd8x50_ffa()) {
+		config_gpio_table(camera_off_gpio_ffa_table,
+		ARRAY_SIZE(camera_off_gpio_ffa_table));
+	}
+	config_gpio_table(camera_off_gpio_table,
 		ARRAY_SIZE(camera_off_gpio_table));
 }
 
