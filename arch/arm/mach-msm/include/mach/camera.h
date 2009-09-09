@@ -139,11 +139,6 @@ struct msm_sync {
 
 	struct mutex lock;
 	struct list_head list;
-
-	spinlock_t af_status_lock;
-	struct msm_ctrl_cmd af_status;
-	int af_flag;
-	wait_queue_head_t af_status_wait;
 };
 
 #define MSM_APPS_ID_V4L2 "msm_v4l2"
