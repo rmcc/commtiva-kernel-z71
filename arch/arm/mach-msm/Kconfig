@@ -442,6 +442,35 @@ config MSM_SMD_NMEA
 	help
 	  Enable this to support the NMEA GPS device.
 
+	  If in doubt, say yes.
+
+config MSM_SMD_TTY
+	bool "SMD TTY Driver"
+	depends on MSM_SMD
+	default y
+	help
+	  Provides TTY interfaces to interact with the modem.
+
+	  If in doubt, say yes.
+
+config MSM_SMD_QMI
+	bool "SMD QMI Driver"
+	depends on MSM_SMD
+	default y
+	help
+	  Manages network data connections.
+
+	  If in doubt, say yes.
+
+config MSM_SMD_CTL
+	bool "SMD Control Driver"
+	depends on MSM_SMD
+	default y
+	help
+	  Provides a binary SMD non-muxed control port interface.
+
+	  If in doubt, say yes.
+
 config MSM_ONCRPCROUTER
 	depends on MSM_SMD
 	default y
