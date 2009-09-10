@@ -238,6 +238,7 @@ struct msmsdcc_host {
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct early_suspend early_suspend;
+	int polling_enabled;
 #endif
 
 #ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
