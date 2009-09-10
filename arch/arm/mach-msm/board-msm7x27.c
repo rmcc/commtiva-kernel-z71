@@ -66,7 +66,7 @@
 #include <linux/msm_kgsl.h>
 
 #define MSM_PMEM_MDP_SIZE	0x1800000
-#define MSM_PMEM_ADSP_SIZE	0x99A000
+#define MSM_PMEM_ADSP_SIZE	0x9E7000
 #define MSM_PMEM_GPU1_SIZE	0x1C00000
 #define MSM_FB_SIZE		0x200000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
