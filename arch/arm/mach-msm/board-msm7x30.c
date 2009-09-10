@@ -95,6 +95,10 @@
 #define MSM_FB_SIZE		0x200000
 #define MSM_PMEM_GPU1_SIZE      0x1000000
 #define MSM_GPU_PHYS_SIZE       SZ_2M
+#define MSM_PMEM_ADSP_SIZE      0x2000000
+#define PMEM_KERNEL_EBI1_SIZE   0x2000000
+
+
 
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
@@ -803,6 +807,37 @@ static struct platform_device android_pmem_gpu1_device = {
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
 };
 
+
+static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
+       .name = PMEM_KERNEL_EBI1_DATA_NAME,
+	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
+	* the only valid choice at this time. The board structure is
+	* set to all zeros by the C runtime initialization and that is now
+	* the enum value of PMEM_ALLOCATORTYPE_BITMAP, now forced to 0 in
+	* include/linux/android_pmem.h.
+	*/
+       .cached = 0,
+};
+
+static struct android_pmem_platform_data android_pmem_adsp_pdata = {
+       .name = "pmem_adsp",
+       .allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+       .cached = 0,
+};
+
+static struct platform_device android_pmem_kernel_ebi1_device = {
+       .name = "android_pmem",
+       .id = 1,
+       .dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
+};
+
+static struct platform_device android_pmem_adsp_device = {
+       .name = "android_pmem",
+       .id = 2,
+       .dev = { .platform_data = &android_pmem_adsp_pdata },
+};
+
+
 static struct kgsl_platform_data kgsl_pdata = {
 	.max_axi_freq = 0, /*7x30 bringup, no request to made now*/
 };
@@ -1145,6 +1180,8 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&msm_fb_device,
+	&android_pmem_kernel_ebi1_device,
+	&android_pmem_adsp_device,
 	&msm_device_i2c,
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
@@ -1451,6 +1488,20 @@ static void __init msm7x30_allocate_memory_regions(void)
 	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
 	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
 		"for KGSL pmem\n", size, addr, __pa(addr));
+
+	size = MSM_PMEM_ADSP_SIZE;
+	addr = alloc_bootmem(size);
+	android_pmem_adsp_pdata.start = __pa(addr);
+	android_pmem_adsp_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+		"for adsp pmem\n", size, addr, __pa(addr));
+
+	size = PMEM_KERNEL_EBI1_SIZE;
+	addr = alloc_bootmem_aligned(size, 0x100000);
+	android_pmem_kernel_ebi1_pdata.start = __pa(addr);
+	android_pmem_kernel_ebi1_pdata.size = size;
+	printk(KERN_INFO "allocating %lu bytes at %p (%lx physical)"
+		"for pmem kernel ebi1 arena\n", size, addr, __pa(addr));
 }
 
 static void __init msm7x30_map_io(void)
