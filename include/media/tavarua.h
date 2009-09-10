@@ -45,14 +45,10 @@
 
 #undef FMDBG
 #ifdef FM_DEBUG
-  #define FMDBG(fmt, args...) printk(KERN_INFO "msm_radio: " fmt, ##args)
+  #define FMDBG(fmt, args...) printk(KERN_INFO "tavarua_radio: " fmt, ##args)
 #else
   #define FMDBG(fmt, args...)
 #endif
-
-
-#define FM_PROTO        0x01
-#define PROC_DIR        "fm"
 
 /*
  * The frequency is set in units of 62.5 Hz when using V4L2_TUNER_CAP_LOW,
@@ -92,88 +88,129 @@ enum tavarua_xfr_t {
 #define RDS_BLOCK 	3
 
 /* registers*/
-#define MARIMBA_XO_BUFF_CNTRL 0x04
+#define MARIMBA_XO_BUFF_CNTRL 0x07
 #define RADIO_REGISTERS 0x2F
-
+#define XFR_REG_NUM     16
 #define STATUS_REG_NUM 	3
-#define STATUS_REG1	0x00
-#define STATUS_REG2	0x01
-#define STATUS_REG3	0x02
 
-#define RDCTRL		0x03
-#define FM_RECV_ON	0x01
+enum register_t {
+	STATUS_REG1,
+	STATUS_REG2,
+	STATUS_REG3,
+	RDCTRL,
+	FREQ,
+	TUNECTRL,
+	SRCHRDS1,
+	SRCHRDS2,
+	SRCHCTRL,
+	IOCTRL,
+	RDSCTRL,
+	ADVCTRL,
+	XFRCTRL = 0x1F,
+	LEAKAGE_CNTRL = 0xFE,
+};
 
-#define XFR_REG_NUM	16
-#define XFRCTRL		0x1F
-#define XFRCTRL_WRITE	0x80
-#define LEAKAGE_CNTRL	0xFE
+/* Radio Control */
+#define RDCTRL_STATE_OFFSET	0
+#define RDCTRL_STATE_MASK	(2 << RDCTRL_STATE_OFFSET)
+#define RDCTRL_BAND_OFFSET	2
+#define RDCTRL_BAND_MASK	(1 << RDCTRL_BAND_OFFSET)
+#define RDCTRL_CHSPACE_OFFSET	3
+#define RDCTRL_CHSPACE_MASK	(2 << RDCTRL_CHSPACE_OFFSET)
+#define RDCTRL_DEEMPHASIS_OFFSET 6
+#define RDCTRL_DEEMPHASIS_MASK	(1 << RDCTRL_DEEMPHASIS_OFFSET)
+#define RDCTRL_HLSI_OFFSET	7
+#define RDCTRL_HLSI_MASK	(2 << RDCTRL_HLSI_OFFSET)
 
-#define FREQ		0x04
-#define TUNECTRL	0x05
+/* Tune Control */
 #define TUNE_STATION	0x01
 
-#define IOCTRL		0x09
-#define RDSCTRL		0x0A
+/* Search Control */
+#define SRCH_MODE_OFFSET	0
+#define SRCH_MODE_MASK		(3 << SRCH_MODE_OFFSET)
+#define SRCH_DIR_OFFSET		3
+#define SRCH_DIR_MASK		(1 << SRCH_DIR_OFFSET)
+#define SRCH_DWELL_OFFSET	4
+#define SRCH_DWELL_MASK		(3 << SRCH_DWELL_OFFSET)
+#define SRCH_STATE_OFFSET	7
+#define SRCH_STATE_MASK		(1 << SRCH_STATE_OFFSET)
+
+/* I/O Control */
+#define IOC_HRD_MUTE	0x03
+#define IOC_SFT_MUTE    (1 << 2)
+#define IOC_MON_STR     (1 << 3)
+#define IOC_SIG_BLND    (1 << 4)
+#define IOC_INTF_BLND   (1 << 5)
+#define IOC_ANTENNA     (1 << 6)
+
+/* RDS Control */
 #define RDS_ON		0x01
 
-#define ADVCTRL		0x0B
-#define RDSRTEN		0x08
-#define RDSPSEN		0x10
 
-/* search options */
-#define SRCHRDS1	0x06
-#define SRCHRDS2	0x07
-#define SRCHCTRL	0x08
-#define SEEK		0x00
-#define SCAN		0x01
-#define SCAN_FOR_STRONG	0x02
-#define SCAN_FOR_WEAK 	0x03
-#define RDS_SEEK_PTY	0x04
-#define RDS_SCAN_PTY	0x05
-#define RDS_SEEK_PI	0x06
-#define RDS_AF_JUMP	0x07
+/* Advanced features controls */
+#define RDSRTEN		(1 << 3)
+#define RDSPSEN		(1 << 4)
+
+/* Search options */
+enum search_t {
+	SEEK,
+	SCAN,
+	SCAN_FOR_STRONG,
+	SCAN_FOR_WEAK,
+	RDS_SEEK_PTY,
+	RDS_SCAN_PTY,
+	RDS_SEEK_PI,
+	RDS_AF_JUMP,
+};
 
 #define SRCH_MODE	0x07
 #define SRCH_DIR	0x08 /* 0-up 1-down */
 #define SCAN_DWELL	0x70
 #define SRCH_ON		0x80
 
-#define IOC_HRD_MUTE	0x03
-#define IOC_SFT_MUTE    0x04
-#define IOC_MON_STR     0x08
-#define IOC_SIG_BLND    0x10
-#define IOC_INTF_BLND   0x20
-#define IOC_ANTENNA     0x40
 
-#define FM_ENABLE	0x0C
+#define FM_ENABLE	0x22
+#define SET_REG_FIELD(reg, val, offset, mask) \
+	(reg = (reg & ~mask) | ((val << offset) & mask))
+#define GET_REG_FIELD(reg, offset, mask) ((reg & mask) >> offset)
 
+
+
+enum radio_state_t {
+	FM_OFF,
+	FM_RECV,
+	FM_TRANS,
+	FM_RESET,
+};
+
+#define XFRCTRL_WRITE   (1 << 7)
 
 /* Interrupt status */
 
 /* interrupt register 1 */
-#define	READY		0x01	/* Radio ready after powerup or reset */
-#define	TUNE		0x02	/* Tune completed */
-#define	SEARCH		0x04	/* Search completed (read FREQ) */
-#define	SCANNEXT	0x08	/* Scanning for next station */
-#define	SIGNAL		0x10	/* Signal indicator change (read SIGSTATE) */
-#define	INTF		0x20	/* Interference cnt has fallen outside range */
-#define	SYNC		0x40	/* RDS sync state change (read RDSSYNC) */
-#define	AUDIO		0x80	/* Audio Control indicator (read AUDIOIND) */
+#define	READY		(1 << 0) /* Radio ready after powerup or reset */
+#define	TUNE		(1 << 1) /* Tune completed */
+#define	SEARCH		(1 << 2) /* Search completed (read FREQ) */
+#define	SCANNEXT	(1 << 3) /* Scanning for next station */
+#define	SIGNAL		(1 << 4) /* Signal indicator change (read SIGSTATE) */
+#define	INTF		(1 << 5) /* Interference cnt has fallen outside range */
+#define	SYNC		(1 << 6) /* RDS sync state change (read RDSSYNC) */
+#define	AUDIO		(1 << 7) /* Audio Control indicator (read AUDIOIND) */
 
 /* interrupt register 2 */
-#define	RDSDAT		0x01	/* New unread RDS data group available */
-#define	BLOCKB		0x02	/* Block-B match condition exists */
-#define	PROGID		0x04	/* Block-A or Block-C matched stored PI value */
-#define	RDSPS		0x08	/* New RDS Program Service Table available */
-#define	RDSRT		0x10	/* New RDS Radio Text available */
-#define	RDSAF		0x20	/* New RDS AF List available */
-#define	TXRDSDAT	0x40	/* Transmitted an RDS group */
-#define	TXRDSDONE	0x80	/* RDS raw group one-shot transmit completed */
+#define	RDSDAT		(1 << 0) /* New unread RDS data group available */
+#define	BLOCKB		(1 << 1) /* Block-B match condition exists */
+#define	PROGID		(1 << 2) /* Block-A or Block-C matched stored PI value*/
+#define	RDSPS		(1 << 3) /* New RDS Program Service Table available */
+#define	RDSRT		(1 << 4) /* New RDS Radio Text available */
+#define	RDSAF		(1 << 5) /* New RDS AF List available */
+#define	TXRDSDAT	(1 << 6) /* Transmitted an RDS group */
+#define	TXRDSDONE	(1 << 7) /* RDS raw group one-shot transmit completed */
 
 /* interrupt register 3 */
-#define	TRANSFER	0x01	/* Data transfer (XFR) completed */
-#define	RDSPROC		0x02	/* Dynamic RDS Processing complete */
-#define	ERROR		0x80	/* Err occurred. Read code to determine cause */
+#define	TRANSFER	(1 << 0) /* Data transfer (XFR) completed */
+#define	RDSPROC		(1 << 1) /* Dynamic RDS Processing complete */
+#define	ERROR		(1 << 7) /* Err occurred.Read code to determine cause */
 
 /* Transfer */
 enum tavarua_xfr_ctrl_t {
