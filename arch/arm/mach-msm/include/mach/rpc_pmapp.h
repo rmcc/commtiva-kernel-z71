@@ -33,8 +33,8 @@
 
 int msm_pm_app_rpc_init(void);
 void msm_pm_app_rpc_deinit(void);
-int msm_pm_app_register_vbus_sn(void);
-void msm_pm_app_unregister_vbus_sn(void);
+int msm_pm_app_register_vbus_sn(void (*callback)(int online));
+void msm_pm_app_unregister_vbus_sn(void (*callback)(int online));
 int msm_pm_app_enable_usb_ldo(int);
 
 #endif
