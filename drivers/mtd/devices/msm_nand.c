@@ -3076,6 +3076,12 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 				data_dma_addr_curr += mtd->oobsize;
 				cmd++;
 			}
+		} else {
+				cmd->cmd = 0;
+				cmd->src = init_dma_addr;
+				cmd->dst = NAND_FLASH_BUFFER;
+				cmd->len = mtd->oobsize;
+				cmd++;
 		}
 
 		/* Write the MACRO1 register */
