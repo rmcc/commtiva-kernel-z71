@@ -1611,10 +1611,14 @@ static struct msm_gpio qup_i2c_gpios_hw[] = {
 	{ GPIO_CFG(17, 2, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "qup_sda" },
 };
 
+/* 1.8V -- L8 */
+static struct vreg *msm_i2c_vreg_gp7;
+
 static void
 msm_i2c_gpio_config(int adap_id, int config_type)
 {
 	struct msm_gpio *msm_i2c_table;
+
 	/* Each adapter gets 2 lines from the table */
 	if (adap_id > 0)
 		return;
@@ -1623,6 +1627,20 @@ msm_i2c_gpio_config(int adap_id, int config_type)
 	else
 		msm_i2c_table = &msm_i2c_gpios_io[adap_id*2];
 	msm_gpios_enable(msm_i2c_table, 2);
+
+	if (msm_i2c_vreg_gp7) {
+		int rc = vreg_set_level(msm_i2c_vreg_gp7, 1800);
+		if (rc) {
+			pr_err("%s: vreg L8 set level failed (%d)\n",
+			       __func__, rc);
+		}
+
+		rc = vreg_enable(msm_i2c_vreg_gp7);
+		if (rc) {
+			pr_err("%s: vreg_enable() = %d \n",
+						__func__, rc);
+		}
+	}
 }
 
 static struct vreg *qup_vreg;
@@ -1666,6 +1684,13 @@ static void __init msm_device_i2c_init(void)
 {
 	if (msm_gpios_request(msm_i2c_gpios_hw, ARRAY_SIZE(msm_i2c_gpios_hw)))
 		pr_err("failed to request I2C gpios\n");
+
+	msm_i2c_vreg_gp7 = vreg_get(NULL, "gp7");
+	if (IS_ERR(msm_i2c_vreg_gp7)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(msm_i2c_vreg_gp7));
+		msm_i2c_vreg_gp7 = 0;
+	}
 
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
