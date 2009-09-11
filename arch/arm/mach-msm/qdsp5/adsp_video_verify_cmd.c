@@ -15,18 +15,9 @@
  * GNU General Public License for more details.
  *
  */
+
+#include <mach/debug_adsp_mm.h>
 #include <linux/io.h>
-
-#define ADSP_DEBUG_MSGS 0
-#if ADSP_DEBUG_MSGS
-#define DLOG(fmt,args...) \
-	do { printk(KERN_INFO "[%s:%s:%d] "fmt, __FILE__, __func__, __LINE__, \
-	     ##args); } \
-	while (0)
-#else
-#define DLOG(x...) do {} while (0)
-#endif
-
 
 #include <mach/qdsp5/qdsp5vdeccmdi.h>
 #include "adsp.h"
@@ -57,14 +48,18 @@ static int pmem_fixup_high_low(unsigned short *high,
 
 	phys_addr = high_low_short_to_ptr(*high, *low);
 	phys_size = (unsigned long)high_low_short_to_ptr(size_high, size_low);
-	DLOG("virt %x %x\n", phys_addr, phys_size);
+	MM_DBG("virt %x %x\n", (unsigned int)phys_addr,
+			(unsigned int)phys_size);
 	if (adsp_pmem_fixup_kvaddr(module, &phys_addr, &kvaddr, phys_size)) {
-		DLOG("ah%x al%x sh%x sl%x addr %x size %x\n",
-			*high, *low, size_high, size_low, phys_addr, phys_size);
+		MM_ERR("ah%x al%x sh%x sl%x addr %x size %x\n",
+			*high, *low, size_high,
+			size_low, (unsigned int)phys_addr,
+			(unsigned int)phys_size);
 		return -1;
 	}
 	ptr_to_high_low_short(phys_addr, high, low);
-	DLOG("phys %x %x\n", phys_addr, phys_size);
+	MM_DBG("phys %x %x\n", (unsigned int)phys_addr,
+			(unsigned int)phys_size);
 	if (addr)
 		*addr = kvaddr;
 	if (size)
@@ -85,10 +80,10 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 	unsigned long frame_buffer_size;
 	unsigned short frame_buffer_size_high, frame_buffer_size_low;
 
-	DLOG("cmd_size %d cmd_id %d cmd_data %x\n", cmd_size, cmd_id, cmd_data);
+	MM_DBG("cmd_size %d cmd_id %d cmd_data %x\n", cmd_size, cmd_id,
+					(unsigned int)cmd_data);
 	if (cmd_id != VIDDEC_CMD_SUBFRAME_PKT) {
-		printk(KERN_INFO "adsp_video: unknown video packet %u\n",
-			cmd_id);
+		MM_INFO("adsp_video: unknown video packet %u\n", cmd_id);
 		return 0;
 	}
 	if (cmd_size < sizeof(viddec_cmd_subframe_pkt))
@@ -170,10 +165,9 @@ int adsp_video_verify_cmd(struct msm_adsp_module *module,
 {
 	switch (queue_id) {
 	case QDSP_mpuVDecPktQueue:
-		DLOG("\n");
 		return verify_vdec_pkt_cmd(module, cmd_data, cmd_size);
 	default:
-		printk(KERN_INFO "unknown video queue %u\n", queue_id);
+		MM_INFO("unknown video queue %u\n", queue_id);
 		return 0;
 	}
 }

@@ -16,6 +16,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
@@ -173,7 +174,7 @@ struct audio_copp {
 
 static void audio_prevent_sleep(struct audio *audio)
 {
-	printk(KERN_INFO "++++++++++++++++++++++++++++++\n");
+	MM_DBG("\n"); /* Macro prints the file name and function */
 	wake_lock(&audio->wakelock);
 	wake_lock(&audio->idlelock);
 }
@@ -182,7 +183,7 @@ static void audio_allow_sleep(struct audio *audio)
 {
 	wake_unlock(&audio->wakelock);
 	wake_unlock(&audio->idlelock);
-	printk(KERN_INFO "------------------------------\n");
+	MM_DBG("\n"); /* Macro prints the file name and function */
 }
 
 static int audio_dsp_out_enable(struct audio *audio, int yes);
@@ -196,7 +197,7 @@ static int audio_enable(struct audio *audio)
 	struct audmgr_config cfg;
 	int rc;
 
-	pr_info("audio_enable()\n");
+	MM_INFO("\n"); /* Macro prints the file name and function */
 
 	if (audio->enabled)
 		return 0;	
@@ -225,7 +226,7 @@ static int audio_enable(struct audio *audio)
 	}
 
 	if (audpp_enable(-1, audio_dsp_event, audio)) {
-		pr_err("audio: audpp_enable() failed\n");
+		MM_ERR("audpp_enable() failed\n");
 		audmgr_disable(&audio->audmgr);
 		audio_allow_sleep(audio);
 		return -ENODEV;
@@ -239,7 +240,7 @@ static int audio_enable(struct audio *audio)
 /* must be called with audio->lock held */
 static int audio_disable(struct audio *audio)
 {
-	pr_info("audio_disable()\n");
+	MM_INFO("\n"); /* Macro prints the file name and function */
 	if (audio->enabled) {
 		audio->enabled = 0;
 		audio_dsp_out_enable(audio, 0);
@@ -293,13 +294,13 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 		unsigned id = msg[2];
 		unsigned idx = msg[3] - 1;
 
-		/* pr_info("audio_dsp_event: HOST_PCM id %d idx %d\n", id, idx); */
+		/* MM_INFO("HOST_PCM id %d idx %d\n", id, idx); */
 		if (id != AUDPP_MSG_HOSTPCM_ID_ARM_RX) {
-			pr_err("bogus id\n");
+			MM_ERR("bogus id\n");
 			break;
 		}
 		if (idx > 1) {
-			pr_err("bogus buffer idx\n");
+			MM_ERR("bogus buffer idx\n");
 			break;
 		}
 
@@ -322,28 +323,28 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 		break;
 	}
 	case AUDPP_MSG_PCMDMAMISSED:
-		pr_info("audio_dsp_event: PCMDMAMISSED %d\n", msg[0]);
+		MM_INFO("PCMDMAMISSED %d\n", msg[0]);
 		audio->teos = 1;
 		wake_up(&audio->wait);
 		break;
 	case AUDPP_MSG_CFG_MSG:
 		if (msg[0] == AUDPP_MSG_ENA_ENA) {
 			LOG(EV_ENABLE, 1);
-			pr_info("audio_dsp_event: CFG_MSG ENABLE\n");
+			MM_INFO("CFG_MSG ENABLE\n");
 			audio->out_needed = 0;
 			audio->running = 1;
 			audpp_dsp_set_vol_pan(5, &audio->vol_pan);
 			audio_dsp_out_enable(audio, 1);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			LOG(EV_ENABLE, 0);
-			pr_info("audio_dsp_event: CFG_MSG DISABLE\n");
+			MM_INFO("CFG_MSG DISABLE\n");
 			audio->running = 0;
 		} else {
-			pr_err("audio_dsp_event: CFG_MSG %d?\n", msg[0]);
+			MM_ERR("CFG_MSG %d?\n", msg[0]);
 		}
 		break;
 	default:
-		pr_err("audio_dsp_event: UNKNOWN (%d)\n", id);
+		MM_ERR("UNKNOWN (%d)\n", id);
 	}
 }
 
@@ -649,7 +650,7 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		cap_raise(new->cap_effective, CAP_SYS_NICE);
 		commit_creds(new);
 		if ((sched_setscheduler(current, SCHED_RR, &s)) < 0)
-			pr_err("audio: sched_setscheduler failed\n");
+			MM_ERR("sched_setscheduler failed\n");
 	}
 
 	mutex_lock(&audio->write_lock);
@@ -694,13 +695,13 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 	if (!rt_policy(old_policy)) {
 		struct sched_param v = { .sched_priority = old_prio };
 		if ((sched_setscheduler(current, old_policy, &v)) < 0)
-			pr_err("audio: sched_setscheduler failed\n");
+			MM_ERR("sched_setscheduler failed\n");
 		if (likely(!cap_nice)) {
 			struct cred *new = prepare_creds();
 			cap_lower(new->cap_effective, CAP_SYS_NICE);
 			commit_creds(new);
 			if ((sched_setscheduler(current, SCHED_RR, &s)) < 0)
-				pr_err("audio: sched_setscheduler failed\n");
+				MM_ERR("sched_setscheduler failed\n");
 		}
 	}
 
@@ -734,7 +735,7 @@ static int audio_open(struct inode *inode, struct file *file)
 	mutex_lock(&audio->lock);
 
 	if (audio->opened) {
-		pr_err("audio: busy\n");
+		MM_ERR("busy\n");
 		rc = -EBUSY;
 		goto done;
 	}
@@ -743,7 +744,7 @@ static int audio_open(struct inode *inode, struct file *file)
 		audio->data = dma_alloc_coherent(NULL, DMASZ, 
 						 &audio->phys, GFP_KERNEL);
 		if (!audio->data) {
-			pr_err("audio: could not allocate DMA buffers\n");
+			MM_ERR("could not allocate DMA buffers\n");
 			rc = -ENOMEM;
 			goto done;
 		}
@@ -951,7 +952,7 @@ static int audpp_open(struct inode *inode, struct file *file)
 				AUDPP_MBADRC_EXTERNAL_BUF_SIZE * 2,
 				 &audio_copp->mbadrc_phys, GFP_KERNEL);
 		if (!audio_copp->mbadrc_data) {
-			pr_err("audio: could not allocate DMA buffers\n");
+			MM_ERR("could not allocate DMA buffers\n");
 			audio_copp->opened = 0;
 			audpp_unregister_event_callback(&audio_copp->ecb);
 			mutex_unlock(&audio_copp->lock);
