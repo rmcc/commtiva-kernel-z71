@@ -386,14 +386,6 @@ static int msm8k_aac_ioctl(struct inode *inode, struct file *f,
 		wake_up(&p->eos_wait);
 		p->flush_rcvd = 0;
 		break;
-	case AUDIO_GET_PCM_CONFIG:
-		D("AUDIO_GET_PCM_CONFIG\n");
-		rc = CAD_RES_SUCCESS;
-		break;
-	case AUDIO_SET_PCM_CONFIG:
-		D("AUDIO_SET_PCM_CONFIG\n");
-		rc = CAD_RES_SUCCESS;
-		break;
 	case AUDIO_GET_CONFIG:
 		if (copy_to_user((void *)arg, &p->cfg,
 				sizeof(struct msm_audio_config)))

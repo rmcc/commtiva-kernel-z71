@@ -68,7 +68,6 @@
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_ard.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
-#include <mach/qdsp6/msm8k_cad_write_amr_format.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
 
 #if 0
@@ -94,7 +93,6 @@ static int msm8k_voice_open(struct inode *inode, struct file *f)
 	struct cad_open_struct_type  cos;
 	struct cad_stream_info_struct_type cad_stream_info;
 	struct cad_stream_device_struct_type cad_stream_dev;
-	struct cad_write_amr_format_struct_type cad_write_amr_fmt;
 	u32 stream_device[1];
 	int rc;
 	D("%s\n", __func__);
@@ -106,8 +104,6 @@ static int msm8k_voice_open(struct inode *inode, struct file *f)
 	}
 
 	memset(&cad_stream_info, 0, sizeof(struct cad_stream_info_struct_type));
-	memset(&cad_write_amr_fmt, 0,
-			sizeof(struct cad_write_amr_format_struct_type));
 
 	f->private_data = voice;
 
