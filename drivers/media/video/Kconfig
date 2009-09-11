@@ -790,14 +790,25 @@ config VIDEO_PXA27x
 # MSM camera configuration
 #
 
-comment "MSM Camera And Video"
+comment "Qualcomm MSM Camera And Video"
 
 menuconfig MSM_CAMERA
-	bool "MSM camera and video capture support"
-	depends on VIDEO_V4L2 && I2C
-	---help---
+	bool "Qualcomm MSM camera and video capture support"
+	depends on ARCH_MSM && VIDEO_V4L2 && I2C
+	default y
+	help
 	  Say Y here to enable selecting the video adapters for
 	  Qualcomm msm camera and video encoding
+
+config MSM_CAMERA_DEBUG
+	bool "Qualcomm MSM camera debugging with printk"
+	depends on MSM_CAMERA
+	default n
+	help
+	  Enable printk() debug for msm camera
+
+
+source "drivers/media/video/msm/Kconfig"
 
 config VIDEO_SH_MOBILE_CEU
 	tristate "SuperH Mobile CEU Interface driver"
@@ -942,22 +953,5 @@ config USB_S2255
 
 endif # V4L_USB_DRIVERS
 
-comment "Qualcomm MSM Camera And Video"
-
-menuconfig MSM_CAMERA
-	bool "Qualcomm MSM camera and video capture support"
-	depends on ARCH_MSM
-	help
-	  Say Y here to enable selecting the video adapters for
-	  Qualcomm msm camera and video encoding
-
-config MSM_CAMERA_DEBUG
-	bool "Qualcomm MSM camera debugging with printk"
-	depends on MSM_CAMERA
-	help
-	  Enable printk() debug for msm camera
-
-
-source "drivers/media/video/msm/Kconfig"
 
 endif # VIDEO_CAPTURE_DRIVERS
