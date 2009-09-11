@@ -29,10 +29,10 @@
 #define __MACH_CLK_H
 
 /* Magic rate value for use with PM QOS to request the board's maximum
- * supported AXI rate. This value is chosen to not collide with
- * PM_QOS_DEFAULT_VALUE which may also be used to vote on the AXI rate.
+ * supported AXI rate. PM QOS will only pass positive s32 rate values
+ * through to the clock driver, so INT_MAX is used.
  */
-#define MSM_AXI_MAX_FREQ_KHZ -2
+#define MSM_AXI_MAX_FREQ	LONG_MAX
 
 struct clk;
 
