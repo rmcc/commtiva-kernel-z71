@@ -62,12 +62,13 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/msm_audio.h>
+#include <linux/msm_audio_amrnb.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_ard.h>
-#include <mach/qdsp6/msm8k_cad_write_amr_format.h>
+#include <mach/qdsp6/msm8k_cad_amr_format.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
 
 #if 0
@@ -83,6 +84,7 @@
 struct amr {
 	u32 cad_w_handle;
 	struct msm_audio_config cfg;
+	struct msm_audio_amrnb_enc_config amr_enc_cfg;
 };
 
 
@@ -160,15 +162,15 @@ static int msm8k_amr_in_ioctl(struct inode *inode, struct file *f,
 	struct cad_device_struct_type cad_dev;
 	struct cad_stream_device_struct_type cad_stream_dev;
 	struct cad_stream_info_struct_type cad_stream_info;
-	struct cad_write_amr_format_struct_type cad_write_amr_fmt;
+	struct cad_amr_format cad_amr_format;
 	D("%s\n", __func__);
 
 	memset(&cad_dev, 0, sizeof(struct cad_device_struct_type));
 	memset(&cad_stream_dev, 0,
 			sizeof(struct cad_stream_device_struct_type));
 	memset(&cad_stream_info, 0, sizeof(struct cad_stream_info_struct_type));
-	memset(&cad_write_amr_fmt, 0,
-			sizeof(struct cad_write_amr_format_struct_type));
+	memset(&cad_amr_format, 0,
+			sizeof(struct cad_amr_format));
 
 	switch (cmd) {
 	case AUDIO_START:
@@ -196,13 +198,11 @@ static int msm8k_amr_in_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
-		cad_write_amr_fmt.ver_id = CAD_WRITE_AMR_VERSION_10;
-		cad_write_amr_fmt.amr.stereo_config = 0;
-		cad_write_amr_fmt.amr.sample_rate = 8000;
-
+		cad_amr_format.amr_band_mode = p->amr_enc_cfg.enc_mode;
+		cad_amr_format.amr_dtx_mode = p->amr_enc_cfg.dtx_mode_enable;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
-			&cad_write_amr_fmt,
-			sizeof(struct cad_write_amr_format_struct_type));
+			&cad_amr_format,
+			sizeof(struct cad_amr_format));
 		if (rc) {
 			pr_err("cad_ioctl() SET_STREAM_CONFIG failed\n");
 			break;
@@ -230,6 +230,15 @@ static int msm8k_amr_in_ioctl(struct inode *inode, struct file *f,
 	case AUDIO_SET_CONFIG:
 		rc = copy_from_user(&p->cfg, (void *)arg,
 				sizeof(struct msm_audio_config));
+		break;
+	case AUDIO_GET_AMRNB_ENC_CONFIG:
+		if (copy_to_user((void *)arg, &p->amr_enc_cfg,
+				sizeof(struct msm_audio_amrnb_enc_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_SET_AMRNB_ENC_CONFIG:
+		rc = copy_from_user(&p->amr_enc_cfg, (void *)arg,
+				sizeof(struct msm_audio_amrnb_enc_config));
 		break;
 	default:
 		rc = -EINVAL;

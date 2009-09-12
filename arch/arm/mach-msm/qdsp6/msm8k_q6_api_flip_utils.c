@@ -849,6 +849,10 @@ s32 convert_amr_format_block(s32 session_id,
 			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
 			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
+
+	if (cad_open_struct->cad_open.op_code == CAD_OPEN_OP_WRITE)
+		return CAD_RES_SUCCESS;
+
 	/* Fill in encoder config. */
 	q6_open_struct->stream_device.config.amr_cfg.mode =
 		q6_band_mode_mapping(cad_format->amr_band_mode);
@@ -864,7 +868,7 @@ s32 convert_amr_format_block(s32 session_id,
 		pr_err("CAD:ARD: unsupported amr_dtx_mode!");
 		return CAD_RES_FAILURE;
 	}
-	q6_open_struct->stream_device.config.amr_cfg.enable = false;
+	q6_open_struct->stream_device.config.amr_cfg.enable = true;
 
 	return result;
 }

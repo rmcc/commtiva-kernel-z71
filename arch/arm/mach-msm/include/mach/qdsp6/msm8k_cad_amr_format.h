@@ -33,8 +33,7 @@
 
 /* cad AMR band mode */
 enum cad_amr_band_mode {
-	CAD_AMR_BM_UNUSED = 0,		/* AMRNB Mode unused / unknown */
-	CAD_AMR_BM_NB0,			/* AMRNB Mode 0 =  4750 bps */
+	CAD_AMR_BM_NB0 = 0,		/* AMRNB Mode 0 =  4750 bps */
 	CAD_AMR_BM_NB1,			/* AMRNB Mode 1 =  5150 bps */
 	CAD_AMR_BM_NB2,			/* AMRNB Mode 2 =  5900 bps */
 	CAD_AMR_BM_NB3,			/* AMRNB Mode 3 =  6700 bps */
@@ -51,6 +50,7 @@ enum cad_amr_band_mode {
 	CAD_AMR_BM_WB6,			/* AMRWB Mode 6 = 19850 bps */
 	CAD_AMR_BM_WB7,			/* AMRWB Mode 7 = 23050 bps */
 	CAD_AMR_BM_WB8,			/* AMRWB Mode 8 = 23850 bps */
+	CAD_AMR_BM_UNUSED,		/* AMRNB Mode unused / unknown */
 	CAD_AMR_BM_MAX = 0x7FFFFFFF
 };
 
