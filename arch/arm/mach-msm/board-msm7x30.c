@@ -135,14 +135,14 @@ static const unsigned int surf_keymap[] = {
 	KEY(3, 1, KEY_NUMERIC_POUND),
 	KEY(3, 2, KEY_0),
 	KEY(3, 3, KEY_2),
-	KEY(3, 4, KEY_EDIT), /* REVISIT: R+ */
+	KEY(3, 4, KEY_END),
 	KEY(3, 5, KEY_F1),
 	KEY(3, 6, KEY_F2),
 	KEY(3, 7, KEY_F3),
 
-	KEY(4, 0, KEY_NEW),  /* REVISIT: R- */
-	KEY(4, 1, KEY_HOME), /* REVISIT: L- */
-	KEY(4, 2, KEY_BACK), /* REVISIT: L+ */
+	KEY(4, 0, KEY_BACK),
+	KEY(4, 1, KEY_HOME),
+	KEY(4, 2, KEY_MENU),
 	KEY(4, 3, KEY_VOLUMEUP),
 	KEY(4, 4, KEY_VOLUMEDOWN),
 	KEY(4, 5, KEY_F4),
