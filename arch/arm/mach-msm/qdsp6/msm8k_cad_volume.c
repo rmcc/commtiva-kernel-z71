@@ -971,6 +971,101 @@ int cad_volume_init(struct cad_func_tbl_type **func_tbl)
 	return CAD_RES_SUCCESS;
 }
 
+int cad_apply_cached_vol_on_dev(u32 device_id)
+{
+	struct adsp_audio_set_dev_volume_command *q6_set_dev_vol;
+	struct adsp_audio_set_dev_mute_command	*q6_set_dev_mute;
+	union adsp_audio_event event_payload;
+	u32 path = CAD_RX_DEVICE;
+	u8 *rpc_cmd_buf = NULL;
+	u32 rpc_cmd_buf_len = 0;
+	int int_dev_id = qdsp6_volume_device_id_mapping(device_id);
+	s32 rc = CAD_RES_SUCCESS;
+
+	D("%s: device_id = %d\n", __func__, device_id);
+
+	if (int_dev_id == INT_CAD_HW_DEVICE_ID_INVALID) {
+		pr_err("%s: bad device_id (%d)\n", __func__, device_id);
+		return CAD_RES_FAILURE;
+	}
+
+	if (qdsp6_volume_cache_tbl[int_dev_id].valid_current_volume == 1) {
+		q6_set_dev_vol = kmalloc(sizeof(*q6_set_dev_vol), GFP_KERNEL);
+		if (!q6_set_dev_vol)
+			return CAD_RES_FAILURE;
+
+		memset(q6_set_dev_vol, 0, sizeof(*q6_set_dev_vol));
+
+		q6_set_dev_mute = kmalloc(
+			sizeof(*q6_set_dev_mute), GFP_KERNEL);
+		if (!q6_set_dev_mute) {
+			kfree(q6_set_dev_vol);
+			return CAD_RES_FAILURE;
+		}
+
+		memset(q6_set_dev_mute, 0, sizeof(*q6_set_dev_mute));
+
+		if (ardsession[audio_ctrl_handle]->sess_open_info->
+					cad_open.op_code == CAD_OPEN_OP_READ)
+			path = CAD_TX_DEVICE;
+		else if (ardsession[audio_ctrl_handle]->sess_open_info->
+				cad_open.op_code == CAD_OPEN_OP_WRITE)
+			path = CAD_RX_DEVICE;
+
+		q6_set_dev_vol->volume =
+			qdsp6_volume_cache_tbl[int_dev_id].current_volume;
+		q6_set_dev_vol->device_id = q6_device_id_mapping(device_id);
+		q6_set_dev_vol->path = path;
+
+		q6_set_dev_vol->cmd.op_code =
+			ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL;
+		q6_set_dev_vol->cmd.response_type =
+			ADSP_AUDIO_RESPONSE_COMMAND;
+		rpc_cmd_buf = (u8 *)q6_set_dev_vol;
+		rpc_cmd_buf_len = sizeof(*q6_set_dev_vol);
+
+		rc = cad_rpc_control(audio_ctrl_handle,
+			ardsession[audio_ctrl_handle]->group_id,
+			(void *)rpc_cmd_buf,
+			rpc_cmd_buf_len,
+			&event_payload);
+
+		if (rc != CAD_RES_SUCCESS)
+			pr_err("%s: cad_rpc_control() failure\n", __func__);
+
+
+		if ((qdsp6_volume_cache_tbl[int_dev_id].mute == 1) ||
+			(qdsp6_volume_cache_tbl[int_dev_id].current_volume ==
+				qdsp6_volume_cache_tbl[int_dev_id].min_gain))
+			q6_set_dev_mute->mute = 1;
+		else
+			q6_set_dev_mute->mute = 0;
+
+		q6_set_dev_mute->device_id = q6_device_id_mapping(device_id);
+		q6_set_dev_mute->path = path;
+
+		rpc_cmd_buf = (u8 *)q6_set_dev_mute;
+		rpc_cmd_buf_len = sizeof(*q6_set_dev_mute);
+
+		q6_set_dev_mute->cmd.op_code =
+			ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE;
+		q6_set_dev_mute->cmd.response_type =
+			ADSP_AUDIO_RESPONSE_COMMAND;
+
+		rc = cad_rpc_control(audio_ctrl_handle,
+				ardsession[audio_ctrl_handle]->group_id,
+				(void *)rpc_cmd_buf,
+				rpc_cmd_buf_len,
+				&event_payload);
+
+		kfree(q6_set_dev_vol);
+		kfree(q6_set_dev_mute);
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(cad_apply_cached_vol_on_dev);
+
 int volume_set_max_vol_all(void)
 {
 	int i;

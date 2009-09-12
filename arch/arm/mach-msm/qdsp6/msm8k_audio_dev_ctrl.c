@@ -221,6 +221,8 @@ int audio_switch_device(int new_device)
 	else
 		ctrl->current_tx_device = cad_dev.device;
 
+	rc = cad_apply_cached_vol_on_dev(cad_dev.device);
+
 	return rc;
 }
 EXPORT_SYMBOL(audio_switch_device);
