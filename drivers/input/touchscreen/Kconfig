@@ -418,7 +418,7 @@ config TOUCHSCREEN_TSC2007
 	  To compile this driver as a module, choose M here: the
 	  module will be called tsc2007.
 
-config TOUCHSCREEN_MSM
+config TOUCHSCREEN_MSM_LEGACY
 	default n
 	tristate "MSM Touchscreen"
 	depends on ARCH_MSM
@@ -431,7 +431,7 @@ config TOUCHSCREEN_MSM
 
 config ANDROID_TOUCHSCREEN_MSM_HACKS
 	default y
-	depends on TOUCHSCREEN_MSM
+	depends on TOUCHSCREEN_MSM_LEGACY
 	bool "Android MSM Touchscreen hacks"
 	help
 	  Say Y here if you are running Android framework on Qualcomm
