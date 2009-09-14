@@ -1533,8 +1533,6 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		pr_info("hsusb suspend interrupt\n");
 		/* stop usb charging */
 		schedule_work(&ui->chg_stop);
-		ui->flags |= USB_FLAG_SUSPEND;
-		queue_delayed_work(usb_work, &ui->work, HW_DELAY_FOR_LPM);
 	}
 
 	if (n & STS_UI) {
@@ -1583,12 +1581,6 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 			ui->flags = USB_FLAG_VBUS_OFFLINE;
 			queue_delayed_work(usb_work, &ui->work, 0);
 		}
-	}
-
-	if (readl(USB_OTGSC) & OTGSC_IDIS) {
-		writel((OTGSC_IDIS | readl(USB_OTGSC)), USB_OTGSC);
-		ui->flags = USB_FLAG_SUSPEND;
-		queue_delayed_work(usb_work, &ui->work, 0);
 	}
 
 	return IRQ_HANDLED;
