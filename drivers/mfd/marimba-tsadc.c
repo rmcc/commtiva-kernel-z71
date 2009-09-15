@@ -103,6 +103,7 @@ struct marimba_tsadc_client {
 struct marimba_tsadc {
 	struct marimba *marimba;
 	struct device *dev;
+	struct marimba_tsadc_platform_data *pdata;
 };
 
 static struct marimba_tsadc *tsadc_dev;
@@ -247,6 +248,7 @@ static int __devinit marimba_tsadc_probe(struct platform_device *pdev)
 {
 	struct marimba *marimba = platform_get_drvdata(pdev);
 	struct marimba_tsadc *tsadc;
+	int rc = 0;
 
 	tsadc = kzalloc(sizeof *tsadc, GFP_KERNEL);
 	if (!tsadc)
@@ -254,17 +256,24 @@ static int __devinit marimba_tsadc_probe(struct platform_device *pdev)
 
 	tsadc->marimba	= marimba;
 	tsadc->dev	= &pdev->dev;
+	tsadc->pdata = pdev->dev.platform_data;
+
+	if (tsadc->pdata->marimba_tsadc_power)
+		rc = tsadc->pdata->marimba_tsadc_power(1);
 
 	platform_set_drvdata(pdev, tsadc);
 
 	tsadc_dev = tsadc;
 
-	return 0;
+	return rc;
 }
 
 static int __devexit marimba_tsadc_remove(struct platform_device *pdev)
 {
 	struct marimba_tsadc *tsadc = platform_get_drvdata(pdev);
+
+	if (tsadc->pdata->marimba_tsadc_power)
+		tsadc->pdata->marimba_tsadc_power(0);
 
 	platform_set_drvdata(pdev, NULL);
 	kfree(tsadc);

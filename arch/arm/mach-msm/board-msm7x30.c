@@ -369,6 +369,39 @@ static struct marimba_fm_platform_data marimba_fm_pdata = {
 #define MARIMBA_SLAVE_ID_CDC_ADDR	0x77
 #define MARIMBA_SLAVE_ID_QMEMBIST_ADDR	0X66
 
+static int msm_marimba_tsadc_power(int vreg_on)
+{
+	struct vreg *vreg_tsadc;
+	int rc = 0;
+
+	vreg_tsadc = vreg_get(NULL, "gp12");
+	/* LDO18 */
+	if (IS_ERR(vreg_tsadc)) {
+		printk(KERN_ERR "%s: vreg_get() failed (%ld)\n",
+				__func__, PTR_ERR(vreg_tsadc));
+		return PTR_ERR(vreg_tsadc);
+	}
+
+	if (vreg_on) {
+		rc = vreg_enable(vreg_tsadc);
+		if (rc)
+			printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+	} else {
+		rc = vreg_disable(vreg_tsadc);
+		if (rc)
+			printk(KERN_ERR "%s: vreg_disable() = %d \n",
+					__func__, rc);
+	}
+
+	return rc;
+}
+
+static struct marimba_tsadc_platform_data marimba_tsadc_pdata = {
+	.marimba_tsadc_power = msm_marimba_tsadc_power,
+};
+
+
 static struct marimba_platform_data marimba_pdata = {
 	.slave_id[MARIMBA_SLAVE_ID_FM]       = MARIMBA_SLAVE_ID_FM_ADDR,
 	.slave_id[MARIMBA_SLAVE_ID_CDC]	     = MARIMBA_SLAVE_ID_CDC_ADDR,
@@ -376,6 +409,7 @@ static struct marimba_platform_data marimba_pdata = {
 	.marimba_setup = msm_marimba_setup_power,
 	.marimba_shutdown = msm_marimba_shutdown_power,
 	.fm = &marimba_fm_pdata,
+	.tsadc = &marimba_tsadc_pdata,
 };
 
 static void __init msm7x30_init_marimba(void)

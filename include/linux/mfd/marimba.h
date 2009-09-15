@@ -73,8 +73,7 @@ struct marimba_codec_platform_data{
 };
 
 struct marimba_tsadc_platform_data{
-	int co_ord_x;   /*  Member added for eg. */
-	int co_ord_y;
+	int (*marimba_tsadc_power)(int vreg_on);
 };
 
 /*
