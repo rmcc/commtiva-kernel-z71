@@ -255,7 +255,7 @@ struct platform_device msm_device_ssbi6 = {
 	.resource	= msm_ssbi6_resources,
 };
 
-#define MSM_SSBI7_PHYS  0xA0C00000
+#define MSM_SSBI7_PHYS  0xAC800000
 static struct resource msm_ssbi7_resources[] = {
 	{
 		.name   = "ssbi_base",
