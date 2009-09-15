@@ -12,6 +12,7 @@ obj-y += socinfo.o
 obj-y += cpufreq.o
 obj-y += nohlt.o
 obj-y += pmic.o
+obj-y += internal_power_rail.o
 
 obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += acpuclock-8x50.o
