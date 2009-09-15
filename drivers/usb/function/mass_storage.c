@@ -2199,12 +2199,12 @@ reset:
 		struct fsg_buffhd *bh = &fsg->buffhds[i];
 
 		if (bh->inreq) {
-			usb_ept_cancel_xfer(bh->inreq);
+			usb_ept_cancel_xfer(fsg->bulk_in, bh->inreq);
 			usb_ept_free_req(fsg->bulk_in, bh->inreq);
 			bh->inreq = NULL;
 		}
 		if (bh->outreq) {
-			usb_ept_cancel_xfer(bh->outreq);
+			usb_ept_cancel_xfer(fsg->bulk_out, bh->outreq);
 			usb_ept_free_req(fsg->bulk_out, bh->outreq);
 			bh->outreq = NULL;
 		}

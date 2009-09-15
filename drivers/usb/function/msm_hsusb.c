@@ -776,6 +776,8 @@ static void usb_ept_start(struct usb_endpoint *ept)
 	/* mark this chain of requests as live */
 	while (req) {
 		req->live = 1;
+		if (req->item->next == TERMINATE)
+			break;
 		req = req->next;
 	}
 }
@@ -3593,23 +3595,90 @@ struct device *usb_get_device(void)
 }
 EXPORT_SYMBOL(usb_get_device);
 
-int usb_ept_cancel_xfer(struct usb_request *_req)
+int usb_ept_cancel_xfer(struct usb_endpoint *ept, struct usb_request *_req)
 {
-	struct msm_request      *req    = to_msm_request(_req);
-	struct ept_queue_item   *item ;
-	struct usb_info         *_ui ;
+	struct usb_info 	*ui = the_usb_info;
+	struct msm_request      *req = to_msm_request(_req);
+	struct msm_request 	*temp_req, *prev_req;
+	unsigned long		flags;
 
-	if (!req)
+	if (!(ui && req && ept->req))
 		return -EINVAL;
 
-	item = req->item;
-	_ui = req->ui;
-
+	spin_lock_irqsave(&ui->lock, flags);
 	if (req->busy) {
 		req->req.status = 0;
 		req->busy = 0;
-	}
+
+		/* See if the request is the first request in the ept queue */
+		if (ept->req == req) {
+			/* Stop the transfer */
+			do {
+				writel((1 << ept->bit), USB_ENDPTFLUSH);
+				while (readl(USB_ENDPTFLUSH) & (1 << ept->bit))
+					udelay(100);
+			} while (readl(USB_ENDPTSTAT) & (1 << ept->bit));
+			if (!req->next)
+				ept->last = NULL;
+			ept->req = req->next;
+			ept->head->next = req->item->next;
+			goto cancel_req;
+		}
+		/* Request could be in the middle of ept queue */
+		prev_req = temp_req = ept->req;
+		do {
+			if (req == temp_req) {
+				if (req->live) {
+					/* Stop the transfer */
+					do {
+						writel((1 << ept->bit),
+							USB_ENDPTFLUSH);
+						while (readl(USB_ENDPTFLUSH) &
+							(1 << ept->bit))
+							udelay(100);
+					} while (readl(USB_ENDPTSTAT) &
+						(1 << ept->bit));
+				}
+				prev_req->next = temp_req->next;
+				prev_req->item->next = temp_req->item->next;
+				if (!req->next)
+					ept->last = prev_req;
+				goto cancel_req;
+			}
+			prev_req = temp_req;
+			temp_req = temp_req->next;
+		} while (temp_req != NULL);
+		goto error;
+cancel_req:
+	if (req->live) {
+		/* prepare the transaction descriptor item for the hardware */
+		req->item->next = TERMINATE;
+		req->item->info = 0;
+		req->live = 0;
+		/* memory barrier to flush the data */
+		dmb();
+		dma_unmap_single(NULL, req->dma, req->req.length,
+				(ept->flags & EPT_FLAG_IN) ?
+				DMA_TO_DEVICE : DMA_FROM_DEVICE);
+		/* Reprime the endpoint for the remaining transfers */
+		if (ept->req) {
+			temp_req = ept->req;
+			while (temp_req != NULL) {
+				temp_req->live = 0;
+				temp_req = temp_req->next;
+			}
+			usb_ept_start(ept);
+		}
+	} else
+		dma_unmap_single(NULL, req->dma, req->req.length,
+				(ept->flags & EPT_FLAG_IN) ?
+				DMA_TO_DEVICE : DMA_FROM_DEVICE);
+	spin_unlock_irqrestore(&ui->lock, flags);
 	return 0;
+	}
+error:
+	spin_unlock_irqrestore(&ui->lock, flags);
+	return -EINVAL;
 }
 EXPORT_SYMBOL(usb_ept_cancel_xfer);
 
