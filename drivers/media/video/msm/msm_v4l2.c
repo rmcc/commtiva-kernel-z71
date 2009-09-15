@@ -130,6 +130,7 @@ static long msm_v4l2_ioctl(struct file *filep,
 			   unsigned int cmd, unsigned long arg)
 {
 	struct msm_ctrl_cmd *ctrlcmd;
+	int rc;
 
 	D("msm_v4l2_ioctl, cmd = %d, %d\n", cmd, __LINE__);
 
@@ -149,8 +150,11 @@ static long msm_v4l2_ioctl(struct file *filep,
 		D("msm_v4l2_ioctl,  MSM_V4L2_START_SNAPSHOT v4l2 ioctl %d\n",
 		cmd);
 		ctrlcmd->type = MSM_V4L2_SNAPSHOT;
-		return g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync,
+		rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync,
 							ctrlcmd);
+		kfree(ctrlcmd);
+
+		return rc;
 
 	case MSM_V4L2_GET_PICTURE:
 		D("msm_v4l2_ioctl,  MSM_V4L2_GET_PICTURE v4l2 ioctl %d\n", cmd);
@@ -206,10 +210,15 @@ static int msm_v4l2_queryctrl(struct file *f,
 	ctrlcmd->timeout_ms = 10000;
 
 	rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
-	if (rc < 0)
-		return -1;
 
-	return ctrlcmd->status;
+	if (rc < 0)
+		rc = -1;
+	else
+		rc = ctrlcmd->status;
+
+	kfree(ctrlcmd);
+
+	return rc;
 }
 
 static int msm_v4l2_g_ctrl(struct file *f, void *pctx, struct v4l2_control *c)
@@ -231,10 +240,15 @@ static int msm_v4l2_g_ctrl(struct file *f, void *pctx, struct v4l2_control *c)
 	ctrlcmd->timeout_ms = 10000;
 
 	rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
-	if (rc < 0)
-		return -1;
 
-	return ctrlcmd->status;
+	if (rc < 0)
+		rc = -1;
+	else
+		rc = ctrlcmd->status;
+
+	kfree(ctrlcmd);
+
+	return rc;
 }
 
 static int msm_v4l2_s_ctrl(struct file *f, void *pctx, struct v4l2_control *c)
@@ -256,10 +270,15 @@ static int msm_v4l2_s_ctrl(struct file *f, void *pctx, struct v4l2_control *c)
 	D("%s\n", __func__);
 
 	rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
-	if (rc < 0)
-		return -1;
 
-	return ctrlcmd->status;
+	if (rc < 0)
+		rc = -1;
+	else
+		rc = ctrlcmd->status;
+
+	kfree(ctrlcmd);
+
+	return rc;
 }
 
 static int msm_v4l2_reqbufs(struct file *f,
@@ -397,6 +416,7 @@ static int msm_v4l2_qbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 static int msm_v4l2_dqbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 {
 	struct msm_frame frame;
+	struct crop_info *vcropinfo;
 	D("%s\n", __func__);
 
 	/* V4L2 videodev will do the copy_to_user. */
@@ -412,6 +432,24 @@ static int msm_v4l2_dqbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 		pb->m.userptr  = (unsigned long)frame.buffer;  /* FIXME */
 		pb->reserved   = (int)frame.fd;
 		/* pb->length     = (int)frame.cbcr_off; */
+
+		vcropinfo = (struct crop_info *)pb->input;
+
+		if (g_pmsm_v4l2_dev->drv->sync->croplen) {
+
+			if (vcropinfo->len >
+					g_pmsm_v4l2_dev->drv->sync->croplen) {
+				D("msm_v4l2_dqbuf: invalid frame\n");
+				return -EINVAL;
+			}
+
+			if (copy_to_user((char *)vcropinfo->info,
+					g_pmsm_v4l2_dev->drv->sync->cropinfo,
+					g_pmsm_v4l2_dev->drv->sync->croplen)) {
+				D("msm_v4l2_dqbuf : copy_to_user failed\n");
+				return -EFAULT;
+			}
+		}
 
 		pb->bytesused  = frame.cbcr_off;
 
@@ -453,6 +491,8 @@ static int msm_v4l2_streamon(struct file *f, void *pctx, enum v4l2_buf_type i)
 		g_pmsm_v4l2_dev->drv->sync,
 		ctrlcmd);
 
+	kfree(ctrlcmd);
+
 	D("%s after drv->ctrl \n", __func__);
 
 	return 0;
@@ -479,6 +519,8 @@ static int msm_v4l2_streamoff(struct file *f, void *pctx, enum v4l2_buf_type i)
 	g_pmsm_v4l2_dev->drv->ctrl(
 		g_pmsm_v4l2_dev->drv->sync,
 		ctrlcmd);
+
+	kfree(ctrlcmd);
 
 	cnt = 0;
 	return 0;
@@ -563,6 +605,7 @@ static int msm_v4l2_s_fmt_cap(struct file *f,
 
 	g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
 
+	kfree(ctrlcmd);
 	return 0;
 }
 
@@ -687,6 +730,57 @@ static int mm_v4l2_try_fmt_type_private(struct file *file,
 	return 0;
 }
 
+static int msm_v4l2_g_crop(struct file *file,
+				void *fh, struct v4l2_crop *a)
+{
+	struct msm_ctrl_cmd *ctrlcmd;
+	int rc;
+	D("%s\n", __func__);
+
+	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
+
+	if (!ctrlcmd) {
+		CDBG("msm_v4l2_g_crop: cannot allocate buffer\n");
+		return -ENOMEM;
+	}
+
+	ctrlcmd->type       = MSM_V4L2_GET_CROP;
+	ctrlcmd->timeout_ms = 10000;
+	ctrlcmd->length     = sizeof(struct v4l2_crop);
+	ctrlcmd->value      = a;
+
+	rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
+
+	a->c.width = *(int *)ctrlcmd->value;
+
+	kfree(ctrlcmd);
+	return rc;
+}
+
+static int msm_v4l2_s_crop(struct file *file,
+				void *fh, struct v4l2_crop *a)
+{
+	struct msm_ctrl_cmd *ctrlcmd;
+	int rc;
+	D("%s\n", __func__);
+
+	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
+	if (!ctrlcmd) {
+		CDBG("msm_v4l2_s_crop: cannot allocate buffer\n");
+		return -ENOMEM;
+	}
+
+	ctrlcmd->type       = MSM_V4L2_SET_CROP;
+	ctrlcmd->timeout_ms = 10000;
+	ctrlcmd->length     = sizeof(struct v4l2_crop);
+	ctrlcmd->value      = a;
+
+	rc = g_pmsm_v4l2_dev->drv->ctrl(g_pmsm_v4l2_dev->drv->sync, ctrlcmd);
+
+	kfree(ctrlcmd);
+	return rc;
+}
+
 /*
  * should the following structure be used instead of the code in the function?
  * static const struct v4l2_ioctl_ops msm_v4l2_ioctl_ops = {
@@ -696,6 +790,9 @@ static int mm_v4l2_try_fmt_type_private(struct file *file,
 static const struct v4l2_ioctl_ops msm_ioctl_ops = {
 	.vidioc_querycap = msm_v4l2_querycap,
 	.vidioc_s_std = msm_v4l2_s_std,
+
+	.vidioc_s_crop = msm_v4l2_s_crop,
+	.vidioc_g_crop = msm_v4l2_g_crop,
 
 	.vidioc_queryctrl = msm_v4l2_queryctrl,
 	.vidioc_g_ctrl = msm_v4l2_g_ctrl,
