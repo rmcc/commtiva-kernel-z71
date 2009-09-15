@@ -1106,6 +1106,7 @@ static int gs_send(struct gs_dev *dev)
 	struct gs_port *port = dev->dev_port[0];
 	struct list_head *pool = &port->write_pool;
 	int status = 0;
+	static long prev_len;
 	bool do_tty_wake = false;
 	struct usb_endpoint *ep = dev->dev_in_ep;
 
@@ -1115,6 +1116,21 @@ static int gs_send(struct gs_dev *dev)
 		req = list_entry(pool->next, struct usb_request, list);
 		len = gs_send_packet(dev, req->buf, usb_ept_get_max_packet(ep));
 		if (len == 0) {
+			/* Queue zero length packet */
+			if (prev_len == usb_ept_get_max_packet(ep)) {
+				req->length = 0;
+				list_del(&req->list);
+
+				spin_unlock(&port->port_lock);
+				status = usb_ept_queue_xfer(ep, req);
+				spin_lock(&port->port_lock);
+				if (status) {
+					printk(KERN_ERR "%s: %s err %d\n",
+					__func__, "queue", status);
+					list_add(&req->list, pool);
+				}
+				prev_len = 0;
+			}
 			wake_up_interruptible(&port->port_write_wait);
 			break;
 		}
@@ -1139,6 +1155,7 @@ static int gs_send(struct gs_dev *dev)
 			list_add(&req->list, pool);
 			break;
 		}
+		prev_len = req->length;
 
 	}
 
@@ -1333,6 +1350,10 @@ static void gs_write_complete(struct usb_endpoint *ep, struct usb_request *req)
 	case 0:
 		/* normal completion */
 
+		if ((req->length == 0) &&
+			(gs_buf_data_avail(port->port_write_buf) == 0)) {
+			break;
+		}
 		if (dev->dev_config)
 			gs_send(dev);
 

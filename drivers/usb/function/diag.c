@@ -425,6 +425,14 @@ static void diag_write_complete(struct usb_endpoint *ep ,
 		return;
 	}
 	if (req->status == WRITE_COMPLETE) {
+		if ((req->length >= ep->max_pkt) &&
+				((req->length % ep->max_pkt) == 0)) {
+			req->length = 0;
+			req->device = ctxt;
+			/* Queue zero length packet */
+			usb_ept_queue_xfer(ctxt->epin, req);
+			return;
+		}
 			/* normal completion*/
 		spin_lock_irqsave(&ctxt->dev_lock, flags);
 		list_add_tail(&diag_req->re_entry ,
