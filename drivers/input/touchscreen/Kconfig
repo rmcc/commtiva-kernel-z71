@@ -201,7 +201,7 @@ config TOUCHSCREEN_PENMOUNT
 
 config TOUCHSCREEN_MSM
 	bool "Qualcomm MSM touchscreen controller"
-	depends on ARCH_MSM
+	depends on ARCH_MSM7X30
 	default n
 	help
 	  Say Y here if you have a 4-wire resistive touchscreen panel
@@ -430,7 +430,7 @@ config TOUCHSCREEN_TSC2007
 config TOUCHSCREEN_MSM_LEGACY
 	default n
 	tristate "MSM Touchscreen"
-	depends on ARCH_MSM
+	depends on ARCH_MSM && !ARCH_MSM7X30
 	help
 	  Say Y here if you have a touchscreen interface using MSM
 	  touchscreen controller.
