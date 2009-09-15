@@ -45,6 +45,7 @@
 #include <mach/msm_otg.h>
 #include <linux/wakelock.h>
 #include <linux/pm_qos_params.h>
+#include <mach/clk.h>
 
 #define MSM_USB_BASE ((unsigned) ui->addr)
 
@@ -489,15 +490,18 @@ static void msm_hsusb_suspend_locks_acquire(struct usb_info *ui, int acquire)
 		wake_lock(&ui->wlock);
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, 0);
-		if (ui->pdata->max_axi_khz)
+		/* targets like 7x30 have introduced core clock
+		 * to remove the dependency on max axi frequency
+		 */
+		if (!ui->cclk)
 			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
-					DRIVER_NAME, ui->pdata->max_axi_khz);
+					DRIVER_NAME, MSM_AXI_MAX_FREQ);
 	} else {
 		wake_lock_timeout(&ui->wlock, HZ / 2);
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 					DRIVER_NAME,
 					PM_QOS_DEFAULT_VALUE);
-		if (ui->pdata->max_axi_khz)
+		if (!ui->cclk)
 			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
 					DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 	}
@@ -2413,6 +2417,7 @@ static void usb_do_work(struct work_struct *w)
 			 * present when we received the signal, go online.
 			 */
 			if ((flags & USB_FLAG_VBUS_ONLINE)) {
+				msm_hsusb_suspend_locks_acquire(ui, 1);
 				disable_irq(ui->irq);
 				ui->state = USB_STATE_ONLINE;
 				if (ui->in_lpm)
@@ -2510,6 +2515,7 @@ static void usb_lpm_exit(struct usb_info *ui)
 	if (ui->li.pmic_h_disabled)
 		schedule_work(&ui->li.detach_int_h);
 
+	wake_lock(&ui->wlock);
 	usb_clk_enable(ui);
 	usb_vreg_enable(ui);
 
@@ -2534,7 +2540,6 @@ static void usb_lpm_exit(struct usb_info *ui)
 		if (ui->xceiv)
 			ui->xceiv->set_suspend(0);
 	}
-	msm_hsusb_suspend_locks_acquire(ui, 1);
 	pr_info("%s(): USB exited from low power mode\n", __func__);
 }
 
