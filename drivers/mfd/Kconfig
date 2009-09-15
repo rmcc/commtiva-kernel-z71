@@ -272,6 +272,14 @@ config PMIC8058
 	help
 	  Say yes here for Qualcomm PM8058 chip.
 
+config MARIMBA_TSADC
+	tristate "Support for Marimba Touchscreen ADC"
+	depends on MARIMBA_CORE
+	default y if MARIMBA_CORE
+	help
+	  Say yes here if you want to include support for TSADC in the
+	  Qualcomm Marimba chip.
+
 endmenu
 
 menu "Multimedia Capabilities Port drivers"
