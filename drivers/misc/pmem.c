@@ -41,6 +41,9 @@
 #define PMEM_1M 	(1 << 20)
 #define PMEM_1M_MASK 	(0xfff00000)
 
+#define PMEM_32BIT_WORD_ORDER (5)
+#define PMEM_BITS_PER_WORD_MASK (BITS_PER_LONG - 1)
+
 #ifdef CONFIG_ANDROID_PMEM_DEBUG
 #define PMEM_DEBUG 1
 #else
@@ -582,23 +585,53 @@ static int pmem_free_buddy_bestfit(int id, int index)
 	return 0;
 }
 
-static inline void bitmap_bit_clear(int *bitp, int bitnum)
+static inline uint32_t start_mask(int bit_start)
 {
-	bitp[bitnum / 32] &= ~(1 << (bitnum % 32));
+	return (uint32_t)(~0) << (bit_start & PMEM_BITS_PER_WORD_MASK);
 }
 
-static void bitmap_bits_clear_all(int *bitp, int bit_start, int bit_end)
+static inline uint32_t end_mask(int bit_end)
 {
-	int i;
+	return (uint32_t)(~0) >>
+		((BITS_PER_LONG - bit_end) & PMEM_BITS_PER_WORD_MASK);
+}
 
-	for (i = bit_start; i < bit_end; i++)
-		bitmap_bit_clear(bitp, i);
+static inline int compute_total_words(int bit_end, int word_index)
+{
+	return ((bit_end + BITS_PER_LONG - 1) >>
+			PMEM_32BIT_WORD_ORDER) - word_index;
+}
+
+static void bitmap_bits_clear_all(uint32_t *bitp, int bit_start, int bit_end)
+{
+	int word_index = bit_start >> PMEM_32BIT_WORD_ORDER, total_words;
+
+	total_words = compute_total_words(bit_end, word_index);
+	if (total_words > 0) {
+		if (total_words == 1) {
+			bitp[word_index] &=
+				~(start_mask(bit_start) & end_mask(bit_end));
+		} else {
+			bitp[word_index++] &= ~start_mask(bit_start);
+			if (total_words > 2) {
+				int total_bytes;
+
+				total_words -= 2;
+				total_bytes = total_words << 2;
+
+				memset(&bitp[word_index], 0, total_bytes);
+				word_index += total_words;
+			}
+			bitp[word_index] &= ~end_mask(bit_end);
+		}
+	}
 }
 
 static int pmem_free_bitmap(int id, int bitnum)
 {
 	/* caller should hold the lock on arena_mutex! */
 	int i;
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
 
 	DLOG("bitnum %d\n", bitnum);
 
@@ -617,6 +650,10 @@ static int pmem_free_bitmap(int id, int bitnum)
 			return 0;
 		}
 	}
+	printk(KERN_ALERT "pmem: %s: Attempt to free unallocated index %d, id"
+		" %d, proc %d(%s)\n", __func__, bitnum, id,  current->pid,
+		get_task_comm(currtask_name, current));
+
 	return -1;
 }
 
@@ -827,43 +864,93 @@ static inline unsigned long bit_from_paddr(const int id,
 	return (paddr - pmem[id].base) / pmem[id].quantum;
 }
 
-static inline int bitmap_bit_is_free(int *bitp, int bitnum)
+static void bitmap_bits_set_all(uint32_t *bitp, int bit_start, int bit_end)
 {
-	return !(bitp[bitnum / 32] & (1 << (bitnum % 32)));
+	int word_index = bit_start >> PMEM_32BIT_WORD_ORDER, total_words;
+
+	total_words = compute_total_words(bit_end, word_index);
+	if (total_words > 0) {
+		if (total_words == 1) {
+			bitp[word_index] |=
+				(start_mask(bit_start) & end_mask(bit_end));
+		} else {
+			bitp[word_index++] |= start_mask(bit_start);
+			if (total_words > 2) {
+				int total_bytes;
+
+				total_words -= 2;
+				total_bytes = total_words << 2;
+
+				memset(&bitp[word_index], ~0, total_bytes);
+				word_index += total_words;
+			}
+			bitp[word_index] |= end_mask(bit_end);
+		}
+	}
 }
 
-static inline void bitmap_bit_set(int *bitp, int bitnum)
+static int
+bitmap_allocate_contiguous(uint32_t *bitp, int num_bits_to_alloc,
+		int total_bits, int spacing)
 {
-	bitp[bitnum / 32] |= (1 << (bitnum % 32));
-}
+	int bit_start, last_bit, word_index;
 
-static void bitmap_bits_set_all(int *bitp, int bit_start, int bit_end)
-{
-	int i;
+	if (num_bits_to_alloc <= 0)
+		return -1;
 
-	for (i = bit_start; i < bit_end; i++)
-		bitmap_bit_set(bitp, i);
-}
+	for (bit_start = 0; ;
+		bit_start = (last_bit +
+			(word_index << PMEM_32BIT_WORD_ORDER) + spacing - 1)
+			& ~(spacing - 1)) {
+		int bit_end = bit_start + num_bits_to_alloc, total_words;
 
-static int bitmap_bits_are_all_free(int *bitp, int bit_start, int needed)
-{
-	int i;
+		if (bit_end >= total_bits)
+			return -1; /* out of contiguous memory */
 
-	if (!needed)
-		return 1;
+		word_index = bit_start >> PMEM_32BIT_WORD_ORDER;
+		total_words = compute_total_words(bit_end, word_index);
 
-	for (i = bit_start; i < (bit_start + needed); i++)
-		if (!bitmap_bit_is_free(bitp, i))
-			return 0;
+		if (total_words <= 0)
+			return -1;
 
-	return 1;
+		if (total_words == 1) {
+			last_bit = fls(bitp[word_index] &
+					(start_mask(bit_start) &
+						end_mask(bit_end)));
+			if (last_bit)
+				continue;
+		} else {
+			int end_word = word_index + (total_words - 1);
+			last_bit =
+				fls(bitp[word_index] & start_mask(bit_start));
+			if (last_bit)
+				continue;
+
+			for (word_index++;
+					word_index < end_word;
+					word_index++) {
+				last_bit = fls(bitp[word_index]);
+				if (last_bit)
+					break;
+			}
+			if (last_bit)
+				continue;
+
+			last_bit = fls(bitp[word_index] & end_mask(bit_end));
+			if (last_bit)
+				continue;
+		}
+		bitmap_bits_set_all(bitp, bit_start, bit_end);
+		return bit_start;
+	}
+	return -1;
 }
 
 static int reserve_quanta(const unsigned int quanta_needed,
 		const int id,
 		const enum pmem_align align)
 {
-	int i, ret = -1, *bitp, start_bit = 0, spacing = 1, bitm_len;
+	int ret = -1, start_bit = 0, spacing = 1;
 
 	/* Sanity check */
 	if (quanta_needed > pmem[id].allocator.bitmap.bitmap_free) {
@@ -889,23 +976,17 @@ static int reserve_quanta(const unsigned int quanta_needed,
 		spacing = PMEM_1M / pmem[id].quantum;
 	}
 
-	bitm_len = (pmem[id].size + pmem[id].quantum - 1) / pmem[id].quantum;
-	for (i = start_bit, bitp = pmem[id].allocator.bitmap.bitmap;
-			i <= (bitm_len - quanta_needed); i += spacing)
-		if (bitmap_bit_is_free(bitp, i) &&
-			bitmap_bits_are_all_free(bitp,
-				i + 1,
-				quanta_needed - 1)) {
-			ret = i;
-			break;
-		}
+	ret = bitmap_allocate_contiguous(pmem[id].allocator.bitmap.bitmap,
+		quanta_needed,
+		(pmem[id].size + pmem[id].quantum - 1) / pmem[id].quantum,
+		spacing);
 
-	if (ret != -1)
-		bitmap_bits_set_all(bitp, ret, ret + quanta_needed);
 #if PMEM_DEBUG
-	else
+	if (ret < 0)
 		printk(KERN_ALERT "pmem: %s: not enough contiguous bits free "
-			"in bitmap!\n", __func__);
+			"in bitmap! Region memory is either too fragmented or"
+			" request is too large for available memory.\n",
+			__func__);
 #endif
 
 	return ret;
@@ -1995,12 +2076,15 @@ static long pmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				region.len = pmem[id].len(id, data);
 			}
 			up_read(&data->sem);
-			printk(KERN_INFO "pmem: request for physical address "
-				"of pmem region offset %lu, len %lu\n",
-				region.offset, region.len);
+
 			if (copy_to_user((void __user *)arg, &region,
 						sizeof(struct pmem_region)))
 				return -EFAULT;
+
+			printk(KERN_INFO "pmem: successful request for "
+				"physical address of pmem region id %d, "
+				"offset %lu, len %lu\n",
+				id, region.offset, region.len);
 
 			break;
 		}
