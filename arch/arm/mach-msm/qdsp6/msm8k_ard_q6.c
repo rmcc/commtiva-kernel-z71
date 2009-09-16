@@ -123,16 +123,15 @@ s32 qdsp6_open(s32 session_id)
 	cadr->cmd.op_code = q6_open_op_mapping(ref_cadr->cad_open.op_code);
 	cadr->cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
 	if (ref_cadr->cad_open.op_code != CAD_OPEN_OP_DEVICE_CTRL) {
-		cadr->stream_device.stream_context =
+		cadr->open_data.stream_context =
 			q6_stream_context_mapping(
 			ref_cadr->cad_stream.app_type,
-			&(cadr->stream_device.mode));
+			&(cadr->open_data.mode));
 
-		cadr->stream_device.buf_max_size =
+		cadr->open_data.buf_max_size =
 			ref_cadr->cad_stream.ses_buf_max_size;
-		cadr->stream_device.priority = ref_cadr->cad_stream.priority;
 
-		if (ref_cadr->cad_device.device_len >=
+		if (ref_cadr->cad_device.device_len >
 			ADSP_AUDIO_MAX_DEVICES) {
 
 			pr_err("CAD:ARD device number is too large\n");
@@ -140,21 +139,16 @@ s32 qdsp6_open(s32 session_id)
 			goto done;
 		}
 
-		cadr->stream_device.num_devices =
-			ref_cadr->cad_device.device_len;
-
 		if (ref_cadr->cad_device.device == NULL) {
 			pr_err("CAD:ARD no device for control session\n");
 			rc = CAD_RES_FAILURE;
 			goto done;
 		}
 
-		cadr->stream_device.device[0] = q6_device_id_mapping
+		cadr->open_data.device = q6_device_id_mapping
 			(ref_cadr->cad_device.device[0]);
 
-		D("ARD device id= %d, device len = %d\n",
-				cadr->stream_device.device[0],
-				cadr->stream_device.num_devices);
+		D("ARD device id = %d \n", cadr->open_data.device);
 
 		rc = convert_format_block(session_id, cadr, ref_cadr);
 		if (rc != CAD_RES_SUCCESS) {
@@ -162,11 +156,6 @@ s32 qdsp6_open(s32 session_id)
 			rc = CAD_RES_FAILURE;
 			goto done;
 		}
-	}
-
-	if (ref_cadr->dls_table.length > 0) {
-		cadr->stream_device.len = ref_cadr->dls_table.length;
-		cadr->stream_device.addr = ref_cadr->dls_table.addr;
 	}
 
 	if (ardsession[session_id]->qdsp6_opened == ARD_FALSE) {

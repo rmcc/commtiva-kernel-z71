@@ -115,13 +115,26 @@
 
 
 /* Enable/disable WMA Pro Chex and Fex. This command has data payload */
-/* struct adsp_audio_stream_set_wma_command. */
+/* struct adsp_audio_set_amrwb_plus_command. */
 #define ADSP_AUDIO_IOCTL_SET_STREAM_WMAPRO		0x0108d417
 
 
+/* Configure AMR-WB+ decoder's sampling rate. This command has data payload */
+/* struct adsp_audio_set_wma_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_AMRWBPLUS_SAMPLE_RATE	0x0108f3dd
 
 
-/* SESSION CMD/SET IOCTLs */
+/* Configure AMR-WB+ decoder to do mono decoding even for stereo content.*/
+/* This command has data payload struct adsp_audio_set_wma_command. */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_AMRWBPLUS_MONO_DEC_STEREO	0x0108f3dc
+
+
+/* Configure AMR-WB+ decoder to do mono decoding even for stereo content */
+/* This command has data payload struct adsp_audio_set_wma_command */
+#define ADSP_AUDIO_IOCTL_SET_STREAM_AMRWBPLUS_LIMITER	0x0108f9a3
+
+
+/* SESSION CMD IOCTLs */
 /* These commands affect a group of streams identified by the major address */
 
 
@@ -168,13 +181,27 @@
 #define ADSP_AUDIO_IOCTL_CMD_SESSION_DTMF_STOP		0x01087554
 
 
+/* Get Audio Media Session time. */
+/* This command has no payload, use struct adsp_audio_no_payload_command. */
+/* This command returns the audioTime in adsp_audio_unsigned64_event */
+
+#define ADSP_AUDIO_IOCTL_CMD_GET_AUDIO_TIME		0x0108c26c
+
+
+/* SESSION SET IOCTLs */
+/* These commands affect a group of streams identified by the major address */
+
+
+
 /* Set Session volume. */
 /* This command has data payload, struct adsp_audio_set_volume_command. */
+
 #define ADSP_AUDIO_IOCTL_SET_SESSION_VOL		0x0108d8bd
 
 
 /* Set session stereo volume. This command has data payload, */
 /* struct adsp_audio_set_stereo_volume_command. */
+
 #define ADSP_AUDIO_IOCTL_SET_SESSION_STEREO_VOL		0x0108df3d
 
 
@@ -199,31 +226,6 @@
 
 #define ADSP_AUDIO_IOCTL_SET_SESSION_AVSYNC		0x0108d1e2
 
-
-/* Get Audio Media Session time. */
-/* This command has no payload, use struct adsp_audio_no_payload_command. */
-/* This command returns the audioTime in adsp_audio_unsigned64_event */
-
-#define ADSP_AUDIO_IOCTL_CMD_GET_AUDIO_TIME		0x0108c26c
-
-#define ADSP_AUDIO_MAX_EQ_BANDS 12
-
-#define CAD_EQ_INVALID_DATA       0xFFFFFFFF
-
-struct adsp_audio_eq_cfg {
-	u32                             enable;
-	/* Number of consequtive bands specified */
-	u32                             num_bands;
-	struct adsp_audio_eq_band       eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
-} __attribute__ ((packed));
-
-
-struct adsp_audio_stream_eq_cfg {
-	/* Associated client data */
-	struct adsp_audio_header        header;
-	/* Equalizer band data */
-	struct adsp_audio_eq_cfg        ecfg;
-} __attribute__ ((packed));
 
 
 #endif

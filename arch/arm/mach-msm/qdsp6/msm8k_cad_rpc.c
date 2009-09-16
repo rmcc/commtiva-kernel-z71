@@ -121,11 +121,11 @@ static s32 cad_rpc_async_callback(union adsp_audio_event *evt)
 	D("<-------------- ARM Async callback function fired.......\n");
 	D("Get new async event(0x%x), handle: %d!!!!!!\n",
 		evt->buffer.buffer.buffer_addr,
-		evt->no_payload.source.minor);
+		evt->no_payload.dest.minor);
 
 	mutex_lock(&cad_rpc_data_type.rpc_cb_mutex);
 	node = cad_rpc_data_type.dal_callback_list[evt->
-		no_payload.source.minor];
+		no_payload.dest.minor];
 
 	while (node) {
 		node->cb_funct(evt, node->client_data);
@@ -142,19 +142,19 @@ static void remote_cb_function(void *context, u32 param,
 	struct cad_rpc_data_struct	*self = context;
 	union adsp_audio_event		*evt = evt_buf;
 
-	if (evt->no_payload.source.domain !=
+	if (evt->no_payload.dest.domain !=
 		cad_rpc_data_type.processor_id) {
 
-		pr_err("CAD:RPC invalid domain: %d\n",
-			evt->no_payload.source.domain);
+		D("CAD:RPC invalid domain: %d\n",
+			evt->no_payload.dest.domain);
 		return;
 	}
 
-	if ((evt->no_payload.source.minor >=
+	if ((evt->no_payload.dest.minor >=
 		CAD_MAX_SESSION)) {
 
 		pr_err("CAD:RPC invalid minor number: %d\n",
-			evt->no_payload.source.minor);
+			evt->no_payload.dest.minor);
 		return;
 	}
 
@@ -164,17 +164,17 @@ static void remote_cb_function(void *context, u32 param,
 		D("<-------CB: get async event!!!\n");
 		if (cad_rpc_async_callback(evt) != CAD_RES_SUCCESS)
 			pr_err("Async callback not fired for session %d\n",
-				evt->no_payload.source.minor);
+				evt->no_payload.dest.minor);
 		break;
 
 	case ADSP_AUDIO_RESPONSE_COMMAND:
 		/* sync event */
-		memcpy(&self->sync_evt_queue[evt->no_payload.source.minor],
+		memcpy(&self->sync_evt_queue[evt->no_payload.dest.minor],
 			evt, sizeof(*evt));
 
 		/* now wake up the blocking thread */
 		complete(&cad_rpc_data_type.compl_list
-			[evt->no_payload.source.minor]);
+			[evt->no_payload.dest.minor]);
 	}
 	return;
 }
@@ -398,12 +398,21 @@ s32 cad_rpc_data(u32 stream_id,
 		return CAD_RES_FAILURE;
 
 	((union adsp_audio_command *)data_buf)->no_payload.dest.domain =
-		(u8)cad_rpc_data_type.processor_id;
-
-	((union adsp_audio_command *)data_buf)->no_payload.dest.service = 0;
+		ADSP_AUDIO_ADDRESS_DOMAIN_DSP;
+	((union adsp_audio_command *)data_buf)->no_payload.dest.service =
+		ADSP_AUDIO_ADDRESS_SERVICE_AUDIO;
 	((union adsp_audio_command *)data_buf)->no_payload.dest.major =
 		(u8)group_id;
 	((union adsp_audio_command *)data_buf)->no_payload.dest.minor =
+		(u8)stream_id;
+
+	((union adsp_audio_command *)data_buf)->no_payload.source.domain =
+		(u8)cad_rpc_data_type.processor_id;
+	((union adsp_audio_command *)data_buf)->no_payload.source.service =
+		ADSP_AUDIO_ADDRESS_SERVICE_AUDIO;
+	((union adsp_audio_command *)data_buf)->no_payload.source.major =
+		(u8)group_id;
+	((union adsp_audio_command *)data_buf)->no_payload.source.minor =
 		(u8)stream_id;
 
 	mutex_lock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
@@ -437,17 +446,27 @@ s32 cad_rpc_control(u32 stream_id,
 		return CAD_RES_FAILURE;
 
 	((union adsp_audio_command *)cmd_buf)->no_payload.dest.domain =
-		(u8)cad_rpc_data_type.processor_id;
-
-	((union adsp_audio_command *)cmd_buf)->no_payload.dest.service = 0;
+		ADSP_AUDIO_ADDRESS_DOMAIN_DSP;
+	((union adsp_audio_command *)cmd_buf)->no_payload.dest.service =
+		ADSP_AUDIO_ADDRESS_SERVICE_AUDIO;
 	((union adsp_audio_command *)cmd_buf)->no_payload.dest.major =
 		(u8)group_id;
 	((union adsp_audio_command *)cmd_buf)->no_payload.dest.minor =
 		(u8)stream_id;
 
+	((union adsp_audio_command *)cmd_buf)->no_payload.source.domain =
+		(u8)cad_rpc_data_type.processor_id;
+	((union adsp_audio_command *)cmd_buf)->no_payload.source.service =
+		ADSP_AUDIO_ADDRESS_SERVICE_AUDIO;
+	((union adsp_audio_command *)cmd_buf)->no_payload.source.major =
+		(u8)group_id;
+	((union adsp_audio_command *)cmd_buf)->no_payload.source.minor =
+		(u8)stream_id;
+
+
 	D("CAD:RPC Control stream (%d), Cmd(0x%x)\n",
 		stream_id,
-		((union adsp_audio_command *)data_buf)->no_payload.cmd.op_code);
+		((union adsp_audio_command *)cmd_buf)->no_payload.cmd.op_code);
 
 	mutex_lock(&cad_rpc_data_type.remote_mutex_list[stream_id]);
 	init_completion(&cad_rpc_data_type.compl_list[stream_id]);

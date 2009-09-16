@@ -71,7 +71,7 @@
 #include <mach/qdsp6/msm8k_cad_write_mp3_format.h>
 #include <mach/qdsp6/msm8k_cad_devices.h>
 #include <mach/qdsp6/msm8k_cad_volume.h>
-#include <mach/qdsp6/msm8k_adsp_audio_stream_ioctl.h>
+#include <mach/qdsp6/msm8k_cad_q6eq_drvi.h>
 
 #if 0
 #define D(fmt, args...) printk(KERN_INFO "msm8k_mp3: " fmt, ##args)
@@ -209,7 +209,7 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_filter_struct flt;
 	struct cad_event_struct_type eos_event;
-	struct adsp_audio_eq_cfg eq;
+	struct cad_audio_eq_cfg eq;
 	u32 percentage;
 	D("%s\n", __func__);
 
@@ -237,17 +237,6 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
-		stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_RX;
-		cad_stream_dev.device = (u32 *)&stream_device[0];
-		cad_stream_dev.device_len = 1;
-		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_DEVICE,
-			&cad_stream_dev,
-			sizeof(struct cad_stream_device_struct_type));
-		if (rc) {
-			pr_err("cad_ioctl() SET_STREAM_DEVICE failed\n");
-			break;
-		}
-
 		cad_write_mp3_fmt.ver_id = CAD_WRITE_MP3_VERSION_10;
 
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
@@ -267,6 +256,17 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 
 		if (rc) {
 			D("cad_ioctl() SET_STREAM_EVENT_LSTR failed\n");
+			break;
+		}
+
+		stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_RX;
+		cad_stream_dev.device = (u32 *)&stream_device[0];
+		cad_stream_dev.device_len = 1;
+		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_DEVICE,
+			&cad_stream_dev,
+			sizeof(struct cad_stream_device_struct_type));
+		if (rc) {
+			pr_err("cad_ioctl() SET_STREAM_DEVICE failed\n");
 			break;
 		}
 
@@ -327,11 +327,11 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 		break;
 	case AUDIO_SET_EQ:
 		rc = copy_from_user(&eq, (void *)arg,
-				sizeof(struct adsp_audio_eq_cfg));
+				sizeof(struct cad_audio_eq_cfg));
 
 		flt.filter_type = CAD_DEVICE_FILTER_TYPE_EQ;
 		flt.cmd = CAD_FILTER_EQ_STREAM_CONFIG;
-		flt.format_block_len = sizeof(struct adsp_audio_eq_cfg);
+		flt.format_block_len = sizeof(struct cad_audio_eq_cfg);
 		flt.format_block = &eq;
 
 		rc = cad_ioctl(p->cad_w_handle,

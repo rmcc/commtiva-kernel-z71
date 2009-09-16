@@ -194,17 +194,6 @@ static int msm8k_pcm_in_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
-		stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_TX;
-		cad_stream_dev.device = (u32 *)&stream_device[0];
-		cad_stream_dev.device_len = 1;
-		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_DEVICE,
-			&cad_stream_dev,
-			sizeof(struct cad_stream_device_struct_type));
-		if (rc) {
-			pr_err("cad_ioctl() SET_STREAM_DEVICE failed\n");
-			break;
-		}
-
 		cad_write_pcm_fmt.us_ver_id = CAD_WRITE_PCM_VERSION_10;
 		cad_write_pcm_fmt.pcm.us_channel_config = p->cfg.channel_count;
 		cad_write_pcm_fmt.pcm.us_width = 1;
@@ -254,6 +243,17 @@ static int msm8k_pcm_in_ioctl(struct inode *inode, struct file *f,
 			sizeof(struct cad_write_pcm_format_struct_type));
 		if (rc) {
 			pr_err("cad_ioctl() SET_STREAM_CONFIG failed\n");
+			break;
+		}
+
+		stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_TX;
+		cad_stream_dev.device = (u32 *)&stream_device[0];
+		cad_stream_dev.device_len = 1;
+		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_DEVICE,
+			&cad_stream_dev,
+			sizeof(struct cad_stream_device_struct_type));
+		if (rc) {
+			pr_err("cad_ioctl() SET_STREAM_DEVICE failed\n");
 			break;
 		}
 

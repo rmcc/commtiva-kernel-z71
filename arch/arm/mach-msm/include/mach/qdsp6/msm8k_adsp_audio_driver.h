@@ -39,7 +39,12 @@
 #include <mach/qdsp6/msm8k_adsp_audio_cfg_ioctl.h>
 
 
-#define ADSP_AUDIO_API_MAJOR_VERSION	2
+/* Major version numbers track significant api changes that are */
+/* not backwards compatible */
+#define ADSP_AUDIO_API_MAJOR_VERSION	3
+
+/* Minor version numbers of the same Major version are backward */
+/* compatible and generally increment as features are added. */
 #define ADSP_AUDIO_API_MINOR_VERSION	0
 
 #define ADSP_AUDIO_DRIVER_SHARED_MEMORY_ACCESS_FLAG_READ	1
@@ -51,72 +56,30 @@
 /* that hosts this driver. */
 /* @param[in] cb_data   Client data for asynchronous event notifications */
 /* @return    status of the operation */
-
 extern s32 adsp_audio_driver_init(struct adsp_audio_event_cb *cb_data);
 
 
 /* This function De-initializes the ADSP Audio Driver Framework and releases */
 /* all its resources */
 /* @return    status of the operation */
-
 extern s32 adsp_audio_driver_release(void);
 
 
-/* Request to open a media stream session on an audio device. */
-/* Note: adsp_audio_driver_init must have been called before this method */
-/* This is an asynchronous call, i.e. the client will get a callback when */
-/* the stream session has been created. All subsequent requests to the */
-/* stream session must be made with the same Handle. */
-/* @param[in] handle        Handle for the new stream session. */
-/* @param[in] open_param    Parameters to configure the stream session. */
-/* @param[in] cb_data Client data for async responses to future requests */
-/* @return    status of the operation. */
-
-extern s32 adsp_audio_open(u32 handle,
-				struct adsp_audio_open_command *open_param,
-				struct adsp_audio_event_cb *cb_data);
+/* Returns current version of the ADSPAudioDriver interface */
+extern s32 adsp_audio_get_version(u32 *major, u32 *minor, char **build);
 
 
-/* Request to close a succesfully opened stream session associated with */
-/* the Handle. */
-/* This is a asynchronous call. Clients will get a callback when stream */
-/* session has been closed. */
-/* @param[in] handle  Handle of the Media Session. */
-/* @return    status of the operation */
-
-extern s32 adsp_audio_close(u32 handle);
+/* Returns driver status in string format */
+extern s32 adsp_audio_get_status(struct adsp_audio_address *addr,
+					u8 *status, u32 *len);
 
 
-/* This function writes data to an open stream session. Caller thread blocks */
-/* till stream session has queued the buffer for rendering. */
-/* @param[in] handle  Handle of the stream session. */
-/* @param[in] buf Pointer to the media data buffer. */
-/* @return    status of the operation */
-/*            Clients must wait for CAD_MSG_STATUS_BUF_DONE before */
-/*            freeing the memory associated with the data buffer. */
-
-extern s32 adsp_audio_write(u32 handle, struct adsp_audio_buffer *buf);
+/* Command interface to ADSP Audio Driver (control path) */
+extern s32 adsp_audio_control(union adsp_audio_command *cmd, u32 len);
 
 
-/* This function reads data from an open stream session. */
-/* @param[in] handle  Handle of the stream session. */
-/* @parm[in]  buf Pointer to the data buffer were data needs to be copied. */
-/* @return    status of the operation */
-/*            Clients must wait for CAD_MSG_STATUS_BUF_DONE before */
-/*            consuming the media data in the buffer. */
-
-extern s32 adsp_audio_read(u32 handle, struct adsp_audio_buffer *buf);
-
-
-/* Command interface to ADSP Audio Driver */
-/* @param[in] handle		unique session id to the driver session. */
-/* @param[in] cmd_code		requested operation. */
-/* @param[in] cmd_buf		pointer to command payload. */
-/* @param[in] cmd_buf_len	lenght of the payload in bytes. */
-/* @return			status of the operation */
-
- extern s32 adsp_audio_ioctl(u32 handle, u32 cmd_code, void *cmd_buf,
-				u32 cmd_buf_len);
+/* Send data buffers to/from an audio stream (data path) */
+extern s32 adsp_audio_data(union adsp_audio_command *cmd, u32 len);
 
 
 #endif
