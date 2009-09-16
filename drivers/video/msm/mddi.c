@@ -183,7 +183,7 @@ static int mddi_probe(struct platform_device *pdev)
 			return -ENOMEM;
 
 		if (mddi_pdata && mddi_pdata->mddi_power_on) {
-			rc = mddi_pdata->mddi_power_on();
+			rc = mddi_pdata->mddi_power_on(1);
 			if (rc) {
 				pr_err("%s: can't power on mddi\n", __func__);
 				return rc;
