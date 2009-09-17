@@ -651,7 +651,6 @@ static int msm_xusb_rpc_close(struct msmusb_hcd *mhcd)
 static int msm_xusb_otg_register(struct msmusb_hcd *mhcd)
 {
 	int ret = 0;
-	struct usb_hcd *hcd = mhcd_to_hcd(mhcd);
 	struct msm_usb_host_platform_data *pdata = mhcd->pdata;
 
 	switch (PHY_TYPE(pdata->phy_info)) {
@@ -663,7 +662,7 @@ static int msm_xusb_otg_register(struct msmusb_hcd *mhcd)
 		if (mhcd->xceiv && mhcd->xceiv->set_host)
 			mhcd->xceiv->set_host(mhcd->xceiv, &mhcd->otg_ops);
 		else
-			msm_hsusb_request_host(hcd_to_bus(hcd), REQUEST_START);
+			msm_hsusb_request_host(mhcd, REQUEST_START);
 		break;
 	case USB_PHY_SERIAL_PMIC:
 		msm_xusb_init_phy(mhcd);
@@ -768,7 +767,7 @@ static int __exit ehci_msm_remove(struct platform_device *pdev)
 
 	device_init_wakeup(&pdev->dev, 0);
 
-	msm_hsusb_request_host(hcd_to_bus(hcd), REQUEST_STOP);
+	msm_hsusb_request_host(mhcd, REQUEST_STOP);
 	if (mhcd->xceiv && mhcd->xceiv->set_host)
 		mhcd->xceiv->set_host(mhcd->xceiv, NULL);
 	msm_otg_put_transceiver(mhcd->xceiv);
