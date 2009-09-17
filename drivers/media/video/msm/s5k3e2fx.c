@@ -919,22 +919,28 @@ static int32_t s5k3e2fx_set_fps(struct fps_cfg *fps)
 {
 	/* input is new fps in Q10 format */
 	int32_t rc = 0;
+	enum msm_s_setting setting;
 
 	s5k3e2fx_ctrl->fps_divider = fps->fps_div;
 
+	if (s5k3e2fx_ctrl->sensormode == SENSOR_PREVIEW_MODE)
+		setting = S_RES_PREVIEW;
+	else
+		setting = S_RES_CAPTURE;
+
   rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 		REG_FRAME_LENGTH_LINES_MSB,
-		(((s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
-			s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l) *
+		(((s5k3e2fx_reg_pat[setting].size_h +
+			s5k3e2fx_reg_pat[setting].blk_l) *
 			s5k3e2fx_ctrl->fps_divider / 0x400) & 0xFF00) >> 8);
 	if (rc < 0)
 		goto set_fps_done;
 
   rc = s5k3e2fx_i2c_write_b(s5k3e2fx_client->addr,
 		REG_FRAME_LENGTH_LINES_LSB,
-		(((s5k3e2fx_reg_pat[S_RES_PREVIEW].size_h +
-			s5k3e2fx_reg_pat[S_RES_PREVIEW].blk_l) *
-			s5k3e2fx_ctrl->fps_divider / 0x400) & 0xFF00));
+		(((s5k3e2fx_reg_pat[setting].size_h +
+			s5k3e2fx_reg_pat[setting].blk_l) *
+			s5k3e2fx_ctrl->fps_divider / 0x400) & 0x00FF));
 
 set_fps_done:
 	return rc;
