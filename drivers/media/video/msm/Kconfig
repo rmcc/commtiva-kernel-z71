@@ -34,6 +34,12 @@ config MSM_CAMERA_AF_BAM
 	bool "BAM Module"
 	help
 	  This driver supports BAM AF module for 5M Bayer sensor
+
+config MSM_CAMERA_AF_KM
+	bool "KM Module"
+	help
+	  This driver supports KM AF module for 5M Bayer sensor
+
 endchoice
 
 config S5K3E2FX
