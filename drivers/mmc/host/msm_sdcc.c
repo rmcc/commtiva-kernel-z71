@@ -1002,6 +1002,9 @@ set_polling(struct device *dev, struct device_attribute *attr,
 	} else {
 		mmc->caps &= ~MMC_CAP_NEEDS_POLL;
 	}
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	host->polling_enabled = mmc->caps & MMC_CAP_NEEDS_POLL;
+#endif
 	spin_unlock_irqrestore(&host->lock, flags);
 	return count;
 }
@@ -1017,7 +1020,6 @@ static struct attribute_group dev_attr_grp = {
 };
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-static int polling_enabled;
 static void msmsdcc_early_suspend(struct early_suspend *h)
 {
 	struct msmsdcc_host *host =
@@ -1025,7 +1027,7 @@ static void msmsdcc_early_suspend(struct early_suspend *h)
 	unsigned long flags;
 
 	spin_lock_irqsave(&host->lock, flags);
-	polling_enabled = host->mmc->caps & MMC_CAP_NEEDS_POLL;
+	host->polling_enabled = host->mmc->caps & MMC_CAP_NEEDS_POLL;
 	host->mmc->caps &= ~MMC_CAP_NEEDS_POLL;
 	spin_unlock_irqrestore(&host->lock, flags);
 };
@@ -1035,7 +1037,7 @@ static void msmsdcc_late_resume(struct early_suspend *h)
 		container_of(h, struct msmsdcc_host, early_suspend);
 	unsigned long flags;
 
-	if (polling_enabled) {
+	if (host->polling_enabled) {
 		spin_lock_irqsave(&host->lock, flags);
 		host->mmc->caps |= MMC_CAP_NEEDS_POLL;
 		mmc_detect_change(host->mmc, 0);
