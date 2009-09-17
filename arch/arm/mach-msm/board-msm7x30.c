@@ -1295,30 +1295,30 @@ struct sdcc_gpio {
 };
 
 static struct msm_gpio sdc1_cfg_data[] = {
-	{GPIO_CFG(38, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_clk"},
-	{GPIO_CFG(39, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_cmd"},
-	{GPIO_CFG(40, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_3"},
-	{GPIO_CFG(41, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_2"},
-	{GPIO_CFG(42, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_1"},
-	{GPIO_CFG(43, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc1_dat_0"},
+	{GPIO_CFG(38, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc1_clk"},
+	{GPIO_CFG(39, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_cmd"},
+	{GPIO_CFG(40, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_3"},
+	{GPIO_CFG(41, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_2"},
+	{GPIO_CFG(42, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_1"},
+	{GPIO_CFG(43, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_0"},
 };
 
 static struct msm_gpio sdc2_cfg_data[] = {
-	{GPIO_CFG(64, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_clk"},
-	{GPIO_CFG(65, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_cmd"},
-	{GPIO_CFG(66, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_3"},
-	{GPIO_CFG(67, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_2"},
-	{GPIO_CFG(68, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_1"},
-	{GPIO_CFG(69, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc2_dat_0"},
+	{GPIO_CFG(64, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc2_clk"},
+	{GPIO_CFG(65, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc2_cmd"},
+	{GPIO_CFG(66, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc2_dat_3"},
+	{GPIO_CFG(67, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc2_dat_2"},
+	{GPIO_CFG(68, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc2_dat_1"},
+	{GPIO_CFG(69, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc2_dat_0"},
 };
 
 static struct msm_gpio sdc3_cfg_data[] = {
-	{GPIO_CFG(110, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_clk"},
-	{GPIO_CFG(111, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_cmd"},
-	{GPIO_CFG(116, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_3"},
-	{GPIO_CFG(117, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_2"},
-	{GPIO_CFG(118, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_1"},
-	{GPIO_CFG(119, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_4MA), "sdc3_dat_0"},
+	{GPIO_CFG(110, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc3_clk"},
+	{GPIO_CFG(111, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc3_cmd"},
+	{GPIO_CFG(116, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc3_dat_3"},
+	{GPIO_CFG(117, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc3_dat_2"},
+	{GPIO_CFG(118, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc3_dat_1"},
+	{GPIO_CFG(119, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc3_dat_0"},
 };
 
 static struct msm_gpio sdc4_cfg_data[] = {
@@ -1349,10 +1349,18 @@ static struct sdcc_gpio sdcc_cfg_data[] = {
 	},
 };
 
-static unsigned long vreg_sts, gpio_sts;
-static struct vreg *vreg_mmc;
+struct sdcc_vreg {
+	struct vreg *vreg_data;
+	unsigned level;
+};
 
-static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
+struct vreg *vreg_s3;
+struct vreg *vreg_mmc;
+static struct sdcc_vreg sdcc_vreg_data[4];
+
+static unsigned long vreg_sts, gpio_sts;
+
+static uint32_t msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
 {
 	int rc = 0;
 	struct sdcc_gpio *curr;
@@ -1360,7 +1368,7 @@ static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
 	curr = &sdcc_cfg_data[dev_id - 1];
 
 	if (!(test_bit(dev_id, &gpio_sts)^enable))
-		return;
+		return rc;
 
 	if (enable) {
 		set_bit(dev_id, &gpio_sts);
@@ -1372,6 +1380,41 @@ static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
 		clear_bit(dev_id, &gpio_sts);
 		msm_gpios_disable_free(curr->cfg_data, curr->size);
 	}
+
+	return rc;
+}
+
+static uint32_t msm_sdcc_setup_vreg(int dev_id, unsigned int enable)
+{
+	int rc = 0;
+	struct sdcc_vreg *curr;
+
+	curr = &sdcc_vreg_data[dev_id - 1];
+
+	if (!(test_bit(dev_id, &vreg_sts)^enable))
+		return rc;
+
+	if (enable) {
+		set_bit(dev_id, &vreg_sts);
+		rc = vreg_set_level(curr->vreg_data, curr->level);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg_set_level() = %d \n",
+					__func__, rc);
+		}
+		rc = vreg_enable(curr->vreg_data);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		}
+	} else {
+		clear_bit(dev_id, &vreg_sts);
+		rc = vreg_disable(curr->vreg_data);
+		if (rc) {
+			printk(KERN_ERR "%s: vreg_disable() = %d \n",
+					__func__, rc);
+		}
+	}
+	return rc;
 }
 
 static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
@@ -1380,48 +1423,53 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	struct platform_device *pdev;
 
 	pdev = container_of(dv, struct platform_device, dev);
-	msm_sdcc_setup_gpio(pdev->id, (vdd ? 1 : 0));
+	rc = msm_sdcc_setup_gpio(pdev->id, (vdd ? 1 : 0));
+	if (rc)
+		goto out;
 
-	if (vdd == 0) {
-		if (!vreg_sts)
-			return 0;
-
-		clear_bit(pdev->id, &vreg_sts);
-
-		if (!vreg_sts) {
-			rc = vreg_disable(vreg_mmc);
-			if (rc)
-				printk(KERN_ERR "%s: return val: %d \n",
-					__func__, rc);
-		}
-	} else {
-		if (!vreg_sts) {
-			rc = vreg_set_level(vreg_mmc, 2850);
-			if (rc) {
-				printk(KERN_ERR "%s: vreg_set_level() = %d \n",
-						__func__, rc);
-				goto out;
-			}
-			rc = vreg_enable(vreg_mmc);
-			if (rc) {
-				printk(KERN_ERR "%s: vreg_enable() = %d \n",
-						__func__, rc);
-				goto out;
-			}
-		}
-		set_bit(pdev->id, &vreg_sts);
-	}
+	if (pdev->id == 4) /* S3 is always ON and cannot be disabled */
+		rc = msm_sdcc_setup_vreg(pdev->id, (vdd ? 1 : 0));
 out:
 	return rc;
 }
 
-static struct mmc_platform_data msm7x30_sdcc_data = {
+#ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
+static struct mmc_platform_data msm7x30_sdc1_data = {
+	.ocr_mask	= MMC_VDD_165_195,
+	.translate_vdd	= msm_sdcc_setup_power,
+};
+#endif
+
+#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
+static struct mmc_platform_data msm7x30_sdc2_data = {
+	.ocr_mask	= MMC_VDD_165_195,
+	.translate_vdd	= msm_sdcc_setup_power,
+};
+#endif
+
+#ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
+static struct mmc_platform_data msm7x30_sdc3_data = {
+	.ocr_mask	= MMC_VDD_165_195,
+	.translate_vdd	= msm_sdcc_setup_power,
+};
+#endif
+
+#ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
+static struct mmc_platform_data msm7x30_sdc4_data = {
 	.ocr_mask	= MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
 };
+#endif
 
 static void __init msm7x30_init_mmc(void)
 {
+	vreg_s3 = vreg_get(NULL, "s3");
+	if (IS_ERR(vreg_s3)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_s3));
+		return;
+	}
+
 	vreg_mmc = vreg_get(NULL, "mmc");
 	if (IS_ERR(vreg_mmc)) {
 		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
@@ -1430,16 +1478,24 @@ static void __init msm7x30_init_mmc(void)
 	}
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
-	msm_add_sdcc(1, &msm7x30_sdcc_data);
+	sdcc_vreg_data[0].vreg_data = vreg_s3;
+	sdcc_vreg_data[0].level = 1800;
+	msm_add_sdcc(1, &msm7x30_sdc1_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-	msm_add_sdcc(2, &msm7x30_sdcc_data);
+	sdcc_vreg_data[1].vreg_data = vreg_s3;
+	sdcc_vreg_data[1].level = 1800;
+	msm_add_sdcc(2, &msm7x30_sdc2_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
-	msm_add_sdcc(3, &msm7x30_sdcc_data);
+	sdcc_vreg_data[2].vreg_data = vreg_s3;
+	sdcc_vreg_data[2].level = 1800;
+	msm_add_sdcc(3, &msm7x30_sdc3_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
-	msm_add_sdcc(4, &msm7x30_sdcc_data);
+	sdcc_vreg_data[3].vreg_data = vreg_mmc;
+	sdcc_vreg_data[3].level = 2850;
+	msm_add_sdcc(4, &msm7x30_sdc4_data);
 #endif
 
 }
