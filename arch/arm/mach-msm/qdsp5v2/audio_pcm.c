@@ -1,26 +1,19 @@
-/* audio_pcm.c - pcm audio decoder driver
+/* arch/arm/mach-msm/qdsp5v2/audio_pcm.c
  *
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
- *
- * Based on the mp3 decoder driver in arch/arm/mach-msm/qdsp5/audio_mp3.c
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
+ * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
- * All source code in this file is licensed under the following license except
- * where indicated.
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License version 2 as published
- * by the Free Software Foundation.
+ * This software is licensed under the terms of the GNU General Public
+ * License version 2, as published by the Free Software Foundation, and
+ * may be copied, distributed, and modified under those terms.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can find it at http://www.fsf.org
  */
 
 #include <linux/module.h>
