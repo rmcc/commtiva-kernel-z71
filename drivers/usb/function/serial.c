@@ -156,6 +156,7 @@ struct gs_port {
 	struct gs_dev *port_dev;	/* pointer to device struct */
 	struct tty_struct *port_tty;	/* pointer to tty struct */
 	spinlock_t port_lock;
+	struct mutex	mutex_lock;	/* protect open/close */
 	int port_num;
 	int port_open_count;
 	int port_in_use;	/* open/close in progress */
@@ -193,6 +194,7 @@ struct gs_dev {
 	/* address of in endpoint */
 	struct usb_endpoint *dev_in_ep;
 	struct usb_request *notify_req;
+	unsigned long notify_queued;
 	/* address of out endpoint */
 	struct usb_endpoint *dev_out_ep;
 	/* list of write requests */
@@ -1348,7 +1350,7 @@ static void gs_write_complete(struct usb_endpoint *ep, struct usb_request *req)
 static void send_notify_data(struct usb_endpoint *ep, struct usb_request *req)
 {
 	struct gs_dev *dev = (struct gs_dev *)req->device;
-	struct usb_cdc_notification *notify = req->buf;
+	struct usb_cdc_notification *notify;
 	struct gs_port *port;
 	unsigned int msr, ret;
 	__le16 *data;
@@ -1365,6 +1367,10 @@ static void send_notify_data(struct usb_endpoint *ep, struct usb_request *req)
 		return;
 	}
 
+	if (test_bit(0, &dev->notify_queued))
+		usb_ept_cancel_xfer(dev->dev_notify_ep,
+		dev->notify_req);
+	notify = req->buf;
 	msr = port->msr;
 	notify->bmRequestType  = 0xA1;
 	notify->bNotificationType  = USB_CDC_NOTIFY_SERIAL_STATE;
@@ -1376,8 +1382,10 @@ static void send_notify_data(struct usb_endpoint *ep, struct usb_request *req)
 			| ((msr & MSR_DSR) ? (1<<1) : (0<<1))
 			| ((msr & MSR_RI) ? (1<<3) : (0<<3)));
 
+	set_bit(0, &dev->notify_queued);
 	ret = usb_ept_queue_xfer(ep, req);
 	if (ret) {
+		clear_bit(0, &dev->notify_queued);
 		printk(KERN_ERR
 		"send_notify_data: cannot queue status request,ret = %d\n",
 			       ret);
@@ -1403,6 +1411,7 @@ static void gs_status_complete(struct usb_endpoint *ep,
 		return;
 	}
 
+	clear_bit(0, &dev->notify_queued);
 	switch (req->status) {
 	case 0:
 
@@ -1973,6 +1982,7 @@ static int gs_alloc_ports(struct gs_dev *dev, gfp_t kmalloc_flags)
 		port->port_line_coding.bParityType = GS_DEFAULT_PARITY;
 		port->port_line_coding.bDataBits = GS_DEFAULT_DATA_BITS;
 		spin_lock_init(&port->port_lock);
+		mutex_init(&port->mutex_lock);
 		init_waitqueue_head(&port->port_write_wait);
 
 		dev->dev_port[i] = port;
@@ -2209,6 +2219,7 @@ static int gs_tiocmget(struct tty_struct *tty, struct file *file)
 	if (port == NULL)
 		return -EIO;
 
+	mutex_lock(&port->mutex_lock);
 	mcr = port->mcr;
 	msr = port->msr;
 
@@ -2220,6 +2231,7 @@ static int gs_tiocmget(struct tty_struct *tty, struct file *file)
 		| ((msr & MSR_DSR) ? TIOCM_DSR : 0)
 		| ((msr & MSR_CTS) ? TIOCM_CTS : 0);
 
+	mutex_unlock(&port->mutex_lock);
 	return result;
 }
 
@@ -2268,6 +2280,7 @@ static int gs_tiocmset(struct tty_struct *tty, struct file *file,
 	if (clear & TIOCM_CD)
 		msr &= ~MSR_CD;
 
+	mutex_lock(&port->mutex_lock);
 	port->mcr = mcr;
 	port->msr = msr;
 
@@ -2275,6 +2288,7 @@ static int gs_tiocmset(struct tty_struct *tty, struct file *file,
 		send_notify_data(dev->dev_notify_ep, dev->notify_req);
 		port->prev_msr = port->msr;
 	}
+	mutex_unlock(&port->mutex_lock);
 
 	return 0;
 }
