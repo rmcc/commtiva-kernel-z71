@@ -172,7 +172,7 @@ void usb_ept_free_req(struct usb_endpoint *ept, struct usb_request *req);
 int usb_ept_queue_xfer(struct usb_endpoint *ept, struct usb_request *req);
 int usb_ept_flush(struct usb_endpoint *ept);
 int usb_ept_get_max_packet(struct usb_endpoint *ept);
-int usb_ept_cancel_xfer(struct usb_request *req);
+int usb_ept_cancel_xfer(struct usb_endpoint *ept, struct usb_request *_req);
 void usb_ept_fifo_flush(struct usb_endpoint *ept);
 int usb_ept_set_halt(struct usb_endpoint *ept);
 int usb_ept_clear_halt(struct usb_endpoint *ept);
