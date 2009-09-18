@@ -144,8 +144,8 @@ static irqreturn_t ts_interrupt(int irq, void *dev_id)
 		 * Android framework adds calibration framework.
 		 */
 #ifdef CONFIG_ANDROID_TOUCHSCREEN_MSM_HACKS
-		lx = ts->x_max + 25 - x;
-		ly = ts->y_max + 25 - y;
+		lx = ts->x_max - x;
+		ly = ts->y_max - y;
 #else
 		lx = x;
 		ly = y;
