@@ -59,7 +59,8 @@
 #include <linux/io.h>
 #include <linux/irq.h>
 #include <linux/sched.h>
-
+#include <linux/timer.h>
+#include <linux/workqueue.h>
 
 #include "kgsl.h"
 #include "kgsl_log.h"
@@ -92,6 +93,31 @@
 		| (1 << MH_ARBITER_CONFIG__TC_CLNT_ENABLE__SHIFT) \
 		| (1 << MH_ARBITER_CONFIG__RB_CLNT_ENABLE__SHIFT) \
 		| (1 << MH_ARBITER_CONFIG__PA_CLNT_ENABLE__SHIFT))
+
+#define FIRST_TIMEOUT (HZ / 2)
+#define INTERVAL_TIMEOUT (HZ / 5)
+
+static struct timer_list idle_timer;
+static struct work_struct idle_check;
+
+void kgsl_yamato_timer(unsigned long data)
+{
+	/* Have work run in a non-interrupt context. */
+	schedule_work(&idle_check);
+}
+
+void kgsl_yamato_idle_check(struct work_struct *work)
+{
+	struct kgsl_device *device = &kgsl_driver.yamato_device;
+
+	mutex_lock(&kgsl_driver.mutex);
+	if (device->hwaccess_blocked == KGSL_FALSE
+	    && device->flags & KGSL_FLAGS_STARTED) {
+		if (kgsl_yamato_sleep(device, KGSL_FALSE) == KGSL_FAILURE)
+			mod_timer(&idle_timer, jiffies + INTERVAL_TIMEOUT);
+	}
+	mutex_unlock(&kgsl_driver.mutex);
+}
 
 static int kgsl_yamato_gmeminit(struct kgsl_device *device)
 {
@@ -201,8 +227,8 @@ irqreturn_t kgsl_yamato_isr(int irq, void *data)
 		kgsl_yamato_sq_intrcallback(device);
 		result = IRQ_HANDLED;
 	}
-
-
+	/* Reset the time-out in our idle timer */
+	mod_timer(&idle_timer, jiffies + INTERVAL_TIMEOUT);
 	return result;
 }
 
@@ -450,6 +476,8 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 			sizeof(device->gmemspace));
 
 	device->id = KGSL_DEVICE_YAMATO;
+	init_completion(&device->hwaccess_gate);
+	device->hwaccess_blocked = KGSL_FALSE;
 
 	if (config->mmu_config) {
 		device->mmu.config    = config->mmu_config;
@@ -584,6 +612,11 @@ int kgsl_yamato_start(struct kgsl_device *device, uint32_t flags)
 	}
 
 	device->flags |= KGSL_FLAGS_STARTED;
+	init_timer(&idle_timer);
+	idle_timer.function = kgsl_yamato_timer;
+	idle_timer.expires = jiffies + FIRST_TIMEOUT;
+	add_timer(&idle_timer);
+	INIT_WORK(&idle_check, kgsl_yamato_idle_check);
 
 	KGSL_DRV_VDBG("return %d\n", status);
 	return status;
@@ -591,6 +624,7 @@ int kgsl_yamato_start(struct kgsl_device *device, uint32_t flags)
 
 int kgsl_yamato_stop(struct kgsl_device *device)
 {
+	del_timer(&idle_timer);
 	if (device->flags & KGSL_FLAGS_STARTED) {
 
 		kgsl_yamato_regwrite(device, REG_RBBM_INT_CNTL, 0);
@@ -675,6 +709,7 @@ int kgsl_yamato_getproperty(struct kgsl_device *device,
 	return status;
 }
 
+/* Caller must hold the driver mutex. */
 int kgsl_yamato_idle(struct kgsl_device *device, unsigned int timeout)
 {
 	int status = -EINVAL;
@@ -724,6 +759,91 @@ int kgsl_yamato_idle(struct kgsl_device *device, unsigned int timeout)
 	}
 done:
 	KGSL_DRV_VDBG("return %d\n", status);
+
+	return status;
+}
+
+static unsigned int kgsl_yamato_isidle(struct kgsl_device *device)
+{
+	int status = KGSL_FALSE;
+	struct kgsl_ringbuffer *rb = &device->ringbuffer;
+	unsigned int rbbm_status;
+
+	if (rb->flags & KGSL_FLAGS_STARTED) {
+		/* Is the ring buffer is empty? */
+		GSL_RB_GET_READPTR(rb, &rb->rptr);
+		if (rb->rptr == rb->wptr) {
+			/* Is the core idle? */
+			kgsl_yamato_regread(device, REG_RBBM_STATUS,
+					    &rbbm_status);
+			if (!(rbbm_status & RBBM_STATUS__GUI_ACTIVE_MASK))
+				status = KGSL_TRUE;
+		}
+	}
+
+	return status;
+}
+
+/******************************************************************/
+/* Caller must hold the driver mutex. */
+int kgsl_yamato_sleep(struct kgsl_device *device, const int idle)
+{
+	int status = KGSL_SUCCESS;
+
+	/* Skip this request if we're already sleeping. */
+	if (device->hwaccess_blocked == KGSL_FALSE) {
+		/* See if the device is idle. If it is, we can shut down */
+		/* the core clock until the next attempt to access the HW. */
+		if (idle == KGSL_TRUE || kgsl_yamato_isidle(device)) {
+			/* Turn off the core clocks */
+			status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_OFF);
+
+			/* Block further access to this core until it's awake */
+			device->hwaccess_blocked = KGSL_TRUE;
+		} else {
+			status = KGSL_FAILURE;
+		}
+	}
+
+	return status;
+}
+
+/******************************************************************/
+/* Caller must hold the driver mutex. */
+int kgsl_yamato_wake(struct kgsl_device *device)
+{
+	int status = KGSL_SUCCESS;
+
+	/* Turn on the core clocks */
+	status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_ON);
+
+	/* Re-enable HW access */
+	device->hwaccess_blocked = KGSL_FALSE;
+	complete_all(&device->hwaccess_gate);
+	mod_timer(&idle_timer, jiffies + FIRST_TIMEOUT);
+
+	KGSL_DRV_VDBG("<-- kgsl_yamato_wake(). Return value %d\n", status);
+
+	return status;
+}
+
+/******************************************************************/
+/* Caller must hold the driver mutex. */
+int kgsl_yamato_suspend(struct kgsl_device *device)
+{
+	int status;
+
+	/* Wait for the device to become idle */
+	status = kgsl_yamato_idle(device, IDLE_COUNT_MAX);
+
+	if (status == KGSL_SUCCESS) {
+		/* Put the device to sleep. */
+		status = kgsl_yamato_sleep(device, KGSL_TRUE);
+		/* Don't let the timer wake us during suspended sleep. */
+		del_timer(&idle_timer);
+		/* Get the completion ready to be waited upon. */
+		INIT_COMPLETION(device->hwaccess_gate);
+	}
 
 	return status;
 }

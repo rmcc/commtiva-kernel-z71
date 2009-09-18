@@ -49,6 +49,16 @@
 #define KGSL_DEV_FLAGS_STARTED		0x00000004
 #define KGSL_DEV_FLAGS_ACTIVE		0x00000008
 
+/*****************************************************************************
+** power flags
+*****************************************************************************/
+#define KGSL_PWRFLAGS_POWER_OFF			0x00000001
+#define KGSL_PWRFLAGS_POWER_ON			0x00000002
+#define KGSL_PWRFLAGS_CLK_ON             0x00000004
+#define KGSL_PWRFLAGS_CLK_OFF            0x00000008
+#define KGSL_PWRFLAGS_OVERRIDE_ON        0x00000010
+#define KGSL_PWRFLAGS_OVERRIDE_OFF       0x00000020
+
 #define KGSL_CHIPID_YAMATODX_REV21  0x20100
 #define KGSL_CHIPID_YAMATODX_REV211 0x20101
 
@@ -79,6 +89,8 @@ struct kgsl_device {
 	unsigned int      drawctxt_count;
 	struct kgsl_drawctxt *drawctxt_active;
 	struct kgsl_drawctxt drawctxt[KGSL_CONTEXT_MAX];
+	unsigned int hwaccess_blocked;
+	struct completion hwaccess_gate;
 
 	wait_queue_head_t ib1_wq;
 };
@@ -100,6 +112,10 @@ int kgsl_yamato_start(struct kgsl_device *device, uint32_t flags);
 int kgsl_yamato_stop(struct kgsl_device *device);
 
 int kgsl_yamato_idle(struct kgsl_device *device, unsigned int timeout);
+
+int kgsl_yamato_wake(struct kgsl_device *device);
+
+int kgsl_yamato_suspend(struct kgsl_device *device);
 
 int kgsl_yamato_getproperty(struct kgsl_device *device,
 				enum kgsl_property_type type, void *value,
