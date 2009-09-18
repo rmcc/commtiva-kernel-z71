@@ -149,6 +149,16 @@ struct adie_codec_state {
 
 static struct adie_codec_state adie_codec;
 
+static void adie_codec_write(u8 reg, u8 mask, u8 val)
+{
+	u8 cur_val;
+
+	marimba_read(adie_codec.pdrv_ptr, reg, &cur_val, 1);
+	cur_val = (cur_val & ~mask) | (val & mask);
+	marimba_write(adie_codec.pdrv_ptr, reg,  &cur_val, 1);
+	pr_debug("%s: write reg %x val %x\n", __func__, reg, cur_val);
+}
+
 int adie_codec_setpath(struct adie_codec_path *path_ptr, u32 freq_plan, u32 osr)
 {
 	int rc = 0;
@@ -187,8 +197,8 @@ static void adie_codec_reach_stage_action(struct adie_codec_path *path_ptr,
 		/* perform reimage */
 		for (iter = 0; iter < path_ptr->img.img_sz; iter++) {
 			reg_info = &path_ptr->img.regs[iter];
-			marimba_write_bit_mask(adie_codec.pdrv_ptr,
-			reg_info->reg, &reg_info->val, 1, reg_info->mask);
+			adie_codec_write(reg_info->reg,
+			reg_info->mask, reg_info->val);
 		}
 	}
 }
@@ -200,6 +210,7 @@ int adie_codec_proceed_stage(struct adie_codec_path *path_ptr, u32 state)
 	struct adie_codec_hwsetting_entry *setting;
 	u8 reg, mask, val;
 
+	mutex_lock(&adie_codec.lock);
 	setting = &path_ptr->profile->settings[path_ptr->hwsetting_idx];
 	while (!loop_exit) {
 		curr_action = &setting->actions[path_ptr->stage_idx];
@@ -207,8 +218,7 @@ int adie_codec_proceed_stage(struct adie_codec_path *path_ptr, u32 state)
 		case ADIE_CODEC_ACTION_ENTRY:
 			ADIE_CODEC_UNPACK_ENTRY(curr_action->action,
 			reg, mask, val);
-			marimba_write_bit_mask(adie_codec.pdrv_ptr,
-			reg, &val, 1,  mask);
+			adie_codec_write(reg, mask, val);
 			break;
 		case ADIE_CODEC_ACTION_DELAY_WAIT:
 			udelay(curr_action->action);
@@ -216,8 +226,10 @@ int adie_codec_proceed_stage(struct adie_codec_path *path_ptr, u32 state)
 		case ADIE_CODEC_ACTION_STAGE_REACHED:
 			adie_codec_reach_stage_action(path_ptr,
 				curr_action->action);
-			if (curr_action->action == state)
+			if (curr_action->action == state) {
+				path_ptr->curr_stage = state;
 				loop_exit = 1;
+			}
 			break;
 		default:
 			BUG();
@@ -227,6 +239,7 @@ int adie_codec_proceed_stage(struct adie_codec_path *path_ptr, u32 state)
 		if (path_ptr->stage_idx == setting->action_sz)
 			path_ptr->stage_idx = 0;
 	}
+	mutex_unlock(&adie_codec.lock);
 	return rc;
 }
 EXPORT_SYMBOL(adie_codec_proceed_stage);
@@ -235,7 +248,6 @@ int adie_codec_open(struct adie_codec_dev_profile *profile,
 	struct adie_codec_path **path_pptr)
 {
 	int rc = 0;
-	u8 reg_val;
 
 	if (!profile || !path_pptr) {
 		rc = -EINVAL;
@@ -259,30 +271,25 @@ int adie_codec_open(struct adie_codec_dev_profile *profile,
 		 */
 
 		/* Bring up codec */
-		reg_val = 0x08;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
+		adie_codec_write(0xFF, 0xFF, 0x08);
 
 		/* set GDFS_EN_FEW=1 */
-		reg_val = 0x0a;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
+		adie_codec_write(0xFF, 0xFF, 0x0a);
 
 		/* set GDFS_EN_REST=1 */
-		reg_val = 0x0e;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
+		adie_codec_write(0xFF, 0xFF, 0x0e);
 
 		/* set RESET_N=1 */
-		reg_val = 0x07;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
-		reg_val = 0x17;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
+		adie_codec_write(0xFF, 0xFF, 0x07);
+
+		adie_codec_write(0xFF, 0xFF, 0x17);
 
 		/* enable band gap */
-		reg_val = 0x04;
-		marimba_write(adie_codec.pdrv_ptr, 0x03, &reg_val, 1);
+		adie_codec_write(0x03, 0xFF, 0x04);
 
 		/* dither delay selected and dmic gain stage bypassed */
-		reg_val = 0x44;
-		marimba_write(adie_codec.pdrv_ptr, 0x8F, &reg_val, 1);
+		adie_codec_write(0x8F, 0xFF, 0x44);
+
 	}
 
 	adie_codec.path[profile->path_type].profile = profile;
@@ -298,19 +305,18 @@ EXPORT_SYMBOL(adie_codec_open);
 int adie_codec_close(struct adie_codec_path *path_ptr)
 {
 	int rc = 0;
-	u8 reg_val;
+
 
 	if (!path_ptr) {
 		rc = -EINVAL;
 		goto error;
 	}
+	adie_codec_proceed_stage(path_ptr, ADIE_CODEC_DIGITAL_OFF);
 
 	mutex_lock(&adie_codec.lock);
 
 	BUG_ON(!adie_codec.ref_cnt);
 
-	/* adie_codec_reset_path(path_ptr); */
-	adie_codec_proceed_stage(path_ptr, ADIE_CODEC_DIGITAL_OFF);
 	path_ptr->profile = NULL;
 	path_ptr->hwsetting_idx = 0;
 	path_ptr->stage_idx = 0;
@@ -319,16 +325,12 @@ int adie_codec_close(struct adie_codec_path *path_ptr)
 	adie_codec.ref_cnt--;
 
 	if (!adie_codec.ref_cnt) {
-		reg_val = 0x07;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
-		reg_val = 0x06;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
-		reg_val = 0x0e;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
-		reg_val = 0x08;
-		marimba_write(adie_codec.pdrv_ptr, 0xFF, &reg_val, 1);
-		reg_val = 0x00;
-		marimba_write(adie_codec.pdrv_ptr, 0x03, &reg_val, 1);
+
+		adie_codec_write(0xFF, 0xFF, 0x07);
+		adie_codec_write(0xFF, 0xFF, 0x06);
+		adie_codec_write(0xFF, 0xFF, 0x0e);
+		adie_codec_write(0xFF, 0xFF, 0x08);
+		adie_codec_write(0x03, 0xFF, 0x00);
 	}
 	mutex_unlock(&adie_codec.lock);
 error:
