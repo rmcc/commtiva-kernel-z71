@@ -163,6 +163,13 @@ struct msm_rpc_server
 	uint32_t prog;
 	uint32_t vers;
 
+	struct mutex cb_req_lock;
+	struct mutex reply_lock;
+	char *cb_req;
+	char *reply;
+
+	struct msm_rpc_endpoint *cb_ept;
+
 	int (*rpc_call)(struct msm_rpc_server *server,
 			struct rpc_request_hdr *req, unsigned len);
 };
@@ -209,6 +216,13 @@ struct msm_rpc_client {
 	char *reply;
 };
 
+struct msm_rpc_client_info {
+	uint32_t pid;
+	uint32_t cid;
+	uint32_t prog;
+	uint32_t vers;
+};
+
 struct msm_rpc_client *msm_rpc_register_client(
 	const char *name,
 	uint32_t prog, uint32_t ver,
@@ -229,10 +243,29 @@ void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
 
 int msm_rpc_send_accepted_reply(struct msm_rpc_client *client, uint32_t size);
 
+void *msm_rpc_server_start_accepted_reply(struct msm_rpc_server *server,
+					  uint32_t xid, uint32_t accept_status);
+
+int msm_rpc_server_send_accepted_reply(struct msm_rpc_server *server,
+				       uint32_t size);
+
 int msm_rpc_add_cb_func(struct msm_rpc_client *client, void *cb_func);
 
 void *msm_rpc_get_cb_func(struct msm_rpc_client *client, uint32_t cb_id);
 
 void msm_rpc_remove_cb_func(struct msm_rpc_client *client, void *cb_func);
+
+int msm_rpc_server_cb_req(struct msm_rpc_server *server,
+			  struct msm_rpc_client_info *clnt_info,
+			  uint32_t cb_proc,
+			  int (*arg_func)(struct msm_rpc_server *server,
+					  void *buf, void *data),
+			  void *arg_data,
+			  int (*ret_func)(struct msm_rpc_server *server,
+					  void *buf, void *data),
+			  void *ret_data, long timeout);
+
+void msm_rpc_server_get_requesting_client(
+	struct msm_rpc_client_info *clnt_info);
 
 #endif
