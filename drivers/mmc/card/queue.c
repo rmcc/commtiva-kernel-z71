@@ -72,6 +72,9 @@ static int mmc_queue_thread(void *d)
 			continue;
 		}
 		set_current_state(TASK_RUNNING);
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+		mmc_auto_suspend(mq->card->host, 0);
+#endif
 #ifdef CONFIG_MMC_BLOCK_PARANOID_RESUME
 		if (mq->check_status) {
 			struct mmc_command cmd;
