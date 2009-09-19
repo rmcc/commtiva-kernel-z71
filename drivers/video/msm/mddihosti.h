@@ -519,6 +519,7 @@ extern void mddi_host_disable_hibernation(boolean disable);
 extern mddi_linked_list_type *llist_extern[];
 extern mddi_linked_list_type *llist_dma_extern[];
 extern mddi_linked_list_notify_type *llist_extern_notify[];
+extern struct timer_list mddi_host_timer;
 
 typedef struct {
 	uint16 transmitting_start_idx;
@@ -542,4 +543,5 @@ typedef struct {
 
 uint32 mddi_get_client_id(void);
 void mddi_mhctl_remove(mddi_host_type host_idx);
+void mddi_host_timer_service(unsigned long data);
 #endif /* MDDIHOSTI_H */
