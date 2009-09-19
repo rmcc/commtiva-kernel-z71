@@ -304,6 +304,9 @@ void mddi_disable(int lock)
 
 	clk_disable(mddi_clk);
 	disable_irq(INT_MDDI_PRI);
+
+	if (mddi_pdata && mddi_pdata->mddi_power_save)
+		mddi_pdata->mddi_power_save(0);
 }
 
 static int mddi_suspend(struct platform_device *pdev, pm_message_t state)

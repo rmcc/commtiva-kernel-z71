@@ -619,16 +619,23 @@ do { \
 				: "vreg_disable", name); \
 } while (0)
 
+static int mddi_power_save_on;
 static void msm_fb_mddi_power_save(int on)
 {
 	struct vreg *vreg;
 	int i;
+	int flag_on = !!on;
+
+	if (mddi_power_save_on == flag_on)
+		return;
+
+	mddi_power_save_on = flag_on;
 
 	if (machine_is_msm7201a_ffa())
-		gpio_direction_output(88, !!on);
+		gpio_direction_output(88, flag_on);
 
 	for (i = 0; i < ARRAY_SIZE(msm_fb_vreg); i++) {
-		if (on)
+		if (flag_on)
 			MSM_FB_VREG_OP(msm_fb_vreg[i], enable);
 		else
 			MSM_FB_VREG_OP(msm_fb_vreg[i], disable);
