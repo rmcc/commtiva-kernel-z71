@@ -51,7 +51,7 @@ static struct mt9d112_ctrl *mt9d112_ctrl;
 
 static DECLARE_WAIT_QUEUE_HEAD(mt9d112_wait_queue);
 DECLARE_MUTEX(mt9d112_sem);
-
+static int16_t mt9d112_effect = CAMERA_EFFECT_OFF;
 
 /*=============================================================
 	EXTERNAL DECLARATIONS
@@ -284,114 +284,6 @@ static long mt9d112_reg_init(void)
 	return 0;
 }
 
-static long mt9d112_set_sensor_mode(int mode)
-{
-	uint16_t clock;
-	long rc = 0;
-
-	switch (mode) {
-	case SENSOR_PREVIEW_MODE:
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA20C, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0004, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA215, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0004, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA20B, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0000, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		clock = 0x0250;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x341C, clock, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA103, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0001, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		mdelay(5);
-		break;
-
-	case SENSOR_SNAPSHOT_MODE:
-		/* Switch to lower fps for Snapshot */
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x341C, 0x0120, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA120, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0002, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		mdelay(5);
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x338C, 0xA103, WORD_LEN);
-		if (rc < 0)
-			return rc;
-
-		rc =
-			mt9d112_i2c_write(mt9d112_client->addr,
-				0x3390, 0x0002, WORD_LEN);
-		if (rc < 0)
-			return rc;
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static long mt9d112_set_effect(int mode, int effect)
 {
 	uint16_t reg_addr;
@@ -501,7 +393,7 @@ static long mt9d112_set_effect(int mode, int effect)
 		return -EINVAL;
 	}
 	}
-
+	mt9d112_effect = effect;
 	/* Refresh Sequencer */
 	rc = mt9d112_i2c_write(mt9d112_client->addr,
 		0x338C, 0xA103, WORD_LEN);
@@ -512,6 +404,169 @@ static long mt9d112_set_effect(int mode, int effect)
 		0x3390, 0x0005, WORD_LEN);
 
 	return rc;
+}
+
+static long mt9d112_set_sensor_mode(int mode)
+{
+	uint16_t clock;
+	long rc = 0;
+
+	switch (mode) {
+	case SENSOR_PREVIEW_MODE:
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA20C, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0004, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA215, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0004, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA20B, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0000, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		clock = 0x0250;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x341C, clock, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA103, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0001, WORD_LEN);
+		if (rc < 0)
+			return rc;
+		mdelay(5);
+		rc =
+			mt9d112_set_effect(mode, mt9d112_effect);
+		if (rc < 0)
+			return rc;
+		break;
+
+	case SENSOR_SNAPSHOT_MODE:
+		rc =
+			mt9d112_set_effect(mode, mt9d112_effect);
+		if (rc < 0)
+			return rc;
+		/* Switch to lower fps for Snapshot */
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x341C, 0x0120, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA120, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0002, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		mdelay(5);
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA103, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0002, WORD_LEN);
+		if (rc < 0)
+			return rc;
+		break;
+
+	case SENSOR_RAW_SNAPSHOT_MODE:
+		/* Setting the effect to CAMERA_EFFECT_OFF */
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0x279B, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+			0x3390, 0x6440, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		/* Switch to lower fps for Snapshot */
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x341C, 0x0120, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA120, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0002, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		mdelay(5);
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x338C, 0xA103, WORD_LEN);
+		if (rc < 0)
+			return rc;
+
+		rc =
+			mt9d112_i2c_write(mt9d112_client->addr,
+				0x3390, 0x0002, WORD_LEN);
+		if (rc < 0)
+			return rc;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
 }
 
 static int mt9d112_sensor_init_probe(const struct msm_camera_sensor_info *data)
