@@ -22,6 +22,10 @@
 #include <asm/pgtable.h>
 #include <asm/tlbflush.h>
 
+#ifdef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+#include <asm/domain.h>
+#endif /* CONFIG_EMULATE_DOMAIN_MANAGER_V7 */
+
 #include "fault.h"
 
 
@@ -502,6 +506,11 @@ do_DataAbort(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 	const struct fsr_info *inf = fsr_info + (fsr & 15) + ((fsr & (1 << 10)) >> 6);
 	struct siginfo info;
 
+#ifdef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+	if (emulate_domain_manager_data_abort(fsr, addr))
+		return;
+#endif
+
 	if (!inf->fn(addr, fsr, regs))
 		return;
 
@@ -520,6 +529,11 @@ do_PrefetchAbort(unsigned long addr, unsigned int ifsr, struct pt_regs *regs)
 {
 	struct vm_area_struct *vma;
 	struct siginfo info;
+
+#ifdef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+	if (emulate_domain_manager_prefetch_abort(ifsr, addr))
+		return;
+#endif
 
 	do_translation_fault(addr, 0, regs);
 

@@ -12,6 +12,7 @@
  */
 #include <linux/linkage.h>
 #include <asm/assembler.h>
+#include <asm/domain.h>
 #include <asm/asm-offsets.h>
 #include <asm/hwcap.h>
 #include <asm/pgtable-hwdef.h>
@@ -93,6 +94,11 @@ ENDPROC(cpu_v7_dcache_clean_area)
  */
 ENTRY(cpu_v7_switch_mm)
 #ifdef CONFIG_MMU
+#ifdef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+	ldr	r2, =cpu_v7_switch_mm_private
+	b	emulate_domain_manager_switch_mm
+cpu_v7_switch_mm_private:
+#endif
 	mov	r2, #0
 	ldr	r1, [r1, #MM_CONTEXT_ID]	@ get mm->context.id
 	orr	r0, r0, #TTB_FLAGS
@@ -191,8 +197,10 @@ __v7_setup:
 	mcr	p15, 0, r10, c2, c0, 2		@ TTB control register
 	orr	r4, r4, #TTB_FLAGS
 	mcr	p15, 0, r4, c2, c0, 1		@ load TTB1
-	mov	r10, #0x1f			@ domains 0, 1 = manager
-	mcr	p15, 0, r10, c3, c0, 0		@ load domain access register
+#ifndef CONFIG_EMULATE_DOMAIN_MANAGER_V7
+	mov     r10, #0x1f                      @ domains 0, 1 = manager
+	mcr     p15, 0, r10, c3, c0, 0          @ load domain access register
+#endif
 #endif
 #ifdef CONFIG_ARCH_MSM_SCORPION
 #ifndef CONFIG_ARCH_MSM7X30
