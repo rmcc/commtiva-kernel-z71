@@ -271,3 +271,29 @@ config APM_EMULATION
 	  random kernel OOPSes or reboots that don't seem to be related to
 	  anything, try disabling/enabling this option (or disabling/enabling
 	  APM in your BIOS).
+
+config NPA
+	bool "Node Power Architecture(NPA) support"
+	default y
+	help
+	  Enable support for Node Power Architecture for aggressive
+	  resource power management. NPA provides an interface for resources
+	  to export their parameters and clients to request a value. The
+	  resources have additional facility to aggreate requests, calculate
+	  the resultant value, apply the value and notify the clients of
+	  change in state.
+
+config NPA_LOG
+	bool "Node Power Architecture(NPA) logging support"
+	depends on NPA
+	default y
+	help
+	  Enable logging support for NPA.
+
+config NPA_DEBUG
+	bool "Node Power Architecture(NPA) debug support"
+	depends on NPA
+	default n
+	help
+	  Exports functions that can debug or reset NPA internal
+	  data structures.
