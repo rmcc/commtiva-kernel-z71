@@ -2085,6 +2085,10 @@ msm_i2c_gpio_config(int iface, int config_type)
 static struct msm_i2c_platform_data msm_i2c_pdata = {
 	.clk_freq = 100000,
 	.rsl_id = SMEM_SPINLOCK_I2C,
+	.pri_clk = 95,
+	.pri_dat = 96,
+	.aux_clk = 60,
+	.aux_dat = 61,
 	.msm_i2c_config_gpio = msm_i2c_gpio_config,
 };
 
