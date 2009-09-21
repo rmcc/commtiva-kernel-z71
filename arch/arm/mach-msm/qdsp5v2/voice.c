@@ -65,6 +65,8 @@
 #include <linux/msm_audio.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <mach/dal.h>
+#include <linux/kthread.h>
+#include <linux/completion.h>
 
 #define VOICE_DALRPC_DEVICEID 0x02000075
 #define VOICE_DALRPC_PORT_NAME "DAL00"
@@ -130,11 +132,12 @@ struct voice_data {
 	int network; /* Network information */
 	int opened;
 	struct mutex lock;
-	wait_queue_head_t wait;
 	uint32_t rx_device;
 	uint32_t tx_device;
 	uint32_t rx_volume;
 	uint32_t tx_volume;
+	struct task_struct *task;
+	struct completion complete;
 };
 
 static struct voice_data voice;
@@ -158,13 +161,15 @@ static void remote_cb_function(void *context, u32 param,
 	case EVENT_ACQUIRE_START:
 		v->state = VOICE_ACQUIRED;
 		v->network = ((struct voice_network *)evt_buf)->network_info;
-		wake_up(&v->wait);
+		complete(&v->complete);
 		break;
 	case EVENT_DEVICE_DONE:
 		break;
 	case EVENT_RELEASE_START:
+		/* If ACQUIRED come in before the RELEASE,
+		* will only services the RELEASE */
 		v->state = VOICE_RELEASED;
-		wake_up(&v->wait);
+		complete(&v->complete);
 		break;
 	default:
 		pr_err("Undefined event %d \n", hdr->id);
@@ -256,192 +261,85 @@ static int voice_cmd_device_info(struct voice_data *v)
 	return err;
 }
 
-static int voice_open(struct inode *inode, struct file *f)
+static int voice_thread(void *data)
 {
-	int rc;
-	int err;
-
-	struct voice_data *v = &voice;
-
-	pr_debug("%s()\n", __func__);
-
-	mutex_lock(&v->lock);
-	if (v->opened) {
-		mutex_unlock(&v->lock);
-		return -EBUSY;
-	}
-
-	v->opened = 1;
-
-	if (v->handle == NULL) {
-		/* get device handle */
-		rc = daldevice_attach(VOICE_DALRPC_DEVICEID,
-				VOICE_DALRPC_PORT_NAME,
-				VOICE_DALRPC_CPU,
-				&v->handle);
-		if (rc) {
-			pr_err("Voc DALRPC call to Modem attach failed\n");
-			mutex_unlock(&v->lock);
-			return -ENODEV;
-		}
-		pr_debug("%s: v->handle =%d\n", __func__, (int) v->handle);
-		/* Allocate the callback handle */
-		v->cb_handle = dalrpc_alloc_cb(v->handle, remote_cb_function,
-						v);
-		if (v->cb_handle == NULL) {
-			pr_err("Allocate Callback failure\n");
-			daldevice_detach(v->handle);
-			v->handle = NULL;
-			mutex_unlock(&v->lock);
-			return -ENODEV;
-		}
-
-		/* setup the callback */
-		err = voice_cmd_init(v);
-		if (err)
-			return -ENODEV;
-	}
-
-	rc = wait_event_timeout(v->wait, v->state == VOICE_ACQUIRED,
-				15 * HZ);
-	if (rc == 0) {
-		pr_err("voice_open: ARM9 did not acquired the voice call");
-		mutex_unlock(&v->lock);
-		return -ENODEV;
-	}
-
-	f->private_data = v;
-	mutex_unlock(&v->lock);
-
-	return 0;
-}
-
-static int voice_release(struct inode *inode, struct file *f)
-{
-
+	struct voice_data *v = data;
 	int rc = 0;
-	struct voice_data *v = f->private_data;
 
-	pr_debug("%s()\n", __func__);
+	pr_info("voice_thread() start\n");
 
-	mutex_lock(&v->lock);
+	while (!kthread_should_stop()) {
+		wait_for_completion(&v->complete);
+		init_completion(&v->complete);
 
-	/* Need to send command to ADSP to stop */
-	rc = wait_event_timeout(v->wait, v->state == VOICE_RELEASED,
-				15 * HZ);
-	if (rc == 0)
-		pr_err("voice_open: voice call release fail");
-
-	v->opened = 0;
-
-	mutex_unlock(&v->lock);
-
-	voice_cmd_release_done(v);
-	dalrpc_dealloc_cb(v->handle, v->cb_handle);
-	daldevice_detach(v->handle);
-
+		switch (v->state) {
+		case VOICE_ACQUIRED:
+			rc = voice_cmd_device_info(v);
+			rc = voice_cmd_acquire_done(v);
+			break;
+		case VOICE_RELEASED:
+			/* release device */
+			voice_cmd_release_done(v);
+			break;
+		}
+	}
 	return 0;
 }
-
-static ssize_t voice_read(struct file *f, char __user *buf, size_t cnt,
-			loff_t *pos)
-{
-	pr_debug("%s()\n", __func__);
-	return -EINVAL;
-}
-
-static ssize_t voice_write(struct file *f, const char __user *buf, size_t cnt,
-			loff_t *pos)
-{
-	pr_debug("%s()\n", __func__);
-	return -EINVAL;
-}
-
-static int voice_ioctl(struct inode *ip, struct file *f,
-			 unsigned int cmd, unsigned long arg)
-{
-	int rc;
-	struct voice_data *v = f->private_data;
-
-	pr_debug("%s()\n", __func__);
-
-	mutex_lock(&v->lock);
-	switch (cmd) {
-	case AUDIO_START:
-		rc = voice_cmd_device_info(v);
-		if (rc)
-			break;
-		rc = voice_cmd_acquire_done(v);
-		break;
-	case AUDIO_STOP:
-		v->tx_volume = 0;
-		v->rx_volume = 0;
-		rc = voice_cmd_device_info(v);
-		break;
-	case AUDIO_GET_CONFIG: {
-		struct msm_audio_config config;
-		if (v->network == NETWORK_WCDMA_WB)
-			config.sample_rate = 16000;
-		else
-			config.sample_rate = 8000;
-		if (copy_to_user((void *) arg, &config, sizeof(config)))
-			rc = -EFAULT;
-		else
-			rc = 0;
-		}
-		break;
-	case AUDIO_SET_CONFIG:
-	default:
-		rc = -EINVAL;
-	}
-	mutex_unlock(&v->lock);
-	return rc;
-}
-
-static const struct file_operations voice_fops = {
-	.owner = THIS_MODULE,
-	.open = voice_open,
-	.release = voice_release,
-	.read = voice_read,
-	.write = voice_write,
-	.ioctl = voice_ioctl,
-};
-
-struct miscdevice voice_misc = {
-	.minor = MISC_DYNAMIC_MINOR,
-	.name = "msm_voice",
-	.fops = &voice_fops,
-};
-
 
 static int __init voice_init(void)
 {
 	int rc;
-	pr_debug("%s\n", __func__);
+	struct voice_data *v = &voice;
+	pr_info("%s\n", __func__);
 
 	mutex_init(&voice.lock);
-	init_waitqueue_head(&voice.wait);
-	voice.opened = 0;
-	voice.handle = NULL;
-	voice.cb_handle = NULL;
-	voice.state = VOICE_RELEASED;
-	voice.tx_device = 0;
-	voice.rx_device = 1;
-	voice.tx_volume = 5;
-	voice.rx_volume = 5;
+	v->opened = 0;
+	v->handle = NULL;
+	v->cb_handle = NULL;
+	v->state = VOICE_RELEASED;
+	v->tx_device = 0;
+	v->rx_device = 1;
+	v->tx_volume = 5;
+	v->rx_volume = 5;
+	init_completion(&voice.complete);
 
-	rc = misc_register(&voice_misc);
+	 /* get device handle */
+	rc = daldevice_attach(VOICE_DALRPC_DEVICEID,
+				VOICE_DALRPC_PORT_NAME,
+				VOICE_DALRPC_CPU,
+				&v->handle);
+	if (rc) {
+		pr_err("Voc DALRPC call to Modem attach failed\n");
+		goto done;
+	}
 
+	/* Allocate the callback handle */
+	v->cb_handle = dalrpc_alloc_cb(v->handle, remote_cb_function, v);
+	if (v->cb_handle == NULL) {
+		pr_err("Allocate Callback failure\n");
+		goto err;
+	}
+
+	/* setup the callback */
+	rc = voice_cmd_init(v);
+	if (rc)
+		goto err1;
+
+	/* create and start thread */
+	v->task = kthread_run(voice_thread, v, "voice");
+	if (IS_ERR(v->task)) {
+		rc = PTR_ERR(v->task);
+		v->task = NULL;
+	} else
+		goto done;
+
+err1:   dalrpc_dealloc_cb(v->handle, v->cb_handle);
+err:
+	daldevice_detach(v->handle);
+	v->handle = NULL;
+done:
 	return rc;
 }
 
-static void __exit voice_exit(void)
-{
-	pr_debug("%s\n", __func__);
-}
+late_initcall(voice_init);
 
-module_init(voice_init);
-module_exit(voice_exit);
-
-MODULE_DESCRIPTION("MSM Voice driver");
-MODULE_LICENSE("Dual BSD/GPL");
