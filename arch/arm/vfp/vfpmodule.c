@@ -340,6 +340,7 @@ int vfp_flush_context(void)
 #ifdef CONFIG_SMP
 	/* On SMP, if VFP is enabled, save the old state */
 	if ((fpexc & FPEXC_EN) && last_VFP_context[cpu]) {
+		last_VFP_context[cpu]->hard.cpu = cpu;
 #else
 	/* If there is a VFP context we must save it. */
 	if (last_VFP_context[cpu]) {
@@ -351,10 +352,9 @@ int vfp_flush_context(void)
 
 		/* disable, just in case */
 		fmxr(FPEXC, fmrx(FPEXC) & ~FPEXC_EN);
-
-		last_VFP_context[cpu] = NULL;
 		saved = 1;
 	}
+	last_VFP_context[cpu] = NULL;
 
 	local_irq_restore(flags);
 
