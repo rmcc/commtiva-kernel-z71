@@ -428,22 +428,29 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	int rc = 0;
 	unsigned int plls_enabled = 0, pll;
 
+	if (reason == SETRATE_CPUFREQ)
+		mutex_lock(&drv_state.lock);
+
 	strt_s = cur_s = drv_state.current_speed;
 
 	WARN_ONCE(cur_s == NULL, "acpuclk_set_rate: not initialized\n");
-	if (cur_s == NULL)
-		return -ENOENT;
+	if (cur_s == NULL) {
+		rc = -ENOENT;
+		goto out;
+	}
 
 	if (rate == (cur_s->a11clk_khz * 1000))
-		return 0;
+		goto out;
 
 	for (tgt_s = acpu_freq_tbl; tgt_s->a11clk_khz != 0; tgt_s++) {
 		if (tgt_s->a11clk_khz == (rate / 1000))
 			break;
 	}
 
-	if (tgt_s->a11clk_khz == 0)
-		return -EINVAL;
+	if (tgt_s->a11clk_khz == 0) {
+		rc = -EINVAL;
+		goto out;
+	}
 
 	/* Choose the highest speed at or below 'rate' with same PLL. */
 	if (reason != SETRATE_CPUFREQ
@@ -456,7 +463,6 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		plls_enabled |= 1 << strt_s->pll;
 
 	if (reason == SETRATE_CPUFREQ) {
-		mutex_lock(&drv_state.lock);
 		if (strt_s->pll != tgt_s->pll && tgt_s->pll != ACPU_PLL_TCXO) {
 			rc = pc_pll_request(tgt_s->pll, 1);
 			if (rc < 0) {
@@ -552,7 +558,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Nothing else to do for SWFI. */
 	if (reason == SETRATE_SWFI)
-		return 0;
+		goto out;
 
 	/* Change the AXI bus frequency if we can. */
 	if (strt_s->axiclk_khz != tgt_s->axiclk_khz) {
@@ -564,7 +570,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Nothing else to do for power collapse if not 7x27. */
 	if (reason == SETRATE_PC && !cpu_is_msm7x27())
-		return 0;
+		goto out;
 
 	/* Disable PLLs we are not using anymore. */
 	if (tgt_s->pll != ACPU_PLL_TCXO)
@@ -580,7 +586,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Nothing else to do for power collapse. */
 	if (reason == SETRATE_PC)
-		return 0;
+		goto out;
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
