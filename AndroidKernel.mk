@@ -15,6 +15,9 @@ $(KERNEL_CONFIG): $(KERNEL_OUT)
 $(TARGET_PREBUILT_KERNEL): $(KERNEL_OUT) $(KERNEL_CONFIG)
 	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi-
 
+kerneltags: $(KERNEL_OUT) $(KERNEL_CONFIG)
+	$(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- tags
+
 kernelconfig: $(KERNEL_OUT) $(KERNEL_CONFIG)
 	env KCONFIG_NOTIMESTAMP=true \
 	     $(MAKE) -C kernel O=../$(KERNEL_OUT) ARCH=arm CROSS_COMPILE=arm-eabi- menuconfig
