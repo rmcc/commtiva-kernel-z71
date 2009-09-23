@@ -139,7 +139,7 @@ void mdp4_display_intf_sel(int output, ulong intf)
   MSM_FB_INFO("mdp4_display_intf_sel: 0x%x\n", (int)inpdw(MDP_BASE + 0x0038));
 }
 
-unsigned long mdp4_dispaly_status(void)
+unsigned long mdp4_display_status(void)
 {
 	return inpdw(MDP_BASE + 0x0018) & 0x3ff;	/* MDP_DISPLAY_STATUS */
 }
@@ -190,8 +190,14 @@ void mdp4_hw_init(void)
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
-	/* DMA_E always in reset,so ignore DMA_E for the time being */
+#ifdef MDP4_ERROR
+	/*
+	 * Issue software reset on DMA_P will casue DMA_P dma engine stall
+	 * on LCDC mode. However DMA_P does not stall at MDDI mode.
+	 * This need further investigation.
+	 */
 	mdp4_sw_reset(0x17);
+#endif
 
 	mdp4_clear_lcdc();
 
@@ -219,8 +225,8 @@ void mdp4_hw_init(void)
 	/* dma_p fetch config */
 	outpdw(MDP_BASE + 0x91004, 0x27);	/* burst size of 8 */
 
-	mdp4_overlay_cfg(OVERLAY0_MIXER, OVERLAY_MODE_BLT,
-			OVERLAY_REFRESH_ON_DEMAND, OVERLAY_FRAMEBUF);
+	/* both REFRESH_MODE and DIRECT_OUT are ignored at BLT mode */
+	mdp4_overlay_cfg(OVERLAY0_MIXER, OVERLAY_MODE_BLT, 0, 0);
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -262,11 +268,10 @@ static int intr_overlay1;
 
 irqreturn_t mdp4_isr(int irq, void *ptr)
 {
-	uint32 isr, mask;
+	uint32 isr, mask, lcdc;
 	struct mdp_dma_data *dma;
 
 	mdp_is_in_isr = TRUE;
-
 
 	while (1) {
 		isr = inpdw(MDP_INTR_STATUS);
@@ -283,10 +288,18 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 
 		if (isr & INTR_DMA_P_DONE) {
 			intr_dma_p++;
+			lcdc = inpdw(MDP_BASE + 0xc0000);
 			dma = &dma2_data;
-			dma->busy = FALSE;
-			mdp_pipe_ctrl(MDP_DMA2_BLOCK,
+			if (lcdc & 0x01) {	/* LCDC enable */
+				/* disable LCDC interrupt */
+				mdp_intr_mask &= ~INTR_DMA_P_DONE;
+				outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+				dma->waiting = FALSE;
+			} else {
+				dma->busy = FALSE;
+				mdp_pipe_ctrl(MDP_DMA2_BLOCK,
 					MDP_BLOCK_POWER_OFF, TRUE);
+			}
 			complete(&dma->comp);
 		}
 		if (isr & INTR_DMA_S_DONE) {
@@ -339,7 +352,6 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 				complete(&mdp_hist_comp);
 			}
 		}
-
 	}
 
 	mdp_is_in_isr = FALSE;

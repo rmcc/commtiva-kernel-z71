@@ -985,20 +985,23 @@ static struct platform_device msm_device_kgsl = {
 static unsigned wega_reset_gpio =
 	GPIO_CFG(180, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
 
-static int mddi_toshiba_power_on(void)
+static int toshiba_wega_power(int on)
 {
 	int rc;
-	struct vreg *vreg_ldo20, *vreg_ldo12, *vreg_ldo16, *vreg_ldo15;
+	struct vreg *vreg_ldo12, *vreg_ldo15;
+	struct vreg *vreg_ldo20, *vreg_ldo16;
 
-	/* reset Toshiba WeGA chip -- toggle reset pin -- gpio_180 */
-	rc = gpio_tlmm_config(wega_reset_gpio, GPIO_ENABLE);
-	if (rc) {
-		pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
-			       __func__, wega_reset_gpio, rc);
-		return rc;
+	if (on) {
+		/* reset Toshiba WeGA chip -- toggle reset pin -- gpio_180 */
+		rc = gpio_tlmm_config(wega_reset_gpio, GPIO_ENABLE);
+		if (rc) {
+			pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
+				       __func__, wega_reset_gpio, rc);
+			return rc;
+		}
+
+		gpio_set_value(180, 0);	/* bring reset line low to hold reset*/
 	}
-
-	gpio_set_value(180, 0);	/* bring reset line low to hold reset*/
 
 	/* Toshiba WeGA power -- has 3 power source */
 	/* 1.5V -- LDO20*/
@@ -1044,6 +1047,7 @@ static int mddi_toshiba_power_on(void)
 		       __func__, rc);
 		return rc;
 	}
+
 	rc = vreg_set_level(vreg_ldo12, 1800);
 	if (rc) {
 		pr_err("%s: vreg LDO12 set level failed (%d)\n",
@@ -1065,28 +1069,44 @@ static int mddi_toshiba_power_on(void)
 		return rc;
 	}
 
-	rc = vreg_enable(vreg_ldo20);
+	if (on)
+		rc = vreg_enable(vreg_ldo20);
+	else
+		rc = vreg_disable(vreg_ldo20);
+
 	if (rc) {
 		pr_err("%s: LDO20 vreg enable failed (%d)\n",
 		       __func__, rc);
 		return rc;
 	}
 
-	rc = vreg_enable(vreg_ldo12);
+	if (on)
+		rc = vreg_enable(vreg_ldo12);
+	else
+		rc = vreg_disable(vreg_ldo12);
+
 	if (rc) {
 		pr_err("%s: LDO12 vreg enable failed (%d)\n",
 		       __func__, rc);
 		return rc;
 	}
 
-	rc = vreg_enable(vreg_ldo16);
+	if (on)
+		rc = vreg_enable(vreg_ldo16);
+	else
+		rc = vreg_disable(vreg_ldo16);
+
 	if (rc) {
 		pr_err("%s: LDO16 vreg enable failed (%d)\n",
 		       __func__, rc);
 		return rc;
 	}
 
-	rc = vreg_enable(vreg_ldo15);
+	if (on)
+		rc = vreg_enable(vreg_ldo15);
+	else
+		rc = vreg_disable(vreg_ldo15);
+
 	if (rc) {
 		pr_err("%s: LDO15 vreg enable failed (%d)\n",
 		       __func__, rc);
@@ -1095,8 +1115,10 @@ static int mddi_toshiba_power_on(void)
 
 	mdelay(5);		/* ensure power is stable */
 
-	gpio_set_value(180, 1);	/* bring reset line high */
-	mdelay(10);		/* 10 msec before IO can be accessed */
+	if (on) {
+		gpio_set_value(180, 1);	/* bring reset line high */
+		mdelay(10);		/* 10 msec before IO can be accessed */
+	}
 
 	return 0;
 }
@@ -1108,19 +1130,96 @@ static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 }
 
 static struct mddi_platform_data mddi_pdata = {
-	.mddi_power_on = mddi_toshiba_power_on,
+	.mddi_power_on = toshiba_wega_power,
 	.mddi_sel_clk = msm_fb_mddi_sel_clk,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
-	.gpio = 92,
+	.gpio = 30,
+};
+
+static int lcd_panel_spi_gpio_num[] = {
+			45, /* spi_clk */
+			46, /* spi_cs  */
+			47, /* spi_mosi */
+			48, /* spi_miso */
+		};
+
+static struct msm_gpio lcd_panel_gpios[] = {
+	{ GPIO_CFG(18, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn0" },
+	{ GPIO_CFG(19, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn1" },
+	{ GPIO_CFG(20, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu0" },
+	{ GPIO_CFG(21, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu1" },
+	{ GPIO_CFG(22, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu2" },
+	{ GPIO_CFG(23, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red0" },
+	{ GPIO_CFG(24, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red1" },
+	{ GPIO_CFG(25, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red2" },
+	{ GPIO_CFG(45, 0, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_clk" },
+	{ GPIO_CFG(46, 0, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_cs0" },
+	{ GPIO_CFG(47, 0, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_mosi" },
+	{ GPIO_CFG(48, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_miso" },
+	{ GPIO_CFG(90, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_pclk" },
+	{ GPIO_CFG(91, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_en" },
+	{ GPIO_CFG(92, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_vsync" },
+	{ GPIO_CFG(93, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_hsync" },
+	{ GPIO_CFG(94, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn2" },
+	{ GPIO_CFG(95, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn3" },
+	{ GPIO_CFG(96, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn4" },
+	{ GPIO_CFG(97, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn5" },
+	{ GPIO_CFG(98, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn6" },
+	{ GPIO_CFG(99, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_grn7" },
+	{ GPIO_CFG(100, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu3" },
+	{ GPIO_CFG(101, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu4" },
+	{ GPIO_CFG(102, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu5" },
+	{ GPIO_CFG(103, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu6" },
+	{ GPIO_CFG(104, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_blu7" },
+	{ GPIO_CFG(105, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red3" },
+	{ GPIO_CFG(106, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red4" },
+	{ GPIO_CFG(107, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red5" },
+	{ GPIO_CFG(108, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red6" },
+	{ GPIO_CFG(109, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_2MA), "lcdc_red7" },
+};
+
+static void lcdc_toshiba_panel_power(int on)
+{
+	int rc;
+
+	toshiba_wega_power(on);
+
+	if (on) {
+		rc = msm_gpios_enable(lcd_panel_gpios,
+				ARRAY_SIZE(lcd_panel_gpios));
+		if (rc < 0) {
+			printk(KERN_ERR "%s: gpio config failed: %d\n",
+				__func__, rc);
+		}
+	} else
+		msm_gpios_disable(lcd_panel_gpios,
+				ARRAY_SIZE(lcd_panel_gpios));
+}
+
+static struct lcdc_platform_data lcdc_pdata = {
+	.lcdc_power_save   = lcdc_toshiba_panel_power,
 };
 
 static void __init msm_fb_add_devices(void)
 {
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("pmdh", &mddi_pdata);
+	msm_fb_register_device("lcdc", &lcdc_pdata);
 }
+
+static struct msm_panel_common_pdata lcdc_toshiba_panel_data = {
+	.gpio_num          = lcd_panel_spi_gpio_num,
+};
+
+static struct platform_device lcdc_toshiba_panel_device = {
+	.name   = "lcdc_toshiba_wvga",
+	.id     = 0,
+	.dev    = {
+		.platform_data = &lcdc_toshiba_panel_data,
+	}
+};
 
 #if defined(CONFIG_MARIMBA_CORE) && \
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
@@ -1290,6 +1389,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&msm_fb_device,
+	&lcdc_toshiba_panel_device,
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_adsp_device,
 	&msm_device_i2c,

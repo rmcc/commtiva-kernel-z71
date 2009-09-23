@@ -75,6 +75,7 @@
 
 #include "mdp.h"
 #include "msm_fb.h"
+#include "mdp4.h"
 
 #ifdef CONFIG_FB_MSM_MDP40
 #define LCDC_BASE	0xC0000
@@ -249,12 +250,19 @@ int mdp_lcdc_on(struct platform_device *pdev)
 		active_v_end = 0;
 	}
 
+
+#ifdef CONFIG_FB_MSM_MDP40
+	hsync_polarity = 1;
+	vsync_polarity = 1;
+	lcdc_underflow_clr |= 0x80000000;	/* enable recovery */
+#else
 	hsync_polarity = 0;
 	vsync_polarity = 0;
+#endif
 	data_en_polarity = 0;
 
 	ctrl_polarity =
-	    (hsync_polarity << 2) | (vsync_polarity << 1) | (hsync_polarity);
+	    (data_en_polarity << 2) | (vsync_polarity << 1) | (hsync_polarity);
 
 	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x4, hsync_ctrl);
 	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x8, vsync_period);
@@ -273,7 +281,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	ret = panel_next_on(pdev);
 	if (ret == 0) {
 		/* enable LCDC block */
-		MDP_OUTP(MDP_BASE + 0xE0000, 1);
+		MDP_OUTP(MDP_BASE + LCDC_BASE, 1);
 		mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	}
 	/* MDP cmd block disable */
@@ -325,17 +333,15 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	INIT_COMPLETION(mfd->dma->comp);
 	mfd->dma->waiting = TRUE;
 #ifdef CONFIG_FB_MSM_MDP40
-	/*
-	 * mdp4 has different interrupt mechanism
-	 * and it will be add later.
-	 */
+	outp32(MDP_INTR_CLEAR, INTR_DMA_P_DONE);
+	mdp_intr_mask |= INTR_DMA_P_DONE;
+	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 #else
 	outp32(MDP_INTR_CLEAR, LCDC_FRAME_START);
 	mdp_intr_mask |= LCDC_FRAME_START;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 #endif
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-
 	wait_for_completion_killable(&mfd->dma->comp);
 	mdp_disable_irq(MDP_DMA2_TERM);
 }
