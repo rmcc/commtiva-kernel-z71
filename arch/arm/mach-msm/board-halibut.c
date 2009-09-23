@@ -1309,7 +1309,6 @@ static void __init halibut_init(void)
 	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
 			      &msm_device_uart3.dev, 1);
 #endif
-	msm_hsusb_pdata.max_axi_khz = clk_get_max_axi_khz();
 	msm_hsusb_pdata.soc_version = socinfo_get_version();
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */

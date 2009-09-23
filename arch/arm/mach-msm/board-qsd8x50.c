@@ -551,7 +551,6 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.config_gpio    = NULL,
 
 	.phy_reset = msm_hsusb_native_phy_reset,
-	.max_axi_khz = 128000,
 };
 
 static struct vreg *vreg_usb;
