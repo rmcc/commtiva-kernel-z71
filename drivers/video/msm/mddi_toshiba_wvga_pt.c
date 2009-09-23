@@ -64,10 +64,18 @@ static int __init mddi_toshiba_wvga_pt_init(void)
 {
 	int ret;
 	struct msm_panel_info pinfo;
-
 #ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
-	if (msm_fb_detect_client("mddi_toshiba_wvga_pt"))
+	uint id;
+
+	ret = msm_fb_detect_client("mddi_toshiba_wvga_pt");
+	if (ret == -ENODEV)
 		return 0;
+
+	if (ret) {
+		id = mddi_get_client_id();
+		if (id != 0xd2638722)
+			return 0;
+	}
 #endif
 
 	pinfo.xres = 480;

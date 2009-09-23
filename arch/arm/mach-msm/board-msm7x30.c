@@ -894,7 +894,20 @@ static struct resource msm_fb_resources[] = {
 	}
 };
 
-static struct msm_fb_platform_data msm_fb_pdata;
+static int msm_fb_detect_panel(const char *name)
+{
+	if (!strncmp(name, "mddi_toshiba_wvga_pt", 20))
+		return -EPERM;
+	else if (!strncmp(name, "lcdc_toshiba_wvga_pt", 20))
+		return -EPERM;
+	else
+		return -ENODEV;
+}
+
+static struct msm_fb_platform_data msm_fb_pdata = {
+	.detect_client = msm_fb_detect_panel,
+	.mddi_prescan = 1,
+};
 
 static struct platform_device msm_fb_device = {
 	.name   = "msm_fb",
