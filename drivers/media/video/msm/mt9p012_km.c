@@ -973,7 +973,7 @@ static int mt9p012_probe_init_sensor(const struct msm_camera_sensor_info *data)
 		goto init_probe_fail;
 	}
 
-	rc = mt9p012_i2c_write_w(mt9p012_client->addr, 0x306E, 0x9080);
+	rc = mt9p012_i2c_write_w(mt9p012_client->addr, 0x306E, 0x9000);
 	if (rc < 0) {
 		CDBG("REV_7 write failed. rc = %d\n", rc);
 		goto init_probe_fail;
