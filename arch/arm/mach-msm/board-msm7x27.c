@@ -458,7 +458,7 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_BUDDYBESTFIT,
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
 
@@ -1587,7 +1587,7 @@ static void __init msm_msm7x27_allocate_memory_regions(void)
 
 	size = pmem_gpu1_size;
 	if (size) {
-		addr = alloc_bootmem_aligned(size, 0x100000);
+		addr = alloc_bootmem(size);
 		android_pmem_gpu1_pdata.start = __pa(addr);
 		android_pmem_gpu1_pdata.size = size;
 		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
@@ -1602,7 +1602,7 @@ static void __init msm_msm7x27_allocate_memory_regions(void)
 		size, addr, __pa(addr));
 
 	size = gpu_phys_size ? : MSM_GPU_PHYS_SIZE;
-	addr = alloc_bootmem_aligned(size, 0x100000);
+	addr = alloc_bootmem(size);
 	kgsl_resources[1].start = __pa(addr);
 	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for KGSL\n",

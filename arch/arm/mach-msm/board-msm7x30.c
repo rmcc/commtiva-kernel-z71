@@ -1884,7 +1884,7 @@ static void __init msm7x30_allocate_memory_regions(void)
 
 	size = pmem_gpu1_size;
 	if (size) {
-		addr = alloc_bootmem_aligned(size, 0x100000);
+		addr = alloc_bootmem(size);
 		android_pmem_gpu1_pdata.start = __pa(addr);
 		android_pmem_gpu1_pdata.size = size;
 		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
@@ -1893,7 +1893,7 @@ static void __init msm7x30_allocate_memory_regions(void)
 
 	size = gpu_phys_size;
 	if (size) {
-		addr = alloc_bootmem_aligned(size, 0x100000);
+		addr = alloc_bootmem(size);
 		kgsl_resources[1].start = __pa(addr);
 		kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
 		pr_info("allocating %lu bytes at %p (%lx physical) for "
