@@ -360,7 +360,8 @@ static int __devinit hs_rpc_init(void)
 
 	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa() ||
 		machine_is_qsd8x50_surf() || machine_is_qsd8x50_ffa() ||
-		machine_is_msm7x30_surf() || machine_is_msm7x30_ffa()) {
+		machine_is_msm7x30_surf() || machine_is_msm7x30_ffa() ||
+		machine_is_msm7x25_surf() || machine_is_msm7x25_ffa()) {
 		rc = hs_rpc_cb_init();
 		if (rc)
 			pr_err("%s: failed to initialize\n", __func__);

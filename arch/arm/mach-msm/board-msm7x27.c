@@ -63,15 +63,26 @@
 #include <linux/usb/android.h>
 #endif
 #include "pm.h"
+#ifdef CONFIG_ARCH_MSM7X27
 #include <linux/msm_kgsl.h>
+#endif
 
+
+#ifdef CONFIG_ARCH_MSM7X25
+#define MSM_PMEM_MDP_SIZE	0x800000
+#define MSM_PMEM_ADSP_SIZE	0x800000
+#define MSM_PMEM_GPU1_SIZE	0x800000
+#define MSM_FB_SIZE		0x200000
+#endif
+
+#ifdef CONFIG_ARCH_MSM7X27
 #define MSM_PMEM_MDP_SIZE	0x1600000
 #define MSM_PMEM_ADSP_SIZE	0xC1B000
 #define MSM_PMEM_GPU1_SIZE	0x1C00000
 #define MSM_FB_SIZE		0x200000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
-
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
+#endif
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -433,6 +444,7 @@ static struct platform_device msm_device_adspdec = {
 	},
 };
 
+#ifdef CONFIG_ARCH_MSM7X27
 static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 	.name = PMEM_KERNEL_EBI1_DATA_NAME,
 	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
@@ -443,6 +455,7 @@ static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 	 */
 	.cached = 0,
 };
+#endif
 
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
@@ -480,6 +493,15 @@ static struct platform_device android_pmem_gpu1_device = {
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
 };
 
+#ifdef CONFIG_ARCH_MSM7X27
+static struct platform_device android_pmem_kernel_ebi1_device = {
+	.name = "android_pmem",
+	.id = 4,
+	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
+};
+
+#endif
+
 static struct platform_device hs_device = {
 	.name   = "msm-handset",
 	.id     = -1,
@@ -488,11 +510,6 @@ static struct platform_device hs_device = {
 	},
 };
 
-static struct platform_device android_pmem_kernel_ebi1_device = {
-	.name = "android_pmem",
-	.id = 4,
-	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
-};
 
 #define GPIO_OUT_132    132
 #define GPIO_OUT_131    131
@@ -609,7 +626,7 @@ static int msm_fb_detect_panel(const char *name)
 {
 	int ret = -EPERM;
 
-	if (machine_is_msm7x27_ffa() || machine_is_msm7x27_ffa()) {
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa()) {
 		if (!strcmp(name, "lcdc_gordon_vga"))
 			ret = 0;
 		else
@@ -748,6 +765,7 @@ static void __init bt_power_init(void)
 #define bt_power_init(x) do {} while (0)
 #endif
 
+#ifdef CONFIG_ARCH_MSM7X27
 static struct resource kgsl_resources[] = {
 	{
 		.name = "kgsl_reg_memory",
@@ -779,6 +797,7 @@ static struct platform_device msm_device_kgsl = {
 		.platform_data = &kgsl_pdata,
 	},
 };
+#endif
 
 static struct platform_device msm_device_pmic_leds = {
 	.name   = "pmic-leds",
@@ -1055,7 +1074,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&smc91x_device,
 	&msm_device_tssc,
+#ifdef CONFIG_ARCH_MSM7X27
 	&android_pmem_kernel_ebi1_device,
+#endif
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 	&android_pmem_gpu1_device,
@@ -1084,7 +1105,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_camera_sensor_vb6801,
 #endif
 	&msm_bluesleep_device,
+#ifdef CONFIG_ARCH_MSM7X27
 	&msm_device_kgsl,
+#endif
 	&hs_device,
 	&msm_batt_device,
 };
@@ -1102,12 +1125,12 @@ static void __init msm_fb_add_devices(void)
 
 extern struct sys_timer msm_timer;
 
-static void __init msm7x27_init_irq(void)
+static void __init msm7x2x_init_irq(void)
 {
 	msm_init_irq();
 }
 
-static struct msm_acpu_clock_platform_data msm7x27_clock_data = {
+static struct msm_acpu_clock_platform_data msm7x2x_clock_data = {
 	.acpu_switch_time_us = 50,
 	.max_speed_delta_khz = 256000,
 	.vdd_switch_time_us = 62,
@@ -1119,6 +1142,7 @@ static struct msm_acpu_clock_platform_data msm7x27_clock_data = {
 void msm_serial_debug_init(unsigned int base, int irq,
 			   struct device *clk_device, int signal_irq);
 
+#ifdef CONFIG_MMC
 static void sdcc_gpio_init(void)
 {
 	/* SDC1 GPIOs */
@@ -1137,7 +1161,7 @@ static void sdcc_gpio_init(void)
 		pr_err("failed to request gpio sdc1_clk\n");
 #endif
 
-	if (machine_is_msm7x27_ffa() || machine_is_msm7x27_ffa())
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
 		return;
 
 	/* SDC2 GPIOs */
@@ -1268,7 +1292,8 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 		clear_bit(pdev->id, &vreg_sts);
 
 		if (!vreg_sts) {
-			if (machine_is_msm7x27_ffa()) {
+			if (machine_is_msm7x25_ffa() ||
+					machine_is_msm7x27_ffa()) {
 				rc = mpp_config_digital_out(mpp_mmc,
 				     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
 				     MPP_DLOGIC_OUT_CTRL_LOW));
@@ -1282,7 +1307,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	}
 
 	if (!vreg_sts) {
-		if (machine_is_msm7x27_ffa()) {
+		if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa()) {
 			rc = mpp_config_digital_out(mpp_mmc,
 			     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
 			     MPP_DLOGIC_OUT_CTRL_HIGH));
@@ -1299,14 +1324,14 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	return 0;
 }
 
-static struct mmc_platform_data msm7x27_sdcc_data = {
+static struct mmc_platform_data msm7x2x_sdcc_data = {
 	.ocr_mask	= MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
 };
 
-static void __init msm7x27_init_mmc(void)
+static void __init msm7x2x_init_mmc(void)
 {
-	if (machine_is_msm7x27_ffa()) {
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa()) {
 		mpp_mmc = mpp_get(NULL, "mpp3");
 		if (!mpp_mmc) {
 			printk(KERN_ERR "%s: mpp get failed (%ld)\n",
@@ -1324,21 +1349,33 @@ static void __init msm7x27_init_mmc(void)
 
 	sdcc_gpio_init();
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
-	msm_add_sdcc(1, &msm7x27_sdcc_data);
+	msm_add_sdcc(1, &msm7x2x_sdcc_data);
 #endif
 
-	if (machine_is_msm7x27_surf()) {
+	if (machine_is_msm7x25_surf() || machine_is_msm7x27_surf()) {
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-		msm_add_sdcc(2, &msm7x27_sdcc_data);
+		msm_add_sdcc(2, &msm7x2x_sdcc_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
-		msm_add_sdcc(3, &msm7x27_sdcc_data);
+		msm_add_sdcc(3, &msm7x2x_sdcc_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
-		msm_add_sdcc(4, &msm7x27_sdcc_data);
+		msm_add_sdcc(4, &msm7x2x_sdcc_data);
 #endif
 	}
 }
+#else
+#define msm7x2x_init_mmc() do {} while (0)
+#endif
+
+
+static struct msm_pm_platform_data msm7x25_pm_data[MSM_PM_SLEEP_MODE_NR] = {
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
+
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].latency = 12000,
+
+	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency = 2000,
+};
 
 static struct msm_pm_platform_data msm7x27_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].supported = 1,
@@ -1407,13 +1444,19 @@ static void __init msm_device_i2c_init(void)
 	if (gpio_request(96, "i2c_sec_dat"))
 		pr_err("failed to request gpio i2c_sec_dat\n");
 
-	msm_i2c_pdata.pm_lat =
+	if (cpu_is_msm7x27())
+		msm_i2c_pdata.pm_lat =
 		msm7x27_pm_data[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN]
 		.latency;
+	else
+		msm_i2c_pdata.pm_lat =
+		msm7x25_pm_data[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN]
+		.latency;
+
 	msm_device_i2c.dev.platform_data = &msm_i2c_pdata;
 }
 
-static void __init msm7x27_init(void)
+static void __init msm7x2x_init(void)
 {
 	if (socinfo_init() < 0)
 		BUG();
@@ -1422,7 +1465,7 @@ static void __init msm7x27_init(void)
 	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
 			&msm_device_uart3.dev, 1);
 #endif
-	if (machine_is_msm7x27_ffa()) {
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa()) {
 		smc91x_resources[0].start = 0x98000300;
 		smc91x_resources[0].end = 0x980003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(85);
@@ -1437,23 +1480,26 @@ static void __init msm7x27_init(void)
 				__func__);
 		}
 
-		msm7x27_clock_data.max_axi_khz = 160000;
+		msm7x2x_clock_data.max_axi_khz = 160000;
 	}
 
 	if (cpu_is_msm7x27())
-		msm7x27_clock_data.max_axi_khz = 200000;
+		msm7x2x_clock_data.max_axi_khz = 200000;
 
-	msm_acpu_clock_init(&msm7x27_clock_data);
+	msm_acpu_clock_init(&msm7x2x_clock_data);
 
+#ifdef CONFIG_ARCH_MSM7X27
 	/* This value has been set to 160000 for power savings. */
 	/* OEMs may modify the value at their discretion for performance */
 	/* The appropriate maximum replacement for 160000 is: */
 	/* clk_get_max_axi_khz() */
 	kgsl_pdata.max_axi_freq = 160000;
+#endif
 
 	msm_hsusb_pdata.swfi_latency =
 		msm7x27_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
+
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
@@ -1466,28 +1512,30 @@ static void __init msm7x27_init(void)
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
 
 #ifdef CONFIG_SURF_FFA_GPIO_KEYPAD
-	if (machine_is_msm7x27_ffa())
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
 		platform_device_register(&keypad_device_7k_ffa);
 	else
 		platform_device_register(&keypad_device_surf);
 #endif
 	lcdc_gordon_gpio_init();
 	msm_fb_add_devices();
-	msm7x27_init_mmc();
+	msm7x2x_init_mmc();
 	bt_power_init();
 
 	if (cpu_is_msm7x27())
 		msm_pm_set_platform_data(msm7x27_pm_data);
 	else
-		msm_pm_set_platform_data(msm7x27_pm_data);
+		msm_pm_set_platform_data(msm7x25_pm_data);
 }
 
+#ifdef CONFIG_ARCH_MSM7X27
 static unsigned pmem_kernel_ebi1_size = PMEM_KERNEL_EBI1_SIZE;
 static void __init pmem_kernel_ebi1_size_setup(char **p)
 {
 	pmem_kernel_ebi1_size = memparse(*p, p);
 }
 __early_param("pmem_kernel_ebi1_size=", pmem_kernel_ebi1_size_setup);
+#endif
 
 static unsigned pmem_mdp_size = MSM_PMEM_MDP_SIZE;
 static void __init pmem_mdp_size_setup(char **p)
@@ -1517,26 +1565,19 @@ static void __init fb_size_setup(char **p)
 }
 __early_param("fb_size=", fb_size_setup);
 
+#ifdef CONFIG_ARCH_MSM7X27
 static unsigned gpu_phys_size = MSM_GPU_PHYS_SIZE;
 static void __init gpu_phys_size_setup(char **p)
 {
 	gpu_phys_size = memparse(*p, p);
 }
 __early_param("gpu_phys_size=", gpu_phys_size_setup);
+#endif
 
-static void __init msm_msm7x27_allocate_memory_regions(void)
+static void __init msm_msm7x2x_allocate_memory_regions(void)
 {
 	void *addr;
 	unsigned long size;
-
-	size = pmem_kernel_ebi1_size;
-	if (size) {
-		addr = alloc_bootmem_aligned(size, 0x100000);
-		android_pmem_kernel_ebi1_pdata.start = __pa(addr);
-		android_pmem_kernel_ebi1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for kernel"
-			" ebi1 pmem arena\n", size, addr, __pa(addr));
-	}
 
 	size = pmem_mdp_size;
 	if (size) {
@@ -1572,15 +1613,28 @@ static void __init msm_msm7x27_allocate_memory_regions(void)
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
 
+#ifdef CONFIG_ARCH_MSM7X27
+
 	size = gpu_phys_size ? : MSM_GPU_PHYS_SIZE;
 	addr = alloc_bootmem(size);
 	kgsl_resources[1].start = __pa(addr);
 	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for KGSL\n",
 		size, addr, __pa(addr));
+
+	size = pmem_kernel_ebi1_size;
+	if (size) {
+		addr = alloc_bootmem_aligned(size, 0x100000);
+		android_pmem_kernel_ebi1_pdata.start = __pa(addr);
+		android_pmem_kernel_ebi1_pdata.size = size;
+		pr_info("allocating %lu bytes at %p (%lx physical) for kernel"
+			" ebi1 pmem arena\n", size, addr, __pa(addr));
+	}
+#endif
+
 }
 
-static void __init msm7x27_map_io(void)
+static void __init msm7x2x_map_io(void)
 {
 	msm_map_common_io();
 	/* Technically dependent on the SoC but using machine_is
@@ -1590,9 +1644,11 @@ static void __init msm7x27_map_io(void)
 	 */
 	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa())
 		msm_clock_init(msm_clocks_7x27, msm_num_clocks_7x27);
-	else
-		msm_clock_init(msm_clocks_7x27, msm_num_clocks_7x27);
-	msm_msm7x27_allocate_memory_regions();
+
+	if (machine_is_msm7x25_surf() || machine_is_msm7x25_ffa())
+		msm_clock_init(msm_clocks_7x25, msm_num_clocks_7x25);
+
+	msm_msm7x2x_allocate_memory_regions();
 
 #ifdef CONFIG_CACHE_L2X0
 	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa()) {
@@ -1611,9 +1667,9 @@ MACHINE_START(MSM7X27_SURF, "QCT MSM7x27 SURF")
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
 	.boot_params	= 0x00200100,
-	.map_io		= msm7x27_map_io,
-	.init_irq	= msm7x27_init_irq,
-	.init_machine	= msm7x27_init,
+	.map_io		= msm7x2x_map_io,
+	.init_irq	= msm7x2x_init_irq,
+	.init_machine	= msm7x2x_init,
 	.timer		= &msm_timer,
 MACHINE_END
 
@@ -1623,8 +1679,32 @@ MACHINE_START(MSM7X27_FFA, "QCT MSM7x27 FFA")
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
 	.boot_params	= 0x00200100,
-	.map_io		= msm7x27_map_io,
-	.init_irq	= msm7x27_init_irq,
-	.init_machine	= msm7x27_init,
+	.map_io		= msm7x2x_map_io,
+	.init_irq	= msm7x2x_init_irq,
+	.init_machine	= msm7x2x_init,
+	.timer		= &msm_timer,
+MACHINE_END
+
+MACHINE_START(MSM7X25_SURF, "QCT MSM7x25 SURF")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io        = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params	= 0x00200100,
+	.map_io		= msm7x2x_map_io,
+	.init_irq	= msm7x2x_init_irq,
+	.init_machine	= msm7x2x_init,
+	.timer		= &msm_timer,
+MACHINE_END
+
+MACHINE_START(MSM7X25_FFA, "QCT MSM7x25 FFA")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io        = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params	= 0x00200100,
+	.map_io		= msm7x2x_map_io,
+	.init_irq	= msm7x2x_init_irq,
+	.init_machine	= msm7x2x_init,
 	.timer		= &msm_timer,
 MACHINE_END

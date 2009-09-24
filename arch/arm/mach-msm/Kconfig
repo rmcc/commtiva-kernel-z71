@@ -26,6 +26,11 @@ config ARCH_QSD8X50
 	select EMULATE_DOMAIN_MANAGER_V7
 	select VERIFY_PERMISSION_FAULT
 
+config ARCH_MSM7X25
+	bool "MSM7x25"
+	select ARCH_MSM_ARM11
+	select CPU_V6
+
 endchoice
 
 config  ARCH_MSM_ARM11
@@ -126,6 +131,22 @@ config MACH_QSD8X50_COMET
 	bool "QSD8x50 Comet"
 	help
 	  Support for the Qualcomm Comet eval board.
+
+config MACH_MSM7X25_SURF
+	depends on ARCH_MSM7X25
+	depends on !MSM_STACKED_MEMORY
+	default y
+	bool "MSM7x25 SURF"
+	help
+	  Support for the Qualcomm MSM7x25 SURF eval board.
+
+config MACH_MSM7X25_FFA
+	depends on ARCH_MSM7X25
+	depends on !MSM_STACKED_MEMORY
+	default y
+	bool "MSM7x25 FFA"
+	help
+	  Support for the Qualcomm MSM7x25 FFA eval board.
 
 endmenu
 
