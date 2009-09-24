@@ -197,7 +197,7 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 	list_del(&private->list);
 
 	for (i = 0; i < KGSL_CONTEXT_MAX; i++)
-		if (private->ctxt_id_mask && (1 << i))
+		if (private->ctxt_id_mask & (1 << i))
 			kgsl_drawctxt_destroy(&kgsl_driver.yamato_device, i);
 
 	list_for_each_entry_safe(entry, entry_tmp, &private->pmem_list, list)
