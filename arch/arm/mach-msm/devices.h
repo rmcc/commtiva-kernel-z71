@@ -52,6 +52,8 @@ extern struct platform_device msm_device_nand;
 
 extern struct platform_device msm_device_tssc;
 
+extern struct platform_device msm_rotator_device;
+
 extern struct platform_device msm_device_tsif;
 
 #ifdef CONFIG_I2C_SSBI

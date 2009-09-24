@@ -908,6 +908,28 @@ struct platform_device msm_device_tssc = {
 	.resource = resources_tssc,
 };
 
+#ifdef CONFIG_MSM_ROTATOR
+static struct resource resources_msm_rotator[] = {
+	{
+		.start	= 0xA3E00000,
+		.end	= 0xA3F00000 - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_ROTATOR,
+		.end	= INT_ROTATOR,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_rotator_device = {
+	.name		= "msm_rotator",
+	.id		= 0,
+	.num_resources  = ARRAY_SIZE(resources_msm_rotator),
+	.resource       = resources_msm_rotator,
+};
+#endif
+
 static void __init msm_register_device(struct platform_device *pdev, void *data)
 {
 	int ret;
