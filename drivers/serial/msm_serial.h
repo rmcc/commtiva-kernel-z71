@@ -40,18 +40,21 @@
 #define UART_MR2_PARITY_MODE		0x3
 
 #define UART_CSR	0x0008
-#define UART_CSR_115200	0xCC
-#define UART_CSR_57600	0xAA
-#define UART_CSR_38400	0x99
-#define UART_CSR_28800	0x88
-#define UART_CSR_19200	0x77
-#define UART_CSR_14400	0x66
-#define UART_CSR_9600	0x55
-#define UART_CSR_4800	0x44
-#define UART_CSR_2400	0x33
-#define UART_CSR_1200	0x22
-#define UART_CSR_600	0x11
-#define UART_CSR_300	0x00
+#define UART_CSR_115200	0xFF
+#define UART_CSR_57600	0xEE
+#define UART_CSR_38400	0xDD
+#define UART_CSR_28800	0xCC
+#define UART_CSR_19200	0xBB
+#define UART_CSR_14400	0xAA
+#define UART_CSR_9600	0x99
+#define UART_CSR_7200	0x88
+#define UART_CSR_4800	0x77
+#define UART_CSR_2400	0x55
+#define UART_CSR_1200	0x44
+#define UART_CSR_600	0x33
+#define UART_CSR_300	0x22
+#define UART_CSR_150	0x11
+#define UART_CSR_75	0x00
 
 #define UART_TF		0x000C
 
