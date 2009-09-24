@@ -134,6 +134,9 @@
 #define INT_SDC2_1		(96 + 3)
 #define INT_SDC4_0		(96 + 4)
 #define INT_SDC4_1		(96 + 5)
+#define INT_PWB_QUP_IN		(96 + 6)
+#define INT_PWB_QUP_OUT		(96 + 7)
+#define INT_PWB_QUP_ERR		(96 + 8)
 /* SCSS_VICFIQSTS3[6:31] are RESERVED */
 
 /* Retrofit universal macro names */
