@@ -494,47 +494,11 @@ static struct platform_device android_pmem_kernel_ebi1_device = {
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
-#define LCDC_CONFIG_PROC          21
-#define LCDC_UN_CONFIG_PROC       22
-#define LCDC_API_PROG             0x30000066
-#define LCDC_API_VERS             0x00010001
-
 #define GPIO_OUT_132    132
 #define GPIO_OUT_131    131
 #define GPIO_OUT_103    103
 #define GPIO_OUT_102    102
 #define GPIO_OUT_88     88
-
-static struct msm_rpc_endpoint *lcdc_ep;
-
-static int msm_fb_lcdc_config(int on)
-{
-	int rc = 0;
-	struct rpc_request_hdr hdr;
-
-	if (on)
-		pr_info("lcdc config\n");
-	else
-		pr_info("lcdc un-config\n");
-
-	lcdc_ep = msm_rpc_connect_compatible(LCDC_API_PROG, LCDC_API_VERS, 0);
-	if (IS_ERR(lcdc_ep)) {
-		printk(KERN_ERR "%s: msm_rpc_connect failed! rc = %ld\n",
-			__func__, PTR_ERR(lcdc_ep));
-		return -EINVAL;
-	}
-
-	rc = msm_rpc_call(lcdc_ep,
-				(on) ? LCDC_CONFIG_PROC : LCDC_UN_CONFIG_PROC,
-				&hdr, sizeof(hdr),
-				5 * HZ);
-	if (rc)
-		printk(KERN_ERR
-			"%s: msm_rpc_call failed! rc = %d\n", __func__, rc);
-
-	msm_rpc_close(lcdc_ep);
-	return rc;
-}
 
 static int gpio_array_num[] = {
 				GPIO_OUT_132, /* spi_clk */
@@ -619,7 +583,6 @@ static void msm_fb_lcdc_power_save(int on)
 		}
 }
 static struct lcdc_platform_data lcdc_pdata = {
-	.lcdc_gpio_config = msm_fb_lcdc_config,
 	.lcdc_power_save   = msm_fb_lcdc_power_save,
 };
 
