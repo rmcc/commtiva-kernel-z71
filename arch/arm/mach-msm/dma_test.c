@@ -360,7 +360,6 @@ static int dma_test_ioctl(struct inode *inode, struct file *file,
 /**********************************************************************
  * Register ourselves as a misc device to be able to test the DMA code
  * from userspace. */
-#define MSM_DMOV_MINOR  32
 
 static const struct file_operations dma_test_fops = {
 	.owner = THIS_MODULE,
@@ -370,7 +369,7 @@ static const struct file_operations dma_test_fops = {
 };
 
 static struct miscdevice dma_test_dev = {
-	.minor = MSM_DMOV_MINOR,
+	.minor = MISC_DYNAMIC_MINOR,
 	.name = "msmdma",
 	.fops = &dma_test_fops,
 };
