@@ -28,6 +28,9 @@
 #include <linux/reboot.h>
 #include <linux/uaccess.h>
 #include <linux/io.h>
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#endif
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
 #ifdef CONFIG_CACHE_L2X0
@@ -1308,6 +1311,9 @@ void arch_idle(void)
 	}
 
 	if ((timer_expiration < msm_pm_idle_sleep_min_time) ||
+#ifdef CONFIG_HAS_WAKELOCK
+		has_wake_lock(WAKE_LOCK_IDLE) ||
+#endif
 		!msm_irq_idle_sleep_allowed()) {
 		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE] = false;
 		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN] = false;
