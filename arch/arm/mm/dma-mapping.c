@@ -493,6 +493,12 @@ void dma_cache_maint(const void *start, size_t size, int direction)
 	void (*inner_op)(const void *, const void *);
 	void (*outer_op)(unsigned long, unsigned long);
 
+	if ((unsigned long)start & (dma_get_cache_alignment() - 1)) {
+		printk(KERN_ERR "addr %p is not %d aligned size=%d\n",
+				start, dma_get_cache_alignment(), size);
+		BUG();
+	}
+
 	switch (direction) {
 	case DMA_FROM_DEVICE:		/* invalidate only */
 		inner_op = dmac_inv_range;
