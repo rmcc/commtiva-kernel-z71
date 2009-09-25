@@ -65,6 +65,7 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
+#include <linux/workqueue.h>
 #include <mach/s1r72v05.h>
 
 #define DRIVER_NAME "s1r72v05"
@@ -105,47 +106,86 @@
 #define S1R72V05_TF_READ               0x40
 
 /* S1R72V05 register map (byte offsets from start of chip select) */
-#define S1R72V05_MAININTSTAT_OFFSET             0x00
-#define   S1R72V05_MAININTSTAT_FINISHEDPM       0x01
-#define   S1R72V05_MAININTSTAT_IDE_INTSTAT      0x10
-#define   S1R72V05_MAININTSTAT_ALLINTS          0xF9
-#define S1R72V05_DEVICEINTSTAT_OFFSET           0x01
-#define S1R72V05_HOSTINTSTAT_OFFSET             0x02
-#define S1R72V05_CPUINTSTAT_OFFSET              0x03
-#define S1R72V05_IDE_INTSTAT_OFFSET             0x04
-#define   S1R72V05_IDE_INTSTAT_DETECTINTRQ      0x02
-#define   S1R72V05_IDE_INTSTAT_ALLINTS          0xF7
-#define S1R72V05_MAININTENB_OFFSET              0x10
-#define   S1R72V05_MAININTENB_ENIDE_INTSTAT     0x10
-#define S1R72V05_IDE_INTENB_OFFSET              0x14
-#define   S1R72V05_IDE_INTENB_ENDETECTINTRQ     0x02
-#define S1R72V05_REVISIONNUM_OFFSET             0x20
-#define S1R72V05_CHIPRESET_SWAPPED_OFFSET       0x20
-#define S1R72V05_CHIPRESET_OFFSET               0x21
-#define S1R72V05_REVISIONNUM_SWAPPED_OFFSET     0x21
-#define S1R72V05_PM_CONTROL_0_OFFSET            0x22
-#define   S1R72V05_PM_CONTROL_0_GOACTIVE60      0x20
-#define   S1R72V05_PM_CONTROL_0_GOSLEEP         0x80
-#define S1R72V05_PM_CONTROL_1_OFFSET            0x23
-#define S1R72V05_IDE_STATUS_OFFSET              0x90
-#define S1R72V05_IDE_CONTROL_OFFSET             0x91
-#define   S1R72V05_IDE_CONTROL_IDE_CLR          0x40
-#define S1R72V05_IDE_CONFIG_0_OFFSET            0x92
-#define   S1R72V05_IDE_CONFIG_0_IDE_BUSRESET    0x80
-#define S1R72V05_IDE_CONFIG_1_OFFSET            0x93
-#define   S1R72V05_IDE_CONFIG_1_SWAP            0x04
-#define   S1R72V05_IDE_CONFIG_1_ACTIVEIDE       0x80
-#define S1R72V05_IDE_RMOD_OFFSET                0x94
-#define   S1R72V05_IDE_RMOD_MAX_TIMING          0xFF
-#define S1R72V05_IDE_REGADRS_OFFSET             0xA0
-#define S1R72V05_IDE_RDREGVALUE_0_OFFSET        0xA2
-#define S1R72V05_IDE_RDREGVALUE_1_OFFSET        0xA3
-#define S1R72V05_IDE_WRREGVALUE_0_OFFSET        0xA4
-#define S1R72V05_IDE_WRREGVALUE_1_OFFSET        0xA5
-#define S1R72V05_CHIPCONFIG_SWAPPED_OFFSET      0xB6
-#define S1R72V05_CHIPCONFIG_OFFSET              0xB7
-#define S1R72V05_CPU_CHGENDIAN_SWAPPED_OFFSET   0xB8
-#define S1R72V05_CPU_CHGENDIAN_OFFSET           0xB9
+#define S1R72V05_MAININTSTAT_OFFSET             	0x00
+#define   S1R72V05_MAININTSTAT_FINISHEDPM       	0x01
+#define   S1R72V05_MAININTSTAT_MEDIAFIFO_INTSTAT      	0x08
+#define   S1R72V05_MAININTSTAT_IDE_INTSTAT      	0x10
+#define   S1R72V05_MAININTSTAT_ALLINTS          	0xF9
+#define S1R72V05_DEVICEINTSTAT_OFFSET           	0x01
+#define S1R72V05_HOSTINTSTAT_OFFSET             	0x02
+#define S1R72V05_CPUINTSTAT_OFFSET              	0x03
+#define S1R72V05_IDE_INTSTAT_OFFSET             	0x04
+#define   S1R72V05_IDE_INTSTAT_DETECTINTRQ      	0x02
+#define   S1R72V05_IDE_INTSTAT_IDE_CMP			0x04
+#define   S1R72V05_IDE_INTSTAT_ALLINTS          	0xF7
+#define S1R72V05_MEDIAFIFO_INTSTAT_OFFSET		0x05
+#define   S1R72V04_MEDIAFIFO_INTSTAT_EMPTY		0x01
+#define   S1R72V04_MEDIAFIFO_INTSTAT_FULL		0x02
+#define   S1R72V04_MEDIAFIFO_INTSTAT_NOTEMPTY		0x04
+#define   S1R72V04_MEDIAFIFO_INTSTAT_CMP		0x40
+#define   S1R72V04_MEDIAFIFO_INTSTAT_ALLINTS		0x47
+#define S1R72V05_MAININTENB_OFFSET              	0x10
+#define   S1R72V05_MAININTENB_ENMEDIAFIFO_INTSTAT	0x08
+#define   S1R72V05_MAININTENB_ENIDE_INTSTAT     	0x10
+#define S1R72V05_IDE_INTENB_OFFSET              	0x14
+#define   S1R72V05_IDE_INTENB_ENDETECTINTRQ     	0x02
+#define   S1R72V05_IDE_INTENB_ENIDE_CMP		     	0x04
+#define S1R72V05_MEDIAFIFOINTENB_OFFSET			0x15
+#define   S1R72V05_MEDIAFIFOINTENB_EMPTY		0x01
+#define   S1R72V05_MEDIAFIFOINTENB_NOTEMPTY		0x04
+#define   S1R72V05_MEDIAFIFOINTENB_CMP			0x40
+#define S1R72V05_REVISIONNUM_OFFSET             	0x20
+#define S1R72V05_CHIPRESET_SWAPPED_OFFSET       	0x20
+#define S1R72V05_CHIPRESET_OFFSET               	0x21
+#define S1R72V05_REVISIONNUM_SWAPPED_OFFSET     	0x21
+#define S1R72V05_PM_CONTROL_0_OFFSET            	0x22
+#define   S1R72V05_PM_CONTROL_0_GOACTIVE60      	0x20
+#define   S1R72V05_PM_CONTROL_0_GOSLEEP		      	0x80
+#define S1R72V05_PM_CONTROL_1_OFFSET            	0x23
+#define S1R72V05_FIFO_RD_0_OFFSET			0x30
+#define S1R72V05_FIFO_RD_1_OFFSET			0x31
+#define S1R72V05_FIFO_WR_0_OFFSET			0x32
+#define S1R72V05_FIFO_WR_1_OFFSET			0x33
+#define S1R72V05_FIFO_RDREMAIN_L_OFFSET			0x34
+#define S1R72V05_FIFO_RDREMAIN_H_OFFSET			0x35
+#define   S1R72V05_FIFO_RDREMAIN_VALID                  0x8000
+#define S1R72V05_FIFO_WRREMAIN_L_OFFSET			0x36
+#define S1R72V05_FIFO_WRREMAIN_H_OFFSET			0x37
+#define S1R72V05_MEDIAFIFO_CONTROL_OFFSET		0x48
+#define   S1R72V05_MEDIAFIFO_CONTROL_FIFOCLR    	0x01
+#define S1R72V05_CLRALLMEDIAFIFO_JOIN_OFFSET		0x49
+#define   S1R72V05_CLRALLMEDIAFIFO_JOIN_ALLBITS         0x8f
+#define S1R72V05_MEDIAFIFO_JOIN_OFFSET			0x4A
+#define   S1R72V05_MEDIAFIFO_JOINCPU_WR			0x01
+#define   S1R72V05_MEDIAFIFO_JOINCPU_RD			0x02
+#define   S1R72V05_MEDIAFIFO_JOIN_IDE			0x80
+#define S1R72V05_IDE_STATUS_OFFSET              	0x90
+#define S1R72V05_IDE_CONTROL_OFFSET             	0x91
+#define   S1R72V05_IDE_CONTROL_IDE_GO           	0x01
+#define   S1R72V05_IDE_CONTROL_DIR_FIFO_TO_IDE		0x08
+#define   S1R72V05_IDE_CONTROL_IDE_CLR          	0x40
+#define S1R72V05_IDE_CONFIG_0_OFFSET            	0x92
+#define   S1R72V05_IDE_CONFIG_0_DMA			0x01
+#define   S1R72V05_IDE_CONFIG_0_ULTRA			0x02
+#define   S1R72V05_IDE_CONFIG_0_IDE_BUSRESET    	0x80
+#define S1R72V05_IDE_CONFIG_1_OFFSET            	0x93
+#define   S1R72V05_IDE_CONFIG_1_SWAP            	0x04
+#define   S1R72V05_IDE_CONFIG_1_ACTIVEIDE       	0x80
+#define S1R72V05_IDE_RMOD_OFFSET                	0x94
+#define   S1R72V05_IDE_RMOD_MAX_TIMING          	0xFF
+#define S1R72V05_IDE_TMOD_OFFSET                	0x95
+#define S1R72V05_IDE_COUNT_H_OFFSET             	0x9C
+#define S1R72V05_IDE_COUNT_M_OFFSET             	0x9F
+#define S1R72V05_IDE_COUNT_L_OFFSET             	0x9E
+#define S1R72V05_IDE_REGADRS_OFFSET             	0xA0
+#define S1R72V05_IDE_RDREGVALUE_0_OFFSET        	0xA2
+#define S1R72V05_IDE_RDREGVALUE_1_OFFSET        	0xA3
+#define S1R72V05_IDE_WRREGVALUE_0_OFFSET        	0xA4
+#define S1R72V05_IDE_WRREGVALUE_1_OFFSET        	0xA5
+#define S1R72V05_CHIPCONFIG_SWAPPED_OFFSET      	0xB6
+#define S1R72V05_CHIPCONFIG_OFFSET              	0xB7
+#define S1R72V05_CPU_CHGENDIAN_SWAPPED_OFFSET   	0xB8
+#define S1R72V05_CPU_CHGENDIAN_OFFSET           	0xB9
 
 #define S1R72V05_REG_ADDR(reg) \
   (s1r72v05_data.virt_io_addr + S1R72V05_##reg##_OFFSET)
@@ -159,6 +199,15 @@
 #define S1R72V05_TF_DBG(...)
 #endif
 
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+static void s1r72v05_fifo_work_f(struct work_struct *work);
+DECLARE_WORK(fifo_work, s1r72v05_fifo_work_f);
+
+#define DMA_TIMER_EXPIRATION (2*WAIT_CMD)
+
+#define S1R72V05_RDREMAIN_VALIDITY_MAX_CNT 20
+#endif
+
 static struct {
 	void __iomem *virt_io_addr;
 	ide_hwif_t *hwif;
@@ -167,6 +216,9 @@ static struct {
 	struct resource *irq_res;
 	struct platform_device *plat_dev;
 	struct ide_host *host;
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	u8 dma;
+#endif
 } s1r72v05_data;
 
 static inline void s1r72v05_read_tfreg(unsigned long port)
@@ -392,6 +444,35 @@ static void s1r72v05_output_data(ide_drive_t *drive, struct request *rq,
 	s1r72v05_outsw(data_addr, buf, len / 2);
 }
 
+static void s1r72v05_set_pio_mode(ide_drive_t *drive, const u8 pio)
+{
+	u8 reg;
+
+	/* Register values taken from s1r72v05 technical manual */
+	switch (pio+XFER_PIO_0) {
+	case XFER_PIO_0:
+		reg = 0xFF;
+		break;
+	case XFER_PIO_1:
+		reg = 0x88;
+		break;
+	case XFER_PIO_2:
+		reg = 0x44;
+		break;
+	case XFER_PIO_3:
+		reg = 0x22;
+		break;
+	case XFER_PIO_4:
+		reg = 0x10;
+		break;
+	default:
+		printk(KERN_WARNING "%s: Unexpected PIO mode: %d\n",
+		       DRIVER_NAME, pio);
+		return;
+	}
+	iowrite8(reg, S1R72V05_REG_ADDR(IDE_TMOD));
+}
+
 #ifdef DEBUG
 static void s1r72v05_register_dump(void)
 {
@@ -411,43 +492,341 @@ static void s1r72v05_register_dump(void)
 
 static int s1r72v05_ack_intr(struct hwif_s *hwif)
 {
-	unsigned char ide_status;
+	unsigned char int_status;
+	unsigned char sub_status;
 
 	if (hwif != s1r72v05_data.hwif)
 		return 0;
 
-	/* Is this not an IDE related interrupt? */
-	if ((ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
-	     S1R72V05_MAININTSTAT_IDE_INTSTAT) == 0) {
-		printk(KERN_ALERT "%s: non-IDE interrupt!\n", DRIVER_NAME);
-		printk(KERN_ALERT "%s: 0x0:%#.2x 0x1:%#.2x 0x2:%#.2x\n",
-		       DRIVER_NAME, ioread8(S1R72V05_REG_ADDR(MAININTSTAT)),
+	/* Is this the correct type of interrupt? */
+	int_status = ioread8(S1R72V05_REG_ADDR(MAININTSTAT));
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	if (((int_status & S1R72V05_MAININTSTAT_IDE_INTSTAT) == 0) &&
+	    ((int_status & S1R72V05_MAININTSTAT_MEDIAFIFO_INTSTAT) == 0)) {
+#else
+	if (((int_status & S1R72V05_MAININTSTAT_IDE_INTSTAT) == 0)) {
+#endif
+		printk(KERN_ALERT "%s: unexpected interrupt!\n", DRIVER_NAME);
+		printk(KERN_ALERT "%s: 0x0:%#.2x 0x1:%#.2x 0x2:%#.2x "
+		       "0x3:%#.2x 0x4:%#.2x 0x5:%#.2x\n",
+		       DRIVER_NAME, int_status,
 		       ioread8(S1R72V05_REG_ADDR(DEVICEINTSTAT)),
-		       ioread8(S1R72V05_REG_ADDR(HOSTINTSTAT)));
+		       ioread8(S1R72V05_REG_ADDR(HOSTINTSTAT)),
+		       ioread8(S1R72V05_REG_ADDR(CPUINTSTAT)),
+		       ioread8(S1R72V05_REG_ADDR(IDE_INTSTAT)),
+		       ioread8(S1R72V05_REG_ADDR(MEDIAFIFO_INTSTAT)));
 		return 0;
 	}
 
-	/* Is this the right kind of IDE interrupt? */
-	ide_status = ioread8(S1R72V05_REG_ADDR(IDE_INTSTAT));
-	if (!(ide_status & S1R72V05_IDE_INTSTAT_DETECTINTRQ)) {
-		printk(KERN_ALERT
-		       "%s: IDE interrupt for wrong reason: %#x!\n",
-		       DRIVER_NAME, ide_status);
-		return 0;
+	if ((int_status & S1R72V05_MAININTSTAT_IDE_INTSTAT) != 0) {
+		/* Is this the right kind of IDE interrupt? */
+		sub_status = ioread8(S1R72V05_REG_ADDR(IDE_INTSTAT));
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+		if (!(sub_status & S1R72V05_IDE_INTSTAT_DETECTINTRQ) &&
+		    !(sub_status & S1R72V05_IDE_INTSTAT_IDE_CMP)) {
+#else
+		if (!(sub_status & S1R72V05_IDE_INTSTAT_DETECTINTRQ)) {
+#endif
+			printk(KERN_ALERT
+			       "%s: IDE interrupt for wrong reason: %#x!\n",
+				       DRIVER_NAME, sub_status);
+			return 0;
+		}
 	}
 
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	/* Clear IDE interrupt status. */
+	iowrite8(S1R72V05_IDE_INTSTAT_DETECTINTRQ |
+		    S1R72V05_IDE_INTSTAT_IDE_CMP,
+		 S1R72V05_REG_ADDR(IDE_INTSTAT));
+#else
 	/* Clear IDE interrupt status. */
 	iowrite8(S1R72V05_IDE_INTSTAT_DETECTINTRQ,
 		 S1R72V05_REG_ADDR(IDE_INTSTAT));
+#endif
 
 	/* Make sure interrupt status is clear. */
 	if (ioread8(S1R72V05_REG_ADDR(MAININTSTAT)) &
-	    S1R72V05_MAININTSTAT_IDE_INTSTAT)
+				S1R72V05_MAININTSTAT_IDE_INTSTAT)
 		printk(KERN_ALERT
 		       "%s: interrupt status did not clear!\n", DRIVER_NAME);
 
+	/* Note:  MediaFIFO status is cleared in the DMA processing */
+
 	return 1;
 }
+
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+static void s1r72v05_dma_host_set(ide_drive_t *drive, int on)
+{
+	u8 reg = ioread8(S1R72V05_REG_ADDR(IDE_CONFIG_0));
+
+	if (on) {
+			printk(KERN_INFO "%s DMA enabled\n", DRIVER_NAME);
+			iowrite8(reg | S1R72V05_IDE_CONFIG_0_DMA,
+				 S1R72V05_REG_ADDR(IDE_CONFIG_0));
+	} else {
+			printk(KERN_INFO "%s DMA disabled\n", DRIVER_NAME);
+			iowrite8(reg & ~S1R72V05_IDE_CONFIG_0_DMA,
+				 S1R72V05_REG_ADDR(IDE_CONFIG_0));
+	}
+}
+
+static void s1r72v05_set_dma_mode(ide_drive_t *drive, const u8 speed)
+{
+	u8 reg;
+
+	/* values taken from s1r72v05 technical manual */
+	switch (speed) {
+	case XFER_MW_DMA_0:
+		reg = 0xBB;
+		break;
+	case XFER_MW_DMA_1:
+		reg = 0x20;
+		break;
+	case XFER_MW_DMA_2:
+		reg = 0x10;
+		break;
+	default:
+		printk(KERN_WARNING "%s: Unexpected DMA mode: %d\n",
+		       DRIVER_NAME, speed);
+		return;
+	}
+	iowrite8(reg, S1R72V05_REG_ADDR(IDE_TMOD));
+
+	reg = ioread8(S1R72V05_REG_ADDR(IDE_CONFIG_0));
+	iowrite8(reg & ~S1R72V05_IDE_CONFIG_0_ULTRA,
+		 S1R72V05_REG_ADDR(IDE_CONFIG_0));
+}
+
+static int s1r72v05_init_dma(ide_hwif_t *hwif, const struct ide_port_info *d)
+{
+	return 1;
+}
+
+static int s1r72v05_dma_setup(ide_drive_t *drive)
+{
+	struct request *rq = drive->hwif->rq;
+	u8 read = (rq_data_dir(rq) == READ);
+	u8 cpu_bit;
+	u8 fifo_int_bit;
+	u32 ide_count;
+
+	ide_init_sg_cmd(drive, rq);
+	ide_map_sg(drive, rq);
+
+	iowrite8(S1R72V05_MEDIAFIFO_CONTROL_FIFOCLR,
+		 S1R72V05_REG_ADDR(MEDIAFIFO_CONTROL));
+
+	if (read) {
+		cpu_bit = S1R72V05_MEDIAFIFO_JOINCPU_RD;
+		fifo_int_bit = S1R72V05_MEDIAFIFOINTENB_NOTEMPTY;
+	} else {
+		cpu_bit = S1R72V05_MEDIAFIFO_JOINCPU_WR;
+		fifo_int_bit = S1R72V05_MEDIAFIFOINTENB_EMPTY;
+	}
+	iowrite8(S1R72V05_MEDIAFIFO_JOIN_IDE | cpu_bit,
+		 S1R72V05_REG_ADDR(MEDIAFIFO_JOIN));
+
+	ide_count = rq->nr_sectors * SECTOR_SIZE;
+	iowrite8((u8)((ide_count & 0x00ff0000) >> 16),
+		 S1R72V05_REG_ADDR(IDE_COUNT_H));
+	iowrite8((u8)((ide_count & 0x0000ff00) >> 8),
+		 S1R72V05_REG_ADDR(IDE_COUNT_M));
+	iowrite8((u8)((ide_count & 0x000000ff) >> 0),
+		 S1R72V05_REG_ADDR(IDE_COUNT_L));
+
+	drive->waiting_for_dma = 1;
+
+	return 0;
+}
+
+static void s1r72v05_write_fifo(u16 *buf, int bytes)
+{
+	u16 count;
+	u16 i;
+
+	count = bytes/2;
+	while (count > 0) {
+		/* chip spec requires 1 clock delay between writing to FIFO
+		 * and reading WRREMAIN registers, so we read revision register
+		 */
+		if (ioread8(S1R72V05_REG_ADDR(REVISIONNUM)) !=
+						S1R72V05_HW_REVISION)
+			printk(KERN_INFO "%s: revision mismatch!\n",
+			       DRIVER_NAME);
+		i = ioread16(S1R72V05_REG_ADDR(FIFO_WRREMAIN_L));
+		if ((count * 2) < i)
+			i = count;
+		else
+			i = i / 2;
+		count -= i;
+		for (; i > 0; i--)
+			iowrite16(*buf++, S1R72V05_REG_ADDR(FIFO_WR_0));
+	}
+}
+
+static void s1r72v05_read_fifo(u16 *buf, int bytes)
+{
+	u16 count;
+	u16 i;
+
+	count = bytes/2;
+	while (count > 0) {
+		i = ioread16(S1R72V05_REG_ADDR(FIFO_RDREMAIN_L));
+		if (i & S1R72V05_FIFO_RDREMAIN_VALID) {
+			i = i & ~S1R72V05_FIFO_RDREMAIN_VALID;
+			if ((count * 2) < i)
+				i = count;
+			else
+				i = i / 2;
+			count -= i;
+			for (; i > 0; i--)
+				*buf++ = ioread16(S1R72V05_REG_ADDR(FIFO_RD_0));
+		}
+	}
+
+}
+
+static void s1r72v05_fifo_work_f(struct work_struct *work)
+{
+	ide_hwif_t *hwif = s1r72v05_data.hwif;
+	u8 read = (rq_data_dir(s1r72v05_data.hwif->rq) == READ);
+	struct scatterlist *curr_sg;
+	struct page *page;
+	u16 offset;
+	u16 *buf;
+	unsigned int sectors = hwif->nleft;
+
+
+	if (read)
+		iowrite8(S1R72V05_IDE_CONTROL_IDE_GO &
+			   ~S1R72V05_IDE_CONTROL_DIR_FIFO_TO_IDE,
+			 S1R72V05_REG_ADDR(IDE_CONTROL));
+	else
+		iowrite8(S1R72V05_IDE_CONTROL_IDE_GO |
+			   S1R72V05_IDE_CONTROL_DIR_FIFO_TO_IDE,
+			 S1R72V05_REG_ADDR(IDE_CONTROL));
+
+	while ((sectors > 0) && (s1r72v05_data.dma)) {
+		if (hwif->cursg)
+			curr_sg = hwif->cursg;
+		else
+			curr_sg = hwif->cursg = hwif->sg_table;
+		page = sg_page(curr_sg);
+		offset = curr_sg->offset + hwif->cursg_ofs * SECTOR_SIZE;
+		page = nth_page(page, (offset >> PAGE_SHIFT));
+		offset %= PAGE_SIZE;
+
+		buf = kmap_atomic(page, KM_BIO_SRC_IRQ) + offset;
+		if (!buf) {
+			printk(KERN_ALERT "%s: could not map page\n",
+			       DRIVER_NAME);
+			break;
+		}
+		hwif->cursg_ofs++;
+		hwif->nleft--;
+
+		if ((hwif->cursg_ofs * SECTOR_SIZE) == curr_sg->length) {
+			hwif->cursg = sg_next(hwif->cursg);
+			hwif->cursg_ofs = 0;
+		}
+
+		if (read)
+			s1r72v05_read_fifo(buf, SECTOR_SIZE);
+		else
+			s1r72v05_write_fifo(buf, SECTOR_SIZE);
+		sectors--;
+
+		kunmap_atomic(buf, KM_BIO_SRC_IRQ);
+	}
+}
+
+static void s1r72v05_dma_start(ide_drive_t *drive)
+{
+	s1r72v05_data.dma = 1;
+	wmb();
+	schedule_work(&fifo_work);
+}
+
+static ide_startstop_t s1r72v05_ide_dma_intr(ide_drive_t *drive)
+{
+	ide_hwif_t *hwif = drive->hwif;
+	u8 read = (rq_data_dir(hwif->rq) == READ);
+	u8 inten;
+	u16 fifobytes;
+	int count = 0;
+
+	if (read) {
+		do {
+			fifobytes =
+				ioread16(S1R72V05_REG_ADDR(FIFO_RDREMAIN_L));
+		} while (((fifobytes & S1R72V05_FIFO_RDREMAIN_VALID) == 0) &&
+			 (count++ < S1R72V05_RDREMAIN_VALIDITY_MAX_CNT));
+
+		if (count >= S1R72V05_RDREMAIN_VALIDITY_MAX_CNT)
+			printk(KERN_ALERT "%s: FIFO RDREMAIN invalid!\n",
+			       DRIVER_NAME);
+
+		if ((fifobytes & ~S1R72V05_FIFO_RDREMAIN_VALID) != 0) {
+			/* IDE transaction complete, but FIFO not empty,
+			 * so turn on interrupt for when FIFO is emtpy */
+			ide_set_handler(drive,
+					s1r72v05_ide_dma_intr,
+					WAIT_CMD,
+					NULL);
+			iowrite8(S1R72V04_MEDIAFIFO_INTSTAT_EMPTY,
+				 S1R72V05_REG_ADDR(MEDIAFIFO_INTSTAT));
+			iowrite8(S1R72V05_MEDIAFIFOINTENB_EMPTY,
+				 S1R72V05_REG_ADDR(MEDIAFIFOINTENB));
+			iowrite8(ioread8(S1R72V05_REG_ADDR(MAININTENB)) |
+				   S1R72V05_MAININTENB_ENMEDIAFIFO_INTSTAT,
+				  S1R72V05_REG_ADDR(MAININTENB));
+			return ide_started;
+		} else {
+			iowrite8(S1R72V04_MEDIAFIFO_INTSTAT_ALLINTS,
+				 S1R72V05_REG_ADDR(MEDIAFIFO_INTSTAT));
+			iowrite8(0, S1R72V05_REG_ADDR(MEDIAFIFOINTENB));
+			iowrite8(ioread8(S1R72V05_REG_ADDR(MAININTENB)) &
+				   ~S1R72V05_MAININTENB_ENMEDIAFIFO_INTSTAT,
+				  S1R72V05_REG_ADDR(MAININTENB));
+		}
+	}
+
+	drive->waiting_for_dma = 0;
+	s1r72v05_data.dma = 0;
+	wmb();
+
+	iowrite8(S1R72V05_CLRALLMEDIAFIFO_JOIN_ALLBITS,
+		 S1R72V05_REG_ADDR(CLRALLMEDIAFIFO_JOIN));
+	inten = ioread8(S1R72V05_REG_ADDR(IDE_INTENB));
+	iowrite8(inten & ~S1R72V05_IDE_INTENB_ENIDE_CMP,
+		 S1R72V05_REG_ADDR(IDE_INTENB));
+
+	return ide_dma_intr(drive);
+}
+
+static void s1r72v05_dma_exec_cmd(ide_drive_t *drive, u8 command)
+{
+	ide_execute_command(drive, command, s1r72v05_ide_dma_intr,
+			    DMA_TIMER_EXPIRATION, NULL);
+}
+
+static int s1r72v05_dma_end(ide_drive_t *drive)
+{
+
+	return 0;
+}
+
+static int s1r72v05_dma_test_irq(ide_drive_t *drive)
+{
+	return 1;
+}
+
+void s1r72v05_dma_lost_irq(ide_drive_t *drive)
+{
+}
+#endif /* CONFIG_IDE_S1R72V05_USE_FIFO */
 
 static const struct ide_tp_ops s1r72v05_tp_ops = {
 	.exec_command		= s1r72v05_exec_command,
@@ -463,10 +842,38 @@ static const struct ide_tp_ops s1r72v05_tp_ops = {
 	.output_data		= s1r72v05_output_data,
 };
 
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+static const struct ide_dma_ops s1r72v05_ide_dma_ops __devinitdata = {
+	.dma_host_set		= s1r72v05_dma_host_set,
+	.dma_setup		= s1r72v05_dma_setup,
+	.dma_exec_cmd		= s1r72v05_dma_exec_cmd,
+	.dma_start		= s1r72v05_dma_start,
+	.dma_end		= s1r72v05_dma_end,
+	.dma_test_irq		= s1r72v05_dma_test_irq,
+	.dma_lost_irq		= s1r72v05_dma_lost_irq,
+};
+#endif
+
+static const struct ide_port_ops s1r72v05_ide_port_ops __devinitdata = {
+	.set_pio_mode		= s1r72v05_set_pio_mode,
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	.set_dma_mode		= s1r72v05_set_dma_mode,
+#endif
+};
+
 static const struct ide_port_info s1r72v05_port_info __devinitdata = {
 	.name			= DRIVER_NAME,
 	.chipset		= ide_unknown,
 	.tp_ops			= &s1r72v05_tp_ops,
+	.pio_mask		= ATA_PIO4,
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	.port_ops		= &s1r72v05_ide_port_ops,
+	.init_dma		= s1r72v05_init_dma,
+	.dma_ops		= &s1r72v05_ide_dma_ops,
+	.swdma_mask		= 0,
+	.mwdma_mask		= ATA_MWDMA2,
+	.udma_mask		= 0,
+#endif
 };
 
 static int __devinit s1r72v05_probe(struct platform_device *plat_dev)
@@ -488,6 +895,9 @@ static int __devinit s1r72v05_probe(struct platform_device *plat_dev)
 		}
 	}
 
+#ifdef CONFIG_IDE_S1R72V05_USE_FIFO
+	s1r72v05_data.dma = 0;
+#endif
 	s1r72v05_data.plat_dev = plat_dev;
 
 	s1r72v05_data.io_res = platform_get_resource(plat_dev, IORESOURCE_MEM,
