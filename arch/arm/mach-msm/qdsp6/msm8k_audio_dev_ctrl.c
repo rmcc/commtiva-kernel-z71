@@ -62,6 +62,7 @@
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/msm_audio.h>
+#include <linux/workqueue.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
@@ -85,6 +86,9 @@ struct msm8k_audio_dev_ctrl {
 	u32 current_volume;
 	int current_rx_device;
 	int current_tx_device;
+	struct delayed_work cad_open_work;
+	int q6_initialized;
+	struct completion q6_init_compl;
 };
 
 struct msm8k_audio_dev_ctrl g_ctrl;
@@ -95,6 +99,12 @@ static int msm8k_audio_dev_ctrl_open(struct inode *inode, struct file *f)
 	D("%s\n", __func__);
 
 	f->private_data = ctrl;
+
+	if (!ctrl->q6_initialized) {
+		D("wait for q6 to finish initializing\n");
+		wait_for_completion(&ctrl->q6_init_compl);
+		D("q6 done initializing\n");
+	}
 
 	return CAD_RES_SUCCESS;
 }
@@ -389,6 +399,38 @@ static int msm8k_audio_dev_ctrl_ioctl(struct inode *inode, struct file *f,
 	return rc;
 }
 
+void msm8k_audio_dev_work(struct work_struct *work)
+{
+	int rc;
+	struct cad_open_struct_type  cos;
+	struct msm8k_audio_dev_ctrl *ctrl = &g_ctrl;
+
+	D("%s() running\n", __func__);
+
+	cos.format = 0;
+	cos.op_code = CAD_OPEN_OP_DEVICE_CTRL;
+	ctrl->cad_ctrl_handle = cad_open(&cos);
+	ctrl->current_rx_device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
+	ctrl->current_tx_device = CAD_HW_DEVICE_ID_HANDSET_MIC;
+
+	if (ctrl->cad_ctrl_handle < 0)
+		pr_err("Dev CTRL handle < 0\n");
+
+	set_audio_ctrl_handle(ctrl->cad_ctrl_handle);
+
+	rc = cad_ioctl(ctrl->cad_ctrl_handle,
+			CAD_IOCTL_CMD_STREAM_START,
+			NULL,
+			0);
+	if (rc)
+		pr_err("%s: cad_ioctl() STREAM_START failed\n", __func__);
+
+	ctrl->q6_initialized = 1;
+	complete(&ctrl->q6_init_compl);
+
+	D("%s() done\n", __func__);
+}
+
 #ifdef CONFIG_PROC_FS
 int msm8k_audio_dev_ctrl_read_proc(char *pbuf, char **start, off_t offset,
 			int count, int *eof, void *data)
@@ -420,7 +462,6 @@ struct miscdevice msm8k_audio_dev_ctrl_misc = {
 
 static int __init msm8k_audio_dev_ctrl_init(void)
 {
-	struct cad_open_struct_type  cos;
 	int rc;
 	struct msm8k_audio_dev_ctrl *ctrl = &g_ctrl;
 
@@ -432,27 +473,13 @@ static int __init msm8k_audio_dev_ctrl_init(void)
 		return CAD_RES_FAILURE;
 	}
 
-	cos.format = 0;
-	cos.op_code = CAD_OPEN_OP_DEVICE_CTRL;
-	ctrl->cad_ctrl_handle = cad_open(&cos);
-	ctrl->current_rx_device = CAD_HW_DEVICE_ID_HANDSET_SPKR;
-	ctrl->current_tx_device = CAD_HW_DEVICE_ID_HANDSET_MIC;
+	init_completion(&ctrl->q6_init_compl);
+	ctrl->q6_initialized = 0;
 
-	if (ctrl->cad_ctrl_handle < 0) {
-		pr_err("Dev CTRL handle < 0\n");
-		return CAD_RES_FAILURE;
-	}
-
-	set_audio_ctrl_handle(ctrl->cad_ctrl_handle);
-
-	rc = cad_ioctl(ctrl->cad_ctrl_handle,
-			CAD_IOCTL_CMD_STREAM_START,
-			NULL,
-			0);
-	if (rc) {
-		pr_err("%s: cad_ioctl() STREAM_START failed\n", __func__);
-		return CAD_RES_FAILURE;
-	}
+	/* Do the Q6 init work in another thread so we don't block other
+	   tasks.  This will save ~300-600 ms. */
+	INIT_DELAYED_WORK(&ctrl->cad_open_work, msm8k_audio_dev_work);
+	schedule_delayed_work(&ctrl->cad_open_work, 0);
 
 #ifdef CONFIG_PROC_FS
 	create_proc_read_entry(MSM8K_AUDIO_PROC_NAME,
