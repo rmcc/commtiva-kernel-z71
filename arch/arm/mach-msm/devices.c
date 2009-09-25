@@ -237,6 +237,57 @@ struct platform_device msm_device_i2c = {
 	.resource	= resources_i2c,
 };
 
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_QUP_PHYS           0xA8301000
+#define MSM_GSBI_QUP_I2C_PHYS  0xA8300000
+#else
+#define MSM_QUP_PHYS           0xA9900000
+#define MSM_GSBI_QUP_I2C_PHYS  0xA9900000
+#define INT_PWB_QUP_IN         INT_PWB_I2C
+#define INT_PWB_QUP_OUT        INT_PWB_I2C
+#define INT_PWB_QUP_ERR        INT_PWB_I2C
+#endif
+#define MSM_QUP_SIZE           SZ_4K
+static struct resource resources_qup[] = {
+	{
+		.name   = "qup_phys_addr",
+		.start	= MSM_QUP_PHYS,
+		.end	= MSM_QUP_PHYS + MSM_QUP_SIZE - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name   = "gsbi_qup_i2c_addr",
+		.start	= MSM_GSBI_QUP_I2C_PHYS,
+		.end	= MSM_GSBI_QUP_I2C_PHYS + 4 - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.name   = "qup_in_intr",
+		.start	= INT_PWB_QUP_IN,
+		.end	= INT_PWB_QUP_IN,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name   = "qup_out_intr",
+		.start	= INT_PWB_QUP_OUT,
+		.end	= INT_PWB_QUP_OUT,
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name   = "qup_err_intr",
+		.start	= INT_PWB_QUP_ERR,
+		.end	= INT_PWB_QUP_ERR,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device qup_device_i2c = {
+	.name		= "qup_i2c",
+	.id		= 4,
+	.num_resources	= ARRAY_SIZE(resources_qup),
+	.resource	= resources_qup,
+};
+
 #ifdef CONFIG_I2C_SSBI
 #define MSM_SSBI6_PHYS	0xAD900000
 static struct resource msm_ssbi6_resources[] = {
@@ -1003,6 +1054,7 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("grp_clk",	GRP_CLK,	NULL, 0),
 	CLK_PCOM("i2c_clk",	I2C_CLK,	&msm_device_i2c.dev, 0),
 	CLK_PCOM("i2c_clk",	I2C_2_CLK,	&msm_device_i2c_2.dev, 0),
+	CLK_PCOM("qup_clk",	QUP_I2C_CLK,	&qup_device_i2c.dev, 0),
 	CLK_PCOM("imem_clk",	IMEM_CLK,	NULL, OFF),
 	CLK_PCOM("mdc_clk",	MDC_CLK,	NULL, 0),
 	CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, OFF),
