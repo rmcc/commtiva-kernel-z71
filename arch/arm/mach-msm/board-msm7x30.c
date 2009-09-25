@@ -1401,6 +1401,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_iearpiece_device,
 	&msm_imic_device,
 	&msm_device_adspdec,
+	&qup_device_i2c,
 #if defined(CONFIG_MARIMBA_CORE) && \
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 	&msm_bt_power_device,
@@ -1419,6 +1420,15 @@ static struct msm_gpio msm_i2c_gpios_io[] = {
 	{ GPIO_CFG(71, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_sda" },
 };
 
+static struct msm_gpio qup_i2c_gpios_io[] = {
+	{ GPIO_CFG(16, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "qup_scl" },
+	{ GPIO_CFG(17, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "qup_sda" },
+};
+static struct msm_gpio qup_i2c_gpios_hw[] = {
+	{ GPIO_CFG(16, 2, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "qup_scl" },
+	{ GPIO_CFG(17, 2, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "qup_sda" },
+};
+
 static void
 msm_i2c_gpio_config(int adap_id, int config_type)
 {
@@ -1431,6 +1441,36 @@ msm_i2c_gpio_config(int adap_id, int config_type)
 	else
 		msm_i2c_table = &msm_i2c_gpios_io[adap_id*2];
 	msm_gpios_enable(msm_i2c_table, 2);
+}
+
+static struct vreg *qup_vreg;
+static void
+qup_i2c_gpio_config(int adap_id, int config_type)
+{
+	int rc = 0;
+	struct msm_gpio *qup_i2c_table;
+	/* Each adapter gets 2 lines from the table */
+	if (adap_id != 4)
+		return;
+	if (config_type)
+		qup_i2c_table = qup_i2c_gpios_hw;
+	else
+		qup_i2c_table = qup_i2c_gpios_io;
+	rc = msm_gpios_enable(qup_i2c_table, 2);
+	if (rc < 0)
+		printk(KERN_ERR "QUP GPIO enable failed: %d\n", rc);
+	if (qup_vreg) {
+		int rc = vreg_set_level(qup_vreg, 1800);
+		if (rc) {
+			pr_err("%s: vreg LVS1 set level failed (%d)\n",
+			__func__, rc);
+		}
+		rc = vreg_enable(qup_vreg);
+		if (rc) {
+			pr_err("%s: vreg_enable() = %d \n",
+			__func__, rc);
+		}
+	}
 }
 
 static struct msm_i2c_platform_data msm_i2c_pdata = {
@@ -1456,6 +1496,24 @@ static struct msm_i2c_platform_data msm_i2c_2_pdata = {
 static void __init msm_device_i2c_2_init(void)
 {
 	msm_device_i2c_2.dev.platform_data = &msm_i2c_2_pdata;
+}
+
+static struct msm_i2c_platform_data qup_i2c_pdata = {
+	.clk_freq = 100000,
+	.msm_i2c_config_gpio = qup_i2c_gpio_config,
+};
+
+static void __init qup_device_i2c_init(void)
+{
+	if (msm_gpios_request(qup_i2c_gpios_hw, ARRAY_SIZE(qup_i2c_gpios_hw)))
+		pr_err("failed to request I2C gpios\n");
+
+	qup_device_i2c.dev.platform_data = &qup_i2c_pdata;
+	qup_vreg = vreg_get(NULL, "lvsw1");
+	if (IS_ERR(qup_vreg)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(qup_vreg));
+	}
 }
 
 static void __init msm7x30_init_irq(void)
@@ -1723,6 +1781,7 @@ static void __init msm7x30_init(void)
 	msm_pm_set_platform_data(msm_pm_data);
 	msm_device_i2c_init();
 	msm_device_i2c_2_init();
+	qup_device_i2c_init();
 	buses_init();
 	msm7x30_init_marimba();
 	i2c_register_board_info(2, msm_marimba_board_info,
