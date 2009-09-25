@@ -1630,11 +1630,15 @@ static uint32_t msm_sdcc_setup_vreg(int dev_id, unsigned int enable)
 {
 	int rc = 0;
 	struct sdcc_vreg *curr;
+	static int enabled_once[] = {0, 0, 0, 0};
 
 	curr = &sdcc_vreg_data[dev_id - 1];
 
 	if (!(test_bit(dev_id, &vreg_sts)^enable))
 		return rc;
+
+	if (!enable || enabled_once[dev_id - 1])
+		return 0;
 
 	if (enable) {
 		set_bit(dev_id, &vreg_sts);
@@ -1648,6 +1652,7 @@ static uint32_t msm_sdcc_setup_vreg(int dev_id, unsigned int enable)
 			printk(KERN_ERR "%s: vreg_enable() = %d \n",
 					__func__, rc);
 		}
+		enabled_once[dev_id - 1] = 1;
 	} else {
 		clear_bit(dev_id, &vreg_sts);
 		rc = vreg_disable(curr->vreg_data);
