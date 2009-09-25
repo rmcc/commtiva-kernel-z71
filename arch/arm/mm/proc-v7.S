@@ -197,10 +197,6 @@ __v7_setup:
 	mcr	p15, 0, r10, c2, c0, 2		@ TTB control register
 	orr	r4, r4, #TTB_FLAGS
 	mcr	p15, 0, r4, c2, c0, 1		@ load TTB1
-#ifndef CONFIG_EMULATE_DOMAIN_MANAGER_V7
-	mov     r10, #0x1f                      @ domains 0, 1 = manager
-	mcr     p15, 0, r10, c3, c0, 0          @ load domain access register
-#endif
 #endif
 #ifdef CONFIG_ARCH_MSM_SCORPION
 #ifndef CONFIG_ARCH_MSM7X30
