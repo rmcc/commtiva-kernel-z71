@@ -61,6 +61,10 @@
 #include <mach/pmic.h>
 #include "msm_fb.h"
 
+#ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
+#include "mddihosti.h"
+#endif
+
 static int spi_cs;
 static int spi_sclk;
 static int spi_mosi;
@@ -363,11 +367,15 @@ static int __init lcdc_toshiba_panel_init(void)
 {
 	int ret;
 	struct msm_panel_info *pinfo;
-
 #ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
-	if (msm_fb_detect_client("lcdc_toshiba_wvga"))
+	ret = msm_fb_detect_client("lcdc_toshiba_wvga_pt");
+	if (ret == -ENODEV)
+		return 0;
+
+	if (ret && (mddi_get_client_id() != 0))
 		return 0;
 #endif
+
 	ret = platform_driver_register(&this_driver);
 	if (ret)
 		return ret;
