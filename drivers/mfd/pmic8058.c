@@ -63,6 +63,12 @@
 #include <linux/kthread.h>
 #include <linux/mfd/pmic8058.h>
 
+/* PMIC8058 Revision */
+#define SSBI_REG_REV			0x002  /* PMIC4 revision */
+
+#define PMIC8058_REV_A0			0xE1
+#define PMIC8058_REV_B0			0xE2	/* REVISIT */
+
 /* PMIC8058 IRQ */
 #define	SSBI_REG_ADDR_IRQ_BASE		0x1BB
 
@@ -140,6 +146,7 @@ struct pm8058_chip {
 	int	pm_max_masters;
 
 	u8	config[PM8058_IRQS];
+	u8	revision;
 };
 
 static struct pm8058_chip *pmic_chip;
@@ -178,6 +185,33 @@ ssbi_read(struct i2c_client *client, u16 addr, u8 *buf, size_t len)
 }
 
 /* External APIs */
+u8 pmic8058_get_rev(void)
+{
+	if (pmic_chip == NULL)
+		return 0;
+
+	return pmic_chip->revision;
+}
+EXPORT_SYMBOL(pmic8058_get_rev);
+
+int pmic8058_is_rev_a0(void)
+{
+	if (pmic_chip == NULL)
+		return 0;
+
+	return pmic_chip->revision == PMIC8058_REV_A0;
+}
+EXPORT_SYMBOL(pmic8058_is_rev_a0);
+
+int pmic8058_is_rev_b0(void)
+{
+	if (pmic_chip == NULL)
+		return 0;
+
+	return pmic_chip->revision == PMIC8058_REV_B0;
+}
+EXPORT_SYMBOL(pmic8058_is_rev_b0);
+
 int pm8058_read(u16 addr, u8 *values, unsigned int len)
 {
 	if (pmic_chip == NULL)
@@ -663,6 +697,13 @@ static int pm8058_probe(struct i2c_client *client,
 	}
 
 	chip->dev = client;
+
+	/* Read PMIC chip revision */
+	rc = ssbi_read(chip->dev, SSBI_REG_REV, &chip->revision, 1);
+	if (rc)
+		pr_err("%s: Failed on ssbi_read for revision: rc=%d.\n",
+			__func__, rc);
+	pr_info("%s: PMIC revision: %X\n", __func__, chip->revision);
 
 	(void) memcpy((void *)&chip->pdata, (const void *)pdata,
 		      sizeof(chip->pdata));
