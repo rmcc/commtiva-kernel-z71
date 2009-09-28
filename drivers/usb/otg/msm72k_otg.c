@@ -71,7 +71,6 @@
 #include <mach/msm_hsusb.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
-#include <linux/pm_qos_params.h>
 
 #define MSM_USB_BASE	(dev->regs)
 #define is_host()	((OTGSC_ID & readl(USB_OTGSC)) ? 0 : 1)
@@ -232,32 +231,6 @@ static void msm_otg_debugfs_init(struct msm_otg *dev) { }
 static void msm_otg_debugfs_cleanup() { }
 
 #endif
-static void msm_otg_suspend_locks_acquire(struct msm_otg *dev, int acquire)
-{
-	if (acquire) {
-		wake_lock(&dev->wlock);
-		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
-				DRIVER_NAME, 0);
-	} else {
-		wake_unlock(&dev->wlock);
-		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
-				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
-	}
-}
-
-static void msm_otg_suspend_locks_init(struct msm_otg *dev, int init)
-{
-	if (init) {
-		wake_lock_init(&dev->wlock,
-				WAKE_LOCK_SUSPEND, "usb_bus_active");
-		pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
-							PM_QOS_DEFAULT_VALUE);
-		msm_otg_suspend_locks_acquire(dev, 1);
-	} else {
-		wake_lock_destroy(&dev->wlock);
-		pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
-	}
-}
 
 static void msm_otg_start_peripheral(struct otg_transceiver *xceiv, int on)
 {
@@ -315,7 +288,7 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	 * it should be dummy check
 	 */
 	if (!vbus || release_wlocks)
-		msm_otg_suspend_locks_acquire(dev, 0);
+		wake_unlock(&dev->wlock);
 
 	pr_info("%s: usb in low power mode\n", __func__);
 out:
@@ -331,7 +304,7 @@ static int msm_otg_resume(struct msm_otg *dev)
 	if (!dev->in_lpm)
 		return 0;
 
-	msm_otg_suspend_locks_acquire(dev, 1);
+	wake_lock(&dev->wlock);
 
 	clk_enable(dev->clk);
 	clk_enable(dev->pclk);
@@ -587,7 +560,9 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto free_regs;
 	}
 
-	msm_otg_suspend_locks_init(dev, 1);
+	wake_lock_init(&dev->wlock,
+			WAKE_LOCK_SUSPEND, "usb_bus_active");
+	wake_lock(&dev->wlock);
 	msm_otg_debugfs_init(dev);
 	device_init_wakeup(&pdev->dev, 1);
 
@@ -615,7 +590,7 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 	clk_disable(dev->clk);
 	clk_put(dev->pclk);
 	clk_put(dev->clk);
-	msm_otg_suspend_locks_init(dev, 0);
+	wake_lock_destroy(&dev->wlock);
 	msm_otg_debugfs_cleanup();
 	kfree(dev);
 	if (dev->rpc_connect)

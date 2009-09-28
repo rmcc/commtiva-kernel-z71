@@ -29,6 +29,7 @@
 #include <linux/platform_device.h>
 #include <linux/debugfs.h>
 #include <linux/workqueue.h>
+#include <linux/pm_qos_params.h>
 
 #include <mach/msm72k_otg.h>
 #include <linux/io.h>
@@ -48,6 +49,7 @@ static const char driver_name[] = "msm72k_udc";
 #define MSM_USB_BASE ((unsigned) ui->addr)
 
 #define	DRIVER_DESC		"MSM 72K USB Peripheral Controller"
+#define	DRIVER_NAME		"MSM72K_UDC"
 
 #define EPT_FLAG_IN        0x0001
 
@@ -1065,7 +1067,18 @@ static int usb_free(struct usb_info *ui, int ret)
 	if (ui->dma)
 		dma_free_coherent(&ui->pdev->dev, 4096, ui->buf, ui->dma);
 	kfree(ui);
+	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
 	return ret;
+}
+
+static void msm72k_pm_qos_update(int vote)
+{
+	if (vote)
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
+				DRIVER_NAME, 0);
+	else
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
+				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 }
 
 static void usb_do_work_check_vbus(struct usb_info *ui)
@@ -1108,6 +1121,7 @@ static void usb_do_work(struct work_struct *w)
 					break;
 				}
 
+				msm72k_pm_qos_update(ui, 1);
 				pr_info("msm72k_udc: IDLE -> ONLINE\n");
 				usb_reset(ui);
 				ret = request_irq(otg->irq, usb_interrupt,
@@ -1119,6 +1133,7 @@ static void usb_do_work(struct work_struct *w)
 				if (ret) {
 					pr_err("hsusb: peripheral: request irq"
 							" failed:(%d)", ret);
+					msm72k_pm_qos_update(ui, 0);
 					break;
 				}
 				ui->irq = otg->irq;
@@ -1175,6 +1190,7 @@ static void usb_do_work(struct work_struct *w)
 
 				ui->state = USB_STATE_OFFLINE;
 				usb_do_work_check_vbus(ui);
+				msm72k_pm_qos_update(ui, 0);
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -1206,6 +1222,7 @@ static void usb_do_work(struct work_struct *w)
 
 				pr_info("msm72k_udc: OFFLINE -> ONLINE\n");
 
+				msm72k_pm_qos_update(ui, 1);
 				otg_set_suspend(ui->xceiv, 0);
 				usb_reset(ui);
 				ui->state = USB_STATE_ONLINE;
@@ -1818,6 +1835,8 @@ static int msm72k_probe(struct platform_device *pdev)
 
 	the_usb_info = ui;
 
+	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
+					PM_QOS_DEFAULT_VALUE);
 	usb_debugfs_init(ui);
 
 	usb_prepare(ui);
