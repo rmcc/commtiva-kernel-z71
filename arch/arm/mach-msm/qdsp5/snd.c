@@ -223,9 +223,8 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 
 		avc_msg.args.avc_ctl = cpu_to_be32(avc);
-
-		vmsg.args.cb_func = -1;
-		vmsg.args.client_data = 0;
+		avc_msg.args.cb_func = -1;
+		avc_msg.args.client_data = 0;
 
 		MM_INFO("snd_avc_ctl %d\n", avc);
 
@@ -243,7 +242,6 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		agc_msg.args.agc_ctl = cpu_to_be32(agc);
-
 		agc_msg.args.cb_func = -1;
 		agc_msg.args.client_data = 0;
 
