@@ -443,7 +443,9 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	if (msm_uport->rx.flush == FLUSH_NONE) {
 		wake_lock(&msm_uport->rx.wake_lock);
 		msm_uport->rx.flush = FLUSH_IGNORE;
-		msm_dmov_flush(msm_uport->dma_rx_channel);
+		/* do discard flush */
+		msm_dmov_stop_cmd(msm_uport->dma_rx_channel,
+				  &msm_uport->rx.xfer, 0);
 	}
 
 	msm_hs_write(uport, UARTDM_IMR_ADDR, msm_uport->imr_reg);
@@ -503,7 +505,9 @@ static void msm_hs_stop_rx_locked(struct uart_port *uport)
 	/* Disable the receiver */
 	if (msm_uport->rx.flush == FLUSH_NONE) {
 		wake_lock(&msm_uport->rx.wake_lock);
-		msm_dmov_flush(msm_uport->dma_rx_channel);
+		/* do discard flush */
+		msm_dmov_stop_cmd(msm_uport->dma_rx_channel,
+				  &msm_uport->rx.xfer, 0);
 	}
 	if (msm_uport->rx.flush != FLUSH_SHUTDOWN)
 		msm_uport->rx.flush = FLUSH_STOP;
