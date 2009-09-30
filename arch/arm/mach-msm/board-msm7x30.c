@@ -109,6 +109,38 @@
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
 
+static const unsigned int fluid_keymap[] = {
+	KEY(0, 0, KEY_7),
+	KEY(0, 1, KEY_DOWN),
+	KEY(0, 2, KEY_UP),
+	KEY(0, 3, KEY_RIGHT),
+	KEY(0, 4, KEY_ENTER),
+
+	KEY(1, 0, KEY_LEFT),
+	KEY(1, 1, KEY_SEND),
+	KEY(1, 2, KEY_1),
+	KEY(1, 3, KEY_4),
+	KEY(1, 4, KEY_CLEAR),
+
+	KEY(2, 0, KEY_6),
+	KEY(2, 1, KEY_5),
+	KEY(2, 2, KEY_8),
+	KEY(2, 3, KEY_3),
+	KEY(2, 4, KEY_NUMERIC_STAR),
+
+	KEY(3, 0, KEY_9),
+	KEY(3, 1, KEY_NUMERIC_POUND),
+	KEY(3, 2, KEY_0),
+	KEY(3, 3, KEY_2),
+	KEY(3, 4, KEY_END),
+
+	KEY(4, 0, KEY_BACK),
+	KEY(4, 1, KEY_HOME),
+	KEY(4, 2, KEY_MENU),
+	KEY(4, 3, KEY_VOLUMEUP),
+	KEY(4, 4, KEY_VOLUMEDOWN),
+};
+
 static const unsigned int surf_keymap[] = {
 	KEY(0, 0, KEY_7),
 	KEY(0, 1, KEY_DOWN),
@@ -257,6 +289,31 @@ static struct platform_device surf_keypad_device = {
 	.resource       = resources_keypad,
 	.dev		= {
 		.platform_data = &surf_keypad_data,
+	},
+};
+
+static struct pmic8058_keypad_data fluid_keypad_data = {
+	.input_name		= "fluid-keypad",
+	.input_phys_device	= "fluid-keypad/input0",
+	.num_rows		= 5,
+	.num_cols		= 5,
+	.rows_gpio_start	= 8,
+	.cols_gpio_start	= 0,
+	.keymap_size		= ARRAY_SIZE(fluid_keymap),
+	.keymap			= fluid_keymap,
+	.debounce_ms		= 8,
+	.scan_delay_ms		= 32,
+	.row_hold_us		= 125,
+	.wakeup			= 1,
+};
+
+static struct platform_device fluid_keypad_device = {
+	.name		= "pmic8058_keypad",
+	.id		= -1,
+	.num_resources  = ARRAY_SIZE(resources_keypad),
+	.resource       = resources_keypad,
+	.dev		= {
+		.platform_data = &fluid_keypad_data,
 	},
 };
 
@@ -2249,7 +2306,12 @@ static void __init msm7x30_init(void)
 
 	i2c_register_board_info(4 /* QUP ID */, msm_camera_boardinfo,
 				ARRAY_SIZE(msm_camera_boardinfo));
-	platform_device_register(&surf_keypad_device);
+
+	if (machine_is_msm7x30_surf() || machine_is_msm7x30_ffa())
+		platform_device_register(&surf_keypad_device);
+	else if (machine_is_msm7x30_fluid())
+		platform_device_register(&fluid_keypad_device);
+
 	bt_power_init();
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	msm7x30_init_uart2();
