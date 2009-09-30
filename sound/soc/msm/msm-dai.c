@@ -29,7 +29,11 @@
 #include <sound/pcm.h>
 #include <sound/initval.h>
 #include <sound/soc.h>
+#ifdef CONFIG_ARCH_MSM_ARM11
 #include "msm-pcm.h"
+#else
+#include "qsd-pcm.h"
+#endif
 
 struct snd_soc_dai msm_dais[] = {
 {
