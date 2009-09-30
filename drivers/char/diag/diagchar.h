@@ -43,7 +43,9 @@
 /* Size of the buffer used for deframing a packet
   reveived from the PC tool*/
 #define HDLC_MAX 4096
-
+#define HDLC_OUT_BUF_SIZE 8192
+#define POOL_TYPE_COPY 1
+#define POOL_TYPE_HDLC 0
 /* Number of maximum USB requests that the USB layer should handle at
    one time. */
 #define MAX_DIAG_USB_REQUESTS 12
@@ -80,11 +82,16 @@ struct diagchar_dev {
 	int num_clients;
 	unsigned int itemsize;
 	unsigned int poolsize;
+	unsigned int itemsize_hdlc;
+	unsigned int poolsize_hdlc;
 
 	/* State for the mempool for the char driver */
 	mempool_t *diagpool;
+	mempool_t *diag_hdlc_pool;
 	struct mutex diagmem_mutex;
 	int count;
+	int count_hdlc_pool;
+	int used;
 
 	/* State for diag forwarding */
 	unsigned char *usb_buf_in;

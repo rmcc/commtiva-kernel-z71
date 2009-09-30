@@ -69,23 +69,44 @@
 #include "diagfwd.h"
 #include "diagmem.h"
 #include "diagchar.h"
-
+#include <linux/timer.h>
 
 MODULE_DESCRIPTION("Diag Char Driver");
 MODULE_LICENSE("GPL v2");
 MODULE_VERSION("1.0");
 
 struct diagchar_dev *driver;
-
 /* The following variables can be specified by module options */
-static unsigned int itemsize = 512; /*Size of item in the mempool*/
-static unsigned int poolsize = 50;  /*Number of items in the mempool*/
+ /* for copy buffer */
+static unsigned int itemsize = 512; /*Size of item in the mempool */
+static unsigned int poolsize = 20; /*Number of items in the mempool */
+/* for hdlc buffer */
+static unsigned int itemsize_hdlc = 8192; /*Size of item in the mempool */
+static unsigned int poolsize_hdlc = 8;  /*Number of items in the mempool */
 /* This is the maximum number of user-space clients supported */
 static unsigned int max_clients = 5;
-
+/* Timer variables */
+static struct timer_list drain_timer;
+static int timer_in_progress;
+static spinlock_t diagchar_write_lock;
+void *buf_hdlc;
 module_param(itemsize, uint, 0);
 module_param(poolsize, uint, 0);
 module_param(max_clients, uint, 0);
+
+static void drain_timer_func(unsigned long data)
+{
+	timer_in_progress = 0;
+	if (buf_hdlc) {
+		diag_write(buf_hdlc, driver->used);
+		buf_hdlc = NULL;
+#ifdef DIAG_DEBUG
+		printk(KERN_INFO "\n Number of bytes written"
+				 "from timer is %d ", driver->used);
+#endif
+		driver->used = 0;
+	}
+}
 
 static int diagchar_open(struct inode *inode, struct file *file)
 {
@@ -107,8 +128,9 @@ static int diagchar_open(struct inode *inode, struct file *file)
 		driver->data_ready[i] |= EVENT_MASKS_TYPE;
 		driver->data_ready[i] |= LOG_MASKS_TYPE;
 
-		if (driver->ref_count == 0 && driver->count == 0)
-			diagmem_init(driver);
+		if (driver->ref_count == 0 && driver->count == 0 &&
+					 driver->count_hdlc_pool == 0)
+				diagmem_init(driver);
 		driver->ref_count++;
 		mutex_unlock(&driver->diagchar_mutex);
 		return 0;
@@ -270,26 +292,30 @@ exit:
 static int diagchar_write(struct file *file, const char __user *buf,
 			      size_t count, loff_t *ppos)
 {
-	int err;
-	int used, ret = 0;
+	int err, ret = 0, pkt_type;
 #ifdef DIAG_DEBUG
 	int length = 0, i;
 #endif
 	struct diag_send_desc_type send = { NULL, NULL, DIAG_STATE_START, 0 };
 	struct diag_hdlc_dest_type enc = { NULL, NULL, 0 };
 	void *buf_copy;
-	void *buf_hdlc;
 	int payload_size;
 
+	if (!timer_in_progress)	{
+		timer_in_progress = 1;
+		ret = mod_timer(&drain_timer, jiffies + msecs_to_jiffies(500));
+	}
 	if (!driver->usb_connected) {
 		/*Drop the diag payload */
 		return -EIO;
 	}
 
+	/* Get the packet type F3/log/event/Pkt response */
+	err = copy_from_user((&pkt_type), buf, 4);
 	/*First 4 bytes indicate the type of payload - ignore these */
 	payload_size = count - 4;
 
-	buf_copy = diagmem_alloc(driver, payload_size);
+	buf_copy = diagmem_alloc(driver, payload_size, POOL_TYPE_COPY);
 	if (!buf_copy) {
 		driver->dropped_count++;
 		return -ENOMEM;
@@ -310,24 +336,9 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	send.pkt = buf_copy;
 	send.last = (void *)(buf_copy + payload_size - 1);
 	send.terminate = 1;
-
-	/*Allocate a buffer for CRC + HDLC framed output to USB */
-	buf_hdlc = diagmem_alloc(driver, payload_size + 8);
-	if (!buf_hdlc) {
-		driver->dropped_count++;
-		ret = -ENOMEM;
-		goto fail_free_copy;
-	}
-
-	enc.dest = buf_hdlc;
-	enc.dest_last = (void *)(buf_hdlc + payload_size + 7);
-
-	diag_hdlc_encode(&send, &enc);
-
-	used = (uint32_t) enc.dest - (uint32_t) buf_hdlc;
-
-	diagmem_free(driver, buf_copy);
 #ifdef DIAG_DEBUG
+	printk(KERN_INFO "\n Already used bytes in buffer %d, and"
+	" incoming payload size is %d \n", driver->used, payload_size);
 	printk(KERN_DEBUG "hdlc encoded data is --> \n");
 	for (i = 0; i < payload_size + 8; i++) {
 		printk(KERN_DEBUG "\t %x \t", *(((unsigned char *)buf_hdlc)+i));
@@ -335,21 +346,77 @@ static int diagchar_write(struct file *file, const char __user *buf,
 			length++;
 	}
 #endif
-	err = diag_write(buf_hdlc, used);
-	if (err) {
-		/*Free the buffer right away if write failed */
-		ret = -EIO;
-		goto fail_free_hdlc;
+	spin_lock_bh(&diagchar_write_lock);
+	if (!buf_hdlc)
+		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
+						 POOL_TYPE_HDLC);
+
+	if ((pkt_type == DATA_TYPE_RESPONSE) ||
+		 (HDLC_OUT_BUF_SIZE - driver->used <= payload_size + 7)) {
+		err = diag_write(buf_hdlc, driver->used);
+		if (err) {
+			/*Free the buffer right away if write failed */
+			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			ret = -EIO;
+			goto fail_free_hdlc;
+		}
+		buf_hdlc = NULL;
+#ifdef DIAG_DEBUG
+		printk(KERN_INFO "\n size written is %d \n", driver->used);
+#endif
+		driver->used = 0;
+		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
+							 POOL_TYPE_HDLC);
+		if (!buf_hdlc) {
+			ret = -ENOMEM;
+			goto fail_free_hdlc;
+		}
 	}
 
+	enc.dest = buf_hdlc + driver->used;
+	enc.dest_last = (void *)(buf_hdlc + driver->used + payload_size + 7);
+	diag_hdlc_encode(&send, &enc);
+
+	/* This is to check if after HDLC encoding, we are still within the
+	 limits of aggregation buffer. If not, we write out the current buffer
+	and start aggregation in a newly allocated buffer */
+	if ((unsigned int) enc.dest >=
+		 (unsigned int)(buf_hdlc + HDLC_OUT_BUF_SIZE)) {
+		err = diag_write(buf_hdlc, driver->used);
+		if (err) {
+			/*Free the buffer right away if write failed */
+			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			ret = -EIO;
+			goto fail_free_hdlc;
+		}
+		buf_hdlc = NULL;
+#ifdef DIAG_DEBUG
+		printk(KERN_INFO "\n size written is %d \n", driver->used);
+#endif
+		driver->used = 0;
+		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
+							 POOL_TYPE_HDLC);
+		if (!buf_hdlc) {
+			ret = -ENOMEM;
+			goto fail_free_hdlc;
+		}
+		enc.dest = buf_hdlc + driver->used;
+		enc.dest_last = (void *)(buf_hdlc + driver->used +
+							 payload_size + 7);
+		diag_hdlc_encode(&send, &enc);
+	}
+	driver->used = (uint32_t) enc.dest - (uint32_t) buf_hdlc;
+	spin_unlock_bh(&diagchar_write_lock);
+	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
 	return 0;
 
 fail_free_hdlc:
-	diagmem_free(driver, buf_hdlc);
+	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
+	spin_unlock_bh(&diagchar_write_lock);
 	return ret;
 
 fail_free_copy:
-	diagmem_free(driver, buf_copy);
+	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
 	return ret;
 }
 
@@ -419,13 +486,18 @@ static int __init diagchar_init(void)
 	driver = kzalloc(sizeof(struct diagchar_dev) + 5, GFP_KERNEL);
 
 	if (driver) {
+		driver->used = 0;
+		timer_in_progress = 0;
 		driver->itemsize = itemsize;
+		setup_timer(&drain_timer, drain_timer_func, 1234);
 		driver->poolsize = poolsize;
+		driver->itemsize_hdlc = itemsize_hdlc;
+		driver->poolsize_hdlc = poolsize_hdlc;
 		driver->num_clients = max_clients;
 		mutex_init(&driver->diagchar_mutex);
+		spin_lock_init(&diagchar_write_lock);
 		init_waitqueue_head(&driver->wait_q);
 		diagfwd_init();
-
 		printk(KERN_INFO "diagchar initializing ..\n");
 		driver->num = 1;
 		driver->name = ((void *)driver) + sizeof(struct diagchar_dev);

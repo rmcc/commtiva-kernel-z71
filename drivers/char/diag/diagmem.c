@@ -62,18 +62,23 @@
 #include <asm/atomic.h>
 #include "diagchar.h"
 
-void *diagmem_alloc(struct diagchar_dev *driver, int size)
+void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 {
-	void *buf;
+	void *buf = NULL;
 
-	mutex_lock(&driver->diagmem_mutex);
-	if (driver->count < driver->poolsize) {
-		atomic_add(1, (atomic_t *)&driver->count);
-		buf = mempool_alloc(driver->diagpool, GFP_ATOMIC);
-	} else {
-		buf = NULL;
+	if (pool_type == POOL_TYPE_COPY) {
+		mutex_lock(&driver->diagmem_mutex);
+		if (driver->count < driver->poolsize) {
+			atomic_add(1, (atomic_t *)&driver->count);
+			buf = mempool_alloc(driver->diagpool, GFP_ATOMIC);
+		}
+		mutex_unlock(&driver->diagmem_mutex);
+	} else if (pool_type == POOL_TYPE_HDLC) {
+		if (driver->count_hdlc_pool < driver->poolsize_hdlc) {
+			atomic_add(1, (atomic_t *)&driver->count_hdlc_pool);
+			buf = mempool_alloc(driver->diag_hdlc_pool, GFP_ATOMIC);
+		}
 	}
-	mutex_unlock(&driver->diagmem_mutex);
 	return buf;
 }
 
@@ -81,16 +86,29 @@ void diagmem_exit(struct diagchar_dev *driver)
 {
 	if (driver->count == 0 && driver->ref_count == 0)
 		mempool_destroy(driver->diagpool);
+
+	if (driver->count_hdlc_pool == 0 && driver->ref_count == 0)
+		mempool_destroy(driver->diag_hdlc_pool);
 }
 
-void diagmem_free(struct diagchar_dev *driver, void *buf)
+void diagmem_free(struct diagchar_dev *driver, void *buf, int pool_type)
 {
-	if (driver->diagpool != NULL && driver->count > 0) {
-		mempool_free(buf, driver->diagpool);
-		atomic_add(-1, (atomic_t *)&driver->count);
-	} else
-		printk(KERN_ALERT "\n Attempt to free up DIAG driver mempool"
-				  " memory which is already free");
+	if (pool_type == POOL_TYPE_COPY) {
+		if (driver->diagpool != NULL && driver->count > 0) {
+			mempool_free(buf, driver->diagpool);
+			atomic_add(-1, (atomic_t *)&driver->count);
+		} else
+			printk(KERN_ALERT "\n Attempt to free up DIAG driver"
+	       "mempool memory which is already free %d", driver->count);
+	} else if (pool_type == POOL_TYPE_HDLC) {
+		if (driver->diag_hdlc_pool != NULL &&
+			 driver->count_hdlc_pool > 0) {
+			mempool_free(buf, driver->diag_hdlc_pool);
+			atomic_add(-1, (atomic_t *)&driver->count_hdlc_pool);
+		} else
+			printk(KERN_ALERT "\n Attempt to free up DIAG driver "
+	"HDLC mempool which is already free %d ", driver->count_hdlc_pool);
+	}
 
 	diagmem_exit(driver);
 }
@@ -100,8 +118,13 @@ void diagmem_init(struct diagchar_dev *driver)
 	mutex_init(&driver->diagmem_mutex);
 	driver->diagpool = mempool_create_kmalloc_pool(driver->poolsize,
 						       driver->itemsize);
+	driver->diag_hdlc_pool = mempool_create_kmalloc_pool(
+	driver->poolsize_hdlc, driver->itemsize_hdlc);
+
 	if (!driver->diagpool)
 		printk(KERN_INFO "Cannot allocate diag mempool\n");
 
+	if (!driver->diag_hdlc_pool)
+		printk(KERN_INFO "Cannot allocate diag HDLC mempool\n");
 }
 
