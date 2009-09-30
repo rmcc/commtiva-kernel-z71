@@ -83,3 +83,7 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param);
 
 int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios);
 int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios);
+
+u8 pmic8058_get_rev(void);
+int pmic8058_is_rev_a0(void);
+int pmic8058_is_rev_b0(void);
