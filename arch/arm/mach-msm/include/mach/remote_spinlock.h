@@ -26,6 +26,11 @@
  *
  */
 
+/*
+ * Part of this this code is based on the standard ARM spinlock
+ * implementation (asm/spinlock.h) found in the 2.6.29 kernel.
+ */
+
 #ifndef __ASM__ARCH_QC_REMOTE_SPINLOCK_H
 #define __ASM__ARCH_QC_REMOTE_SPINLOCK_H
 
@@ -39,8 +44,72 @@ typedef raw_remote_spinlock_t *_remote_spinlock_t;
 
 #define remote_spin_lock_id_t uint32_t
 
-int _remote_spin_lock_init(remote_spin_lock_id_t id, _remote_spinlock_t *lock);
-void _remote_spin_lock(_remote_spinlock_t *lock);
-void _remote_spin_unlock(_remote_spinlock_t *lock);
+static inline void __raw_remote_ex_spin_lock(raw_remote_spinlock_t *lock)
+{
+	unsigned long tmp;
 
-#endif
+	__asm__ __volatile__(
+"1:	ldrex	%0, [%1]\n"
+"	teq	%0, #0\n"
+"	strexeq	%0, %2, [%1]\n"
+"	teqeq	%0, #0\n"
+"	bne	1b"
+	: "=&r" (tmp)
+	: "r" (&lock->lock), "r" (1)
+	: "cc");
+
+	smp_mb();
+}
+
+static inline void __raw_remote_ex_spin_unlock(raw_remote_spinlock_t *lock)
+{
+	smp_mb();
+
+	__asm__ __volatile__(
+"	str	%1, [%0]\n"
+	:
+	: "r" (&lock->lock), "r" (0)
+	: "cc");
+}
+
+static inline void __raw_remote_swp_spin_lock(raw_remote_spinlock_t *lock)
+{
+	unsigned long tmp;
+
+	__asm__ __volatile__(
+"1:	swp	%0, %2, [%1]\n"
+"	teq	%0, #0\n"
+"	bne	1b"
+	: "=&r" (tmp)
+	: "r" (&lock->lock), "r" (1)
+	: "cc");
+
+	smp_mb();
+}
+
+static inline void __raw_remote_swp_spin_unlock(raw_remote_spinlock_t *lock)
+{
+	smp_mb();
+
+	__asm__ __volatile__(
+"	str	%1, [%0]"
+	:
+	: "r" (&lock->lock), "r" (0)
+	: "cc");
+}
+
+
+int _remote_spin_lock_init(remote_spin_lock_id_t id, _remote_spinlock_t *lock);
+
+/* Only use SWP-based spinlocks for ARM11 apps processors where the LDREX/STREX
+ * instructions are unable to lock shared memory for exclusive access. */
+#if defined(CONFIG_ARCH_MSM_ARM11)
+#define _remote_spin_lock(lock)		__raw_remote_swp_spin_lock(*lock)
+#define _remote_spin_unlock(lock)	__raw_remote_swp_spin_unlock(*lock)
+#else
+#define _remote_spin_lock(lock)		__raw_remote_ex_spin_lock(*lock)
+#define _remote_spin_unlock(lock)	__raw_remote_ex_spin_unlock(*lock)
+#endif	/* CONFIG_ARCH_MSM_ARM11 */
+
+#endif /* __ASM__ARCH_QC_REMOTE_SPINLOCK_H */
+
