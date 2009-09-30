@@ -72,18 +72,29 @@
 #include <linux/delay.h>
 #include <linux/workqueue.h>
 #include <linux/io.h>
+#include <linux/debugfs.h>
 #include <mach/msm_spi.h>
 
 #define SPI_CONFIG                    0x0000
 #define SPI_IO_CONTROL                0x0004
 #define SPI_IO_MODES                  0x0008
+#define SPI_SW_RESET                  0x000C
+#define SPI_TIME_OUT                  0x0010
+#define SPI_TIME_OUT_CURRENT          0x0014
+#define SPI_MX_OUTPUT_COUNT           0x0018
+#define SPI_MX_OUTPUT_CNT_CURRENT     0x001C
+#define SPI_MX_INPUT_COUNT            0x0020
+#define SPI_MX_INPUT_CNT_CURRENT      0x0024
 #define SPI_MX_READ_COUNT             0x0028
 #define SPI_MX_READ_CNT_CURRENT       0x002C
 #define SPI_OPERATIONAL               0x0030
 #define SPI_ERROR_FLAGS               0x0034
 #define SPI_ERROR_FLAGS_EN            0x0038
 #define SPI_DEASSERT_WAIT             0x003C
+#define SPI_OUTPUT_DEBUG              0x0040
+#define SPI_INPUT_DEBUG               0x0044
 #define SPI_FIFO_WORD_CNT             0x0048
+#define SPI_TEST_CTRL                 0x004C
 #define SPI_OUTPUT_FIFO               0x0100
 #define SPI_INPUT_FIFO                0x0200
 
@@ -144,6 +155,40 @@ MODULE_LICENSE("GPL v2");
 MODULE_VERSION("0.2");
 MODULE_ALIAS("platform:spi_qsd");
 
+#define SPI_CLOCK_MAX            19200000
+
+#ifdef CONFIG_DEBUG_FS
+/* Used to create debugfs entries */
+static const struct {
+	const char *name;
+	mode_t mode;
+	int offset;
+} debugfs_spi_regs[] = {
+	{"config",                S_IRUGO | S_IWUSR, SPI_CONFIG},
+	{"io_control",            S_IRUGO | S_IWUSR, SPI_IO_CONTROL},
+	{"io_modes",              S_IRUGO | S_IWUSR, SPI_IO_MODES},
+	{"sw_reset",                        S_IWUSR, SPI_SW_RESET},
+	{"time_out",              S_IRUGO | S_IWUSR, SPI_TIME_OUT},
+	{"time_out_current",      S_IRUGO,           SPI_TIME_OUT_CURRENT},
+	{"mx_output_count",       S_IRUGO | S_IWUSR, SPI_MX_OUTPUT_COUNT},
+	{"mx_output_cnt_current", S_IRUGO,           SPI_MX_OUTPUT_CNT_CURRENT},
+	{"mx_input_count",        S_IRUGO | S_IWUSR, SPI_MX_INPUT_COUNT},
+	{"mx_input_cnt_current",  S_IRUGO,           SPI_MX_INPUT_CNT_CURRENT},
+	{"mx_read_count",         S_IRUGO | S_IWUSR, SPI_MX_READ_COUNT},
+	{"mx_read_cnt_current",   S_IRUGO,           SPI_MX_READ_CNT_CURRENT},
+	{"operational",           S_IRUGO | S_IWUSR, SPI_OPERATIONAL},
+	{"error_flags",           S_IRUGO | S_IWUSR, SPI_ERROR_FLAGS},
+	{"error_flags_en",        S_IRUGO | S_IWUSR, SPI_ERROR_FLAGS_EN},
+	{"deassert_wait",         S_IRUGO | S_IWUSR, SPI_DEASSERT_WAIT},
+	{"output_debug",          S_IRUGO,           SPI_OUTPUT_DEBUG},
+	{"input_debug",           S_IRUGO,           SPI_INPUT_DEBUG},
+	{"fifo_word_cnt",         S_IRUGO,           SPI_FIFO_WORD_CNT},
+	{"test_ctrl",             S_IRUGO | S_IWUSR, SPI_TEST_CTRL},
+	{"output_fifo",                     S_IWUSR, SPI_OUTPUT_FIFO},
+	{"input_fifo" ,           S_IRUSR,           SPI_INPUT_FIFO},
+};
+#endif
+
 struct msm_spi {
 	u8                      *read_buf;
 	const u8                *write_buf;
@@ -169,7 +214,10 @@ struct msm_spi {
 	int                      bytes_per_word;
 	bool                     suspended;
 	bool                     transfer_in_progress;
-
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dent_spi;
+	struct dentry *debugfs_spi_regs[ARRAY_SIZE(debugfs_spi_regs)];
+#endif
 };
 
 static int input_fifo_size;
@@ -537,6 +585,55 @@ err_setup_exit:
 	return rc;
 }
 
+#ifdef CONFIG_DEBUG_FS
+static int debugfs_iomem_x32_set(void *data, u64 val)
+{
+	iowrite32(val, data);
+	wmb();
+	return 0;
+}
+
+static int debugfs_iomem_x32_get(void *data, u64 *val)
+{
+	*val = ioread32(data);
+	return 0;
+}
+
+DEFINE_SIMPLE_ATTRIBUTE(fops_iomem_x32, debugfs_iomem_x32_get,
+			debugfs_iomem_x32_set, "0x%08llx\n");
+
+static void spi_debugfs_init(struct msm_spi *dd)
+{
+	dd->dent_spi = debugfs_create_dir(dev_name(dd->dev), NULL);
+	if (dd->dent_spi) {
+		int i;
+		for (i = 0; i < ARRAY_SIZE(debugfs_spi_regs); i++) {
+			dd->debugfs_spi_regs[i] =
+			   debugfs_create_file(
+			       debugfs_spi_regs[i].name,
+			       debugfs_spi_regs[i].mode,
+			       dd->dent_spi,
+			       dd->base + debugfs_spi_regs[i].offset,
+			       &fops_iomem_x32);
+		}
+	}
+}
+
+static void spi_debugfs_exit(struct msm_spi *dd)
+{
+	if (dd->dent_spi) {
+		int i;
+		debugfs_remove_recursive(dd->dent_spi);
+		dd->dent_spi = NULL;
+		for (i = 0; i < ARRAY_SIZE(debugfs_spi_regs); i++)
+			dd->debugfs_spi_regs[i] = NULL;
+	}
+}
+#else
+#define spi_debugfs_init NULL
+#define spi_debugfs_exit NULL
+#endif
+
 static int __init msm_spi_probe(struct platform_device *pdev)
 {
 	struct spi_master      *master;
@@ -660,6 +757,8 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	if (rc)
 		goto err_probe_reg_master;
 
+	spi_debugfs_init(dd);
+
 	return 0;
 
 err_probe_reg_master:
@@ -758,6 +857,8 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 	struct spi_master *master = platform_get_drvdata(pdev);
 	struct msm_spi    *dd = spi_master_get_devdata(master);
 	struct msm_spi_platform_data *pdata = pdev->dev.platform_data;
+
+	spi_debugfs_exit(dd);
 
 	free_irq(dd->irq_in, dd);
 	free_irq(dd->irq_out, dd);
