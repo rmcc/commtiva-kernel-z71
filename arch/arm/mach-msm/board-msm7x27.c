@@ -1450,6 +1450,10 @@ static void __init msm7x27_init(void)
 	/* The appropriate maximum replacement for 160000 is: */
 	/* clk_get_max_axi_khz() */
 	kgsl_pdata.max_axi_freq = 160000;
+
+	msm_hsusb_pdata.swfi_latency =
+		msm7x27_pm_data
+		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;

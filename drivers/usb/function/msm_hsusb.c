@@ -489,7 +489,7 @@ static void msm_hsusb_suspend_locks_acquire(struct usb_info *ui, int acquire)
 	if (acquire) {
 		wake_lock(&ui->wlock);
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
-				DRIVER_NAME, 0);
+				DRIVER_NAME, ui->pdata->swfi_latency);
 		/* targets like 7x30 have introduced core clock
 		 * to remove the dependency on max axi frequency
 		 */
@@ -3113,6 +3113,11 @@ static int __init usb_probe(struct platform_device *pdev)
 
 	ui->functions_map = ui->pdata->function_map;
 	ui->num_funcs = ui->pdata->num_functions;
+
+	/* to allow swfi latency, driver latency
+	 * must be above listed swfi latency
+	 */
+	ui->pdata->swfi_latency += 1;
 
 	/* zero is reserved for language id */
 	ui->strdesc_index = 1;

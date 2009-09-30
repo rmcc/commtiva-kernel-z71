@@ -97,6 +97,8 @@ struct msm_hsusb_platform_data {
 	unsigned int core_clk;
 
 	int vreg5v_required;
+
+	u32 swfi_latency;
 };
 
 struct msm_otg_platform_data {
