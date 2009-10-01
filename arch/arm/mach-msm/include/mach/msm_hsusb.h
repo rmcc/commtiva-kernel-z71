@@ -102,6 +102,7 @@ struct msm_hsusb_platform_data {
 struct msm_otg_platform_data {
 	int (*rpc_connect)(int);
 	int (*phy_reset)(void);
+	unsigned int core_clk;
 };
 
 struct msm_usb_host_platform_data {

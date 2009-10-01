@@ -55,11 +55,13 @@ struct msm_otg {
 
 	struct clk		*clk;
 	struct clk		*pclk;
+	struct clk		*cclk;
 	int			irq;
 	void __iomem		*regs;
 	u8			in_lpm;
 	struct wake_lock	wlock;
 
+	unsigned int 		core_clk;
 	int 			(*rpc_connect)(int);
 	int 			(*phy_reset)(void);
 };

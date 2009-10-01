@@ -280,6 +280,8 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL | ULPI_STP_CTRL, USB_USBCMD);
 	clk_disable(dev->clk);
 	clk_disable(dev->pclk);
+	if (dev->cclk)
+		clk_disable(dev->cclk);
 	if (device_may_wakeup(dev->otg.dev))
 		enable_irq_wake(dev->irq);
 	dev->in_lpm = 1;
@@ -308,6 +310,8 @@ static int msm_otg_resume(struct msm_otg *dev)
 
 	clk_enable(dev->clk);
 	clk_enable(dev->pclk);
+	if (dev->cclk)
+		clk_enable(dev->cclk);
 
 	temp = readl(USB_USBCMD);
 	temp &= ~ASYNC_INTR_CTRL;
@@ -492,6 +496,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		pdata = pdev->dev.platform_data;
 		dev->rpc_connect = pdata->rpc_connect;
 		dev->phy_reset = pdata->phy_reset;
+		dev->core_clk  = pdata->core_clk;
 	}
 
 	if (dev->rpc_connect) {
@@ -516,18 +521,26 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		ret = PTR_ERR(dev->pclk);
 		goto put_clk;
 	}
+	if (dev->core_clk) {
+		dev->cclk = clk_get(&pdev->dev, "usb_hs_core_clk");
+		if (IS_ERR(dev->cclk)) {
+			pr_err("%s: failed to get usb_hs_core_clk\n", __func__);
+			ret = PTR_ERR(dev->cclk);
+			goto put_pclk;
+		}
+	}
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
 		pr_err("%s: failed to get platform resource mem\n", __func__);
 		ret = -ENODEV;
-		goto put_pclk;
+		goto put_cclk;
 	}
 
 	dev->regs = ioremap(res->start, resource_size(res));
 	if (!dev->regs) {
 		pr_err("%s: ioremap failed\n", __func__);
 		ret = -ENOMEM;
-		goto put_pclk;
+		goto put_cclk;
 	}
 	dev->irq = platform_get_irq(pdev, 0);
 	if (!dev->irq) {
@@ -539,6 +552,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	/* enable clocks */
 	clk_enable(dev->clk);
 	clk_enable(dev->pclk);
+	if (dev->cclk)
+		clk_enable(dev->cclk);
 
 	otg_reset(dev);
 
@@ -548,6 +563,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		pr_info("%s: request irq failed\n", __func__);
 		clk_disable(dev->clk);
 		clk_disable(dev->pclk);
+		if (dev->cclk)
+			clk_disable(dev->cclk);
 		goto free_regs;
 	}
 
@@ -569,6 +586,9 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	return 0;
 free_regs:
 	iounmap(dev->regs);
+put_cclk:
+	if (dev->cclk)
+		clk_put(dev->cclk);
 put_pclk:
 	clk_put(dev->pclk);
 put_clk:
@@ -586,8 +606,12 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 
 	free_irq(dev->irq, pdev);
 	iounmap(dev->regs);
+	if (dev->cclk)
+		clk_disable(dev->cclk);
 	clk_disable(dev->pclk);
 	clk_disable(dev->clk);
+	if (dev->cclk)
+		clk_put(dev->cclk);
 	clk_put(dev->pclk);
 	clk_put(dev->clk);
 	wake_lock_destroy(&dev->wlock);

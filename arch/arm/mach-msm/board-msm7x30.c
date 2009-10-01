@@ -1005,6 +1005,7 @@ void hsusb_chg_connected(enum chg_type chgtype)
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_phy_reset,
+	.core_clk	= 1,
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
