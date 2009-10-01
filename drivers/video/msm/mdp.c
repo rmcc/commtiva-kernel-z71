@@ -943,7 +943,11 @@ static int mdp_probe(struct platform_device *pdev)
 		mfd->dma = &dma2_data;
 #else
 		if (mfd->panel_info.pdest == DISPLAY_1) {
+#ifdef CONFIG_FB_MSM_OVERLAY
+			mfd->dma_fnc = mdp4_mddi_overlay;
+#else
 			mfd->dma_fnc = mdp_dma2_update;
+#endif
 			mfd->dma = &dma2_data;
 			mfd->lut_update = mdp_lut_update_nonlcdc;
 			mfd->do_histogram = mdp_do_histogram;
@@ -982,7 +986,11 @@ static int mdp_probe(struct platform_device *pdev)
 		mfd->lut_update = mdp_lut_update_lcdc;
 		mfd->do_histogram = mdp_do_histogram;
 #endif
+#ifdef CONFIG_FB_MSM_OVERLAY
+		mfd->dma_fnc = mdp4_lcdc_overlay;
+#else
 		mfd->dma_fnc = mdp_lcdc_update;
+#endif
 		mfd->dma = &dma2_data;
 
 #ifdef CONFIG_FB_MSM_MDP40

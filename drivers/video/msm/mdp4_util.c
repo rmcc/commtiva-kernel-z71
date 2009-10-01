@@ -99,7 +99,7 @@ void mdp4_overlay_cfg(int overlayer, int blt_mode, int refresh, int direct_out)
 	direct_out &= 0x01;
 	bits |= direct_out;
 
-	if (overlayer == OVERLAY0_MIXER)
+	if (overlayer == MDP4_MIXER0)
 		outpdw(MDP_BASE + 0x10004, bits); /* MDP_OVERLAY0_CFG */
 	else
 		outpdw(MDP_BASE + 0x18004, bits); /* MDP_OVERLAY1_CFG */
@@ -225,8 +225,10 @@ void mdp4_hw_init(void)
 	/* dma_p fetch config */
 	outpdw(MDP_BASE + 0x91004, 0x27);	/* burst size of 8 */
 
+#ifndef CONFIG_FB_MSM_OVERLAY
 	/* both REFRESH_MODE and DIRECT_OUT are ignored at BLT mode */
-	mdp4_overlay_cfg(OVERLAY0_MIXER, OVERLAY_MODE_BLT, 0, 0);
+	mdp4_overlay_cfg(MDP4_MIXER0, OVERLAY_MODE_BLT, 0, 0);
+#endif
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -258,7 +260,6 @@ void mdp4_clear_lcdc(void)
 }
 
 static struct mdp_dma_data dma_e_data;
-static struct mdp_dma_data overlay0_data;
 static struct mdp_dma_data overlay1_data;
 static int intr_dma_p;
 static int intr_dma_s;
@@ -320,10 +321,18 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		}
 		if (isr & INTR_OVERLAY0_DONE) {
 			intr_overlay0++;
-			dma = &overlay0_data;
-			dma->busy = FALSE;
-			mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK,
+			lcdc = inpdw(MDP_BASE + 0xc0000);
+			dma = &dma2_data;
+			if (lcdc & 0x01) {	/* LCDC enable */
+				/* disable LCDC interrupt */
+				mdp_intr_mask &= ~INTR_OVERLAY0_DONE;
+				outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+				dma->waiting = FALSE;
+			} else {
+				dma->busy = FALSE;
+				mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK,
 					MDP_BLOCK_POWER_OFF, TRUE);
+			}
 			complete(&dma->comp);
 		}
 		if (isr & INTR_OVERLAY1_DONE) {
