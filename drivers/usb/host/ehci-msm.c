@@ -403,8 +403,8 @@ static int ehci_msm_bus_resume(struct usb_hcd *hcd)
 static int ehci_msm_reset(struct usb_hcd *hcd)
 {
 	struct ehci_hcd *ehci = hcd_to_ehci(hcd);
-	struct msmusb_hcd *mhcd = hcd_to_mhcd(hcd);
 	int retval;
+	unsigned otgsc;
 
 	ehci->caps = USB_CAPLENGTH;
 	ehci->regs = USB_CAPLENGTH +
@@ -419,13 +419,14 @@ static int ehci_msm_reset(struct usb_hcd *hcd)
 
 	hcd->has_tt = 1;
 	ehci->sbrn = HCD_USB2;
+	/* restore otgsc after reset */
+	otgsc = readl(USB_OTGSC);
 	retval = ehci_reset(ehci);
+	writel((otgsc & ~OTGSC_IDIS), USB_OTGSC);
 
 	/* SW workaround, Issue#3 */
 	writel(0x0, USB_AHB_MODE);
 	writel(0x0, USB_AHB_BURST);
-	if (mhcd->xceiv)
-		writel(readl(USB_OTGSC) | OTGSC_IDIE, USB_OTGSC);
 
 	return retval;
 }
