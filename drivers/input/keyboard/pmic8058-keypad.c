@@ -378,8 +378,6 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 		bits = KEYP_CTRL_SCAN_ROWS_BITS;
 	ctrl_val |= (bits << KEYP_CTRL_SCAN_ROWS_SHIFT);
 
-	ctrl_val |= KEYP_CTRL_KEYP_EN;
-
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
 
 	if (rev == PMIC8058_REV_A0)
@@ -433,12 +431,23 @@ static int pmic8058_kp_resume(struct platform_device *pdev)
 #define pmic8058_kp_resume	NULL
 #endif
 
+/*
+ * keypad controller should be initialized in the following sequence
+ * only, otherwise it might get into FSM stuck state.
+ *
+ * - Initialize keypad control parameters, like no. of rows, columns,
+ *   timing values etc.,
+ * - configure rows and column gpios pull up/down.
+ * - set irq edge type.
+ * - enable the keypad controller.
+ */
 static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 {
 	struct pmic8058_keypad_data *pdata = pdev->dev.platform_data;
 	struct pmic8058_kp *kp;
 	int rc, i;
 	unsigned short *keycodes;
+	u8 ctrl_val;
 
 	if (!pdata || !pdata->num_cols || !pdata->num_rows ||
 		pdata->num_cols > MATRIX_MAX_COLS ||
@@ -566,6 +575,15 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		goto err_get_irq;
 	}
 
+	/* initialize keypad state */
+	memset(kp->keystate, 0xff, sizeof(kp->keystate));
+
+	rc = pmic8058_kpd_init(kp);
+	if (rc < 0) {
+		dev_err(&pdev->dev, "unable to initialize keypad controller\n");
+		goto err_kpd_init;
+	}
+
 	rc = pm8058_gpio_config_kypd_sns(pdata->cols_gpio_start,
 						 pdata->num_cols);
 	if (rc < 0) {
@@ -579,17 +597,6 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "unable to configure keypad drive lines\n");
 		goto err_gpio_config;
 	}
-
-	/* initialize keypad state */
-	memset(kp->keystate, 0xff, sizeof(kp->keystate));
-
-	rc = pmic8058_kpd_init(kp);
-	if (rc < 0) {
-		dev_err(&pdev->dev, "unable to initialize keypad controller\n");
-		goto err_kpd_init;
-	}
-
-	__dump_kp_regs(kp, "probe");
 
 	rc = request_irq(kp->key_sense_irq, pmic8058_kp_irq,
 				 IRQF_TRIGGER_RISING, "pmic-keypad", kp);
@@ -605,6 +612,12 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		goto err_req_stuck_irq;
 	}
 
+	rc = pmic8058_kp_read(kp, &ctrl_val, KEYP_CTRL, 1);
+	ctrl_val |= KEYP_CTRL_KEYP_EN;
+	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
+
+	__dump_kp_regs(kp, "probe");
+
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
 
 	return 0;
@@ -612,10 +625,10 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 err_req_stuck_irq:
 	free_irq(kp->key_sense_irq, NULL);
 err_req_sense_irq:
+err_gpio_config:
 err_kpd_init:
 	input_unregister_device(kp->input);
 	kp->input = NULL;
-err_gpio_config:
 err_get_irq:
 	input_free_device(kp->input);
 err_alloc_device:
