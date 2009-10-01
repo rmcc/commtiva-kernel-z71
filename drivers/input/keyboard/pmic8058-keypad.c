@@ -196,12 +196,11 @@ static void __dump_kp_regs(struct pmic8058_kp *kp, char *msg)
 static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
 {
 	u8 temp, scan_val;
-	int retries = 100, rc;
+	int retries = 10, rc;
 
 	do {
 		rc = pmic8058_kp_read(kp, &scan_val, KEYP_SCAN, 1);
 		if (scan_val & 0x1) {
-			dev_dbg(kp->dev, "keypad FSM in read state\n");
 			if (flag)
 				rc = pmic8058_kp_read(kp, &temp,
 							 KEYP_RECENT_DATA, 1);
@@ -211,7 +210,8 @@ static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
 		}
 	} while ((scan_val & 0x1) && (--retries > 0));
 
-	WARN_ON(retries == 0);
+	if (retries == 0)
+		dev_dbg(kp->dev, "Unable to clear read state bit\n");
 
 	return 0;
 }
@@ -589,15 +589,6 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		goto err_kpd_init;
 	}
 
-	__dump_kp_regs(kp, "probe");
-	/*
-	 * REVISIT:
-	 * keypad controller state machine remains in the read state during
-	 * booting through JTAG connected, so we need to check and wait
-	 * until the read state bit is cleared.
-	 */
-	rc = pmic8058_chk_read_state(kp, 1);
-	rc = pmic8058_chk_read_state(kp, 0);
 	__dump_kp_regs(kp, "probe");
 
 	rc = request_irq(kp->key_sense_irq, pmic8058_kp_irq,
