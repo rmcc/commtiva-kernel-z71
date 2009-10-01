@@ -351,8 +351,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
 						 POOL_TYPE_HDLC);
 
-	if ((pkt_type == DATA_TYPE_RESPONSE) ||
-		 (HDLC_OUT_BUF_SIZE - driver->used <= payload_size + 7)) {
+	if (HDLC_OUT_BUF_SIZE - driver->used <= payload_size + 7) {
 		err = diag_write(buf_hdlc, driver->used);
 		if (err) {
 			/*Free the buffer right away if write failed */
@@ -405,7 +404,23 @@ static int diagchar_write(struct file *file, const char __user *buf,
 							 payload_size + 7);
 		diag_hdlc_encode(&send, &enc);
 	}
+
 	driver->used = (uint32_t) enc.dest - (uint32_t) buf_hdlc;
+	if (pkt_type == DATA_TYPE_RESPONSE) {
+		err = diag_write(buf_hdlc, driver->used);
+		if (err) {
+			/*Free the buffer right away if write failed */
+			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			ret = -EIO;
+			goto fail_free_hdlc;
+		}
+		buf_hdlc = NULL;
+#ifdef DIAG_DEBUG
+		printk(KERN_INFO "\n size written is %d \n", driver->used);
+#endif
+		driver->used = 0;
+	}
+
 	spin_unlock_bh(&diagchar_write_lock);
 	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
 	return 0;
