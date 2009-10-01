@@ -79,6 +79,7 @@
 #include <mach/memory.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_hsusb.h>
+#include <mach/rpc_hsusb.h>
 #include <mach/msm_spi.h>
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
@@ -89,6 +90,9 @@
 #include "devices.h"
 #include "timer.h"
 #include "socinfo.h"
+#ifdef CONFIG_USB_ANDROID
+#include <linux/usb/android.h>
+#endif
 #include "pm.h"
 #include <linux/msm_kgsl.h>
 
@@ -677,6 +681,7 @@ static struct platform_device smc91x_device = {
 	.resource       = smc91x_resources,
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
 	.nluns          = 0x02,
 	.buf_size       = 16384,
@@ -692,6 +697,81 @@ static struct platform_device mass_storage_device = {
 		.platform_data          = &usb_mass_storage_pdata,
 	},
 };
+#endif
+#ifdef CONFIG_USB_ANDROID
+/* dynamic composition */
+static struct usb_composition usb_func_composition[] = {
+	{
+		.product_id         = 0x9015,
+		/* MSC + ADB */
+		.functions	    = 0x12 /* 10010 */
+	},
+	{
+		.product_id         = 0xF000,
+		/* MSC */
+		.functions	    = 0x02, /* 0010 */
+	},
+	{
+		.product_id         = 0xF005,
+		/* MODEM ONLY */
+		.functions	    = 0x03,
+	},
+
+	{
+		.product_id         = 0x8080,
+		/* DIAG + MODEM */
+		.functions	    = 0x34,
+	},
+	{
+		.product_id         = 0x8082,
+		/* DIAG + ADB + MODEM */
+		.functions	    = 0x0314,
+	},
+	{
+		.product_id         = 0x8085,
+		/* DIAG + ADB + MODEM + NMEA + MSC*/
+		.functions	    = 0x25314,
+	},
+	{
+		.product_id         = 0x9016,
+		/* DIAG + GENERIC MODEM + GENERIC NMEA*/
+		.functions	    = 0x764,
+	},
+	{
+		.product_id         = 0x9017,
+		/* DIAG + GENERIC MODEM + GENERIC NMEA + MSC*/
+		.functions	    = 0x2764,
+	},
+	{
+		.product_id         = 0x9018,
+		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
+		.functions	    = 0x27614,
+	},
+	{
+		.product_id         = 0xF009,
+		/* CDC-ECM*/
+		.functions	    = 0x08,
+	}
+};
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x05C6,
+	.product_id	= 0x9018,
+	.functions	= 0x27614,
+	.version	= 0x0100,
+	.compositions   = usb_func_composition,
+	.num_compositions = ARRAY_SIZE(usb_func_composition),
+	.product_name	= "Qualcomm HSUSB Device",
+	.manufacturer_name = "Qualcomm Incorporated",
+	.nluns = 1,
+};
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+#endif
 
 static struct i2c_board_info msm_marimba_board_info[] = {
 	{
@@ -700,6 +780,7 @@ static struct i2c_board_info msm_marimba_board_info[] = {
 	}
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_function_map usb_functions_map[] = {
 	{"diag", 0},
 	{"adb", 1},
@@ -766,6 +847,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.core_clk	= 1,
 };
+#endif
 
 static struct msm_gpio bma_spi_gpio_config_data[] = {
 	{ GPIO_CFG(51, 0, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "bma_irq" },
@@ -875,7 +957,63 @@ static void __init msm_qsd_spi_init(void)
 {
 	qsd_device_spi.dev.platform_data = &qsd_spi_pdata;
 }
+#ifdef CONFIG_USB_ANDROID
+static int hsusb_rpc_connect(int connect)
+{
+	if (connect)
+		return msm_hsusb_rpc_connect();
+	else
+		return msm_hsusb_rpc_close();
+}
 
+static int hsusb_chg_init(int connect)
+{
+	if (connect)
+		return msm_chg_rpc_connect();
+	else
+		return msm_chg_rpc_close();
+}
+
+void hsusb_chg_vbus_draw(unsigned mA)
+{
+	if (mA)
+		msm_chg_usb_i_is_available(mA);
+	else
+		msm_chg_usb_i_is_not_available();
+}
+
+void hsusb_chg_connected(enum chg_type chgtype)
+{
+	switch (chgtype) {
+	case CHG_TYPE_HOSTPC:
+		pr_debug("Charger Type: HOST PC\n");
+		msm_chg_usb_charger_connected(0);
+		msm_chg_usb_i_is_available(100);
+		break;
+	case CHG_TYPE_WALL_CHARGER:
+		pr_debug("Charger Type: WALL CHARGER\n");
+		msm_chg_usb_charger_connected(2);
+		msm_chg_usb_i_is_available(1500);
+		break;
+	case CHG_TYPE_INVALID:
+		pr_debug("Charger Type: DISCONNECTED\n");
+		msm_chg_usb_i_is_not_available();
+		msm_chg_usb_charger_disconnected();
+		break;
+	}
+}
+static struct msm_otg_platform_data msm_otg_pdata = {
+	.rpc_connect	= hsusb_rpc_connect,
+	.phy_reset	= msm_hsusb_phy_reset,
+};
+
+static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
+	/* charging apis */
+	.chg_init = hsusb_chg_init,
+	.chg_connected = hsusb_chg_connected,
+	.chg_vbus_draw = hsusb_chg_vbus_draw,
+};
+#endif
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
@@ -1399,8 +1537,15 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_dmov,
 	&smc91x_device,
 	&msm_device_nand,
+#ifdef CONFIG_USB_FUNCTION
 	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
+#endif
+#ifdef CONFIG_USB_ANDROID
+	&msm_device_otg,
+	&msm_device_gadget_peripheral,
+	&android_usb_device,
+#endif
 	&qsd_device_spi,
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi6,
@@ -1815,7 +1960,13 @@ static void __init msm7x30_init(void)
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
+#ifdef CONFIG_USB_FUNCTION
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
+#endif
+#ifdef CONFIG_USB_ANDROID
+	msm_device_otg.dev.platform_data = &msm_otg_pdata;
+	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
+#endif
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	msm7x30_init_mmc();
 	msm_qsd_spi_init();
