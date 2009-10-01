@@ -837,10 +837,16 @@ struct platform_device msm_device_tsif = {
 #endif /* defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE) */
 /* TSIF end   */
 
+#if defined(CONFIG_ARCH_MSM7X30)
+#define MSM_TSSC_PHYS         0xAD300000
+#else
+#define MSM_TSSC_PHYS         0xAA300000
+#endif
+
 static struct resource resources_tssc[] = {
 	{
 		.start	= MSM_TSSC_PHYS,
-		.end	= MSM_TSSC_PHYS + MSM_TSSC_SIZE - 1,
+		.end	= MSM_TSSC_PHYS + SZ_4K - 1,
 		.name	= "tssc",
 		.flags	= IORESOURCE_MEM,
 	},

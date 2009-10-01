@@ -164,8 +164,4 @@
 #define MSM_SSBI_PHYS         0xA8100000
 #define MSM_SSBI_SIZE         SZ_4K
 
-#define MSM_TSSC_BASE         IOMEM(0xE1005000)
-#define MSM_TSSC_PHYS         0xAA300000
-#define MSM_TSSC_SIZE         SZ_4K
-
 #endif
