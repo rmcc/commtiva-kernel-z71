@@ -416,6 +416,7 @@ static int32_t mt9p012_set_fps(struct fps_cfg *fps)
 {
 	/* input is new fps in Q10 format */
 	int32_t rc = 0;
+	enum mt9p012_setting setting;
 
 	mt9p012_ctrl->fps_divider = fps->fps_div;
 	mt9p012_ctrl->pict_fps_divider = fps->pict_fps_div;
@@ -426,10 +427,15 @@ static int32_t mt9p012_set_fps(struct fps_cfg *fps)
 	if (rc < 0)
 		return -EBUSY;
 
+	if (mt9p012_ctrl->sensormode == SENSOR_PREVIEW_MODE)
+		setting = RES_PREVIEW;
+	else
+		setting = RES_CAPTURE;
+
 	rc = mt9p012_i2c_write_w(mt9p012_client->addr,
-				 REG_LINE_LENGTH_PCK,
-				 (mt9p012_regs.reg_pat[RES_PREVIEW].
-				  line_length_pck * fps->f_mult / 0x00000400));
+		REG_FRAME_LENGTH_LINES,
+		(mt9p012_regs.reg_pat[setting].frame_length_lines *
+		fps->fps_div / 0x00000400));
 	if (rc < 0)
 		return rc;
 

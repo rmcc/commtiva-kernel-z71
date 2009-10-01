@@ -407,6 +407,7 @@ static int32_t mt9t013_set_fps(struct fps_cfg *fps)
 {
 	/* input is new fps in Q8 format */
 	int32_t rc = 0;
+	enum mt9t013_setting setting;
 
 	mt9t013_ctrl->fps_divider = fps->fps_div;
 	mt9t013_ctrl->pict_fps_divider = fps->pict_fps_div;
@@ -417,17 +418,19 @@ static int32_t mt9t013_set_fps(struct fps_cfg *fps)
 	if (rc < 0)
 		return -EBUSY;
 
-	CDBG("mt9t013_set_fps: fps_div is %d, frame_rate is %d\n",
-			fps->fps_div,
-			(uint16_t) (mt9t013_regs.reg_pat[RES_PREVIEW].
-						frame_length_lines *
-					fps->fps_div/0x00000400));
+	CDBG("mt9t013_set_fps: fps_div is %d, f_mult is %d\n",
+			fps->fps_div, fps->f_mult);
 
+	if (mt9t013_ctrl->sensormode == SENSOR_PREVIEW_MODE)
+		setting = RES_PREVIEW;
+	else
+		setting = RES_CAPTURE;
 	rc = mt9t013_i2c_write_w(mt9t013_client->addr,
 			REG_FRAME_LENGTH_LINES,
 			(uint16_t) (
-			mt9t013_regs.reg_pat[RES_PREVIEW].frame_length_lines *
-			fps->f_mult / fps->fps_div));
+			mt9t013_regs.reg_pat[setting].frame_length_lines *
+			fps->fps_div / 0x00000400));
+
 	if (rc < 0)
 		return rc;
 
@@ -452,6 +455,13 @@ static int32_t mt9t013_write_exp_gain(uint16_t gain, uint32_t line)
 
 	if (gain > max_legal_gain)
 		gain = max_legal_gain;
+
+	if (mt9t013_ctrl->sensormode != SENSOR_SNAPSHOT_MODE)
+		line = (uint32_t) (line * mt9t013_ctrl->fps_divider /
+				   0x00000400);
+	else
+		line = (uint32_t) (line * mt9t013_ctrl->pict_fps_divider /
+				   0x00000400);
 
 	/*Set digital gain to 1 */
 	gain |= 0x0200;
