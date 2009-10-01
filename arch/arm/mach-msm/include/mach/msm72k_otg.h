@@ -64,6 +64,7 @@ struct msm_otg {
 	unsigned int 		core_clk;
 	int 			(*rpc_connect)(int);
 	int 			(*phy_reset)(void __iomem *);
+	void (*start_host)	(struct usb_bus *bus, int suspend);
 };
 
 #endif
