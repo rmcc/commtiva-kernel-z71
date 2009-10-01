@@ -45,7 +45,11 @@ int nandmtd2_WriteChunkWithTagsToNAND(yaffs_Device *dev, int chunkInNAND,
 
 	loff_t addr;
 
-	yaffs_PackedTags2 pt;
+	yaffs_PackedTags2 *pt;
+	pt = kmalloc(sizeof(yaffs_PackedTags2), GFP_KERNEL);
+	if (pt == NULL) {
+		return YAFFS_FAIL;
+	}
 
 	T(YAFFS_TRACE_MTD,
 	  (TSTR
@@ -67,28 +71,29 @@ int nandmtd2_WriteChunkWithTagsToNAND(yaffs_Device *dev, int chunkInNAND,
 		pt2tp = (yaffs_PackedTags2TagsPart *)(data + dev->nDataBytesPerChunk);
 		yaffs_PackTags2TagsPart(pt2tp, tags);
 	} else
-		yaffs_PackTags2(&pt, tags);
+		yaffs_PackTags2(pt, tags);
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2, 6, 17))
 	ops.mode = MTD_OOB_AUTO;
-	ops.ooblen = (dev->inbandTags) ? 0 : sizeof(pt);
+	ops.ooblen = (dev->inbandTags) ? 0 : sizeof(*pt);
 	ops.len = dev->totalBytesPerChunk;
 	ops.ooboffs = 0;
 	ops.datbuf = (__u8 *)data;
-	ops.oobbuf = (dev->inbandTags) ? NULL : (void *)&pt;
+	ops.oobbuf = (dev->inbandTags) ? NULL : (void *)pt;
 	retval = mtd->write_oob(mtd, addr, &ops);
 
 #else
 	if (!dev->inbandTags) {
 		retval =
 		    mtd->write_ecc(mtd, addr, dev->nDataBytesPerChunk,
-				   &dummy, data, (__u8 *) &pt, NULL);
+				   &dummy, data, (__u8 *) pt, NULL);
 	} else {
 		retval =
 		    mtd->write(mtd, addr, dev->totalBytesPerChunk, &dummy,
 			       data);
 	}
 #endif
+	kfree(pt);
 
 	if (retval == 0)
 		return YAFFS_OK;
