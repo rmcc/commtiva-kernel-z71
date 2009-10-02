@@ -185,7 +185,6 @@ struct msm_rpc_endpoint {
 	struct list_head reply_avail_q;
 	spinlock_t reply_q_lock;
 	uint32_t reply_cnt;
-	uint32_t next_pm;   /* Pacmark sequence */
 
 	/* device node if this endpoint is accessed via userspace */
 	dev_t dev;
