@@ -40,6 +40,7 @@
 #include <mach/msm_hsusb.h>
 #include <linux/device.h>
 #include <mach/msm_hsusb_hw.h>
+#include <mach/clk.h>
 
 static const char driver_name[] = "msm72k_udc";
 
@@ -1068,17 +1069,23 @@ static int usb_free(struct usb_info *ui, int ret)
 		dma_free_coherent(&ui->pdev->dev, 4096, ui->buf, ui->dma);
 	kfree(ui);
 	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME);
+	pm_qos_remove_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME);
 	return ret;
 }
 
 static void msm72k_pm_qos_update(int vote)
 {
-	if (vote)
+	if (vote) {
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, 0);
-	else
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+						MSM_AXI_MAX_FREQ);
+	} else {
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+						PM_QOS_DEFAULT_VALUE);
+	}
 }
 
 static void usb_do_work_check_vbus(struct usb_info *ui)
@@ -1836,6 +1843,8 @@ static int msm72k_probe(struct platform_device *pdev)
 	the_usb_info = ui;
 
 	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
+					PM_QOS_DEFAULT_VALUE);
+	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 					PM_QOS_DEFAULT_VALUE);
 	usb_debugfs_init(ui);
 
