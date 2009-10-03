@@ -1389,6 +1389,11 @@ static void __init bt_power_init(void)
 #define bt_power_init(x) do {} while (0)
 #endif
 
+static struct platform_device msm_device_pmic_leds = {
+	.name   = "pmic-leds",
+	.id = -1,
+};
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
@@ -1425,6 +1430,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	&msm_device_uart2,
 #endif
+	&msm_device_pmic_leds,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
