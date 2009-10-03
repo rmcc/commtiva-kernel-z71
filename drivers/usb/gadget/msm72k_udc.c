@@ -1121,7 +1121,7 @@ static void usb_do_work(struct work_struct *w)
 					break;
 				}
 
-				msm72k_pm_qos_update(ui, 1);
+				msm72k_pm_qos_update(1);
 				pr_info("msm72k_udc: IDLE -> ONLINE\n");
 				usb_reset(ui);
 				ret = request_irq(otg->irq, usb_interrupt,
@@ -1133,7 +1133,7 @@ static void usb_do_work(struct work_struct *w)
 				if (ret) {
 					pr_err("hsusb: peripheral: request irq"
 							" failed:(%d)", ret);
-					msm72k_pm_qos_update(ui, 0);
+					msm72k_pm_qos_update(0);
 					break;
 				}
 				ui->irq = otg->irq;
@@ -1190,7 +1190,7 @@ static void usb_do_work(struct work_struct *w)
 
 				ui->state = USB_STATE_OFFLINE;
 				usb_do_work_check_vbus(ui);
-				msm72k_pm_qos_update(ui, 0);
+				msm72k_pm_qos_update(0);
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -1222,7 +1222,7 @@ static void usb_do_work(struct work_struct *w)
 
 				pr_info("msm72k_udc: OFFLINE -> ONLINE\n");
 
-				msm72k_pm_qos_update(ui, 1);
+				msm72k_pm_qos_update(1);
 				otg_set_suspend(ui->xceiv, 0);
 				usb_reset(ui);
 				ui->state = USB_STATE_ONLINE;
