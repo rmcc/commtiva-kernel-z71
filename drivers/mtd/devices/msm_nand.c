@@ -2652,7 +2652,7 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 	dma_addr_t init_dma_addr = 0;
 	dma_addr_t data_dma_addr_curr = 0;
 	dma_addr_t oob_dma_addr_curr = 0;
-	static uint8_t init_spare_bytes[64];
+	uint8_t *init_spare_bytes;
 
 	loff_t to_curr = 0;
 	unsigned page_count;
@@ -2766,6 +2766,12 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 		return -EINVAL;
 	}
 
+	init_spare_bytes = kmalloc(64, GFP_KERNEL);
+	if (!init_spare_bytes) {
+		pr_err("%s: failed to alloc init_spare_bytes buffer\n",
+				__func__);
+		return -ENOMEM;
+	}
 	for (i = 0; i < 64; i++)
 		init_spare_bytes[i] = 0xFF;
 
@@ -3329,6 +3335,7 @@ err_dma_map_oobbuf_failed:
 	pr_info("================================================="
 			"================\n");
 #endif
+	kfree(init_spare_bytes);
 	return err;
 }
 
