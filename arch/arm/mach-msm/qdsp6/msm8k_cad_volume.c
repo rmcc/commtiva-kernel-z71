@@ -247,6 +247,91 @@ s32 qdsp6_volume_read(s32 session_id,
 	return CAD_RES_SUCCESS;
 }
 
+s32 send_voice_mute(s32 sess_id, u32 device_id, u32 path, u32 mute)
+{
+	struct adsp_audio_set_dev_mute_command	set_dev_mute;
+	union adsp_audio_event event_payload;
+	s32 rc;
+
+	memset(&set_dev_mute, 0,
+		sizeof(struct adsp_audio_set_dev_mute_command));
+	memset(&event_payload, 0, sizeof(union adsp_audio_event));
+
+	D("%s: device id = %d, path = %d, mute = %d\n", __func__, device_id,
+		path, mute);
+
+	set_dev_mute.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_MUTE;
+	set_dev_mute.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+	set_dev_mute.device_id = ADSP_AUDIO_DEVICE_ID_VOICE;
+	set_dev_mute.path = path;
+	set_dev_mute.mute = mute;
+
+	rc = cad_rpc_control(sess_id,
+		ardsession[sess_id]->group_id,
+		(void *)&set_dev_mute,
+		sizeof(struct adsp_audio_set_dev_mute_command),
+		&event_payload);
+
+	if (rc != CAD_RES_SUCCESS)
+		pr_err("%s: cad_rpc_control() failure\n", __func__);
+
+	return rc;
+}
+
+s32 handle_voice_mute(s32 session_id,
+		struct cad_flt_cfg_strm_mute *stream_mute_buf)
+{
+	u32 path = 1;
+	s32 rc;
+	rc = send_voice_mute(audio_ctrl_handle, CAD_HW_DEVICE_ID_VOICE, path,
+		stream_mute_buf->mute);
+
+	return rc;
+}
+
+s32 send_voice_vol(s32 sess_id, u32 device_id, u32 path, u32 volume)
+{
+	struct adsp_audio_set_dev_stereo_volume_command	set_dev_stereo_volume;
+	union adsp_audio_event event_payload;
+	s32 rc;
+
+	memset(&set_dev_stereo_volume, 0,
+		sizeof(struct adsp_audio_set_dev_stereo_volume_command));
+	memset(&event_payload, 0, sizeof(union adsp_audio_event));
+
+	D("%s: device id = %d\n", __func__, device_id);
+
+	set_dev_stereo_volume.cmd.op_code = ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL;
+	set_dev_stereo_volume.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+	set_dev_stereo_volume.device_id = ADSP_AUDIO_DEVICE_ID_VOICE;
+	set_dev_stereo_volume.path = path;
+	set_dev_stereo_volume.l_chan_gain_mb = volume;
+	set_dev_stereo_volume.r_chan_gain_mb = volume;
+
+	rc = cad_rpc_control(sess_id,
+		ardsession[sess_id]->group_id,
+		(void *)&set_dev_stereo_volume,
+		sizeof(struct adsp_audio_set_dev_stereo_volume_command),
+		&event_payload);
+
+	if (rc != CAD_RES_SUCCESS)
+		pr_err("%s: cad_rpc_control() failure\n", __func__);
+
+	return rc;
+}
+
+s32 handle_voice_vol(s32 session_id,
+		struct cad_flt_cfg_strm_vol *stream_vol_buf)
+{
+	u32 path = 0;
+	s32 rc;
+
+	rc = send_voice_vol(audio_ctrl_handle, CAD_HW_DEVICE_ID_VOICE, path,
+		stream_vol_buf->volume);
+
+	return rc;
+}
+
 s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	void *cmd_buf, u32 cmd_len)
 {
@@ -750,6 +835,12 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 			goto done;
 		}
 
+		if (ardsession[session_id]->sess_open_info->cad_stream.app_type
+				== CAD_STREAM_APP_VOICE) {
+			rc = handle_voice_vol(session_id, stream_vol_buf);
+			goto done;
+		}
+
 		/* For volume != min: send unmute command. */
 		if (stream_vol_buf->volume != CAD_STREAM_MIN_GAIN) {
 			/* Construct QDSP6 stream mute command. */
@@ -835,6 +926,11 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 
 		if (!q6_set_strm_mute)
 			return CAD_RES_FAILURE;
+		if (ardsession[session_id]->sess_open_info->cad_stream.app_type
+				== CAD_STREAM_APP_VOICE) {
+			rc = handle_voice_mute(session_id, stream_mute_buf);
+			goto done;
+		}
 
 		/* 2. Assign values to command buffer. */
 		q6_set_strm_mute->mute = stream_mute_buf->mute;
