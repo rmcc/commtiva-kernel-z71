@@ -1052,7 +1052,7 @@ err_initial:
 	return retval;
 }
 
-static int __exit tavarua_remove(struct platform_device *pdev)
+static int __devexit tavarua_remove(struct platform_device *pdev)
 {
 	int i;
 	struct tavarua_device *radio = platform_get_drvdata(pdev);
@@ -1082,7 +1082,7 @@ static struct platform_driver tavarua_driver = {
 		.name   = "marimba_fm",
 	},
 	.probe = tavarua_probe,
-	.remove = tavarua_remove,
+	.remove = __devexit_p(tavarua_remove),
 	.suspend = tavarua_suspend,
 	.resume = tavarua_resume,
 };
