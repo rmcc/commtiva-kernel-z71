@@ -597,7 +597,8 @@ static int msm_xusb_init_phy(struct msmusb_hcd *mhcd)
 			ret = msm_hsusb_phy_reset();
 		if (ret)
 			break;
-		/* enable IDpullup to start ID pin sampling */
+		/* Give some delay to settle phy after reset */
+		msleep(100);
 		/* Disable VbusValid and SessionEnd comparators */
 		ulpi_write(hcd, ULPI_VBUS_VALID
 				| ULPI_SESS_END, ULPI_INT_RISE_CLR);
