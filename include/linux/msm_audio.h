@@ -65,6 +65,11 @@
 				struct msm_vol_info)
 #define AUDIO_SET_MAX_VOL_ALL _IOW(AUDIO_IOCTL_MAGIC, 39, unsigned)
 
+#define AUDIO_SET_STREAM_CONFIG   _IOW(AUDIO_IOCTL_MAGIC, 40, \
+				struct msm_audio_stream_config)
+#define AUDIO_GET_STREAM_CONFIG   _IOR(AUDIO_IOCTL_MAGIC, 41, \
+				struct msm_audio_stream_config)
+
 #define	AUDIO_MAX_COMMON_IOCTL_NUM	100
 
 /* CONFLICTING ioctls added by Google. */
@@ -129,6 +134,11 @@ struct msm_audio_config {
 	uint32_t meta_field;
 	uint32_t bits;
 	uint32_t unused[3];
+};
+
+struct msm_audio_stream_config {
+	uint32_t buffer_size;
+	uint32_t buffer_count;
 };
 
 struct msm_audio_stats {

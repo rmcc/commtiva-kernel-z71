@@ -61,7 +61,7 @@
 #include <linux/miscdevice.h>
 #include <linux/platform_device.h>
 #include <linux/uaccess.h>
-#include <linux/msm_audio.h>
+#include <linux/msm_audio_aac.h>
 
 #include <asm/ioctls.h>
 #include <mach/qdsp6/msm8k_cad.h>
@@ -82,7 +82,8 @@
 
 struct aac {
 	u32 cad_w_handle;
-	struct msm_audio_config cfg;
+	struct msm_audio_stream_config str_cfg;
+	struct msm_audio_aac_enc_config aac_cfg;
 };
 
 static int msm8k_aac_in_open(struct inode *inode, struct file *f)
@@ -101,10 +102,12 @@ static int msm8k_aac_in_open(struct inode *inode, struct file *f)
 	f->private_data = aac;
 	memset(aac, 0, sizeof(struct aac));
 
-	aac->cfg.buffer_size = 4096;
-	aac->cfg.buffer_count = 2;
-	aac->cfg.channel_count = 1;
-	aac->cfg.sample_rate = 48000;
+	aac->str_cfg.buffer_size = 4096;
+	aac->str_cfg.buffer_count = 2;
+	aac->aac_cfg.channels = 1;
+	aac->aac_cfg.sample_rate = 48000;
+	aac->aac_cfg.bit_rate = 192000;
+	aac->aac_cfg.stream_format = AUDIO_AAC_FORMAT_ADTS;
 
 	cos.format = CAD_FORMAT_AAC;
 	cos.op_code = CAD_OPEN_OP_READ;
@@ -178,7 +181,7 @@ static int msm8k_aac_in_ioctl(struct inode *inode, struct file *f,
 		cad_stream_info.app_type = CAD_STREAM_APP_RECORD;
 		cad_stream_info.priority = 0;
 		cad_stream_info.buf_mem_type = CAD_STREAM_BUF_MEM_HEAP;
-		cad_stream_info.ses_buf_max_size = p->cfg.buffer_size;
+		cad_stream_info.ses_buf_max_size = p->str_cfg.buffer_size;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_INFO,
 			&cad_stream_info,
 			sizeof(struct cad_stream_info_struct_type));
@@ -199,14 +202,11 @@ static int msm8k_aac_in_ioctl(struct inode *inode, struct file *f,
 		}
 		cad_write_aac_fmt.ver_id = CAD_WRITE_AAC_VERSION_10;
 
-		if (p->cfg.sample_rate != 48000)
-			D("Switching to 48KHz, only 48KHz supported!\n");
-
 		cad_write_aac_fmt.aac.sample_rate = CAD_SAMPLE_RATE_48000;
-		cad_write_aac_fmt.aac.channel_config = 1;
-		cad_write_aac_fmt.aac.block_formats = 0xffff;
+		cad_write_aac_fmt.aac.channel_config = p->aac_cfg.channels;
+		cad_write_aac_fmt.aac.block_formats = p->aac_cfg.stream_format;
 		cad_write_aac_fmt.aac.audio_object_type = 2;
-		cad_write_aac_fmt.aac.bit_rate = 192000;
+		cad_write_aac_fmt.aac.bit_rate = p->aac_cfg.bit_rate;
 
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
 			&cad_write_aac_fmt,
@@ -231,13 +231,38 @@ static int msm8k_aac_in_ioctl(struct inode *inode, struct file *f,
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
 			NULL, 0);
 		break;
-	case AUDIO_GET_CONFIG:
-		if (copy_to_user((void *)arg, &p->cfg,
-				sizeof(struct msm_audio_config)))
+	case AUDIO_GET_STREAM_CONFIG:
+		if (copy_to_user((void *)arg, &p->str_cfg,
+				sizeof(struct msm_audio_stream_config)))
 			return -EFAULT;
-	case AUDIO_SET_CONFIG:
-		rc = copy_from_user(&p->cfg, (void *)arg,
-				sizeof(struct msm_audio_config));
+		break;
+	case AUDIO_SET_STREAM_CONFIG:
+		if (copy_from_user(&p->str_cfg, (void *)arg,
+				sizeof(struct msm_audio_stream_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_GET_AAC_ENC_CONFIG:
+		if (copy_to_user((void *)arg, &p->aac_cfg,
+				sizeof(struct msm_audio_aac_enc_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_SET_AAC_ENC_CONFIG:
+		if (copy_from_user(&p->aac_cfg, (void *)arg,
+				sizeof(struct msm_audio_aac_enc_config)))
+			return -EFAULT;
+		if (p->aac_cfg.channels != 1) {
+			pr_err("only mono is supported\n");
+			return -EINVAL;
+		}
+		if (p->aac_cfg.sample_rate != 48000) {
+			pr_err("only 48KHz is supported\n");
+			return -EINVAL;
+		}
+		if (p->aac_cfg.stream_format != AUDIO_AAC_FORMAT_RAW &&
+			p->aac_cfg.stream_format != AUDIO_AAC_FORMAT_ADTS) {
+			pr_err("unsupported AAC format\n");
+			return -EINVAL;
+		}
 		break;
 	default:
 		rc = -EINVAL;
