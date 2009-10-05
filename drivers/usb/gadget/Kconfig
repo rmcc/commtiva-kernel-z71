@@ -466,7 +466,7 @@ config USB_GOKU
 
 config USB_GADGET_MSM_72K
 	boolean "MSM 72K Device Controller"
-	depends on ARCH_MSM_ARM11
+	depends on ARCH_MSM
 	select USB_GADGET_SELECTED
 	select USB_GADGET_DUALSPEED
 	help
