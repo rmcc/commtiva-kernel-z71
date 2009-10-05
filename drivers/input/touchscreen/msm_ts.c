@@ -23,6 +23,7 @@
 #include <linux/io.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/mfd/marimba-tsadc.h>
 
 #include <mach/msm_ts.h>
 
@@ -54,6 +55,7 @@ struct msm_ts {
 	void __iomem			*tssc_base;
 	uint32_t			ts_down:1;
 	struct ts_virt_key		*vkey_down;
+	struct marimba_tsadc_client	*ts_client;
 };
 
 static uint32_t msm_tsdebug;
@@ -220,6 +222,7 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	struct resource *irq2_res;
 	int err = 0;
 	int i;
+	struct marimba_tsadc_client *ts_client;
 
 	tssc_res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "tssc");
 	irq1_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc1");
@@ -248,6 +251,21 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 		       (uint32_t)tssc_res->start, (uint32_t)tssc_res->end);
 		err = -ENOMEM;
 		goto err_ioremap_tssc;
+	}
+
+	ts_client = marimba_tsadc_register(pdev, 1);
+	if (!ts_client) {
+		pr_err("%s: Unable to register with TSADC\n", __func__);
+		err = -ENOMEM;
+		goto err_tsadc_register;
+	}
+	ts->ts_client = ts_client;
+
+	err = marimba_tsadc_start(ts_client);
+	if (err) {
+		pr_err("%s: Unable to start TSADC\n", __func__);
+		err = -EINVAL;
+		goto err_start_tsadc;
 	}
 
 	ts->input_dev = input_allocate_device();
@@ -304,6 +322,7 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 
 	pr_info("%s: tssc_base=%p irq1=%d irq2=%d\n", __func__,
 		ts->tssc_base, (int)irq1_res->start, (int)irq2_res->start);
+	dump_tssc_regs(ts);
 	return 0;
 
 err_request_irq2:
@@ -318,11 +337,35 @@ err_input_dev_reg:
 	input_free_device(ts->input_dev);
 
 err_alloc_input_dev:
+err_start_tsadc:
+	marimba_tsadc_unregister(ts->ts_client);
+
+err_tsadc_register:
 	iounmap(ts->tssc_base);
 
 err_ioremap_tssc:
 	kfree(ts);
 	return err;
+}
+
+static int __devexit msm_ts_remove(struct platform_device *pdev)
+{
+	struct msm_ts *ts = platform_get_drvdata(pdev);
+	struct resource *irq1_res;
+	struct resource *irq2_res;
+
+	irq1_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc1");
+	irq2_res = platform_get_resource_byname(pdev, IORESOURCE_IRQ, "tssc2");
+
+	marimba_tsadc_unregister(ts->ts_client);
+	free_irq(irq1_res->start, ts);
+	free_irq(irq2_res->start, ts);
+	input_unregister_device(ts->input_dev);
+	iounmap(ts->tssc_base);
+	platform_set_drvdata(pdev, NULL);
+	kfree(ts);
+
+	return 0;
 }
 
 static struct platform_driver msm_touchscreen_driver = {
@@ -331,13 +374,21 @@ static struct platform_driver msm_touchscreen_driver = {
 		.owner = THIS_MODULE,
 	},
 	.probe = msm_ts_probe,
+	.remove = __devexit_p(msm_ts_remove),
 };
 
 static int __init msm_ts_init(void)
 {
 	return platform_driver_register(&msm_touchscreen_driver);
 }
-device_initcall(msm_ts_init);
 
+static void __exit msm_ts_exit(void)
+{
+	platform_driver_unregister(&msm_touchscreen_driver);
+}
+
+device_initcall(msm_ts_init);
+module_exit(msm_ts_exit);
 MODULE_DESCRIPTION("Qualcomm MSM/QSD Touchscreen controller driver");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:msm_touchscreen");
