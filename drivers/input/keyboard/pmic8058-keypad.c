@@ -66,11 +66,6 @@
 
 #include <mach/pmic8058-keypad.h>
 
-#define PM8058_REV			0x002  /* PMIC4 revision */
-
-#define PMIC8058_REV_A0			0xE1
-#define PMIC8058_REV_B0			0xE2    /* REVISIT */
-
 #define KEYP_CTRL			0x148
 
 #define KEYP_CTRL_EVNTS			BIT(0)
@@ -129,9 +124,6 @@ struct pmic8058_kp {
 
 	u32	flags;
 };
-
-/* REVISIT - this should have come from pm8058_read/write */
-static u8 rev = PMIC8058_REV_A0;
 
 static int pmic8058_kp_write_u8(struct pmic8058_kp *kp,
 				 u8 data, u16 reg)
@@ -239,13 +231,13 @@ static int pmic8058_kp_read_data(struct pmic8058_kp *kp, u16 *state,
 	int rc, row;
 	u8 new_data[MATRIX_MAX_ROWS];
 
-	if (rev == PMIC8058_REV_B0)
+	if (pmic8058_is_rev_b0())
 		pmic8058_chk_sync_read(kp);
 
 	rc = pmic8058_kp_read(kp, new_data, data_reg, read_rows);
 
 	if (!rc) {
-		if (rev == PMIC8058_REV_A0)
+		if (pmic8058_is_rev_a0())
 			pmic8058_chk_read_state(kp, data_reg);
 		for (row = 0; row < kp->pdata->num_rows; row++) {
 			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
@@ -275,7 +267,7 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 	rc = pmic8058_kp_read_data(kp, new_state, KEYP_RECENT_DATA,
 					 read_rows);
 
-	if (rev == PMIC8058_REV_B0) {
+	if (pmic8058_is_rev_b0()) {
 		/* 4 * 32KHz clocks */
 		udelay((4 * USEC_PER_SEC / KEYP_CLOCK_FREQ) + 1);
 
@@ -408,7 +400,7 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
 
-	if (rev == PMIC8058_REV_A0)
+	if (pmic8058_is_rev_a0())
 		bits = fls(kp->pdata->debounce_ms) - 1;
 	else
 		bits = kp->pdata->debounce_ms / 5;
@@ -497,10 +489,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	rc = pm8058_read(PM8058_REV, &rev, 1);
-	pr_info("PMIC4 is at %X revision\n", rev);
-
-	if (rev == PMIC8058_REV_A0) {
+	if (pmic8058_is_rev_a0()) {
 		if (!pdata->debounce_ms || !is_power_of_2(pdata->debounce_ms)
 				|| pdata->debounce_ms > MAX_DEBOUNCE_A0_TIME
 				|| pdata->debounce_ms < MIN_DEBOUNCE_A0_TIME) {
@@ -533,7 +522,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	kp->keycodes	= keycodes;
 
 	/* REVISIT: actual revision with the fix */
-	if (rev <= PMIC8058_REV_B0)
+	if (pmic8058_is_rev_a0() || pmic8058_is_rev_b0())
 		kp->flags |= KEYF_FIX_LAST_ROW;
 
 	kp->input = input_allocate_device();
