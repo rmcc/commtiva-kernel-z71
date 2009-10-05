@@ -69,6 +69,9 @@
 #include <linux/debugfs.h>
 #include <linux/io.h>
 #include <linux/string.h>
+#include <linux/sched.h>
+#include <linux/wait.h>
+#include <linux/delay.h>
 
 #include <mach/msm_iomap.h>
 #include <mach/smem_log.h>
@@ -130,7 +133,10 @@ struct smem_log_inst {
 	int which_log;
 	struct smem_log_item __iomem *events;
 	uint32_t __iomem *idx;
-	int num;
+	uint32_t num;
+	uint32_t read_idx;
+	uint32_t last_read_avail;
+	wait_queue_head_t read_wait;
 	remote_spinlock_t *remote_spinlock;
 };
 
@@ -1130,6 +1136,9 @@ static int _smem_log_init(void)
 		       "smem_log disabled\n", __func__);
 	}
 	inst[GEN].num = SMEM_LOG_NUM_ENTRIES;
+	inst[GEN].read_idx = 0;
+	inst[GEN].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[GEN].read_wait);
 	inst[GEN].remote_spinlock = &remote_spinlock;
 
 	inst[STA].which_log = STA;
@@ -1144,6 +1153,9 @@ static int _smem_log_init(void)
 		       "allocated, smem_log disabled\n", __func__);
 	}
 	inst[STA].num = SMEM_LOG_NUM_STATIC_ENTRIES;
+	inst[STA].read_idx = 0;
+	inst[STA].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[STA].read_wait);
 	inst[STA].remote_spinlock = &remote_spinlock_static;
 
 	inst[POW].which_log = POW;
@@ -1158,6 +1170,9 @@ static int _smem_log_init(void)
 		       "allocated, smem_log disabled\n", __func__);
 	}
 	inst[POW].num = SMEM_LOG_NUM_POWER_ENTRIES;
+	inst[POW].read_idx = 0;
+	inst[POW].last_read_avail = SMEM_LOG_NUM_ENTRIES;
+	init_waitqueue_head(&inst[POW].read_wait);
 	inst[POW].remote_spinlock = &remote_spinlock;
 
 	remote_spin_lock_init(&remote_spinlock,
@@ -1288,7 +1303,6 @@ static ssize_t smem_log_write_bin(struct file *fp, const char __user *buf,
 	smem_log_event_from_user(fp->private_data, buf,
 				 sizeof(struct smem_log_item),
 				 count / sizeof(struct smem_log_item));
-
 	return count;
 }
 
@@ -1446,51 +1460,142 @@ static struct miscdevice smem_log_dev = {
 
 #if defined(CONFIG_DEBUG_FS)
 
-static int _debug_dump(int log, char *buf, int max)
+#define SMEM_LOG_ITEM_PRINT_SIZE 160
+
+#define EVENTS_PRINT_SIZE \
+(SMEM_LOG_ITEM_PRINT_SIZE * SMEM_LOG_NUM_ENTRIES)
+
+static uint32_t smem_log_timeout_ms;
+module_param_named(timeout_ms, smem_log_timeout_ms,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+static int smem_log_debug_mask;
+module_param_named(debug_mask, smem_log_debug_mask, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
+
+#define DBG(x...) do {\
+	if (smem_log_debug_mask) \
+		printk(KERN_DEBUG x);\
+	} while (0)
+
+static int update_read_avail(struct smem_log_inst *inst)
+{
+	int curr_read_avail;
+	unsigned long flags = 0;
+
+	remote_spin_lock_irqsave(inst->remote_spinlock, flags);
+
+	curr_read_avail = (*inst->idx - inst->read_idx);
+	if (curr_read_avail < 0)
+		curr_read_avail = inst->num - inst->read_idx + *inst->idx;
+
+	DBG("%s: read = %d write = %d curr = %d last = %d\n", __func__,
+	    inst->read_idx, *inst->idx, curr_read_avail, inst->last_read_avail);
+
+	if (curr_read_avail < inst->last_read_avail) {
+		if (inst->last_read_avail != inst->num)
+			pr_info("smem_log: skipping %d log entries\n",
+				inst->last_read_avail);
+		inst->read_idx = *inst->idx + 1;
+		inst->last_read_avail = inst->num - 1;
+	} else
+		inst->last_read_avail = curr_read_avail;
+
+	remote_spin_unlock_irqrestore(inst->remote_spinlock, flags);
+
+	DBG("%s: read = %d write = %d curr = %d last = %d\n", __func__,
+	    inst->read_idx, *inst->idx, curr_read_avail, inst->last_read_avail);
+
+	return inst->last_read_avail;
+}
+
+static int _debug_dump(int log, char *buf, int max, uint32_t cont)
 {
 	unsigned int idx;
-	int orig_idx;
+	int write_idx, read_avail = 0;
 	unsigned long flags;
 	int i = 0;
 
 	if (!inst[log].events)
 		return 0;
 
+	if (cont && update_read_avail(&inst[log]) == 0)
+		return 0;
+
 	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
 
-	orig_idx = *inst[log].idx;
-	idx = orig_idx;
+	if (cont) {
+		idx = inst[log].read_idx;
+		write_idx = (inst[log].read_idx + inst[log].last_read_avail);
+		if (write_idx >= inst[log].num)
+			write_idx -= inst[log].num;
+	} else {
+		write_idx = *inst[log].idx;
+		idx = (write_idx + 1);
+	}
 
-	while (1) {
-		idx++;
-		if (idx > inst[log].num - 1)
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num - 1);
+
+	while ((max - i) > 50) {
+		if ((inst[log].num - 1) < idx)
 			idx = 0;
-		if (idx == orig_idx)
+
+		if (idx == write_idx)
 			break;
 
-		if (idx < inst[log].num) {
-			if (!inst[log].events[idx].identifier)
-				continue;
+		if (inst[log].events[idx].identifier) {
 
 			i += scnprintf(buf + i, max - i,
-			       "%08x %08x %08x %08x %08x\n",
-			       inst[log].events[idx].identifier,
-			       inst[log].events[idx].timetick,
-			       inst[log].events[idx].data1,
-			       inst[log].events[idx].data2,
-			       inst[log].events[idx].data3);
+				       "%08x %08x %08x %08x %08x\n",
+				       inst[log].events[idx].identifier,
+				       inst[log].events[idx].timetick,
+				       inst[log].events[idx].data1,
+				       inst[log].events[idx].data2,
+				       inst[log].events[idx].data3);
 		}
+		idx++;
+	}
+	if (cont) {
+		inst[log].read_idx = idx;
+		read_avail = (write_idx - inst[log].read_idx);
+		if (read_avail < 0)
+			read_avail = inst->num - inst->read_idx + write_idx;
+		inst[log].last_read_avail = read_avail;
 	}
 
 	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num);
+
 	return i;
 }
 
-static int _debug_dump_sym(int log, char *buf, int max)
+static int _debug_dump_voters(char *buf, int max)
+{
+	int k, i = 0;
+
+	find_voters();
+
+	i += scnprintf(buf + i, max - i, "Voters:\n");
+	for (k = 0; k < ARRAY_SIZE(voter_d3_syms); ++k)
+		if (voter_d3_syms[k].str)
+			i += scnprintf(buf + i, max - i, "%s ",
+				       voter_d3_syms[k].str);
+	for (k = 0; k < ARRAY_SIZE(voter_d2_syms); ++k)
+		if (voter_d2_syms[k].str)
+			i += scnprintf(buf + i, max - i, "%s ",
+				       voter_d2_syms[k].str);
+	i += scnprintf(buf + i, max - i, "\n");
+
+	return i;
+}
+
+static int _debug_dump_sym(int log, char *buf, int max, uint32_t cont)
 {
 	unsigned int idx;
-	int orig_idx;
+	int write_idx, read_avail = 0;
 	unsigned long flags;
 	int i = 0;
 
@@ -1509,37 +1614,36 @@ static int _debug_dump_sym(int log, char *buf, int max)
 	uint32_t data2 = 0;
 	uint32_t data3 = 0;
 
-	int k;
-
 	if (!inst[log].events)
 		return 0;
 
-	find_voters(); /* need to call each time in case voters come and go */
+	find_voters();
 
-	i += scnprintf(buf + i, max - i, "Voters:\n");
-	for (k = 0; k < ARRAY_SIZE(voter_d3_syms); ++k)
-		if (voter_d3_syms[k].str)
-			i += scnprintf(buf + i, max - i, "%s ",
-				       voter_d3_syms[k].str);
-	for (k = 0; k < ARRAY_SIZE(voter_d2_syms); ++k)
-		if (voter_d2_syms[k].str)
-			i += scnprintf(buf + i, max - i, "%s ",
-				       voter_d2_syms[k].str);
-	i += scnprintf(buf + i, max - i, "\n");
+	if (cont && update_read_avail(&inst[log]) == 0)
+		return 0;
 
 	remote_spin_lock_irqsave(inst[log].remote_spinlock, flags);
 
-	orig_idx = *inst[log].idx;
-	idx = orig_idx;
+	if (cont) {
+		idx = inst[log].read_idx;
+		write_idx = (inst[log].read_idx + inst[log].last_read_avail);
+		if (write_idx >= inst[log].num)
+			write_idx -= inst[log].num;
+	} else {
+		write_idx = *inst[log].idx;
+		idx = (write_idx + 1);
+	}
 
-	while (1) {
-		idx++;
-		if (idx > inst[log].num - 1)
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num - 1);
+
+	for (; (max - i) > SMEM_LOG_ITEM_PRINT_SIZE; idx++) {
+		if (idx > (inst[log].num - 1))
 			idx = 0;
-		if (idx == orig_idx) {
-			i += scnprintf(buf + i, max - i, "\n");
+
+		if (idx == write_idx)
 			break;
-		}
+
 		if (idx < inst[log].num) {
 			if (!inst[log].events[idx].identifier)
 				continue;
@@ -1559,8 +1663,7 @@ static int _debug_dump_sym(int log, char *buf, int max)
 
 				if (proc)
 					i += scnprintf(buf + i, max - i,
-						       "%4s: ",
-						       proc);
+						       "%4s: ", proc);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "%04x: ",
@@ -1568,31 +1671,26 @@ static int _debug_dump_sym(int log, char *buf, int max)
 						       inst[log].events[idx].
 						       identifier);
 
-				i += scnprintf(buf + i, max - i,
-					       "%10u ",
+				i += scnprintf(buf + i, max - i, "%10u ",
 					       inst[log].events[idx].timetick);
 
 				sub = find_sym(BASE_SYM, sub_val);
 
 				if (sub)
 					i += scnprintf(buf + i, max - i,
-						       "%9s: ",
-						       sub);
+						       "%9s: ", sub);
 				else
 					i += scnprintf(buf + i, max - i,
-						       "%08x: ",
-						       sub_val);
+						       "%08x: ", sub_val);
 
 				id = find_sym(EVENT_SYM, id_val);
 
 				if (id)
 					i += scnprintf(buf + i, max - i,
-						       "%11s: ",
-						       id);
+						       "%11s: ", id);
 				else
 					i += scnprintf(buf + i, max - i,
-						       "%08x: ",
-						       id_only_val);
+						       "%08x: ", id_only_val);
 			}
 
 			if ((proc_val & SMEM_LOG_CONT) &&
@@ -1602,60 +1700,45 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				data[1] = data2;
 				data[2] = data3;
 				i += scnprintf(buf + i, max - i,
-					       " %.16s",
-					       (char *) data);
+					       " %.16s", (char *) data);
 			} else if (proc_val & SMEM_LOG_CONT) {
 				i += scnprintf(buf + i, max - i,
 					       " %08x %08x %08x",
-					       data1,
-					       data2,
-					       data3);
+					       data1, data2, data3);
 			} else if (id_val == ONCRPC_LOG_EVENT_STD_CALL) {
 				sym = find_sym(ONCRPC_SYM, data2);
 
 				if (sym)
 					i += scnprintf(buf + i, max - i,
 						       "xid:%4i %8s proc:%3i",
-						       data1,
-						       sym,
-						       data3);
+						       data1, sym, data3);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "xid:%4i %08x proc:%3i",
-						       data1,
-						       data2,
-						       data3);
+						       data1, data2, data3);
 #if defined(CONFIG_MSM_N_WAY_SMSM)
 			} else if (id_val == DEM_STATE_CHANGE) {
 				if (data1 == 1) {
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "MASTER: ");
 					sym = find_sym(DEM_STATE_MASTER_SYM,
 						       data2);
 				} else if (data1 == 0) {
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       " SLAVE: ");
 					sym = find_sym(DEM_STATE_SLAVE_SYM,
 						       data2);
 				} else {
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%x: ",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "%x: ",  data1);
 					sym = NULL;
 				}
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "from:%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "from:%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "from:0x%x ",
-						       data2);
+					i += scnprintf(buf + i, max - i,
+						       "from:0x%x ", data2);
 
 				if (data1 == 1)
 					sym = find_sym(DEM_STATE_MASTER_SYM,
@@ -1666,19 +1749,14 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				else
 					sym = NULL;
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "to:%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "to:%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "to:0x%x ",
-						       data3);
+					i += scnprintf(buf + i, max - i,
+						       "to:0x%x ", data3);
 
 			} else if (id_val == DEM_STATE_MACHINE_ENTER) {
-				i += scnprintf(buf + i,
-					       max - i,
+				i += scnprintf(buf + i, max - i,
 					       "swfi:%i timer:%i manexit:%i",
 					       data1, data2, data3);
 
@@ -1688,27 +1766,21 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				sym = find_sym(SMSM_ENTRY_TYPE_SYM,
 					       data1);
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "hostid:%s",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "hostid:%s", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "hostid:%x",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "hostid:%x", data1);
 
 			} else if (id_val == DEM_TIME_SYNC_START ||
 				   id_val == DEM_TIME_SYNC_SEND_VALUE) {
 				unsigned mask = 0x1;
 				unsigned tmp = 0;
 				if (id_val == DEM_TIME_SYNC_START)
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "req:");
 				else
-					i += scnprintf(buf + i,
-						       max - i,
+					i += scnprintf(buf + i, max - i,
 						       "pol:");
 				while (mask) {
 					if (mask & data1) {
@@ -1730,10 +1802,8 @@ static int _debug_dump_sym(int log, char *buf, int max)
 					tmp++;
 				}
 				if (id_val == DEM_TIME_SYNC_SEND_VALUE)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "tick:%x",
-						       data2);
+					i += scnprintf(buf + i, max - i,
+						       "tick:%x", data2);
 			} else if (id_val == DEM_SMSM_ISR) {
 				unsigned vals[] = {data2, data3};
 				unsigned j;
@@ -1743,15 +1813,11 @@ static int _debug_dump_sym(int log, char *buf, int max)
 				sym = find_sym(SMSM_ENTRY_TYPE_SYM,
 					       data1);
 				if (sym)
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%s ",
-						       sym);
+					i += scnprintf(buf + i, max - i,
+						       "%s ", sym);
 				else
-					i += scnprintf(buf + i,
-						       max - i,
-						       "%x ",
-						       data1);
+					i += scnprintf(buf + i, max - i,
+						       "%x ", data1);
 
 				for (j = 0; j < ARRAY_SIZE(vals); ++j) {
 					i += scnprintf(buf + i, max - i, "[");
@@ -1805,24 +1871,18 @@ static int _debug_dump_sym(int log, char *buf, int max)
 							       tmp);
 				}
 				i += scnprintf(buf + i, max - i,
-					       "%08x %08x",
-					       data2,
-					       data3);
+					       "%08x %08x", data2, data3);
 			} else if (id_val == DEMMOD_APPS_WAKEUP_INT) {
 				sym = find_sym(WAKEUP_INT_SYM, data1);
 
 				if (sym)
 					i += scnprintf(buf + i, max - i,
 						       "%s %08x %08x",
-						       sym,
-						       data2,
-						       data3);
+						       sym, data2, data3);
 				else
 					i += scnprintf(buf + i, max - i,
 						       "%08x %08x %08x",
-						       data1,
-						       data2,
-						       data3);
+						       data1, data2, data3);
 			} else if (id_val == DEM_NO_SLEEP ||
 				   id_val == NO_SLEEP_NEW) {
 				unsigned vals[] = {data3, data2};
@@ -1909,62 +1969,183 @@ static int _debug_dump_sym(int log, char *buf, int max)
 			} else {
 				i += scnprintf(buf + i, max - i,
 					       "%08x %08x %08x",
-					       data1,
-					       data2,
-					       data3);
+					       data1, data2, data3);
 			}
 		}
+	}
+	if (cont) {
+		inst[log].read_idx = idx;
+		read_avail = (write_idx - inst[log].read_idx);
+		if (read_avail < 0)
+			read_avail = inst->num - inst->read_idx + write_idx;
+		inst[log].last_read_avail = read_avail;
 	}
 
 	remote_spin_unlock_irqrestore(inst[log].remote_spinlock, flags);
 
+	DBG("%s: read %d write %d idx %d num %d\n", __func__,
+	    inst[log].read_idx, write_idx, idx, inst[log].num);
+
 	return i;
 }
 
-static int debug_dump(char *buf, int max)
+static int debug_dump(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(GEN, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[GEN]);
+		r = wait_event_interruptible_timeout(inst[GEN].read_wait,
+						     inst[GEN].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: read available %d\n", __func__,
+		    inst[GEN].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[GEN].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(GEN, buf, max, cont);
 }
 
-static int debug_dump_sym(char *buf, int max)
+static int debug_dump_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(GEN, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[GEN]);
+		r = wait_event_interruptible_timeout(inst[GEN].read_wait,
+						     inst[GEN].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[GEN].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[GEN].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(GEN, buf, max, cont);
 }
 
-static int debug_dump_static(char *buf, int max)
+static int debug_dump_static(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(STA, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[STA]);
+		r = wait_event_interruptible_timeout(inst[STA].read_wait,
+						     inst[STA].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[STA].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[STA].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(STA, buf, max, cont);
 }
 
-static int debug_dump_static_sym(char *buf, int max)
+static int debug_dump_static_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(STA, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[STA]);
+		r = wait_event_interruptible_timeout(inst[STA].read_wait,
+						     inst[STA].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[STA].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[STA].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(STA, buf, max, cont);
 }
 
-static int debug_dump_power(char *buf, int max)
+static int debug_dump_power(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump(POW, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[POW]);
+		r = wait_event_interruptible_timeout(inst[POW].read_wait,
+						     inst[POW].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[POW].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[POW].last_read_avail)
+			break;
+	}
+
+	return _debug_dump(POW, buf, max, cont);
 }
 
-static int debug_dump_power_sym(char *buf, int max)
+static int debug_dump_power_sym(char *buf, int max, uint32_t cont)
 {
-	return _debug_dump_sym(POW, buf, max);
+	int r;
+	while (cont) {
+		update_read_avail(&inst[POW]);
+		r = wait_event_interruptible_timeout(inst[POW].read_wait,
+						     inst[POW].last_read_avail,
+						     smem_log_timeout_ms *
+						     HZ / 1000);
+		DBG("%s: readavailable %d\n", __func__,
+		    inst[POW].last_read_avail);
+		if (r < 0)
+			return 0;
+		else if (inst[POW].last_read_avail)
+			break;
+	}
+
+	return _debug_dump_sym(POW, buf, max, cont);
 }
 
-#define SMEM_LOG_ITEM_PRINT_SIZE 160
-
-#define EVENTS_PRINT_SIZE \
-(SMEM_LOG_ITEM_PRINT_SIZE * SMEM_LOG_NUM_ENTRIES)
+static int debug_dump_voters(char *buf, int max, uint32_t cont)
+{
+	return _debug_dump_voters(buf, max);
+}
 
 static char debug_buffer[EVENTS_PRINT_SIZE];
 
 static ssize_t debug_read(struct file *file, char __user *buf,
 			  size_t count, loff_t *ppos)
 {
-	int (*fill)(char *buf, int max) = file->private_data;
-	int bsize = fill(debug_buffer, EVENTS_PRINT_SIZE);
-	return simple_read_from_buffer(buf, count, ppos, debug_buffer,
-				       bsize);
+	int r;
+	static int bsize;
+	int (*fill)(char *, int, uint32_t) = file->private_data;
+	if (!(*ppos))
+		bsize = fill(debug_buffer, EVENTS_PRINT_SIZE, 0);
+	DBG("%s: count %d ppos %d\n", __func__, count, (unsigned int)*ppos);
+	r =  simple_read_from_buffer(buf, count, ppos, debug_buffer,
+				     bsize);
+	return r;
+}
+
+static ssize_t debug_read_cont(struct file *file, char __user *buf,
+			       size_t count, loff_t *ppos)
+{
+	int (*fill)(char *, int, uint32_t) = file->private_data;
+	char *buffer = kmalloc(count, GFP_KERNEL);
+	int bsize;
+	if (!buffer)
+		return -ENOMEM;
+	bsize = fill(buffer, count, 1);
+	DBG("%s: count %d bsize %d\n", __func__, count, bsize);
+	if (copy_to_user(buf, buffer, bsize)) {
+		kfree(buffer);
+		return -EFAULT;
+	}
+	kfree(buffer);
+	return bsize;
 }
 
 static int debug_open(struct inode *inode, struct file *file)
@@ -1978,11 +2159,17 @@ static const struct file_operations debug_ops = {
 	.open = debug_open,
 };
 
+static const struct file_operations debug_ops_cont = {
+	.read = debug_read_cont,
+	.open = debug_open,
+};
+
 static void debug_create(const char *name, mode_t mode,
 			 struct dentry *dent,
-			 int (*fill)(char *buf, int max))
+			 int (*fill)(char *buf, int max, uint32_t cont),
+			 const struct file_operations *fops)
 {
-	debugfs_create_file(name, mode, dent, fill, &debug_ops);
+	debugfs_create_file(name, mode, dent, fill, fops);
 }
 
 static void smem_log_debugfs_init(void)
@@ -1993,12 +2180,31 @@ static void smem_log_debugfs_init(void)
 	if (IS_ERR(dent))
 		return;
 
-	debug_create("dump", 0444, dent, debug_dump);
-	debug_create("dump_sym", 0444, dent, debug_dump_sym);
-	debug_create("dump_static", 0444, dent, debug_dump_static);
-	debug_create("dump_static_sym", 0444, dent, debug_dump_static_sym);
-	debug_create("dump_power", 0444, dent, debug_dump_power);
-	debug_create("dump_power_sym", 0444, dent, debug_dump_power_sym);
+	debug_create("dump", 0444, dent, debug_dump, &debug_ops);
+	debug_create("dump_sym", 0444, dent, debug_dump_sym, &debug_ops);
+	debug_create("dump_static", 0444, dent, debug_dump_static, &debug_ops);
+	debug_create("dump_static_sym", 0444, dent,
+		     debug_dump_static_sym, &debug_ops);
+	debug_create("dump_power", 0444, dent, debug_dump_power, &debug_ops);
+	debug_create("dump_power_sym", 0444, dent,
+		     debug_dump_power_sym, &debug_ops);
+	debug_create("dump_voters", 0444, dent,
+		     debug_dump_voters, &debug_ops);
+
+	debug_create("dump_cont", 0444, dent, debug_dump, &debug_ops_cont);
+	debug_create("dump_sym_cont", 0444, dent,
+		     debug_dump_sym, &debug_ops_cont);
+	debug_create("dump_static_cont", 0444, dent,
+		     debug_dump_static, &debug_ops_cont);
+	debug_create("dump_static_sym_cont", 0444, dent,
+		     debug_dump_static_sym, &debug_ops_cont);
+	debug_create("dump_power_cont", 0444, dent,
+		     debug_dump_power, &debug_ops_cont);
+	debug_create("dump_power_sym_cont", 0444, dent,
+		     debug_dump_power_sym, &debug_ops_cont);
+
+	smem_log_timeout_ms = 500;
+	smem_log_debug_mask = 0;
 }
 #else
 static void smem_log_debugfs_init(void) {}
