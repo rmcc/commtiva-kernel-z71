@@ -1038,7 +1038,7 @@ static int msm_fb_detect_panel(const char *name)
 	if (!strncmp(name, "mddi_toshiba_wvga_pt", 20))
 		return -EPERM;
 	else if (!strncmp(name, "lcdc_toshiba_wvga_pt", 20))
-		return -EPERM;
+		return 0;
 	else
 		return -ENODEV;
 }

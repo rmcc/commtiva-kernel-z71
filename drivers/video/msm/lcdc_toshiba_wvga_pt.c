@@ -368,12 +368,13 @@ static int __init lcdc_toshiba_panel_init(void)
 	int ret;
 	struct msm_panel_info *pinfo;
 #ifdef CONFIG_FB_MSM_TRY_MDDI_CATCH_LCDC_PRISM
-	ret = msm_fb_detect_client("lcdc_toshiba_wvga_pt");
-	if (ret == -ENODEV)
+	if (mddi_get_client_id() != 0)
 		return 0;
 
-	if (ret && (mddi_get_client_id() != 0))
+	ret = msm_fb_detect_client("lcdc_toshiba_wvga_pt");
+	if (ret)
 		return 0;
+
 #endif
 
 	ret = platform_driver_register(&this_driver);
