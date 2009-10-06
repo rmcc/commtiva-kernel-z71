@@ -713,7 +713,8 @@ vfe_proc_ops(enum VFE_MESSAGE_ID id, void *msg, size_t len)
 		return;
 	}
 
-	rp = ctrl->resp->vfe_alloc(sizeof(struct msm_vfe_resp), ctrl->syncdata);
+	rp = ctrl->resp->vfe_alloc(sizeof(struct msm_vfe_resp) + len,
+		ctrl->syncdata);
 	if (!rp) {
 		CDBG("rp: cannot allocate buffer\n");
 		return;
@@ -724,7 +725,11 @@ vfe_proc_ops(enum VFE_MESSAGE_ID id, void *msg, size_t len)
 	rp->evt_msg.type   = MSM_CAMERA_MSG;
 	rp->evt_msg.msg_id = id;
 	rp->evt_msg.len    = len;
-	rp->evt_msg.data   = msg;
+	rp->evt_msg.data   = rp + 1;
+
+	if (len != 0) {
+		memcpy(rp->evt_msg.data, msg, len);
+	}
 
 	switch (rp->evt_msg.msg_id) {
 	case VFE_MSG_ID_SNAPSHOT_DONE:
@@ -767,49 +772,37 @@ vfe_proc_ops(enum VFE_MESSAGE_ID id, void *msg, size_t len)
 
 static void vfe_send_msg_no_payload(enum VFE_MESSAGE_ID id)
 {
-	struct vfe_message *msg;
+	struct vfe_message msg;
 
-	msg = kzalloc(sizeof(msg), GFP_ATOMIC);
-	if (!msg)
-		return;
-
-	msg->_d = id;
-	vfe_proc_ops(id, msg, 0);
+	msg._d = id;
+	vfe_proc_ops(id, &msg, 0);
 }
 
 static void vfe_send_bus_overflow_msg(void)
 {
-	struct vfe_message *msg;
-	msg =
-		kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message msg;
 
-	msg->_d = VFE_MSG_ID_BUS_OVERFLOW;
+	msg._d = VFE_MSG_ID_BUS_OVERFLOW;
 #if 0
-	memcpy(&(msg->_u.msgBusOverflow),
+	memcpy(&(msg._u.msgBusOverflow),
 		&ctrl->vfePmData, sizeof(ctrl->vfePmData));
 #endif
 
 	vfe_proc_ops(VFE_MSG_ID_BUS_OVERFLOW,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 }
 
 static void vfe_send_camif_error_msg(void)
 {
 #if 0
-	struct vfe_message *msg;
-	msg =
-		kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message msg;
 
-	msg->_d = VFE_MSG_ID_CAMIF_ERROR;
-	memcpy(&(msg->_u.msgCamifError),
+	msg._d = VFE_MSG_ID_CAMIF_ERROR;
+	memcpy(&(msg._u.msgCamifError),
 		&ctrl->vfeCamifStatusLocal, sizeof(ctrl->vfeCamifStatusLocal));
 
 	vfe_proc_ops(VFE_MSG_ID_CAMIF_ERROR,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 #endif
 }
 
@@ -908,11 +901,7 @@ static void
 vfe_send_af_stats_msg(uint32_t afBufAddress)
 {
 	/* unsigned long flags; */
-	struct vfe_message *msg;
-	msg =
-		kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message msg;
 
 	/* fill message with right content. */
 	/* @todo This is causing issues, need further investigate */
@@ -920,12 +909,12 @@ vfe_send_af_stats_msg(uint32_t afBufAddress)
 	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		goto af_stats_done;
 
-	msg->_d = VFE_MSG_ID_STATS_AUTOFOCUS;
-	msg->_u.msgStatsAf.afBuffer = afBufAddress;
-	msg->_u.msgStatsAf.frameCounter = ctrl->vfeFrameId;
+	msg._d = VFE_MSG_ID_STATS_AUTOFOCUS;
+	msg._u.msgStatsAf.afBuffer = afBufAddress;
+	msg._u.msgStatsAf.frameCounter = ctrl->vfeFrameId;
 
 	vfe_proc_ops(VFE_MSG_ID_STATS_AUTOFOCUS,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 
 	ctrl->afStatsControl.ackPending = TRUE;
 
@@ -993,12 +982,7 @@ static void vfe_update_awb_buf_addr(
 static void vfe_send_awb_stats_msg(uint32_t awbBufAddress)
 {
 	/* unsigned long flags; */
-	struct vfe_message   *msg;
-
-	msg =
-		kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message   msg;
 
 	/* fill message with right content. */
 	/* @todo This is causing issues, need further investigate */
@@ -1006,12 +990,12 @@ static void vfe_send_awb_stats_msg(uint32_t awbBufAddress)
 	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		goto awb_stats_done;
 
-	msg->_d = VFE_MSG_ID_STATS_WB_EXP;
-	msg->_u.msgStatsWbExp.awbBuffer = awbBufAddress;
-	msg->_u.msgStatsWbExp.frameCounter = ctrl->vfeFrameId;
+	msg._d = VFE_MSG_ID_STATS_WB_EXP;
+	msg._u.msgStatsWbExp.awbBuffer = awbBufAddress;
+	msg._u.msgStatsWbExp.frameCounter = ctrl->vfeFrameId;
 
 	vfe_proc_ops(VFE_MSG_ID_STATS_WB_EXP,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 
 	ctrl->awbStatsControl.ackPending = TRUE;
 
@@ -1382,11 +1366,7 @@ static void vfe_send_output2_msg(
 	struct vfe_msg_output *pPayload)
 {
 	/* unsigned long flags; */
-	struct vfe_message *msg;
-
-	msg = kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message msg;
 
 	/* fill message with right content. */
 	/* @todo This is causing issues, need further investigate */
@@ -1394,13 +1374,13 @@ static void vfe_send_output2_msg(
 	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		goto output2_msg_done;
 
-	msg->_d = VFE_MSG_ID_OUTPUT2;
+	msg._d = VFE_MSG_ID_OUTPUT2;
 
-	memcpy(&(msg->_u.msgOutput2),
+	memcpy(&(msg._u.msgOutput2),
 		(void *)pPayload, sizeof(struct vfe_msg_output));
 
 	vfe_proc_ops(VFE_MSG_ID_OUTPUT2,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 
 	ctrl->encPath.ackPending = TRUE;
 
@@ -1418,23 +1398,19 @@ static void vfe_send_output1_msg(
 	struct vfe_msg_output *pPayload)
 {
 	/* unsigned long flags; */
-	struct vfe_message *msg;
-
-	msg = kzalloc(sizeof(struct vfe_message), GFP_ATOMIC);
-	if (!msg)
-		return;
+	struct vfe_message msg;
 
 	/* @todo This is causing issues, need further investigate */
 	/* spin_lock_irqsave(&ctrl->state_lock, flags); */
 	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		goto output1_msg_done;
 
-	msg->_d = VFE_MSG_ID_OUTPUT1;
-	memmove(&(msg->_u),
+	msg._d = VFE_MSG_ID_OUTPUT1;
+	memmove(&(msg._u),
 		(void *)pPayload, sizeof(struct vfe_msg_output));
 
 	vfe_proc_ops(VFE_MSG_ID_OUTPUT1,
-		msg, sizeof(struct vfe_message));
+		&msg, sizeof(struct vfe_message));
 
 	ctrl->viewPath.ackPending = TRUE;
 
