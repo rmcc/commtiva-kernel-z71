@@ -308,23 +308,19 @@ static unsigned int tavarua_get_freq(struct tavarua_device *radio,
 {
 	int retval;
 	unsigned short chan;
-	unsigned int band_bottom = 87.5 * FREQ_MUL;
-	unsigned int spacing = 0.100 * FREQ_MUL;
-
+	unsigned int band_bottom;
+	unsigned int spacing  = 0.100 * FREQ_MUL;
 	switch (radio->zone) {
 	/* 0: 200 kHz (USA, Australia) */
 	default:
-		spacing = 0.200 * FREQ_MUL;
 		band_bottom = 87.5 * FREQ_MUL;
 		break;
 	/* 1: 100 kHz (Europe, Japan) */
 	case TAVARUA_ZONE_1:
-		spacing = 0.100 * FREQ_MUL;
 		band_bottom = 76 * FREQ_MUL;
 		break;
 	/* 2:  50 kHz */
 	case TAVARUA_ZONE_2:
-		spacing = 0.050 * FREQ_MUL;
 		band_bottom = 76 * FREQ_MUL;
 		break;
 	}
@@ -333,8 +329,8 @@ static unsigned int tavarua_get_freq(struct tavarua_device *radio,
 	retval = tavarua_read_registers(radio, FREQ, 2);
 	chan = radio->registers[FREQ];
 
-	/* Frequency (MHz) = Spacing (kHz) x Channel + Bottom of Band (MHz) */
-	freq->frequency = chan * spacing + band_bottom;
+	/* Frequency (MHz) = 100 (kHz) x Channel + Bottom of Band (MHz) */
+	freq->frequency = spacing * chan + band_bottom;
 
 	return retval;
 }
@@ -342,30 +338,28 @@ static unsigned int tavarua_get_freq(struct tavarua_device *radio,
 
 static int tavarua_set_freq(struct tavarua_device *radio, unsigned int freq)
 {
-	unsigned int spacing = 0.100 * FREQ_MUL;
-	unsigned int band_bottom = 87.5 * FREQ_MUL;
+
+	unsigned int band_bottom;
 	unsigned char chan;
 	unsigned char cmd[2];
+	unsigned int spacing  = 0.100 * FREQ_MUL;
 
 	switch (radio->zone) {
 	/* 0: 200 kHz (USA, Australia) */
 	default:
-		spacing = 0.200 * FREQ_MUL;
 		band_bottom = 87.5 * FREQ_MUL;
 		break;
 	/* 1: 100 kHz (Europe, Japan) */
 	case TAVARUA_ZONE_1:
-		spacing = 0.100 * FREQ_MUL;
 		band_bottom = 76 * FREQ_MUL;
 		break;
 	/* 2:  50 kHz */
 	case TAVARUA_ZONE_2:
-		spacing = 0.050 * FREQ_MUL;
 		band_bottom = 76 * FREQ_MUL;
 		break;
 	}
 
-	/* Chan = [ Freq (Mhz) - Bottom of Band (MHz) ] / Spacing (kHz) */
+	/* Chan = [ Freq (Mhz) - Bottom of Band (MHz) ] / 100 (kHz) */
 	chan = (freq - band_bottom) / spacing;
 
 	cmd[0] = chan;
@@ -420,6 +414,7 @@ static int tavarua_fops_open(struct file *file)
 		printk(KERN_ERR "%s: failed to bring up FM Core \n", __func__);
 		return retval;
 	}
+	msleep(100);
 	return 0;
 }
 
@@ -918,7 +913,6 @@ static int tavarua_start(struct tavarua_device *radio,
 	int_init[2] = (TRANSFER | ERROR);
 
 	FMDBG("%s <%d>\n", __func__, state);
-
 	/* set geographic zone */
 	radio->zone = TAVARUA_ZONE_0;
 
@@ -951,7 +945,6 @@ static int tavarua_start(struct tavarua_device *radio,
 		if (retval < 0)
 			return retval;
 	}
-
 	return 0;
 }
 
