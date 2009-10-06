@@ -84,11 +84,23 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 
 void diagmem_exit(struct diagchar_dev *driver)
 {
-	if (driver->count == 0 && driver->ref_count == 0)
-		mempool_destroy(driver->diagpool);
+	if (driver->diagpool) {
+		if (driver->count == 0 && driver->ref_count == 0) {
+			mempool_destroy(driver->diagpool);
+			driver->diagpool = NULL;
+		}
+	} else
+		printk(KERN_ALERT "\n Attempt to free up"
+					"non existing COPY pool");
 
-	if (driver->count_hdlc_pool == 0 && driver->ref_count == 0)
-		mempool_destroy(driver->diag_hdlc_pool);
+	if (driver->diag_hdlc_pool) {
+		if (driver->count_hdlc_pool == 0 && driver->ref_count == 0) {
+			mempool_destroy(driver->diag_hdlc_pool);
+			driver->diag_hdlc_pool = NULL;
+		}
+	} else
+		printk(KERN_ALERT "\n Attempt to free up"
+					 "non existing HDLC pool");
 }
 
 void diagmem_free(struct diagchar_dev *driver, void *buf, int pool_type)
