@@ -96,6 +96,7 @@ static void mddi_early_resume(struct early_suspend *h);
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
 static struct clk *mddi_clk;
+static struct clk *mddi_pclk;
 static struct mddi_platform_data *mddi_pdata;
 
 static struct platform_driver mddi_driver = {
@@ -306,6 +307,8 @@ void mddi_disable(int lock)
 		printk(KERN_ERR "%s: clk_set_min_rate failed\n", __func__);
 
 	clk_disable(mddi_clk);
+	if (mddi_pclk)
+		clk_disable(mddi_pclk);
 	disable_irq(INT_MDDI_PRI);
 
 	if (mddi_pdata && mddi_pdata->mddi_power_save)
@@ -336,6 +339,8 @@ static int mddi_resume(struct platform_device *pdev)
 
 	enable_irq(INT_MDDI_PRI);
 	clk_enable(mddi_clk);
+	if (mddi_pclk)
+		clk_enable(mddi_pclk);
 	mddi_host_reg_out(PAD_CTL, mddi_pad_ctrl);
 
 	if (mddi_host_timer.function)
@@ -389,10 +394,20 @@ static int __init mddi_driver_init(void)
 	}
 	clk_enable(mddi_clk);
 
+	mddi_pclk = clk_get(NULL, "mddi_pclk");
+	if (IS_ERR(mddi_pclk))
+		mddi_pclk = NULL;
+	else
+		clk_enable(mddi_pclk);
+
 	ret = mddi_register_driver();
 	if (ret) {
 		clk_disable(mddi_clk);
 		clk_put(mddi_clk);
+		if (mddi_pclk) {
+			clk_disable(mddi_pclk);
+			clk_put(mddi_pclk);
+		}
 		printk(KERN_ERR "mddi_register_driver() failed!\n");
 		return ret;
 	}
