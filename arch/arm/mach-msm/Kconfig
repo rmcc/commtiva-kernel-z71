@@ -533,6 +533,13 @@ config MSM_RPC_PING
 	help
 	  Implements MSM rpc ping test module.
 
+config MSM_RPC_PROC_COMM_TEST
+	depends on DEBUG_FS
+	default m
+	bool "MSM rpc proc comm test"
+	help
+	  Implements MSM rpc proc comm test module.
+
 config MSM_RPC_OEM_RAPI
 	depends on MSM_ONCRPCROUTER
 	default m
