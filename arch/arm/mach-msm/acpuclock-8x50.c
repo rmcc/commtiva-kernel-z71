@@ -83,6 +83,15 @@
 #define SCPLL_STATUS_ADDR      (MSM_SCPLL_BASE + 0x18)
 #define SCPLL_FSM_CTL_EXT_ADDR (MSM_SCPLL_BASE + 0x10)
 
+enum {
+	ACPU_PLL_TCXO	= -1,
+	ACPU_PLL_0	= 0,
+	ACPU_PLL_1,
+	ACPU_PLL_2,
+	ACPU_PLL_3,
+	ACPU_PLL_END,
+};
+
 struct clkctl_acpu_speed {
 	unsigned int     use_for_scaling;
 	unsigned int     acpuclk_khz;
