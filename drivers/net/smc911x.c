@@ -319,10 +319,7 @@ static void smc911x_enable(struct net_device *dev)
 	cfg |= HW_CFG_SF_;
 	SMC_SET_HW_CFG(lp, cfg);
 
-	if (current_chip_id == CHIP_9221)
-		SMC_SET_FIFO_TDA(lp, 0x30);
-	else
-		SMC_SET_FIFO_TDA(lp, 0xFF);
+	SMC_SET_FIFO_TDA(lp, 0xFF);
 
 	/* Update TX stats on every 64 packets received or every 1 sec */
 	SMC_SET_FIFO_TSL(lp, 64);
@@ -1174,9 +1171,6 @@ static irqreturn_t smc911x_interrupt(int irq, void *dev_id)
 		/* Handle transmit FIFO available */
 		if (status & INT_STS_TDFA_) {
 			DBG(SMC_DEBUG_TX, "%s: TX data FIFO space available irq\n", dev->name);
-		if (current_chip_id == CHIP_9221)
-			SMC_SET_FIFO_TDA(lp, 0x30);
-		else
 			SMC_SET_FIFO_TDA(lp, 0xFF);
 			lp->tx_throttle = 0;
 #ifdef SMC_USE_DMA
