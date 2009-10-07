@@ -799,7 +799,8 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 		} else if (data->type == VFE_MSG_SNAPSHOT) {
 			if (sync->pict_pp & PP_SNAP) {
 				struct msm_postproc buf;
-				struct msm_pmem_region region;
+				struct msm_pmem_region region = { .paddr = 0,
+								  .len = 0 };
 				buf.fmnum = msm_pmem_region_lookup(&sync->frame,
 						MSM_PMEM_MAINIMG,
 						&region, 1);
