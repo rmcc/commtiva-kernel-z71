@@ -62,9 +62,9 @@
 #endif
 #define MSM_CSR_SIZE          SZ_4K
 
-#define MSM_GPT_PHYS          MSM_CSR_PHYS
-#define MSM_GPT_BASE          MSM_CSR_BASE
-#define MSM_GPT_SIZE          SZ_4K
+#define MSM_TMR_PHYS          MSM_CSR_PHYS
+#define MSM_TMR_BASE          MSM_CSR_BASE
+#define MSM_TMR_SIZE          SZ_4K
 
 #define MSM_DMOV_BASE         IOMEM(0xE0002000)
 #if defined(CONFIG_ARCH_MSM7X30)
