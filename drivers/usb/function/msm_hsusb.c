@@ -72,7 +72,6 @@
 #define is_phy_external() (PHY_TYPE(ui->phy_info) == USB_PHY_EXTERNAL)
 
 static int pid = 0x9018;
-static int usb_init_err;
 
 struct usb_fi_ept {
 	struct usb_endpoint *ept;
@@ -2257,28 +2256,24 @@ EXPORT_SYMBOL(usb_function_enable);
 
 static int usb_free(struct usb_info *ui, int ret)
 {
-	if (ui->irq) {
-		disable_irq_wake(ui->irq);
-		free_irq(ui->irq, ui);
-	}
-	msm_hsusb_suspend_locks_init(ui, 0);
+	disable_irq_wake(ui->irq);
+	free_irq(ui->irq, ui);
 	if (ui->gpio_irq[0])
 		free_irq(ui->gpio_irq[0], NULL);
 	if (ui->gpio_irq[1])
 		free_irq(ui->gpio_irq[1], NULL);
-	if (ui->pool)
-		dma_pool_destroy(ui->pool);
-	if (ui->dma)
-		dma_free_coherent(&ui->pdev->dev, 4096, ui->buf, ui->dma);
-	if (ui->addr)
-		iounmap(ui->addr);
-	if (ui->clk)
-		clk_put(ui->clk);
-	if (ui->pclk)
-		clk_put(ui->pclk);
-	if (ui->cclk)
-		clk_put(ui->cclk);
+
+	dma_pool_destroy(ui->pool);
+	dma_free_coherent(&ui->pdev->dev, 4096, ui->buf, ui->dma);
+	kfree(ui->func);
+	kfree(ui->strdesc);
+	iounmap(ui->addr);
+	clk_put(ui->clk);
+	clk_put(ui->pclk);
+	clk_put(ui->cclk);
+	msm_hsusb_suspend_locks_init(ui, 0);
 	kfree(ui);
+
 	return ret;
 }
 
@@ -3030,132 +3025,157 @@ static int __init usb_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct usb_info *ui;
 	int irq;
-	int ret;
+	int ulpi_irq1 = 0;
+	int ulpi_irq2 = 0;
+	int i;
+	int ret = 0;
 
-	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
-	if (!ui)
-		return -ENOMEM;
-
-	ui->pdev = pdev;
-	if (!ui->pdev || !ui->pdev->dev.platform_data) {
+	if (!pdev || !pdev->dev.platform_data) {
 		pr_err("%s:pdev or platform data is null\n", __func__);
-		return -1;
-	}
-
-	ui->pdata = ui->pdev->dev.platform_data;
-
-	spin_lock_init(&ui->lock);
-	msm_hsusb_suspend_locks_init(ui, 1);
-	the_usb_info = ui;
-
-	ui->functions_map = ui->pdata->function_map;
-	ui->num_funcs = ui->pdata->num_functions;
-
-	/* to allow swfi latency, driver latency
-	 * must be above listed swfi latency
-	 */
-	ui->pdata->swfi_latency += 1;
-
-	/* zero is reserved for language id */
-	ui->strdesc_index = 1;
-	/* Allocate memory for string descriptor arrary to store strings */
-	ui->strdesc = kzalloc(sizeof(char *) * MAX_STRDESC_NUM, GFP_KERNEL);
-	if (!ui->strdesc) {
-		usb_init_err = -ENOMEM;
-		return usb_init_err;
-	}
-	ui->func = kzalloc(sizeof(struct usb_function *) *
-				ui->num_funcs, GFP_KERNEL);
-	if (!ui->func) {
-		kfree(ui);
-		usb_init_err = -ENOMEM;
-		return usb_init_err;
-	}
-
-	if (!usb_set_composition(pid)) {
-		usb_init_err = -ENODEV;
-		return usb_init_err;
-	}
-
-	/* initializing phy type */
-	if (ui->pdata) {
-		ui->phy_info = ui->pdata->phy_info;
-		if (ui->phy_info == USB_PHY_UNDEFINED) {
-			pr_err("undefined phy_info: (%d)\n", ui->phy_info);
-			usb_init_err = -ENOMEM;
-			return usb_init_err;
-		}
-		pr_info("phy info:(%d)\n", ui->phy_info);
+		return -ENODEV;
 	}
 
 	irq = platform_get_irq(pdev, 0);
+	if (irq < 0) {
+		pr_err("%s: failed to get irq num from platform_get_irq\n",
+				__func__);
+		return -ENODEV;
+	}
+
+#ifdef CONFIG_ARCH_MSM7201A
+	ulpi_irq1 = platform_get_irq_byname(pdev, "vbus_interrupt");
+	if (ulpi_irq1 < 0) {
+		pr_err("%s: failed to get vbus gpio interrupt\n", __func__);
+		return -ENODEV;
+	}
+
+	ulpi_irq2 = platform_get_irq_byname(pdev, "id_interrupt");
+	if (ulpi_irq2 < 0) {
+		pr_err("%s: failed to get id gpio interrupt\n", __func__);
+		return -ENODEV;
+	}
+#endif
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
-	if (!res || (irq < 0)) {
-		usb_free(ui, -ENODEV);
-		usb_init_err = 	-ENODEV;
-		return usb_init_err;
+	if (!res) {
+		pr_err("%s: failed to get mem resource\n", __func__);
+		return -ENODEV;
+	}
+
+	ret = sysfs_create_group(&pdev->dev.kobj, &msm_hsusb_attr_grp);
+	if (ret) {
+		pr_err("%s: unable to create sysfs group\n", __func__);
+		return ret;
+	}
+
+	usb_work = create_singlethread_workqueue("usb_work");
+	if (!usb_work) {
+		pr_err("%s: unable to create work queue\n", __func__);
+		ret = -ENOMEM;
+		goto free_sysfs_grp;
+	}
+
+	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
+	if (!ui) {
+		pr_err("%s: unable to allocate memory for ui\n", __func__);
+		ret = -ENOMEM;
+		goto free_workqueue;
+	}
+
+	ui->pdev = pdev;
+	ui->pdata = pdev->dev.platform_data;
+
+	for (i = 0; i < ui->pdata->num_compositions; i++)
+		if (ui->pdata->compositions[i].product_id == pid) {
+			ui->composition = &ui->pdata->compositions[i];
+			break;
+		}
+	if (!ui->composition) {
+		pr_err("%s: unable to find the composition with pid:(%d)\n",
+				__func__, pid);
+		ret = -ENODEV;
+		goto free_ui;
+	}
+
+	ui->phy_info = ui->pdata->phy_info;
+	if (ui->phy_info == USB_PHY_UNDEFINED) {
+		pr_err("undefined phy_info: (%d)\n", ui->phy_info);
+		ret = -ENOMEM;
+		goto free_ui;
+	}
+
+	/* zero is reserved for language id */
+	ui->strdesc_index = 1;
+	ui->strdesc = kzalloc(sizeof(char *) * MAX_STRDESC_NUM, GFP_KERNEL);
+	if (!ui->strdesc) {
+		pr_err("%s: unable allocate mem for string descriptors\n",
+				__func__);
+		ret = -ENOMEM;
+		goto free_ui;
+	}
+
+	ui->num_funcs = ui->pdata->num_functions;
+	ui->func = kzalloc(sizeof(struct usb_function *) * ui->num_funcs,
+				GFP_KERNEL);
+	if (!ui->func) {
+		pr_err("%s: unable allocate mem for functions\n", __func__);
+		ret = -ENOMEM;
+		goto free_str_desc;
 	}
 
 	ui->addr = ioremap(res->start, resource_size(res));
 	if (!ui->addr) {
-		usb_free(ui, -ENOMEM);
-		usb_init_err = -ENOMEM;
-		return usb_init_err;
+		pr_err("%s: unable ioremap\n", __func__);
+		ret = -ENOMEM;
+		goto free_func;
 	}
 
 	ui->buf = dma_alloc_coherent(&pdev->dev, 4096, &ui->dma, GFP_KERNEL);
 	if (!ui->buf) {
-		usb_free(ui, -ENOMEM);
-		usb_init_err = -ENOMEM;
-		return usb_init_err;
+		pr_err("%s: failed allocate dma coherent memory\n", __func__);
+		ret = -ENOMEM;
+		goto free_iounmap;
 	}
 
 	ui->pool = dma_pool_create("hsusb", NULL, 32, 32, 0);
 	if (!ui->pool) {
-		usb_free(ui, -ENOMEM);
-		usb_init_err = -ENOMEM;
-		return usb_init_err;
+		pr_err("%s: unable to allocate dma pool\n", __func__);
+		ret = -ENOMEM;
+		goto free_dma_coherent;
 	}
-
-	printk(KERN_INFO "usb_probe() io=%p, irq=%d, dma=%p(%x)\n",
-	       ui->addr, irq, ui->buf, ui->dma);
 
 	ui->clk = clk_get(&pdev->dev, "usb_hs_clk");
 	if (IS_ERR(ui->clk)) {
-		usb_free(ui, PTR_ERR(ui->clk));
-		usb_init_err = PTR_ERR(ui->clk);
-		return usb_init_err;
+		pr_err("%s: unable get usb_hs_clk\n", __func__);
+		ret = PTR_ERR(ui->clk);
+		goto free_dma_pool;
 	}
 
 	ui->pclk = clk_get(&pdev->dev, "usb_hs_pclk");
 	if (IS_ERR(ui->pclk)) {
-		usb_free(ui, PTR_ERR(ui->pclk));
-		usb_init_err = PTR_ERR(ui->clk);
-		return usb_init_err;
+		pr_err("%s: unable get usb_hs_pclk\n", __func__);
+		ret = PTR_ERR(ui->pclk);
+		goto free_hs_clk;
 	}
 
 	if (ui->pdata->core_clk) {
 		ui->cclk = clk_get(&pdev->dev, "usb_hs_core_clk");
 		if (IS_ERR(ui->cclk)) {
-			usb_free(ui, PTR_ERR(ui->cclk));
-			usb_init_err = PTR_ERR(ui->cclk);
-			return usb_init_err;
+			pr_err("%s: unable get usb_hs_core_clk\n", __func__);
+			ret = PTR_ERR(ui->cclk);
+			goto free_hs_pclk;
 		}
 	}
 
 	if (ui->pdata->vreg5v_required) {
 		ui->vreg = vreg_get(NULL, "boost");
-		if (IS_ERR(ui->vreg) || (!ui->vreg)) {
+		if (IS_ERR(ui->vreg)) {
 			pr_err("%s: vreg get failed\n", __func__);
 			ui->vreg = NULL;
-			usb_free(ui, PTR_ERR(ui->vreg));
-			usb_init_err = PTR_ERR(ui->vreg);
-			return usb_init_err;
+			ret = PTR_ERR(ui->vreg);
+			goto free_hs_cclk;
 		}
 	}
-
-	/* memory barrier initialization in non-interrupt context */
-	dmb();
 
 	/* disable interrupts before requesting irq */
 	usb_clk_enable(ui);
@@ -3165,70 +3185,94 @@ static int __init usb_probe(struct platform_device *pdev)
 
 	ret = request_irq(irq, usb_interrupt, IRQF_SHARED, pdev->name, ui);
 	if (ret) {
-		usb_free(ui, ret);
-		usb_init_err = ret;
-		return ret;
+		pr_err("%s: request_irq failed\n", __func__);
+		goto free_vreg5v;
 	}
-	enable_irq_wake(irq);
 	ui->irq = irq;
 
-	/* TODO: add dynamic port speed detect, bmAttributes and max power */
+	if (ui->pdata->config_gpio) {
+		usb_lpm_config_gpio = ui->pdata->config_gpio;
+
+		ret = request_irq(ulpi_irq1,
+				&usb_lpm_gpio_isr,
+				IRQF_TRIGGER_HIGH,
+				"vbus_interrupt", NULL);
+		if (ret) {
+			pr_err("%s: failed to request vbus interrupt:(%d)\n",
+					__func__, ulpi_irq1);
+			goto free_irq;
+		}
+
+		ret = request_irq(ulpi_irq2,
+				&usb_lpm_gpio_isr,
+				IRQF_TRIGGER_RISING,
+				"usb_ulpi_data3", NULL);
+		if (ret) {
+			pr_err("%s: failed to request irq ulpi_data_3:(%d)\n",
+							__func__, ulpi_irq2);
+			goto free_ulpi_irq1;
+		}
+
+		ui->gpio_irq[0] = ulpi_irq1;
+		ui->gpio_irq[1] = ulpi_irq2;
+	}
+
+	the_usb_info = ui;
+	ui->functions_map = ui->pdata->function_map;
 	ui->selfpowered = 0;
 	ui->remote_wakeup = 0;
 	ui->maxpower = 0xFA;
 	ui->chg_type = CHG_UNDEFINED;
+	/* to allow swfi latency, driver latency
+	 * must be above listed swfi latency
+	 */
+	ui->pdata->swfi_latency += 1;
 
-	if (!ui->pdata->ulpi_data_1_pin)
-		goto no_gpios;
+	spin_lock_init(&ui->lock);
+	msm_hsusb_suspend_locks_init(ui, 1);
+	enable_irq_wake(irq);
 
-	usb_lpm_config_gpio = ui->pdata->config_gpio;
+	/* memory barrier initialization in non-interrupt context */
+	dmb();
 
-	/* request gpio irqs */
-	/* ulpi_data_1: level detect, active high */
-	ui->gpio_irq[0] = MSM_GPIO_TO_INT(ui->pdata->ulpi_data_1_pin);
-	ret = request_irq(ui->gpio_irq[0],
-			&usb_lpm_gpio_isr,
-			IRQF_TRIGGER_HIGH,
-			"usb_ulpi_data1", NULL);
-	if (ret) {
-		pr_err("%s: failed to request irq ulpi_data_1:(%d)\n",
-						__func__,
-						ui->gpio_irq[0]);
-		ui->gpio_irq[0] = 0;
-		usb_free(ui, ret);
-		return ret;
-	}
-	disable_irq(ui->gpio_irq[0]);
-
-	/* ulpi_data_3: edge detect, active high */
-	ui->gpio_irq[1] = MSM_GPIO_TO_INT(ui->pdata->ulpi_data_3_pin);
-	ret = request_irq(ui->gpio_irq[1],
-			&usb_lpm_gpio_isr,
-			IRQF_TRIGGER_RISING,
-			"usb_ulpi_data3", NULL);
-	if (ret) {
-		pr_err("%s: failed to request irq ulpi_data_3:(%d)\n",
-						__func__,
-						ui->gpio_irq[1]);
-		ui->gpio_irq[1] = 0;
-		usb_free(ui, ret);
-		return ret;
-	}
-	disable_irq(ui->gpio_irq[1]);
-
-no_gpios:
 	usb_debugfs_init(ui);
-
-	if (!sysfs_create_group(&pdev->dev.kobj, &msm_hsusb_attr_grp))
-		pr_info("Created the sysfs entry successfully \n");
-
-	usb_work = create_singlethread_workqueue("usb_work");
-	if (!usb_work)
-		return -ENOMEM;
-
 	usb_prepare(ui);
 
+	pr_info("%s: io=%p, irq=%d, dma=%p(%x)\n",
+			__func__, ui->addr, ui->irq, ui->buf, ui->dma);
 	return 0;
+
+free_ulpi_irq1:
+	free_irq(ulpi_irq1, NULL);
+free_irq:
+	free_irq(ui->irq, ui);
+free_vreg5v:
+	if (ui->pdata->vreg5v_required)
+		vreg_put(ui->vreg);
+free_hs_cclk:
+	clk_put(ui->cclk);
+free_hs_pclk:
+	clk_put(ui->pclk);
+free_hs_clk:
+	clk_put(ui->clk);
+free_dma_pool:
+	dma_pool_destroy(ui->pool);
+free_dma_coherent:
+	dma_free_coherent(&pdev->dev, 4096, ui->buf, ui->dma);
+free_iounmap:
+	iounmap(ui->addr);
+free_func:
+	kfree(ui->func);
+free_str_desc:
+	kfree(ui->strdesc);
+free_ui:
+	kfree(ui);
+free_workqueue:
+	destroy_workqueue(usb_work);
+free_sysfs_grp:
+	sysfs_remove_group(&pdev->dev.kobj, &msm_hsusb_attr_grp);
+
+	return ret;
 }
 
 #ifdef CONFIG_PM
@@ -3277,22 +3321,12 @@ static struct platform_driver usb_driver = {
 
 static int __init usb_module_init(void)
 {
-	int ret, err;
 	/* rpc connect for phy_reset */
 	msm_hsusb_rpc_connect();
 	/* rpc connect for charging */
 	msm_chg_rpc_connect();
 
-	ret = platform_driver_register(&usb_driver);
-
-	if (ret != 0 || usb_init_err != 0) {
-		usb_exit();
-		err = usb_init_err;
-		usb_init_err = 0;
-		return err;
-	} else
-		return ret;
-
+	return platform_driver_register(&usb_driver);
 }
 
 static void free_usb_info(void)

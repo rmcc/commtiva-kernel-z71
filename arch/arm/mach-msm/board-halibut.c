@@ -318,8 +318,6 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
-	.ulpi_data_1_pin = 112,
-	.ulpi_data_3_pin = 114,
 	.config_gpio 	= usb_config_gpio,
 #endif
 };
