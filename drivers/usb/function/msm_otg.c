@@ -66,14 +66,16 @@ static void msm_otg_set_clk(int on)
 static inline int is_host(void)
 {
 	int ret;
-	msm_otg_set_clk(1);
+
 	ret = (OTGSC_ID & readl(USB_OTGSC)) ? 0 : 1;
-	msm_otg_set_clk(0);
 	return ret;
 }
 
 static void msm_otg_enable(void)
 {
+	msm_otg_set_clk(1);
+	/* Enable ID interrupts */
+	writel(readl(USB_OTGSC) | OTGSC_IDIE, USB_OTGSC);
 
 	if (is_host()) {
 		pr_info("%s: configuring USB in host mode\n", __func__);
@@ -84,6 +86,7 @@ static void msm_otg_enable(void)
 		xceiv->dcd_ops->request(xceiv->dcd_ops->handle, REQUEST_START);
 		xceiv->state = B_DEVICE;
 	}
+	msm_otg_set_clk(0);
 	xceiv->active = 1;
 	wake_lock_timeout(&xceiv->wlock, HZ/2);
 	enable_irq(xceiv->irq);
