@@ -252,13 +252,14 @@ unlock:
 	return ret;
 }
 
-static void msm_otg_set_suspend(int on)
+static int msm_otg_set_suspend(struct msm_otg_transceiver *otg, int suspend)
 {
 	unsigned long flags;
 
 	spin_lock_irqsave(&xceiv->lock, flags);
-	xceiv->in_lpm = on;
+	xceiv->in_lpm = suspend;
 	spin_unlock_irqrestore(&xceiv->lock, flags);
+	return 0;
 }
 
 static int __init msm_otg_probe(struct platform_device *pdev)

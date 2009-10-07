@@ -2538,7 +2538,7 @@ static void usb_lpm_exit(struct usb_info *ui)
 		}
 		ui->in_lpm = 0;
 		if (ui->xceiv)
-			ui->xceiv->set_suspend(0);
+			ui->xceiv->set_suspend(ui->xceiv, 0);
 	}
 	pr_info("%s(): USB exited from low power mode\n", __func__);
 }
@@ -2563,7 +2563,7 @@ static int usb_lpm_enter(struct usb_info *ui)
 
 	ui->in_lpm = 1;
 	if (ui->xceiv)
-		ui->xceiv->set_suspend(1);
+		ui->xceiv->set_suspend(ui->xceiv, 1);
 	disable_irq(ui->irq);
 	spin_unlock_irqrestore(&ui->lock, flags);
 
@@ -2765,7 +2765,7 @@ static void usb_lpm_wakeup_phy(struct work_struct *w)
 
 	ui->in_lpm = 0;
 	if (ui->xceiv)
-		ui->xceiv->set_suspend(0);
+		ui->xceiv->set_suspend(ui->xceiv, 0);
 	enable_irq(ui->irq);
 }
 
