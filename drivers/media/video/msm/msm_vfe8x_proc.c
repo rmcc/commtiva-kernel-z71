@@ -1664,42 +1664,20 @@ static void vfe_process_output_path_irq(
 	}
 }
 
-static void vfe_do_tasklet(unsigned long data)
+static void __vfe_do_tasklet(struct isr_queue_cmd *qcmd)
 {
-	unsigned long flags;
-
-	struct isr_queue_cmd *qcmd = NULL;
-
-	CDBG("=== vfe_do_tasklet start === \n");
-
-	spin_lock_irqsave(&ctrl->tasklet_lock, flags);
-	qcmd = list_first_entry(&ctrl->tasklet_q,
-			struct isr_queue_cmd, list);
-
-	if (!qcmd) {
-		spin_unlock_irqrestore(&ctrl->tasklet_lock, flags);
-		return;
-	}
-
-	list_del(&qcmd->list);
-	spin_unlock_irqrestore(&ctrl->tasklet_lock, flags);
-
 	if (qcmd->vfeInterruptStatus.regUpdateIrq) {
-		CDBG("irq	regUpdateIrq\n");
+		CDBG("irq regUpdateIrq\n");
 		vfe_process_reg_update_irq();
 	}
 
 	if (qcmd->vfeInterruptStatus.resetAckIrq) {
-		CDBG("irq	resetAckIrq\n");
+		CDBG("%s: process resetAckIrq\n", __func__);
 		vfe_process_reset_irq();
 	}
 
-	spin_lock_irqsave(&ctrl->state_lock, flags);
-	if (ctrl->vstate != VFE_STATE_ACTIVE) {
-		spin_unlock_irqrestore(&ctrl->state_lock, flags);
+	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		return;
-	}
-	spin_unlock_irqrestore(&ctrl->state_lock, flags);
 
 #if 0
 	if (qcmd->vfeInterruptStatus.camifEpoch1Irq)
@@ -1711,7 +1689,7 @@ static void vfe_do_tasklet(unsigned long data)
 
 	/* next, check output path related interrupts. */
 	if (qcmd->vfeInterruptStatus.anyOutputPathIrqs) {
-		CDBG("irq	anyOutputPathIrqs\n");
+		CDBG("irq: anyOutputPathIrqs\n");
 		vfe_process_output_path_irq(&qcmd->vfeInterruptStatus);
 	}
 
@@ -1734,12 +1712,34 @@ static void vfe_do_tasklet(unsigned long data)
 #endif /* Jeff */
 
 	if (qcmd->vfeInterruptStatus.camifSofIrq) {
-		CDBG("irq	camifSofIrq\n");
+		CDBG("irq: camifSofIrq\n");
 		vfe_process_camif_sof_irq();
 	}
+}
 
+static void vfe_do_tasklet(unsigned long data)
+{
+	int cnt = 0;
+	unsigned long flags;
+	struct isr_queue_cmd *qcmd = NULL;
+	struct list_head *elem, *temp;
+
+	CDBG("%s\n", __func__);
+
+	spin_lock_irqsave(&ctrl->tasklet_lock, flags);
+
+	list_for_each_safe(elem, temp, &ctrl->tasklet_q) {
+		qcmd = list_entry(elem, struct isr_queue_cmd, list);
+		__vfe_do_tasklet(qcmd);
+		list_del(elem);
 	kfree(qcmd);
-	CDBG("=== vfe_do_tasklet end === \n");
+		cnt++;
+	}
+
+	spin_unlock_irqrestore(&ctrl->tasklet_lock, flags);
+
+	if (cnt > 1)
+		pr_info("%s: serviced %d vfe interrupts\n", __func__, cnt);
 }
 
 DECLARE_TASKLET(vfe_tasklet, vfe_do_tasklet, 0);
