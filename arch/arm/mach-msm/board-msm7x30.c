@@ -1981,6 +1981,10 @@ static struct msm_i2c_platform_data msm_i2c_ssbi7_pdata = {
 };
 #endif
 
+static struct msm_acpu_clock_platform_data msm7x30_clock_data = {
+	.acpu_switch_time_us = 50,
+};
+
 static void __init msm7x30_init_irq(void)
 {
 	msm_init_irq();
@@ -2290,6 +2294,7 @@ static void __init msm7x30_init(void)
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
+	msm_acpu_clock_init(&msm7x30_clock_data);
 #ifdef CONFIG_USB_FUNCTION
 	msm_hsusb_pdata.swfi_latency =
 		msm_pm_data
