@@ -52,6 +52,9 @@ static void vfe_release(struct platform_device *dev)
 	mutex_lock(&vfe_lock);
 	vfe_syncdata = NULL;
 	mutex_unlock(&vfe_lock);
+	/* request AXI bus for camera */
+	release_axi_qos();
+
 }
 
 static void vfe_config_axi(int mode,
@@ -764,7 +767,15 @@ static int vfe_init(struct msm_vfe_callback *presp,
 		return rc;
 
 	/* Bring up all the required GPIOs and Clocks */
-	return msm_camio_enable(dev);
+	rc = msm_camio_enable(dev);
+	if (rc < 0) {
+		return rc;
+	} else {
+		rc = request_axi_qos();
+		if (rc < 0)
+			CDBG("request of axi qos failed\n");
+	}
+	return rc;
 }
 
 void msm_camvfe_fn_init(struct msm_camvfe_fn *fptr, void *data)
