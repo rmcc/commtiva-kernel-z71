@@ -112,7 +112,6 @@ static void usb_vbus_online(struct usb_info *);
 static void usb_vbus_offline(struct usb_info *ui);
 static void usb_lpm_exit(struct usb_info *ui);
 static void usb_lpm_wakeup_phy(struct work_struct *);
-static void usb_lpm_detach_int_h(struct work_struct *w);
 static void usb_exit(void);
 static int usb_is_online(struct usb_info *ui);
 static void usb_do_work(struct work_struct *w);
@@ -143,9 +142,6 @@ static void usb_chg_set_type(struct usb_info *ui);
 #define DRIVER_NAME		"msm_hsusb_peripheral"
 
 struct lpm_info {
-	unsigned int rs_rw;
-	unsigned int pmic_h_disabled;
-	struct work_struct detach_int_h;
 	struct work_struct wakeup_phy;
 };
 
@@ -1618,7 +1614,6 @@ static void usb_prepare(struct usb_info *ui)
 	ui->ep0out_req = usb_ept_alloc_req(&ui->ep0out, ui->ep0out.max_pkt);
 
 	INIT_WORK(&ui->chg_stop, usb_chg_stop);
-	INIT_WORK(&ui->li.detach_int_h, usb_lpm_detach_int_h);
 	INIT_WORK(&ui->li.wakeup_phy, usb_lpm_wakeup_phy);
 	INIT_DELAYED_WORK(&ui->work, usb_do_work);
 }
@@ -2483,31 +2478,6 @@ static irqreturn_t usb_lpm_gpio_isr(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
-static int usb_lpm_config_pmic_handler(struct usb_info *ui)
-{
-	int reset_handler = ui->li.rs_rw;
-
-	if (reset_handler < 0) {
-		pr_err("failed to check if reset rework"
-				" is installed or not\n");
-		return -1;
-	}
-
-	if (!reset_handler)
-		return 0;
-
-	if (!ui->li.pmic_h_disabled &&
-			msm_hsusb_enable_pmic_ulpidata0() < 0) {
-		pr_err("failed to enable s/w to wakeup on"
-				"usb reset from suspend\n");
-		return -1;
-	}
-
-	ui->li.pmic_h_disabled = 1;
-
-	return 0;
-}
-
 static void usb_lpm_exit(struct usb_info *ui)
 {
 	if (ui->in_lpm == 0)
@@ -2515,9 +2485,6 @@ static void usb_lpm_exit(struct usb_info *ui)
 
 	if (usb_lpm_config_gpio)
 		usb_lpm_config_gpio(0);
-
-	if (ui->li.pmic_h_disabled)
-		schedule_work(&ui->li.detach_int_h);
 
 	wake_lock(&ui->wlock);
 	usb_clk_enable(ui);
@@ -2530,16 +2497,6 @@ static void usb_lpm_exit(struct usb_info *ui)
 		disable_irq(ui->irq);
 		schedule_work(&ui->li.wakeup_phy);
 	} else {
-		if (PHY_TYPE(ui->phy_info) == USB_PHY_EXTERNAL) {
-			/* enable vbus valid and session end raise/fall
-			   interrupts */
-			ulpi_write(ui,
-				ULPI_VBUS_VALID_RAISE | ULPI_SESSION_END_RAISE,
-				ULPI_USBINTR_ENABLE_RASING_S);
-			ulpi_write(ui,
-				ULPI_VBUS_VALID_FALL | ULPI_SESSION_END_FALL,
-				ULPI_USBINTR_ENABLE_FALLING_S);
-		}
 		ui->in_lpm = 0;
 		if (ui->xceiv)
 			ui->xceiv->set_suspend(ui->xceiv, 0);
@@ -2609,15 +2566,6 @@ static int usb_lpm_enter(struct usb_info *ui)
 		}
 		enable_irq(ui->gpio_irq[0]);
 		enable_irq(ui->gpio_irq[1]);
-	}
-
-	if (!connected && usb_lpm_config_pmic_handler(ui)) {
-		pr_err("%s: unable to config msm wake interrupts\n", __func__);
-		spin_lock_irqsave(&ui->lock, flags);
-		usb_lpm_exit(ui);
-		spin_unlock_irqrestore(&ui->lock, flags);
-		enable_irq(ui->irq);
-		return -1;
 	}
 
 	enable_irq(ui->irq);
@@ -2771,20 +2719,6 @@ static void usb_lpm_wakeup_phy(struct work_struct *w)
 	if (ui->xceiv)
 		ui->xceiv->set_suspend(ui->xceiv, 0);
 	enable_irq(ui->irq);
-}
-
-static void usb_lpm_detach_int_h(struct work_struct *w)
-{
-	struct usb_info *ui = the_usb_info;
-
-	if (ui->li.rs_rw == 1 && ui->li.pmic_h_disabled) {
-		if (msm_hsusb_disable_pmic_ulpidata0() < 0) {
-			pr_err("failed to disable s/w work-around to wakeup on"
-					"usb reset from suspend\n");
-			return;
-		}
-		ui->li.pmic_h_disabled = 0;
-	}
 }
 
 void usb_function_reenumerate(void)
@@ -3097,7 +3031,6 @@ static int __init usb_probe(struct platform_device *pdev)
 	struct usb_info *ui;
 	int irq;
 	int ret;
-	int i;
 
 	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
 	if (!ui)
@@ -3248,22 +3181,8 @@ static int __init usb_probe(struct platform_device *pdev)
 	if (!ui->pdata->ulpi_data_1_pin)
 		goto no_gpios;
 
-	/* initialize lpm variables */
-	ui->li.pmic_h_disabled = 0;
-	ui->li.rs_rw = 0;
-	/* check if reset rework is installed or not */
-	i = msm_hsusb_reset_rework_installed();
-	if (i < 0) {
-		pr_err("%s: unable to verify if reset"
-				" rework is installed or not\n", __func__);
-		ui->li.rs_rw = -1;
-	} else if (i) {
-		pr_info("%s: reset rework is installed\n", __func__);
-		ui->li.rs_rw = 1;
-	} else
-		pr_info("%s: reset rework is not installed\n", __func__);
-
 	usb_lpm_config_gpio = ui->pdata->config_gpio;
+
 	/* request gpio irqs */
 	/* ulpi_data_1: level detect, active high */
 	ui->gpio_irq[0] = MSM_GPIO_TO_INT(ui->pdata->ulpi_data_1_pin);
@@ -3296,6 +3215,7 @@ static int __init usb_probe(struct platform_device *pdev)
 		return ret;
 	}
 	disable_irq(ui->gpio_irq[1]);
+
 no_gpios:
 	usb_debugfs_init(ui);
 
@@ -3411,7 +3331,6 @@ static void usb_exit(void)
 		msm_otg_put_transceiver(ui->xceiv);
 	}
 
-	cancel_work_sync(&ui->li.detach_int_h);
 	cancel_work_sync(&ui->li.wakeup_phy);
 
 	destroy_workqueue(usb_work);
