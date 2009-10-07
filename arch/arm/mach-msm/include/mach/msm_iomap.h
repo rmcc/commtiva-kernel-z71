@@ -115,6 +115,10 @@
 #define MSM_SCPLL_PHYS        0xA8800000
 #define MSM_SCPLL_SIZE        SZ_4K
 
+#define MSM_ACC_BASE          IOMEM(0xE0007000)
+#define MSM_ACC_PHYS          0xC0101000
+#define MSM_ACC_SIZE          SZ_4K
+
 #define MSM_GCC_BASE	      IOMEM(0xE0008000)
 #define MSM_GCC_PHYS	      0xC0182000
 #define MSM_GCC_SIZE	      SZ_4K
