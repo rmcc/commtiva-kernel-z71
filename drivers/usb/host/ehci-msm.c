@@ -550,12 +550,16 @@ static void msm_hsusb_request_host(void *handle, int request)
 		wake_lock(&mhcd->wlock);
 		msm_xusb_pm_qos_update(mhcd, 1);
 		msm_xusb_enable_clks(mhcd);
+		if (PHY_TYPE(pdata->phy_info) == USB_PHY_INTEGRATED)
+			clk_enable(mhcd->clk);
 		if (pdata->vbus_power)
 			pdata->vbus_power(pdata->phy_info, 1);
 		if (pdata->config_gpio)
 			pdata->config_gpio(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
 		mhcd->running = 1;
+		if (PHY_TYPE(pdata->phy_info) == USB_PHY_INTEGRATED)
+			clk_disable(mhcd->clk);
 		break;
 	case REQUEST_STOP:
 		if (!mhcd->running)
