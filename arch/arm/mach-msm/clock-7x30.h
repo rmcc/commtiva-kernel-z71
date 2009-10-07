@@ -127,6 +127,9 @@ enum {
 struct clk_ops;
 extern struct clk_ops clk_ops_7x30;
 
+void pll_enable(uint32_t pll);
+void pll_disable(uint32_t pll);
+
 #define CLK_7X30(clk_name, clk_id, clk_dev, clk_flags) {	\
 	.name = clk_name, \
 	.id = L_7X30_##clk_id, \

@@ -100,17 +100,11 @@ enum {
 	SRC_MAX       /* Used for sources that can't be turned on/off. */
 };
 
-struct pll_data {
-	int count;
-	uint32_t bit_mask;
-};
-
-static struct pll_data pll_tbl[SRC_MAX] = {
-	/* FIXME: Put in proper values for bit_mask. */
-	[SRC_PLL0] = { 0, 0 },
-	[SRC_PLL1] = { 0, 0 },
-	[SRC_PLL3] = { 0, 0 },
-	[SRC_PLL4] = { 0, 0 },
+static uint32_t src_pll_tbl[] = {
+	[SRC_PLL0] = PLL_0,
+	[SRC_PLL1] = PLL_1,
+	[SRC_PLL3] = PLL_3,
+	[SRC_PLL4] = PLL_4,
 };
 
 #define B(x)	BIT(x)
@@ -406,6 +400,8 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MDP_VSYNC_REG		0x0460
 #define PLL_ENA_REG		0x0260
 
+static uint32_t pll_count[NUM_PLL];
+
 static uint32_t chld_grp_3d_src[] = {C(IMEM), C(GRP_3D), C(NONE)};
 static uint32_t chld_mdp_lcdc_p[] = {C(MDP_LCDC_PAD_P), C(NONE)};
 static uint32_t chld_mi2s_codec_rx[] = {C(MI2S_CODEC_RX_S), C(NONE)};
@@ -545,48 +541,61 @@ static struct clk_local clk_local_tbl[] = {
 };
 
 static DEFINE_SPINLOCK(clock_reg_lock);
+static DEFINE_SPINLOCK(pll_vote_lock);
 
 void pll_enable(uint32_t pll)
 {
-	struct pll_data *p;
 	uint32_t reg_val;
+	unsigned long flags;
 
-	/* SRC_MAX is used as a placeholder for some freqencies that don't
-	 * have any direct PLL dependency. */
-	if (pll == SRC_MAX || pll == SRC_LPXO)
-		return;
-
-	p = &pll_tbl[pll];
-	if (!p->count) {
+	spin_lock_irqsave(&pll_vote_lock, flags);
+	if (!pll_count[pll]) {
 		reg_val = readl(REG(PLL_ENA_REG));
-		reg_val |= p->bit_mask;
+		reg_val |= (1 << pll);
 		writel(reg_val, REG(PLL_ENA_REG));
 	}
-	p->count++;
+	pll_count[pll]++;
+	spin_unlock_irqrestore(&pll_vote_lock, flags);
+}
+
+static void src_enable(uint32_t src)
+{
+	/* SRC_MAX is used as a placeholder for some freqencies that don't
+	 * have any direct PLL dependency. */
+	if (src == SRC_MAX || src == SRC_LPXO)
+		return;
+
+	pll_enable(src_pll_tbl[src]);
 }
 
 void pll_disable(uint32_t pll)
 {
-	struct pll_data *p;
 	uint32_t reg_val;
+	unsigned long flags;
 
-	/* SRC_MAX is used as a placeholder for some freqencies that don't
-	 * have any direct PLL dependency. */
-	if (pll == SRC_MAX || pll == SRC_LPXO)
-		return;
-
-	p = &pll_tbl[pll];
-	if (!p->count) {
+	spin_lock_irqsave(&pll_vote_lock, flags);
+	if (pll_count[pll])
+		pll_count[pll]--;
+	else
 		pr_warning("Reference count mismatch in PLL disable!\n");
-		return;
-	}
-	if (p->count)
-		p->count--;
-	if (p->count == 0) {
+
+	if (pll_count[pll] == 0) {
 		reg_val = readl(REG(PLL_ENA_REG));
-		reg_val &= ~(p->bit_mask);
+		reg_val &= ~(1 << pll);
 		writel(reg_val, REG(PLL_ENA_REG));
 	}
+	spin_unlock_irqrestore(&pll_vote_lock, flags);
+}
+
+static void src_disable(uint32_t src)
+{
+	/* SRC_MAX is used as a placeholder for some freqencies that don't
+	 * have any direct PLL dependency. */
+	if (src == SRC_MAX || src == SRC_LPXO)
+		return;
+
+	pll_disable(src_pll_tbl[src]);
+
 }
 
 /*
@@ -648,7 +657,7 @@ static int soc_clk_enable_nolock(unsigned id)
 	if (!t->count) {
 		if (t->parent != C(NONE))
 			soc_clk_enable_nolock(t->parent);
-		pll_enable(t->current_freq->src);
+		src_enable(t->current_freq->src);
 		ret = _soc_clk_enable(id);
 	}
 	t->count++;
@@ -668,7 +677,7 @@ static void soc_clk_disable_nolock(unsigned id)
 		t->count--;
 	if (t->count == 0) {
 		_soc_clk_disable(id);
-		pll_disable(t->current_freq->src);
+		src_disable(t->current_freq->src);
 		if (t->parent != C(NONE))
 			soc_clk_disable_nolock(t->parent);
 	}
@@ -754,7 +763,7 @@ static int soc_clk_set_rate(unsigned id, unsigned rate)
 		_soc_clk_disable(id);
 
 	/* Turn on PLL of the new freq. */
-	pll_enable(nf->src);
+	src_enable(nf->src);
 
 	/* Some clocks share the same register, so must be careful when
 	 * assuming a register doesn't need to be re-read. */
@@ -779,7 +788,7 @@ static int soc_clk_set_rate(unsigned id, unsigned rate)
 	}
 
 	/* Turn off PLL of the old freq. */
-	pll_disable(cf->src);
+	src_disable(cf->src);
 
 	/* Current freq must be updated before _soc_clk_enable() is called to
 	 * make sure the MNCNTR_E bit is set correctly. */
