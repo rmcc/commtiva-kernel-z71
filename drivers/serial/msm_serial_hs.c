@@ -520,7 +520,9 @@ static void msm_hs_submit_tx_locked(struct uart_port *uport)
 {
 	int left;
 	int tx_count;
+	int aligned_tx_count;
 	dma_addr_t src_addr;
+	dma_addr_t aligned_src_addr;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 	struct msm_hs_tx *tx = &msm_uport->tx;
 	struct circ_buf *tx_buf = &msm_uport->uport.info->xmit;
@@ -543,8 +545,13 @@ static void msm_hs_submit_tx_locked(struct uart_port *uport)
 		tx_count = left;
 
 	src_addr = tx->dma_base + tx_buf->tail;
-	dma_sync_single_for_device(uport->dev, src_addr, tx_count,
-				   DMA_TO_DEVICE);
+	/* Mask the src_addr to align on a cache
+	 * and add those bytes to tx_count */
+	aligned_src_addr = src_addr & ~(dma_get_cache_alignment() - 1);
+	aligned_tx_count = tx_count + src_addr - aligned_src_addr;
+
+	dma_sync_single_for_device(uport->dev, aligned_src_addr,
+			aligned_tx_count, DMA_TO_DEVICE);
 
 	tx->command_ptr->num_rows = (((tx_count + 15) >> 4) << 16) |
 				     ((tx_count + 15) >> 4);
