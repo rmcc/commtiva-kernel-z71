@@ -519,17 +519,20 @@ static long kgsl_ioctl_rb_freememontimestamp(struct kgsl_file_private *private,
 		goto done;
 	}
 
-	entry = kgsl_sharedmem_find(private, param.gpuaddr);
-	if (entry == NULL) {
-		KGSL_DRV_ERR("invalid gpuaddr %08x\n", param.gpuaddr);
-		result = -EINVAL;
-		goto done;
-	}
+	if (param.gpuaddr) {
+		entry = kgsl_sharedmem_find(private, param.gpuaddr);
+		if (entry == NULL) {
+			KGSL_DRV_ERR("invalid gpuaddr %08x\n", param.gpuaddr);
+			result = -EINVAL;
+			goto done;
+		}
 
-	result = kgsl_ringbuffer_freememontimestamp(&kgsl_driver.yamato_device,
-							entry,
-							param.timestamp,
-							param.type);
+		result = kgsl_ringbuffer_freememontimestamp(
+					&kgsl_driver.yamato_device,
+					entry,
+					param.timestamp,
+					param.type);
+	}
 
 	kgsl_yamato_runpending(&kgsl_driver.yamato_device);
 
@@ -596,8 +599,10 @@ void kgsl_remove_pmem_entry(struct kgsl_pmem_entry *entry)
 {
 	KGSL_DRV_DBG("unlocked pmem fd %p\n", entry->pmem_file);
 	put_pmem_file(entry->pmem_file);
-	list_del(&entry->list);
 
+	/* remove the entry from list and free_list if it exists */
+	if (entry->list.prev)
+		list_del(&entry->list);
 	if (entry->free_list.prev)
 		list_del(&entry->free_list);
 
@@ -621,14 +626,16 @@ static long kgsl_ioctl_sharedmem_free(struct kgsl_file_private *private,
 		goto done;
 	}
 
-	entry = kgsl_sharedmem_find(private, param.gpuaddr);
-	if (entry == NULL) {
-		KGSL_DRV_ERR("invalid gpuaddr %08x\n", param.gpuaddr);
-		result = -EINVAL;
-		goto done;
-	}
+	if (param.gpuaddr) {
+		entry = kgsl_sharedmem_find(private, param.gpuaddr);
+		if (entry == NULL) {
+			KGSL_DRV_ERR("invalid gpuaddr %08x\n", param.gpuaddr);
+			result = -EINVAL;
+			goto done;
+		}
 
-	kgsl_remove_pmem_entry(entry);
+		kgsl_remove_pmem_entry(entry);
+	}
 done:
 	return result;
 }
