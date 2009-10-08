@@ -342,6 +342,19 @@ struct msm_adsp_ops audrec_adsp_ops = {
 	msm_adsp_write(audio->audrec, \
 	QDSP_uPAudRecCmdQueue, cmd, len)
 
+/* Convert Bit Rate to Record Quality field of DSP */
+static unsigned int bitrate_to_record_quality(unsigned int sample_rate,
+    unsigned int channel, unsigned int bit_rate) {
+	unsigned int temp;
+
+	temp = sample_rate * channel;
+	MM_DBG(" sample rate *  channel = %d \n", temp);
+	/* To represent in Q12 fixed format */
+	temp = (bit_rate * 4096) / temp;
+	MM_DBG(" Record Quality = 0x%8x \n", temp);
+	return temp;
+}
+
 static int audio_dsp_set_tx_agc(struct audio_in *audio)
 {
 	audpreproc_cmd_cfg_agc_params cmd;
@@ -498,8 +511,8 @@ static int audio_in_encoder_config(struct audio_in *audio)
 	cmd.samp_rate_index = audio->samp_rate_index;
 	cmd.stereo_mode = audio->channel_mode; /* 0 for mono, 1 for stereo */
 
-	/* FIXME have no idea why cmd.rec_quality is fixed 
-	 * as 0x1C00 from sample code
+	/* cmd.rec_quality is based on user set bit rate / sample rate /
+	 * channel
 	 */
 	cmd.rec_quality = audio->record_quality;
 
@@ -698,12 +711,21 @@ static long audio_in_ioctl(struct file *file,
 	}
 	case AUDIO_SET_AAC_ENC_CONFIG: {
 		struct msm_audio_aac_enc_config cfg;
+		unsigned int record_quality;
 		if (copy_from_user(&cfg, (void *)arg, sizeof(cfg))) {
 			rc = -EFAULT;
 			break;
 		}
 		if (cfg.stream_format != AUDIO_AAC_FORMAT_RAW) {
 			MM_ERR("unsupported AAC format\n");
+			rc = -EINVAL;
+			break;
+		}
+		record_quality = bitrate_to_record_quality(cfg.sample_rate,
+					cfg.channels, cfg.bit_rate);
+		/* Range of Record Quality Supported by DSP, Q12 format */
+		if ((record_quality < 0x800) || (record_quality > 0x4000)) {
+			MM_ERR("Unsupported bit rate \n");
 			rc = -EINVAL;
 			break;
 		}
@@ -719,6 +741,9 @@ static long audio_in_ioctl(struct file *file,
 		audio->samp_rate_index =
 		  convert_dsp_samp_index(cfg.sample_rate);
 		audio->channel_mode = cfg.channels;
+		audio->bit_rate = cfg.bit_rate;
+		audio->record_quality = record_quality;
+		MM_DBG(" Record Quality = 0x%8x \n", audio->record_quality);
 		rc = 0;
 		break;
 	}
