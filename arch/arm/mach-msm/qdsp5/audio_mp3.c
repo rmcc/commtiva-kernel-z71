@@ -1343,7 +1343,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	case AUDIO_GET_PCM_CONFIG:{
 		struct msm_audio_pcm_config config;
-		config.pcm_feedback = 0;
+		config.pcm_feedback = audio->pcm_feedback;
 		config.buffer_count = PCM_BUF_MAX_COUNT;
 		config.buffer_size = PCM_BUFSZ_MIN;
 		if (copy_to_user((void *)arg, &config,
@@ -1361,9 +1361,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				break;
 			}
 
+			if (config.pcm_feedback != audio->pcm_feedback) {
+				MM_ERR("Not sufficient permission to"
+					 "change the playback mode\n");
+				rc = -EACCES;
+				break;
+			}
 			if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
-				audio->pcm_feedback =
-				(config.pcm_feedback ? 1 : 0);
 				rc = 0;
 				break;
 			}
@@ -1399,7 +1403,6 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				} else {
 					uint8_t index;
 					uint32_t offset = 0;
-					audio->pcm_feedback = 1;
 					audio->buf_refresh = 0;
 					audio->pcm_buf_count =
 					    config.buffer_count;
@@ -2036,10 +2039,19 @@ static int audio_open(struct inode *inode, struct file *file)
 
 	/* Allocate the decoder */
 	dec_attrb = AUDDEC_DEC_MP3;
-	if (file->f_mode & FMODE_READ)
+	if ((file->f_mode & FMODE_WRITE) &&
+			(file->f_mode & FMODE_READ)) {
 		dec_attrb |= MSM_AUD_MODE_NONTUNNEL;
-	else
+		audio->pcm_feedback = NON_TUNNEL_MODE_PLAYBACK;
+	} else if ((file->f_mode & FMODE_WRITE) &&
+			!(file->f_mode & FMODE_READ)) {
 		dec_attrb |= MSM_AUD_MODE_TUNNEL;
+		audio->pcm_feedback = TUNNEL_MODE_PLAYBACK;
+	} else {
+		kfree(audio);
+		rc = -EACCES;
+		goto done;
+	}
 
 	decid = audpp_adec_alloc(dec_attrb, &audio->module_name,
 			&audio->queue_id);

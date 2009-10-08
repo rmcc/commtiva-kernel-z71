@@ -209,6 +209,10 @@ typedef void (*audrec_event_func)(void *private, unsigned id, uint16_t *msg);
 #define MSM_AUD_DECODER_MASK  0x0000FFFF
 #define MSM_AUD_OP_MASK  0xFFFF0000
 
+/*Playback mode*/
+#define NON_TUNNEL_MODE_PLAYBACK 1
+#define TUNNEL_MODE_PLAYBACK 0
+
 enum msm_aud_decoder_state {
 	MSM_AUD_DECODER_STATE_NONE = 0,
 	MSM_AUD_DECODER_STATE_FAILURE = 1,
