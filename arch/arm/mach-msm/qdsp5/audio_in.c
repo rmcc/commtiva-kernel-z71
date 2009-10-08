@@ -28,7 +28,7 @@
 
 #include <linux/delay.h>
 
-#include <linux/msm_audio.h>
+#include <linux/msm_audio_aac.h>
 
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
@@ -75,6 +75,10 @@ struct audio_in {
 	uint32_t channel_mode;
 	uint32_t buffer_size; /* 2048 for mono, 4096 for stereo */
 	uint32_t type; /* 0 for PCM ,1 for AAC */
+	uint32_t bit_rate; /* bit rate for AAC */
+	uint32_t record_quality; /* record quality (bits/sample/channel)
+				    for AAC*/
+	uint32_t buffer_cfg_ioctl; /* to allow any one of buffer set ioctl */
 	uint32_t dsp_cnt;
 	uint32_t in_head; /* next buffer dsp will write */
 	uint32_t in_tail; /* next buffer read() will read */
@@ -497,7 +501,7 @@ static int audio_in_encoder_config(struct audio_in *audio)
 	/* FIXME have no idea why cmd.rec_quality is fixed 
 	 * as 0x1C00 from sample code
 	 */
-	cmd.rec_quality = 0x1C00;
+	cmd.rec_quality = audio->record_quality;
 
 	/* prepare buffer pointers:
 	 * Mono: 1024 samples + 4 halfword header
@@ -583,6 +587,14 @@ static long audio_in_ioctl(struct file *file,
 		}
 	case AUDIO_SET_CONFIG: {
 		struct msm_audio_config cfg;
+		/* The below code is to make mutual exclusive between
+		 * AUDIO_SET_CONFIG and AUDIO_SET_STREAM_CONFIG.
+		 * Allow any one IOCTL.
+		 */
+		if (audio->buffer_cfg_ioctl == AUDIO_SET_STREAM_CONFIG) {
+			rc = -EINVAL;
+			break;
+		}
 		if (copy_from_user(&cfg, (void *) arg, sizeof(cfg))) {
 			rc = -EFAULT;
 			break;
@@ -612,6 +624,7 @@ static long audio_in_ioctl(struct file *file,
 				audio->channel_mode ? STEREO_DATA_SIZE
 							: MONO_DATA_SIZE;
 		audio->type = cfg.type;
+		audio->buffer_cfg_ioctl = AUDIO_SET_CONFIG;
 		rc = 0;
 		break;
 	}
@@ -635,6 +648,78 @@ static long audio_in_ioctl(struct file *file,
 			rc = -EFAULT;
 		else
 			rc = 0;
+		break;
+	}
+	case AUDIO_GET_STREAM_CONFIG: {
+		struct msm_audio_stream_config cfg;
+		cfg.buffer_size = audio->buffer_size;
+		cfg.buffer_count = FRAME_NUM;
+		if (copy_to_user((void *)arg, &cfg, sizeof(cfg)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
+	case AUDIO_SET_STREAM_CONFIG: {
+		struct msm_audio_stream_config cfg;
+		/* The below code is to make mutual exclusive between
+		 * AUDIO_SET_CONFIG and AUDIO_SET_STREAM_CONFIG.
+		 * Allow any one IOCTL.
+		 */
+		if (audio->buffer_cfg_ioctl == AUDIO_SET_CONFIG) {
+			rc = -EINVAL;
+			break;
+		}
+		if (copy_from_user(&cfg, (void *)arg, sizeof(cfg))) {
+			rc = -EFAULT;
+			break;
+		} else
+			rc = 0;
+		audio->buffer_size = cfg.buffer_size;
+		/* The IOCTL is only of AAC, set the encoder as AAC */
+		audio->type = 1;
+		audio->buffer_cfg_ioctl = AUDIO_SET_STREAM_CONFIG;
+		break;
+	}
+	case AUDIO_GET_AAC_ENC_CONFIG: {
+		struct msm_audio_aac_enc_config cfg;
+		if (audio->channel_mode == AUDREC_CMD_STEREO_MODE_MONO)
+			cfg.channels = 1;
+		else
+			cfg.channels = 2;
+		cfg.sample_rate = convert_samp_index(audio->samp_rate);
+		cfg.bit_rate = audio->bit_rate;
+		cfg.stream_format = AUDIO_AAC_FORMAT_RAW;
+		if (copy_to_user((void *)arg, &cfg, sizeof(cfg)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
+	case AUDIO_SET_AAC_ENC_CONFIG: {
+		struct msm_audio_aac_enc_config cfg;
+		if (copy_from_user(&cfg, (void *)arg, sizeof(cfg))) {
+			rc = -EFAULT;
+			break;
+		}
+		if (cfg.stream_format != AUDIO_AAC_FORMAT_RAW) {
+			MM_ERR("unsupported AAC format\n");
+			rc = -EINVAL;
+			break;
+		}
+		if (cfg.channels == 1) {
+			cfg.channels = AUDREC_CMD_STEREO_MODE_MONO;
+		} else if (cfg.channels == 2) {
+			cfg.channels = AUDREC_CMD_STEREO_MODE_STEREO;
+		} else {
+			rc = -EINVAL;
+			break;
+		}
+		audio->samp_rate = convert_samp_rate(cfg.sample_rate);
+		audio->samp_rate_index =
+		  convert_dsp_samp_index(cfg.sample_rate);
+		audio->channel_mode = cfg.channels;
+		rc = 0;
 		break;
 	}
 	default:
@@ -748,6 +833,12 @@ static int audio_in_open(struct inode *inode, struct file *file)
 	audio->buffer_size = MONO_DATA_SIZE;
 	audio->type = AUDREC_CMD_TYPE_0_INDEX_WAV;
 
+	/* For AAC, bit rate hard coded, default settings is
+	 * sample rate (11025) x channel count (1) x recording quality (1.75)
+	 * = 19293 bps  */
+	audio->bit_rate = 19293;
+	audio->record_quality = 0x1c00;
+
 	rc = audmgr_open(&audio->audmgr);
 	if (rc)
 		goto done;
@@ -762,6 +853,7 @@ static int audio_in_open(struct inode *inode, struct file *file)
 
 	audio->dsp_cnt = 0;
 	audio->stopped = 0;
+	audio->buffer_cfg_ioctl = 0; /* No valid ioctl set */
 
 	audio_flush(audio);
 
