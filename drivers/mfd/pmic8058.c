@@ -90,6 +90,11 @@
 #define	PM8058_IRQF_BITS_SHIFT		4
 #define	PM8058_IRQF_WRITE		0x80
 
+#define PM8058_IRQF_W_C_M		(PM8058_IRQF_WRITE |	\
+					PM8058_IRQF_CLR |	\
+					PM8058_IRQF_MASK_FE |	\
+					PM8058_IRQF_MASK_RE)
+
 /* GPIO */
 #define	PM8058_GPIO_BANK_MASK		0x70
 #define	PM8058_GPIO_BANK_SHIFT		4
@@ -339,13 +344,33 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 EXPORT_SYMBOL(pm8058_gpio_config_kypd_sns);
 
 /* Internal functions */
+static inline int
+pm8058_config_irq(struct pm8058_chip *chip, u8 *bp, u8 *cp)
+{
+	int	rc;
+
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, bp, 1);
+	if (rc) {
+		pr_err("%s: ssbi_write: rc=%d (Select block)\n",
+			__func__, rc);
+		goto bail_out;
+	}
+
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, cp, 1);
+	if (rc)
+		pr_err("%s: ssbi_write: rc=%d (Configure IRQ)\n",
+			__func__, rc);
+
+bail_out:
+	return rc;
+}
+
 static void pm8058_irq_mask(unsigned int irq)
 {
-	int	rc = 0;
-	u8	buf[4];
-	int	block, master, irq_bit;
+	int	master, irq_bit;
 	int	pm_irq;
 	struct	pm8058_chip *chip = get_irq_data(irq);
+	u8	block, config;
 
 	irq -= PM8058_FIRST_IRQ;
 	pm_irq = chip->pdata.pm_irqs[irq];
@@ -361,35 +386,17 @@ static void pm8058_irq_mask(unsigned int irq)
 			chip->masters_allowed &= ~(1 << master);
 	}
 
-	/* Select block and configure the bit */
-	buf[0] = block;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] |
+	config = PM8058_IRQF_WRITE | chip->config[irq] |
 		PM8058_IRQF_MASK_FE | PM8058_IRQF_MASK_RE;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-bail_out:
-	return;
+	pm8058_config_irq(chip, &block, &config);
 }
 
 static void pm8058_irq_unmask(unsigned int irq)
 {
-	int	rc = 0;
-	u8	buf[4], old_irqs_allowed, old_blocks_allowed;
-	int	block, master, irq_bit;
+	int	master, irq_bit;
 	int	pm_irq;
 	struct	pm8058_chip *chip = get_irq_data(irq);
+	u8	block, config, old_irqs_allowed, old_blocks_allowed;
 
 	irq -= PM8058_FIRST_IRQ;
 	pm_irq = chip->pdata.pm_irqs[irq];
@@ -409,68 +416,30 @@ static void pm8058_irq_unmask(unsigned int irq)
 			chip->masters_allowed |= 1 << master;
 	}
 
-	/* Select block and configure the bit */
-	buf[0] = block;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-	buf[0] = PM8058_IRQF_WRITE | chip->config[irq];
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-bail_out:
-	return;
+	config = PM8058_IRQF_WRITE | chip->config[irq];
+	pm8058_config_irq(chip, &block, &config);
 }
 
 static void pm8058_irq_ack(unsigned int irq)
 {
-	int	rc = 0;
-	u8	buf[4];
-	int	block;
 	int	pm_irq;
 	struct	pm8058_chip *chip = get_irq_data(irq);
+	u8	block, config;
 
 	irq -= PM8058_FIRST_IRQ;
 	pm_irq = chip->pdata.pm_irqs[irq];
 	block = pm_irq / 8;
 
-	/* Select block and configure the bit */
-	buf[0] = block;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] |
-		PM8058_IRQF_CLR;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
-
-bail_out:
-	return;
+	config = PM8058_IRQF_WRITE | chip->config[irq] | PM8058_IRQF_CLR;
+	pm8058_config_irq(chip, &block, &config);
 }
 
 static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
 {
-	int	rc = 0;
-	u8	buf[4];
-	int	block, master, irq_bit;
+	int	master, irq_bit;
 	int	pm_irq;
 	struct	pm8058_chip *chip = get_irq_data(irq);
+	u8	block, config;
 
 	irq -= PM8058_FIRST_IRQ;
 	pm_irq = chip->pdata.pm_irqs[irq];
@@ -494,22 +463,57 @@ static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
 			chip->config[irq] &= ~PM8058_IRQF_MASK_FE;
 	}
 
-	/* Select block and configure the bit */
-	buf[0] = block;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, buf, 1);
+	config = PM8058_IRQF_WRITE | chip->config[irq] | PM8058_IRQF_CLR;
+	return pm8058_config_irq(chip, &block, &config);
+}
+
+static inline int
+pm8058_read_root(struct pm8058_chip *chip, u8 *rp)
+{
+	int	rc;
+
+	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_ROOT, rp, 1);
 	if (rc) {
-		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
+		pr_err("%s: FAIL ssbi_read(): rc=%d (Read Root)\n",
 			__func__, rc);
+		*rp = 0;
+	}
+
+	return rc;
+}
+
+static inline int
+pm8058_read_master(struct pm8058_chip *chip, u8 m, u8 *bp)
+{
+	int	rc;
+
+	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_M_STATUS1 + m, bp, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_read(): rc=%d (Read Master)\n",
+			__func__, rc);
+		*bp = 0;
+	}
+
+	return rc;
+}
+
+static inline int
+pm8058_read_block(struct pm8058_chip *chip, u8 *bp, u8 *ip)
+{
+	int	rc;
+
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, bp, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_write(): rc=%d (Select Block)\n",
+		       __func__, rc);
+		*bp = 0;
 		goto bail_out;
 	}
 
-	buf[0] = PM8058_IRQF_WRITE | chip->config[irq] | PM8058_IRQF_CLR;
-	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_CONFIG, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on 2nd ssbi_write(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
+	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_IT_STATUS, ip, 1);
+	if (rc)
+		pr_err("%s: FAIL ssbi_read(): rc=%d (Read Status)\n",
+		       __func__, rc);
 
 bail_out:
 	return rc;
@@ -517,103 +521,118 @@ bail_out:
 
 static void pm8058_handle_isr(struct pm8058_chip *chip)
 {
-	int	rc, i, j, k, m;
-	u8	buf[4];
+	int	i, j, k;
+	u8	root, block, config, bits;
 	u8	blocks[MAX_PM_MASTERS];
-	int	masters, irq;
+	int	masters, irq, handled = 0, spurious = 0;
 
 	/* Read root for masters */
-	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_ROOT, buf, 1);
-	if (rc) {
-		pr_err("%s: Failed on (1) ssbi_read(): rc=%d.\n",
-			__func__, rc);
-		goto bail_out;
-	}
+	if (pm8058_read_root(chip, &root))
+		return;
 
-	/* Check allowed masters */
-	masters = buf[0] >> 1;
-	if (!(masters & chip->masters_allowed)) {
-		pr_err("%s: Unknown masters=0x%x.\n",
-			__func__, buf[0]);
-		goto bail_out;
+	masters = root >> 1;
+
+	if (!(masters & chip->masters_allowed) ||
+	    (masters & ~chip->masters_allowed)) {
+		pr_err("%s: Spurious root: 0x%x (masters=0x%x, "
+		       "Allowed masters=0x%x)\n",
+		       __func__, root, masters, chip->masters_allowed);
+		spurious = 1000000;
 	}
 
 	/* Read allowed masters for blocks. */
-	masters &= chip->masters_allowed;
 	for (i = 0; i < chip->pm_max_masters; i++) {
 		if (masters & (1 << i)) {
-			rc = ssbi_read(chip->dev,
-				       SSBI_REG_ADDR_IRQ_M_STATUS1+i,
-				       &blocks[i], 1);
-			if (rc) {
-				pr_err("%s: FAIL (2) ssbi_read(): rc=%d.\n",
-					__func__, rc);
+			if (pm8058_read_master(chip, i, &blocks[i]))
 				goto bail_out;
-			}
 
-			masters &= ~(1 << i);
-			blocks[i] &= chip->blocks_allowed[i];
-			if (!masters)
-				break;
-		}
+			if (!blocks[i]) {
+				pr_err("%s: Spurious master: %d (blocks=0)",
+					__func__, i);
+				spurious += 10000;
+			}
+		} else
+			blocks[i] = 0;
 	}
 
-	if (i >= chip->pm_max_masters)
-		goto bail_out;
-
 	/* Select block, read status and call isr */
-	for (; i >= 0; i--) {
+	for (i = 0; i < chip->pm_max_masters; i++) {
 		if (!blocks[i])
 			continue;
 
 		for (j = 0; j < 8; j++) {
-			if (blocks[i] & (1 << j)) {
-				k = i * 8 + j;	/* block # */
-				buf[0] = k;
-				rc = ssbi_write(chip->dev,
-						SSBI_REG_ADDR_IRQ_BLK_SEL,
-						buf, 1);
-				if (rc) {
-					pr_err("%s: FAIL ssbi_write(): "
-					       "rc=%d.\n",
-						__func__, rc);
-					goto bail_out;
+			if (!(blocks[i] & (1 << j)))
+				continue;
+
+			block = i * 8 + j;	/* block # */
+			if (pm8058_read_block(chip, &block, &bits))
+				goto bail_out;
+
+			if (!bits) {
+				pr_err("%s: Spurious block: "
+				       "[master, block] ="
+				       "[%d, %d] (bits=0)\n",
+					__func__, i, j);
+				spurious += 100;
+				continue;
+			}
+
+			/* Check IRQ bits */
+			for (k = 0; k < 8; k++) {
+				if (!(bits & (1 << k)))
+					continue;
+
+				/* Check spurious interrupts */
+				if (((1 << i) & chip->masters_allowed) &&
+				    (blocks[i] & chip->blocks_allowed[i]) &&
+				    (bits & chip->irqs_allowed[block])) {
+
+					/* Found one */
+					irq = block * 8 + k;
+					irq = chip->irq_i2e[irq];
+					generic_handle_irq(irq);
+					handled++;
+				} else {
+					/* Clear and mask wrong one */
+					config = PM8058_IRQF_W_C_M |
+						(k < PM8058_IRQF_BITS_SHIFT);
+
+					pm8058_config_irq(chip,
+							  &block, &config);
+
+					pr_err("%s: Spurious IRQ: "
+					       "[master, block, bit]="
+					       "[%d, %d (%d), %d]\n",
+						__func__, i, j, block, k);
+					pr_err("%s: Allowed "
+					       "[masters, blocks, irqs]="
+					       "[0x%x, 0x%x, 0x%x]\n",
+					       __func__,
+					       chip->masters_allowed,
+					       chip->blocks_allowed[i],
+					       chip->irqs_allowed[block]);
+					spurious++;
 				}
-
-				rc = ssbi_read(chip->dev,
-					       SSBI_REG_ADDR_IRQ_IT_STATUS,
-					       buf, 1);
-				if (rc) {
-					pr_err("%s: FAIL (3) ssbi_read(): "
-					       "rc=%d.\n",
-						__func__, rc);
-					goto bail_out;
-				}
-
-				/* Check IRQ bits */
-				buf[0] &= chip->irqs_allowed[k];
-				if (buf[0]) {
-					for (m = 0; m < 8; m++) {
-						if (!(buf[0] & (1 << m)))
-							continue;
-
-						/* Found one */
-						irq = k * 8 + m;
-						irq = chip->irq_i2e[irq];
-
-						generic_handle_irq(irq);
-					}
-				}
-
-				blocks[i] &= ~(1 << j);
-				if (!blocks[i])
-					break;
 			}
 		}
 
 	}
 
 bail_out:
+	if (spurious) {
+		pr_err("%s: handled = %d, spurious = %d\n",
+		       __func__, handled, spurious);
+		pr_err("   root=0x%x, masters_allowed=0x%x\n",
+		       root, chip->masters_allowed);
+		for (i = 0; i < chip->pm_max_masters; i++) {
+			if (masters & (1 << i))
+				pr_err("   blocks[%d]=0x%x, "
+				       "allowed[%d]=0x%x\n",
+				       i, blocks[i],
+				       i, chip->blocks_allowed[i]);
+		}
+	}
+
 	return;
 }
 
