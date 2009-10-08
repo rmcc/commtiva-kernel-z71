@@ -53,7 +53,8 @@ static void msm_map_io(struct map_desc *io_desc, int size)
 	iotable_init(io_desc, size);
 }
 
-#if defined(CONFIG_ARCH_MSM7X01A) || defined(CONFIG_ARCH_MSM7X27)
+#if defined(CONFIG_ARCH_MSM7X01A) || defined(CONFIG_ARCH_MSM7X27) \
+	|| defined(CONFIG_ARCH_MSM7X25)
 static struct map_desc msm_io_desc[] __initdata = {
 	MSM_DEVICE(VIC),
 	MSM_DEVICE(CSR),
