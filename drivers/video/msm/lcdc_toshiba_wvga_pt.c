@@ -214,7 +214,7 @@ static void toshiba_disp_on(void)
 		toshiba_spi_write(0xb3, 0x22, 1);
 		mdelay(1);
 		toshiba_spi_write(0xb4, 0x02, 1);
-		toshiba_spi_write(0xb5, 0x1e, 1);
+		toshiba_spi_write(0xb5, 0x30, 1); /* vcs -- adjust brightness */
 		mdelay(1);
 		toshiba_spi_write(0xb6, 0x27, 1);
 		toshiba_spi_write(0xb7, 0x03, 1);
