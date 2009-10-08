@@ -1799,10 +1799,14 @@ static int usb_hw_reset(struct usb_info *ui)
 		else
 			writel(0x01, USB_ROC_AHB_MODE);
 	} else {
+		unsigned cfg_val;
+
 		/* Raise  amplitude to 400mV
 		 * SW workaround, Issue#2
 		 */
-		ulpi_write(ui, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
+		cfg_val = ulpi_read(ui, ULPI_CONFIG_REG);
+		cfg_val = (cfg_val & ~0x0C) | ULPI_AMPLITUDE;
+		ulpi_write(ui, cfg_val, ULPI_CONFIG_REG);
 
 		writel(0x0, USB_AHB_BURST);
 		writel(0x00, USB_AHB_MODE);
