@@ -118,8 +118,7 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 		/* b - buffer, fb - format block, p - padding */
 		self->shared_buffer = g_audio_mem +
 			((Q6_ENC_BUF_PER_SESSION *
-			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING))
 			* self->session_id);
 
 		if (self->shared_buffer == NULL)
@@ -152,8 +151,7 @@ static s32 create_buffers(struct q6_enc_session_data *self, void *cmd_buf)
 		/* Set to the physical address of buffer memory */
 		node->phys_addr = g_audio_base +
 			(Q6_ENC_BUF_PER_SESSION *
-			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			(Q6_ENC_BUF_MAX_SIZE + MEMORY_PADDING))
 			* self->session_id + i *
 			(self->buf_size + MEMORY_PADDING);
 	}

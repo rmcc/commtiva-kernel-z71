@@ -38,14 +38,6 @@
 
 
 
-/* This event is generated after a media stream session is opened. */
-#define ADSP_AUDIO_EVT_STATUS_OPEN				0x0108c0d6
-
-
-/* This event is generated after a media stream  session is closed. */
-#define ADSP_AUDIO_EVT_STATUS_CLOSE				0x0108c0d7
-
-
 /* Asyncronous buffer consumption. This event is generated after a */
 /* recived  buffer is consumed during rendering or filled during */
 /* capture opeartion. */
@@ -73,20 +65,12 @@
 
 union adsp_audio_event;
 
-/* Callback function type for clients to recieve events */
-typedef void (*adsp_audio_event_cb_func)(union adsp_audio_event *event,
-						void *client_data);
-
-
-struct adsp_audio_event_cb {
-	adsp_audio_event_cb_func	callback;
-	void				*client_data;
-};
-
 
 struct adsp_audio_no_payload_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -102,22 +86,8 @@ struct adsp_audio_no_payload_event {
 struct adsp_audio_signed32_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
-	/* data that identifies this event */
-	struct adsp_audio_event_data	event_data;
-	/* read-only client data */
-	struct adsp_audio_client_data	client_data;
-	/* Return status/error code */
-	u32				status;
-
-	/* payload */
-	s32				value;
-} __attribute__ ((packed));
-
-
-/* Event struct that returns a signed 32bit value */
-struct adsp_audio_signed_event {
-	/* source address, used in routing */
-	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -134,6 +104,8 @@ struct adsp_audio_signed_event {
 struct adsp_audio_unsigned32_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -151,6 +123,8 @@ struct adsp_audio_unsigned32_event {
 struct adsp_audio_unsigned64_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -173,6 +147,8 @@ struct adsp_audio_unsigned64_event {
 struct adsp_audio_byte_array_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -194,6 +170,8 @@ struct adsp_audio_byte_array_event {
 struct adsp_audio_data_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */
@@ -213,6 +191,8 @@ struct adsp_audio_data_event {
 struct adsp_audio_buffer_event {
 	/* source address, used in routing */
 	struct adsp_audio_address	source;
+	/* destination address, used in routing */
+	struct adsp_audio_address	dest;
 	/* data that identifies this event */
 	struct adsp_audio_event_data	event_data;
 	/* read-only client data */

@@ -100,7 +100,7 @@ s32 cad_filter_eq_send_stream_config(u32 sess_id)
 }
 
 s32 cad_filter_eq_process_stream_config(s32 sess_id,
-		struct adsp_audio_eq_cfg *fesc)
+		struct cad_audio_eq_cfg *fesc)
 {
 	s32 rc = CAD_RES_SUCCESS;
 	u32 i;
@@ -203,7 +203,7 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 		switch (filt->cmd) {
 		case CAD_FILTER_EQ_DEVICE_CONFIG:
 			if (filt->format_block_len !=
-					sizeof(struct adsp_audio_eq_cfg)) {
+					sizeof(struct cad_audio_eq_cfg)) {
 				D("%s: wrong device config format block\n",
 					__func__);
 				break;
@@ -212,7 +212,7 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 			break;
 		case CAD_FILTER_EQ_STREAM_CONFIG:
 			if (filt->format_block_len !=
-					sizeof(struct adsp_audio_eq_cfg)) {
+					sizeof(struct cad_audio_eq_cfg)) {
 
 				D("%s: wrong stream config format block.\n",
 					__func__);
@@ -220,7 +220,7 @@ static s32 cad_filter_eq_ioctl(s32 sess_id, u32 cmd, void *cmd_buf,
 			}
 			rc = cad_filter_eq_process_stream_config(
 				sess_id,
-				(struct adsp_audio_eq_cfg *)
+				(struct cad_audio_eq_cfg *)
 					filt->format_block);
 			break;
 		}

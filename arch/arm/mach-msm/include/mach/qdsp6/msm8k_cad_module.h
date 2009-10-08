@@ -33,7 +33,6 @@
 #include <mach/qdsp6/msm8k_cad_ioctl.h>
 #include <mach/qdsp6/msm8k_cad_event.h>
 
-#define MAX_FORMAT_BLOCK_SIZE		40
 #define MEMORY_PADDING			4096
 
 

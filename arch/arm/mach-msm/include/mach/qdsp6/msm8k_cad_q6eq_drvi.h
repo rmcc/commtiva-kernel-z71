@@ -38,6 +38,15 @@
 
 #define CAD_EQ_INVALID_DATA       0xFFFFFFFF
 
+
+struct cad_audio_eq_cfg {
+	u32                             enable;
+	/* Number of consequtive bands specified */
+	u32                             num_bands;
+	struct adsp_audio_eq_band       eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
+} __attribute__ ((packed));
+
+
 struct cad_filter_eq_driver_struct {
 	/* this is the device control session */
 	u32     device_session_id;

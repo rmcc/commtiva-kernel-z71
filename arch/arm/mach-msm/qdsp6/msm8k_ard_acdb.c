@@ -65,6 +65,7 @@
 #include <mach/qdsp6/msm8k_adsp_audio_cfg_ioctl.h>
 #include <mach/qdsp6/msm8k_adsp_audio_error.h>
 #include <mach/qdsp6/msm8k_q6_api_flip_utils.h>
+#include <mach/qdsp6/msm8k_ard_clk.h>
 
 
 /* this is the ACDB device ID */
@@ -86,7 +87,7 @@ enum {
 enum ard_acdb_sample_rate {
 	ARD_ACDB_SR_INVALID	= 0,
 	ARD_ACDB_SR_8K_HZ	= 8000,
-	ARD_ACDB_SR_16k_HZ	= 16000,
+	ARD_ACDB_SR_16K_HZ	= 16000,
 	ARD_ACDB_SR_24K_HZ	= 24000,
 	ARD_ACDB_SR_48K_HZ	= 48000,
 	ARD_ACDB_SR_96K_HZ	= 96000
@@ -133,18 +134,19 @@ enum ard_acdb_sample_rate	ard_acdb_calculate_sample_rate(u32 session_id)
 	}
 
 	if (voice_exist != 1) {
-		if (ardsession[session_id]->sess_open_info->cad_open.format ==
-			CAD_FORMAT_PCM)
+		if ((ardsession[session_id]->sess_open_info->cad_open.format ==
+			CAD_FORMAT_PCM) || (ardsession[session_id]->
+			sess_open_info->cad_open.format == CAD_FORMAT_AAC)) {
 
-			sample_rate = ARD_ACDB_SR_16k_HZ;
-
-		else if (ardsession[session_id]->sess_open_info->
-			cad_open.format == CAD_FORMAT_AAC)
-
-			sample_rate = ARD_ACDB_SR_48K_HZ;
-
-		else
+			if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_16K_HZ)
+				sample_rate = ARD_ACDB_SR_48K_HZ;
+			else if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_8K_HZ)
+				sample_rate = ARD_ACDB_SR_16K_HZ;
+			else
+				sample_rate = ARD_ACDB_SR_8K_HZ;
+		} else {
 			sample_rate = ARD_ACDB_SR_8K_HZ;
+		}
 	}
 	return sample_rate;
 }
@@ -172,7 +174,7 @@ u32 ard_acdb_get_sample_rate(u32 session_id, u32 route_id)
 		break;
 	/* I2S TX */
 	case 7:
-		sample_rate = ARD_ACDB_SR_16k_HZ;
+		sample_rate = ARD_ACDB_SR_16K_HZ;
 		break;
 	default:
 		pr_err("CAD:ACDB==> Unsupported route_id %d\n", route_id);
@@ -310,6 +312,11 @@ s32   ard_acdb_send_cal(u32 session_id, u32 new_device, u32 old_device)
 
 	/* push the device cal to Q6 */
 	memset(&q6_cmd, 0, sizeof(q6_cmd));
+
+	if (ard_state.ard_device[route_id].device_type ==
+		CAD_TX_DEVICE)
+		q6_cmd.client_data.data = g_clk_info.tx_clk_freq;
+
 	q6_cmd.cmd.op_code = ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG_TABLE;
 	q6_cmd.cmd.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
 

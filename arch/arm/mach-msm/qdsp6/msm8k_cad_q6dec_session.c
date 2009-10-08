@@ -284,8 +284,7 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 		/* b - buffer, fb - format block, p - padding */
 		self->shared_buf = g_audio_mem +
 			((Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING))
 			* self->session_id);
 
 
@@ -316,8 +315,7 @@ static s32 cad_q6dec_session_create_buffer(struct q6dec_session_data *self,
 		/* Set to the physical address of buffer memory */
 		node->phys_addr = g_audio_base +
 			(Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
+			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING))
 			* self->session_id + i *
 			(self->buffer_size + MEMORY_PADDING);
 	}

@@ -40,10 +40,15 @@
 struct adsp_audio_no_payload_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
 
 	/* no payload for this command */
 } __attribute__ ((packed));
@@ -54,14 +59,18 @@ struct adsp_audio_no_payload_command {
 struct adsp_audio_open_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Open for READ/WRITE */
-	struct adsp_audio_open_stream_device	stream_device;
+	struct adsp_audio_open_payload		open_data;
 } __attribute__ ((packed));
 
 
@@ -71,14 +80,73 @@ struct adsp_audio_open_command {
 struct adsp_audio_data_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Media data buffer */
 	struct adsp_audio_data_buffer		buffer;
+} __attribute__ ((packed));
+
+
+/* Maximum number of bytes allowed in adsp_audio_set_command */
+/* 5 u32's */
+#define ADSP_AUDIO_SET_CMD_MAX_BYTES	(5 * 4)
+
+/* Generic command structure for setting configuration data */
+struct adsp_audio_set_command {
+	/* destination address, used in routing */
+	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
+	/* command data, used for processing */
+	struct adsp_audio_command_data		cmd;
+	/* read-only client data */
+	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
+	/* payload */
+	/* unique id of contorl to be set */
+	u32					control_id;
+	/* unique id of parameter to be set */
+	u32					param_id;
+	/* number of bytes to be set */
+	u32					len;
+	/* data to be set */
+	u8					data
+						[ADSP_AUDIO_SET_CMD_MAX_BYTES];
+} __attribute__ ((packed));
+
+
+/* Generic command structure for setting configuration data */
+struct adsp_audio_set_from_memory_command {
+	/* destination address, used in routing */
+	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
+	/* command data, used for processing */
+	struct adsp_audio_command_data		cmd;
+	/* read-only client data */
+	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
+	/* payload */
+	/* unique id of contorl to be set */
+	u32					control_id;
+	/* unique id of parameter to be set */
+	u32					param_id;
+	/* number of bytes to be set */
+	u32					len;
+	/* physical address of data to be set */
+	u32					address;
 } __attribute__ ((packed));
 
 
@@ -87,10 +155,14 @@ struct adsp_audio_data_command {
 struct adsp_audio_set_dev_cfg_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -109,10 +181,14 @@ struct adsp_audio_set_dev_cfg_command {
 struct adsp_audio_set_dev_cfg_table_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -126,10 +202,14 @@ struct adsp_audio_set_dev_cfg_table_command {
 struct adsp_audio_set_dev_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -142,10 +222,14 @@ struct adsp_audio_set_dev_command {
 struct adsp_audio_set_dev_volume_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -160,10 +244,14 @@ struct adsp_audio_set_dev_volume_command {
 struct adsp_audio_set_dev_stereo_volume_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -174,8 +262,6 @@ struct adsp_audio_set_dev_stereo_volume_command {
 	s32					l_chan_gain_mb;
 	/* Right Channel gain in mB */
 	s32					r_chan_gain_mb;
-	/* Optional destination identifier */
-	u32					destination;
 } __attribute__ ((packed));
 
 
@@ -183,10 +269,14 @@ struct adsp_audio_set_dev_stereo_volume_command {
 struct adsp_audio_set_dev_x_chan_gain_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -203,18 +293,20 @@ struct adsp_audio_set_dev_x_chan_gain_command {
 	/* Gain in mB applied to left channel, */
 	/* when added to the right channel */
 	s32					r_chan_l_mb;
-	/* Optional destination identifier */
-	u32					destination;
 } __attribute__ ((packed));
 
 
 struct adsp_audio_set_dev_mute_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* ADSP Device ID */
@@ -223,6 +315,52 @@ struct adsp_audio_set_dev_mute_command {
 	u32					path;
 	/* 0 == UnMute, 1 == Mute */
 	u32					mute;
+} __attribute__ ((packed));
+
+
+/* Set device RVE (Received Voice Enhancement) state */
+struct adsp_audio_set_dev_rve_command {
+	/* destination address, used in routing */
+	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
+	/* command data, used for processing */
+	struct adsp_audio_command_data		cmd;
+	/* read-only client data */
+	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
+	/* payload */
+	/* ADSP Device ID */
+	u32					device_id;
+	/* 0 == Rx, 1 == Tx and 2 == both */
+	u32					path;
+	/* 0 == RVE disabled, 1 == RVE enabled */
+	u32					rve;
+} __attribute__ ((packed));
+
+
+/* Set device WNR (Wind Noise Reduction) state */
+struct adsp_audio_set_dev_wnr_command {
+	/* destination address, used in routing */
+	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
+	/* command data, used for processing */
+	struct adsp_audio_command_data		cmd;
+	/* read-only client data */
+	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
+	/* payload */
+	/* ADSP Device ID */
+	u32					device_id;
+	/* 0 == Rx, 1 == Tx and 2 == both */
+	u32					path;
+	/* 0 == WNR disabled, 1 == WNR enabled */
+	u32					wnr;
 } __attribute__ ((packed));
 
 
@@ -256,10 +394,14 @@ struct adsp_audio_set_dev_equalizer_command {
 struct adsp_audio_device_switch_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* DeviceID to switch from */
@@ -280,10 +422,14 @@ struct adsp_audio_device_switch_command {
 struct adsp_audio_dtmf_start_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* First tone in Hz */
@@ -300,10 +446,14 @@ struct adsp_audio_dtmf_start_command {
 struct adsp_audio_set_volume_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* in mB */
@@ -314,18 +464,20 @@ struct adsp_audio_set_volume_command {
 struct adsp_audio_set_stereo_volume_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Left Channel gain in mB */
 	s32					l_chan_gain_mb;
 	/* Right Channel gain in mB */
 	s32					r_chan_gain_mb;
-	/* Optional destination identifier */
-	u32					destination;
 } __attribute__ ((packed));
 
 
@@ -333,10 +485,14 @@ struct adsp_audio_set_stereo_volume_command {
 struct adsp_audio_set_x_chan_gain_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Gain in mB applied to left channel */
@@ -349,18 +505,20 @@ struct adsp_audio_set_x_chan_gain_command {
 	/* Gain in mB applied to left channel, */
 	/* when added to the right channel */
 	s32					r_chan_l_mb;
-	/* Optional destination identifier */
-	u32					destination;
 } __attribute__ ((packed));
 
 
 struct adsp_audio_set_mute_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* 0 == UnMute, 1 == Mute */
@@ -388,10 +546,14 @@ struct adsp_audio_set_equalizer_command {
 struct adsp_audio_set_av_sync_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Media time */
@@ -405,10 +567,14 @@ struct adsp_audio_set_av_sync_command {
 struct adsp_audio_set_bit_rate_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Required BitRate */
@@ -419,10 +585,14 @@ struct adsp_audio_set_bit_rate_command {
 struct adsp_audio_set_channel_map_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Channel Mapping controls the dual-mono mapping method: */
@@ -445,10 +615,14 @@ struct adsp_audio_set_channel_map_command {
 struct adsp_audio_slip_sample_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* number of samples to add/drop */
@@ -468,10 +642,14 @@ struct adsp_audio_slip_sample_command {
 struct adsp_audio_set_sbr_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Enable/Disable Flag */
@@ -486,17 +664,39 @@ struct adsp_audio_set_sbr_command {
 #define ADSP_AUDIO_WMAPRO_CHEX_ON_FEX_OFF	2
 #define ADSP_AUDIO_WMAPRO_CHEX_ON_FEX_ON	3
 
-struct adsp_audio_stream_set_wma_command {
+struct adsp_audio_set_wma_command {
 	/* destination address, used in routing */
 	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
 	/* command data, used for processing */
 	struct adsp_audio_command_data		cmd;
 	/* read-only client data */
 	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
 
 	/* payload */
 	/* Enable/Disable Flag */
 	u32					chex_fex_flag;
+} __attribute__ ((packed));
+
+
+struct adsp_audio_set_amrwb_plus_command {
+	/* destination address, used in routing */
+	struct adsp_audio_address		dest;
+	/* source address, used in routing */
+	struct adsp_audio_address		source;
+	/* command data, used for processing */
+	struct adsp_audio_command_data		cmd;
+	/* read-only client data */
+	struct adsp_audio_client_data		client_data;
+	/* pad header to 64byte aligned/also match event status */
+	u32					padding;
+
+	/* payload */
+	/* Number of Channels */
+	u32					param;
 } __attribute__ ((packed));
 
 
@@ -511,6 +711,12 @@ union adsp_audio_command {
 	/* Data command structure, used for read/write data buffers */
 	struct adsp_audio_data_command			data;
 
+	/* Generic Set Command - for inband data */
+	struct adsp_audio_set_command			set;
+
+	/* Generic Set Command - for out-of-band data */
+	struct adsp_audio_set_from_memory_command	set_from_memory;
+
 	/* device commands */
 	struct adsp_audio_set_dev_cfg_command		set_dev_cfg;
 	struct adsp_audio_set_dev_cfg_table_command	set_dev_cfg_table;
@@ -519,6 +725,8 @@ union adsp_audio_command {
 	struct adsp_audio_set_dev_stereo_volume_command	set_dev_stereo_volume;
 	struct adsp_audio_set_dev_x_chan_gain_command	set_dev_x_chan_gain;
 	struct adsp_audio_set_dev_mute_command		set_dev_mute;
+	struct adsp_audio_set_dev_rve_command		set_dev_rve;
+	struct adsp_audio_set_dev_wnr_command		set_dev_wnr;
 	struct adsp_audio_set_dev_equalizer_command	set_dev_equalizer;
 
 	/* device switch */
@@ -536,7 +744,15 @@ union adsp_audio_command {
 	struct adsp_audio_set_channel_map_command	set_channel_map;
 	struct adsp_audio_slip_sample_command		slip_sample;
 	struct adsp_audio_set_sbr_command		set_sbr;
-	struct adsp_audio_stream_set_wma_command	set_wma;
+	struct adsp_audio_set_wma_command		set_wma;
+	struct adsp_audio_set_amrwb_plus_command	set_amrwb_plus;
+
+	/* Provide space in our command union to hold any audio event */
+	/* this way we can use the same memory allocated for the command to */
+	/* send an event as well as cast a command to an event and back */
+	/* Not intended for direct access */
+	union adsp_audio_event				dummy;
+
 };
 
 

@@ -29,19 +29,28 @@
 #ifndef __ADSP_AUDIO_TYPES_H
 #define __ADSP_AUDIO_TYPES_H
 
+#include <mach/qdsp6/msm8k_adsp_audio_media_format.h>
+
 
 /* only 3 for now - AMR9, AMR11, DSP */
-#define ADSP_AUDIO_MAX_DOMAIN 3
+#define ADSP_AUDIO_MAX_DOMAIN	3
+/* only 2 for now: Audio, Video */
+#define ADSP_AUDIO_MAX_SERVICE	2
 /* same as minor (one major per minor) */
-#define ADSP_AUDIO_MAX_MAJOR  64
+#define ADSP_AUDIO_MAX_MAJOR	64
 /* max possible audio streams (including device streams) */
-#define ADSP_AUDIO_MAX_MINOR  64
+#define ADSP_AUDIO_MAX_MINOR	64
 
 
 /* Valid Domain locations */
 #define ADSP_AUDIO_ADDRESS_DOMAIN_APP   0
 #define ADSP_AUDIO_ADDRESS_DOMAIN_MODEM 1
 #define ADSP_AUDIO_ADDRESS_DOMAIN_DSP   2
+
+
+/* Valid services */
+#define ADSP_AUDIO_ADDRESS_SERVICE_AUDIO	0
+#define ADSP_AUDIO_ADDRESS_SERVICE_VIDEO	1
 
 
 struct adsp_audio_address {
@@ -75,6 +84,15 @@ struct adsp_audio_command_data {
 } __attribute__ ((packed));
 
 
+/* Defines client data that is returned in the event response for */
+/* each command sent */
+/* Treated as read-only data by the DSP */
+struct adsp_audio_client_data {
+	u32	context;	/* Clients Context */
+	u32	data;		/* Associated data */
+} __attribute__ ((packed));
+
+
 /* Defines an event id and type used to route the command request */
 /* and its event response */
 /* Set by DSP, read-only data from client */
@@ -87,67 +105,6 @@ struct adsp_audio_event_data {
 	/* sequence number (internal use only) */
 	u32	seq_number;
 } __attribute__ ((packed));
-
-
-/* Defines client data that is returned in the event response for */
-/* each command sent */
-/* Treated as read-only data by the DSP */
-struct adsp_audio_client_data {
-	u32	context;	/* Clients Context */
-	u32	data;		/* Associated data */
-} __attribute__ ((packed));
-
-/* This structure allows for future expansion of information that */
-/* the client needs but ADSP is not concerned about. This header is */
-/* passed back to the client in the event corresponding to the command */
-/* received.*/
-
-struct adsp_audio_header {
-	/* Client specified data */
-	struct adsp_audio_client_data   client_data;
-	/* Room for expansion */
-} __attribute__ ((packed));
-
-
-/* Data that defines a physical memory address into shared memory */
-struct adsp_phys_mem_type {
-	u32	addr;	/* physical address */
-	u32	total;	/* Length of allocated memory in bytes */
-	u32	used;	/* Actual Length of buffer in bytes */
-} __attribute__ ((packed));
-
-
-
-/* Equalizer filter band types */
-#define ADSP_AUDIO_EQUALIZER_TYPE_NONE		0
-#define ADSP_AUDIO_EQUALIZER_BASS_BOOST		1
-#define ADSP_AUDIO_EQUALIZER_BASS_CUT		2
-#define ADSP_AUDIO_EQUALIZER_TREBLE_BOOST	3
-#define ADSP_AUDIO_EQUALIZER_TREBLE_CUT		4
-#define ADSP_AUDIO_EQUALIZER_BAND_BOOST		5
-#define ADSP_AUDIO_EQUALIZER_BAND_CUT		6
-
-
-/* Definition for any one band of Equalizer. */
-
-struct adsp_audio_eq_band {
-	/* The band index, 0 .. 11 */
-	u16	band_idx;
-	/* Filter band type */
-	u32	filter_type;
-	/* Filter band center frequency */
-	u32	center_freq_hz;
-	/* Filter band initial gain (dB) */
-	/* Range is +12 dB to -12 dB with 1dB increments. */
-	s32	filter_gain;
-	/* Filter band quality factor expressed as q-8 number, */
-	/* i.e. fixed point number with q factor of 8, */
-	/* e.g. 3000/(2^8) */
-	s32	q_factor;
-} __attribute__ ((packed));
-
-
-#define ADSP_AUDIO_MAX_EQ_BANDS 12
 
 
 /* Some encoders need configuration information in addition to format */
@@ -223,73 +180,56 @@ struct adsp_audio_evrc_enc_cfg {
 } __attribute__ ((packed));
 
 
-struct adsp_audio_codec_config {
-	union {
-		struct adsp_audio_amr_enc_cfg		amr_cfg;
-		struct adsp_audio_aac_enc_cfg		aac_cfg;
-		struct adsp_audio_qcelp13k_enc_cfg	qcelp13k_cfg;
-		struct adsp_audio_evrc_enc_cfg		evrc_cfg;
-		struct adsp_audio_sbc_encoder_cfg	sbc_cfg;
-	};
+union adsp_audio_codec_config {
+	struct adsp_audio_amr_enc_cfg		amr_cfg;
+	struct adsp_audio_aac_enc_cfg		aac_cfg;
+	struct adsp_audio_qcelp13k_enc_cfg	qcelp13k_cfg;
+	struct adsp_audio_evrc_enc_cfg		evrc_cfg;
+	struct adsp_audio_sbc_encoder_cfg	sbc_cfg;
 } __attribute__ ((packed));
 
 
+/* Bit masks for adsp_audio_open_payload.mode */
 
-
-/* Bit masks for adsp_audio_open_stream_device.mode */
 
 
 /* This is the default value. */
 #define  ADSP_AUDIO_OPEN_STREAM_MODE_NONE		0x0000
 
-
-
 /* This bit, if set, indicates that the AVSync mode is activated. */
-
 #define  ADSP_AUDIO_OPEN_STREAM_MODE_AVSYNC		0x0001
-
 
 /* This bit, if set, indicates that the Sample Rate/Channel Mode */
 /* Change Notification mode is activated. */
-
 #define  ADSP_AUDIO_OPEN_STREAM_MODE_SR_CM_NOTIFY	0x0002
 
+/* This bit, if set, indicates that the sync clock is enabled */
+#define  ADSP_AUDIO_OPEN_STREAM_MODE_ENABLE_SYNC_CLOCK	0x0004
 
 
-/* Data for ADSPaudio_DriverOpen operation.  */
 
 /* The client specifies the media format block as defined in  */
 /* ADSPaudio_MediaFormat.h for OPEN_OP_READ/WRITE */
 
 
-#define ADSP_AUDIO_MAX_DEVICES 4
+#define ADSP_AUDIO_MAX_DEVICES 1
 
-struct adsp_audio_open_stream_device {
-	/* Number of devices specified */
-	u32				num_devices;
-	/* List of stream device IDs */
-	u32				device[ADSP_AUDIO_MAX_DEVICES];
+struct adsp_audio_open_payload {
+
+	/* stream device ID */
+	u32				device;
+	/* data end point (HostPCM) */
+	struct adsp_audio_address	end_point;
 	/* Stream usage type */
 	u32				stream_context;
-	/* Media Format Block */
-	void				*format_block;
-	/* Media Format Block len */
-	u32				format_block_len;
-	/* Max buf size in bytes */
-	u32				buf_max_size;
-	/* Desired stream priority */
-	u32				priority;
-	/* Encoder configuration for READ op */
-	struct adsp_audio_codec_config	config;
 	/* 1- indicates AVSync playback mode */
 	u32				mode;
-
-	/* tmp hack for DLS support, byte stream is passed in open call */
-
-	/* length of byte stream that follows */
-	u32				len;
-	/* address to DLS data */
-	u32				addr;
+	/* Media Format buffer size in bytes */
+	u32				buf_max_size;
+	/* Media Format Block */
+	union adsp_audio_format		format_block;
+	/* Encoder configuration for READ op */
+	union adsp_audio_codec_config	config;
 } __attribute__ ((packed));
 
 
@@ -337,6 +277,59 @@ struct adsp_audio_data_buffer {
 	s64	preroll;	/* Preroll timestamp, if any */
 } __attribute__ ((packed));
 
+
+
+#define ADSP_AUDIO_MAX_EQ_BANDS 12
+
+/* Equalizer filter band types */
+#define ADSP_AUDIO_EQUALIZER_TYPE_NONE		0
+#define ADSP_AUDIO_EQUALIZER_BASS_BOOST		1
+#define ADSP_AUDIO_EQUALIZER_BASS_CUT		2
+#define ADSP_AUDIO_EQUALIZER_TREBLE_BOOST	3
+#define ADSP_AUDIO_EQUALIZER_TREBLE_CUT		4
+#define ADSP_AUDIO_EQUALIZER_BAND_BOOST		5
+#define ADSP_AUDIO_EQUALIZER_BAND_CUT		6
+
+
+/* Definition for any one band of Equalizer. */
+
+struct adsp_audio_eq_band {
+	/* The band index, 0 .. 11 */
+	u16	band_idx;
+	/* Filter band type */
+	u32	filter_type;
+	/* Filter band center frequency */
+	u32	center_freq_hz;
+	/* Filter band initial gain (dB) */
+	/* Range is +12 dB to -12 dB with 1dB increments. */
+	s32	filter_gain;
+	/* Filter band quality factor expressed as q-8 number, */
+	/* i.e. fixed point number with q factor of 8, */
+	/* e.g. 3000/(2^8) */
+	s32	q_factor;
+} __attribute__ ((packed));
+
+
+
+/* Data that defines a physical memory address into shared memory */
+struct adsp_phys_mem_type {
+	u32	addr;	/* physical address */
+	u32	total;	/* Length of allocated memory in bytes */
+	u32	used;	/* Actual Length of buffer in bytes */
+} __attribute__ ((packed));
+
+
+union adsp_audio_event;
+
+/* Callback function type for clients to recieve events */
+typedef void (*adsp_audio_event_cb_func)(union adsp_audio_event *event,
+						void *client_data);
+
+
+struct adsp_audio_event_cb {
+	adsp_audio_event_cb_func	callback;
+	void				*client_data;
+};
 
 
 #endif

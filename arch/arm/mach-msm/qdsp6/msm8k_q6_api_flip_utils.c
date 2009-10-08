@@ -303,31 +303,11 @@ s32 convert_pcm_format_block(s32 session_id,
 	}
 
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = &(((struct cad_write_pcm_format_struct_type *)
 		(cad_open_struct->cad_config.format_block))->pcm);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_PCM;
 	if (cad_open_struct->cad_open.op_code == CAD_OPEN_OP_WRITE) {
@@ -397,16 +377,6 @@ s32 convert_pcm_format_block(s32 session_id,
 	if (cad_format->us_sign == 0)
 		q6_format->is_signed = true;
 
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -419,28 +389,9 @@ s32 convert_dtmf_format_block(s32 session_id,
 	s32					result = CAD_RES_SUCCESS;
 	struct adsp_audio_standard_format	*q6_format = NULL;
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
 	/* Save and translate the cmdbuff passed in */
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_DTMF;
 	q6_format->sampling_rate = 48000;
@@ -448,17 +399,6 @@ s32 convert_dtmf_format_block(s32 session_id,
 	q6_format->bits_per_sample = 16;
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -481,31 +421,11 @@ s32 convert_yadpcm_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_adpcm_format_struct *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_YADPCM;
 	q6_format->sampling_rate = cad_format->sampling_rate;
@@ -517,17 +437,6 @@ s32 convert_yadpcm_format_block(s32 session_id,
 
 	if (cad_format->flags == CAD_ADPCM_INTERLEAVED)
 		q6_format->is_interleaved = true;
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -549,31 +458,11 @@ s32 convert_adpcm_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_adpcm_format_struct *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_adpcm_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_ADPCM;
 	q6_format->block_size = cad_format->block_size;
@@ -586,17 +475,6 @@ s32 convert_adpcm_format_block(s32 session_id,
 
 	if (cad_format->flags == CAD_ADPCM_INTERLEAVED)
 		q6_format->is_interleaved = true;
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -620,31 +498,11 @@ s32 convert_aac_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = &(((struct cad_write_aac_format_struct_type *)
 		(cad_open_struct->cad_config.format_block))->aac);
 	q6_format = (struct adsp_audio_binary_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 
 	q6_format->format = ADSP_AUDIO_FORMAT_MPEG4_AAC;
@@ -742,36 +600,27 @@ s32 convert_aac_format_block(s32 session_id,
 
 	q6_format->num_bytes = index + 1;
 
-	q6_open_struct->stream_device.format_block_len = sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	/* Fill in encoder config. */
-	q6_open_struct->stream_device.config.aac_cfg.bit_rate =
+	q6_open_struct->open_data.config.aac_cfg.bit_rate =
 		cad_format->bit_rate;
 
 	if ((cad_format->sbr_on_flag == 0) &&
 		(cad_format->sbr_ps_on_flag == 0)) {
 
-		q6_open_struct->stream_device.config.aac_cfg.encoder_mode =
+		q6_open_struct->open_data.config.aac_cfg.encoder_mode =
 			ADSP_AUDIO_ENC_AAC_LC_ONLY_MODE;
 
 	} else if ((cad_format->sbr_on_flag == 1) &&
 		(cad_format->sbr_ps_on_flag == 0)) {
 
-		q6_open_struct->stream_device.config.aac_cfg.encoder_mode =
+		q6_open_struct->open_data.config.aac_cfg.encoder_mode =
 			ADSP_AUDIO_ENC_AAC_PLUS_MODE;
 
 	} else if ((cad_format->sbr_on_flag == 1) &&
 		(cad_format->sbr_ps_on_flag == 1)) {
 
-		q6_open_struct->stream_device.config.aac_cfg.encoder_mode =
+		q6_open_struct->open_data.config.aac_cfg.encoder_mode =
 			ADSP_AUDIO_ENC_ENHANCED_AAC_PLUS_MODE;
 
 	} else {
@@ -798,31 +647,11 @@ s32 convert_amr_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));;
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_amr_format *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 
 	if (cad_open_struct->cad_open.format == CAD_FORMAT_AMRWB)
@@ -838,37 +667,26 @@ s32 convert_amr_format_block(s32 session_id,
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
 
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
 
 	if (cad_open_struct->cad_open.op_code == CAD_OPEN_OP_WRITE)
 		return CAD_RES_SUCCESS;
 
 	/* Fill in encoder config. */
-	q6_open_struct->stream_device.config.amr_cfg.mode =
+	q6_open_struct->open_data.config.amr_cfg.mode =
 		q6_band_mode_mapping(cad_format->amr_band_mode);
-	if (q6_open_struct->stream_device.config.amr_cfg.mode == 0xFFFFFFFF) {
+	if (q6_open_struct->open_data.config.amr_cfg.mode == 0xFFFFFFFF) {
 		pr_err("CAD:ARD: unsupported amr_band_mode!");
 		return CAD_RES_FAILURE;
 	}
-	q6_open_struct->stream_device.config.amr_cfg.dtx_mode =
+	q6_open_struct->open_data.config.amr_cfg.dtx_mode =
 		q6_dtx_mode_mapping(cad_format->amr_dtx_mode);
-	if (q6_open_struct->stream_device.config.amr_cfg.dtx_mode ==
+	if (q6_open_struct->open_data.config.amr_cfg.dtx_mode ==
 		0xFFFFFFFF) {
 
 		pr_err("CAD:ARD: unsupported amr_dtx_mode!");
 		return CAD_RES_FAILURE;
 	}
-	q6_open_struct->stream_device.config.amr_cfg.enable = true;
+	q6_open_struct->open_data.config.amr_cfg.enable = true;
 
 	return result;
 }
@@ -891,31 +709,11 @@ s32 convert_evrc_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_evrc_format *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 
 	if (cad_open_struct->cad_open.format == CAD_FORMAT_EVRCB)
@@ -929,21 +727,11 @@ s32 convert_evrc_format_block(s32 session_id,
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
 
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	/* Fill in encoder config. */
-	q6_open_struct->stream_device.config.evrc_cfg.min_rate =
+	q6_open_struct->open_data.config.evrc_cfg.min_rate =
 		(u16)(cad_format->min_bit_rate);
-	q6_open_struct->stream_device.config.evrc_cfg.max_rate =
+	q6_open_struct->open_data.config.evrc_cfg.max_rate =
 		(u16)(cad_format->max_bit_rate);
 
 	return result;
@@ -967,31 +755,11 @@ s32 convert_v13k_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_qcelp13k_format *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_V13K_FS;
 	q6_format->sampling_rate = 8000;
@@ -1000,19 +768,11 @@ s32 convert_v13k_format_block(s32 session_id,
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
 
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	/* Fill in encoder config. */
-	q6_open_struct->stream_device.config.qcelp13k_cfg.min_rate =
+	q6_open_struct->open_data.config.qcelp13k_cfg.min_rate =
 		(u16)(cad_format->min_bit_rate);
-	q6_open_struct->stream_device.config.qcelp13k_cfg.max_rate =
+	q6_open_struct->open_data.config.qcelp13k_cfg.max_rate =
 		(u16)(cad_format->max_bit_rate);
 
 	return result;
@@ -1034,46 +794,16 @@ s32 convert_midi_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = &(((struct cad_write_midi_format_struct_type *)
 		(cad_open_struct->cad_config.format_block))->midi);
 	q6_format = (struct adsp_audio_midi_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_MIDI;
 	q6_format->sampling_rate = 48000;
 	q6_format->channels = cad_format->midi_stereo;
 	q6_format->mode = cad_format->volume_lookup_index;
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -1088,29 +818,10 @@ s32 convert_mp3_format_block(s32 session_id,
 	s32					result = CAD_RES_SUCCESS;
 	struct adsp_audio_standard_format	*q6_format = NULL;
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
 
 	/* Save and translate the cmdbuff passed in */
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_MP3;
 	q6_format->sampling_rate = 48000;
@@ -1118,17 +829,6 @@ s32 convert_mp3_format_block(s32 session_id,
 	q6_format->bits_per_sample = 16;
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }
@@ -1150,31 +850,11 @@ s32 convert_sbc_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_sbc_enc_cfg_struct_type *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_standard_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	q6_format->format = ADSP_AUDIO_FORMAT_SBC;
 	q6_format->sampling_rate = 48000;
@@ -1183,27 +863,17 @@ s32 convert_sbc_format_block(s32 session_id,
 	q6_format->is_signed = true;
 	q6_format->is_interleaved = false;
 
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	/* Fill in encoder config. */
-	q6_open_struct->stream_device.config.sbc_cfg.num_subbands =
+	q6_open_struct->open_data.config.sbc_cfg.num_subbands =
 		cad_format->num_subbands;
-	q6_open_struct->stream_device.config.sbc_cfg.block_len =
+	q6_open_struct->open_data.config.sbc_cfg.block_len =
 		cad_format->block_len;
-	q6_open_struct->stream_device.config.sbc_cfg.channel_mode =
+	q6_open_struct->open_data.config.sbc_cfg.channel_mode =
 		cad_format->channel_mode;
-	q6_open_struct->stream_device.config.sbc_cfg.allocation_method =
+	q6_open_struct->open_data.config.sbc_cfg.allocation_method =
 		cad_format->allocation_method;
-	q6_open_struct->stream_device.config.sbc_cfg.bit_rate =
+	q6_open_struct->open_data.config.sbc_cfg.bit_rate =
 		cad_format->bit_rate;
 
 	return result;
@@ -1226,31 +896,11 @@ s32 convert_wma_std_format_block(s32 session_id,
 		return CAD_RES_FAILURE;
 	}
 
-	/* Allocate memory for Q6 format block */
-	/* Set to virtual address of format block */
-	/* reserved for this session. */
-	/* memory for each session is stored as: */
-	/* |b|p|b|p|b|p|b|p|fb|p */
-	/* b - buffer, fb - format block, p - padding */
-	ardsession[session_id]->local_format_block =
-		(void *)(g_audio_mem + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
-
-	q6_open_struct->stream_device.format_block =
-		ardsession[session_id]->local_format_block;
-
-	memset(ardsession[session_id]->local_format_block, 0,
-		sizeof(*q6_format));
-
-
 	/* Save and translate the cmdbuff passed in */
 	cad_format = (struct cad_wma_format *)
 		(cad_open_struct->cad_config.format_block);
 	q6_format = (struct adsp_audio_wma_pro_format *)
-		(q6_open_struct->stream_device.format_block);
+		&(q6_open_struct->open_data.format_block);
 
 	if (cad_open_struct->cad_open.format == CAD_FORMAT_WMA_PRO)
 		q6_format->format = ADSP_AUDIO_FORMAT_WMA_V9PRO;
@@ -1271,19 +921,6 @@ s32 convert_wma_std_format_block(s32 session_id,
 	q6_format->drc_peak_target = cad_format->drc_peak_target;
 	q6_format->drc_average_reference = cad_format->drc_average_reference;
 	q6_format->drc_average_target = cad_format->drc_average_target;
-
-
-
-	q6_open_struct->stream_device.format_block_len =
-		sizeof(*q6_format);
-
-	/* Set to physical address of format block */
-	q6_open_struct->stream_device.format_block =
-		(void *)(g_audio_base + (Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING) +
-			MAX_FORMAT_BLOCK_SIZE + MEMORY_PADDING)
-			* session_id + Q6_DEC_BUFFER_NUM_PER_STREAM *
-			(Q6_DEC_BUFFER_SIZE_MAX + MEMORY_PADDING));
 
 	return result;
 }

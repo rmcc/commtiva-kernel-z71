@@ -191,6 +191,14 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 			break;
 		}
 
+		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
+			&cad_amr_fmt,
+			sizeof(struct cad_amr_format));
+		if (rc) {
+			pr_err("cad_ioctl() SET_STREAM_CONFIG failed\n");
+			break;
+		}
+
 		stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_RX;
 		cad_stream_dev.device = (u32 *)&stream_device[0];
 		cad_stream_dev.device_len = 1;
@@ -199,14 +207,6 @@ static int msm8k_amr_ioctl(struct inode *inode, struct file *f,
 			sizeof(struct cad_stream_device_struct_type));
 		if (rc) {
 			pr_err("cad_ioctl() SET_STREAM_DEVICE failed\n");
-			break;
-		}
-
-		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
-			&cad_amr_fmt,
-			sizeof(struct cad_amr_format));
-		if (rc) {
-			pr_err("cad_ioctl() SET_STREAM_CONFIG failed\n");
 			break;
 		}
 
