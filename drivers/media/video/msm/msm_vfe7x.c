@@ -21,6 +21,7 @@
 #include <linux/fs.h>
 #include <linux/android_pmem.h>
 #include <mach/msm_adsp.h>
+#include <mach/clk.h>
 #include <linux/delay.h>
 #include <linux/wait.h>
 #include "msm_vfe7x.h"
@@ -42,6 +43,7 @@
 #define MSG_STATS_WE  9
 
 #define VFE_ADSP_EVENT 0xFFFF
+#define SNAPSHOT_MASK_MODE 0x00000002
 
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
@@ -129,6 +131,7 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 
 		switch (rp->evt_msg.msg_id) {
 		case MSG_SNAPSHOT:
+			update_axi_qos(MSM_AXI_QOS_PREVIEW);
 			rp->type = VFE_MSG_SNAPSHOT;
 			break;
 
@@ -245,6 +248,9 @@ static void vfe_7x_release(struct platform_device *pdev)
 
 	kfree(extdata);
 	extlen = 0;
+
+	/* release AXI frequency request */
+	release_axi_qos();
 }
 
 static int vfe_7x_init(struct msm_vfe_callback *presp,
@@ -263,6 +269,11 @@ static int vfe_7x_init(struct msm_vfe_callback *presp,
 
 	/* Bring up all the required GPIOs and Clocks */
 	rc = msm_camio_enable(dev);
+	if (rc < 0)
+		return rc;
+
+	/* Set required axi bus frequency */
+	rc = request_axi_qos(MSM_AXI_QOS_PREVIEW);
 	if (rc < 0)
 		return rc;
 
@@ -371,7 +382,8 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 
 	struct vfe_stats_ack sack;
 	struct axidata *axid;
-	uint32_t i;
+	uint32_t i, op_mode;
+	uint32_t *_mode;
 
 	struct vfe_stats_we_cfg *scfg = NULL;
 	struct vfe_stats_af_cfg *sfcfg = NULL;
@@ -591,6 +603,16 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 				break;
 
 			case VFE_START_CMD:
+				_mode = (uint32_t *)cmd_data;
+				op_mode = *(++_mode);
+				if (op_mode & SNAPSHOT_MASK_MODE) {
+					/* request AXI bus for snapshot */
+					if (update_axi_qos(MSM_AXI_MAX_FREQ)
+						< 0) {
+						rc = -EFAULT;
+						goto config_failure;
+					}
+				}
 				msm_camio_camif_pad_reg_reset_2();
 				vfestopped = 0;
 				break;

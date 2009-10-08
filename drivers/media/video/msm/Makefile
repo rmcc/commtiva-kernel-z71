@@ -3,7 +3,7 @@ ifeq ($(GCC_VERSION),0404)
 CFLAGS_REMOVE_msm_vfe8x.o = -Wframe-larger-than=1024
 endif
 
-obj-$(CONFIG_MSM_CAMERA) += msm_camera.o msm_v4l2.o
+obj-$(CONFIG_MSM_CAMERA) += msm_camera.o msm_v4l2.o msm_axi_qos.o
 obj-$(CONFIG_MSM_CAMERA_FLASH) += flash.o
 obj-$(CONFIG_ARCH_MSM_ARM11) += msm_vfe7x.o msm_io7x.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += msm_vfe8x.o msm_vfe8x_proc.o msm_io8x.o
