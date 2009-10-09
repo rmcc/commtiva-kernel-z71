@@ -145,7 +145,7 @@ static inline u32 *__get_pte_v7(u32 *addr)
 	u32 *pmd = __get_pmd_v7(addr);
 	u32 *table_pa = pmd && PMD_IS_TABLE(*pmd) ?
 		MMU_TABLE_ADDRESS(*pmd) : 0;
-	u32 *entry = table_pa ? __va(table_pa[MMU_TABLE_INDEX(addr)]) : 0;
+	u32 *entry = table_pa ? __va(table_pa + MMU_TABLE_INDEX(addr)) : 0;
 
 	return entry;
 }
