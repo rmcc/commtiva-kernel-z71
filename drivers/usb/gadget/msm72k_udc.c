@@ -81,6 +81,7 @@ struct msm_request {
 
 	struct usb_info *ui;
 	struct msm_request *next;
+	struct msm_request *prev;
 
 	unsigned busy:1;
 	unsigned live:1;
@@ -415,6 +416,8 @@ static void usb_ept_start(struct msm_endpoint *ept)
 	/* mark this chain of requests as live */
 	while (req) {
 		req->live = 1;
+		if (req->item->next == TERMINATE)
+			break;
 		req = req->next;
 	}
 }
@@ -472,6 +475,7 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 		 * start things going, to avoid hw issues
 		 */
 		last->next = req;
+		req->prev = last;
 
 		/* only modify the hw transaction next pointer if
 		 * that request is not live
@@ -481,6 +485,7 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 	} else {
 		/* queue was empty -- kick the hardware */
 		ept->req = req;
+		req->prev = NULL;
 		usb_ept_start(ept);
 	}
 	ept->last = req;
@@ -1505,43 +1510,63 @@ static int msm72k_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 	struct msm_request *req = to_msm_request(_req);
 	struct usb_info *ui = ep->ui;
 
-	struct msm_request *cur, *prev;
+	struct msm_request *temp_req;
 	unsigned long flags;
 
-	if (!_ep || !_req)
+	if (!(ui && req && ep->req))
 		return -EINVAL;
 
 	spin_lock_irqsave(&ui->lock, flags);
-	cur = ep->req;
-	prev = NULL;
+	if (!req->busy) {
+		pr_debug("%s: !req->busy\n", __func__);
+		spin_unlock_irqrestore(&ui->lock, flags);
+		BUG_ON(!req->busy);
+		return -EINVAL;
+	}
+	/* Stop the transfer */
+	do {
+		writel((1 << ep->bit), USB_ENDPTFLUSH);
+		while (readl(USB_ENDPTFLUSH) & (1 << ep->bit))
+			udelay(100);
+	} while (readl(USB_ENDPTSTAT) & (1 << ep->bit));
 
-	while (cur != 0) {
-		if (cur == req) {
-			req->busy = 0;
-			req->live = 0;
-			req->req.status = -ECONNRESET;
-			req->req.actual = 0;
-			if (req->req.complete) {
-				spin_unlock_irqrestore(&ui->lock, flags);
-				req->req.complete(&ep->ep, &req->req);
-				spin_lock_irqsave(&ui->lock, flags);
-			}
-			if (req->dead)
-				do_free_req(ui, req);
-			/* remove from linked list */
-			if (prev)
-				prev->next = cur->next;
-			else
-				ep->req = cur->next;
-			prev = cur;
-			/* break from loop */
-			cur = NULL;
-		} else
-			cur = cur->next;
+	req->req.status = 0;
+	req->busy = 0;
+
+	if (ep->req == req) {
+		ep->req = req->next;
+		ep->head->next = req->item->next;
+	} else {
+		req->prev->next = req->next;
+		if (req->next)
+			req->next->prev = req->prev;
+		req->prev->item->next = req->item->next;
+	}
+
+	if (!req->next)
+		ep->last = req->prev;
+
+	/* initialize request to default */
+	req->item->next = TERMINATE;
+	req->item->info = 0;
+	req->live = 0;
+	/* memory barrier to flush the data */
+	dmb();
+	dma_unmap_single(NULL, req->dma, req->req.length,
+		(ep->flags & EPT_FLAG_IN) ?
+		DMA_TO_DEVICE : DMA_FROM_DEVICE);
+
+	if (!req->live) {
+		/* Reprime the endpoint for the remaining transfers */
+		for (temp_req = ep->req ; temp_req ; temp_req = temp_req->next)
+			temp_req->live = 0;
+		if (ep->req)
+			usb_ept_start(ep);
+		spin_unlock_irqrestore(&ui->lock, flags);
+		return 0;
 	}
 	spin_unlock_irqrestore(&ui->lock, flags);
-
-	return 0;
+	return -EINVAL;
 }
 
 static int
