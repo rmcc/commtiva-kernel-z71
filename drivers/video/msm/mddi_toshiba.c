@@ -416,7 +416,7 @@ static void toshiba_common_initial_setup(struct msm_fb_data_type *mfd)
 		write_client_reg(DPSET1    , 0x00000113, TRUE);
 		write_client_reg(DPSUS     , 0x00000000, TRUE);
 		write_client_reg(DPRUN     , 0x00000001, TRUE);
-		mddi_wait(500);
+		mddi_wait(5);
 		write_client_reg(SYSCKENA  , 0x00000001, TRUE);
 		write_client_reg(CLKENB    , 0x0000a0e9, TRUE);
 
