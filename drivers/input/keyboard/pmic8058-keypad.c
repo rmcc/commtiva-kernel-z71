@@ -305,14 +305,14 @@ static int pmic8058_kp_scan_matrix(struct pmic8058_kp *kp, unsigned int events)
 	break;
 	case 0x3: /* two events - eventcounter is gray-coded */
 		rc = pmic8058_kp_read_matrix(kp, new_state, old_state);
-		__pmic8058_kp_scan_matrix(kp, new_state, kp->keystate);
+		__pmic8058_kp_scan_matrix(kp, old_state, kp->keystate);
 		__pmic8058_kp_scan_matrix(kp, new_state, old_state);
 		memcpy(kp->keystate, new_state, sizeof(new_state));
 	break;
 	case 0x2:
 		dev_dbg(kp->dev, "Some key events are missed\n");
 		rc = pmic8058_kp_read_matrix(kp, new_state, old_state);
-		__pmic8058_kp_scan_matrix(kp, new_state, kp->keystate);
+		__pmic8058_kp_scan_matrix(kp, old_state, kp->keystate);
 		__pmic8058_kp_scan_matrix(kp, new_state, old_state);
 		memcpy(kp->keystate, new_state, sizeof(new_state));
 	break;
