@@ -131,10 +131,11 @@ struct mt9p012_ctrl {
 	enum mt9p012_resolution curr_res;
 	enum mt9p012_test_mode set_test;
 };
-
+static uint16_t update_type = UPDATE_PERIODIC;
 static struct mt9p012_ctrl *mt9p012_ctrl;
 static DECLARE_WAIT_QUEUE_HEAD(mt9p012_wait_queue);
 DEFINE_MUTEX(mt9p012_mut);
+
 
 /*=============================================================*/
 
@@ -537,11 +538,9 @@ static int32_t mt9p012_setting(enum mt9p012_reg_update rupdate,
 			       enum mt9p012_setting rt)
 {
 	int32_t rc = 0;
-
 	switch (rupdate) {
 	case UPDATE_PERIODIC:
 		if (rt == RES_PREVIEW || rt == RES_CAPTURE) {
-
 			struct mt9p012_i2c_reg_conf ppc_tbl[] = {
 				{REG_GROUPED_PARAMETER_HOLD,
 				 GROUPED_PARAMETER_HOLD},
@@ -575,9 +574,12 @@ static int32_t mt9p012_setting(enum mt9p012_reg_update rupdate,
 				{REG_GROUPED_PARAMETER_HOLD,
 				 GROUPED_PARAMETER_UPDATE},
 			};
-
+			if (update_type == REG_INIT) {
+				update_type = rupdate;
+				return rc;
+			}
 			rc = mt9p012_i2c_write_w_table(&ppc_tbl[0],
-						       ARRAY_SIZE(ppc_tbl));
+						ARRAY_SIZE(ppc_tbl));
 			if (rc < 0)
 				return rc;
 
@@ -751,6 +753,7 @@ static int32_t mt9p012_setting(enum mt9p012_reg_update rupdate,
 			if (rc < 0)
 				return rc;
 		}
+		update_type = rupdate;
 		break;		/* case REG_INIT: */
 
 	default:
@@ -974,8 +977,6 @@ static int mt9p012_probe_init_sensor(const struct msm_camera_sensor_info *data)
 		CDBG("disable the 2 extra lines failed. rc = %d\n", rc);
 		goto init_probe_fail;
 	}
-
-	msleep(MT9P012_RESET_DELAY_MSECS);
 	goto init_probe_done;
 
 init_probe_fail:
@@ -1003,10 +1004,6 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 
 	if (data)
 		mt9p012_ctrl->sensordata = data;
-
-	/* enable mclk first */
-	msm_camio_clk_rate_set(MT9P012_DEFAULT_CLOCK_RATE);
-	mdelay(20);
 
 	msm_camio_camif_pad_reg_reset();
 	mdelay(20);
