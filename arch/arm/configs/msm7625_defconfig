@@ -790,9 +790,6 @@ CONFIG_SSB_POSSIBLE=y
 #
 # Multimedia drivers
 #
-# CONFIG_MSM_CAMERA_AF_FOXCONN is not set
-# CONFIG_MSM_CAMERA_AF_BAM is not set
-# CONFIG_MSM_CAMERA_AF_KM is not set
 # CONFIG_DAB is not set
 
 #
