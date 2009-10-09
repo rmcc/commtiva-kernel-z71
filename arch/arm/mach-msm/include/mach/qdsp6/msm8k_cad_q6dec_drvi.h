@@ -38,7 +38,7 @@
 
 #define Q6_DEC_MAX_STREAM_COUNT			4
 #define Q6_DEC_BUFFER_NUM_PER_STREAM		4
-#define Q6_DEC_BUFFER_SIZE_MAX			(1024 * 10)
+#define Q6_DEC_BUFFER_SIZE_MAX			(1024 * 11)
 
 enum q6dec_session_state {
 	Q6_DEC_RESET		= 0x0,
