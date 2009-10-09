@@ -40,6 +40,7 @@
 #define DATA_TYPE_LOG           2
 #define DATA_TYPE_RESPONSE      3
 #define DIAG_IOCTL_COMMAND_REG  0
+#define DIAG_IOCTL_GET_DELAYED_RSP_ID 8
 
 struct bindpkt_params {
 	uint16_t cmd_code;
@@ -59,6 +60,12 @@ struct bindpkt_params_per_process {
 	char sync_obj_name[MAX_SYNC_OBJ_NAME_SIZE];
 	uint32_t count;	/* Number of entries in this bind */
 	struct bindpkt_params *params; /* first bind params */
+};
+
+struct diagpkt_delay_params{
+	void *rsp_ptr;
+	int size;
+	int *num_bytes_ptr;
 };
 
 #endif

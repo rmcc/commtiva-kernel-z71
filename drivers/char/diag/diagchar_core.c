@@ -94,6 +94,17 @@ module_param(itemsize, uint, 0);
 module_param(poolsize, uint, 0);
 module_param(max_clients, uint, 0);
 
+/* delayed_rsp_id 0 represents no delay in the response. Any other number
+    means that the diag packet has a delayed response. */
+static uint16_t delayed_rsp_id = 1;
+
+#define DIAGPKT_MAX_DELAYED_RSP 0xFFFF
+/* This macro gets the next delayed respose id. Once it reaches
+ DIAGPKT_MAX_DELAYED_RSP, it stays at DIAGPKT_MAX_DELAYED_RSP */
+
+#define DIAGPKT_NEXT_DELAYED_RSP_ID(x) \
+((x < DIAGPKT_MAX_DELAYED_RSP) ? x++ : DIAGPKT_MAX_DELAYED_RSP)
+
 static void drain_timer_func(unsigned long data)
 {
 	timer_in_progress = 0;
@@ -167,10 +178,13 @@ static int diagchar_ioctl(struct inode *inode, struct file *filp,
 			   unsigned int iocmd, unsigned long ioarg)
 {
 	int i, count_entries = 0;
-	struct bindpkt_params_per_process *pkt_params =
-			 (struct bindpkt_params_per_process *) ioarg;
+	int success = -1;
+
 
 	if (iocmd == DIAG_IOCTL_COMMAND_REG) {
+		struct bindpkt_params_per_process *pkt_params =
+			 (struct bindpkt_params_per_process *) ioarg;
+
 		for (i = 0; i < REG_TABLE_SIZE; i++) {
 			if (driver->table[i].process_id == 0) {
 				driver->table[i].cmd_code =
@@ -189,7 +203,22 @@ static int diagchar_ioctl(struct inode *inode, struct file *filp,
 						break;
 			}
 		}
+	} else if (iocmd == DIAG_IOCTL_GET_DELAYED_RSP_ID) {
+		struct diagpkt_delay_params *delay_params =
+					(struct diagpkt_delay_params *) ioarg;
+
+		if ((delay_params->rsp_ptr) &&
+		 (delay_params->size == sizeof(delayed_rsp_id)) &&
+				 (delay_params->num_bytes_ptr)) {
+			*((uint16_t *)delay_params->rsp_ptr) =
+				DIAGPKT_NEXT_DELAYED_RSP_ID(delayed_rsp_id);
+			*(delay_params->num_bytes_ptr) = sizeof(delayed_rsp_id);
+			success = 0;
+		}
+
+	return success;
 	}
+
 	return -EINVAL;
 }
 
