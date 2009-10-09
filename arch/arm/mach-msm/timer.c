@@ -42,7 +42,12 @@ module_param_named(debug_mask, msm_timer_debug_mask, int, S_IRUGO | S_IWUSR | S_
 #define MSM_GPT_BASE MSM_TMR_BASE
 #define MSM_DGT_BASE (MSM_TMR_BASE + 0x10)
 #endif
+
+#if defined(CONFIG_ARCH_MSM_ARM11)
 #define MSM_DGT_SHIFT (5)
+#else
+#define MSM_DGT_SHIFT (0)
+#endif
 
 #define TIMER_MATCH_VAL         0x0000
 #define TIMER_COUNT_VAL         0x0004
