@@ -460,6 +460,16 @@ static void diag_write_complete(struct usb_ep *ep ,
 				"NULL device pointer\n", __func__);
 		return;
 	}
+	if (req->status == WRITE_COMPLETE) {
+		if ((req->length >= ep->maxpacket) &&
+				((req->length % ep->maxpacket) == 0)) {
+			req->length = 0;
+			req->device = ctxt;
+			/* Queue zero length packet */
+			usb_ep_queue(ctxt->in, req, GFP_ATOMIC);
+			return;
+		}
+	}
 	spin_lock_irqsave(&ctxt->dev_lock, flags);
 	list_add_tail(&diag_req->re_entry ,
 			&ctxt->dev_write_req_list);

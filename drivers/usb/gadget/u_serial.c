@@ -356,6 +356,7 @@ __acquires(&port->port_lock)
 	struct list_head	*pool = &port->write_pool;
 	struct usb_ep		*in = port->port_usb->in;
 	int			status = 0;
+	static long 		prev_len;
 	bool			do_tty_wake = false;
 
 	while (!list_empty(pool)) {
@@ -365,6 +366,21 @@ __acquires(&port->port_lock)
 		req = list_entry(pool->next, struct usb_request, list);
 		len = gs_send_packet(port, req->buf, in->maxpacket);
 		if (len == 0) {
+			/* Queue zero length packet */
+			if (prev_len == in->maxpacket) {
+				req->length = 0;
+				list_del(&req->list);
+
+				spin_unlock(&port->port_lock);
+				status = usb_ep_queue(in, req, GFP_ATOMIC);
+				spin_lock(&port->port_lock);
+				if (status) {
+					printk(KERN_ERR "%s: %s err %d\n",
+					__func__, "queue", status);
+					list_add(&req->list, pool);
+				}
+				prev_len = 0;
+			}
 			wake_up_interruptible(&port->drain_wait);
 			break;
 		}
@@ -394,6 +410,7 @@ __acquires(&port->port_lock)
 			list_add(&req->list, pool);
 			break;
 		}
+		prev_len = req->length;
 
 		/* abort immediately after disconnect */
 		if (!port->port_usb)
