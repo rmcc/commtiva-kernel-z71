@@ -366,14 +366,14 @@ s32 ard_close(s32 session_id)
 
 	print_data(session_id);
 
-	/* Disable the session */
-	ardsession[session_id]->enabled = ARD_FALSE;
-
 
 	if (ardsession[session_id]->session_type != DEVICE_CTRL_TYPE
 		&& ardsession[session_id]->active == ARD_TRUE) {
 
 		mutex_lock(&local_ard_state->ard_state_machine_mutex);
+
+		/* Disable the session */
+		ardsession[session_id]->enabled = ARD_FALSE;
 
 		for (i = 0; i < strm_dev->device_len; i++) {
 			if (strm_dev->device[i] == CAD_HW_DEVICE_ID_DEFAULT_TX)
