@@ -55,6 +55,9 @@ struct kgsl_driver {
 	struct clk *grp_pclk;
 	struct clk *grp_clk;
 	struct clk *imem_clk;
+	unsigned int power_flags;
+	unsigned int is_suspended;
+	unsigned int max_axi_freq;
 
 	struct kgsl_devconfig yamato_config;
 
@@ -76,6 +79,34 @@ struct kgsl_pmem_entry {
 	uint32_t free_timestamp;
 };
 
+enum kgsl_status {
+	KGSL_SUCCESS = 0,
+	KGSL_FAILURE = 1
+};
+
+#define KGSL_TRUE 1
+#define KGSL_FALSE 0
+
+#define KGSL_PRE_HWACCESS() \
+while (1) { \
+	mutex_lock(&kgsl_driver.mutex); \
+	if (kgsl_driver.yamato_device.hwaccess_blocked == KGSL_FALSE) { \
+		break; \
+	} \
+	if (kgsl_driver.is_suspended != KGSL_TRUE) { \
+		kgsl_yamato_wake(&kgsl_driver.yamato_device); \
+		break; \
+	} \
+	mutex_unlock(&kgsl_driver.mutex); \
+	wait_for_completion(&kgsl_driver.yamato_device.hwaccess_gate); \
+}
+
+#define KGSL_POST_HWACCESS() \
+	mutex_unlock(&kgsl_driver.mutex)
+
 void kgsl_remove_pmem_entry(struct kgsl_pmem_entry *entry);
+
+int kgsl_pwrctrl(unsigned int pwrflag);
+int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
 
 #endif /* _GSL_DRIVER_H */

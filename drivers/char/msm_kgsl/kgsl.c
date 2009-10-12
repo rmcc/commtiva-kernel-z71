@@ -68,16 +68,15 @@
 #include <linux/android_pmem.h>
 #include <linux/pm_qos_params.h>
 
+#include <linux/delay.h>
 #include <asm/atomic.h>
+#include <mach/internal_power_rail.h>
 
 #include "kgsl.h"
 #include "kgsl_drawctxt.h"
 #include "kgsl_ringbuffer.h"
 #include "kgsl_log.h"
 #include "kgsl_drm.h"
-
-static int max_axi_freq_set;
-static unsigned int max_axi_freq;
 
 struct kgsl_file_private {
 	struct list_head list;
@@ -94,22 +93,83 @@ struct device *kgsl_driver_getdevnode(void)
 	return &kgsl_driver.pdev->dev;
 }
 
+int kgsl_pwrctrl(unsigned int pwrflag)
+{
+	switch (pwrflag) {
+	case KGSL_PWRFLAGS_CLK_OFF:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_CLK_ON) {
+			if (kgsl_driver.grp_pclk)
+				clk_disable(kgsl_driver.grp_pclk);
+
+			clk_disable(kgsl_driver.grp_clk);
+
+			clk_disable(kgsl_driver.imem_clk);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_CLK_ON);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_CLK_OFF;
+		}
+		return KGSL_SUCCESS;
+	case KGSL_PWRFLAGS_CLK_ON:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_CLK_OFF) {
+			if (kgsl_driver.grp_pclk)
+				clk_enable(kgsl_driver.grp_pclk);
+			clk_enable(kgsl_driver.grp_clk);
+			clk_enable(kgsl_driver.imem_clk);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_CLK_OFF);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_CLK_ON;
+		}
+		return KGSL_SUCCESS;
+	case KGSL_PWRFLAGS_POWER_OFF:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_POWER_ON) {
+			internal_pwr_rail_ctl(PWR_RAIL_GRP_CLK, KGSL_FALSE);
+			internal_pwr_rail_mode(PWR_RAIL_GRP_CLK,
+					PWR_RAIL_CTL_AUTO);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_POWER_ON);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_POWER_OFF;
+		}
+		return KGSL_SUCCESS;
+	case KGSL_PWRFLAGS_POWER_ON:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_POWER_OFF) {
+			internal_pwr_rail_mode(PWR_RAIL_GRP_CLK,
+					PWR_RAIL_CTL_MANUAL);
+			internal_pwr_rail_ctl(PWR_RAIL_GRP_CLK, KGSL_TRUE);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_POWER_OFF);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_POWER_ON;
+		}
+		return KGSL_SUCCESS;
+	default:
+		return KGSL_FAILURE;
+	}
+}
+
 /*Suspend function*/
 static int kgsl_suspend(struct platform_device *dev, pm_message_t state)
 {
-	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+	mutex_lock(&kgsl_driver.mutex);
+	if (kgsl_driver.power_flags != 0) {
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 			PM_QOS_DEFAULT_VALUE);
-	return 0;
+		if (kgsl_driver.yamato_device.hwaccess_blocked == KGSL_FALSE)
+			kgsl_yamato_suspend(&kgsl_driver.yamato_device);
+		kgsl_driver.is_suspended = KGSL_TRUE;
+	}
+	mutex_unlock(&kgsl_driver.mutex);
+	return KGSL_SUCCESS;
 }
 
 /*Resume function*/
 static int kgsl_resume(struct platform_device *dev)
 {
-	if (max_axi_freq_set) {
-		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-			max_axi_freq);
+	mutex_lock(&kgsl_driver.mutex);
+	if (kgsl_driver.power_flags != 0) {
+		if (kgsl_driver.max_axi_freq) {
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				DRIVER_NAME, kgsl_driver.max_axi_freq);
+		}
+		kgsl_yamato_wake(&kgsl_driver.yamato_device);
+		kgsl_driver.is_suspended = KGSL_FALSE;
 	}
-	return 0;
+	mutex_unlock(&kgsl_driver.mutex);
+	return KGSL_SUCCESS;
 }
 
 /* file operations */
@@ -120,18 +180,16 @@ static int kgsl_first_open_locked(void)
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
 
-	if (max_axi_freq) {
-		max_axi_freq_set = 1;
+	if (kgsl_driver.max_axi_freq) {
 		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-				max_axi_freq);
+					  kgsl_driver.max_axi_freq);
 	}
 
-	if (kgsl_driver.grp_pclk)
-		clk_enable(kgsl_driver.grp_pclk);
-
-	clk_enable(kgsl_driver.grp_clk);
-
-	clk_enable(kgsl_driver.imem_clk);
+	kgsl_driver.power_flags =
+	    KGSL_PWRFLAGS_CLK_OFF | KGSL_PWRFLAGS_POWER_OFF;
+	kgsl_pwrctrl(KGSL_PWRFLAGS_POWER_ON);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_ON);
+	kgsl_driver.is_suspended = KGSL_FALSE;
 
 	/* init memory apertures */
 	result = kgsl_sharedmem_init(&kgsl_driver.shmem);
@@ -168,14 +226,10 @@ static int kgsl_last_release_locked(void)
 	/* shutdown memory apertures */
 	kgsl_sharedmem_close(&kgsl_driver.shmem);
 
-	if (kgsl_driver.grp_pclk)
-		clk_disable(kgsl_driver.grp_pclk);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_OFF);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_POWER_OFF);
+	kgsl_driver.power_flags = 0;
 
-	clk_disable(kgsl_driver.grp_clk);
-
-	clk_disable(kgsl_driver.imem_clk);
-
-	max_axi_freq_set = 0;
 	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 			PM_QOS_DEFAULT_VALUE);
 
@@ -189,7 +243,7 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 	struct kgsl_pmem_entry *entry, *entry_tmp;
 	struct kgsl_file_private *private = NULL;
 
-	mutex_lock(&kgsl_driver.mutex);
+	KGSL_PRE_HWACCESS();
 
 	private = filep->private_data;
 	BUG_ON(private == NULL);
@@ -217,7 +271,7 @@ static int kgsl_release(struct inode *inodep, struct file *filep)
 		result = kgsl_last_release_locked();
 	}
 
-	mutex_unlock(&kgsl_driver.mutex);
+	KGSL_POST_HWACCESS();
 
 	return result;
 }
@@ -658,7 +712,7 @@ static long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	BUG_ON(private == NULL);
 
 	KGSL_DRV_VDBG("filep %p cmd 0x%08x arg 0x%08lx\n", filep, cmd, arg);
-	mutex_lock(&kgsl_driver.mutex);
+	KGSL_PRE_HWACCESS();
 	switch (cmd) {
 
 	case IOCTL_KGSL_DEVICE_GETPROPERTY:
@@ -714,7 +768,7 @@ static long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		result = -EINVAL;
 		break;
 	}
-	mutex_unlock(&kgsl_driver.mutex);
+	KGSL_POST_HWACCESS();
 	KGSL_DRV_VDBG("result %d\n", result);
 	return result;
 }
@@ -849,13 +903,14 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 		goto done;
 	}
 	kgsl_driver.imem_clk = clk;
+	kgsl_driver.power_flags = 0;
 
 	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 				PM_QOS_DEFAULT_VALUE);
 
 	pdata = pdev->dev.platform_data;
 	if (pdata)
-		max_axi_freq = pdata->max_axi_freq;
+		kgsl_driver.max_axi_freq = pdata->max_axi_freq;
 
 	/*acquire interrupt */
 	kgsl_driver.interrupt_num = platform_get_irq(pdev, 0);
