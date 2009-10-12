@@ -362,7 +362,6 @@ typedef struct {
   unsigned short                        aac_spectral_data_resilience_flag;
   unsigned short                        sbr_on_flag;
   unsigned short                        sbr_ps_on_flag;
-  unsigned short                        dual_mono_mode;
   unsigned short                        channel_configuration;
 } __attribute__((packed)) audpp_cmd_cfg_adec_params_aac;
 
