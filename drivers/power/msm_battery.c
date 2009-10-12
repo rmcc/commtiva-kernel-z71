@@ -115,7 +115,7 @@
 #define RPC_TYPE_REPLY   1
 #define RPC_REQ_REPLY_COMMON_HEADER_SIZE   (3 * sizeof(uint32_t))
 
-#define DEBUG  1
+#define DEBUG  0
 
 #if DEBUG
 #define DBG(x...) printk(KERN_INFO x)
