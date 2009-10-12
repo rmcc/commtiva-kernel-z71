@@ -450,7 +450,7 @@ static void otg_reset(struct msm_otg *dev)
 	unsigned long timeout;
 
 	if (dev->phy_reset)
-		dev->phy_reset();
+		dev->phy_reset(dev->regs);
 	/*disable all phy interrupts*/
 	ulpi_write(dev, 0x1F, 0x0F);
 	ulpi_write(dev, 0x1F, 0x12);

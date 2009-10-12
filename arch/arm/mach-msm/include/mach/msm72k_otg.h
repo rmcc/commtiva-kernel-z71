@@ -63,7 +63,7 @@ struct msm_otg {
 
 	unsigned int 		core_clk;
 	int 			(*rpc_connect)(int);
-	int 			(*phy_reset)(void);
+	int 			(*phy_reset)(void __iomem *);
 };
 
 #endif

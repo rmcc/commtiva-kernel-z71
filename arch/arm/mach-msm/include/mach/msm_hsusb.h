@@ -103,7 +103,7 @@ struct msm_hsusb_platform_data {
 
 struct msm_otg_platform_data {
 	int (*rpc_connect)(int);
-	int (*phy_reset)(void);
+	int (*phy_reset)(void __iomem *);
 	unsigned int core_clk;
 };
 
