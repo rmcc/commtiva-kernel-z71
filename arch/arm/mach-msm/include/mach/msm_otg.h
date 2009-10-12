@@ -46,7 +46,8 @@ struct msm_otg_transceiver {
 	/* bind/unbind the peripheral controller */
 	int	(*set_peripheral)(struct msm_otg_transceiver *otg,
 				struct msm_otg_ops *dcd_ops);
-	void    (*set_suspend) (int on);
+	int	(*set_suspend)(struct msm_otg_transceiver *otg,
+				int suspend);
 
 };
 
