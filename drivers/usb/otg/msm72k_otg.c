@@ -245,10 +245,13 @@ static void msm_otg_start_peripheral(struct otg_transceiver *xceiv, int on)
 
 static void msm_otg_start_host(struct otg_transceiver *xceiv, int on)
 {
+	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
+
 	if (!xceiv->host)
 		return;
 
-	/* TBD: call host specific start function */
+	if (dev->start_host)
+		dev->start_host(xceiv->host, on);
 }
 
 static int msm_otg_suspend(struct msm_otg *dev)
@@ -260,7 +263,9 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	if (dev->in_lpm)
 		goto out;
 
-	otg_reset(dev);
+	/* Don't reset if mini-A cable is connected */
+	if (!is_host())
+		otg_reset(dev);
 
 	ulpi_read(dev, 0x14);/* clear PHY interrupt latch register */
 	ulpi_write(dev, 0x01, 0x30);/* PHY comparators on in LPM */
@@ -318,6 +323,12 @@ static int msm_otg_resume(struct msm_otg *dev)
 	temp &= ~ULPI_STP_CTRL;
 	writel(temp, USB_USBCMD);
 
+	/* If resume signalling finishes before lpm exit, PCD is not set in
+	 * USBSTS register. Drive resume signal to the downstream device now
+	 * so that host driver can process the upcoming port change interrupt.*/
+	if (is_host())
+		writel(readl(USB_PORTSC) | PORTSC_FPR, USB_PORTSC);
+
 	if (device_may_wakeup(dev->otg.dev))
 		disable_irq_wake(dev->irq);
 
@@ -333,6 +344,9 @@ static int msm_otg_set_suspend(struct otg_transceiver *xceiv, int suspend)
 
 	if (!dev || (dev != the_msm_otg))
 		return -ENODEV;
+
+	if (suspend == dev->in_lpm)
+		return 0;
 
 	if (suspend)
 		msm_otg_suspend(dev);
@@ -398,9 +412,13 @@ static int msm_otg_set_host(struct otg_transceiver *xceiv, struct usb_bus *host)
 	if (!dev || (dev != the_msm_otg))
 		return -ENODEV;
 
+	if (!dev->start_host)
+		return -ENODEV;
+
 	if (!host) {
 		msm_otg_start_host(xceiv, 0);
 		dev->otg.host = 0;
+		dev->start_host = 0;
 		disable_idgnd(dev);
 		return 0;
 	}
