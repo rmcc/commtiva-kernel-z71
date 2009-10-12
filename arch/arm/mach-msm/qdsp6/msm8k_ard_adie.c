@@ -68,6 +68,7 @@
 
 struct adie_state_struct_type	adie_state;
 static int pmic_is_stereo;
+static int pmic_initialized;
 
 static u32 adie_spkr_mono_ref1_cnt;
 static u32 adie_spkr_stereo_ref1_cnt;
@@ -145,8 +146,6 @@ u32 get_path_id(u32 dev_id)
 	return adie_path_id;
 }
 
-
-
 u32 get_path_type(u32 cad_dev_type)
 {
 	u32 adie_dev_type;
@@ -167,7 +166,33 @@ u32 get_path_type(u32 cad_dev_type)
 	return adie_dev_type;
 }
 
+void pmic_init(void)
+{
+	s32	dal_rc;
+	u8	dev_type;
+	u32	stereo;
 
+	dal_rc = CAD_RES_SUCCESS;
+	dev_type = 0;
+
+	if (pmic_spkr_is_stereo_en(&stereo))
+		pmic_is_stereo = 0;
+	else
+		pmic_is_stereo = 1;
+
+	D("pmic stereo out val = 0x%08x\n", stereo);
+
+	/* Initialize the PMIC MIC and SPKR */
+	if (pmic_is_stereo) {
+		pmic_spkr_set_gain(LEFT_SPKR, SPKR_GAIN_PLUS12DB);
+		pmic_spkr_set_gain(RIGHT_SPKR, SPKR_GAIN_PLUS12DB);
+	} else
+		pmic_set_speaker_gain(SPKR_GAIN_PLUS12DB);
+
+	pmic_mic_set_volt(MIC_VOLT_1_80V);
+
+	pmic_initialized = 1;
+}
 
 s32 adie_init(void)
 {
@@ -176,10 +201,6 @@ s32 adie_init(void)
 
 	dal_rc = CAD_RES_SUCCESS;
 	dev_type = 0;
-
-	/* NULL is ok, as it will not use the param. */
-	if (pmic_spkr_is_stereo_en(NULL))
-		pmic_is_stereo = 1;
 
 	dal_rc = daldevice_attach(DALDEVICEID_ADIE_CODEC, ADIE_CODEC_PORT_NAME,
 			ADIE_CODEC_CPU, &adie_state.adie_handle);
@@ -194,15 +215,6 @@ s32 adie_init(void)
 		adie_state.adie_path_type[dev_type].enable_request = ADIE_FALSE;
 		adie_state.adie_path_type[dev_type].state = ADIE_STATE_RESET;
 	}
-
-	/* Initialize the PMIC MIC and SPKR */
-	if (pmic_is_stereo) {
-		pmic_spkr_set_gain(LEFT_SPKR, SPKR_GAIN_PLUS12DB);
-		pmic_spkr_set_gain(RIGHT_SPKR, SPKR_GAIN_PLUS12DB);
-	} else
-		pmic_set_speaker_gain(SPKR_GAIN_PLUS12DB);
-
-	pmic_mic_set_volt(MIC_VOLT_1_80V);
 
 	return dal_rc;
 }
@@ -236,6 +248,8 @@ s32 adie_open(u32 dev_type)
 
 	cad_rc = dal_rc = CAD_RES_SUCCESS;
 
+	if (!pmic_initialized)
+		pmic_init();
 
 	if (adie_state.adie_opened != ADIE_TRUE) {
 		dal_rc = daldevice_open(adie_state.adie_handle, 0);
