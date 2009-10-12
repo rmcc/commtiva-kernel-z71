@@ -429,17 +429,18 @@ static void update_packet_state(struct smd_channel *ch)
 	int r;
 
 	/* can't do anything if we're in the middle of a packet */
-	if (ch->current_packet != 0)
-		return;
+	while (ch->current_packet == 0) {
+		/* discard 0 length packets if any */
 
-	/* don't bother unless we can get the full header */
-	if (smd_stream_read_avail(ch) < SMD_HEADER_SIZE)
-		return;
+		/* don't bother unless we can get the full header */
+		if (smd_stream_read_avail(ch) < SMD_HEADER_SIZE)
+			return;
 
-	r = ch_read(ch, hdr, SMD_HEADER_SIZE);
-	BUG_ON(r != SMD_HEADER_SIZE);
+		r = ch_read(ch, hdr, SMD_HEADER_SIZE);
+		BUG_ON(r != SMD_HEADER_SIZE);
 
-	ch->current_packet = hdr[0];
+		ch->current_packet = hdr[0];
+	}
 }
 
 /* provide a pointer and length to next free space in the fifo */
@@ -673,6 +674,8 @@ static int smd_stream_write(smd_channel_t *ch, const void *_data, int len)
 	SMD_DBG("smd_stream_write() %d -> ch%d\n", len, ch->n);
 	if (len < 0)
 		return -EINVAL;
+	else if (len == 0)
+		return 0;
 
 	while ((xfer = ch_write_buffer(ch, &ptr)) != 0) {
 		if (!ch_is_open(ch))
@@ -701,6 +704,8 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len)
 	SMD_DBG("smd_packet_write() %d -> ch%d\n", len, ch->n);
 	if (len < 0)
 		return -EINVAL;
+	else if (len == 0)
+		return 0;
 
 	if (smd_stream_write_avail(ch) < (len + SMD_HEADER_SIZE))
 		return -ENOMEM;
