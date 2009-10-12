@@ -619,6 +619,7 @@ static int audaac_validate_usr_config(struct msm_audio_aac_config *config)
 
 	if (config->audio_object != AUDIO_AAC_OBJECT_LC &&
 		config->audio_object != AUDIO_AAC_OBJECT_LTP &&
+		config->audio_object != AUDIO_AAC_OBJECT_BSAC &&
 		config->audio_object != AUDIO_AAC_OBJECT_ERLC)
 		goto done;
 
