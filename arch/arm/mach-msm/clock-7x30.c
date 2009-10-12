@@ -63,6 +63,7 @@
 #include <linux/io.h>
 #include <linux/spinlock.h>
 #include <mach/msm_iomap.h>
+#include <mach/clk.h>
 
 #include "clock.h"
 #include "clock-7x30.h"
@@ -695,6 +696,11 @@ static void soc_clk_disable(unsigned id)
 	return;
 }
 
+static int soc_clk_reset(unsigned id, enum clk_reset_action action)
+{
+	return -EPERM;
+}
+
 static int soc_clk_set_rate(unsigned id, unsigned rate)
 {
 	struct clk_local *t = &clk_local_tbl[id];
@@ -857,6 +863,7 @@ static long soc_clk_round_rate(unsigned id, unsigned rate)
 struct clk_ops clk_ops_7x30 = {
 	.enable = soc_clk_enable,
 	.disable = soc_clk_disable,
+	.reset = soc_clk_reset,
 	.set_rate = soc_clk_set_rate,
 	.set_min_rate = soc_clk_set_min_rate,
 	.set_max_rate = soc_clk_set_max_rate,

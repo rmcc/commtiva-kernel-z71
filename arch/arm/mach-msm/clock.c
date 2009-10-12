@@ -106,6 +106,12 @@ void clk_disable(struct clk *clk)
 }
 EXPORT_SYMBOL(clk_disable);
 
+int clk_reset(struct clk *clk, enum clk_reset_action action)
+{
+	return clk->ops->reset(clk->id, action);
+}
+EXPORT_SYMBOL(clk_reset);
+
 unsigned long clk_get_rate(struct clk *clk)
 {
 	return clk->ops->get_rate(clk->id);

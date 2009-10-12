@@ -18,6 +18,7 @@
 #define __ARCH_ARM_MACH_MSM_CLOCK_H
 
 #include <linux/list.h>
+#include <mach/clk.h>
 
 #include "clock-pcom.h"
 #include "clock-7x30.h"
@@ -35,6 +36,7 @@
 struct clk_ops {
 	int (*enable)(unsigned id);
 	void (*disable)(unsigned id);
+	int (*reset)(unsigned id, enum clk_reset_action action);
 	int (*set_rate)(unsigned id, unsigned rate);
 	int (*set_min_rate)(unsigned id, unsigned rate);
 	int (*set_max_rate)(unsigned id, unsigned rate);
