@@ -1507,6 +1507,10 @@ static void __init msm7x2x_init(void)
 
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
+
+	msm_gadget_pdata.swfi_latency =
+		msm7x27_pm_data
+		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));

@@ -1075,9 +1075,13 @@ static int usb_free(struct usb_info *ui, int ret)
 
 static void msm72k_pm_qos_update(int vote)
 {
+	struct msm_hsusb_gadget_platform_data *pdata =
+				the_usb_info->pdev->dev.platform_data;
+	u32 swfi_latency = pdata->swfi_latency + 1;
+
 	if (vote) {
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
-				DRIVER_NAME, 0);
+				DRIVER_NAME, swfi_latency);
 		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 						MSM_AXI_MAX_FREQ);
 	} else {
