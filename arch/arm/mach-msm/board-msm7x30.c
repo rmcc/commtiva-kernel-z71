@@ -1820,7 +1820,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_gpu1_device,
 	&msm_device_kgsl,
-#ifdef CONFIG_SERIAL_MSM_CONSOLE
+#if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart2,
 #endif
 	&msm_device_pmic_leds,
@@ -2273,7 +2273,7 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT].residency = 0,
 };
 
-#ifdef CONFIG_SERIAL_MSM_CONSOLE
+#if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 static struct msm_gpio uart2_config_data[] = {
 	{ GPIO_CFG(49, 2, GPIO_OUTPUT,  GPIO_PULL_DOWN, GPIO_2MA), "UART2_RFR"},
 	{ GPIO_CFG(50, 2, GPIO_INPUT,   GPIO_PULL_DOWN, GPIO_2MA), "UART2_CTS"},
@@ -2334,7 +2334,7 @@ static void __init msm7x30_init(void)
 		platform_device_register(&fluid_keypad_device);
 
 	bt_power_init();
-#ifdef CONFIG_SERIAL_MSM_CONSOLE
+#if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm7x30_init_uart2();
 #endif
 	msm_device_tssc.dev.platform_data = &msm_ts_data;
