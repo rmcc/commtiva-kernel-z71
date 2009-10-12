@@ -1221,9 +1221,15 @@ void hsusb_chg_connected(enum chg_type chgtype)
 		break;
 	}
 }
+
+static int msm_hsusb_rpc_phy_reset(void __iomem *addr)
+{
+	return msm_hsusb_phy_reset();
+}
+
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
-	.phy_reset	= msm_hsusb_phy_reset,
+	.phy_reset	= msm_hsusb_rpc_phy_reset,
 	.core_clk	= 1,
 };
 
