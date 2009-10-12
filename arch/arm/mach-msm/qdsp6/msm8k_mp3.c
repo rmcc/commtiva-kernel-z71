@@ -228,7 +228,7 @@ static int msm8k_mp3_ioctl(struct inode *inode, struct file *f,
 		cad_stream_info.app_type = CAD_STREAM_APP_PLAYBACK;
 		cad_stream_info.priority = 0;
 		cad_stream_info.buf_mem_type = CAD_STREAM_BUF_MEM_HEAP;
-		cad_stream_info.ses_buf_max_size = 1024 * 10;
+		cad_stream_info.ses_buf_max_size = 1024 * 11;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_INFO,
 			&cad_stream_info,
 			sizeof(struct cad_stream_info_struct_type));

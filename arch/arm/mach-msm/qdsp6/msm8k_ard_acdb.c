@@ -80,8 +80,9 @@ enum {
 
 
 /* this is the default acdb data buffer size */
+/* Offset at last 4K of mem assigned to audio */
 #define ARD_ACDB_DEFAULT_BUF_SIZE	4096
-#define ARD_ACDB_BUF_OFFSET		0x190000
+#define ARD_ACDB_BUF_OFFSET		0x7F000
 
 /* this defines the sampel rate */
 enum ard_acdb_sample_rate {
