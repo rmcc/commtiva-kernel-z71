@@ -687,6 +687,21 @@ int __init msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat)
 	return platform_device_register(pdev);
 }
 
+static struct resource rmt_storage_resources[] = {
+       {
+		.start  = 0x0CB00000,
+		.end    = 0x0CB00000 + SZ_4M - 1,
+		.flags  = IORESOURCE_MEM,
+       },
+};
+
+struct platform_device rmt_storage_device = {
+       .name           = "rmt_storage",
+       .id             = 0,
+       .num_resources  = ARRAY_SIZE(rmt_storage_resources),
+       .resource       = rmt_storage_resources,
+};
+
 #if defined(CONFIG_FB_MSM_MDP40)
 #define MDP_BASE          0xA3F00000
 #define PMDH_BASE         0xAD600000
