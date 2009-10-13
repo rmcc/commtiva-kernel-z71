@@ -294,4 +294,7 @@ void msm_camio_clk_sel(enum msm_camio_clk_src_type);
 void msm_camio_disable(struct platform_device *);
 int msm_camio_probe_on(struct platform_device *);
 int msm_camio_probe_off(struct platform_device *);
+
+int request_axi_qos(void);
+void release_axi_qos(void);
 #endif
