@@ -62,6 +62,7 @@
 #include <linux/input.h>
 #include <linux/bitops.h>
 #include <linux/mfd/pmic8058.h>
+#include <linux/delay.h>
 
 #include <mach/pmic8058-keypad.h>
 
@@ -216,35 +217,43 @@ static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
 	return 0;
 }
 
+static int pmic8058_chk_sync_read(struct pmic8058_kp *kp)
+{
+	int rc;
+	u8 scan_val;
+
+	rc = pmic8058_kp_read(kp, &scan_val, KEYP_SCAN, 1);
+	scan_val |= 0x1;
+	rc = pmic8058_kp_write_u8(kp, scan_val, KEYP_SCAN);
+
+	/* 2 * 32KHz clocks */
+	udelay((2 * USEC_PER_SEC / KEYP_CLOCK_FREQ) + 1);
+
+	return rc;
+}
+
 static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 					 u16 *old_state)
 {
 	int rc, row, read_rows;
 	u8 new_data[MATRIX_MAX_ROWS];
 	u8 old_data[MATRIX_MAX_ROWS];
+	u8 scan_val;
 
 	if (kp->flags & KEYF_FIX_LAST_ROW)
 		read_rows = MATRIX_MAX_ROWS;
 	else
 		read_rows = kp->pdata->num_rows;
 
-	rc = pmic8058_kp_read(kp, new_data, KEYP_RECENT_DATA,
-			      read_rows);
-
-	if (!rc) {
-		pmic8058_chk_read_state(kp, 1);
-		for (row = 0; row < kp->pdata->num_rows; row++) {
-			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
-						new_data[row]);
-			new_state[row] = pmic8058_col_state(kp, new_data[row]);
-		}
-	}
+	if (rev == PMIC8058_REV_B0)
+		pmic8058_chk_sync_read(kp);
 
 	if (old_state) {
 		rc = pmic8058_kp_read(kp, old_data, KEYP_OLD_DATA,
 				read_rows);
 		if (!rc) {
-			pmic8058_chk_read_state(kp, 0);
+			if (rev == PMIC8058_REV_A0)
+				pmic8058_chk_read_state(kp, 0);
 			for (row = 0; row < kp->pdata->num_rows; row++) {
 				dev_dbg(kp->dev, "old_data[%d] = %d\n", row,
 						 old_data[row]);
@@ -252,6 +261,30 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 							 old_data[row]);
 			}
 		}
+	}
+
+	rc = pmic8058_kp_read(kp, new_data, KEYP_RECENT_DATA,
+			      read_rows);
+
+	if (!rc) {
+		if (rev == PMIC8058_REV_A0)
+			pmic8058_chk_read_state(kp, 1);
+
+		for (row = 0; row < kp->pdata->num_rows; row++) {
+			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
+						new_data[row]);
+			new_state[row] = pmic8058_col_state(kp, new_data[row]);
+		}
+	}
+
+
+	if (rev == PMIC8058_REV_B0) {
+		/* 4 * 32KHz clocks */
+		udelay((4 * USEC_PER_SEC / KEYP_CLOCK_FREQ) + 1);
+
+		rc = pmic8058_kp_read(kp, &scan_val, KEYP_SCAN, 1);
+		scan_val &= 0xFE;
+		rc = pmic8058_kp_write_u8(kp, scan_val, KEYP_SCAN);
 	}
 
 	return rc;
