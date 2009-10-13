@@ -77,6 +77,8 @@
 #define TSHK_DIG_CONFIG		0x4F
 #define TSHK_INTF_CONFIG	0x50
 #define TSHK_SETUP		0x51
+	#define TSHK_SETUP_EN_ADC  BIT(0)
+	#define TSHK_SETUP_EN_PIRQ BIT(7)
 #define TSHK_PARAM		0x52
 #define TSHK_DATA_RD		0x53
 #define TSHK_STATUS		0x54
@@ -86,7 +88,7 @@
 #define TSHK_COMMAND		0x57
 #define TSHK_PARAM2		0x58
 #define TSHK_PARAM3		0x59
-	#define TSHK_PARAM3_NORMAL_MODE	BIT(1)
+	#define TSHK_PARAM3_NORMAL_MODE	(0)
 	#define TSHK_PARAM3_PRE_CHG_SHIFT (5)
 	#define TSHK_PARAM3_STABIZ_SHIFT (2)
 #define TSHK_PARAM4		0x5A
@@ -186,12 +188,16 @@ static int marimba_tsadc_configure(struct marimba_tsadc *tsadc)
 
 	/* TSADC normal-mode */
 	val = TSHK_PARAM3_NORMAL_MODE;
-	/* 102.4us pre-charge time */
-	val |=	0x4 << TSHK_PARAM3_PRE_CHG_SHIFT;
+	/* 6.4us pre-charge time */
+	val |=  0x0 << TSHK_PARAM3_PRE_CHG_SHIFT;
 	/* 6.4us stabilization time */
-	val |=	0x0 << TSHK_PARAM3_STABIZ_SHIFT;
+	val |=  0x0 << TSHK_PARAM3_STABIZ_SHIFT;
 
 	marimba_tsadc_write(tsadc, TSHK_PARAM3, val);
+
+	/* Enable signals to ADC, pen irq assertion */
+	val = TSHK_SETUP_EN_ADC | TSHK_SETUP_EN_PIRQ;
+	marimba_tsadc_write(tsadc, TSHK_SETUP, val);
 
 	return 0;
 }
