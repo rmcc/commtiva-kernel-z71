@@ -61,6 +61,12 @@
 
 #define AUDIO_INTERCT_ADSPLPA_WBRX_SEL_BMSK 0x4
 #define AUDIO_INTERCT_ADSPLPA_WBRX_SEL_SHFT 0x2
+#define AUDIO_INTERCT_ADSPAV_RPCMI2SRX_SEL_BMSK 0x10
+#define AUDIO_INTERCT_ADSPAV_RPCMI2SRX_SEL_SHFT 0x4
+#define AUDIO_INTERCT_ADSPAV_TPCMI2STX_SEL_BMSK 0x40
+#define AUDIO_INTERCT_ADSPAV_TPCMI2STX_SEL_SHFT 0x6
+#define AUDIO_INTERCT_ADSPAV_AUX_REGSEL_BMSK 0x100
+#define AUDIO_INTERCT_ADSPAV_AUX_REGSEL_SHFT 0x8
 
 /* Should look to protect this register */
 void __iomem *aictl_reg;
@@ -75,6 +81,39 @@ void audio_interct_codec(u32 source)
 	writel(reg_val, aictl_reg);
 }
 EXPORT_SYMBOL(audio_interct_codec);
+
+void audio_interct_aux_regsel(u32 source)
+{
+	u32 reg_val;
+
+	reg_val = readl(aictl_reg);
+	reg_val = (reg_val & ~AUDIO_INTERCT_ADSPAV_AUX_REGSEL_BMSK) |
+		(source << AUDIO_INTERCT_ADSPAV_AUX_REGSEL_SHFT);
+	writel(reg_val, aictl_reg);
+}
+EXPORT_SYMBOL(audio_interct_aux_regsel);
+
+void audio_interct_tpcm_source(u32 source)
+{
+	u32 reg_val;
+
+	reg_val = readl(aictl_reg);
+	reg_val = (reg_val & ~AUDIO_INTERCT_ADSPAV_TPCMI2STX_SEL_BMSK) |
+		(source << AUDIO_INTERCT_ADSPAV_TPCMI2STX_SEL_SHFT);
+	writel(reg_val, aictl_reg);
+}
+EXPORT_SYMBOL(audio_interct_tpcm_source);
+
+void audio_interct_rpcm_source(u32 source)
+{
+	u32 reg_val;
+
+	reg_val = readl(aictl_reg);
+	reg_val = (reg_val & ~AUDIO_INTERCT_ADSPAV_RPCMI2SRX_SEL_BMSK) |
+		(source << AUDIO_INTERCT_ADSPAV_RPCMI2SRX_SEL_SHFT);
+	writel(reg_val, aictl_reg);
+}
+EXPORT_SYMBOL(audio_interct_rpcm_source);
 
 static int audio_interct_probe(struct platform_device *pdev)
 {

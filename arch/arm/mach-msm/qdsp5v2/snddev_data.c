@@ -57,6 +57,15 @@
 #include <linux/platform_device.h>
 #include <mach/qdsp5v2/snddev_icodec.h>
 #include <mach/qdsp5v2/marimba_profile.h>
+#include <mach/qdsp5v2/aux_pcm.h>
+#include <mach/qdsp5v2/snddev_ecodec.h>
+
+/* define the value for BT_SCO */
+#define BT_SCO_PCM_CTL_VAL (PCM_CTL__RPCM_WIDTH__LINEAR_V |\
+				PCM_CTL__TPCM_WIDTH__LINEAR_V)
+#define BT_SCO_DATA_FORMAT_PADDING (DATA_FORMAT_PADDING_INFO__RPCM_FORMAT_V |\
+				DATA_FORMAT_PADDING_INFO__TPCM_FORMAT_V)
+#define BT_SCO_AUX_CODEC_INTF   AUX_CODEC_INTF_CTL__PCMINTF_DATA_EN_V
 
 static struct adie_codec_action_unit iearpiece_48KHz_osr256_actions[] =
 	HANDSET_RX_48000_OSR_256;
@@ -265,6 +274,40 @@ static struct platform_device msm_ifmradio_handset_device = {
 	.dev = { .platform_data = &snddev_ifmradio_handset_data },
 };
 
+static struct snddev_ecodec_data snddev_bt_sco_earpiece_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "bt_sco_rx",
+	.copp_id = 1,
+	.acdb_id = 10,
+	.channel_mode = 1,  /* mono */
+	.conf_pcm_ctl_val = BT_SCO_PCM_CTL_VAL,
+	.conf_aux_codec_intf = BT_SCO_AUX_CODEC_INTF,
+	.conf_data_format_padding_val = BT_SCO_DATA_FORMAT_PADDING,
+};
+
+static struct snddev_ecodec_data snddev_bt_sco_mic_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "bt_sco_tx",
+	.copp_id = 1,
+	.acdb_id = 9,
+	.channel_mode = 1,  /* mono */
+	.conf_pcm_ctl_val = BT_SCO_PCM_CTL_VAL,
+	.conf_aux_codec_intf = BT_SCO_AUX_CODEC_INTF,
+	.conf_data_format_padding_val = BT_SCO_DATA_FORMAT_PADDING,
+};
+
+struct platform_device msm_bt_sco_earpiece_device = {
+	.name = "msm_snddev_ecodec",
+	.id = 0,
+	.dev = { .platform_data = &snddev_bt_sco_earpiece_data },
+};
+
+struct platform_device msm_bt_sco_mic_device = {
+	.name = "msm_snddev_ecodec",
+	.id = 1,
+	.dev = { .platform_data = &snddev_bt_sco_mic_data },
+};
+
 static struct platform_device *snd_devices[] = {
 	&msm_iearpiece_device,
 	&msm_imic_device,
@@ -272,6 +315,8 @@ static struct platform_device *snd_devices[] = {
 	&msm_ihs_stereo_rx_device,
 	&msm_ihs_mono_rx_device,
 	&msm_ihs_mono_tx_device,
+	&msm_bt_sco_earpiece_device,
+	&msm_bt_sco_mic_device,
 };
 
 void __init msm_snddev_init(void)

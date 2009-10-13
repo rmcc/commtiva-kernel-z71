@@ -25,20 +25,18 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __MACH_QDSP5_V2_AUDIO_INTERCT_H
-#define __MACH_QDSP5_V2_AUDIO_INTERCT_H
+#ifndef __MACH_QDSP5_V2_SNDDEV_ECODEC_H
+#define __MACH_QDSP5_V2_SNDDEV_ECODEC_H
+#include <mach/qdsp5v2/audio_def.h>
 
-#define AUDIO_INTERCT_ADSP 0
-#define AUDIO_INTERCT_LPA 1
-#define AUDIO_ADSP_A 1
-#define AUDIO_ADSP_V 0
-
-void audio_interct_lpa(u32 source);
-void audio_interct_aux_regsel(u32 source);
-void audio_interct_rpcm_source(u32 source);
-void audio_interct_tpcm_source(u32 source);
-void audio_interct_pcmmi2s(u32 source);
-void audio_interct_codec(u32 source);
-void audio_interct_multichannel(u32 source);
-
+struct snddev_ecodec_data {
+	u32 capability; /* RX or TX */
+	const char *name;
+	u32 copp_id; /* audpp routing */
+	u32 acdb_id; /* Audio Cal purpose */
+	u8 channel_mode;
+	u32 conf_pcm_ctl_val;
+	u32 conf_aux_codec_intf;
+	u32 conf_data_format_padding_val;
+};
 #endif
