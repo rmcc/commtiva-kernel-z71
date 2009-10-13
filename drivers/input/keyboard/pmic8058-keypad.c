@@ -201,21 +201,15 @@ static void __dump_kp_regs(struct pmic8058_kp *kp, char *msg)
  * register to be '0' at the end of data read, to make sure
  * the keypad state machine is not in READ state.
  */
-static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
+static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u16 data_reg)
 {
 	u8 temp, scan_val;
 	int retries = 10, rc;
 
 	do {
 		rc = pmic8058_kp_read_u8(kp, &scan_val, KEYP_SCAN);
-		if (scan_val & 0x1) {
-			if (flag)
-				rc = pmic8058_kp_read_u8(kp, &temp,
-							KEYP_RECENT_DATA);
-			else
-				rc = pmic8058_kp_read_u8(kp, &temp,
-							KEYP_OLD_DATA);
-		}
+		if (scan_val & 0x1)
+			rc = pmic8058_kp_read_u8(kp, &temp, data_reg);
 	} while ((scan_val & 0x1) && (--retries > 0));
 
 	if (retries == 0)
@@ -239,12 +233,34 @@ static int pmic8058_chk_sync_read(struct pmic8058_kp *kp)
 	return rc;
 }
 
+static int pmic8058_kp_read_data(struct pmic8058_kp *kp, u16 *state,
+					u16 data_reg, int read_rows)
+{
+	int rc, row;
+	u8 new_data[MATRIX_MAX_ROWS];
+
+	if (rev == PMIC8058_REV_B0)
+		pmic8058_chk_sync_read(kp);
+
+	rc = pmic8058_kp_read(kp, new_data, data_reg, read_rows);
+
+	if (!rc) {
+		if (rev == PMIC8058_REV_A0)
+			pmic8058_chk_read_state(kp, data_reg);
+		for (row = 0; row < kp->pdata->num_rows; row++) {
+			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
+						new_data[row]);
+			state[row] = pmic8058_col_state(kp, new_data[row]);
+		}
+	}
+
+	return rc;
+}
+
 static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 					 u16 *old_state)
 {
-	int rc, row, read_rows;
-	u8 new_data[MATRIX_MAX_ROWS];
-	u8 old_data[MATRIX_MAX_ROWS];
+	int rc, read_rows;
 	u8 scan_val;
 
 	if (kp->flags & KEYF_FIX_LAST_ROW)
@@ -252,38 +268,12 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 	else
 		read_rows = kp->pdata->num_rows;
 
-	if (rev == PMIC8058_REV_B0)
-		pmic8058_chk_sync_read(kp);
+	if (old_state)
+		rc = pmic8058_kp_read_data(kp, old_state, KEYP_OLD_DATA,
+						read_rows);
 
-	if (old_state) {
-		rc = pmic8058_kp_read(kp, old_data, KEYP_OLD_DATA,
-				read_rows);
-		if (!rc) {
-			if (rev == PMIC8058_REV_A0)
-				pmic8058_chk_read_state(kp, 0);
-			for (row = 0; row < kp->pdata->num_rows; row++) {
-				dev_dbg(kp->dev, "old_data[%d] = %d\n", row,
-						 old_data[row]);
-				old_state[row] = pmic8058_col_state(kp,
-							 old_data[row]);
-			}
-		}
-	}
-
-	rc = pmic8058_kp_read(kp, new_data, KEYP_RECENT_DATA,
-			      read_rows);
-
-	if (!rc) {
-		if (rev == PMIC8058_REV_A0)
-			pmic8058_chk_read_state(kp, 1);
-
-		for (row = 0; row < kp->pdata->num_rows; row++) {
-			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
-						new_data[row]);
-			new_state[row] = pmic8058_col_state(kp, new_data[row]);
-		}
-	}
-
+	rc = pmic8058_kp_read_data(kp, new_state, KEYP_RECENT_DATA,
+					 read_rows);
 
 	if (rev == PMIC8058_REV_B0) {
 		/* 4 * 32KHz clocks */
