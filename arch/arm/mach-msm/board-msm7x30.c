@@ -235,8 +235,8 @@ static struct resource resources_keypad[] = {
 };
 
 static struct pmic8058_keypad_data surf_keypad_data = {
-	.input_name		= "surf-keypad",
-	.input_phys_device	= "surf-keypad/input0",
+	.input_name		= "surf_keypad",
+	.input_phys_device	= "surf_keypad/input0",
 	.num_rows		= 12,
 	.num_cols		= 8,
 	.rows_gpio_start	= 8,
