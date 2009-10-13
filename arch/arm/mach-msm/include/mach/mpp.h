@@ -32,6 +32,7 @@
 struct mpp {
 	const char *name;
 	unsigned id;
+	int is_input;
 	int status;
 };
 
@@ -52,10 +53,21 @@ enum {
 	MPP_DLOGIC_OUT_CTRL_NOT_MPP,	/* MPP Output = Inverted MPP Input */
 };
 
+/* Digital Logical Input Value */
+enum {
+	MPP_DLOGIC_IN_DBUS_NONE,
+	MPP_DLOGIC_IN_DBUS_1,
+	MPP_DLOGIC_IN_DBUS_2,
+	MPP_DLOGIC_IN_DBUS_3,
+};
+
 #define MPP_CFG(level, control) ((((level) & 0x0FFFF) << 16) | \
+				 ((control) & 0x0FFFFF))
+#define MPP_CFG_INPUT(level, dbus) ((((level) & 0x0FFFF) << 16) | \
 				 ((control) & 0x0FFFFF))
 
 struct mpp *mpp_get(struct device *dev, const char *id);
 int mpp_config_digital_out(struct mpp *mpp, unsigned config);
+int mpp_config_digital_in(struct mpp *mpp, unsigned config);
 
 #endif
