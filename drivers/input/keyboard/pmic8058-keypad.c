@@ -133,17 +133,12 @@ struct pmic8058_kp {
 /* REVISIT - this should have come from pm8058_read/write */
 static u8 rev = PMIC8058_REV_A0;
 
-static int pmic8058_write_u8(u8 data, u16 reg)
-{
-	return pm8058_write(reg, &data, 1);
-}
-
 static int pmic8058_kp_write_u8(struct pmic8058_kp *kp,
 				 u8 data, u16 reg)
 {
 	int rc;
 
-	rc = pmic8058_write_u8(data, reg);
+	rc = pm8058_write(reg, &data, 1);
 	if (rc < 0)
 		dev_warn(kp->dev, "Error writing pmic8058: %X - ret %X\n",
 				reg, rc);
@@ -163,6 +158,18 @@ static int pmic8058_kp_read(struct pmic8058_kp *kp,
 	return rc;
 }
 
+static int pmic8058_kp_read_u8(struct pmic8058_kp *kp,
+				 u8 *data, u16 reg)
+{
+	int rc;
+
+	rc = pmic8058_kp_read(kp, data, reg, 1);
+	if (rc < 0)
+		dev_warn(kp->dev, "Error reading pmic8058: %X - ret %X\n",
+				reg, rc);
+	return rc;
+}
+
 static u8 pmic8058_col_state(struct pmic8058_kp *kp, u8 col)
 {
 	/* all keys pressed on that particular row? */
@@ -178,11 +185,11 @@ static void __dump_kp_regs(struct pmic8058_kp *kp, char *msg)
 
 	dev_dbg(kp->dev, "%s\n", msg);
 
-	pmic8058_kp_read(kp, &temp, KEYP_CTRL, 1);
+	pmic8058_kp_read_u8(kp, &temp, KEYP_CTRL);
 	dev_dbg(kp->dev, "KEYP_CTRL - %X\n", temp);
-	pmic8058_kp_read(kp, &temp, KEYP_SCAN, 1);
+	pmic8058_kp_read_u8(kp, &temp, KEYP_SCAN);
 	dev_dbg(kp->dev, "KEYP_SCAN - %X\n", temp);
-	pmic8058_kp_read(kp, &temp, KEYP_TEST, 1);
+	pmic8058_kp_read_u8(kp, &temp, KEYP_TEST);
 	dev_dbg(kp->dev, "KEYP_TEST - %X\n", temp);
 }
 
@@ -200,14 +207,14 @@ static int pmic8058_chk_read_state(struct pmic8058_kp *kp, u8 flag)
 	int retries = 10, rc;
 
 	do {
-		rc = pmic8058_kp_read(kp, &scan_val, KEYP_SCAN, 1);
+		rc = pmic8058_kp_read_u8(kp, &scan_val, KEYP_SCAN);
 		if (scan_val & 0x1) {
 			if (flag)
-				rc = pmic8058_kp_read(kp, &temp,
-							 KEYP_RECENT_DATA, 1);
+				rc = pmic8058_kp_read_u8(kp, &temp,
+							KEYP_RECENT_DATA);
 			else
-				rc = pmic8058_kp_read(kp, &temp,
-							 KEYP_OLD_DATA, 1);
+				rc = pmic8058_kp_read_u8(kp, &temp,
+							KEYP_OLD_DATA);
 		}
 	} while ((scan_val & 0x1) && (--retries > 0));
 
@@ -222,7 +229,7 @@ static int pmic8058_chk_sync_read(struct pmic8058_kp *kp)
 	int rc;
 	u8 scan_val;
 
-	rc = pmic8058_kp_read(kp, &scan_val, KEYP_SCAN, 1);
+	rc = pmic8058_kp_read_u8(kp, &scan_val, KEYP_SCAN);
 	scan_val |= 0x1;
 	rc = pmic8058_kp_write_u8(kp, scan_val, KEYP_SCAN);
 
@@ -327,8 +334,6 @@ static int pmic8058_kp_scan_matrix(struct pmic8058_kp *kp, unsigned int events)
 	u16 new_state[MATRIX_MAX_ROWS];
 	u16 old_state[MATRIX_MAX_ROWS];
 	int rc;
-
-	dev_dbg(kp->dev, "events reported are %d\n", events);
 
 	switch (events) {
 	case 0x1:
