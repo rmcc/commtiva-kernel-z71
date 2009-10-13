@@ -189,6 +189,8 @@ void msm_hsusb_set_vbus_state(int online);
 static inline void msm_hsusb_set_vbus_state(int online) {}
 #endif
 
+void __init msm_snddev_init(void);
+
 extern int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 
 #endif

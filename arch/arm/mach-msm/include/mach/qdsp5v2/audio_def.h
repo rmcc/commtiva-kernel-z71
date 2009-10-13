@@ -28,8 +28,11 @@
 #ifndef _MACH_QDSP5_V2_AUDIO_DEF_H
 #define _MACH_QDSP5_V2_AUDIO_DEF_H
 
-#define SNDDEV_CAP_RX 0x1
-#define SNDDEV_CAP_TX 0x2
-#define SNDDEV_CAP_VOICE 0x4
+/* Define sound device capability */
+#define SNDDEV_CAP_RX 0x1 /* RX direction */
+#define SNDDEV_CAP_TX 0x2 /* TX direction */
+#define SNDDEV_CAP_VOICE 0x4 /* Support voice call */
+#define SNDDEV_CAP_PLAYBACK 0x8 /* Support playback */
+#define SNDDEV_CAP_FM 0x10 /* Support FM radio */
 
 #endif /* _MACH_QDSP5_V2_AUDIO_DEF_H */
