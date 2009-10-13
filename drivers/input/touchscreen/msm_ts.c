@@ -33,6 +33,7 @@
 #define 	TSSC_CTL_DEBOUNCE_EN	(1 << 6)
 #define 	TSSC_CTL_EN_AVERAGE	(1 << 5)
 #define 	TSSC_CTL_MODE_MASTER	(3 << 3)
+#define 	TSSC_CTL_SW_RESET	(1 << 2)
 #define 	TSSC_CTL_ENABLE		(1 << 0)
 #define TSSC_OPN			0x104
 #define 	TSSC_OPN_NOOP		0x00
@@ -47,6 +48,7 @@
 #define TSSC_SAMPLE(op,samp)		((0x118 + ((op & 0x3) * 0x20)) + \
 					 ((samp & 0x7) * 0x4))
 #define TSSC_TEST_1			0x198
+	#define TSSC_TEST_1_EN_GATE_DEBOUNCE (1 << 2)
 #define TSSC_TEST_2			0x19c
 
 struct msm_ts {
@@ -182,6 +184,7 @@ static void dump_tssc_regs(struct msm_ts *ts)
 	__dump_tssc_reg(TSSC_STATUS);
 	__dump_tssc_reg(TSSC_AVG_12);
 	__dump_tssc_reg(TSSC_AVG_34);
+	__dump_tssc_reg(TSSC_TEST_1);
 #undef __dump_tssc_reg
 }
 
@@ -191,6 +194,8 @@ static int __devinit msm_ts_hw_init(struct msm_ts *ts)
 
 	/* Enable the register clock to tssc so we can configure it. */
 	tssc_writel(ts, TSSC_CTL_ENABLE, TSSC_CTL);
+	/* Enable software reset*/
+	tssc_writel(ts, TSSC_CTL_SW_RESET, TSSC_CTL);
 
 	/* op1 - measure X, 1 sample, 12bit resolution */
 	tmp = (TSSC_OPN_4WIRE_X << 16) | (2 << 8) | (2 << 0);
@@ -207,6 +212,9 @@ static int __devinit msm_ts_hw_init(struct msm_ts *ts)
 
 	/* 16ms sampling interval */
 	tssc_writel(ts, 16, TSSC_SAMPLING_INT);
+	/* Enable gating logic to fix the timing delays caused because of
+	 * enabling debounce logic */
+	tssc_writel(ts, TSSC_TEST_1_EN_GATE_DEBOUNCE, TSSC_TEST_1);
 
 	setup_next_sample(ts);
 
