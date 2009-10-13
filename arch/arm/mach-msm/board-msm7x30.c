@@ -2007,3 +2007,27 @@ MACHINE_START(MSM7X30_SURF, "QCT MSM7X30 SURF")
 	.init_machine = msm7x30_init,
 	.timer = &msm_timer,
 MACHINE_END
+
+MACHINE_START(MSM7X30_FFA, "QCT MSM7X30 FFA")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io  = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params = 0x00200100,
+	.map_io = msm7x30_map_io,
+	.init_irq = msm7x30_init_irq,
+	.init_machine = msm7x30_init,
+	.timer = &msm_timer,
+MACHINE_END
+
+MACHINE_START(MSM7X30_FLUID, "QCT MSM7X30 FLUID")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io  = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params = 0x00200100,
+	.map_io = msm7x30_map_io,
+	.init_irq = msm7x30_init_irq,
+	.init_machine = msm7x30_init,
+	.timer = &msm_timer,
+MACHINE_END
