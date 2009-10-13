@@ -66,31 +66,32 @@
 
 #include "proc_comm.h"
 
-#define MPP(_name, _id, _status) { .name = _name, .id = _id, .status = _status}
+#define MPP(_name, _id, _is_input, _status) \
+	{ .name = _name, .id = _id, .is_input = _is_input, .status = _status}
 
 static struct mpp mpps[] = {
-	MPP("mpp1", 0, 0),
-	MPP("mpp2", 1, 0),
-	MPP("mpp3", 2, 0),
-	MPP("mpp4", 3, 0),
-	MPP("mpp5", 4, 0),
-	MPP("mpp6", 5, 0),
-	MPP("mpp7", 6, 0),
-	MPP("mpp8", 7, 0),
-	MPP("mpp9", 8, 0),
-	MPP("mpp10", 9, 0),
-	MPP("mpp11", 10, 0),
-	MPP("mpp12", 11, 0),
-	MPP("mpp13", 12, 0),
-	MPP("mpp14", 13, 0),
-	MPP("mpp15", 14, 0),
-	MPP("mpp16", 15, 0),
-	MPP("mpp17", 16, 0),
-	MPP("mpp18", 17, 0),
-	MPP("mpp19", 18, 0),
-	MPP("mpp20", 19, 0),
-	MPP("mpp21", 20, 0),
-	MPP("mpp22", 21, 0),
+	MPP("mpp1", 0, 0, 0),
+	MPP("mpp2", 1, 0, 0),
+	MPP("mpp3", 2, 0, 0),
+	MPP("mpp4", 3, 0, 0),
+	MPP("mpp5", 4, 0, 0),
+	MPP("mpp6", 5, 0, 0),
+	MPP("mpp7", 6, 0, 0),
+	MPP("mpp8", 7, 0, 0),
+	MPP("mpp9", 8, 0, 0),
+	MPP("mpp10", 9, 0, 0),
+	MPP("mpp11", 10, 0, 0),
+	MPP("mpp12", 11, 0, 0),
+	MPP("mpp13", 12, 0, 0),
+	MPP("mpp14", 13, 0, 0),
+	MPP("mpp15", 14, 0, 0),
+	MPP("mpp16", 15, 0, 0),
+	MPP("mpp17", 16, 0, 0),
+	MPP("mpp18", 17, 0, 0),
+	MPP("mpp19", 18, 0, 0),
+	MPP("mpp20", 19, 0, 0),
+	MPP("mpp21", 20, 0, 0),
+	MPP("mpp22", 21, 0, 0),
 };
 
 struct mpp *mpp_get(struct device *dev, const char *id)
@@ -110,9 +111,21 @@ int mpp_config_digital_out(struct mpp *mpp, unsigned config)
 	int err;
 	err = msm_proc_comm(PCOM_PM_MPP_CONFIG, &id, &config);
 	mpp->status = err;
+	mpp->is_input = 0;
 	return err;
 }
 EXPORT_SYMBOL(mpp_config_digital_out);
+
+int mpp_config_digital_in(struct mpp *mpp, unsigned config)
+{
+	unsigned id = mpp->id;
+	int err;
+	err = msm_proc_comm(PCOM_PM_MPP_CONFIG_DIGITAL_INPUT, &id, &config);
+	mpp->status = err;
+	mpp->is_input = 1;
+	return err;
+}
+EXPORT_SYMBOL(mpp_config_digital_in);
 
 #if defined(CONFIG_DEBUG_FS)
 static int mpp_debug_set(void *data, u64 val)
