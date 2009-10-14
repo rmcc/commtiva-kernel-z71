@@ -802,6 +802,9 @@ kgsl_ringbuffer_freememontimestamp(struct kgsl_device *device,
 			device, entry->memdesc.gpuaddr, timestamp);
 	(void)type; /* unref. For now just use EOP timestamp */
 
+	/* move the entry from list to free_list */
+	list_del(&entry->list);
+	entry->list.prev = 0;
 	list_add_tail(&entry->free_list, &rb->memqueue);
 	entry->free_timestamp = timestamp;
 
