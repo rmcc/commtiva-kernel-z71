@@ -67,6 +67,8 @@ struct msm_hsusb_gadget_platform_data {
 	int *phy_init_seq;
 	void (*phy_reset)(void);
 
+	u32 swfi_latency;
+
 	/*charging apis*/
 	int  (*chg_init)(int);
 	void (*chg_connected)(enum chg_type);
