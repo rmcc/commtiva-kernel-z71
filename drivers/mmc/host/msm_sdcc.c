@@ -1134,7 +1134,7 @@ msmsdcc_probe(struct platform_device *pdev)
 	if (pdev->id < 1 || pdev->id > 4)
 		return -EINVAL;
 
-	if (pdev->resource == NULL || pdev->num_resources < 2) {
+	if (pdev->resource == NULL || pdev->num_resources < 3) {
 		printk(KERN_ERR "%s: Invalid resource\n", __func__);
 		return -ENXIO;
 	}
@@ -1170,7 +1170,7 @@ msmsdcc_probe(struct platform_device *pdev)
 	host->base = ioremap(memres->start, PAGE_SIZE);
 	if (!host->base) {
 		ret = -ENOMEM;
-		goto out;
+		goto host_free;
 	}
 
 	host->irqres = irqres;
@@ -1194,7 +1194,9 @@ msmsdcc_probe(struct platform_device *pdev)
 	/*
 	 * Setup DMA
 	 */
-	msmsdcc_init_dma(host);
+	ret = msmsdcc_init_dma(host);
+	if (ret)
+		goto ioremap_free;
 
 	/*
 	 * Setup main peripheral bus clock
@@ -1202,7 +1204,7 @@ msmsdcc_probe(struct platform_device *pdev)
 	host->pclk = clk_get(&pdev->dev, "sdc_pclk");
 	if (IS_ERR(host->pclk)) {
 		ret = PTR_ERR(host->pclk);
-		goto host_free;
+		goto dma_free;
 	}
 
 	ret = clk_enable(host->pclk);
@@ -1368,6 +1370,11 @@ msmsdcc_probe(struct platform_device *pdev)
 	clk_disable(host->pclk);
  pclk_put:
 	clk_put(host->pclk);
+ dma_free:
+	dma_free_coherent(NULL, sizeof(struct msmsdcc_nc_dmadata),
+			host->dma.nc, host->dma.nc_busaddr);
+ ioremap_free:
+	iounmap(host->base);
  host_free:
 	mmc_free_host(mmc);
  out:
@@ -1409,6 +1416,9 @@ static int msmsdcc_remove(struct platform_device *pdev)
 	clk_put(host->clk);
 	clk_put(host->pclk);
 
+	dma_free_coherent(NULL, sizeof(struct msmsdcc_nc_dmadata),
+			host->dma.nc, host->dma.nc_busaddr);
+	iounmap(host->base);
 	mmc_free_host(mmc);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
