@@ -514,7 +514,10 @@ asmlinkage int arm_syscall(int no, struct pt_regs *regs)
 		thread->tp_value = regs->ARM_r0;
 #if defined(CONFIG_HAS_TLS_REG)
 		asm ("mcr p15, 0, %0, c13, c0, 3" : : "r" (regs->ARM_r0) );
-#elif !defined(CONFIG_TLS_REG_EMUL)
+#endif
+
+#if (!defined(CONFIG_HAS_TLS_REG) && !defined(CONFIG_TLS_REG_EMUL)) || \
+      defined(CONFIG_ARCH_MSM_SCORPION)
 		/*
 		 * User space must never try to access this directly.
 		 * Expect your app to break eventually if you do so.
