@@ -351,11 +351,8 @@ s32 ard_close(s32 session_id)
 		ardsession[session_id]->sess_open_info->cad_open.format ==
 		CAD_FORMAT_PCM ||
 		ardsession[session_id]->sess_open_info->cad_open.format ==
-		CAD_FORMAT_AAC)) {
-
+		CAD_FORMAT_AAC))
 		g_clk_info.open_rec_sessions -= 1;
-		g_clk_info.tx_clk_freq = 8000;
-	}
 
 	local_ard_state = &ard_state;
 	cadr = ardsession[session_id]->sess_open_info;
@@ -937,15 +934,8 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 			ardsession[session_id]->sess_open_info->cad_open.op_code
 			== CAD_OPEN_OP_READ) {
 
-			if (g_clk_info.tx_clk_freq != 8000)
-				for (i = 0; i < ARD_AUDIO_MAX_CLIENT; i++)
-					if (ardsession[i] &&
-						ardsession[i]->sess_open_info
-						->cad_open.op_code
-						== CAD_OPEN_OP_READ
-						&& i != session_id)
-						ard_close(i);
-
+			if (!g_clk_info.open_rec_sessions)
+				g_clk_info.tx_clk_freq = 8000;
 			g_clk_info.open_rec_sessions += 1;
 
 		}
@@ -1041,13 +1031,7 @@ s32 ard_ioctl(s32 session_id, u32 cmd_code, void *cmd_buf, u32 cmd_len)
 				break;
 			}
 
-			if (g_clk_info.open_rec_sessions > 0 &&
-					g_clk_info.tx_clk_freq != clk_freq) {
-
-				rc = CAD_RES_FAILURE;
-				pr_err("clk mismatch with current recording\n");
-				break;
-			} else
+			if (!g_clk_info.open_rec_sessions)
 				g_clk_info.tx_clk_freq = clk_freq;
 
 			g_clk_info.open_rec_sessions += 1;

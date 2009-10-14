@@ -111,44 +111,14 @@ static void		*ard_acdb_buffer;
 enum ard_acdb_sample_rate	ard_acdb_calculate_sample_rate(u32 session_id)
 {
 	enum ard_acdb_sample_rate	sample_rate = ARD_ACDB_SR_INVALID;
-	u32				voice_exist = 0;
-	u32				i;
 
+	if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_16K_HZ)
+		sample_rate = ARD_ACDB_SR_48K_HZ;
+	else if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_8K_HZ)
+		sample_rate = ARD_ACDB_SR_16K_HZ;
+	else
+		sample_rate = ARD_ACDB_SR_8K_HZ;
 
-	for (i = 0; i < ARD_AUDIO_MAX_CLIENT; ++i) {
-		if (ardsession[i] == NULL  ||
-			ardsession[i]->enabled != ARD_TRUE)
-
-			continue;
-
-		if ((ardsession[i]->sess_open_info)->cad_open.op_code !=
-			CAD_OPEN_OP_DEVICE_CTRL) {
-
-			if (ardsession[i]->sess_open_info->cad_stream.app_type
-				 == CAD_STREAM_APP_VOICE) {
-
-				voice_exist = 1;
-				sample_rate = ARD_ACDB_SR_8K_HZ;
-				break;
-			}
-		}
-	}
-
-	if (voice_exist != 1) {
-		if ((ardsession[session_id]->sess_open_info->cad_open.format ==
-			CAD_FORMAT_PCM) || (ardsession[session_id]->
-			sess_open_info->cad_open.format == CAD_FORMAT_AAC)) {
-
-			if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_16K_HZ)
-				sample_rate = ARD_ACDB_SR_48K_HZ;
-			else if (g_clk_info.tx_clk_freq > ARD_ACDB_SR_8K_HZ)
-				sample_rate = ARD_ACDB_SR_16K_HZ;
-			else
-				sample_rate = ARD_ACDB_SR_8K_HZ;
-		} else {
-			sample_rate = ARD_ACDB_SR_8K_HZ;
-		}
-	}
 	return sample_rate;
 }
 
