@@ -180,7 +180,6 @@ static int diagchar_ioctl(struct inode *inode, struct file *filp,
 	int i, count_entries = 0;
 	int success = -1;
 
-
 	if (iocmd == DIAG_IOCTL_COMMAND_REG) {
 		struct bindpkt_params_per_process *pkt_params =
 			 (struct bindpkt_params_per_process *) ioarg;
@@ -217,6 +216,14 @@ static int diagchar_ioctl(struct inode *inode, struct file *filp,
 		}
 
 	return success;
+	} else if (iocmd == DIAG_IOCTL_LSM_DEINIT) {
+		for (i = 0; i < driver->num_clients; i++)
+			if (driver->client_map[i] == current->tgid)
+				break;
+		if (i == -1)
+			return -EINVAL;
+		driver->data_ready[i] |= DEINIT_TYPE;
+		wake_up_interruptible(&driver->wait_q);
 	}
 
 	return -EINVAL;
@@ -237,6 +244,19 @@ static int diagchar_read(struct file *file, char __user *buf, size_t count,
 	wait_event_interruptible(driver->wait_q,
 				  driver->data_ready[index]);
 	mutex_lock(&driver->diagchar_mutex);
+
+	if (driver->data_ready[index] & DEINIT_TYPE) {
+		/*Copy the type of data being passed*/
+		data_type = driver->data_ready[index] & DEINIT_TYPE;
+		if (copy_to_user(buf, (void *)&data_type, 4)) {
+			ret = -EFAULT;
+			goto exit;
+		}
+
+		ret += 4;
+		driver->data_ready[index] ^= DEINIT_TYPE;
+		goto exit;
+	}
 
 	if (driver->data_ready[index] & MSG_MASKS_TYPE) {
 		/*Copy the type of data being passed*/

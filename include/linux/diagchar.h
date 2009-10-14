@@ -33,6 +33,7 @@
 #define LOG_MASKS_TYPE 2
 #define EVENT_MASKS_TYPE 4
 #define PKT_TYPE 8
+#define DEINIT_TYPE 16
 
 /* different values that go in for diag_data_type */
 #define DATA_TYPE_EVENT         0
@@ -41,6 +42,7 @@
 #define DATA_TYPE_RESPONSE      3
 #define DIAG_IOCTL_COMMAND_REG  0
 #define DIAG_IOCTL_GET_DELAYED_RSP_ID 8
+#define DIAG_IOCTL_LSM_DEINIT	9
 
 struct bindpkt_params {
 	uint16_t cmd_code;
