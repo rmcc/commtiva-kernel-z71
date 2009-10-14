@@ -61,6 +61,7 @@
  *
  */
 
+#include <linux/module.h>
 #include <linux/sched.h>
 #include <asm/domain.h>
 #include <asm/pgtable.h>
@@ -347,6 +348,7 @@ void emulate_domain_manager_set(u32 domain)
 
 	spin_unlock_irqrestore(&edm_lock, flags);
 }
+EXPORT_SYMBOL(emulate_domain_manager_set);
 
 /*
  * Switch thread context.  Restore original contents.
