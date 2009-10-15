@@ -1024,6 +1024,7 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 	if (sync->vfefn.vfe_config)
 		rc = sync->vfefn.vfe_config(&cfgcmd, data);
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	return rc;
 }
 
@@ -1108,6 +1109,7 @@ static int msm_frame_axi_cfg(struct msm_sync *sync,
 	if (sync->vfefn.vfe_config)
 		rc = sync->vfefn.vfe_config(cfgcmd, data);
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	return rc;
 }
 
@@ -1151,6 +1153,7 @@ static int __msm_put_frame_buf(struct msm_sync *sync,
 
 	int rc = -EIO;
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	pphy = msm_pmem_frame_vtop_lookup(sync,
 		pb->buffer,
 		pb->y_off, pb->cbcr_off, pb->fd);
@@ -1168,6 +1171,7 @@ static int __msm_put_frame_buf(struct msm_sync *sync,
 		rc = -EINVAL;
 	}
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	return rc;
 }
 
@@ -1234,6 +1238,7 @@ static int msm_stats_axi_cfg(struct msm_sync *sync,
 	struct msm_pmem_region region[3];
 	int pmem_type = MSM_PMEM_MAX;
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	memset(&axi_data, 0, sizeof(axi_data));
 
 	switch (cfgcmd->cmd_type) {
@@ -1267,6 +1272,7 @@ static int msm_stats_axi_cfg(struct msm_sync *sync,
 	if (sync->vfefn.vfe_config)
 		rc = sync->vfefn.vfe_config(cfgcmd, &axi_data);
 
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	return rc;
 }
 
@@ -1315,6 +1321,7 @@ static int msm_put_stats_buffer(struct msm_sync *sync, void __user *arg)
 	}
 
 put_done:
+	CDBG("%s %d] rc = %d \n", __func__, __LINE__, rc);
 	return rc;
 }
 
@@ -2032,7 +2039,7 @@ static int __msm_open(struct msm_sync *sync, const char *const apps_id)
 			rc = sync->sctrl.s_init(sync->sdata);
 			if (rc < 0) {
 				pr_err("sensor init failed: %d\n", rc);
-				goto msm_open_done;
+				goto msm_open_sensor_failed;
 			}
 		} else {
 			pr_err("no sensor init func\n");
@@ -2049,6 +2056,11 @@ static int __msm_open(struct msm_sync *sync, const char *const apps_id)
 	sync->opencnt++;
 
 msm_open_done:
+	mutex_unlock(&sync->lock);
+	return rc;
+
+msm_open_sensor_failed:
+	sync->vfefn.vfe_release(sync->pdev);
 	mutex_unlock(&sync->lock);
 	return rc;
 }

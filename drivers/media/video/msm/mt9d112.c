@@ -35,6 +35,8 @@
 #define  REG_MT9D112_STANDBY_CONTROL  0x3202
 #define  REG_MT9D112_MCU_BOOT         0x3386
 
+#define SENSOR_DEBUG 0
+
 struct mt9d112_work {
 	struct work_struct work;
 };
@@ -89,6 +91,15 @@ static int32_t mt9d112_i2c_txdata(unsigned short saddr,
 		},
 	};
 
+#if SENSOR_DEBUG
+	if (length == 2)
+		CDBG("msm_io_i2c_w: 0x%04x 0x%04x\n",
+			*(u16 *) txdata, *(u16 *) (txdata + 2));
+	else if (length == 4)
+		CDBG("msm_io_i2c_w: 0x%04x\n", *(u16 *) txdata);
+	else
+		CDBG("msm_io_i2c_w: length = %d\n", length);
+#endif
 	if (i2c_transfer(mt9d112_client->adapter, msg, 1) < 0) {
 		CDBG("mt9d112_i2c_txdata failed\n");
 		return -EIO;
@@ -172,6 +183,16 @@ static int mt9d112_i2c_rxdata(unsigned short saddr,
 		.buf   = rxdata,
 	},
 	};
+
+#if SENSOR_DEBUG
+	if (length == 2)
+		CDBG("msm_io_i2c_r: 0x%04x 0x%04x\n",
+			*(u16 *) rxdata, *(u16 *) (rxdata + 2));
+	else if (length == 4)
+		CDBG("msm_io_i2c_r: 0x%04x\n", *(u16 *) rxdata);
+	else
+		CDBG("msm_io_i2c_r: length = %d\n", length);
+#endif
 
 	if (i2c_transfer(mt9d112_client->adapter, msgs, 2) < 0) {
 		CDBG("mt9d112_i2c_rxdata failed!\n");

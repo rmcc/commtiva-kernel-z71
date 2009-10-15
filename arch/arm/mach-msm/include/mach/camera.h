@@ -60,10 +60,15 @@ enum vfe_resp_msg {
 	VFE_MSG_STATS_WE,
 };
 
+#define VFE31_OUTPUT_MODE_P (0x1 << 0)
+#define VFE31_OUTPUT_MODE_S (0x1 << 1)
+#define VFE31_OUTPUT_MODE_V (0x1 << 2)
+
 struct msm_vfe_phy_info {
 	uint32_t sbuf_phy;
 	uint32_t y_phy;
 	uint32_t cbcr_phy;
+	uint8_t output_mode; /* VFE31_OUTPUT_MODE_P/S/V */
 };
 
 struct msm_vfe_resp {
@@ -240,6 +245,11 @@ enum msm_camio_clk_type {
 	CAMIO_VFE_CLK,
 	CAMIO_VFE_AXI_CLK,
 
+	CAMIO_VFE_CAMIF_CLK,
+	CAMIO_VFE_PBDG_CLK,
+	CAMIO_CAM_MCLK_CLK,
+	CAMIO_CAMIF_PAD_PBDG_CLK,
+
 	CAMIO_MAX_CLK
 };
 
@@ -284,6 +294,7 @@ int  msm_camio_clk_enable(enum msm_camio_clk_type clk);
 int  msm_camio_clk_disable(enum msm_camio_clk_type clk);
 int  msm_camio_clk_config(uint32_t freq);
 void msm_camio_clk_rate_set(int rate);
+void msm_camio_clk_rate_set_2(struct clk *clk, int rate);
 void msm_camio_clk_axi_rate_set(int rate);
 
 void msm_camio_camif_pad_reg_reset(void);
@@ -299,4 +310,13 @@ int msm_camio_probe_off(struct platform_device *);
 int request_axi_qos(uint32_t freq);
 int update_axi_qos(uint32_t freq);
 void release_axi_qos(void);
+int msm_camio_read_camif_status(void);
+
+void msm_io_w(u32 data, void __iomem *addr);
+u32 msm_io_r(void __iomem *addr);
+void msm_io_dump(void __iomem *addr, int size);
+void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len);
+
+int clk_set_flags(struct clk *clk, unsigned long flags);
+
 #endif
