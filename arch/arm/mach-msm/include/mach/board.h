@@ -39,6 +39,8 @@ struct msm_camera_io_ext {
 	uint32_t mdcsz;
 	uint32_t appphy;
 	uint32_t appsz;
+	uint32_t camifpadphy;
+	uint32_t camifpadsz;
 };
 
 struct msm_camera_device_platform_data {
