@@ -16,6 +16,9 @@
 #ifndef _ARCH_ARM_MACH_MSM_MSM_SMD_PRIVATE_H_
 #define _ARCH_ARM_MACH_MSM_MSM_SMD_PRIVATE_H_
 
+#include <linux/types.h>
+#include <linux/spinlock.h>
+
 struct smem_heap_info
 {
 	unsigned initialized;
@@ -253,5 +256,60 @@ enum {
 	SMEM_SEFS_INFO,
 	SMEM_NUM_ITEMS,
 };
+
+enum {
+	SMEM_APPS_Q6_SMSM = 3,
+	SMEM_Q6_APPS_SMSM = 5,
+	SMSM_NUM_INTR_MUX = 8,
+};
+
+#define SMD_SS_CLOSED            0x00000000
+#define SMD_SS_OPENING           0x00000001
+#define SMD_SS_OPENED            0x00000002
+#define SMD_SS_FLUSHING          0x00000003
+#define SMD_SS_CLOSING           0x00000004
+#define SMD_SS_RESET             0x00000005
+#define SMD_SS_RESET_OPENING     0x00000006
+
+#define SMD_BUF_SIZE             8192
+#define SMD_CHANNELS             64
+#define SMD_HEADER_SIZE          20
+
+/* 'type' field of smd_alloc_elm structure
+ * has the following breakup
+ * bits 0-7   -> channel type
+ * bits 8-11  -> xfer type
+ * bits 12-31 -> reserved
+ */
+struct smd_alloc_elm {
+	char name[20];
+	uint32_t cid;
+	uint32_t type;
+	uint32_t ref_count;
+};
+
+#define SMD_CHANNEL_TYPE(x) ((x) & 0x000000FF)
+#define SMD_XFER_TYPE(x)    (((x) & 0x00000F00) >> 8)
+
+struct smd_half_channel {
+	unsigned state;
+	unsigned char fDSR;
+	unsigned char fCTS;
+	unsigned char fCD;
+	unsigned char fRI;
+	unsigned char fHEAD;
+	unsigned char fTAIL;
+	unsigned char fSTATE;
+	unsigned char fUNUSED;
+	unsigned tail;
+	unsigned head;
+};
+
+extern spinlock_t smem_lock;
+
+extern int (*msm_check_for_modem_crash)(void);
+void *smem_find(unsigned id, unsigned size);
+void *smem_get_entry(unsigned id, unsigned *size);
+void smd_diag(void);
 
 #endif
