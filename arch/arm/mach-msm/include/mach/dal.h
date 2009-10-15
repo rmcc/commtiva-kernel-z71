@@ -56,6 +56,16 @@ struct daldevice_info_t {
 	char name[32];
 };
 
+#define DAL_CHUNK_NAME_LENGTH 12
+struct dal_chunk_header {
+	uint32_t size;
+	char name[DAL_CHUNK_NAME_LENGTH];
+	uint32_t lock;
+	uint32_t reserved;
+	uint32_t type;
+	uint32_t version;
+};
+
 int daldevice_attach(uint32_t device_id, char *port, int cpu,
 		     void **handle_ptr);
 

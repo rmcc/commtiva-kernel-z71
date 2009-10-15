@@ -42,7 +42,7 @@ typedef struct {
 
 typedef raw_remote_spinlock_t *_remote_spinlock_t;
 
-#define remote_spin_lock_id_t uint32_t
+#define remote_spinlock_id_t const char *
 
 static inline void __raw_remote_ex_spin_lock(raw_remote_spinlock_t *lock)
 {
@@ -98,8 +98,7 @@ static inline void __raw_remote_swp_spin_unlock(raw_remote_spinlock_t *lock)
 	: "cc");
 }
 
-
-int _remote_spin_lock_init(remote_spin_lock_id_t id, _remote_spinlock_t *lock);
+int _remote_spin_lock_init(remote_spinlock_id_t id, _remote_spinlock_t *lock);
 
 /* Only use SWP-based spinlocks for ARM11 apps processors where the LDREX/STREX
  * instructions are unable to lock shared memory for exclusive access. */
