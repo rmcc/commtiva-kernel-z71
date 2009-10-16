@@ -85,10 +85,10 @@
 
 struct clkctl_acpu_speed {
 	unsigned int     use_for_scaling;
-	unsigned int     a11clk_khz;
+	unsigned int     acpuclk_khz;
 	int              pll;
-	unsigned int     a11clk_src_sel;
-	unsigned int     a11clk_src_div;
+	unsigned int     acpuclk_src_sel;
+	unsigned int     acpuclk_src_div;
 	unsigned int     ahbclk_khz;
 	unsigned int     ahbclk_div;
 	unsigned int     axiclk_khz;
@@ -139,18 +139,18 @@ static void __init cpufreq_table_init(void)
 	 * freq_table values need to match frequencies specified in
 	 * acpu_freq_tbl and acpu_freq_tbl needs to be fixed up during init.
 	 */
-	for (i = 0; acpu_freq_tbl[i].a11clk_khz != 0
+	for (i = 0; acpu_freq_tbl[i].acpuclk_khz != 0
 			&& freq_cnt < ARRAY_SIZE(freq_table)-1; i++) {
 		if (acpu_freq_tbl[i].use_for_scaling) {
 			freq_table[freq_cnt].index = freq_cnt;
 			freq_table[freq_cnt].frequency
-				= acpu_freq_tbl[i].a11clk_khz;
+				= acpu_freq_tbl[i].acpuclk_khz;
 			freq_cnt++;
 		}
 	}
 
 	/* freq_table not big enough to store all usable freqs. */
-	BUG_ON(acpu_freq_tbl[i].a11clk_khz != 0);
+	BUG_ON(acpu_freq_tbl[i].acpuclk_khz != 0);
 
 	freq_table[freq_cnt].index = freq_cnt;
 	freq_table[freq_cnt].frequency = CPUFREQ_TABLE_END;
@@ -342,8 +342,8 @@ static void config_pll(struct clkctl_acpu_speed *s)
 		case 0x0:
 			regval = readl(SPSS_CLK_CNTL_ADDR);
 			regval &= ~(0x7 << 4 | 0xf);
-			regval |= (s->a11clk_src_sel << 4);
-			regval |= (s->a11clk_src_div << 0);
+			regval |= (s->acpuclk_src_sel << 4);
+			regval |= (s->acpuclk_src_div << 0);
 			writel(regval, SPSS_CLK_CNTL_ADDR);
 
 			regval = readl(SPSS_CLK_SEL_ADDR);
@@ -354,8 +354,8 @@ static void config_pll(struct clkctl_acpu_speed *s)
 		case 0x1:
 			regval = readl(SPSS_CLK_CNTL_ADDR);
 			regval &= ~(0x7 << 12 | 0xf << 8);
-			regval |= (s->a11clk_src_sel << 12);
-			regval |= (s->a11clk_src_div << 8);
+			regval |= (s->acpuclk_src_sel << 12);
+			regval |= (s->acpuclk_src_div << 8);
 			writel(regval, SPSS_CLK_CNTL_ADDR);
 
 			regval = readl(SPSS_CLK_SEL_ADDR);
@@ -411,16 +411,16 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	strt_s = drv_state.current_speed;
 
-	if (rate == (strt_s->a11clk_khz * 1000))
+	if (rate == (strt_s->acpuclk_khz * 1000))
 		goto out;
 
-	for (tgt_s = acpu_freq_tbl; tgt_s->a11clk_khz != 0; tgt_s++) {
-		if (tgt_s->a11clk_khz == (rate / 1000))
+	for (tgt_s = acpu_freq_tbl; tgt_s->acpuclk_khz != 0; tgt_s++) {
+		if (tgt_s->acpuclk_khz == (rate / 1000))
 			break;
 		freq_index++;
 	}
 
-	if (tgt_s->a11clk_khz == 0) {
+	if (tgt_s->acpuclk_khz == 0) {
 		rc = -EINVAL;
 		goto out;
 	}
@@ -523,9 +523,9 @@ static void __init acpuclk_init(void)
 		}
 
 		/* Find the matching clock rate. */
-		for (speed = acpu_freq_tbl; speed->a11clk_khz != 0; speed++) {
-			if (speed->a11clk_src_sel == sel &&
-			    speed->a11clk_src_div == div)
+		for (speed = acpu_freq_tbl; speed->acpuclk_khz != 0; speed++) {
+			if (speed->acpuclk_src_sel == sel &&
+			    speed->acpuclk_src_div == div)
 				break;
 		}
 		break;
@@ -534,7 +534,7 @@ static void __init acpuclk_init(void)
 		sel = ((readl(SCPLL_FSM_CTL_EXT_ADDR) >> 3) & 0x3f);
 
 		/* Find the matching clock rate. */
-		for (speed = acpu_freq_tbl; speed->a11clk_khz != 0; speed++) {
+		for (speed = acpu_freq_tbl; speed->acpuclk_khz != 0; speed++) {
 			if (speed->sc_l_value == sel &&
 			    speed->sc_core_src_sel_mask == 1)
 				break;
@@ -552,7 +552,7 @@ static void __init acpuclk_init(void)
 	if (speed->pll != ACPU_PLL_3)
 		scpll_init();
 
-	if (speed->a11clk_khz == 0) {
+	if (speed->acpuclk_khz == 0) {
 		printk(KERN_WARNING "Warning - ACPU clock reports invalid "
 			"speed\n");
 		return;
@@ -563,12 +563,12 @@ static void __init acpuclk_init(void)
 	if (rc < 0)
 		pr_err("Setting AXI min rate failed!\n");
 
-	printk(KERN_INFO "ACPU running at %d KHz\n", speed->a11clk_khz);
+	printk(KERN_INFO "ACPU running at %d KHz\n", speed->acpuclk_khz);
 }
 
 unsigned long acpuclk_get_rate(void)
 {
-	return drv_state.current_speed->a11clk_khz;
+	return drv_state.current_speed->acpuclk_khz;
 }
 
 uint32_t acpuclk_get_switch_time(void)
@@ -633,9 +633,9 @@ static void __init acpu_freq_tbl_fixup(void)
 
 	pr_info("Max ACPU freq from efuse data is %d KHz\n", max_acpu_khz);
 
-	for (i = 0; acpu_freq_tbl[i].a11clk_khz != 0; i++) {
-		if (acpu_freq_tbl[i].a11clk_khz > max_acpu_khz) {
-			acpu_freq_tbl[i].a11clk_khz = 0;
+	for (i = 0; acpu_freq_tbl[i].acpuclk_khz != 0; i++) {
+		if (acpu_freq_tbl[i].acpuclk_khz > max_acpu_khz) {
+			acpu_freq_tbl[i].acpuclk_khz = 0;
 			break;
 		}
 	}
@@ -649,14 +649,14 @@ skip_efuse_fixup:
 	pll0_m_val = readl(PLL0_M_VAL_ADDR) & 0x7FFFF;
 	pll0_fixup = (pll0_m_val == 36);
 
-	for (i = 0; acpu_freq_tbl[i].a11clk_khz != 0; i++) {
+	for (i = 0; acpu_freq_tbl[i].acpuclk_khz != 0; i++) {
 		if (acpu_freq_tbl[i].pll == ACPU_PLL_0
-				&& acpu_freq_tbl[i].a11clk_khz == 245760
+				&& acpu_freq_tbl[i].acpuclk_khz == 245760
 				&& pll0_fixup) {
-			acpu_freq_tbl[i].a11clk_khz = 235930;
+			acpu_freq_tbl[i].acpuclk_khz = 235930;
 		}
 		if (acpu_freq_tbl[i].vdd > drv_state.max_vdd) {
-			acpu_freq_tbl[i].a11clk_khz = 0;
+			acpu_freq_tbl[i].acpuclk_khz = 0;
 			break;
 		}
 	}
@@ -667,10 +667,10 @@ static void __init lpj_init(void)
 {
 	int i;
 	const struct clkctl_acpu_speed *base_clk = drv_state.current_speed;
-	for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
+	for (i = 0; acpu_freq_tbl[i].acpuclk_khz; i++) {
 		acpu_freq_tbl[i].lpj = cpufreq_scale(loops_per_jiffy,
-						base_clk->a11clk_khz,
-						acpu_freq_tbl[i].a11clk_khz);
+						base_clk->acpuclk_khz,
+						acpu_freq_tbl[i].acpuclk_khz);
 	}
 }
 
@@ -681,9 +681,9 @@ static int __init acpu_avs_init(int (*set_vdd) (int), int khz)
 	int freq_count = 0;
 	int freq_index = -1;
 
-	for (i = 0; acpu_freq_tbl[i].a11clk_khz; i++) {
+	for (i = 0; acpu_freq_tbl[i].acpuclk_khz; i++) {
 		freq_count++;
-		if (acpu_freq_tbl[i].a11clk_khz == khz)
+		if (acpu_freq_tbl[i].acpuclk_khz == khz)
 			freq_index = i;
 	}
 
@@ -711,7 +711,7 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 #endif
 #ifdef CONFIG_MSM_CPU_AVS
 	if (!acpu_avs_init(drv_state.acpu_set_vdd,
-		drv_state.current_speed->a11clk_khz)) {
+		drv_state.current_speed->acpuclk_khz)) {
 		/* avs init successful. avs will handle voltage changes */
 		drv_state.acpu_set_vdd = NULL;
 	}
