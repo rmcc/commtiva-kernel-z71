@@ -624,7 +624,7 @@ static int msm_pm_enter(suspend_state_t state)
 	int64_t period = 0;
 	int64_t time = 0;
 
-	time = msm_timer_get_smem_clock_time(&period);
+	time = msm_timer_get_sclk_time(&period);
 	ret = msm_clock_require_tcxo(clk_ids, NR_CLKS);
 #elif defined(CONFIG_CLOCK_BASED_SLEEP_LIMIT)
 	ret = msm_clock_require_tcxo(NULL, 0);
@@ -663,7 +663,7 @@ static int msm_pm_enter(suspend_state_t state)
 		}
 
 		if (time != 0) {
-			end_time = msm_timer_get_smem_clock_time(NULL);
+			end_time = msm_timer_get_sclk_time(NULL);
 			if (end_time != 0) {
 				time = end_time - time;
 				if (time < 0)
