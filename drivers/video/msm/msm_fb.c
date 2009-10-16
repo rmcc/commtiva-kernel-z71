@@ -224,6 +224,7 @@ static int msm_fb_probe(struct platform_device *pdev)
 		return -EPERM;
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
+
 	if (!mfd)
 		return -ENODEV;
 
@@ -233,6 +234,7 @@ static int msm_fb_probe(struct platform_device *pdev)
 	if (pdev_list_cnt >= MSM_FB_MAX_DEV_LIST)
 		return -ENOMEM;
 
+	mfd->panel_info.frame_count = 0;
 	mfd->bl_level = mfd->panel_info.bl_max;
 
 	rc = msm_fb_register(mfd);
@@ -958,6 +960,10 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 			msm_fb_debugfs_file_create(sub_dir, "clk_rate",
 						   (u32 *) &mfd->panel_info.
 						   clk_rate);
+			msm_fb_debugfs_file_create(sub_dir, "frame_count",
+						   (u32 *) &mfd->panel_info.
+						   frame_count);
+
 
 			switch (mfd->dest) {
 			case DISPLAY_LCD:
@@ -1131,6 +1137,7 @@ static int msm_fb_pan_display(struct fb_var_screeninfo *var,
 	mdp_dma_pan_update(info);
 	up(&msm_fb_pan_sem);
 
+	++mfd->panel_info.frame_count;
 	return 0;
 }
 
