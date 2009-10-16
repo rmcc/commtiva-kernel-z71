@@ -60,6 +60,8 @@
 #include <linux/msm_audio.h>
 #include <asm/uaccess.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
 
 #define AUDIO_DEV_CTL_MAX_DEV 16
 
@@ -70,6 +72,7 @@ struct audio_dev_ctrl_state {
 	u32 opened;
 	struct msm_snddev_info *voice_rx_dev;
 	struct msm_snddev_info *voice_tx_dev;
+	wait_queue_head_t      wait;
 };
 
 static struct audio_dev_ctrl_state audio_dev_ctrl;
@@ -95,13 +98,25 @@ int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 	mutex_lock(&audio_dev_ctrl.lock);
 	if (!audio_dev_ctrl.voice_rx_dev || !audio_dev_ctrl.voice_tx_dev) {
 		rc = -ENODEV;
-		goto error;
+		mutex_unlock(&audio_dev_ctrl.lock);
+		return rc;
 	}
 
 	*rx_id = audio_dev_ctrl.voice_rx_dev->acdb_id;
 	*tx_id = audio_dev_ctrl.voice_tx_dev->acdb_id;
-error:
+
 	mutex_unlock(&audio_dev_ctrl.lock);
+
+	/* wait for both tx and rx are opened */
+	rc = wait_event_timeout(audio_dev_ctrl.wait,
+		((audio_dev_ctrl.voice_rx_dev->opened == 1)
+		&& (audio_dev_ctrl.voice_tx_dev->opened == 1)),
+		30 * HZ);
+	if (!rc) {
+		pr_err("failed to get voice tx and rx opened  within 30s\n");
+		rc = -ENODEV;
+	}
+
 	return rc;
 }
 EXPORT_SYMBOL(msm_get_voc_route);
@@ -187,8 +202,12 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 		dev_info = audio_dev_ctrl_find_dev(dev_ctrl, dev_id);
 		if (IS_ERR(dev_info))
 			rc = PTR_ERR(dev_info);
-		else
+		else {
 			rc = dev_info->dev_ops.open(dev_info);
+			if (!rc)
+				dev_info->opened = 1;
+			wake_up(&audio_dev_ctrl.wait);
+		}
 		break;
 
 	}
@@ -204,8 +223,10 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 		dev_info = audio_dev_ctrl_find_dev(dev_ctrl, dev_id);
 		if (IS_ERR(dev_info))
 			rc = PTR_ERR(dev_info);
-		else
+		else {
 			rc = dev_info->dev_ops.close(dev_info);
+			dev_info->opened = 0;
+		}
 		break;
 	}
 
@@ -299,6 +320,8 @@ struct miscdevice audio_dev_ctrl_misc = {
 static int __init audio_dev_ctrl_init(void)
 {
 	mutex_init(&audio_dev_ctrl.lock);
+	init_waitqueue_head(&audio_dev_ctrl.wait);
+
 	audio_dev_ctrl.opened = 0;
 	audio_dev_ctrl.num_dev = 0;
 	audio_dev_ctrl.voice_rx_dev = NULL;

@@ -605,6 +605,7 @@ static int snddev_icodec_probe(struct platform_device *pdev)
 	dev_info->dev_ops.close = snddev_icodec_close;
 	dev_info->dev_ops.set_freq = snddev_icodec_set_freq;
 	dev_info->capability = pdata->capability;
+	dev_info->opened = 0;
 	msm_snddev_register(dev_info);
 	icodec->data = pdata;
 	icodec->sample_rate = 8000; /* Default to 8KHz */
