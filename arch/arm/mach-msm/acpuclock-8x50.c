@@ -105,8 +105,7 @@ struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	{ 0, 96000, ACPU_PLL_1, 1, 7, 0, 0, 14000, 0, 0, 1000},
 	{ 0, 128000, ACPU_PLL_1, 1, 5, 0, 0, 14000, 2, 0, 1000},
 	{ 0, 192000, ACPU_PLL_1, 1, 3, 0, 0, 14000, 0, 0, 1000},
-	/* 235.93 on CDMA only. */
-	{ 1, 245000, ACPU_PLL_0, 4, 0, 0, 0, 29000, 0, 0, 1000},
+	{ 1, 245760, ACPU_PLL_0, 4, 0, 0, 0, 29000, 0, 0, 1000},
 	{ 0, 256000, ACPU_PLL_1, 1, 2, 0, 0, 29000, 0, 0, 1000},
 	{ 1, 384000, ACPU_PLL_3, 0, 0, 0, 0, 58000, 1, 0xA, 1000},
 	{ 0, 422400, ACPU_PLL_3, 0, 0, 0, 0, 117000, 1, 0xB, 1000},
@@ -604,11 +603,6 @@ static void __init acpu_freq_tbl_fixup(void)
 	unsigned int max_acpu_khz, pll0_fixup;
 	unsigned int i;
 
-	/* pll0_m_val will be 36 for CDMA-only and 4 otherwise,
-	 * indicating PLL0 is running at 235MHz, not 245MHz */
-	pll0_m_val = readl(PLL0_M_VAL_ADDR) & 0x7FFFF;
-	pll0_fixup = (pll0_m_val == 36);
-
 	ct_csr_base = ioremap(CT_CSR_PHYS, PAGE_SIZE);
 	BUG_ON(ct_csr_base == NULL);
 
@@ -649,9 +643,16 @@ static void __init acpu_freq_tbl_fixup(void)
 skip_efuse_fixup:
 	iounmap(ct_csr_base);
 	BUG_ON(drv_state.max_vdd == 0);
+
+	/* pll0_m_val will be 36 when PLL0 is run at 235MHz
+	 * instead of the usual 245MHz. */
+	pll0_m_val = readl(PLL0_M_VAL_ADDR) & 0x7FFFF;
+	pll0_fixup = (pll0_m_val == 36);
+
 	for (i = 0; acpu_freq_tbl[i].a11clk_khz != 0; i++) {
-		if (pll0_fixup && acpu_freq_tbl[i].pll == ACPU_PLL_0) {
-			/* PLL0 is 235.93MHz for CDMA-only */
+		if (acpu_freq_tbl[i].pll == ACPU_PLL_0
+				&& acpu_freq_tbl[i].a11clk_khz == 245760
+				&& pll0_fixup) {
 			acpu_freq_tbl[i].a11clk_khz = 235930;
 		}
 		if (acpu_freq_tbl[i].vdd > drv_state.max_vdd) {
