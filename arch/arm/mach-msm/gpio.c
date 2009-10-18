@@ -31,8 +31,6 @@ enum {
 static int msm_gpio_debug_mask = 0;
 module_param_named(debug_mask, msm_gpio_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
 
-#define MSM_GPIO_BROKEN_INT_CLEAR 1
-
 /* private gpio_configure flags */
 #define MSM_GPIOF_ENABLE_INTERRUPT      0x10000000
 #define MSM_GPIOF_DISABLE_INTERRUPT     0x20000000
@@ -45,28 +43,6 @@ static int msm_gpio_read(struct gpio_chip *chip, unsigned n);
 static int msm_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on);
 static int msm_gpio_read_detect_status(struct gpio_chip *chip, unsigned int gpio);
 static int msm_gpio_clear_detect_status(struct gpio_chip *chip, unsigned int gpio);
-
-struct msm_gpio_regs
-{
-	void __iomem *out;
-	void __iomem *in;
-	void __iomem *int_status;
-	void __iomem *int_clear;
-	void __iomem *int_en;
-	void __iomem *int_edge;
-	void __iomem *int_pos;
-	void __iomem *oe;
-};
-
-struct msm_gpio_chip {
-	struct gpio_chip        chip;
-	struct msm_gpio_regs    regs;
-#if MSM_GPIO_BROKEN_INT_CLEAR
-	unsigned                int_status_copy;
-#endif
-	unsigned int            both_edge_detect;
-	unsigned int            int_enable[2]; /* 0: awake, 1: sleep */
-};
 
 struct msm_gpio_chip msm_gpio_chips[] = {
 	{
