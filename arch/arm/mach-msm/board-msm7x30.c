@@ -2866,7 +2866,6 @@ static void __init msm7x30_init(void)
 	buses_init();
 	msm7x30_init_marimba();
 	snddev_poweramp_gpio_init();
-	msm_snddev_init();
 	i2c_register_board_info(2, msm_marimba_board_info,
 			ARRAY_SIZE(msm_marimba_board_info));
 
