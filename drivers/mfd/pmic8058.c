@@ -139,6 +139,7 @@
 #define	MAX_PM_MASTERS		(MAX_PM_BLOCKS / 8 + 1)
 
 #define FIRST_GPIO_IRQ_BLOCK		24
+#define FIRST_MPP_IRQ_BLOCK		16
 
 struct pm8058_chip {
 	struct pm8058_platform_data	pdata;
@@ -444,6 +445,44 @@ int pm8058_gpio_get(unsigned gpio)
 
 	block = FIRST_GPIO_IRQ_BLOCK + gpio / 8;
 	bit = gpio % 8;
+
+	local_irq_save(irqsave);
+
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_write(): rc=%d (Select Block)\n",
+		       __func__, rc);
+		goto bail_out;
+	}
+
+	rc = ssbi_read(pmic_chip->dev, SSBI_REG_ADDR_IRQ_RT_STATUS, &bits, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_read(): rc=%d (Read RT Status)\n",
+		       __func__, rc);
+		goto bail_out;
+	}
+
+	rc = (bits & (1 << bit)) ? 1 : 0;
+
+bail_out:
+	local_irq_restore(irqsave);
+
+	return rc;
+}
+
+int pm8058_mpp_get(unsigned mpp)
+{
+	int     rc;
+	u8      block, bits, bit;
+	unsigned long	irqsave;
+
+	if (mpp >= PM8058_MPPS)
+		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	block = FIRST_MPP_IRQ_BLOCK + mpp / 8;
+	bit = mpp % 8;
 
 	local_irq_save(irqsave);
 
