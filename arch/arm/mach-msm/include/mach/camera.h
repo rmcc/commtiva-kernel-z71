@@ -41,6 +41,7 @@
 #define NUM_WB_EXP_STAT_OUTPUT_BUFFERS  3
 #define NUM_AUTOFOCUS_MULTI_WINDOW_GRIDS 16
 #define NUM_AF_STAT_OUTPUT_BUFFERS      3
+#define MSM_AXI_QOS_PREVIEW	128000
 
 enum msm_queue {
 	MSM_CAM_Q_CTRL,     /* control command or control command status */
@@ -295,6 +296,7 @@ void msm_camio_disable(struct platform_device *);
 int msm_camio_probe_on(struct platform_device *);
 int msm_camio_probe_off(struct platform_device *);
 
-int request_axi_qos(void);
+int request_axi_qos(uint32_t freq);
+int update_axi_qos(uint32_t freq);
 void release_axi_qos(void);
 #endif

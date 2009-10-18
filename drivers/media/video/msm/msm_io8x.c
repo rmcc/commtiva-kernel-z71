@@ -19,7 +19,6 @@
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/io.h>
-#include <linux/pm_qos_params.h>
 
 #include <mach/clk.h>
 #include <mach/gpio.h>
@@ -52,7 +51,6 @@ static struct clk *camio_vfe_clk;
 static struct clk *camio_vfe_axi_clk;
 static struct msm_camera_io_ext camio_ext;
 static struct resource *appio, *mdcio;
-static uint8_t axi_qos_requested;
 
 void __iomem *appbase, *mdcbase;
 
@@ -336,33 +334,4 @@ int msm_camio_probe_off(struct platform_device *pdev)
 
 	camdev->camera_gpio_off();
 	return msm_camio_clk_disable(CAMIO_VFE_MDC_CLK);
-}
-
-
-int request_axi_qos(void)
-{
-	int rc = 0;
-	if (!axi_qos_requested) {
-		rc = pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ ,
-			"msm_camera", MSM_AXI_MAX_FREQ);
-		if (rc < 0) {
-			printk(KERN_ERR "Unable to request AXI bus QOS\n");
-		} else {
-			CDBG("%s: request successful\n", __func__);
-			axi_qos_requested = 1;
-			msleep(5);
-		}
-	}
-		return rc;
-}
-
-void release_axi_qos(void)
-{
-	if (axi_qos_requested) {
-		pm_qos_remove_requirement(PM_QOS_SYSTEM_BUS_FREQ ,
-			"msm_camera");
-		CDBG("%s: release successful\n", __func__);
-		axi_qos_requested = 0;
-		msleep(5);
-	}
 }
