@@ -33,6 +33,7 @@
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_otg.h>
+#include <mach/clk.h>
 #include <linux/wakelock.h>
 #include <linux/pm_qos_params.h>
 
@@ -78,15 +79,13 @@ static void msm_xusb_pm_qos_update(struct msmusb_hcd *mhcd, int vote)
 	struct usb_hcd *hcd = mhcd_to_hcd(mhcd);
 
 	if (vote) {
-		if (mhcd->pdata->max_axi_khz)
-			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
-					(char *)hcd->self.bus_name,
-					mhcd->pdata->max_axi_khz);
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				(char *)hcd->self.bus_name,
+				 MSM_AXI_MAX_FREQ);
 	} else {
-		if (mhcd->pdata->max_axi_khz)
-			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
-					(char *) hcd->self.bus_name,
-					PM_QOS_DEFAULT_VALUE);
+		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				(char *) hcd->self.bus_name,
+				PM_QOS_DEFAULT_VALUE);
 	}
 }
 
