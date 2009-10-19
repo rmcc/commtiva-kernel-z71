@@ -274,7 +274,10 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 			PM8058_GPIO_MODE_SHIFT) &
 			PM8058_GPIO_MODE_MASK) |
 		((param->direction & PM_GPIO_DIR_OUT) ?
-			PM8058_GPIO_OUT_BUFFER : 0);
+			((param->output_buffer & 1) ?
+			 PM8058_GPIO_OUT_BUFFER : 0) : 0) |
+		((param->direction & PM_GPIO_DIR_OUT) ?
+			param->output_value & 0x01 : 0);
 	bank[2] = PM8058_GPIO_WRITE |
 		((2 << PM8058_GPIO_BANK_SHIFT) &
 			PM8058_GPIO_BANK_MASK) |
@@ -311,6 +314,8 @@ int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios)
 	int	rc;
 	struct pm8058_gpio kypd_drv = {
 		.direction	= PM_GPIO_DIR_OUT,
+		.output_buffer	= PM_GPIO_OUT_BUF_OPEN_DRAIN,
+		.output_value	= 0,
 		.pull		= PM_GPIO_PULL_NO,
 		.vin_sel	= 2,
 		.out_strength	= PM_GPIO_STRENGTH_LOW,
