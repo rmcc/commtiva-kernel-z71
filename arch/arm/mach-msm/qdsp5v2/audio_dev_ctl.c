@@ -59,9 +59,11 @@
 #include <linux/miscdevice.h>
 #include <linux/msm_audio.h>
 #include <asm/uaccess.h>
+#include <asm/atomic.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
+#include <mach/debug_audio_mm.h>
 
 #define AUDIO_DEV_CTL_MAX_DEV 16
 
@@ -69,7 +71,7 @@ struct audio_dev_ctrl_state {
 	struct mutex lock;
 	struct msm_snddev_info *devs[AUDIO_DEV_CTL_MAX_DEV];
 	u32 num_dev;
-	u32 opened;
+	atomic_t opened;
 	struct msm_snddev_info *voice_rx_dev;
 	struct msm_snddev_info *voice_tx_dev;
 	wait_queue_head_t      wait;
@@ -281,25 +283,17 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 static int audio_dev_ctrl_open(struct inode *inode, struct file *file)
 {
 	int rc = 0;
-	mutex_lock(&audio_dev_ctrl.lock);
-	if (audio_dev_ctrl.opened) {
-		pr_err("audio: busy\n");
-		rc = -EBUSY;
-		goto error;
-	} else
-		audio_dev_ctrl.opened = 1;
+
+	MM_DBG("open audio_dev_ctrl\n");
+	atomic_inc(&audio_dev_ctrl.opened);
 	file->private_data = &audio_dev_ctrl;
-error:
-	mutex_unlock(&audio_dev_ctrl.lock);
 	return rc;
 }
 
 static int audio_dev_ctrl_release(struct inode *inode, struct file *file)
 {
-
-	mutex_lock(&audio_dev_ctrl.lock);
-	audio_dev_ctrl.opened = 0;
-	mutex_unlock(&audio_dev_ctrl.lock);
+	MM_DBG("release audio_dev_ctrl\n");
+	atomic_dec(&audio_dev_ctrl.opened);
 	return 0;
 }
 
@@ -322,7 +316,7 @@ static int __init audio_dev_ctrl_init(void)
 	mutex_init(&audio_dev_ctrl.lock);
 	init_waitqueue_head(&audio_dev_ctrl.wait);
 
-	audio_dev_ctrl.opened = 0;
+	atomic_set(&audio_dev_ctrl.opened, 0);
 	audio_dev_ctrl.num_dev = 0;
 	audio_dev_ctrl.voice_rx_dev = NULL;
 	audio_dev_ctrl.voice_tx_dev = NULL;
