@@ -344,7 +344,7 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 	int	rc;
 	struct pm8058_gpio kypd_sns = {
 		.direction	= PM_GPIO_DIR_IN,
-		.pull		= PM_GPIO_PULL_UP1,
+		.pull		= PM_GPIO_PULL_UP_31P5,
 		.vin_sel	= 2,
 		.out_strength	= PM_GPIO_STRENGTH_NO,
 		.function	= PM_GPIO_FUNC_NORMAL,

@@ -60,8 +60,10 @@ struct pm8058_platform_data {
 #define	PM_GPIO_OUT_BUF_OPEN_DRAIN	1
 #define	PM_GPIO_OUT_BUF_CMOS		0
 
-#define	PM_GPIO_PULL_UP1		2
-#define	PM_GPIO_PULL_UP2		3
+#define	PM_GPIO_PULL_UP_30		0
+#define	PM_GPIO_PULL_UP_1P5		1
+#define	PM_GPIO_PULL_UP_31P5		2
+#define	PM_GPIO_PULL_UP_1P5_30		3
 #define	PM_GPIO_PULL_DN			4
 #define	PM_GPIO_PULL_NO			5
 
