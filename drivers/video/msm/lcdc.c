@@ -153,7 +153,6 @@ static int lcdc_on(struct platform_device *pdev)
 	clk_set_rate(mdp_lcdc_pad_pclk_clk, mfd->fbi->var.pixclock);
 	mdp_lcdc_pclk_clk_rate = clk_get_rate(mdp_lcdc_pclk_clk);
 	mdp_lcdc_pad_pclk_clk_rate = clk_get_rate(mdp_lcdc_pad_pclk_clk);
-	mfd->fbi->var.pixclock = mdp_lcdc_pclk_clk_rate;
 
 	ret = panel_next_on(pdev);
 	return ret;
