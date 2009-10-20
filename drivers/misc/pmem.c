@@ -1127,9 +1127,10 @@ leave:
 static pgprot_t phys_mem_access_prot(struct file *file, pgprot_t vma_prot)
 {
 	int id = get_id(file);
-#ifdef pgprot_noncached
+#ifdef pgprot_writecombine
 	if (pmem[id].cached == 0 || file->f_flags & O_SYNC)
-		return pgprot_noncached(vma_prot);
+		/* on ARMv6 and ARMv7 this expands to Normal Noncached */
+		return pgprot_writecombine(vma_prot);
 #endif
 #ifdef pgprot_ext_buffered
 	else if (pmem[id].buffered)
