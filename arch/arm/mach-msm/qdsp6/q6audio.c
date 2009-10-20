@@ -845,6 +845,10 @@ static void audio_rx_analog_enable(int en)
 		if (analog_ops->bt_sco_enable)
 			analog_ops->bt_sco_enable(en);
 		break;
+	case ADSP_AUDIO_DEVICE_ID_HANDSET_SPKR:
+		if (analog_ops->receiver_enable)
+			analog_ops->receiver_enable(en);
+		break;
 	}
 }
 
