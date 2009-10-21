@@ -32,6 +32,7 @@
 #define PWR_RAIL_GRP_CLK	8
 #define PWR_RAIL_VDC_CLK	39
 #define PWR_RAIL_VFE_CLK	41
+#define PWR_RAIL_MFC_CLK	68
 
 enum rail_ctl_mode {
 	PWR_RAIL_CTL_AUTO = 0,
