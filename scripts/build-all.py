@@ -66,13 +66,19 @@ def check_build():
 	fail("Build directory doesn't exist, please create: %s" %
 		build_dir)
 
+def update_config(file, str):
+    print 'Updating %s with \'%s\'\n' % (file, str)
+    defconfig = open(file, 'a')
+    defconfig.write(str + '\n')
+    defconfig.close()
+
 def scan_configs():
     """Get the full list of defconfigs appropriate for this tree."""
-    names = []
+    names = {}
     for n in glob.glob('arch/arm/configs/msm[0-9]*_defconfig'):
-	names.append(os.path.basename(n)[:-10])
+        names[os.path.basename(n)[:-10]] = n
     for n in glob.glob('arch/arm/configs/qsd*_defconfig'):
-	names.append(os.path.basename(n)[:-10])
+        names[os.path.basename(n)[:-10]] = n
     return names
 
 class Builder:
@@ -130,18 +136,21 @@ def build(target):
 	'%s_defconfig' % target], env=make_env, stdin=devnull)
     devnull.close()
 
-    build = Builder(log_name)
-    build.run(['make', 'O=%s' % dest_dir] + make_command)
-    build.close()
+    if not all_options.updateconfigs:
+        build = Builder(log_name)
+        build.run(['make', 'O=%s' % dest_dir] + make_command)
+        build.close()
 
     # Copy the defconfig back.
-    if all_options.configs:
-	shutil.copyfile(dotconfig, defconfig)
+    if all_options.configs or all_options.updateconfigs:
+        shutil.copyfile(dotconfig, defconfig)
 
-def build_many(targets):
+def build_many(allconf, targets):
     print "Building %d target(s)" % len(targets)
     for target in targets:
-	build(target)
+	if all_options.updateconfigs:
+            update_config(allconf[target], all_options.updateconfigs)
+        build(target)
 
 def main():
     check_kernel()
@@ -164,6 +173,10 @@ def main():
     parser.add_option('--oldconfig', action='store_true',
 	    dest='oldconfig',
 	    help='Only process "make oldconfig"')
+    parser.add_option('--updateconfigs',
+            dest='updateconfigs',
+            help="Update defconfigs with provided option setting, "
+                 "e.g. --updateconfigs=\'CONFIG_USE_THING=y\'")
 
     (options, args) = parser.parse_args()
     global all_options
@@ -171,7 +184,7 @@ def main():
 
     if options.list:
 	print "Available targets:"
-	for target in configs:
+        for target in configs.keys():
 	    print "   %s" % target
 	sys.exit(0)
 
@@ -180,14 +193,14 @@ def main():
 	make_command = ["oldconfig"]
 
     if args == ['all']:
-	build_many(configs)
+        build_many(configs, configs.keys())
     elif len(args) > 0:
 	targets = []
 	for t in args:
-	    if t not in configs:
-		parser.error("Target '%s' not one of %s" % (t, configs))
+            if t not in configs.keys():
+                parser.error("Target '%s' not one of %s" % (t, configs.keys()))
 	    targets.append(t)
-	build_many(targets)
+        build_many(configs, targets)
     else:
 	parser.error("Must specify a target to build, or 'all'")
 
