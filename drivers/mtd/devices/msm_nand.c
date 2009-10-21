@@ -4728,12 +4728,42 @@ struct msm_nand_info {
 	struct msm_nand_chip	msm_nand;
 };
 
+#ifdef CONFIG_MTD_PARTITIONS
+static void setup_mtd_device(struct platform_device *pdev,
+			     struct msm_nand_info *info)
+{
+	int i, nr_parts;
+	struct flash_platform_data *pdata = pdev->dev.platform_data;
+
+	for (i = 0; i < pdata->nr_parts; i++) {
+		pdata->parts[i].offset = pdata->parts[i].offset
+			* info->mtd.erasesize;
+		pdata->parts[i].size = pdata->parts[i].size
+			* info->mtd.erasesize;
+	}
+
+	nr_parts = parse_mtd_partitions(&info->mtd, part_probes, &info->parts,
+					0);
+	if (nr_parts > 0)
+		add_mtd_partitions(&info->mtd, info->parts, nr_parts);
+	else if (nr_parts <= 0 && pdata && pdata->parts)
+		add_mtd_partitions(&info->mtd, pdata->parts, pdata->nr_parts);
+	else
+		add_mtd_device(&info->mtd);
+}
+#else
+static void setup_mtd_device(struct platform_device *pdev,
+			     struct msm_nand_info *info)
+{
+	add_mtd_device(&info->mtd);
+}
+#endif
+
 static int __devinit msm_nand_probe(struct platform_device *pdev)
 {
 	struct msm_nand_info *info;
-	struct flash_platform_data *pdata = pdev->dev.platform_data;
 	struct resource *res;
-	int err, i;
+	int err;
 
 	res = platform_get_resource_byname(pdev,
 					   IORESOURCE_MEM, "msm_nand_phys");
@@ -4784,24 +4814,7 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 			goto out_free_dma_buffer;
 		}
 
-#ifdef CONFIG_MTD_PARTITIONS
-
-	for (i = 0; i < pdata->nr_parts; i++) {
-		pdata->parts[i].offset = pdata->parts[i].offset
-			* info->mtd.erasesize;
-		pdata->parts[i].size = pdata->parts[i].size
-			* info->mtd.erasesize;
-	}
-
-	err = parse_mtd_partitions(&info->mtd, part_probes, &info->parts, 0);
-	if (err > 0)
-		add_mtd_partitions(&info->mtd, info->parts, err);
-	else if (err <= 0 && pdata && pdata->parts)
-		add_mtd_partitions(&info->mtd, pdata->parts, pdata->nr_parts);
-	else
-#endif
-		err = add_mtd_device(&info->mtd);
-
+	setup_mtd_device(pdev, info);
 	dev_set_drvdata(&pdev->dev, info);
 
 	return 0;
