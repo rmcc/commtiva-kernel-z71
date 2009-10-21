@@ -39,5 +39,6 @@ struct snddev_icodec_data {
 	struct adie_codec_dev_profile *profile;
 	/* Afe setting */
 	u8 channel_mode;
+	u32 default_sample_rate;
 };
 #endif

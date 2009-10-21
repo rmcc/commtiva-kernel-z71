@@ -210,6 +210,7 @@ static struct snddev_icodec_data snddev_iearpiece_data = {
 	.acdb_id = 1,
 	.profile = &iearpiece_profile,
 	.channel_mode = 1,
+	.default_sample_rate = 8000,
 };
 
 static struct snddev_icodec_data snddev_imic_data = {
@@ -219,6 +220,7 @@ static struct snddev_icodec_data snddev_imic_data = {
 	.acdb_id = 2,
 	.profile = &imic_profile,
 	.channel_mode = 1,
+	.default_sample_rate = 8000,
 };
 
 static struct platform_device msm_iearpiece_device = {
@@ -255,6 +257,7 @@ static struct snddev_icodec_data snddev_ifmradio_handset_data = {
 	.acdb_id = 1,
 	.profile = &ifmradio_handset_profile,
 	.channel_mode = 1,
+	.default_sample_rate = 8000,
 };
 
 static struct platform_device msm_ifmradio_handset_device = {
