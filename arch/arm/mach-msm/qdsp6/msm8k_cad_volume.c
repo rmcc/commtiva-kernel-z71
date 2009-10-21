@@ -341,7 +341,8 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 	struct cad_flt_cfg_strm_vol *stream_vol_buf = NULL;
 	struct cad_flt_cfg_dev_mute *dev_mute_buf = NULL;
 	struct cad_flt_cfg_strm_mute *stream_mute_buf = NULL;
-
+	struct cad_stream_info_struct_type      *cadr_stream = NULL;
+	struct cadi_open_struct_type            *cadr = NULL;
 	struct adsp_audio_set_dev_volume_command	*q6_set_dev_vol = NULL;
 	struct adsp_audio_set_volume_command	*q6_set_strm_vol = NULL;
 	struct adsp_audio_set_dev_mute_command	*q6_set_dev_mute = NULL;
@@ -826,8 +827,11 @@ s32 qdsp6_volume_ioctl(s32 session_id, u32 cmd_code,
 		break;
 	case CAD_FILTER_CONFIG_STREAM_VOLUME:
 		D("CAD:VOL: Stream Volume\n");
+		cadr = ardsession[session_id]->sess_open_info;
+		cadr_stream = &cadr->cad_stream;
 
-		stream_volume_cache = stream_vol_buf->volume;
+		if (cadr_stream->app_type != CAD_STREAM_APP_VOICE)
+			stream_volume_cache = stream_vol_buf->volume;
 
 		if (ardsession[session_id]->active != ARD_TRUE) {
 			rc = CAD_RES_SUCCESS;
