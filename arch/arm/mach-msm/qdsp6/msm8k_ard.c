@@ -1223,9 +1223,7 @@ enum ard_state_ret_enum_type ard_state_afe_active(s32 session_id, u32 dev_id)
 	codec_type = get_codec_type(local_ard_state->
 		ard_device[dev_id].device_inuse);
 
-	if (ardsession[session_id]->sess_open_info->cad_open.op_code ==
-							CAD_OPEN_OP_WRITE)
-		audio_resync_afe_clk();
+	audio_resync_afe_clk();
 
 	res = codec_enable(codec_type,
 		(u32)local_ard_state->ard_device[dev_id].device_type,
