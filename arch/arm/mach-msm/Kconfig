@@ -103,6 +103,14 @@ config MACH_MSM7X30_FFA
        help
          Support for the Qualcomm MSM7x30 FFA eval board.
 
+config MACH_MSM7X30_FLUID
+       depends on ARCH_MSM7X30
+       depends on !MSM_STACKED_MEMORY
+       default y
+       bool "MSM7x30 FLUID"
+       help
+         Support for the Qualcomm MSM7x30 FLUID eval board.
+
 config MACH_SAPPHIRE
 	depends on ARCH_MSM7X01A
 	default n
