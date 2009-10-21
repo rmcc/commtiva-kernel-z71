@@ -1964,15 +1964,10 @@ int netif_rx(struct sk_buff *skb)
 
 	__get_cpu_var(netdev_rx_stat).total++;
 	if (queue->input_pkt_queue.qlen <= netdev_max_backlog) {
-		if (queue->input_pkt_queue.qlen) {
-enqueue:
-			__skb_queue_tail(&queue->input_pkt_queue, skb);
-			local_irq_restore(flags);
-			return NET_RX_SUCCESS;
-		}
-
+		__skb_queue_tail(&queue->input_pkt_queue, skb);
 		napi_schedule(&queue->backlog);
-		goto enqueue;
+		local_irq_restore(flags);
+		return NET_RX_SUCCESS;
 	}
 
 	__get_cpu_var(netdev_rx_stat).dropped++;
