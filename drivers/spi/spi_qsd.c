@@ -453,14 +453,21 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	if (spi_ioc != spi_ioc_orig)
 		writel(spi_ioc, dd->base + SPI_IO_CONTROL);
 
-	writel((readl(dd->base + SPI_OPERATIONAL)
-		& ~SPI_OP_STATE) | SPI_OP_STATE_RUN,
-	       dd->base + SPI_OPERATIONAL);
 	/* The output fifo interrupt handler will handle all writes after
 	   the first. Restricting this to one write avoids contention
 	   issues and race conditions between this thread and the int handler
 	*/
 	msm_spi_write_word_to_fifo(dd);
+
+	/* Only enter the RUN state after the first word is written into
+	   the output FIFO.  Otherwise, the output FIFO EMPTY interrupt
+	   might fire before the first word is written resulting in a
+	   possible race condition.
+	 */
+	writel((readl(dd->base + SPI_OPERATIONAL)
+		& ~SPI_OP_STATE) | SPI_OP_STATE_RUN,
+	       dd->base + SPI_OPERATIONAL);
+
 	wait_for_completion(&dd->transfer_complete);
 	writel(spi_ioc & ~SPI_IO_C_MX_CS_MODE, dd->base + SPI_IO_CONTROL);
 	writel((readl(dd->base + SPI_OPERATIONAL)
