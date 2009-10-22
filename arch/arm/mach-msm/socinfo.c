@@ -137,6 +137,7 @@ static enum msm_cpu cpu_of_id[] = {
 	/* 7x27 IDs */
 	[43] = MSM_CPU_7X27,
 	[44] = MSM_CPU_7X27,
+	[61] = MSM_CPU_7X27,
 
 	/* 8x50 IDs */
 	[30] = MSM_CPU_8X50,
