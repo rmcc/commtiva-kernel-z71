@@ -42,6 +42,21 @@
 #define PERF_SWITCH_DEBUG 0
 #define PERF_SWITCH_STEP_DEBUG 0
 
+#define A11S_CLK_CNTL_ADDR (MSM_CSR_BASE + 0x100)
+#define A11S_CLK_SEL_ADDR (MSM_CSR_BASE + 0x104)
+#define A11S_VDD_SVS_PLEVEL_ADDR (MSM_CSR_BASE + 0x124)
+#define PLLn_MODE(n)	(MSM_CLK_CTL_BASE + 0x300 + 28 * (n))
+#define PLLn_L_VAL(n)	(MSM_CLK_CTL_BASE + 0x304 + 28 * (n))
+
+enum {
+	ACPU_PLL_TCXO	= -1,
+	ACPU_PLL_0	= 0,
+	ACPU_PLL_1,
+	ACPU_PLL_2,
+	ACPU_PLL_3,
+	ACPU_PLL_END,
+};
+
 struct clock_state
 {
 	struct clkctl_acpu_speed	*current_speed;
