@@ -223,28 +223,37 @@ int audmgr_open(struct audmgr *am)
 	/* connect to audmgr end point and polling thread only once */
 	if (amg->ept == NULL) {
 		amg->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
-				AUDMGR_VERS_COMP_VER2,
+				AUDMGR_VERS_COMP_VER3,
 				MSM_RPC_UNINTERRUPTIBLE);
-
 		if (IS_ERR(amg->ept)) {
 			MM_ERR("connect failed with current VERS \
 				= %x, trying again with another API\n",
-				AUDMGR_VERS_COMP_VER2);
+				AUDMGR_VERS_COMP_VER3);
 			amg->ept = msm_rpc_connect_compatible(AUDMGR_PROG,
-					AUDMGR_VERS_COMP,
+					AUDMGR_VERS_COMP_VER2,
 					MSM_RPC_UNINTERRUPTIBLE);
 			if (IS_ERR(amg->ept)) {
-				MM_ERR("connect failed with current \
+				MM_ERR("connect failed with current VERS \
+					= %x, trying again with another API\n",
+					AUDMGR_VERS_COMP_VER2);
+				amg->ept = msm_rpc_connect_compatible(
+						AUDMGR_PROG,
+						AUDMGR_VERS_COMP,
+						MSM_RPC_UNINTERRUPTIBLE);
+				if (IS_ERR(amg->ept)) {
+					MM_ERR("connect failed with current \
 					VERS=%x, trying again with another \
 					API\n", AUDMGR_VERS_COMP);
-				amg->ept = msm_rpc_connect(AUDMGR_PROG,
+					amg->ept = msm_rpc_connect(AUDMGR_PROG,
 						AUDMGR_VERS,
 						MSM_RPC_UNINTERRUPTIBLE);
-				amg->rpc_version = AUDMGR_VERS;
+					amg->rpc_version = AUDMGR_VERS;
+				} else
+					amg->rpc_version = AUDMGR_VERS_COMP;
 			} else
-				amg->rpc_version = AUDMGR_VERS_COMP;
+				amg->rpc_version = AUDMGR_VERS_COMP_VER2;
 		} else
-			amg->rpc_version = AUDMGR_VERS_COMP_VER2;
+			amg->rpc_version = AUDMGR_VERS_COMP_VER3;
 
 		if (IS_ERR(amg->ept)) {
 			rc = PTR_ERR(amg->ept);
