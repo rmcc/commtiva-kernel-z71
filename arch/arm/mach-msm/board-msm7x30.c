@@ -1774,7 +1774,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_MT9P012
 	&msm_camera_sensor_mt9p012,
 #endif
-
+	&msm_device_ss_mfc_720p,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
