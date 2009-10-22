@@ -16,6 +16,7 @@
 #include <linux/err.h>
 #include <linux/ctype.h>
 #include <linux/stddef.h>
+#include <mach/clk.h>
 
 #include "proc_comm.h"
 #include "clock.h"
@@ -35,6 +36,21 @@ int pc_clk_enable(unsigned id)
 void pc_clk_disable(unsigned id)
 {
 	msm_proc_comm(PCOM_CLKCTL_RPC_DISABLE, &id, NULL);
+}
+
+int pc_clk_reset(unsigned id, enum clk_reset_action action)
+{
+	int rc;
+
+	if (action == CLK_RESET_ASSERT)
+		rc = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_ASSERT, &id, NULL);
+	else
+		rc = msm_proc_comm(PCOM_CLKCTL_RPC_RESET_DEASSERT, &id, NULL);
+
+	if (rc < 0)
+		return rc;
+	else
+		return (int)id < 0 ? -EINVAL : 0;
 }
 
 int pc_clk_set_rate(unsigned id, unsigned rate)
@@ -103,6 +119,7 @@ long pc_clk_round_rate(unsigned id, unsigned rate)
 struct clk_ops clk_ops_pcom = {
 	.enable = pc_clk_enable,
 	.disable = pc_clk_disable,
+	.reset = pc_clk_reset,
 	.set_rate = pc_clk_set_rate,
 	.set_min_rate = pc_clk_set_min_rate,
 	.set_max_rate = pc_clk_set_max_rate,
