@@ -1192,7 +1192,10 @@ int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst)
 	memcpy(audio_data, acdb_data + db->entry[n].offset, db->entry[n].length);
 	sz = db->entry[n].length;
 	audio_set_table(ac_control, id_dst, sz);
-	qdsp6_devchg_notify(ac_control, q6_device_to_dir(id_dst), id_dst);
+	if (q6_device_to_dir(id_dst) == Q6_RX)
+		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, id_dst);
+	else
+		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, id_dst);
 	qdsp6_standby(ac_control);
 	qdsp6_start(ac_control);
 done:
