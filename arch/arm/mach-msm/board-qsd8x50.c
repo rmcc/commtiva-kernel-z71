@@ -1535,6 +1535,11 @@ static struct i2c_board_info msm_i2c_board_info[] __initdata = {
 		I2C_BOARD_INFO("mt9p012", 0x6C >> 1),
 	},
 #endif
+#ifdef CONFIG_MT9P012_KM
+	{
+		I2C_BOARD_INFO("mt9p012_km", 0x6C >> 2),
+	},
+#endif
 #if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
 	{
 		I2C_BOARD_INFO("mt9t013", 0x6C),
@@ -1592,15 +1597,11 @@ static uint32_t camera_on_gpio_ffa_table[] = {
 	GPIO_CFG(96,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* I2C_SDA */
 	/* FFA front Sensor Reset */
 	GPIO_CFG(137,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
-	/* FFA front Sensor Standby */
-	GPIO_CFG(134,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
 };
 
 static uint32_t camera_off_gpio_ffa_table[] = {
 	/* FFA front Sensor Reset */
 	GPIO_CFG(137,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
-	/* FFA front Sensor Standby */
-	GPIO_CFG(134,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
 };
 
 static void config_gpio_table(uint32_t *table, int len)
@@ -1668,7 +1669,6 @@ static void config_camera_on_gpios(void)
 
 		msm_camera_vreg_config();
 		gpio_set_value(137, 0);
-		gpio_set_value(134, 1);
 	}
 	config_gpio_table(camera_on_gpio_table,
 		ARRAY_SIZE(camera_on_gpio_table));
@@ -1766,6 +1766,26 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 };
 #endif
 
+#ifdef CONFIG_MT9P012_KM
+static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
+	.sensor_name    = "mt9p012_km",
+	.sensor_reset   = 17,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 88,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+};
+
+static struct platform_device msm_camera_sensor_mt9p012_km = {
+	.name      = "msm_camera_mt9p012_km",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9p012_km_data,
+	},
+};
+#endif
+
 #ifdef CONFIG_MT9T013
 static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_name    = "mt9t013",
@@ -1857,6 +1877,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_MT9P012
 	&msm_camera_sensor_mt9p012,
+#endif
+#ifdef CONFIG_MT9P012_KM
+	&msm_camera_sensor_mt9p012_km,
 #endif
 	&msm_batt_device,
 };

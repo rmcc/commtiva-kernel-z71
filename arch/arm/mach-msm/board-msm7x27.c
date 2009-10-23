@@ -890,6 +890,11 @@ static struct i2c_board_info i2c_devices[] = {
 		I2C_BOARD_INFO("mt9p012", 0x6C >> 1),
 	},
 #endif
+#ifdef CONFIG_MT9P012_KM
+	{
+		I2C_BOARD_INFO("mt9p012_km", 0x6C >> 2),
+	},
+#endif
 #if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
 	{
 		I2C_BOARD_INFO("mt9t013", 0x6C),
@@ -1031,6 +1036,24 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 };
 #endif
 
+#ifdef CONFIG_MT9P012_KM
+static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
+	.sensor_name    = "mt9p012_km",
+	.sensor_reset   = 89,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 88,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED
+};
+
+static struct platform_device msm_camera_sensor_mt9p012_km = {
+	.name      = "msm_camera_mt9p012_km",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9p012_km_data,
+	},
+};
+#endif
+
 #ifdef CONFIG_MT9T013
 static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_name    = "mt9t013",
@@ -1142,6 +1165,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_MT9P012
 	&msm_camera_sensor_mt9p012,
+#endif
+#ifdef CONFIG_MT9P012_KM
+	&msm_camera_sensor_mt9p012_km,
 #endif
 #ifdef CONFIG_VB6801
 	&msm_camera_sensor_vb6801,

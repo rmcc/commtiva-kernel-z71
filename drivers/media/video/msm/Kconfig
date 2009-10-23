@@ -35,12 +35,14 @@ config MSM_CAMERA_AF_BAM
 	help
 	  This driver supports BAM AF module for 5M Bayer sensor
 
-config MSM_CAMERA_AF_KM
-	bool "KM Module"
-	help
-	  This driver supports KM AF module for 5M Bayer sensor
-
 endchoice
+
+config MT9P012_KM
+	bool "Sensor mt9p012 KM module (BAYER 5M)"
+	depends on MSM_CAMERA
+	default y
+	---help---
+	  MICRON 5M Bayer Sensor KM modules with Autofocus
 
 config S5K3E2FX
 	bool "Sensor s5k3e2fx (Samsung 5M)"
