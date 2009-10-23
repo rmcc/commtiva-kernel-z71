@@ -880,6 +880,19 @@ static struct platform_device android_pmem_device = {
 	.dev = { .platform_data = &android_pmem_pdata },
 };
 
+static struct resource rmt_storage_resources[] = {
+       {
+		.flags  = IORESOURCE_MEM,
+       },
+};
+
+struct platform_device rmt_storage_device = {
+       .name           = "rmt_storage",
+       .id             = 0,
+       .num_resources  = ARRAY_SIZE(rmt_storage_resources),
+       .resource       = rmt_storage_resources,
+};
+
 static struct resource msm_fb_resources[] = {
 	{
 		.flags  = IORESOURCE_DMA,
@@ -1417,7 +1430,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_ssbi7,
 #endif
 	&android_pmem_device,
-	&rmt_storage_device,
 	&msm_fb_device,
 	&lcdc_toshiba_panel_device,
 	&android_pmem_kernel_ebi1_device,
@@ -1763,6 +1775,39 @@ static struct mmc_platform_data msm7x30_sdc4_data = {
 };
 #endif
 
+static void __init msm7x30_init_rmt_storage(void)
+{
+	char *build_id;
+	resource_size_t shared_ram_efs_base;
+
+	build_id = socinfo_get_build_id();
+
+	if (build_id == NULL) {
+		printk(KERN_ERR "%s: Build ID not available from socinfo\n",
+				__func__);
+		goto out;
+	}
+
+	if (build_id[8] == 'B') {        /* LPDDR1 Configuration */
+		shared_ram_efs_base = 0x0C800000;
+	} else if (build_id[8] == 'A') { /* LPDDR2 Configuration */
+		shared_ram_efs_base = 0x44800000;
+	} else {                        /* Unknown Configuration */
+		printk(KERN_ERR "%s: Unknown LPDDR configuration \n", __func__);
+		goto out;
+	}
+
+	printk(KERN_INFO "%s: Shared RAM EFS Base address = 0x%08x\n", __func__,
+			shared_ram_efs_base);
+
+	rmt_storage_resources[0].start = shared_ram_efs_base;
+	rmt_storage_resources[0].end = shared_ram_efs_base + SZ_1M + SZ_2M - 1;
+	platform_device_register(&rmt_storage_device);
+
+out:
+	return;
+}
+
 static void __init msm7x30_init_mmc(void)
 {
 	vreg_s3 = vreg_get(NULL, "s3");
@@ -1864,6 +1909,7 @@ static void __init msm7x30_init(void)
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 #endif
 	platform_add_devices(devices, ARRAY_SIZE(devices));
+	msm7x30_init_rmt_storage();
 	msm7x30_init_mmc();
 	msm_qsd_spi_init();
 	spi_register_board_info(msm_spi_board_info,
