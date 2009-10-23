@@ -67,16 +67,23 @@ void *diagmem_alloc(struct diagchar_dev *driver, int size, int pool_type)
 	void *buf = NULL;
 
 	if (pool_type == POOL_TYPE_COPY) {
-		mutex_lock(&driver->diagmem_mutex);
-		if (driver->count < driver->poolsize) {
-			atomic_add(1, (atomic_t *)&driver->count);
-			buf = mempool_alloc(driver->diagpool, GFP_ATOMIC);
+		if (driver->diagpool) {
+			mutex_lock(&driver->diagmem_mutex);
+			if (driver->count < driver->poolsize) {
+				atomic_add(1, (atomic_t *)&driver->count);
+				buf = mempool_alloc(driver->diagpool,
+								 GFP_ATOMIC);
+			}
+			mutex_unlock(&driver->diagmem_mutex);
 		}
-		mutex_unlock(&driver->diagmem_mutex);
 	} else if (pool_type == POOL_TYPE_HDLC) {
-		if (driver->count_hdlc_pool < driver->poolsize_hdlc) {
-			atomic_add(1, (atomic_t *)&driver->count_hdlc_pool);
-			buf = mempool_alloc(driver->diag_hdlc_pool, GFP_ATOMIC);
+		if (driver->diag_hdlc_pool) {
+			if (driver->count_hdlc_pool < driver->poolsize_hdlc) {
+				atomic_add(1,
+					 (atomic_t *)&driver->count_hdlc_pool);
+				buf = mempool_alloc(driver->diag_hdlc_pool,
+								 GFP_ATOMIC);
+			}
 		}
 	}
 	return buf;
