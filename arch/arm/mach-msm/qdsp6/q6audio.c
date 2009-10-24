@@ -36,6 +36,11 @@
 
 #include "q6audio_devices.h"
 
+#if 0
+#define TRACE(x...) pr_info("Q6: "x)
+#else
+#define TRACE(x...) do{}while(0)
+#endif
 struct q6_hw_info {
 	int min_gain;
 	int max_gain;
@@ -323,7 +328,7 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 	if (r != 4)
 		return -EIO;
 	wait_event(ac->wait, (ac->cb_status != -EBUSY));
-	return tmp;
+	return ac->cb_status;
 }
 
 static int audio_command(struct audio_client *ac, uint32_t cmd)
@@ -365,6 +370,7 @@ static int audio_out_open(struct audio_client *ac, uint32_t bufsz,
 	rpc.format_block_len = sizeof(*fmt);
 	rpc.buf_max_size = bufsz; /* XXX ??? */
 
+	TRACE("open out %p\n", ac);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
@@ -390,6 +396,7 @@ static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 	rpc.format_block_len = sizeof(*fmt);
 	rpc.buf_max_size = bufsz; /* XXX ??? */
 
+	TRACE("%p: open in\n", ac);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
@@ -420,6 +427,7 @@ static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 
 static int audio_close(struct audio_client *ac)
 {
+	TRACE("%p: close\n", ac);
 	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_STREAM_STOP);
 	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_CLOSE);
 	return 0;
@@ -437,6 +445,7 @@ static int audio_set_table(struct audio_client *ac,
 	rpc.phys_size = size;
 	rpc.phys_used = size;
 
+	TRACE("control: set table %x\n", device_id);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
@@ -455,6 +464,7 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.buffer.max_size = ab->size;
 	rpc.buffer.actual_size = ab->used;
 
+	TRACE("%p: read\n", ac);
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
 		     &res, sizeof(res));
 	return 0;
@@ -475,6 +485,7 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.buffer.max_size = ab->size;
 	rpc.buffer.actual_size = ab->used;
 
+	TRACE("%p: write\n", ac);
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
 		     &res, sizeof(res));
 	return 0;
@@ -546,7 +557,7 @@ static void callback(void *data, int len, void *cookie)
 	}
 
 	if (e->event_id == ADSP_AUDIO_IOCTL_CMD_STREAM_EOS) {
-		pr_info("playback done\n");
+		TRACE("%p: CB stream eos\n", ac);
 		if (e->status)
 			pr_err("playback status %d\n", e->status);
 		if (ac->cb_status == -EBUSY) {
@@ -557,7 +568,7 @@ static void callback(void *data, int len, void *cookie)
 	}
 
 	if (e->event_id == ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
-//		pr_info("buffer done\n");
+		TRACE("%p: CB done (%d)\n", ac, e->status);
 		if (e->status)
 			pr_err("buffer status %d\n", e->status);
 		ac->buf[ac->dsp_buf].used = 0;
@@ -566,10 +577,10 @@ static void callback(void *data, int len, void *cookie)
 		return;
 	}
 
+	TRACE("%p: CB %08x status %d\n", ac, e->event_id, e->status);
 	if (e->status)
 		pr_warning("audio_cb: s=%d e=%08x status=%d\n",
 			   e->context, e->event_id, e->status);
-
 	if (ac->cb_status == -EBUSY) {
 		ac->cb_status = e->status;
 		wake_up(&ac->wait);
@@ -1329,6 +1340,7 @@ done:
 struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 				      uint32_t channels, uint32_t flags)
 {
+	int rc, retry = 5;
 	struct audio_client *ac;
 
 	if (q6audio_init())
@@ -1347,12 +1359,27 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		audio_tx_path_enable(1);
 	}
 
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_out_open(ac, bufsz, rate, channels);
-	else
-		audio_in_open(ac, bufsz, rate, channels);
+	for (retry = 5;;retry--) {
+		if (ac->flags & AUDIO_FLAG_WRITE)
+			rc = audio_out_open(ac, bufsz, rate, channels);
+		else
+			rc = audio_in_open(ac, bufsz, rate, channels);
+		if (rc == 0)
+			break;
+		if (retry == 0)
+			BUG();
+		pr_err("q6audio: open pcm error %d, retrying\n", rc);
+		msleep(1);
+	}
 
-	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
+	for (retry = 5;;retry--) {
+		rc = audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
+		if (rc == 0)
+			break;
+		if (retry == 0)
+			BUG();
+		pr_err("q6audio: stream start error %d, retrying\n", rc);
+	}
 
 	if (!(ac->flags & AUDIO_FLAG_WRITE)) {
 		ac->buf[0].used = 1;
