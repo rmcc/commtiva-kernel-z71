@@ -267,26 +267,41 @@ static void qup_verify_fifo(struct qup_i2c_dev *dev, uint32_t val,
 #endif
 
 static void
-qup_issue_read(struct qup_i2c_dev *dev, struct i2c_msg *msg, int *idx)
+qup_issue_read(struct qup_i2c_dev *dev, struct i2c_msg *msg, int *idx,
+		uint32_t carry_over)
 {
 	uint16_t addr = (msg->addr << 1) | 1;
 
 	/* QUP limit 256 bytes per read */
-	if (*idx % 4)
-		dev_err(dev->dev, "READ start: QUP idx not 4-byte aligned:%d\n",
-				*idx);
-	writel(((QUP_OUT_REC | dev->cnt) << 16) | QUP_OUT_START | addr,
-		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx)); */
+	if (*idx % 4) {
+		writel(carry_over | ((QUP_OUT_START | addr) << 16),
+		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx-2)); */
 #if DEBUG
-	qup_verify_fifo(dev, QUP_OUT_REC << 16 | dev->cnt << 16 |
+		qup_verify_fifo(dev, carry_over |
+			((QUP_OUT_START | addr) << 16), (uint32_t)dev->base
+			+ QUP_OUT_FIFO_BASE + (*idx - 2), 1);
+#endif
+		writel((QUP_OUT_REC | dev->cnt),
+			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx+2)); */
+#if DEBUG
+		qup_verify_fifo(dev, (QUP_OUT_REC | dev->cnt),
+		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx + 2), 1);
+#endif
+	} else {
+		writel(((QUP_OUT_REC | dev->cnt) << 16) | QUP_OUT_START | addr,
+			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx)); */
+#if DEBUG
+		qup_verify_fifo(dev, QUP_OUT_REC << 16 | dev->cnt << 16 |
 		QUP_OUT_START | addr,
 		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx), 1);
 #endif
+	}
 	*idx += 4;
 }
 
 static void
-qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem, int *idx)
+qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
+			int *idx, uint32_t *carry_over)
 {
 	int entries = dev->cnt;
 	int i = 0;
@@ -298,10 +313,15 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem, int *idx)
 
 	if (dev->pos == 0) {
 		if (*idx % 4) {
-			dev_err(dev->dev, "WR: QUP idx not 4-byte aligned?%d\n",
-					*idx);
-		}
-		val = QUP_OUT_START | addr;
+			writel(*carry_over | ((QUP_OUT_START | addr) << 16),
+					dev->base + QUP_OUT_FIFO_BASE);
+#if DEBUG
+			qup_verify_fifo(dev, *carry_over | QUP_OUT_DATA << 16 |
+				addr << 16, (uint32_t)dev->base +
+				QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
+#endif
+		} else
+			val = QUP_OUT_START | addr;
 		*idx += 2;
 		i++;
 	} else if (*idx % 4) {
@@ -331,16 +351,41 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem, int *idx)
 	else
 		last_entry = QUP_OUT_STOP;
 	if ((*idx % 4) == 0) {
-		val = (QUP_OUT_NOP | 1);
-		*idx += 2;
-	}
-	writel(val | ((last_entry | msg->buf[dev->pos]) << 16),
+		/*
+		 * If read-start and read-command end up in different fifos, it
+		 * may result in extra-byte being read due to extra-read cycle.
+		 * Avoid that by inserting NOP as the last entry of fifo only
+		 * if write command(s) leave 1 space in fifo.
+		 */
+		if (rem > 1) {
+			struct i2c_msg *next = msg + 1;
+			if (next->addr == msg->addr && (next->flags | I2C_M_RD)
+				&& *idx == ((dev->out_fifo_sz*2) - 4)) {
+				writel(((last_entry | msg->buf[dev->pos]) |
+					((1 | QUP_OUT_NOP) << 16)), dev->base +
+					QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
+				*idx += 2;
+			} else
+				*carry_over = (last_entry | msg->buf[dev->pos]);
+		} else {
+			writel((last_entry | msg->buf[dev->pos]),
+			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
+#if DEBUG
+			qup_verify_fifo(dev, last_entry | msg->buf[dev->pos],
+			(uint32_t)dev->base + QUP_OUT_FIFO_BASE +
+			(*idx), 0);
+#endif
+		}
+	} else {
+		writel((val << 16) | (last_entry | msg->buf[dev->pos]),
 		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
 #if DEBUG
-	qup_verify_fifo(dev, val | last_entry << 16|
-		msg->buf[dev->pos] << 16, (uint32_t)dev->base +
-		QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
+		qup_verify_fifo(dev, (val << 16) | last_entry |
+			msg->buf[dev->pos], (uint32_t)dev->base +
+			QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
 #endif
+	}
+
 	*idx += 2;
 	dev->pos++;
 	dev->cnt = msg->len - dev->pos;
@@ -448,6 +493,7 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 		do {
 			int idx = 0;
+			uint32_t carry_over = 0;
 
 			/* Transition to PAUSE state only possible from RUN */
 			err = qup_update_state(dev, QUP_PAUSE_STATE);
@@ -461,9 +507,11 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			 */
 			while (filled == false) {
 				if (msgs->flags & I2C_M_RD)
-					qup_issue_read(dev, msgs, &idx);
+					qup_issue_read(dev, msgs, &idx,
+							carry_over);
 				else
-					qup_issue_write(dev, msgs, rem, &idx);
+					qup_issue_write(dev, msgs, rem, &idx,
+							&carry_over);
 				if (idx >= dev->out_fifo_sz)
 					filled = true;
 				/* Start new message */
