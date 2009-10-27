@@ -69,9 +69,8 @@
 
 
 #ifdef CONFIG_ARCH_MSM7X25
-#define MSM_PMEM_MDP_SIZE	0x800000
+#define MSM_PMEM_MDP_SIZE	0xb21000
 #define MSM_PMEM_ADSP_SIZE	0x800000
-#define MSM_PMEM_GPU1_SIZE	0x800000
 #define MSM_FB_SIZE		0x200000
 #endif
 
@@ -474,11 +473,13 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
+#ifdef CONFIG_ARCH_MSM7X27
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
+#endif
 
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
@@ -492,13 +493,13 @@ static struct platform_device android_pmem_adsp_device = {
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
+#ifdef CONFIG_ARCH_MSM7X27
 static struct platform_device android_pmem_gpu1_device = {
 	.name = "android_pmem",
 	.id = 3,
 	.dev = { .platform_data = &android_pmem_gpu1_pdata },
 };
 
-#ifdef CONFIG_ARCH_MSM7X27
 static struct platform_device android_pmem_kernel_ebi1_device = {
 	.name = "android_pmem",
 	.id = 4,
@@ -1144,7 +1145,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&android_pmem_adsp_device,
+#ifdef CONFIG_ARCH_MSM7X27
 	&android_pmem_gpu1_device,
+#endif
 	&msm_fb_device,
 	&lcdc_gordon_panel_device,
 	&msm_device_uart_dm1,
@@ -1623,13 +1626,14 @@ static void __init pmem_adsp_size_setup(char **p)
 }
 __early_param("pmem_adsp_size=", pmem_adsp_size_setup);
 
+#ifdef CONFIG_ARCH_MSM7X27
 static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
 static void __init pmem_gpu1_size_setup(char **p)
 {
 	pmem_gpu1_size = memparse(*p, p);
 }
 __early_param("pmem_gpu1_size=", pmem_gpu1_size_setup);
-
+#endif
 static unsigned fb_size = MSM_FB_SIZE;
 static void __init fb_size_setup(char **p)
 {
@@ -1669,15 +1673,6 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
-
 	size = fb_size ? : MSM_FB_SIZE;
 	addr = alloc_bootmem(size);
 	msm_fb_resources[0].start = __pa(addr);
@@ -1686,7 +1681,6 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 		size, addr, __pa(addr));
 
 #ifdef CONFIG_ARCH_MSM7X27
-
 	size = gpu_phys_size ? : MSM_GPU_PHYS_SIZE;
 	addr = alloc_bootmem(size);
 	kgsl_resources[1].start = __pa(addr);
@@ -1701,6 +1695,14 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 		android_pmem_kernel_ebi1_pdata.size = size;
 		pr_info("allocating %lu bytes at %p (%lx physical) for kernel"
 			" ebi1 pmem arena\n", size, addr, __pa(addr));
+	}
+	size = pmem_gpu1_size;
+	if (size) {
+		addr = alloc_bootmem(size);
+		android_pmem_gpu1_pdata.start = __pa(addr);
+		android_pmem_gpu1_pdata.size = size;
+		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
+			"pmem arena\n", size, addr, __pa(addr));
 	}
 #endif
 
