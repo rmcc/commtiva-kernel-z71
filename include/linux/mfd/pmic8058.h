@@ -45,6 +45,7 @@
 #define PM8058_IRQS		NR_PMIC8058_IRQS
 
 #define PM8058_GPIOS		NR_PMIC8058_GPIO_IRQS
+#define PM8058_MPPS		NR_PMIC8058_MPP_IRQS
 
 struct pm8058_platform_data {
 	unsigned int	pm_irqs[PM8058_IRQS];	/* block*8 + bit-pos */
@@ -86,6 +87,8 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param);
 int pm8058_gpio_set_direction(unsigned gpio, int direction);
 int pm8058_gpio_set(unsigned gpio, int value);
 int pm8058_gpio_get(unsigned gpio);
+
+int pm8058_mpp_get(unsigned mpp);
 
 int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios);
 int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios);
