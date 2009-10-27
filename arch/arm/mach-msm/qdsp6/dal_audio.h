@@ -29,6 +29,8 @@
 #ifndef __DAL_AUDIO_H__
 #define __DAL_AUDIO_H__
 
+#include "dal_audio_format.h"
+
 #define AUDIO_DAL_DEVICE 0x02000028
 #define AUDIO_DAL_PORT "DSP_DAL_AQ_AUD"
 
@@ -89,7 +91,8 @@ struct adsp_audio_buffer {
 struct adsp_command_hdr {
 	u32 size;		/* sizeof(cmd) - sizeof(u32) */
 
-	u32 addr;
+	u32 dst;
+	u32 src;
 
 	u32 opcode;
 	u32 response_type;
@@ -97,11 +100,22 @@ struct adsp_command_hdr {
 
 	u32 context;		/* opaque to DSP */
 	u32 data;
+
+	u32 padding;
 } __attribute__ ((packed));
 
 
+#define AUDIO_DOMAIN_APP	0
+#define AUDIO_DOMAIN_MODEM	1
+#define AUDIO_DOMAIN_DSP	2
+
+#define AUDIO_SERVICE_AUDIO	0
+#define AUDIO_SERVICE_VIDEO	1 /* really? */
+
 /* adsp audio addresses are (byte order) domain, service, major, minor */
-#define AUDIO_ADDR(maj,min) ( (((maj) & 0xff) << 16) | (((min) & 0xff) << 24) | (1) )
+//#define AUDIO_ADDR(maj,min) ( (((maj) & 0xff) << 16) | (((min) & 0xff) << 24) | (1) )
+
+#define AUDIO_ADDR(maj,min,dom) ( (((min) & 0xff) << 24) | (((maj) & 0xff) << 16) | ((AUDIO_SERVICE_AUDIO) << 8) | (dom) )
 
 
 /* AAC Encoder modes */
@@ -182,24 +196,22 @@ union adsp_audio_codec_config {
 /* Change Notification mode is activated. */
 #define ADSP_AUDIO_OPEN_STREAM_MODE_SR_CM_NOTIFY	0x0002
 
-
-#define ADSP_AUDIO_MAX_DEVICES 4
+/* This bit, if set, indicates that the sync clock is enabled */
+#define  ADSP_AUDIO_OPEN_STREAM_MODE_ENABLE_SYNC_CLOCK	0x0004
 
 struct adsp_open_command {
 	struct adsp_command_hdr hdr;
-	u32 num_devices;
-	u32 device[ADSP_AUDIO_MAX_DEVICES];
+
+	u32 device;
+	u32 endpoint; /* address */
+
 	u32 stream_context;
-	void *format_block;
-	u32 format_block_len;
-	u32 buf_max_size;
-	u32 priority;
-	union adsp_audio_codec_config config;
 	u32 mode;
 
-	/* temp hack for DLS */
-	u32 len;
-	u32 addr;
+	u32 buf_max_size;
+
+	union adsp_audio_format format;
+	union adsp_audio_codec_config config;
 } __attribute__ ((packed));
 
 
@@ -476,7 +488,8 @@ struct adsp_event_hdr {
 	u32 evt_cookie;
 	u32 evt_length;
 
-	u32 addr;		/* "source" audio address */
+	u32 src;		/* "source" audio address */
+	u32 dst;		/* "destination" audio address */
 
 	u32 event_id;
 	u32 response_type;

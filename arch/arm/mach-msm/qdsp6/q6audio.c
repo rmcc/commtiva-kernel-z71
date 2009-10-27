@@ -326,7 +326,8 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 	int r;
 
 	hdr->size = len - sizeof(u32);
-	hdr->addr = AUDIO_ADDR(ac->session, 0);
+	hdr->dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
+	hdr->src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
 	hdr->context = ac->session;
 	ac->cb_status = -EBUSY;
 	r = dal_call(ac->client, AUDIO_OP_CONTROL, 5, ptr, len, &tmp, sizeof(tmp));
@@ -356,24 +357,21 @@ static int audio_open_control(struct audio_client *ac)
 static int audio_out_open(struct audio_client *ac, uint32_t bufsz,
 			  uint32_t rate, uint32_t channels)
 {
-	struct adsp_audio_standard_format *fmt = audio_data;
 	struct adsp_open_command rpc;
 
-	fmt->format = ADSP_AUDIO_FORMAT_PCM;
-	fmt->channels = channels;
-	fmt->bits_per_sample = 16;
-	fmt->sampling_rate = rate;
-	fmt->is_signed = 1;
-	fmt->is_interleaved = 1;
-
 	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.format.standard.format = ADSP_AUDIO_FORMAT_PCM;
+	rpc.format.standard.channels = channels;
+	rpc.format.standard.bits_per_sample = 16;
+	rpc.format.standard.sampling_rate = rate;
+	rpc.format.standard.is_signed = 1;
+	rpc.format.standard.is_interleaved = 1;
+
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE;
-	rpc.num_devices = 1;
-	rpc.device[0] = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
-	rpc.format_block = (void*) audio_phys;
-	rpc.format_block_len = sizeof(*fmt);
-	rpc.buf_max_size = bufsz; /* XXX ??? */
+	rpc.buf_max_size = bufsz;
 
 	TRACE("open out %p\n", ac);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
@@ -382,24 +380,21 @@ static int audio_out_open(struct audio_client *ac, uint32_t bufsz,
 static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 			 uint32_t rate, uint32_t channels)
 {
-	struct adsp_audio_standard_format *fmt = audio_data;
 	struct adsp_open_command rpc;
 
-	fmt->format = ADSP_AUDIO_FORMAT_PCM;
-	fmt->channels = channels;
-	fmt->bits_per_sample = 16;
-	fmt->sampling_rate = rate;
-	fmt->is_signed = 1;
-	fmt->is_interleaved = 1;
-
 	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.format.standard.format = ADSP_AUDIO_FORMAT_PCM;
+	rpc.format.standard.channels = channels;
+	rpc.format.standard.bits_per_sample = 16;
+	rpc.format.standard.sampling_rate = rate;
+	rpc.format.standard.is_signed = 1;
+	rpc.format.standard.is_interleaved = 1;
+
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
-	rpc.num_devices = 1;
-	rpc.device[0] = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
-	rpc.format_block = (void*) audio_phys;
-	rpc.format_block_len = sizeof(*fmt);
-	rpc.buf_max_size = bufsz; /* XXX ??? */
+	rpc.buf_max_size = bufsz;
 
 	TRACE("%p: open in\n", ac);
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
@@ -408,24 +403,21 @@ static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 			  uint32_t rate, uint32_t channels)
 {
-	struct adsp_audio_standard_format *fmt = audio_data;
 	struct adsp_open_command rpc;
 
-	fmt->format = ADSP_AUDIO_FORMAT_MP3;
-	fmt->channels = channels;
-	fmt->bits_per_sample = 16;
-	fmt->sampling_rate = rate;
-	fmt->is_signed = 1;
-	fmt->is_interleaved = 0;
-
 	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.format.standard.format = ADSP_AUDIO_FORMAT_MP3;
+	rpc.format.standard.channels = channels;
+	rpc.format.standard.bits_per_sample = 16;
+	rpc.format.standard.sampling_rate = rate;
+	rpc.format.standard.is_signed = 1;
+	rpc.format.standard.is_interleaved = 0;
+
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE;
-	rpc.num_devices = 1;
-	rpc.device[0] = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
-	rpc.format_block = (void*) audio_phys;
-	rpc.format_block_len = sizeof(*fmt);
-	rpc.buf_max_size = bufsz; /* XXX ??? */
+	rpc.buf_max_size = bufsz;
 
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
@@ -445,6 +437,7 @@ static int audio_set_table(struct audio_client *ac,
 
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG_TABLE;
+	rpc.hdr.data = 8000;
 	rpc.device_id = device_id;
 	rpc.phys_addr = audio_phys;
 	rpc.phys_size = size;
@@ -462,7 +455,8 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab)
 
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.size = sizeof(rpc) - sizeof(u32);
-	rpc.hdr.addr = AUDIO_ADDR(ac->session, 0);
+	rpc.hdr.dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
+	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
 	rpc.hdr.context = ac->session;
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_TX;
 	rpc.buffer.addr = ab->phys;
@@ -483,7 +477,8 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.size = sizeof(rpc) - sizeof(u32);
-	rpc.hdr.addr = AUDIO_ADDR(ac->session, 0);
+	rpc.hdr.dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
+	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
 	rpc.hdr.context = ac->session;
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
 	rpc.buffer.addr = ab->phys;
@@ -548,6 +543,7 @@ static void callback(void *data, int len, void *cookie)
 {
 	struct adsp_event_hdr *e = data;
 	struct audio_client *ac;
+
 
 	if (e->context >= SESSION_MAX) {
 		pr_err("audio callback: bogus session %d\n",
@@ -616,6 +612,7 @@ static int q6audio_init(void)
 		goto done;
 	}
 
+	pr_info("audio: init: codecs\n");
 	icodec_rx_clk = clk_get(0, "icodec_rx_clk");
 	icodec_tx_clk = clk_get(0, "icodec_tx_clk");
 	ecodec_clk = clk_get(0, "ecodec_clk");
@@ -629,6 +626,7 @@ static int q6audio_init(void)
 		res = -ENODEV;
 		goto done;
 	}
+	pr_info("audio: init: INIT\n");
 	audio_init(adsp);
 
 	ac = audio_client_alloc(0);
@@ -638,12 +636,14 @@ static int q6audio_init(void)
 		goto done;
 	}
 
+	pr_info("audio: init: OPEN control\n");
 	if (audio_open_control(ac)) {
 		pr_err("audio_init: cannot open control channel\n");
 		res = -ENODEV;
 		goto done;
 	}
 
+	pr_info("audio: init: attach ACDB\n");
 	acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0, 0);
 	if (!acdb) {
 		pr_err("audio_init: cannot attach to acdb channel\n");
@@ -651,6 +651,7 @@ static int q6audio_init(void)
 		goto done;
 	}
 
+	pr_info("audio: init: attach ADIE\n");
 	adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0, 0);
 	if (!adie) {
 		pr_err("audio_init: cannot attach to adie\n");
