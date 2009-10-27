@@ -180,7 +180,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 
 	case CAMIO_VFE_PBDG_CLK:
 		camio_vfe_pbdg_clk =
-		clk = clk_get(NULL, "vfe_pbdg_clk");
+		clk = clk_get(NULL, "vfe_pclk");
 		break;
 
 	case CAMIO_CAM_MCLK_CLK:
@@ -191,7 +191,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 
 	case CAMIO_CAMIF_PAD_PBDG_CLK:
 		camio_camif_pad_pbdg_clk =
-		clk = clk_get(NULL, "camif_pad_pbdg_clk");
+		clk = clk_get(NULL, "camif_pad_pclk");
 		break;
 
 	default:
