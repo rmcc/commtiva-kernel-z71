@@ -76,6 +76,7 @@
 
 #include <mach/gpio.h>
 #include <mach/board.h>
+#include <mach/camera.h>
 #include <mach/memory.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_hsusb.h>
@@ -273,6 +274,314 @@ static struct i2c_board_info pm8058_boardinfo[] __initdata = {
 		.platform_data = &pm8058_7x30_data,
 	},
 };
+
+static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
+#ifdef CONFIG_MT9D112
+	{
+		I2C_BOARD_INFO("mt9d112", 0x78 >> 1),
+	},
+#endif
+#ifdef CONFIG_S5K3E2FX
+	{
+		I2C_BOARD_INFO("s5k3e2fx", 0x20 >> 1),
+	},
+#endif
+#ifdef CONFIG_MT9P012
+	{
+		I2C_BOARD_INFO("mt9p012", 0x6C >> 1),
+	},
+#endif
+#if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
+	{
+		I2C_BOARD_INFO("mt9t013", 0x6C),
+	},
+#endif
+
+};
+
+#ifdef CONFIG_MSM_CAMERA
+static uint32_t camera_off_gpio_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(0,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* RST */
+	GPIO_CFG(1,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VCM */
+	GPIO_CFG(2,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT2 */
+	GPIO_CFG(3,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT3 */
+	GPIO_CFG(4,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT4 */
+	GPIO_CFG(5,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT5 */
+	GPIO_CFG(6,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT6 */
+	GPIO_CFG(7,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT7 */
+	GPIO_CFG(8,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT8 */
+	GPIO_CFG(9,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT9 */
+	GPIO_CFG(10, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT10 */
+	GPIO_CFG(11, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT11 */
+	GPIO_CFG(12, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PCLK */
+	GPIO_CFG(13, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* HSYNC_IN */
+	GPIO_CFG(14, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VSYNC_IN */
+	GPIO_CFG(15, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), /* MCLK */
+};
+
+static uint32_t camera_on_gpio_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(0,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* RST */
+	GPIO_CFG(1,  0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VCM */
+	GPIO_CFG(2,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT2 */
+	GPIO_CFG(3,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT3 */
+	GPIO_CFG(4,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT4 */
+	GPIO_CFG(5,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT5 */
+	GPIO_CFG(6,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT6 */
+	GPIO_CFG(7,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT7 */
+	GPIO_CFG(8,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT8 */
+	GPIO_CFG(9,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT9 */
+	GPIO_CFG(10, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT10 */
+	GPIO_CFG(11, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* DAT11 */
+	GPIO_CFG(12, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* PCLK */
+	GPIO_CFG(13, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* HSYNC_IN */
+	GPIO_CFG(14, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), /* VSYNC_IN */
+	GPIO_CFG(15, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), /* MCLK */
+};
+
+static uint32_t camera_on_gpio_ffa_table[] = {
+	/* parallel CAMERA interfaces */
+	GPIO_CFG(95,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* I2C_SCL */
+	GPIO_CFG(96,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA), /* I2C_SDA */
+	/* FFA front Sensor Reset */
+	GPIO_CFG(137,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+	/* FFA front Sensor Standby */
+	GPIO_CFG(134,  1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+};
+
+static uint32_t camera_off_gpio_ffa_table[] = {
+	/* FFA front Sensor Reset */
+	GPIO_CFG(137,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+	/* FFA front Sensor Standby */
+	GPIO_CFG(134,  0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_16MA),
+};
+
+static void config_gpio_table(uint32_t *table, int len)
+{
+	int n, rc;
+	for (n = 0; n < len; n++) {
+		rc = gpio_tlmm_config(table[n], GPIO_ENABLE);
+		if (rc) {
+			pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, table[n], rc);
+			break;
+		}
+	}
+}
+
+static void msm_camera_vreg_config_on(void)
+{
+	struct vreg *vreg_gp2, *vreg_gp3;
+	int rc;
+
+	vreg_gp2 = vreg_get(NULL, "gp2");
+	if (IS_ERR(vreg_gp2)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp2", PTR_ERR(vreg_gp2));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_gp2, 1800);
+	if (rc) {
+		pr_err("%s: vreg gp2 set level failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	rc = vreg_enable(vreg_gp2);
+	if (rc) {
+		pr_err("%s: vreg enable failed (%d)\n",
+			 __func__, rc);
+		return;
+	}
+
+	vreg_gp3 = vreg_get(NULL, "gp3");
+	if (IS_ERR(vreg_gp3)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp3", PTR_ERR(vreg_gp3));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_gp3, 2800);
+	if (rc) {
+		pr_err("%s: vreg gp3 set level failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	rc = vreg_enable(vreg_gp3);
+	if (rc) {
+		pr_err("%s: vreg enable failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+}
+
+static void msm_camera_vreg_config_off(void)
+{
+	struct vreg *vreg_gp2, *vreg_gp3;
+	int rc;
+
+	vreg_gp2 = vreg_get(NULL, "gp2");
+	if (IS_ERR(vreg_gp2)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp2", PTR_ERR(vreg_gp2));
+		return;
+	}
+
+	rc = vreg_disable(vreg_gp2);
+	if (rc) {
+		pr_err("%s: vreg enable failed (%d)\n",
+			 __func__, rc);
+		return;
+	}
+
+	vreg_gp3 = vreg_get(NULL, "gp3");
+	if (IS_ERR(vreg_gp3)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp3", PTR_ERR(vreg_gp3));
+		return;
+	}
+
+	rc = vreg_disable(vreg_gp3);
+	if (rc) {
+		pr_err("%s: vreg enable failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+}
+
+static void config_camera_on_gpios(void)
+{
+	if (machine_is_msm7x30_ffa()) {
+		config_gpio_table(camera_on_gpio_ffa_table,
+		ARRAY_SIZE(camera_on_gpio_ffa_table));
+
+		msm_camera_vreg_config_on();
+		gpio_set_value(137, 0);
+		gpio_set_value(134, 1);
+	}
+	config_gpio_table(camera_on_gpio_table,
+		ARRAY_SIZE(camera_on_gpio_table));
+}
+
+static void config_camera_off_gpios(void)
+{
+	if (machine_is_msm7x30_ffa()) {
+		config_gpio_table(camera_off_gpio_ffa_table,
+		ARRAY_SIZE(camera_off_gpio_ffa_table));
+
+		msm_camera_vreg_config_off();
+	}
+	config_gpio_table(camera_off_gpio_table,
+		ARRAY_SIZE(camera_off_gpio_table));
+}
+
+static struct resource msm_camera_resources[] = {
+	{
+		.start	= 0xA6000000,
+		.end	= 0xA6000000 + SZ_1M - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_VFE,
+		.end	= INT_VFE,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+static struct msm_camera_device_platform_data msm_camera_device_data = {
+	.camera_gpio_on  = config_camera_on_gpios,
+	.camera_gpio_off = config_camera_off_gpios,
+	.ioext.mdcphy = MSM_MDC_PHYS,
+	.ioext.mdcsz  = MSM_MDC_SIZE,
+	.ioext.appphy = MSM_CLK_CTL_PHYS,
+	.ioext.appsz  = MSM_CLK_CTL_SIZE,
+	.ioext.camifpadphy = 0xAB000000,
+	.ioext.camifpadsz  = 0x00000400,
+};
+
+#ifdef CONFIG_MT9D112
+static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
+	.sensor_name    = "mt9d112",
+	.sensor_reset   = 0,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 0,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+};
+
+static struct platform_device msm_camera_sensor_mt9d112 = {
+	.name      = "msm_camera_mt9d112",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9d112_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_S5K3E2FX
+static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
+	.sensor_name    = "s5k3e2fx",
+	.sensor_reset   = 17,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 0,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+};
+
+static struct platform_device msm_camera_sensor_s5k3e2fx = {
+	.name      = "msm_camera_s5k3e2fx",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_s5k3e2fx_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_MT9P012
+static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
+	.sensor_name    = "mt9p012",
+	.sensor_reset   = 17,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 88,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+};
+
+static struct platform_device msm_camera_sensor_mt9p012 = {
+	.name      = "msm_camera_mt9p012",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9p012_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_MT9T013
+static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
+	.sensor_name    = "mt9t013",
+	.sensor_reset   = 17,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 0,
+	.pdata          = &msm_camera_device_data,
+	.flash_type     = MSM_CAMERA_FLASH_LED,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+};
+
+static struct platform_device msm_camera_sensor_mt9t013 = {
+	.name      = "msm_camera_mt9t013",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9t013_data,
+	},
+};
+#endif
+#endif /*CONFIG_MSM_CAMERA*/
 
 static int __init buses_init(void)
 {
@@ -1453,6 +1762,19 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_pmic_leds,
 	&msm_device_tssc,
+#ifdef CONFIG_MT9T013
+	&msm_camera_sensor_mt9t013,
+#endif
+#ifdef CONFIG_MT9D112
+	&msm_camera_sensor_mt9d112,
+#endif
+#ifdef CONFIG_S5K3E2FX
+	&msm_camera_sensor_s5k3e2fx,
+#endif
+#ifdef CONFIG_MT9P012
+	&msm_camera_sensor_mt9p012,
+#endif
+
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -1925,6 +2247,8 @@ static void __init msm7x30_init(void)
 	i2c_register_board_info(2, msm_marimba_board_info,
 			ARRAY_SIZE(msm_marimba_board_info));
 
+	i2c_register_board_info(4 /* QUP ID */, msm_camera_boardinfo,
+				ARRAY_SIZE(msm_camera_boardinfo));
 	platform_device_register(&surf_keypad_device);
 	bt_power_init();
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
