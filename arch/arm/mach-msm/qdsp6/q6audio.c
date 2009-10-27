@@ -75,6 +75,7 @@ static struct q6_hw_info q6_audio_hw[Q6_HW_COUNT] = {
 	},
 };
 
+static struct wake_lock wakelock;
 static struct wake_lock idlelock;
 static int idlecount;
 static DEFINE_MUTEX(idlecount_lock);
@@ -82,16 +83,20 @@ static DEFINE_MUTEX(idlecount_lock);
 void audio_prevent_sleep(void)
 {
 	mutex_lock(&idlecount_lock);
-	if (++idlecount == 1)
+	if (++idlecount == 1) {
+		wake_lock(&wakelock);
 		wake_lock(&idlelock);
+	}
 	mutex_unlock(&idlecount_lock);
 }
 
 void audio_allow_sleep(void)
 {
 	mutex_lock(&idlecount_lock);
-	if (--idlecount == 0)
+	if (--idlecount == 0) {
 		wake_unlock(&idlelock);
+		wake_unlock(&wakelock);
+	}
 	mutex_unlock(&idlecount_lock);
 }
 
@@ -659,6 +664,7 @@ static int q6audio_init(void)
 	ac_control = ac;
 
 	wake_lock_init(&idlelock, WAKE_LOCK_IDLE, "audio_pcm_idle");
+	wake_lock_init(&wakelock, WAKE_LOCK_SUSPEND, "audio_pcm_suspend");
 done:
 	if ((res < 0) && ac)
 		audio_client_free(ac);
