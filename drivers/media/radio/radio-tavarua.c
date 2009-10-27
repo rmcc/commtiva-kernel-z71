@@ -91,6 +91,11 @@
 #include <linux/mfd/marimba.h>
 #include <linux/platform_device.h>
 
+struct freq_band_t {
+	unsigned int high;
+	unsigned int low;
+};
+
 struct tavarua_device {
 	struct video_device *videodev;
 	/* driver management */
@@ -109,10 +114,15 @@ struct tavarua_device {
 	int pending_xfrs[TAVARUA_XFR_MAX];
 	int xfr_bytes_left;
 	int xfr_in_progress;
+	/* synchrnous xfr data */
+	unsigned char sync_xfr_regs[XFR_REG_NUM];
+	struct completion sync_xfr_start;
+	struct completion sync_req_done;
 	/* internal register status */
 	unsigned char registers[RADIO_REGISTERS];
-	/* radio standard */
-	enum tavarua_zone zone;
+	/* regional settings */
+	enum tavarua_region_t region;
+	struct freq_band_t freq_band;
 	/* global lock */
 	struct mutex lock;
 	/* buffer locks*/
@@ -175,7 +185,7 @@ static int tavarua_write_register(struct tavarua_device *radio,
 	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
 	retval = marimba_write(radio->marimba, offset, &value, 1);
 	if (retval > 0) {
-		if (offset <= RADIO_REGISTERS)
+		if (offset < RADIO_REGISTERS)
 			radio->registers[offset] = value;
 	}
 	return retval;
@@ -191,7 +201,7 @@ static int tavarua_write_registers(struct tavarua_device *radio,
 	retval = marimba_write(radio->marimba, offset, buf, len);
 	if (retval > 0) { /* if write successful, update internal state too */
 		for (i = 0; i < len; i++) {
-			if ((offset+i) <= RADIO_REGISTERS)
+			if ((offset+i) < RADIO_REGISTERS)
 				radio->registers[offset+i] = buf[i];
 		}
 	}
@@ -246,6 +256,76 @@ static int copy_from_xfr(struct tavarua_device *radio,
 	unsigned char *xfr_regs = &radio->registers[XFRCTRL+1];
 	kfifo_put(data_fifo, xfr_regs, n);
 	return 0;
+}
+
+/*
+ * write_to_xfr
+ */
+static int write_to_xfr(struct tavarua_device *radio, unsigned char mode,
+			char *buf, int len)
+{
+	char buffer[len+1];
+	memcpy(buffer+1, buf, len);
+	buffer[0] = ((1<<7) | mode);
+	return tavarua_write_registers(radio, XFRCTRL, buffer, sizeof(buffer));
+}
+
+static int xfr_intf_own(struct tavarua_device *radio)
+{
+
+	mutex_lock(&radio->lock);
+	if (radio->xfr_in_progress) {
+		radio->pending_xfrs[TAVARUA_XFR_SYNC] = 1;
+		mutex_unlock(&radio->lock);
+		if (!wait_for_completion_timeout(&radio->sync_xfr_start,
+			msecs_to_jiffies(WAIT_TIMEOUT)))
+			return -1;
+	} else {
+		radio->xfr_in_progress = 1;
+		mutex_unlock(&radio->lock);
+	}
+	return 0;
+}
+
+/*
+ * sync_read_xfr
+ */
+static int sync_read_xfr(struct tavarua_device *radio,
+				enum tavarua_xfr_ctrl_t xfr_type)
+{
+	int retval;
+	retval = xfr_intf_own(radio);
+	if (retval < 0)
+		return retval;
+	retval = tavarua_write_register(radio, XFRCTRL, xfr_type);
+	if (retval < 0)
+		return retval;
+	if (!wait_for_completion_timeout(&radio->sync_req_done,
+		msecs_to_jiffies(WAIT_TIMEOUT)))
+		return -1;
+
+	return retval;
+}
+
+/*
+ * sync_write_xfr
+ */
+static int sync_write_xfr(struct tavarua_device *radio,
+				enum tavarua_xfr_ctrl_t xfr_type)
+{
+	int retval;
+	retval = xfr_intf_own(radio);
+	if (retval < 0)
+		return retval;
+	retval = write_to_xfr(radio, xfr_type, radio->sync_xfr_regs,
+							XFR_REG_NUM);
+	if (retval < 0)
+		return retval;
+	if (!wait_for_completion_timeout(&radio->sync_req_done,
+		msecs_to_jiffies(WAIT_TIMEOUT)))
+		return -1;
+
+	return retval;
 }
 
 /*
@@ -308,20 +388,23 @@ static void read_int_stat(struct work_struct *work)
 	FMDBG("INTSTAT2 <%x> \n", radio->registers[STATUS_REG2]);
 	FMDBG("INTSTAT3 <%x> \n", radio->registers[STATUS_REG3]);
 
-	if (radio->registers[STATUS_REG1] & READY)
+	if (radio->registers[STATUS_REG1] & READY) {
+		complete(&radio->sync_req_done);
 		tavarua_q_event(radio, TAVARUA_EVT_RADIO_READY);
+	}
 
 	/* Tune completed */
 	if (radio->registers[STATUS_REG1] & TUNE) {
+		complete(&radio->sync_req_done);
 		tavarua_q_event(radio, TAVARUA_EVT_TUNE_SUCC);
 		radio->xfr_in_progress = 0;
 		radio->xfr_bytes_left = 0;
 		for (i = 0; i < TAVARUA_BUF_MAX; i++) {
-			if (i != TAVARUA_BUF_EVENTS)
+			if (i >= TAVARUA_BUF_RT_RDS)
 				kfifo_reset(radio->data_buf[i]);
 		}
 		for (i = 0; i < TAVARUA_XFR_MAX; i++) {
-			if (i != TAVARUA_XFR_ERROR)
+			if (i >= TAVARUA_XFR_RT_RDS)
 				radio->pending_xfrs[i] = 0;
 		}
 	}
@@ -350,6 +433,7 @@ static void read_int_stat(struct work_struct *work)
 	/* New unread RDS data group available */
 	if (radio->registers[STATUS_REG2] & RDSDAT) {
 		FMDBG("Raw RDS Available\n");
+		read_data_blocks(radio, RAW_RDS);
 		tavarua_rds_read(radio);
 		tavarua_q_event(radio, TAVARUA_EVT_NEW_RAW_RDS);
 	}
@@ -440,8 +524,16 @@ static void read_int_stat(struct work_struct *work)
 				tavarua_q_event(radio, TAVARUA_EVT_NEW_RT_RDS);
 			}
 			break;
+		case RX_CONFIG:
+			memcpy(radio->sync_xfr_regs,
+				&radio->registers[XFRCTRL+1], XFR_REG_NUM);
+			radio->xfr_in_progress = 0;
+			complete(&radio->sync_req_done);
+			break;
 		default:
-			FMDBG("UNKNOWN XFR!\n");
+			radio->xfr_in_progress = 0;
+			complete(&radio->sync_req_done);
+			FMDBG("XFR write complete\n");
 
 		}
 		if (!radio->xfr_in_progress) {
@@ -509,31 +601,124 @@ static int tavarua_disable_irq(struct tavarua_device *radio)
  * fops/IOCTL helper functions
  ************************************************************************/
 
+
+/*
+ * tavarua_set_region
+ */
+static int tavarua_set_region(struct tavarua_device *radio,
+				int req_region)
+{
+	int retval = 0;
+	enum tavarua_region_t region = req_region;
+
+	/* Set freq band */
+	switch (region) {
+	case TAVARUA_REGION_US:
+	case TAVARUA_REGION_EU:
+		SET_REG_FIELD(radio->registers[RDCTRL], 0,
+			RDCTRL_BAND_OFFSET, RDCTRL_BAND_MASK);
+		break;
+	case TAVARUA_REGION_JAPAN:
+		SET_REG_FIELD(radio->registers[RDCTRL], 1,
+			RDCTRL_BAND_OFFSET, RDCTRL_BAND_MASK);
+		break;
+	case TAVARUA_REGION_JAPAN_WIDE:
+		retval = sync_read_xfr(radio, RADIO_CONFIG);
+		if (retval < 0)
+			break;
+		radio->sync_xfr_regs[0] = 0x00;
+		radio->sync_xfr_regs[1] = 0x00;
+		radio->sync_xfr_regs[2] = 0x01;
+		radio->sync_xfr_regs[3] = 0x40;
+		retval = sync_write_xfr(radio, RADIO_CONFIG);
+		break;
+	default:
+		retval = -1;
+	}
+
+	/* Set channel spacing */
+	switch (region) {
+	case TAVARUA_REGION_US:
+	case TAVARUA_REGION_EU:
+	case TAVARUA_REGION_JAPAN:
+	case TAVARUA_REGION_JAPAN_WIDE:
+		SET_REG_FIELD(radio->registers[RDCTRL], 0,
+			RDCTRL_CHSPACE_OFFSET, RDCTRL_CHSPACE_MASK);
+		break;
+	default:
+		retval = -1;
+	}
+
+	/* Set De-emphasis and soft band range*/
+	switch (region) {
+	case TAVARUA_REGION_US:
+	case TAVARUA_REGION_JAPAN:
+	case TAVARUA_REGION_JAPAN_WIDE:
+		SET_REG_FIELD(radio->registers[RDCTRL], 0,
+			RDCTRL_DEEMPHASIS_OFFSET, RDCTRL_DEEMPHASIS_MASK);
+		break;
+	case TAVARUA_REGION_EU:
+		SET_REG_FIELD(radio->registers[RDCTRL], 1,
+			RDCTRL_DEEMPHASIS_OFFSET, RDCTRL_DEEMPHASIS_MASK);
+		break;
+	default:
+		retval = -1;
+	}
+
+	if (retval < 0) {
+		FMDBG("unknown regions\n");
+		return retval;
+	}
+	/* set RDS standard */
+	switch (region) {
+	default:
+		SET_REG_FIELD(radio->registers[RDSCTRL], 0,
+			RDSCTRL_STANDARD_OFFSET, RDSCTRL_STANDARD_MASK);
+	case TAVARUA_REGION_EU:
+		SET_REG_FIELD(radio->registers[RDSCTRL], 1,
+			RDSCTRL_STANDARD_OFFSET, RDSCTRL_STANDARD_MASK);
+	}
+	retval = tavarua_write_register(radio, RDSCTRL,
+					radio->registers[RDSCTRL]);
+	if (retval < 0)
+		return retval;
+	retval = tavarua_write_register(radio, RDCTRL,
+					radio->registers[RDCTRL]);
+	if (retval < 0) {
+		FMDBG("Could not set regional settings\n");
+		return retval;
+	}
+	/* setting soft band */
+	switch (region) {
+	default:
+		radio->freq_band.low = 87.5 * FREQ_MUL;
+		radio->freq_band.high = 108 * FREQ_MUL;
+		break;
+	case TAVARUA_REGION_JAPAN:
+		radio->freq_band.low = 76 * FREQ_MUL;
+		radio->freq_band.high = 90 * FREQ_MUL;
+		break;
+	case TAVARUA_REGION_JAPAN_WIDE:
+		radio->freq_band.low = 76 * FREQ_MUL;
+		radio->freq_band.high = 108 * FREQ_MUL;
+		break;
+	}
+	radio->region = region;
+	return retval;
+}
+
 /*
  * tavarua_get_freq - get the frequency
  */
-static unsigned int tavarua_get_freq(struct tavarua_device *radio,
+static int tavarua_get_freq(struct tavarua_device *radio,
 				struct v4l2_frequency *freq)
 {
 	int retval;
 	unsigned short chan;
 	unsigned int band_bottom;
-	unsigned int spacing  = 0.100 * FREQ_MUL;
-	switch (radio->zone) {
-	/* 0: 200 kHz (USA, Australia) */
-	default:
-		band_bottom = 87.5 * FREQ_MUL;
-		break;
-	/* 1: 100 kHz (Europe, Japan) */
-	case TAVARUA_ZONE_1:
-		band_bottom = 76 * FREQ_MUL;
-		break;
-	/* 2:  50 kHz */
-	case TAVARUA_ZONE_2:
-		band_bottom = 76 * FREQ_MUL;
-		break;
-	}
-
+	unsigned int spacing;
+	band_bottom = radio->freq_band.low;
+	spacing  = 0.100 * FREQ_MUL;
 	/* read channel */
 	retval = tavarua_read_registers(radio, FREQ, 2);
 	chan = radio->registers[FREQ];
@@ -551,23 +736,9 @@ static int tavarua_set_freq(struct tavarua_device *radio, unsigned int freq)
 	unsigned int band_bottom;
 	unsigned char chan;
 	unsigned char cmd[2];
-	unsigned int spacing  = 0.100 * FREQ_MUL;
-
-	switch (radio->zone) {
-	/* 0: 200 kHz (USA, Australia) */
-	default:
-		band_bottom = 87.5 * FREQ_MUL;
-		break;
-	/* 1: 100 kHz (Europe, Japan) */
-	case TAVARUA_ZONE_1:
-		band_bottom = 76 * FREQ_MUL;
-		break;
-	/* 2:  50 kHz */
-	case TAVARUA_ZONE_2:
-		band_bottom = 76 * FREQ_MUL;
-		break;
-	}
-
+	unsigned int spacing;
+	band_bottom = radio->freq_band.low;;
+	spacing  = 0.100 * FREQ_MUL;
 	/* Chan = [ Freq (Mhz) - Bottom of Band (MHz) ] / 100 (kHz) */
 	chan = (freq - band_bottom) / spacing;
 
@@ -653,7 +824,10 @@ static int tavarua_fops_open(struct file *file)
 		printk(KERN_ERR "%s: failed to bring up FM Core \n", __func__);
 		return retval;
 	}
-	msleep(100);
+	if (!wait_for_completion_timeout(&radio->sync_req_done,
+		msecs_to_jiffies(WAIT_TIMEOUT)))
+		return -1;
+
 	return 0;
 }
 
@@ -753,7 +927,7 @@ static struct v4l2_queryctrl tavarua_v4l2_queryctrl[] = {
 	{
 		.id	       = V4L2_CID_PRIVATE_TAVARUA_SRHCMODE,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
-		.name	       = "freq search mode",
+		.name	       = "Search mode",
 		.minimum       = 0,
 		.maximum       = 7,
 		.step	       = 1,
@@ -762,7 +936,7 @@ static struct v4l2_queryctrl tavarua_v4l2_queryctrl[] = {
 	{
 		.id            = V4L2_CID_PRIVATE_TAVARUA_SCANDWELL,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
-		.name          = "freq search mode",
+		.name          = "Search dwell time",
 		.minimum       = 0,
 		.maximum       = 7,
 		.step          = 1,
@@ -781,7 +955,7 @@ static struct v4l2_queryctrl tavarua_v4l2_queryctrl[] = {
 	{
 		.id            = V4L2_CID_PRIVATE_TAVARUA_STATE,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
-		.name          = "radio rx/tx on/off",
+		.name          = "radio 0ff/rx/tx/reset",
 		.minimum       = 0,
 		.maximum       = 3,
 		.step          = 1,
@@ -789,7 +963,7 @@ static struct v4l2_queryctrl tavarua_v4l2_queryctrl[] = {
 
 	},
 	{
-		.id            = V4L2_CID_PRIVATE_TAVARUA_ZONE,
+		.id            = V4L2_CID_PRIVATE_TAVARUA_REGION,
 		.type          = V4L2_CTRL_TYPE_INTEGER,
 		.name          = "radio standard",
 		.minimum       = 0,
@@ -865,6 +1039,9 @@ static int tavarua_vidioc_g_ctrl(struct file *file, void *priv,
 	case V4L2_CID_PRIVATE_TAVARUA_STATE:
 		ctrl->value = (radio->registers[RDCTRL] & 0x03);
 		break;
+	case V4L2_CID_PRIVATE_TAVARUA_REGION:
+		ctrl->value = radio->region;
+		break;
 	default:
 		retval = -EINVAL;
 	}
@@ -892,7 +1069,7 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 		break;
 	case V4L2_CID_AUDIO_MUTE:
 		value = (radio->registers[IOCTRL] & ~IOC_HRD_MUTE) |
-							ctrl->value;
+							(ctrl->value & 0x03);
 		retval = tavarua_write_register(radio, IOCTRL, value);
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_SRHCMODE:
@@ -931,6 +1108,9 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 			retval = tavarua_start(radio, 2);
 		}
 		break;
+	case V4L2_CID_PRIVATE_TAVARUA_REGION:
+		tavarua_set_region(radio, ctrl->value);
+		break;
 	default:
 	  retval = -EINVAL;
 	}
@@ -961,23 +1141,8 @@ static int tavarua_vidioc_g_tuner(struct file *file, void *priv,
 
 	strcpy(tuner->name, "FM");
 	tuner->type = V4L2_TUNER_RADIO;
-	switch (radio->zone) {
-	/* 0: 87.5 - 108 MHz (USA, Europe, default) */
-	case 0:
-		tuner->rangelow  =  87.5 * FREQ_MUL;
-		tuner->rangehigh = 108   * FREQ_MUL;
-		break;
-	/* 1: 76   - 108 MHz (Japan wide band) */
-	case 1:
-		tuner->rangelow  =  76   * FREQ_MUL;
-		tuner->rangehigh = 108   * FREQ_MUL;
-		break;
-	/* 2: 76   -  90 MHz (Japan) */
-	default:
-		tuner->rangelow  =  76   * FREQ_MUL;
-		tuner->rangehigh =  90   * FREQ_MUL;
-		break;
-	};
+	tuner->rangelow  =  radio->freq_band.low;
+	tuner->rangehigh =  radio->freq_band.high;
 	tuner->rxsubchans = V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO;
 	tuner->capability = V4L2_TUNER_CAP_LOW;
 
@@ -1054,7 +1219,10 @@ static int tavarua_vidioc_s_frequency(struct file *file, void *priv,
 	if (retval < 0)
 		printk(KERN_WARNING DRIVER_NAME
 			": set frequency failed with %d\n", retval);
-	msleep(500);
+
+	if (!wait_for_completion_timeout(&radio->sync_xfr_start,
+		msecs_to_jiffies(WAIT_TIMEOUT)))
+		return -1;
 	return retval;
 }
 
@@ -1149,12 +1317,12 @@ static int tavarua_start(struct tavarua_device *radio,
 	char int_init[3];
 	int_init[0] = (READY | TUNE | SEARCH | SCANNEXT | SIGNAL |
 						INTF | SYNC | AUDIO);
-	int_init[1] = (RDSRT | RDSPS);
+	int_init[1] = (RDSDAT | RDSRT | RDSPS);
 	int_init[2] = (TRANSFER | ERROR);
 
 	FMDBG("%s <%d>\n", __func__, state);
-	/* set geographic zone */
-	radio->zone = TAVARUA_ZONE_0;
+	/* set geographic region */
+	radio->region = TAVARUA_REGION_US;
 
 	/* set radio mode */
 	retval = tavarua_write_register(radio, RDCTRL, state);
@@ -1180,8 +1348,14 @@ static int tavarua_start(struct tavarua_device *radio,
 	if (retval < 0)
 		return retval;
 
+	/* default region is US */
+	tavarua_set_region(radio, TAVARUA_REGION_US);
+	/* enable RDS */
+	tavarua_write_register(radio, RDSCTRL, 0x01);
+
 	if (state == FM_RECV) {
-		retval = tavarua_write_register(radio, ADVCTRL, RDSRTEN);
+		retval = tavarua_write_register(radio, ADVCTRL,
+						RDSRTEN | RDSPSEN);
 		if (retval < 0)
 			return retval;
 	}
@@ -1268,6 +1442,9 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 
 	/* init lock */
 	mutex_init(&radio->lock);
+	/* init completion flags */
+	init_completion(&radio->sync_xfr_start);
+	init_completion(&radio->sync_req_done);
 	/* initialize wait queue for event read */
 	init_waitqueue_head(&radio->event_queue);
 
