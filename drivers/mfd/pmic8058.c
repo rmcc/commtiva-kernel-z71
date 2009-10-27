@@ -607,6 +607,22 @@ static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
 	u8	block, config;
 
 	irq -= PM8058_FIRST_IRQ;
+	if (irq < (PM8058_GPIOS + PM8058_MPPS)) {
+		/* Create mapping for GPIO and MPP */
+		if (irq < PM8058_GPIOS)
+			pm_irq = FIRST_GPIO_IRQ_BLOCK * 8 + irq;
+		else
+			pm_irq = FIRST_MPP_IRQ_BLOCK * 8 +
+				(irq - PM8058_GPIOS);
+
+		if (!chip->irq_i2e[pm_irq]) {
+			chip->irq_i2e[pm_irq] = irq + PM8058_FIRST_IRQ;
+			chip->pdata.pm_irqs[irq] = pm_irq;
+
+			if (pm_irq > chip->pm_max_irq)
+				chip->pm_max_irq = pm_irq;
+		}
+	}
 	pm_irq = chip->pdata.pm_irqs[irq];
 	block = pm_irq / 8;
 	master = block / 8;

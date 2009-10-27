@@ -48,6 +48,7 @@
 #define PM8058_MPPS		NR_PMIC8058_MPP_IRQS
 
 struct pm8058_platform_data {
+	/* This table is only needed for misc interrupts. */
 	unsigned int	pm_irqs[PM8058_IRQS];	/* block*8 + bit-pos */
 };
 
