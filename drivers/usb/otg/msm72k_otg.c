@@ -78,6 +78,7 @@
 #define DRIVER_NAME	"msm_otg"
 
 static void otg_reset(struct msm_otg *dev);
+static void msm_otg_set_vbus_state(int online);
 
 struct msm_otg *the_msm_otg;
 
@@ -268,7 +269,9 @@ static int msm_otg_suspend(struct msm_otg *dev)
 		otg_reset(dev);
 
 	ulpi_read(dev, 0x14);/* clear PHY interrupt latch register */
-	ulpi_write(dev, 0x01, 0x30);/* PHY comparators on in LPM */
+	/* If there is no pmic notify support turn on phy comparators. */
+	if (!dev->pmic_notif_supp)
+		ulpi_write(dev, 0x01, 0x30);
 	ulpi_write(dev, 0x08, 0x09);/* turn off PLL on integrated phy */
 
 	timeout = jiffies + msecs_to_jiffies(500);
@@ -291,15 +294,19 @@ static int msm_otg_suspend(struct msm_otg *dev)
 		enable_irq_wake(dev->irq);
 	dev->in_lpm = 1;
 
+	if (!vbus && dev->pmic_notif_supp)
+		dev->pmic_enable_ldo(0);
+
+	pr_info("%s: usb in low power mode\n", __func__);
+
+out:
+	enable_irq(dev->irq);
+
 	/* TBD: as there is no bus suspend implemented as of now
 	 * it should be dummy check
 	 */
 	if (!vbus || release_wlocks)
 		wake_unlock(&dev->wlock);
-
-	pr_info("%s: usb in low power mode\n", __func__);
-out:
-	enable_irq(dev->irq);
 
 	return 0;
 }
@@ -354,6 +361,8 @@ static int msm_otg_set_suspend(struct otg_transceiver *xceiv, int suspend)
 		unsigned long timeout;
 
 		disable_irq(dev->irq);
+		if (dev->pmic_notif_supp)
+			dev->pmic_enable_ldo(1);
 
 		msm_otg_resume(dev);
 
@@ -389,10 +398,14 @@ static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 		msm_otg_start_peripheral(xceiv, 0);
 		dev->otg.gadget = 0;
 		disable_sess_valid(dev);
+		if (dev->pmic_notif_supp)
+			dev->pmic_unregister_vbus_sn(&msm_otg_set_vbus_state);
 		return 0;
 	}
 	dev->otg.gadget = gadget;
 	enable_sess_valid(dev);
+	if (dev->pmic_notif_supp)
+		dev->pmic_register_vbus_sn(&msm_otg_set_vbus_state);
 	pr_info("peripheral driver registered w/ tranceiver\n");
 
 	if (is_b_sess_vld())
@@ -433,6 +446,14 @@ static int msm_otg_set_host(struct otg_transceiver *xceiv, struct usb_bus *host)
 		msm_otg_suspend(dev);
 #endif
 	return 0;
+}
+
+static void msm_otg_set_vbus_state(int online)
+{
+	struct msm_otg *dev = the_msm_otg;
+
+	if (online)
+		msm_otg_set_suspend(&dev->otg, 0);
 }
 
 static irqreturn_t msm_otg_irq(int irq, void *data)
@@ -515,6 +536,12 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		dev->rpc_connect = pdata->rpc_connect;
 		dev->phy_reset = pdata->phy_reset;
 		dev->core_clk  = pdata->core_clk;
+		/* pmic apis */
+		dev->pmic_notif_init = pdata->pmic_notif_init;
+		dev->pmic_notif_deinit = pdata->pmic_notif_deinit;
+		dev->pmic_register_vbus_sn = pdata->pmic_register_vbus_sn;
+		dev->pmic_unregister_vbus_sn = pdata->pmic_unregister_vbus_sn;
+		dev->pmic_enable_ldo = pdata->pmic_enable_ldo;
 	}
 
 	if (dev->rpc_connect) {
@@ -573,6 +600,23 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	if (dev->cclk)
 		clk_enable(dev->cclk);
 
+	/* To reduce phy power consumption and to avoid external LDO
+	 * on the board, PMIC comparators can be used to detect VBUS
+	 * session change.
+	 */
+	if (dev->pmic_notif_init) {
+		ret = dev->pmic_notif_init();
+		if (ret && ret != -ENOTSUPP) {
+			clk_disable(dev->clk);
+			clk_disable(dev->pclk);
+			if (dev->cclk)
+				clk_disable(dev->cclk);
+			goto free_regs;
+		}
+		dev->pmic_notif_supp = 1;
+		dev->pmic_enable_ldo(1);
+	}
+
 	otg_reset(dev);
 
 	ret = request_irq(dev->irq, msm_otg_irq, IRQF_SHARED,
@@ -621,6 +665,9 @@ free_dev:
 static int __exit msm_otg_remove(struct platform_device *pdev)
 {
 	struct msm_otg *dev = the_msm_otg;
+
+	if (dev->pmic_notif_supp)
+		dev->pmic_notif_deinit();
 
 	free_irq(dev->irq, pdev);
 	iounmap(dev->regs);
