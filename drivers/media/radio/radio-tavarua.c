@@ -105,16 +105,24 @@ struct tavarua_device {
 	struct marimba_fm_platform_data *pdata;
 	/*RDS buffers + Radio event buffer*/
 	struct kfifo *data_buf[TAVARUA_BUF_MAX];
+	/* keep track of pending xfrs */
+	int pending_xfrs[TAVARUA_XFR_MAX];
+	int xfr_bytes_left;
+	int xfr_in_progress;
 	/* internal register status */
 	unsigned char registers[RADIO_REGISTERS];
 	/* radio standard */
 	enum tavarua_zone zone;
 	/* global lock */
 	struct mutex lock;
+	/* buffer locks*/
+	spinlock_t buf_lock[TAVARUA_BUF_MAX];
 	/* work queue */
 	struct work_struct work;
 	/* wait queue for blocking event read */
 	wait_queue_head_t event_queue;
+	/* wait queue for raw rds read */
+	wait_queue_head_t read_queue;
 };
 
 /**************************************************************************
@@ -191,6 +199,86 @@ static int tavarua_write_registers(struct tavarua_device *radio,
 }
 
 /*
+ * reads Raw RDS blocks from Host regs to driver internal regs
+ */
+static int read_data_blocks(struct tavarua_device *radio, unsigned char offset)
+{
+	/* read all 3 RDS blocks */
+	return tavarua_read_registers(radio, offset, RDS_BLOCK*4);
+}
+
+/*
+ * tavarua_rds_read - rds processing function
+ */
+static void tavarua_rds_read(struct tavarua_device *radio)
+{
+	struct kfifo *rds_buf = radio->data_buf[TAVARUA_BUF_RAW_RDS];
+	unsigned char blocknum;
+	unsigned char tmp[3];
+
+	if (read_data_blocks(radio, RAW_RDS))
+		return;
+	 /* copy all four RDS blocks to internal buffer */
+	for (blocknum = 0; blocknum < 4; blocknum++) {
+		/* Fill the V4L2 RDS buffer */
+		put_unaligned(cpu_to_le16(radio->registers[RAW_RDS +
+			blocknum*RDS_BLOCK]), (unsigned short *) &tmp);
+		tmp[2] = blocknum;		/* offset name */
+		tmp[2] |= blocknum << 3;	/* received offset */
+		tmp[2] |= 0x40; /* corrected error(s) */
+
+		/* copy RDS block to internal buffer */
+		kfifo_put(rds_buf, tmp, 3);
+	}
+	/* wake up read queue */
+	if (kfifo_len(rds_buf))
+		wake_up_interruptible(&radio->read_queue);
+
+}
+
+/*
+ * Copy from XFR regs to the appropriate internal buffer n bytes
+ */
+static int copy_from_xfr(struct tavarua_device *radio,
+		enum tavarua_buf_t buf_type, unsigned int n){
+
+	struct kfifo *data_fifo = radio->data_buf[buf_type];
+	unsigned char *xfr_regs = &radio->registers[XFRCTRL+1];
+	kfifo_put(data_fifo, xfr_regs, n);
+	return 0;
+}
+
+/*
+ * start_pending_xfr
+ */
+static int start_pending_xfr(struct tavarua_device *radio)
+{
+	int i;
+	enum tavarua_xfr_t xfr;
+	for (i = 0; i < TAVARUA_XFR_MAX; i++) {
+		if (radio->pending_xfrs[i]) {
+			xfr = (enum tavarua_xfr_t)i;
+			switch (xfr) {
+			case TAVARUA_XFR_RT_RDS:
+				tavarua_write_register(radio, XFRCTRL,
+							RDS_RT_0);
+				break;
+			case TAVARUA_XFR_PS_RDS:
+				tavarua_write_register(radio, XFRCTRL,
+							RDS_PS_0);
+				break;
+			default:
+				FMDBG("%s: Unsupported XFR\n", __func__);
+			}
+			radio->pending_xfrs[i] = 0;
+			return i;
+			}
+
+	}
+	return -1;
+}
+
+/*
  * queue event for user
  */
 static void tavarua_q_event(struct tavarua_device *radio,
@@ -200,16 +288,17 @@ static void tavarua_q_event(struct tavarua_device *radio,
 	struct kfifo *data_b = radio->data_buf[TAVARUA_BUF_EVENTS];
 	unsigned char evt = event;
 	FMDBG("updating event_q with event %x\n", event);
-	if (__kfifo_put(data_b, &evt, 1))
+	if (kfifo_put(data_b, &evt, 1))
 		wake_up_interruptible(&radio->event_queue);
 }
-
 
 /**************************************************************************
  * Scheduled event handler
  *************************************************************************/
 static void read_int_stat(struct work_struct *work)
 {
+	int i;
+	enum tavarua_xfr_ctrl_t xfr_status;
 	struct tavarua_device *radio = container_of(work,
 					struct tavarua_device, work);
 	mutex_lock(&radio->lock);
@@ -223,9 +312,19 @@ static void read_int_stat(struct work_struct *work)
 		tavarua_q_event(radio, TAVARUA_EVT_RADIO_READY);
 
 	/* Tune completed */
-	if (radio->registers[STATUS_REG1] & TUNE)
+	if (radio->registers[STATUS_REG1] & TUNE) {
 		tavarua_q_event(radio, TAVARUA_EVT_TUNE_SUCC);
-
+		radio->xfr_in_progress = 0;
+		radio->xfr_bytes_left = 0;
+		for (i = 0; i < TAVARUA_BUF_MAX; i++) {
+			if (i != TAVARUA_BUF_EVENTS)
+				kfifo_reset(radio->data_buf[i]);
+		}
+		for (i = 0; i < TAVARUA_XFR_MAX; i++) {
+			if (i != TAVARUA_XFR_ERROR)
+				radio->pending_xfrs[i] = 0;
+		}
+	}
 	/* Search completed (read FREQ) */
 	if (radio->registers[STATUS_REG1] & SEARCH)
 		tavarua_q_event(radio, TAVARUA_EVT_SEEK_COMPLETE);
@@ -246,8 +345,118 @@ static void read_int_stat(struct work_struct *work)
 	if (radio->registers[STATUS_REG1] & AUDIO)
 		tavarua_q_event(radio, TAVARUA_EVT_AUDIO);
 
+	/* interrupt register 2 */
+
+	/* New unread RDS data group available */
+	if (radio->registers[STATUS_REG2] & RDSDAT) {
+		FMDBG("Raw RDS Available\n");
+		tavarua_rds_read(radio);
+		tavarua_q_event(radio, TAVARUA_EVT_NEW_RAW_RDS);
+	}
+
+	/* New RDS Program Service Table available */
+	if (radio->registers[STATUS_REG2] & RDSPS) {
+		FMDBG("New PS RDS\n");
+		if (radio->xfr_in_progress)
+			radio->pending_xfrs[TAVARUA_XFR_PS_RDS] = 1;
+		else{
+			radio->xfr_in_progress = 1;
+			tavarua_write_register(radio, XFRCTRL, RDS_PS_0);
+		}
+	}
+
+	/* New RDS Radio Text available */
+	if (radio->registers[STATUS_REG2] & RDSRT) {
+		FMDBG("New RT RDS\n");
+		if (radio->xfr_in_progress)
+			radio->pending_xfrs[TAVARUA_XFR_RT_RDS] = 1;
+		else{
+			radio->xfr_in_progress = 1;
+			tavarua_write_register(radio, XFRCTRL, RDS_RT_0);
+		}
+	}
+
+	/* interrupt register 3 */
+
+	/* Data transfer (XFR) completed */
+	if (radio->registers[STATUS_REG3] & TRANSFER) {
+		FMDBG("XFR Interrupt\n");
+		tavarua_read_registers(radio, XFRCTRL, XFR_REG_NUM+1);
+		FMDBG("XFRCTRL IS: %x\n", radio->registers[XFRCTRL]);
+		xfr_status = (enum tavarua_xfr_ctrl_t)radio->registers[XFRCTRL];
+		switch (xfr_status) {
+		case RDS_PS_0:
+			FMDBG("PS Header\n");
+			copy_from_xfr(radio, TAVARUA_BUF_PS_RDS, 5);
+			radio->xfr_bytes_left = radio->registers[XFRCTRL+1]*8;
+			FMDBG("PS RDS Length: %d\n", radio->xfr_bytes_left);
+			if (radio->xfr_bytes_left > 0)
+				tavarua_write_register(radio, XFRCTRL,
+							RDS_PS_1);
+			break;
+		case RDS_PS_1:
+		case RDS_PS_2:
+		case RDS_PS_3:
+		case RDS_PS_4:
+		case RDS_PS_5:
+		case RDS_PS_6:
+			FMDBG("PS Data\n");
+			copy_from_xfr(radio, TAVARUA_BUF_PS_RDS, XFR_REG_NUM);
+			radio->xfr_bytes_left -= XFR_REG_NUM;
+			if (radio->xfr_bytes_left > 0) {
+				if ((xfr_status + 1) > RDS_PS_6) {
+					tavarua_write_register(radio, XFRCTRL,
+								RDS_PS_6);
+				} else {
+					tavarua_write_register(radio, XFRCTRL,
+								xfr_status+1);
+				}
+			} else {
+				radio->xfr_in_progress = 0;
+				tavarua_q_event(radio, TAVARUA_EVT_NEW_PS_RDS);
+			}
+			break;
+		case RDS_RT_0:
+			FMDBG("RT Header\n");
+			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, 5);
+			radio->xfr_bytes_left = radio->registers[XFRCTRL+1];
+			FMDBG("RT RDS Length: %d\n", radio->xfr_bytes_left);
+			if (radio->xfr_bytes_left > 0)
+				tavarua_write_register(radio, XFRCTRL,
+							RDS_RT_1);
+			break;
+		case RDS_RT_1:
+		case RDS_RT_2:
+		case RDS_RT_3:
+		case RDS_RT_4:
+			FMDBG("xfr interrupt RT data\n");
+			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, XFR_REG_NUM);
+			radio->xfr_bytes_left -= XFR_REG_NUM;
+			if (radio->xfr_bytes_left > 0) {
+				tavarua_write_register(radio, XFRCTRL,
+							xfr_status+1);
+			} else {
+				radio->xfr_in_progress = 0;
+				tavarua_q_event(radio, TAVARUA_EVT_NEW_RT_RDS);
+			}
+			break;
+		default:
+			FMDBG("UNKNOWN XFR!\n");
+
+		}
+		if (!radio->xfr_in_progress) {
+			if (start_pending_xfr(radio) != -1)
+				radio->xfr_in_progress = 1;
+		}
+
+	}
+
+	/* Error occurred. Read ERRCODE to determine cause */
+	if (radio->registers[STATUS_REG3] & ERROR)
+		FMDBG("ERROR STATE\n");
+
 	mutex_unlock(&radio->lock);
-	FMDBG("handler is done\n");
+	FMDBG("Work is done\n");
 
 }
 
@@ -372,6 +581,36 @@ static int tavarua_set_freq(struct tavarua_device *radio, unsigned int freq)
  *************************************************************************/
 
 /*
+** tavarua_fops_read - read RDS data
+*/
+static ssize_t tavarua_fops_read(struct file *file, char __user *buf,
+				size_t count, loff_t *ppos)
+{
+	struct tavarua_device *radio = video_get_drvdata(video_devdata(file));
+	struct kfifo *rds_buf = radio->data_buf[TAVARUA_BUF_RAW_RDS];
+
+	/* block if no new data available */
+	while (!kfifo_len(rds_buf)) {
+		if (file->f_flags & O_NONBLOCK)
+			return -EWOULDBLOCK;
+		if (wait_event_interruptible(radio->read_queue,
+			kfifo_len(rds_buf)) < 0)
+			return -EINTR;
+	}
+
+	/* calculate block count from byte count */
+	count /= 3;
+
+
+	/* check if we can write to the user buffer */
+	if (!access_ok(VERIFY_WRITE, buf, count*3))
+		return -EFAULT;
+
+	/* copy RDS block out of internal buffer and to user buffer */
+	return kfifo_get(rds_buf, buf, count*3);
+}
+
+/*
 ** tavarua_fops_open - file open
 */
 static int tavarua_fops_open(struct file *file)
@@ -463,6 +702,7 @@ static int tavarua_fops_release(struct file *file)
  */
 static const struct v4l2_file_operations tavarua_fops = {
 	.owner = THIS_MODULE,
+	.read = tavarua_fops_read,
 	.ioctl = video_ioctl2,
 	.open  = tavarua_fops_open,
 	.release = tavarua_fops_release,
@@ -839,7 +1079,7 @@ static int tavarua_vidioc_dqbuf(struct file *file, void *priv,
 		data_fifo = radio->data_buf[buf_type];
 		if (buf_type == TAVARUA_BUF_EVENTS) {
 			if (wait_event_interruptible(radio->event_queue,
-			__kfifo_len(data_fifo)) < 0) {
+				kfifo_len(data_fifo)) < 0) {
 				return -EINTR;
 			}
 		}
@@ -847,7 +1087,7 @@ static int tavarua_vidioc_dqbuf(struct file *file, void *priv,
 		FMDBG("invalid buffer type\n");
 		return -1;
 	}
-	buffer->bytesused = __kfifo_get(data_fifo, buf, len);
+	buffer->bytesused = kfifo_get(data_fifo, buf, len);
 
 	return 0;
 }
@@ -1005,18 +1245,27 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	/*allocate internal buffers for decoded rds and event buffer*/
 	buf_size = 64;
 	for (i = 0; i < TAVARUA_BUF_MAX; i++) {
+		spin_lock_init(&radio->buf_lock[i]);
 		if (i == TAVARUA_BUF_RAW_RDS)
 			radio->data_buf[i] = kfifo_alloc(rds_buf*3,
-						GFP_KERNEL, NULL);
+				GFP_KERNEL, &radio->buf_lock[i]);
 		else
 			radio->data_buf[i] = kfifo_alloc(buf_size,
-						GFP_KERNEL, NULL);
+				GFP_KERNEL, &radio->buf_lock[i]);
 
-		if (radio->data_buf[i] < 0)
+		if (IS_ERR(radio->data_buf[i])) {
+			printk(KERN_ERR "%s: failed allocating buffers %ld\n",
+				__func__, PTR_ERR(radio->data_buf[i]));
 			goto err_bufs;
+		}
 	}
-
+	/* init xfr status */
 	radio->users = 0;
+	radio->xfr_in_progress = 0;
+	radio->xfr_bytes_left = 0;
+	for (i = 0; i < TAVARUA_XFR_MAX; i++)
+		radio->pending_xfrs[i] = 0;
+
 	/* init lock */
 	mutex_init(&radio->lock);
 	/* initialize wait queue for event read */
