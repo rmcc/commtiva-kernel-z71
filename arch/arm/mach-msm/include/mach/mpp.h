@@ -29,12 +29,11 @@
 #ifndef __ARCH_ARM_MACH_MSM_MPP_H
 #define __ARCH_ARM_MACH_MSM_MPP_H
 
-struct mpp {
-	const char *name;
-	unsigned id;
-	int is_input;
-	int status;
-};
+#ifdef CONFIG_PMIC8058
+#define	MPPS		12
+#else
+#define	MPPS		22
+#endif
 
 /* Digital Logical Output Level */
 enum {
@@ -66,8 +65,8 @@ enum {
 #define MPP_CFG_INPUT(level, dbus) ((((level) & 0x0FFFF) << 16) | \
 				 ((control) & 0x0FFFFF))
 
-struct mpp *mpp_get(struct device *dev, const char *id);
-int mpp_config_digital_out(struct mpp *mpp, unsigned config);
-int mpp_config_digital_in(struct mpp *mpp, unsigned config);
+/* Use mpp number starting from 0 */
+int mpp_config_digital_out(unsigned mpp, unsigned config);
+int mpp_config_digital_in(unsigned mpp, unsigned config);
 
 #endif

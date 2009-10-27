@@ -1330,7 +1330,7 @@ static unsigned sdcc_cfg_data[][6] = {
 };
 
 static unsigned long vreg_sts, gpio_sts;
-static struct mpp *mpp_mmc;
+static unsigned mpp_mmc = 2;
 static struct vreg *vreg_mmc;
 
 static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
@@ -1408,14 +1408,7 @@ static struct mmc_platform_data msm7x2x_sdcc_data = {
 
 static void __init msm7x2x_init_mmc(void)
 {
-	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa()) {
-		mpp_mmc = mpp_get(NULL, "mpp3");
-		if (!mpp_mmc) {
-			printk(KERN_ERR "%s: mpp get failed (%ld)\n",
-			       __func__, PTR_ERR(vreg_mmc));
-			return;
-		}
-	} else {
+	if (!machine_is_msm7x25_ffa() && !machine_is_msm7x27_ffa()) {
 		vreg_mmc = vreg_get(NULL, "mmc");
 		if (IS_ERR(vreg_mmc)) {
 			printk(KERN_ERR "%s: vreg get failed (%ld)\n",
