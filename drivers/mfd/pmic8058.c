@@ -62,6 +62,8 @@
 #include <linux/i2c.h>
 #include <linux/kthread.h>
 #include <linux/mfd/pmic8058.h>
+#include <linux/gpio.h>
+#include <asm-generic/gpio.h>
 
 /* PMIC8058 Revision */
 #define SSBI_REG_REV			0x002  /* PMIC4 revision */
@@ -94,6 +96,10 @@
 					PM8058_IRQF_CLR |	\
 					PM8058_IRQF_MASK_FE |	\
 					PM8058_IRQF_MASK_RE)
+
+/* GPIO registers */
+#define	SSBI_REG_ADDR_GPIO_BASE		0x150
+#define	SSBI_REG_ADDR_GPIO(n)		(SSBI_REG_ADDR_GPIO_BASE + n)
 
 /* GPIO */
 #define	PM8058_GPIO_BANK_MASK		0x70
@@ -131,7 +137,8 @@
 #define	MAX_PM_IRQ		256
 #define	MAX_PM_BLOCKS		(MAX_PM_IRQ / 8 + 1)
 #define	MAX_PM_MASTERS		(MAX_PM_BLOCKS / 8 + 1)
-#define MAX_PM_GPIO		40
+
+#define FIRST_GPIO_IRQ_BLOCK		24
 
 struct pm8058_chip {
 	struct pm8058_platform_data	pdata;
@@ -152,6 +159,8 @@ struct pm8058_chip {
 
 	u8	config[PM8058_IRQS];
 	u8	revision;
+
+	u8	gpio_bank1[PM8058_GPIOS];
 };
 
 static struct pm8058_chip *pmic_chip;
@@ -245,6 +254,7 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 		PM8058_GPIO_MODE_INPUT,
 		PM8058_GPIO_MODE_BOTH,
 	};
+	unsigned long	irqsave;
 
 	if (param == NULL)
 		return -EINVAL;
@@ -257,32 +267,40 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 			PM8058_GPIO_VIN_MASK) |
 		PM8058_GPIO_MODE_ENABLE;
 	bank[1] = PM8058_GPIO_WRITE |
-		((1 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
-		((dir_map[param->direction] << PM8058_GPIO_MODE_SHIFT) &
+		((1 << PM8058_GPIO_BANK_SHIFT) &
+			PM8058_GPIO_BANK_MASK) |
+		((dir_map[param->direction] <<
+			PM8058_GPIO_MODE_SHIFT) &
 			PM8058_GPIO_MODE_MASK) |
 		((param->direction & PM_GPIO_DIR_OUT) ?
 			PM8058_GPIO_OUT_BUFFER : 0);
 	bank[2] = PM8058_GPIO_WRITE |
-		((2 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((2 << PM8058_GPIO_BANK_SHIFT) &
+			PM8058_GPIO_BANK_MASK) |
 		((param->pull << PM8058_GPIO_PULL_SHIFT) &
 			PM8058_GPIO_PULL_MASK);
 	bank[3] = PM8058_GPIO_WRITE |
-		((3 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
-		((param->out_strength << PM8058_GPIO_OUT_STRENGTH_SHIFT) &
+		((3 << PM8058_GPIO_BANK_SHIFT) &
+			PM8058_GPIO_BANK_MASK) |
+		((param->out_strength <<
+			PM8058_GPIO_OUT_STRENGTH_SHIFT) &
 			PM8058_GPIO_OUT_STRENGTH_MASK);
 	bank[4] = PM8058_GPIO_WRITE |
-		((4 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		((4 << PM8058_GPIO_BANK_SHIFT) &
+			PM8058_GPIO_BANK_MASK) |
 		((param->function << PM8058_GPIO_FUNC_SHIFT) &
 			PM8058_GPIO_FUNC_MASK);
 
+	local_irq_save(irqsave);
+	/* Remember bank1 for later use */
+	pmic_chip->gpio_bank1[gpio] = bank[1];
 	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 5);
-	if (rc) {
-		pr_err("%s: Failed on 1st ssbi_write(): rc=%d.\n",
-				__func__, rc);
-		goto bail_out;
-	}
+	local_irq_restore(irqsave);
 
-bail_out:
+	if (rc)
+		pr_err("%s: Failed on ssbi_write(): rc=%d (GPIO config)\n",
+				__func__, rc);
+
 	return rc;
 }
 EXPORT_SYMBOL(pm8058_gpio_config);
@@ -299,7 +317,7 @@ int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios)
 		.inv_int_pol	= 1,
 	};
 
-	if (gpio_start < 0 || num_gpios < 0 || num_gpios > MAX_PM_GPIO)
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
 		return -EINVAL;
 
 	while (num_gpios--) {
@@ -327,7 +345,7 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 		.inv_int_pol	= 1,
 	};
 
-	if (gpio_start < 0 || num_gpios < 0 || num_gpios > MAX_PM_GPIO)
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
 		return -EINVAL;
 
 	while (num_gpios--) {
@@ -342,6 +360,114 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 	return 0;
 }
 EXPORT_SYMBOL(pm8058_gpio_config_kypd_sns);
+
+int pm8058_gpio_set_direction(unsigned gpio, int direction)
+{
+	int	rc;
+	u8	bank1;
+	static int	dir_map[] = {
+		PM8058_GPIO_MODE_OFF,
+		PM8058_GPIO_MODE_OUTPUT,
+		PM8058_GPIO_MODE_INPUT,
+		PM8058_GPIO_MODE_BOTH,
+	};
+	unsigned long	irqsave;
+
+	if (!direction)
+		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	bank1 = PM8058_GPIO_WRITE |
+		((1 << PM8058_GPIO_BANK_SHIFT) &
+			PM8058_GPIO_BANK_MASK) |
+		((dir_map[direction] << PM8058_GPIO_MODE_SHIFT) &
+			PM8058_GPIO_MODE_MASK) |
+		((direction & PM_GPIO_DIR_OUT) ?
+			PM8058_GPIO_OUT_BUFFER : 0);
+
+	if (direction & PM_GPIO_DIR_OUT)
+		/* Carry over the old value */
+		bank1 |= pmic_chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
+
+	local_irq_save(irqsave);
+	pmic_chip->gpio_bank1[gpio] = bank1;
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
+	local_irq_restore(irqsave);
+
+	if (rc)
+		pr_err("%s: Failed on ssbi_write(): rc=%d (GPIO config)\n",
+				__func__, rc);
+
+	return rc;
+}
+
+int pm8058_gpio_set(unsigned gpio, int value)
+{
+	int	rc;
+	u8	bank1;
+	unsigned long	irqsave;
+
+	if (gpio >= PM8058_GPIOS)
+		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	bank1 = pmic_chip->gpio_bank1[gpio] & ~PM8058_GPIO_OUT_INVERT;
+
+	if (value)
+		bank1 |= PM8058_GPIO_OUT_INVERT;
+
+	local_irq_save(irqsave);
+	pmic_chip->gpio_bank1[gpio] = bank1;
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
+	local_irq_restore(irqsave);
+
+	if (rc)
+		pr_err("%s: FAIL ssbi_write(): rc=%d. "
+		       "(gpio=%d, value=%d)\n",
+			__func__, rc, gpio, value);
+
+	return rc;
+}
+
+int pm8058_gpio_get(unsigned gpio)
+{
+	int	rc;
+	u8	block, bits, bit;
+	unsigned long	irqsave;
+
+	if (gpio >= PM8058_GPIOS)
+		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	block = FIRST_GPIO_IRQ_BLOCK + gpio / 8;
+	bit = gpio % 8;
+
+	local_irq_save(irqsave);
+
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_write(): rc=%d (Select Block)\n",
+		       __func__, rc);
+		goto bail_out;
+	}
+
+	rc = ssbi_read(pmic_chip->dev, SSBI_REG_ADDR_IRQ_RT_STATUS, &bits, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_read(): rc=%d (Read RT Status)\n",
+		       __func__, rc);
+		goto bail_out;
+	}
+
+	rc = (bits & (1 << bit)) ? 1 : 0;
+
+bail_out:
+	local_irq_restore(irqsave);
+
+	return rc;
+}
 
 /* Internal functions */
 static inline int

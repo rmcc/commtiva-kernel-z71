@@ -35,19 +35,22 @@
 /* PM8058 interrupt numbers */
 #define PM8058_FIRST_IRQ	PMIC8058_IRQ_BASE
 
-#define	PM8058_IRQ_KEYPAD	(PM8058_FIRST_IRQ)
-#define	PM8058_IRQ_KEYSTUCK	(PM8058_FIRST_IRQ + 1)
+#define PM8058_FIRST_GPIO_IRQ	PM8058_FIRST_IRQ
+#define PM8058_FIRST_MPP_IRQ	(PM8058_FIRST_GPIO_IRQ + NR_PMIC8058_GPIO_IRQS)
+#define PM8058_FIRST_MISC_IRQ	(PM8058_FIRST_MPP_IRQ + NR_PMIC8058_MPP_IRQS)
+
+#define	PM8058_IRQ_KEYPAD	(PM8058_FIRST_MISC_IRQ)
+#define	PM8058_IRQ_KEYSTUCK	(PM8058_FIRST_MISC_IRQ + 1)
 
 #define PM8058_IRQS		NR_PMIC8058_IRQS
+
+#define PM8058_GPIOS		NR_PMIC8058_GPIO_IRQS
 
 struct pm8058_platform_data {
 	unsigned int	pm_irqs[PM8058_IRQS];	/* block*8 + bit-pos */
 };
 
-/* GPIO definitions */
-#define	SSBI_REG_ADDR_GPIO_BASE		0x150
-#define	SSBI_REG_ADDR_GPIO(n)		(SSBI_REG_ADDR_GPIO_BASE + n)
-
+/* GPIO parameters */
 #define	PM_GPIO_DIR_OUT			0x01
 #define	PM_GPIO_DIR_IN			0x02
 #define	PM_GPIO_DIR_BOTH		(PM_GPIO_DIR_OUT | PM_GPIO_DIR_IN)
@@ -80,6 +83,9 @@ int pm8058_read(u16 addr, u8 *values, unsigned int len);
 int pm8058_write(u16 addr, u8 *values, unsigned int len);
 
 int pm8058_gpio_config(int gpio, struct pm8058_gpio *param);
+int pm8058_gpio_set_direction(unsigned gpio, int direction);
+int pm8058_gpio_set(unsigned gpio, int value);
+int pm8058_gpio_get(unsigned gpio);
 
 int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios);
 int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios);
