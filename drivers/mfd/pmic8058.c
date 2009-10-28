@@ -923,8 +923,20 @@ static int pm8058_probe(struct i2c_client *client,
 	chip->pm_max_irq = 0;
 	for (i = 0; i < PM8058_IRQS; i++) {
 		pm_irq = chip->pdata.pm_irqs[i];
-		if (pm_irq > 0)
+		if (pm_irq > 0) {
+			u8	block, irq_bit, config;
+
+			block = pm_irq / 8;
+			irq_bit = pm_irq % 8;
+
+			/* Mask and clear the interrupt first */
+			config = PM8058_IRQF_W_C_M |
+				(irq_bit < PM8058_IRQF_BITS_SHIFT);
+
+			pm8058_config_irq(chip, &block, &config);
+
 			chip->irq_i2e[pm_irq] = i + PM8058_FIRST_IRQ;
+		}
 		if (pm_irq > chip->pm_max_irq)
 			chip->pm_max_irq = pm_irq;
 	}
