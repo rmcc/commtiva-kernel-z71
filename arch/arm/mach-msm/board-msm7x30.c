@@ -478,7 +478,7 @@ static void config_camera_off_gpios(void)
 		ARRAY_SIZE(camera_off_gpio_table));
 }
 
-static struct resource msm_camera_resources[] = {
+struct resource msm_camera_resources[] = {
 	{
 		.start	= 0xA6000000,
 		.end	= 0xA6000000 + SZ_1M - 1,
@@ -491,7 +491,7 @@ static struct resource msm_camera_resources[] = {
 	},
 };
 
-static struct msm_camera_device_platform_data msm_camera_device_data = {
+struct msm_camera_device_platform_data msm_camera_device_data = {
 	.camera_gpio_on  = config_camera_on_gpios,
 	.camera_gpio_off = config_camera_off_gpios,
 	.ioext.mdcphy = MSM_MDC_PHYS,
