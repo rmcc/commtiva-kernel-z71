@@ -2180,7 +2180,6 @@ config FB_MSM_MDP40
 	  Say Y here if this is msm7x30 variant platform.
 endchoice
 
-
 config FB_MSM_EBI2
 	bool
 	default n
@@ -2191,6 +2190,11 @@ config FB_MSM_MDDI
 
 config FB_MSM_LCDC
 	bool
+	default n
+
+config FB_MSM_OVERLAY
+	depends on FB_MSM_MDP40
+	bool "MDP4 overlay support"
 	default n
 
 config FB_MSM_EXTMDDI

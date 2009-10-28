@@ -18,10 +18,18 @@ else
 obj-y += mdp_ppp_v20.o
 endif
 endif
+
+ifeq ($(CONFIG_FB_MSM_OVERLAY),y)
+obj-y += mdp4_overlay.o
+obj-y += mdp4_overlay_lcdc.o
+obj-y += mdp4_overlay_mddi.o
+else
+obj-y += mdp_dma_lcdc.o
+endif
+
 obj-y += mdp_dma.o
 obj-y += mdp_dma_s.o
 obj-y += mdp_vsync.o
-obj-y += mdp_dma_lcdc.o
 obj-y += mdp_cursor.o
 obj-y += mdp_dma_tv.o
 
