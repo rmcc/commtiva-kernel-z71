@@ -64,6 +64,8 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/i2c.h>
+#include <linux/remote_spinlock.h>
+#include <mach/board.h>
 
 /* SSBI 2.0 controller registers */
 #define SSBI2_CTL			0x0000
@@ -135,8 +137,8 @@ struct i2c_ssbi_dev {
 	unsigned long		 mem_phys_addr;
 	size_t			 mem_size;
 	bool                     suspended;
+	remote_spinlock_t	 rspin_lock;
 };
-
 
 static inline int
 i2c_ssbi_poll_for_device_ready(struct i2c_ssbi_dev *ssbi)
@@ -260,11 +262,13 @@ i2c_ssbi_transfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
 	int ret = 0;
 	int rem = num;
+	unsigned long flags;
 	struct i2c_ssbi_dev *ssbi = i2c_get_adapdata(adap);
 
 	if (ssbi->suspended)
 		return -EBUSY;
 
+	remote_spin_lock_irqsave(&ssbi->rspin_lock, flags);
 	while (rem) {
 		if (msgs->flags & I2C_M_RD) {
 			ret = i2c_ssbi_read_bytes(ssbi, msgs);
@@ -279,10 +283,12 @@ i2c_ssbi_transfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		msgs++;
 		rem--;
 	}
+	remote_spin_unlock_irqrestore(&ssbi->rspin_lock, flags);
 
 	return num;
 
 transfer_failed:
+	remote_spin_unlock_irqrestore(&ssbi->rspin_lock, flags);
 	return ret;
 }
 
@@ -301,6 +307,14 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 	int			 ret = 0;
 	struct resource		*ssbi_res;
 	struct i2c_ssbi_dev	*ssbi;
+	struct msm_i2c_platform_data *pdata;
+
+	pdata = pdev->dev.platform_data;
+	if (!pdata) {
+		ret = -ENXIO;
+		dev_err(&pdev->dev, "platform data not initialized\n");
+		goto err_probe_exit;
+	}
 
 	ssbi = kzalloc(sizeof(struct i2c_ssbi_dev), GFP_KERNEL);
 	if (!ssbi) {
@@ -341,6 +355,8 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 	strlcpy(ssbi->adapter.name,
 		"MSM SSBI adapter",
 		sizeof(ssbi->adapter.name));
+
+	remote_spin_lock_init(&ssbi->rspin_lock, pdata->rsl_id);
 
 	ssbi->adapter.nr = pdev->id;
 	ret = i2c_add_numbered_adapter(&ssbi->adapter);
