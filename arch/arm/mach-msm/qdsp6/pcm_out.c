@@ -51,8 +51,15 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	mutex_lock(&pcm->lock);
 	switch (cmd) {
-	case AUDIO_SET_VOLUME:
+	case AUDIO_SET_VOLUME: {
+		int vol;
+		if (copy_from_user(&vol, (void*) arg, sizeof(vol))) {
+			rc = -EFAULT;
+			break;
+		}
+		rc = q6audio_set_stream_volume(pcm->ac, vol);
 		break;
+	}
 	case AUDIO_START:
 		if (pcm->ac) {
 			rc = -EBUSY;

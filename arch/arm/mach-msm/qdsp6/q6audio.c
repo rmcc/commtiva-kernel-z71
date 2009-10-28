@@ -540,6 +540,30 @@ static int audio_tx_mute(struct audio_client *ac, uint32_t dev_id, int mute)
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
+static int audio_stream_volume(struct audio_client *ac, int volume)
+{
+	struct adsp_set_volume_command rpc;
+	int rc;
+
+	memset(&rpc, 0, sizeof(rpc));
+	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_VOL;
+	rpc.volume = volume;
+	rc = audio_ioctl(ac, &rpc, sizeof(rpc));
+	return rc;
+}
+
+static int audio_stream_mute(struct audio_client *ac, int mute)
+{
+	struct adsp_set_mute_command rpc;
+	int rc;
+
+	memset(&rpc, 0, sizeof(rpc));
+	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_SET_STREAM_MUTE;
+	rpc.mute = mute;
+	rc = audio_ioctl(ac, &rpc, sizeof(rpc));
+	return rc;
+}
+
 static void callback(void *data, int len, void *cookie)
 {
 	struct adsp_event_hdr *e = data;
@@ -1247,6 +1271,19 @@ int q6audio_set_tx_mute(int mute)
 	adev = audio_tx_device_id;
 	rc = audio_tx_mute(ac_control, adev, mute);
 	if (!rc) tx_mute_status = mute;
+	mutex_unlock(&audio_path_lock);
+	return 0;
+}
+
+int q6audio_set_stream_volume(struct audio_client *ac, int vol)
+{
+	if (vol > 1200 || vol < -4000) {
+		pr_err("unsupported volume level %d\n", vol);
+		return -EINVAL;
+	}
+	mutex_lock(&audio_path_lock);
+	audio_stream_mute(ac, 0);
+	audio_stream_volume(ac, vol);
 	mutex_unlock(&audio_path_lock);
 	return 0;
 }
