@@ -27,6 +27,7 @@
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <linux/wakelock.h>
+#include <linux/timer.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
@@ -36,6 +37,14 @@
 
 /* XXX should come from smd headers */
 #define SMD_PORT_ETHER0 11
+
+static const char *ch_name[3] = {
+	"DATA5",
+	"DATA6",
+	"DATA7",
+};
+
+#define SMD_POLL_MILLISECS 1
 
 struct rmnet_private
 {
@@ -49,6 +58,8 @@ struct rmnet_private
 	unsigned long wakeups_rcv;
 	unsigned long timeout_us;
 #endif
+	struct sk_buff *skb;
+	struct timer_list smd_poll_timer;
 };
 
 static int count_this_packet(void *_hdr, int len)
@@ -263,14 +274,71 @@ static int rmnet_stop(struct net_device *dev)
 	return 0;
 }
 
+
+static void rmnet_poll_smd_write(unsigned long param)
+{
+	struct net_device * dev = (struct net_device *)param;
+	struct rmnet_private *p = netdev_priv(dev);
+	smd_channel_t *ch = p->ch;
+	int smd_ret;
+
+	/* this should never happen */
+	if (p == 0 || (p->skb) == 0 || (p->skb->len) == 0) {
+		pr_err("fatal: rmnet rmnet_poll_smd_write rcvd skb length 0");
+		return;
+	}
+
+	if (smd_write_avail(ch) >= p->skb->len) {
+		smd_ret = smd_write(ch, p->skb->data, p->skb->len);
+		if (smd_ret != p->skb->len) {
+			pr_err("fatal: smd_write returned error %d", smd_ret);
+			return;
+		}
+		/* data xmited, safe to release skb */
+		dev_kfree_skb_irq(p->skb);
+		p->skb = 0;
+		netif_wake_queue((struct net_device *)dev);
+	} else {
+		init_timer(&p->smd_poll_timer);
+		p->smd_poll_timer.expires = jiffies +
+			((SMD_POLL_MILLISECS*HZ)/1000);
+		p->smd_poll_timer.function = rmnet_poll_smd_write;
+		p->smd_poll_timer.data = param;
+		add_timer(&p->smd_poll_timer);
+	}
+}
+
 static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct rmnet_private *p = netdev_priv(dev);
 	smd_channel_t *ch = p->ch;
+	int smd_ret;
 
-	if (smd_write(ch, skb->data, skb->len) != skb->len) {
-		pr_err("rmnet fifo full, dropping packet\n");
+	if (netif_queue_stopped(dev)) {
+		pr_err("fatal: rmnet_xmit called when netif_queue is stopped");
+		return 0;
+	}
+
+	if (smd_write_avail(ch) < skb->len) {
+		rmnet_stop(dev);
+		/* schedule a function to poll at exponential interval */
+		init_timer(&p->smd_poll_timer);
+		p->smd_poll_timer.expires = jiffies
+			+ ((SMD_POLL_MILLISECS*HZ)/1000);
+		p->smd_poll_timer.function = rmnet_poll_smd_write;
+		if (p->skb)
+			pr_err("fatal: p->skb was non-zero when"
+				"we tried to scheduled timer");
+		p->skb = skb;
+		p->smd_poll_timer.data = (unsigned long)dev;
+		add_timer(&p->smd_poll_timer);
 	} else {
+		smd_ret = smd_write(ch, skb->data, skb->len);
+		if (smd_ret != skb->len) {
+			pr_err("fatal: smd_write returned error %d", smd_ret);
+			return 0;
+		}
+
 		if (count_this_packet(skb->data, skb->len)) {
 			p->stats.tx_packets++;
 			p->stats.tx_bytes += skb->len;
@@ -278,9 +346,11 @@ static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 			p->wakeups_xmit += rmnet_cause_wakeup(p);
 #endif
 		}
+		/* data xmited, safe to release skb */
+		dev_kfree_skb_irq(skb);
 	}
 
-	dev_kfree_skb_irq(skb);
+
 	return 0;
 }
 
@@ -318,12 +388,6 @@ static void __init rmnet_setup(struct net_device *dev)
 }
 
 
-static const char *ch_name[3] = {
-	"DATA5",
-	"DATA6",
-	"DATA7",
-};
-
 static int __init rmnet_init(void)
 {
 	int ret;
@@ -348,6 +412,7 @@ static int __init rmnet_init(void)
 
 		d = &(dev->dev);
 		p = netdev_priv(dev);
+		p->skb = 0;
 		p->chname = ch_name[n];
 		wake_lock_init(&p->wake_lock, WAKE_LOCK_SUSPEND, ch_name[n]);
 #ifdef CONFIG_MSM_RMNET_DEBUG
