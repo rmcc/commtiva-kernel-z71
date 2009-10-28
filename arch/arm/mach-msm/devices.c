@@ -687,6 +687,29 @@ int __init msm_add_sdcc(unsigned int controller, struct mmc_platform_data *plat)
 	return platform_device_register(pdev);
 }
 
+#if defined(CONFIG_ARCH_MSM7X30)
+static struct resource msm_ss_mfc_720p_resources[] = {
+	{
+		.start	= 0xA3B00000,
+		.end	= 0xA3B00000 + SZ_4K - 1,
+		.flags	= IORESOURCE_MEM,
+	},
+	{
+		.start	= INT_MFC720,
+		.end	= INT_MFC720,
+		.flags	= IORESOURCE_IRQ,
+	},
+};
+
+struct platform_device msm_device_ss_mfc_720p = {
+	.name = "msm_ss_mfc_720p",
+	.id = 0,
+	.num_resources = ARRAY_SIZE(msm_ss_mfc_720p_resources),
+	.resource = msm_ss_mfc_720p_resources,
+};
+
+#endif
+
 #if defined(CONFIG_FB_MSM_MDP40)
 #define MDP_BASE          0xA3F00000
 #define PMDH_BASE         0xAD600000

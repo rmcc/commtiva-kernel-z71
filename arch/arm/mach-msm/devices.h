@@ -59,6 +59,10 @@ extern struct platform_device msm_device_ssbi6;
 extern struct platform_device msm_device_ssbi7;
 #endif
 
+#if defined(CONFIG_ARCH_MSM7X30)
+extern struct platform_device msm_device_ss_mfc_720p;
+#endif
+
 extern struct clk msm_clocks_7x01a[];
 extern unsigned msm_num_clocks_7x01a;
 
