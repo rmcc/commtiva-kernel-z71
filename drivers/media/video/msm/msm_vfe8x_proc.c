@@ -1658,6 +1658,8 @@ static void vfe_process_output_path_irq(
 			/* spin_unlock_irqrestore(&ctrl->state_lock, flags); */
 
 			vfe_send_msg_no_payload(VFE_MSG_ID_SNAPSHOT_DONE);
+			writel(CAMIF_COMMAND_STOP_IMMEDIATELY,
+				ctrl->vfebase + CAMIF_COMMAND);
 			vfe_prog_hw_testgen_cmd(VFE_TEST_GEN_STOP);
 			vfe_pm_stop();
 		}
