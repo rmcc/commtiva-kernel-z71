@@ -279,6 +279,9 @@ struct snddev_icodec_drv_state {
 
 static struct snddev_icodec_drv_state snddev_icodec_drv;
 
+static int afe_rx_enabled;
+static int afe_tx_enabled;
+
 static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 {
 	int trc;
@@ -319,12 +322,15 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	 */
 	adie_codec_setpath(icodec->adie_path, icodec->sample_rate, 256);
 	/* Start AFE */
-	afe_config.sample_rate = icodec->sample_rate / 1000;
-	afe_config.channel_mode = icodec->data->channel_mode;
-	afe_config.volume = AFE_VOLUME_UNITY;
-	trc = afe_enable(AFE_HW_PATH_CODEC_RX, &afe_config);
-	if (IS_ERR_VALUE(trc))
-		goto error_afe;
+	if (!afe_rx_enabled) {
+		afe_config.sample_rate = icodec->sample_rate / 1000;
+		afe_config.channel_mode = icodec->data->channel_mode;
+		afe_config.volume = AFE_VOLUME_UNITY;
+		trc = afe_enable(AFE_HW_PATH_CODEC_RX, &afe_config);
+		if (IS_ERR_VALUE(trc))
+			goto error_afe;
+		afe_rx_enabled = 1;
+	}
 	/* Enable ADIE */
 	adie_codec_proceed_stage(icodec->adie_path, ADIE_CODEC_DIGITAL_READY);
 	adie_codec_proceed_stage(icodec->adie_path,
@@ -385,12 +391,15 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	ADIE_CODEC_DIGITAL_ANALOG_READY);
 
 	/* Start AFE */
-	afe_config.sample_rate = icodec->sample_rate / 1000;
-	afe_config.channel_mode = icodec->data->channel_mode;
-	afe_config.volume = AFE_VOLUME_UNITY;
-	trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
-	if (IS_ERR_VALUE(trc))
-		goto error_afe;
+	if (!afe_tx_enabled) {
+		afe_config.sample_rate = icodec->sample_rate / 1000;
+		afe_config.channel_mode = icodec->data->channel_mode;
+		afe_config.volume = AFE_VOLUME_UNITY;
+		trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
+		if (IS_ERR_VALUE(trc))
+			goto error_afe;
+		afe_tx_enabled = 1;
+	}
 	icodec->enabled = 1;
 	return 0;
 
@@ -418,8 +427,6 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 	adie_codec_close(icodec->adie_path);
 	icodec->adie_path = NULL;
 
-	afe_disable(AFE_HW_PATH_CODEC_RX);
-
 	/* Disable MI2S RX master block */
 	/* Disable MI2S RX bit clock */
 	clk_disable(drv->rx_sclk);
@@ -437,8 +444,6 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 {
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
-
-	afe_disable(AFE_HW_PATH_CODEC_TX);
 
 	/* Disable ADIE */
 	adie_codec_proceed_stage(icodec->adie_path, ADIE_CODEC_DIGITAL_OFF);
@@ -842,6 +847,8 @@ static int __init snddev_icodec_init(void)
 	s32 rc;
 	struct snddev_icodec_drv_state *icodec_drv = &snddev_icodec_drv;
 
+	afe_rx_enabled = 0;
+	afe_tx_enabled = 0;
 	rc = platform_driver_register(&snddev_icodec_driver);
 	if (IS_ERR_VALUE(rc))
 		goto error_platform_driver;
