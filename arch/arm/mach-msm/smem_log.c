@@ -119,8 +119,8 @@ struct smem_log_item {
 #define SMEM_POWER_LOG_EVENTS_SIZE (sizeof(struct smem_log_item) * \
 			      SMEM_LOG_NUM_POWER_ENTRIES)
 
-#define SMEM_SPINLOCK_SMEM_LOG 2
-#define SMEM_SPINLOCK_STATIC_LOG 5
+#define SMEM_SPINLOCK_SMEM_LOG		"S:2"
+#define SMEM_SPINLOCK_STATIC_LOG	"S:5"
 /* POWER shares with SMEM_SPINLOCK_SMEM_LOG */
 
 static remote_spinlock_t remote_spinlock;

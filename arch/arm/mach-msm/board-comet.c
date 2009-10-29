@@ -98,7 +98,7 @@
 #define OPTNAV_BUTTON_L         35
 #define OPTNAV_BUTTON_R         34
 
-#define SMEM_SPINLOCK_I2C	6
+#define SMEM_SPINLOCK_I2C	"S:6"
 
 #define MSM_PMEM_MDP_SIZE	0x800000
 #define MSM_PMEM_ADSP_SIZE	0x2900000

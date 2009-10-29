@@ -865,7 +865,7 @@ static void msm7x25_acpu_pll_hw_bug_fix(void)
 
 static void shared_pll_control_init(void)
 {
-#define PLL_REMOTE_SPINLOCK_ID	7
+#define PLL_REMOTE_SPINLOCK_ID "S:7"
 	unsigned smem_size;
 	remote_spin_lock_init(&pll_lock, PLL_REMOTE_SPINLOCK_ID);
 	pll_control = smem_get_entry(SMEM_CLKREGIM_SOURCES, &smem_size);

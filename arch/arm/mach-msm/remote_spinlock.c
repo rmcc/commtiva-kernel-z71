@@ -57,16 +57,18 @@
 
 #include <linux/err.h>
 #include <linux/kernel.h>
+#include <linux/string.h>
 
 #include <asm/system.h>
 
 #include <mach/remote_spinlock.h>
+#include <mach/dal.h>
 #include "smd_private.h"
 
 #define SMEM_SPINLOCK_COUNT 8
 #define SMEM_SPINLOCK_ARRAY_SIZE (SMEM_SPINLOCK_COUNT * sizeof(uint32_t))
 
-int _remote_spin_lock_init(remote_spin_lock_id_t id, _remote_spinlock_t *lock)
+static int remote_spinlock_smem_init(int id, _remote_spinlock_t *lock)
 {
 	_remote_spinlock_t spinlock_start;
 
@@ -81,5 +83,55 @@ int _remote_spin_lock_init(remote_spin_lock_id_t id, _remote_spinlock_t *lock)
 	*lock = spinlock_start + id;
 
 	return 0;
+}
+
+static int
+remote_spinlock_dal_init(const char *chunk_name, _remote_spinlock_t *lock)
+{
+	void *dal_smem_start, *dal_smem_end;
+	uint32_t dal_smem_size;
+	struct dal_chunk_header *cur_header;
+
+	if (!chunk_name)
+		return -EINVAL;
+
+	dal_smem_start = smem_get_entry(SMEM_DAL_AREA, &dal_smem_size);
+	if (!dal_smem_start)
+		return -ENXIO;
+
+	dal_smem_end = dal_smem_start + dal_smem_size;
+
+	/* Find first chunk header */
+	cur_header = (struct dal_chunk_header *)
+			(((uint32_t)dal_smem_start + (4095)) & ~4095);
+
+	while (cur_header->size != 0
+		&& ((uint32_t)(cur_header + 1) < (uint32_t)dal_smem_end)) {
+
+		/* Check if chunk name matches */
+		if (!strncmp(cur_header->name, chunk_name,
+						DAL_CHUNK_NAME_LENGTH)) {
+			*lock = (_remote_spinlock_t)&cur_header->lock;
+			break;
+		}
+		cur_header = (void *)cur_header + cur_header->size;
+	}
+
+	return 0;
+}
+
+int _remote_spin_lock_init(remote_spinlock_id_t id, _remote_spinlock_t *lock)
+{
+	BUG_ON(id == NULL);
+
+	if (id[0] == 'D' && id[1] == ':') {
+		/* DAL chunk name starts after "D:" */
+		return remote_spinlock_dal_init(&id[2], lock);
+	} else if (id[0] == 'S' && id[1] == ':') {
+		/* Single-digit SMEM lock ID follows "S:" */
+		BUG_ON(id[3] != '\0');
+		return remote_spinlock_smem_init((((uint8_t)id[2])-'0'), lock);
+	} else
+		return -EINVAL;
 }
 
