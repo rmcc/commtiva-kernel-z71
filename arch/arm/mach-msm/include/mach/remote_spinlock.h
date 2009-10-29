@@ -36,8 +36,16 @@
 
 #include <linux/types.h>
 
-typedef struct {
+struct dek_spinlock {
+	volatile uint8_t self_lock;
+	volatile uint8_t other_lock;
+	volatile uint8_t turn;
+	uint8_t pad;
+};
+
+typedef union {
 	volatile uint32_t lock;
+	struct dek_spinlock dek;
 } raw_remote_spinlock_t;
 
 typedef raw_remote_spinlock_t *_remote_spinlock_t;
@@ -98,17 +106,52 @@ static inline void __raw_remote_swp_spin_unlock(raw_remote_spinlock_t *lock)
 	: "cc");
 }
 
-int _remote_spin_lock_init(remote_spinlock_id_t id, _remote_spinlock_t *lock);
+#define DEK_LOCK_REQUEST	1
+#define DEK_LOCK_YIELD		0
+#define DEK_TURN_SELF		0
+#define DEK_TURN_OTHER		1
+static inline void __raw_remote_dek_spin_lock(raw_remote_spinlock_t *lock)
+{
+	lock->dek.self_lock = DEK_LOCK_REQUEST;
 
-/* Only use SWP-based spinlocks for ARM11 apps processors where the LDREX/STREX
- * instructions are unable to lock shared memory for exclusive access. */
-#if defined(CONFIG_ARCH_MSM_ARM11)
+	while (lock->dek.other_lock) {
+
+		if (lock->dek.turn != DEK_TURN_SELF)
+			lock->dek.self_lock = DEK_LOCK_YIELD;
+
+		while (lock->dek.other_lock)
+			;
+
+		lock->dek.self_lock = DEK_LOCK_YIELD;
+	}
+	lock->dek.turn = DEK_TURN_OTHER;
+
+	smp_mb();
+}
+
+static inline void __raw_remote_dek_spin_unlock(raw_remote_spinlock_t *lock)
+{
+	smp_mb();
+
+	lock->dek.self_lock = DEK_LOCK_YIELD;
+}
+
+int _remote_spin_lock_init(remote_spinlock_id_t, _remote_spinlock_t *lock);
+
+#if defined(CONFIG_REMOTE_SPINLOCK_DEKKERS)
+/* Use Dekker's algorithm when LDREX/STREX and SWP are unavailable for
+ * shared memory */
+#define _remote_spin_lock(lock)		__raw_remote_dek_spin_lock(*lock)
+#define _remote_spin_unlock(lock)	__raw_remote_dek_spin_unlock(*lock)
+#elif defined(CONFIG_REMOTE_SPINLOCK_SWP)
+/* Use SWP-based locks when LDREX/STREX are unavailable for shared memory. */
 #define _remote_spin_lock(lock)		__raw_remote_swp_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_swp_spin_unlock(*lock)
 #else
+/* Use LDREX/STREX for shared memory locking, when available */
 #define _remote_spin_lock(lock)		__raw_remote_ex_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_ex_spin_unlock(*lock)
-#endif	/* CONFIG_ARCH_MSM_ARM11 */
+#endif
 
 #endif /* __ASM__ARCH_QC_REMOTE_SPINLOCK_H */
 
