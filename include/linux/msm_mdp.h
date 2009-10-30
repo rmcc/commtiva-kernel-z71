@@ -29,8 +29,14 @@
 /* new ioctls's for set/get ccs matrix */
 #define MSMFB_GET_CCS_MATRIX  _IOWR(MSMFB_IOCTL_MAGIC, 133, struct mdp_ccs)
 #define MSMFB_SET_CCS_MATRIX  _IOW(MSMFB_IOCTL_MAGIC, 134, struct mdp_ccs)
+#define MSMFB_OVERLAY_SET       _IOWR(MSMFB_IOCTL_MAGIC, 135, \
+						struct mdp_overlay)
+#define MSMFB_OVERLAY_UNSET     _IOW(MSMFB_IOCTL_MAGIC, 136, unsigned int)
+#define MSMFB_OVERLAY_PLAY      _IOW(MSMFB_IOCTL_MAGIC, 137, \
+						struct msmfb_overlay_data)
 
 #define MDP_IMGTYPE2_START 0x10000
+
 enum {
 	MDP_RGB_565,      /* RGB 565 planer */
 	MDP_XRGB_8888,    /* RGB 888 padded */
@@ -115,6 +121,41 @@ struct mdp_blit_req {
 struct mdp_blit_req_list {
 	uint32_t count;
 	struct mdp_blit_req req[];
+};
+
+enum {
+	MDP_ZORDER_BASELAYER,
+	MDP_ZORDER_STAGE0,
+	MDP_ZORDER_STAGE1,
+	MDP_ZORDER_STAGE2
+};
+
+struct msmfb_data {
+	uint32_t offset;
+	int memory_id;
+	int id;
+};
+
+struct msmfb_overlay_data {
+	uint32_t id;
+	struct msmfb_data data;
+};
+
+struct msmfb_img {
+	uint32_t width;
+	uint32_t height;
+	uint32_t format;
+};
+
+struct mdp_overlay {
+	struct msmfb_img src;
+	struct mdp_rect src_rect;
+	struct mdp_rect dst_rect;
+	uint32_t z_order;	/* stage number */
+	uint32_t alpha;
+	uint32_t transp_mask;
+	uint32_t flags;
+	uint32_t id;
 };
 
 struct mdp_histogram {
