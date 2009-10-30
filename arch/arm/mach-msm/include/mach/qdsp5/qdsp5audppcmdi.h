@@ -316,6 +316,27 @@ struct audpp_cmd_cfg_adec_params_wma {
 	unsigned short	wmaencoderopts;
 } __attribute__((packed));
 
+/*
+ * Command Structure to configure Per decoder Parameters (WMAPRO)
+ */
+
+#define AUDPP_CMD_CFG_ADEC_PARAMS_WMAPRO_LEN	\
+	sizeof(struct audpp_cmd_cfg_adec_params_wmapro)
+
+struct audpp_cmd_cfg_adec_params_wmapro {
+	audpp_cmd_cfg_adec_params_common    common;
+	unsigned short 	armdatareqthr;
+	uint8_t         validbitspersample;
+	uint8_t         numchannels;
+	unsigned short  formattag;
+	unsigned short  samplingrate;
+	unsigned short  avgbytespersecond;
+	unsigned short  asfpacketlength;
+	unsigned short 	channelmask;
+	unsigned short 	encodeopt;
+	unsigned short	advancedencodeopt;
+	uint32_t	advancedencodeopt2;
+} __attribute__((packed));
 
 /*
  * Command Structure to configure Per decoder Parameters (MP3)
