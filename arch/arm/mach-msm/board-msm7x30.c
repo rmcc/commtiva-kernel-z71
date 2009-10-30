@@ -1965,6 +1965,16 @@ static void __init qup_device_i2c_init(void)
 	}
 }
 
+#ifdef CONFIG_I2C_SSBI
+static struct msm_i2c_platform_data msm_i2c_ssbi6_pdata = {
+	.rsl_id = "D:PMIC_SSBI"
+};
+
+static struct msm_i2c_platform_data msm_i2c_ssbi7_pdata = {
+	.rsl_id = "D:CODEC_SSBI"
+};
+#endif
+
 static void __init msm7x30_init_irq(void)
 {
 	msm_init_irq();
@@ -2317,6 +2327,10 @@ static void __init msm7x30_init(void)
 	msm7x30_init_uart2();
 #endif
 	msm_device_tssc.dev.platform_data = &msm_ts_data;
+#ifdef CONFIG_I2C_SSBI
+	msm_device_ssbi6.dev.platform_data = &msm_i2c_ssbi6_pdata;
+	msm_device_ssbi7.dev.platform_data = &msm_i2c_ssbi7_pdata;
+#endif
 }
 
 static unsigned pmem_sf_size = MSM_PMEM_SF_SIZE;
