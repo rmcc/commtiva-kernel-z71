@@ -438,7 +438,8 @@ static int audio_set_table(struct audio_client *ac,
 
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG_TABLE;
-	rpc.hdr.data = 8000;
+	if (q6_device_to_dir(device_id) == Q6_TX)
+		rpc.hdr.data = tx_clk_freq;
 	rpc.device_id = device_id;
 	rpc.phys_addr = audio_phys;
 	rpc.phys_size = size;
