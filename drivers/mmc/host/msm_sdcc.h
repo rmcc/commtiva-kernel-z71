@@ -186,6 +186,8 @@ struct msmsdcc_dma_data {
 	int				channel;
 	struct msmsdcc_host		*host;
 	int				busy; /* Set if DM is busy */
+	unsigned int 			result;
+	struct msm_dmov_errdata 	*err;
 };
 
 struct msmsdcc_pio_data {
@@ -244,6 +246,7 @@ struct msmsdcc_host {
 #ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 	struct work_struct	resume_task;
 #endif
+	struct tasklet_struct 	dma_tlet;
 	unsigned int prog_scan;
 	unsigned int prog_enable;
 };
