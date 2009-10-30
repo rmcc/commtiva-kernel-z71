@@ -26,7 +26,7 @@
 
 #include <mach/msm_qdsp6_audio.h>
 
-#define BUFSZ (8192)
+#define BUFSZ (4800)
 #define DMASZ (BUFSZ * 2)
 
 struct pcm {
