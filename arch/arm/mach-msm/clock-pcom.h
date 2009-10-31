@@ -121,8 +121,10 @@
 #define P_SDAC_MCLK		87
 #define P_MI2S_HDMI_CLK		88
 #define P_MI2S_HDMI_MCLK	89
+#define P_AXI_ROTATOR_CLK	90
+#define P_HDMI_CLK		91
 
-#define P_NR_CLKS		90
+#define P_NR_CLKS		92
 
 struct clk_ops;
 extern struct clk_ops clk_ops_pcom;
