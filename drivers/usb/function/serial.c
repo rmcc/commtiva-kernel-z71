@@ -1333,12 +1333,13 @@ static void gs_write_complete(struct usb_endpoint *ep, struct usb_request *req)
 {
 	struct gs_dev *dev = (struct gs_dev *)req->device;
 	struct gs_port	*port = dev->dev_port[0];
+	unsigned long flags;
 
 	if (dev == NULL) {
 		printk(KERN_ERR "gs_write_complete: NULL device pointer\n");
 		return;
 	}
-	spin_lock(&port->port_lock);
+	spin_lock_irqsave(&port->port_lock, flags);
 	list_add(&req->list, &port->write_pool);
 
 	switch (req->status) {
@@ -1364,7 +1365,7 @@ static void gs_write_complete(struct usb_endpoint *ep, struct usb_request *req)
 		printk(KERN_DEBUG "%s: shutdown\n", __func__);
 		break;
 	}
-	spin_unlock(&port->port_lock);
+	spin_unlock_irqrestore(&port->port_lock, flags);
 }
 
 /* Send Notification to host if Status changes */
