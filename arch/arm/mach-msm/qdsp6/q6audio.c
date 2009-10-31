@@ -109,6 +109,7 @@ static struct q6audio_analog_ops default_analog_ops;
 static struct q6audio_analog_ops *analog_ops = &default_analog_ops;
 static uint32_t tx_clk_freq = 8000;
 static int tx_mute_status = 0;
+static char acdb_file[64] = "default.acdb";
 
 void q6audio_register_analog_ops(struct q6audio_analog_ops *ops)
 {
@@ -689,17 +690,16 @@ struct audio_config_database {
 };
 
 void *acdb_data;
-
 extern struct miscdevice q6_control_device;
 
-static int acdb_init(void)
+static int acdb_init(char *filename)
 {
 	const struct audio_config_database *db;
 	const struct firmware *fw;
 	int n;
 
-	pr_info("acdb: load 'default.acdb'\n");
-	if (request_firmware(&fw, "default.acdb", q6_control_device.this_device) < 0) {
+	pr_info("acdb: load '%s'\n", filename);
+	if (request_firmware(&fw, filename, q6_control_device.this_device) < 0) {
 		pr_err("acdb: load 'default.acdb' failed...\n");
 		return -ENODEV;
 	}
@@ -733,6 +733,8 @@ static int acdb_init(void)
 			goto fail;
 		}
 	}
+	if (acdb_data)
+		release_firmware(acdb_data);
 	acdb_data = (void*) fw->data;
 	return 0;
 fail:
@@ -749,7 +751,7 @@ static int acdb_get_config_table(uint32_t device_id, uint32_t sample_rate)
 		return 0;
 
 	if (!acdb_data) {
-		res = acdb_init();
+		res = acdb_init(acdb_file);
 		if (res)
 			return res;
 	}
@@ -1158,6 +1160,26 @@ static int audio_tx_path_enable(int en)
 	return 0;
 }
 
+int q6audio_reinit_acdb(char* filename) {
+	int res;
+
+	if (q6audio_init())
+		return 0;
+
+	mutex_lock(&audio_path_lock);
+	if (strlen(filename) < 0 || !strcmp(filename, acdb_file)) {
+		res = -EINVAL;
+		goto done;
+	}
+	res = acdb_init(filename);
+	if (!res)
+		strcpy(acdb_file, filename);
+done:
+	mutex_unlock(&audio_path_lock);
+	return res;
+
+}
+
 int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst)
 {
 	struct audio_config_database *db;
@@ -1169,7 +1191,7 @@ int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst)
 	mutex_lock(&audio_path_lock);
 
 	if (!acdb_data) {
-		res = acdb_init();
+		res = acdb_init(acdb_file);
 		if (res)
 			goto done;
 	}

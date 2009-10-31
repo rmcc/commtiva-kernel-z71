@@ -85,6 +85,7 @@ static int q6_ioctl(struct inode *inode, struct file *file,
 	int rc;
 	uint32_t n;
 	uint32_t id[2];
+	char filename[64];
 
 	switch (cmd) {
 	case AUDIO_SWITCH_DEVICE:
@@ -112,6 +113,11 @@ static int q6_ioctl(struct inode *inode, struct file *file,
 		break;
 	case AUDIO_STOP_VOICE:
 		rc = q6_voice_stop();
+		break;
+	case AUDIO_REINIT_ACDB:
+		rc = copy_from_user(&filename, (void *)arg, sizeof(filename));
+		if (!rc)
+			rc = q6audio_reinit_acdb(filename);
 		break;
 	default:
 		rc = -EINVAL;
