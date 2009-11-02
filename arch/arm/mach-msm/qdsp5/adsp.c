@@ -588,8 +588,14 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 
 		iptr = adsp_info.init_info_ptr;
 		iptr->image_count = be32_to_cpu(sptr->image_count);
+		if (iptr->image_count > IMG_MAX)
+			iptr->image_count = IMG_MAX;
 		iptr->num_queue_offsets = be32_to_cpu(sptr->num_queue_offsets);
 		num_entries = iptr->num_queue_offsets;
+		if (num_entries > ENTRIES_MAX) {
+			num_entries = ENTRIES_MAX;
+			iptr->num_queue_offsets = ENTRIES_MAX;
+		}
 		qptr = &sptr->queue_offsets_tbl[0][0];
 		for (i_no = 0; i_no < iptr->image_count; i_no++) {
 			qtbl = &iptr->queue_offsets_tbl[i_no][0];
@@ -603,6 +609,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 		}
 
 		num_entries = be32_to_cpu(sptr->num_task_module_entries);
+		if (num_entries > ENTRIES_MAX)
+			num_entries = ENTRIES_MAX;
 		iptr->num_task_module_entries = num_entries;
 		entries_per_image = num_entries / iptr->image_count;
 		mptr = &sptr->task_to_module_tbl[0][0];
@@ -615,6 +623,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 		}
 
 		iptr->module_table_size = be32_to_cpu(sptr->module_table_size);
+		if (iptr->module_table_size > MODULES_MAX)
+			iptr->module_table_size = MODULES_MAX;
 		mptr = &sptr->module_entries[0];
 		for (i_no = 0; i_no < iptr->module_table_size; i_no++)
 			iptr->module_entries[i_no] = be32_to_cpu(mptr[i_no]);
@@ -622,6 +632,8 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 		mqptr = &sptr->mod_to_q_tbl[0];
 		mqtbl = &iptr->mod_to_q_tbl[0];
 		iptr->mod_to_q_entries = be32_to_cpu(sptr->mod_to_q_entries);
+		if (iptr->mod_to_q_entries > ENTRIES_MAX)
+			iptr->mod_to_q_entries = ENTRIES_MAX;
 		for (e_idx = 0; e_idx < iptr->mod_to_q_entries; e_idx++) {
 			mqtbl[e_idx].module = be32_to_cpu(mqptr->module);
 			mqtbl[e_idx].q_type = be32_to_cpu(mqptr->q_type);
