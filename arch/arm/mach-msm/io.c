@@ -137,6 +137,7 @@ static struct map_desc msm7x30_io_desc[] __initdata = {
 	MSM_DEVICE(AD5),
 	MSM_DEVICE(MDC),
 	MSM_DEVICE(ACC),
+	MSM_DEVICE(SAW),
 	MSM_DEVICE(GCC),
 #ifdef CONFIG_MSM_DEBUG_UART
 	MSM_DEVICE(DEBUG_UART),
