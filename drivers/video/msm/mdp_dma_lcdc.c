@@ -79,9 +79,13 @@
 
 #ifdef CONFIG_FB_MSM_MDP40
 #define LCDC_BASE	0xC0000
+#define DTV_BASE	0xD0000
+#define DMA_E_BASE      0xB0000
 #else
 #define LCDC_BASE	0xE0000
 #endif
+
+#define DMA_P_BASE      0x90000
 
 extern spinlock_t mdp_spin_lock;
 #ifndef CONFIG_FB_MSM_MDP40
@@ -129,6 +133,9 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	struct fb_info *fbi;
 	struct fb_var_screeninfo *var;
 	struct msm_fb_data_type *mfd;
+	uint32 dma_base;
+	uint32 timer_base = LCDC_BASE;
+	uint32 block = MDP_DMA2_BLOCK;
 	int ret;
 
 	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
@@ -187,16 +194,24 @@ int mdp_lcdc_on(struct platform_device *pdev)
 
 	/* DMA register config */
 
+	dma_base = DMA_P_BASE;
+
+#ifdef CONFIG_FB_MSM_MDP40
+	if (mfd->panel.type == HDMI_PANEL)
+		dma_base = DMA_E_BASE;
+#endif
+
 	/* starting address */
-	MDP_OUTP(MDP_BASE + 0x90008, (uint32) buf);
+	MDP_OUTP(MDP_BASE + dma_base + 0x8, (uint32) buf);
 	/* active window width and height */
-	MDP_OUTP(MDP_BASE + 0x90004, ((fbi->var.yres) << 16) | (fbi->var.xres));
+	MDP_OUTP(MDP_BASE + dma_base + 0x4, ((fbi->var.yres) << 16) |
+						(fbi->var.xres));
 	/* buffer ystride */
-	MDP_OUTP(MDP_BASE + 0x9000c, fbi->fix.line_length);
+	MDP_OUTP(MDP_BASE + dma_base + 0xc, fbi->fix.line_length);
 	/* x/y coordinate = always 0 for lcdc */
-	MDP_OUTP(MDP_BASE + 0x90010, 0);
+	MDP_OUTP(MDP_BASE + dma_base + 0x10, 0);
 	/* dma config */
-	MDP_OUTP(MDP_BASE + 0x90000, dma2_cfg_reg);
+	MDP_OUTP(MDP_BASE + dma_base, dma2_cfg_reg);
 
 	/*
 	 * LCDC timing setting
@@ -251,8 +266,16 @@ int mdp_lcdc_on(struct platform_device *pdev)
 
 
 #ifdef CONFIG_FB_MSM_MDP40
-	hsync_polarity = 1;
-	vsync_polarity = 1;
+	if (mfd->panel.type == HDMI_PANEL) {
+		block = MDP_DMA_E_BLOCK;
+		timer_base = DTV_BASE;
+		hsync_polarity = 0;
+		vsync_polarity = 0;
+	} else {
+		hsync_polarity = 1;
+		vsync_polarity = 1;
+	}
+
 	lcdc_underflow_clr |= 0x80000000;	/* enable recovery */
 #else
 	hsync_polarity = 0;
@@ -263,25 +286,38 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	ctrl_polarity =
 	    (data_en_polarity << 2) | (vsync_polarity << 1) | (hsync_polarity);
 
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x4, hsync_ctrl);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x8, vsync_period);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0xc, vsync_pulse_width * hsync_period);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x10, display_hctl);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x14, display_v_start);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x18, display_v_end);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x28, lcdc_border_clr);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x2c, lcdc_underflow_clr);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x30, lcdc_hsync_skew);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x38, ctrl_polarity);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x1c, active_hctl);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x20, active_v_start);
-	MDP_OUTP(MDP_BASE + LCDC_BASE + 0x24, active_v_end);
+	MDP_OUTP(MDP_BASE + timer_base + 0x4, hsync_ctrl);
+	MDP_OUTP(MDP_BASE + timer_base + 0x8, vsync_period);
+	MDP_OUTP(MDP_BASE + timer_base + 0xc, vsync_pulse_width * hsync_period);
+	if (timer_base == LCDC_BASE) {
+		MDP_OUTP(MDP_BASE + timer_base + 0x10, display_hctl);
+		MDP_OUTP(MDP_BASE + timer_base + 0x14, display_v_start);
+		MDP_OUTP(MDP_BASE + timer_base + 0x18, display_v_end);
+		MDP_OUTP(MDP_BASE + timer_base + 0x28, lcdc_border_clr);
+		MDP_OUTP(MDP_BASE + timer_base + 0x2c, lcdc_underflow_clr);
+		MDP_OUTP(MDP_BASE + timer_base + 0x30, lcdc_hsync_skew);
+		MDP_OUTP(MDP_BASE + timer_base + 0x38, ctrl_polarity);
+		MDP_OUTP(MDP_BASE + timer_base + 0x1c, active_hctl);
+		MDP_OUTP(MDP_BASE + timer_base + 0x20, active_v_start);
+		MDP_OUTP(MDP_BASE + timer_base + 0x24, active_v_end);
+	} else {
+		MDP_OUTP(MDP_BASE + timer_base + 0x18, display_hctl);
+		MDP_OUTP(MDP_BASE + timer_base + 0x1c, display_v_start);
+		MDP_OUTP(MDP_BASE + timer_base + 0x20, display_v_end);
+		MDP_OUTP(MDP_BASE + timer_base + 0x40, lcdc_border_clr);
+		MDP_OUTP(MDP_BASE + timer_base + 0x44, lcdc_underflow_clr);
+		MDP_OUTP(MDP_BASE + timer_base + 0x48, lcdc_hsync_skew);
+		MDP_OUTP(MDP_BASE + timer_base + 0x50, ctrl_polarity);
+		MDP_OUTP(MDP_BASE + timer_base + 0x2c, active_hctl);
+		MDP_OUTP(MDP_BASE + timer_base + 0x30, active_v_start);
+		MDP_OUTP(MDP_BASE + timer_base + 0x38, active_v_end);
+	}
 
 	ret = panel_next_on(pdev);
 	if (ret == 0) {
 		/* enable LCDC block */
-		MDP_OUTP(MDP_BASE + LCDC_BASE, 1);
-		mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		MDP_OUTP(MDP_BASE + timer_base, 1);
+		mdp_pipe_ctrl(block, MDP_BLOCK_POWER_ON, FALSE);
 	}
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -292,13 +328,25 @@ int mdp_lcdc_on(struct platform_device *pdev)
 int mdp_lcdc_off(struct platform_device *pdev)
 {
 	int ret = 0;
+	struct msm_fb_data_type *mfd;
+	uint32 timer_base = LCDC_BASE;
+	uint32 block = MDP_DMA2_BLOCK;
+
+	mfd = (struct msm_fb_data_type *)platform_get_drvdata(pdev);
+
+#ifdef CONFIG_FB_MSM_MDP40
+	if (mfd->panel.type == HDMI_PANEL) {
+		block = MDP_DMA_E_BLOCK;
+		timer_base = DTV_BASE;
+	}
+#endif
 
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
-	MDP_OUTP(MDP_BASE + LCDC_BASE, 0);
+	MDP_OUTP(MDP_BASE + timer_base, 0);
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
-	mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	mdp_pipe_ctrl(block, MDP_BLOCK_POWER_OFF, FALSE);
 
 	ret = panel_next_off(pdev);
 
@@ -314,6 +362,11 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	uint8 *buf;
 	int bpp;
 	unsigned long flag;
+	uint32 dma_base;
+	int irq_block = MDP_DMA2_TERM;
+#ifdef CONFIG_FB_MSM_MDP40
+	int intr = INTR_DMA_P_DONE;
+#endif
 
 	if (!mfd->panel_power_on)
 		return;
@@ -323,17 +376,28 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	buf = (uint8 *) fbi->fix.smem_start;
 	buf += fbi->var.xoffset * bpp +
 		fbi->var.yoffset * fbi->fix.line_length;
+
+	dma_base = DMA_P_BASE;
+
+#ifdef CONFIG_FB_MSM_MDP40
+	if (mfd->panel.type == HDMI_PANEL) {
+		intr = INTR_DMA_E_DONE;
+		irq_block = MDP_DMA_E_TERM;
+		dma_base = DMA_E_BASE;
+	}
+#endif
+
 	/* starting address */
-	MDP_OUTP(MDP_BASE + 0x90008, (uint32) buf);
+	MDP_OUTP(MDP_BASE + dma_base + 0x8, (uint32) buf);
 
 	/* enable LCDC irq */
 	spin_lock_irqsave(&mdp_spin_lock, flag);
-	mdp_enable_irq(MDP_DMA2_TERM);
+	mdp_enable_irq(irq_block);
 	INIT_COMPLETION(mfd->dma->comp);
 	mfd->dma->waiting = TRUE;
 #ifdef CONFIG_FB_MSM_MDP40
-	outp32(MDP_INTR_CLEAR, INTR_DMA_P_DONE);
-	mdp_intr_mask |= INTR_DMA_P_DONE;
+	outp32(MDP_INTR_CLEAR, intr);
+	mdp_intr_mask |= intr;
 	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 #else
 	outp32(MDP_INTR_CLEAR, LCDC_FRAME_START);
@@ -342,5 +406,5 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 #endif
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 	wait_for_completion_killable(&mfd->dma->comp);
-	mdp_disable_irq(MDP_DMA2_TERM);
+	mdp_disable_irq(irq_block);
 }
