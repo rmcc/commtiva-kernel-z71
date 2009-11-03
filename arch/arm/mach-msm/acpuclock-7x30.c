@@ -36,14 +36,24 @@
 
 #define SCSS_CLK_CTL_ADDR	(MSM_ACC_BASE + 0x04)
 #define SCSS_CLK_SEL_ADDR	(MSM_ACC_BASE + 0x08)
+#define SAW_VCTL		(MSM_SAW_BASE + 0x08)
+#define SAW_STS			(MSM_SAW_BASE + 0x0C)
+#define SAW_SPM_CTL		(MSM_SAW_BASE + 0x14)
 
 #define dprintk(msg...) \
 	cpufreq_debug_printk(CPUFREQ_DEBUG_DRIVER, "cpufreq-msm", msg)
+
+#define VREF_SEL_SHIFT	5
+#define VREF_SEL_VAL	1
+
+/* mv = (750mV + (raw*25mV))*(2-VREF_SEL_VAL)) */
+#define VDD_RAW(_mv) ((((_mv) - 750) / 25) | (VREF_SEL_VAL << VREF_SEL_SHIFT))
 
 struct clock_state {
 	struct clkctl_acpu_speed	*current_speed;
 	struct mutex			lock;
 	uint32_t			acpu_switch_time_us;
+	uint32_t			vdd_switch_time_us;
 };
 
 struct clkctl_acpu_speed {
@@ -51,8 +61,9 @@ struct clkctl_acpu_speed {
 	int		src;
 	unsigned int	acpu_src_sel;
 	unsigned int	acpu_src_div;
-	unsigned int 	axi_clk_khz;
+	unsigned int	axi_clk_khz;
 	unsigned int	vdd_mv;
+	unsigned int	vdd_raw;
 	unsigned long	lpj; /* loops_per_jiffy */
 };
 
@@ -73,16 +84,16 @@ static struct cpufreq_frequency_table freq_table[] = {
 #define SRC_LPXO (-2)
 #define SRC_AXI  (-1)
 static struct clkctl_acpu_speed acpu_freq_tbl[] = {
-	{ 24576,  SRC_LPXO, 0, 0,  30720,  1200 },
-	{ 61440,  PLL_3,    5, 11, 61440,  1200 },
-	{ 122880, PLL_3,    5, 5,  61440,  1200 },
-	{ 128000, SRC_AXI,  1, 0,  128000, 1200 },
-	{ 184320, PLL_3,    5, 4,  61440,  1200 },
-	{ 245760, PLL_3,    5, 2,  61440,  1200 },
-	{ 368640, PLL_3,    5, 1,  128000, 1200 },
-	{ 768000, PLL_1,    2, 0,  128000, 1200 },
-	{ 806400, PLL_2,    3, 0,  128000, 1200 },
-	{ 0, 0, 0, 0, 0, 0, 0 }
+	{ 24576,  SRC_LPXO, 0, 0,  30720,  1200, VDD_RAW(1200) },
+	{ 61440,  PLL_3,    5, 11, 61440,  1200, VDD_RAW(1200) },
+	{ 122880, PLL_3,    5, 5,  61440,  1200, VDD_RAW(1200) },
+	{ 128000, SRC_AXI,  1, 0,  128000, 1200, VDD_RAW(1200) },
+	{ 184320, PLL_3,    5, 4,  61440,  1200, VDD_RAW(1200) },
+	{ 245760, PLL_3,    5, 2,  61440,  1200, VDD_RAW(1200) },
+	{ 368640, PLL_3,    5, 1,  128000, 1200, VDD_RAW(1200) },
+	{ 768000, PLL_1,    2, 0,  128000, 1200, VDD_RAW(1200) },
+	{ 806400, PLL_2,    3, 0,  128000, 1200, VDD_RAW(1200) },
+	{ 0 }
 };
 
 #define POWER_COLLAPSE_HZ 128000000
@@ -128,10 +139,37 @@ static int pc_pll_request(unsigned id, unsigned on)
 	return rc;
 }
 
+#define STS_PMIC_DATA_SHIFT	10
+#define STS_PMIC_DATA_VDD_MASK	(0x3F << STS_PMIC_DATA_SHIFT)
+#define VCTL_PMIC_DATA_VDD_MASK	0x3F
+#define PMIC_STATE_MASK		(0x3 << 20)
+#define PMIC_STATE_IDLE		0
 static int acpuclk_set_acpu_vdd(struct clkctl_acpu_speed *s)
 {
-	/* TODO: Add local VDD control.
-	 * Assuming VDD is set to max by bootloader. */
+	uint32_t reg_val, cur_raw_vdd;
+	uint32_t timeout_count = 5;
+
+	/* Set VDD. */
+	reg_val = readl(SAW_VCTL);
+	reg_val &= ~(VCTL_PMIC_DATA_VDD_MASK);
+	reg_val |= s->vdd_raw;
+	writel(reg_val, SAW_VCTL);
+
+	/* Wait for PMIC to set VDD. Use timeout to detect unconfigured SAW. */
+	while ((readl(SAW_STS) & PMIC_STATE_MASK) != PMIC_STATE_IDLE
+			&& timeout_count > 0) {
+		udelay(10);
+		timeout_count--;
+	}
+
+	/* Read set voltage to check for success. */
+	cur_raw_vdd = (readl(SAW_STS) & STS_PMIC_DATA_VDD_MASK)
+				>> STS_PMIC_DATA_SHIFT;
+	if (timeout_count == 0 || cur_raw_vdd != s->vdd_raw)
+		return -EIO;
+
+	/* Wait for voltage to stabilize. */
+	udelay(drv_state.vdd_switch_time_us);
 
 	return 0;
 }
@@ -223,7 +261,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
-	/* Turn off previous PLL if not needed. */
+	/* Turn off previous PLL if not used. */
 	if (strt_s->src != tgt_s->src && strt_s->src >= 0) {
 		res = pc_pll_request(strt_s->src, 0);
 		if (res < 0) {
@@ -353,12 +391,27 @@ static void __init lpj_init(void)
 	}
 }
 
+#define RPM_BYPASS_MASK	(1 << 3)
+#define PMIC_MODE_MASK	(1 << 4)
+static void __init saw_init(void)
+{
+	uint32_t reg_spmctl;
+
+	reg_spmctl = readl(SAW_SPM_CTL);
+	reg_spmctl |= RPM_BYPASS_MASK;	/* No RPM interface on 7x30, so
+					   bypass the RPM handshake. */
+	reg_spmctl |= PMIC_MODE_MASK;	/* PMIC_MODE is MSM7XXX.  */
+	writel(reg_spmctl, SAW_SPM_CTL);
+}
+
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	pr_info("acpu_clock_init()\n");
 
 	mutex_init(&drv_state.lock);
 	drv_state.acpu_switch_time_us = clkdata->acpu_switch_time_us;
+	drv_state.vdd_switch_time_us = clkdata->vdd_switch_time_us;
+	saw_init();
 	acpuclk_init();
 	lpj_init();
 #ifdef CONFIG_CPU_FREQ_MSM
