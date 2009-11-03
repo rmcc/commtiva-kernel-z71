@@ -96,6 +96,13 @@ struct freq_band_t {
 	unsigned int low;
 };
 
+struct srch_params_t {
+	unsigned short srch_pi;
+	unsigned char srch_pty;
+	unsigned int preset_num;
+	int get_list;
+};
+
 struct tavarua_device {
 	struct video_device *videodev;
 	/* driver management */
@@ -110,6 +117,8 @@ struct tavarua_device {
 	struct marimba_fm_platform_data *pdata;
 	/*RDS buffers + Radio event buffer*/
 	struct kfifo *data_buf[TAVARUA_BUF_MAX];
+	/* search paramters */
+	struct srch_params_t srch_params;
 	/* keep track of pending xfrs */
 	int pending_xfrs[TAVARUA_XFR_MAX];
 	int xfr_bytes_left;
@@ -378,6 +387,7 @@ static void tavarua_q_event(struct tavarua_device *radio,
 static void read_int_stat(struct work_struct *work)
 {
 	int i;
+	int retval;
 	enum tavarua_xfr_ctrl_t xfr_status;
 	struct tavarua_device *radio = container_of(work,
 					struct tavarua_device, work);
@@ -406,6 +416,26 @@ static void read_int_stat(struct work_struct *work)
 		for (i = 0; i < TAVARUA_XFR_MAX; i++) {
 			if (i >= TAVARUA_XFR_RT_RDS)
 				radio->pending_xfrs[i] = 0;
+		}
+		if (radio->srch_params.get_list) {
+			radio->srch_params.get_list = 0;
+			if (radio->xfr_in_progress)
+				radio->pending_xfrs[TAVARUA_XFR_SRCH_LIST] = 1;
+			else{
+				radio->xfr_in_progress = 1;
+				tavarua_write_register(radio, XFRCTRL,
+								RX_STATIONS_0);
+			}
+		}
+		retval = tavarua_read_registers(radio, FREQ, 2);
+		if (retval > -1) {
+			if (!(radio->registers[TUNECTRL] & SIGSTATE))
+				tavarua_q_event(radio, TAVARUA_EVT_BELOW_TH);
+			if ((radio->registers[TUNECTRL] & MOSTSTATE))
+				tavarua_q_event(radio,
+					TAVARUA_EVT_STEREO_AVAIL);
+			if ((radio->registers[TUNECTRL] & RDSSYNC))
+				tavarua_q_event(radio, TAVARUA_EVT_RDS_AVAIL);
 		}
 	}
 	/* Search completed (read FREQ) */
@@ -530,6 +560,24 @@ static void read_int_stat(struct work_struct *work)
 			radio->xfr_in_progress = 0;
 			complete(&radio->sync_req_done);
 			break;
+		case RX_STATIONS_0:
+			radio->xfr_bytes_left = radio->registers[XFRCTRL+1]*2;
+			if (radio->xfr_bytes_left > 14) {
+				copy_from_xfr(radio, TAVARUA_BUF_SRCH_LIST,
+							XFR_REG_NUM);
+				tavarua_write_register(radio, XFRCTRL,
+							RX_STATIONS_1);
+			} else {
+				copy_from_xfr(radio, TAVARUA_BUF_SRCH_LIST,
+						radio->xfr_bytes_left);
+				radio->xfr_in_progress = 0;
+			}
+			break;
+		case RX_STATIONS_1:
+			copy_from_xfr(radio, TAVARUA_BUF_SRCH_LIST,
+						radio->xfr_bytes_left*2);
+			radio->xfr_in_progress = 0;
+			break;
 		default:
 			radio->xfr_in_progress = 0;
 			complete(&radio->sync_req_done);
@@ -602,6 +650,45 @@ static int tavarua_disable_irq(struct tavarua_device *radio)
  ************************************************************************/
 
 
+/*
+ * tavarua_search
+ */
+static int tavarua_search(struct tavarua_device *radio, int on, int dir)
+{
+	enum search_t srch = radio->registers[SRCHCTRL] & SRCH_MODE;
+	if (on) {
+		radio->registers[SRCHRDS1] = 0x00;
+		radio->registers[SRCHRDS2] = 0x00;
+		/* Set freq band */
+		switch (srch) {
+		case SCAN_FOR_STRONG:
+		case SCAN_FOR_WEAK:
+			radio->srch_params.get_list = 1;
+			radio->registers[SRCHRDS2] =
+					radio->srch_params.preset_num;
+			break;
+		case RDS_SEEK_PTY:
+		case RDS_SCAN_PTY:
+			radio->registers[SRCHRDS2] =
+					radio->srch_params.srch_pty;
+			break;
+		case RDS_SEEK_PI:
+			radio->registers[SRCHRDS1] =
+				(radio->srch_params.srch_pi & 0xFF00) >> 8;
+			radio->registers[SRCHRDS2] =
+				(radio->srch_params.srch_pi & 0x00FF);
+			break;
+		default:
+			break;
+		}
+		radio->registers[SRCHCTRL] |= SRCH_ON;
+	} else {
+		radio->registers[SRCHCTRL] &= ~SRCH_ON;
+	}
+	radio->registers[SRCHCTRL] |= (dir << 3);
+	return tavarua_write_registers(radio, SRCHRDS1,
+				&radio->registers[SRCHRDS1], 3);
+}
 /*
  * tavarua_set_region
  */
@@ -971,6 +1058,39 @@ static struct v4l2_queryctrl tavarua_v4l2_queryctrl[] = {
 		.step          = 1,
 		.default_value = 0,
 	},
+	{
+		.id            = V4L2_CID_PRIVATE_TAVARUA_SIGNAL_TH,
+		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.name          = "Signal Threshold",
+		.minimum       = 0x80,
+		.maximum       = 0x7F,
+		.step          = 1,
+		.default_value = 0,
+	},
+	{
+		.id            = V4L2_CID_PRIVATE_TAVARUA_SRCH_PTY,
+		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.name          = "Search PTY",
+		.minimum       = 0,
+		.maximum       = 31,
+		.default_value = 0,
+	},
+	{
+		.id            = V4L2_CID_PRIVATE_TAVARUA_SRCH_PI,
+		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.name          = "Search PI",
+		.minimum       = 0,
+		.maximum       = 0xFF,
+		.default_value = 0,
+	},
+	{
+		.id            = V4L2_CID_PRIVATE_TAVARUA_SRCH_CNT,
+		.type          = V4L2_CTRL_TYPE_INTEGER,
+		.name          = "Preset num",
+		.minimum       = 0,
+		.maximum       = 12,
+		.default_value = 0,
+	}
 };
 
 
@@ -1042,6 +1162,19 @@ static int tavarua_vidioc_g_ctrl(struct file *file, void *priv,
 	case V4L2_CID_PRIVATE_TAVARUA_REGION:
 		ctrl->value = radio->region;
 		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SIGNAL_TH:
+		retval = sync_read_xfr(radio, RX_CONFIG);
+		ctrl->value  = radio->sync_xfr_regs[0];
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_PTY:
+		ctrl->value = radio->srch_params.srch_pty;
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_PI:
+		ctrl->value = radio->srch_params.srch_pi;
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_CNT:
+		ctrl->value = radio->srch_params.preset_num;
+		break;
 	default:
 		retval = -EINVAL;
 	}
@@ -1062,7 +1195,6 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 	struct tavarua_device *radio = video_get_drvdata(video_devdata(file));
 	int retval = 0;
 	unsigned char value;
-	char buffer[] = {0x00, 0x00, 0x00};
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_VOLUME:
@@ -1084,11 +1216,8 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 		break;
 	/* start/stop search */
 	case V4L2_CID_PRIVATE_TAVARUA_SRCHON:
-		value = ((radio->registers[SRCHCTRL] & ~SRCH_ON)) |
-						(ctrl->value << 7);
-		FMDBG("starting search with: %x\n", value);
-		buffer[2] = value;
-		retval = tavarua_write_registers(radio, SRCHRDS1, buffer, 3);
+		FMDBG("starting search\n");
+		tavarua_search(radio, ctrl->value, 0);
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_STATE:
 		/* check if already on */
@@ -1110,6 +1239,23 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_REGION:
 		tavarua_set_region(radio, ctrl->value);
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SIGNAL_TH:
+		retval = sync_read_xfr(radio, RX_CONFIG);
+		if (retval < 0)
+			break;
+		radio->sync_xfr_regs[0] = ctrl->value;
+		radio->sync_xfr_regs[1] = ctrl->value;
+		retval = sync_write_xfr(radio, RX_CONFIG);
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_PTY:
+		radio->srch_params.srch_pty = ctrl->value;
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_PI:
+		radio->srch_params.srch_pi = ctrl->value;
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_SRCH_CNT:
+		radio->srch_params.preset_num = ctrl->value;
 		break;
 	default:
 	  retval = -EINVAL;
@@ -1136,6 +1282,10 @@ static int tavarua_vidioc_g_tuner(struct file *file, void *priv,
 
 	/* read status rssi */
 	retval = tavarua_read_registers(radio, IOCTRL, 1);
+	if (retval < 0)
+		return retval;
+	/* read RMSSI */
+	retval = tavarua_read_registers(radio, RMSSI, 1);
 	if (retval < 0)
 		return retval;
 
@@ -1220,7 +1370,7 @@ static int tavarua_vidioc_s_frequency(struct file *file, void *priv,
 		printk(KERN_WARNING DRIVER_NAME
 			": set frequency failed with %d\n", retval);
 
-	if (!wait_for_completion_timeout(&radio->sync_xfr_start,
+	if (!wait_for_completion_timeout(&radio->sync_req_done,
 		msecs_to_jiffies(WAIT_TIMEOUT)))
 		return -1;
 	return retval;
@@ -1275,13 +1425,13 @@ static int tavarua_vidioc_s_hw_freq_seek(struct file *file, void *priv,
 					struct v4l2_hw_freq_seek *seek)
 {
 	struct tavarua_device  *radio = video_get_drvdata(video_devdata(file));
-	int mode = radio->registers[SRCHCTRL] & SRCH_MODE;
-	int dwell = radio->registers[SRCHCTRL] & SCAN_DWELL >> 4;
-	unsigned char srch;
-
-	FMDBG("starting seek in mode:%d with dwell of:%d\n", mode, dwell);
-	srch =  radio->registers[SRCHCTRL] | SRCH_ON | (seek->seek_upward << 3);
-	return tavarua_write_register(radio, SRCHCTRL, srch);
+	int dir;
+	if (seek->seek_upward)
+		dir = 0;
+	else
+		dir = 1;
+	FMDBG("starting search\n");
+	return tavarua_search(radio, 1, dir);
 }
 
 /*
@@ -1440,6 +1590,11 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	for (i = 0; i < TAVARUA_XFR_MAX; i++)
 		radio->pending_xfrs[i] = 0;
 
+	/* init search params */
+	radio->srch_params.srch_pty = 0;
+	radio->srch_params.srch_pi = 0;
+	radio->srch_params.preset_num = 0;
+	radio->srch_params.get_list = 0;
 	/* init lock */
 	mutex_init(&radio->lock);
 	/* init completion flags */
