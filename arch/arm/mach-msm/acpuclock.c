@@ -39,14 +39,14 @@
 #include "acpuclock.h"
 #include "socinfo.h"
 
-#define PERF_SWITCH_DEBUG 0
-#define PERF_SWITCH_STEP_DEBUG 0
-
 #define A11S_CLK_CNTL_ADDR (MSM_CSR_BASE + 0x100)
 #define A11S_CLK_SEL_ADDR (MSM_CSR_BASE + 0x104)
 #define A11S_VDD_SVS_PLEVEL_ADDR (MSM_CSR_BASE + 0x124)
 #define PLLn_MODE(n)	(MSM_CLK_CTL_BASE + 0x300 + 28 * (n))
 #define PLLn_L_VAL(n)	(MSM_CLK_CTL_BASE + 0x304 + 28 * (n))
+
+#define dprintk(msg...) \
+	cpufreq_debug_printk(CPUFREQ_DEBUG_DRIVER, "cpufreq-msm", msg)
 
 enum {
 	ACPU_PLL_TCXO	= -1,
@@ -305,12 +305,10 @@ static int pc_pll_request(unsigned id, unsigned on)
 	int res = 0;
 	on = !!on;
 
-#if PERF_SWITCH_DEBUG
 	if (on)
-		printk(KERN_DEBUG "Enabling PLL %d\n", id);
+		dprintk("Enabling PLL %d\n", id);
 	else
-		printk(KERN_DEBUG "Disabling PLL %d\n", id);
-#endif
+		dprintk("Disabling PLL %d\n", id);
 
 	if (id >= ACPU_PLL_END)
 		return -EINVAL;
@@ -342,12 +340,11 @@ static int pc_pll_request(unsigned id, unsigned on)
 			return -EINVAL;
 	}
 
-#if PERF_SWITCH_DEBUG
 	if (on)
-		printk(KERN_DEBUG "PLL enabled\n");
+		dprintk("PLL enabled\n");
 	else
-		printk(KERN_DEBUG "PLL disabled\n");
-#endif
+		dprintk("PLL disabled\n");
+
 	return res;
 }
 
@@ -374,22 +371,18 @@ static int acpuclk_set_vdd_level(int vdd)
 
 	current_vdd = readl(A11S_VDD_SVS_PLEVEL_ADDR) & 0x07;
 
-#if PERF_SWITCH_DEBUG
-	printk(KERN_DEBUG "acpuclock: Switching VDD from %u -> %d\n",
+	dprintk("Switching VDD from %u mV -> %d mV\n",
 	       current_vdd, vdd);
-#endif
+
 	writel((1 << 7) | (vdd << 3), A11S_VDD_SVS_PLEVEL_ADDR);
 	udelay(drv_state.vdd_switch_time_us);
 	if ((readl(A11S_VDD_SVS_PLEVEL_ADDR) & 0x7) != vdd) {
-#if PERF_SWITCH_DEBUG
-		printk(KERN_ERR "acpuclock: VDD set failed\n");
-#endif
+		pr_err("VDD set failed\n");
 		return -EIO;
 	}
 
-#if PERF_SWITCH_DEBUG
-	printk(KERN_DEBUG "acpuclock: VDD switched\n");
-#endif
+	dprintk("VDD switched\n");
+
 	return 0;
 }
 
@@ -440,7 +433,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
 	uint32_t reg_clkctl;
 	struct clkctl_acpu_speed *cur_s, *tgt_s, *strt_s;
-	int rc = 0;
+	int res, rc = 0;
 	unsigned int plls_enabled = 0, pll;
 
 	if (reason == SETRATE_CPUFREQ)
@@ -494,8 +487,9 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	if (reason == SETRATE_CPUFREQ || reason == SETRATE_PC) {
 		/* Increase VDD if needed. */
 		if (tgt_s->vdd > cur_s->vdd) {
-			if ((rc = acpuclk_set_vdd_level(tgt_s->vdd)) < 0) {
-				printk(KERN_ERR "Unable to switch ACPU vdd\n");
+			rc = acpuclk_set_vdd_level(tgt_s->vdd);
+			if (rc < 0) {
+				pr_err("Unable to switch ACPU vdd (%d)\n", rc);
 				goto out;
 			}
 		}
@@ -506,10 +500,8 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	reg_clkctl |= (100 << 16); /* set WT_ST_CNT */
 	writel(reg_clkctl, A11S_CLK_CNTL_ADDR);
 
-#if PERF_SWITCH_DEBUG
-	printk(KERN_INFO "acpuclock: Switching from ACPU rate %u -> %u\n",
-	       strt_s->a11clk_khz * 1000, tgt_s->a11clk_khz * 1000);
-#endif
+	dprintk("Switching from ACPU rate %u KHz -> %u KHz\n",
+		       strt_s->a11clk_khz, tgt_s->a11clk_khz);
 
 	while (cur_s != tgt_s) {
 		/*
@@ -549,10 +541,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		} else {
 			cur_s = tgt_s;
 		}
-#if PERF_SWITCH_STEP_DEBUG
-		printk(KERN_DEBUG "%s: STEP khz = %u, pll = %d\n",
-			__FUNCTION__, cur_s->a11clk_khz, cur_s->pll);
-#endif
+
+		dprintk("STEP khz = %u, pll = %d\n",
+				cur_s->a11clk_khz, cur_s->pll);
+
 		if (cur_s->pll != ACPU_PLL_TCXO
 		    && !(plls_enabled & (1 << cur_s->pll))) {
 			rc = pc_pll_request(cur_s->pll, 1);
@@ -577,10 +569,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Change the AXI bus frequency if we can. */
 	if (strt_s->axiclk_khz != tgt_s->axiclk_khz) {
-		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+		res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
 						tgt_s->axiclk_khz * 1000);
-		if (rc < 0)
-			pr_err("Setting AXI min rate failed!\n");
+		if (res < 0)
+			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
 	/* Nothing else to do for power collapse if not 7x27. */
@@ -592,11 +584,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		plls_enabled &= ~(1 << tgt_s->pll);
 	for (pll = ACPU_PLL_0; pll <= ACPU_PLL_2; pll++)
 		if (plls_enabled & (1 << pll)) {
-			rc = pc_pll_request(pll, 0);
-			if (rc < 0) {
-				pr_err("PLL%d disable failed (%d)\n", pll, rc);
-				goto out;
-			}
+			res = pc_pll_request(pll, 0);
+			if (res < 0)
+				pr_warning("PLL%d disable failed (%d)\n",
+						pll, res);
 		}
 
 	/* Nothing else to do for power collapse. */
@@ -605,13 +596,12 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
-		if (acpuclk_set_vdd_level(tgt_s->vdd) < 0)
-			printk(KERN_ERR "acpuclock: Unable to drop ACPU vdd\n");
+		res = acpuclk_set_vdd_level(tgt_s->vdd);
+		if (res < 0)
+			pr_warning("Unable to drop ACPU vdd (%d)\n", res);
 	}
 
-#if PERF_SWITCH_DEBUG
-	printk(KERN_DEBUG "%s: ACPU speed change complete\n", __FUNCTION__);
-#endif
+	dprintk("ACPU speed change complete\n");
 out:
 	if (reason == SETRATE_CPUFREQ)
 		mutex_unlock(&drv_state.lock);
@@ -622,7 +612,7 @@ static void __init acpuclk_init(void)
 {
 	struct clkctl_acpu_speed *speed;
 	uint32_t div, sel;
-	int rc;
+	int res;
 
 	/*
 	 * Determine the rate of ACPU clock
@@ -646,17 +636,17 @@ static void __init acpuclk_init(void)
 			break;
 	}
 	if (speed->a11clk_khz == 0) {
-		printk(KERN_WARNING "Warning - ACPU clock reports invalid speed\n");
+		pr_err("Error - ACPU clock reports invalid speed\n");
 		return;
 	}
 
 	drv_state.current_speed = speed;
 
-	rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, speed->axiclk_khz * 1000);
-	if (rc < 0)
-		pr_err("Setting AXI min rate failed!\n");
+	res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, speed->axiclk_khz * 1000);
+	if (res < 0)
+		pr_warning("Setting AXI min rate failed (%d)\n", res);
 
-	printk(KERN_INFO "ACPU running at %d KHz\n", speed->a11clk_khz);
+	pr_info("ACPU running at %d KHz\n", speed->a11clk_khz);
 }
 
 unsigned long acpuclk_get_rate(void)
@@ -708,8 +698,8 @@ static void __init acpu_freq_tbl_fixup(void)
 		udelay(50);
 	} while (pll2_l == 0);
 
-	printk(KERN_INFO "L val: PLL0: %d, PLL1: %d, PLL2: %d\n",
-				(int)pll0_l, (int)pll1_l, (int)pll2_l);
+	pr_info("L val: PLL0: %d, PLL1: %d, PLL2: %d\n",
+			(int)pll0_l, (int)pll1_l, (int)pll2_l);
 
 	/* Some configurations run PLL0 twice as fast. Instead of having
 	 * separate tables for this case, we simply fix up the ACPU clock
@@ -871,21 +861,21 @@ static void shared_pll_control_init(void)
 	pll_control = smem_get_entry(SMEM_CLKREGIM_SOURCES, &smem_size);
 
 	if (!pll_control)
-		pr_err("Unable to find shared PLL control data structure!\n");
+		pr_warning("Can't find shared PLL control data structure!\n");
 	/* There might be more PLLs than what the application processor knows
 	 * about. But the index used for each PLL is guaranteed to remain the
 	 * same. */
 	else if (smem_size < sizeof(struct shared_pll_control))
-		pr_err("Shared PLL control data structure too small!\n");
+		pr_warning("Shared PLL control data structure too small!\n");
 	else if (pll_control->version != 0xCCEE0001)
-		pr_err("Shared PLL control version mismatch!\n");
+		pr_warning("Shared PLL control version mismatch!\n");
 	else {
 		pr_info("Shared PLL control available.\n");
 		return;
 	}
 
 	pll_control = NULL;
-	pr_err("Falling back to proc_comm PLL control.\n");
+	pr_warning("Falling back to proc_comm PLL control.\n");
 }
 
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)

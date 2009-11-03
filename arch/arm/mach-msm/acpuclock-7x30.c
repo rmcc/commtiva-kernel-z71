@@ -220,14 +220,16 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
 						tgt_s->axi_clk_khz * 1000);
 		if (res < 0)
-			pr_err("Setting AXI min rate failed (%d)\n", res);
+			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
 	/* Turn off previous PLL if not needed. */
 	if (strt_s->src != tgt_s->src && strt_s->src >= 0) {
 		res = pc_pll_request(strt_s->src, 0);
-		if (res < 0)
-			pr_err("PLL%d disable failed (%d)\n", strt_s->src, res);
+		if (res < 0) {
+			pr_warning("PLL%d disable failed (%d)\n",
+					strt_s->src, res);
+		}
 	}
 
 	/* Nothing else to do for power collapse. */
@@ -238,7 +240,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	if (tgt_s->vdd_mv < strt_s->vdd_mv) {
 		res = acpuclk_set_acpu_vdd(tgt_s);
 		if (res < 0) {
-			pr_err("ACPU VDD decrease to %d mV failed (%d)\n",
+			pr_warning("ACPU VDD decrease to %d mV failed (%d)\n",
 					tgt_s->vdd_mv, res);
 		}
 	}
@@ -331,7 +333,7 @@ static void __init acpuclk_init(void)
 
 	res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, s->axi_clk_khz * 1000);
 	if (res < 0)
-		pr_err("Setting AXI min rate failed!\n");
+		pr_warning("Setting AXI min rate failed!\n");
 
 	pr_info("ACPU running at %d KHz\n", s->acpu_clk_khz);
 

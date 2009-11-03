@@ -83,6 +83,9 @@
 #define SCPLL_STATUS_ADDR      (MSM_SCPLL_BASE + 0x18)
 #define SCPLL_FSM_CTL_EXT_ADDR (MSM_SCPLL_BASE + 0x10)
 
+#define dprintk(msg...) \
+	cpufreq_debug_printk(CPUFREQ_DEBUG_DRIVER, "cpufreq-msm", msg)
+
 enum {
 	ACPU_PLL_TCXO	= -1,
 	ACPU_PLL_0	= 0,
@@ -229,6 +232,11 @@ static void scpll_apps_enable(bool state)
 {
 	uint32_t regval;
 
+	if (state)
+		dprintk("Enabling PLL 3\n");
+	else
+		dprintk("Disabling PLL 3\n");
+
 	/* Wait for any frequency switches to finish. */
 	while (readl(SCPLL_STATUS_ADDR) & 0x1)
 		;
@@ -254,6 +262,11 @@ static void scpll_apps_enable(bool state)
 		writel(regval, SCPLL_CTL_ADDR);
 	}
 	udelay(drv_state.vdd_switch_time_us);
+
+	if (state)
+		dprintk("PLL 3 Enabled\n");
+	else
+		dprintk("PLL 3 Disabled\n");
 }
 
 static void scpll_init(void)
@@ -261,6 +274,8 @@ static void scpll_init(void)
 	uint32_t regval;
 #define L_VAL_384MHZ	0xA
 #define L_VAL_768MHZ	0x14
+
+	dprintk("Initializing PLL 3\n");
 
 	/* power down scpll */
 	writel(0x0, SCPLL_CTL_ADDR);
@@ -394,9 +409,10 @@ void config_switching_pll(void)
 
 static int acpuclk_set_vdd_level(int vdd)
 {
-	if (drv_state.acpu_set_vdd)
+	if (drv_state.acpu_set_vdd) {
+		dprintk("Switching VDD to %d mV\n", vdd);
 		return drv_state.acpu_set_vdd(vdd);
-	else {
+	} else {
 		/* Assume that the PMIC supports scaling the processor
 		 * to its maximum frequency at its default voltage.
 		 */
@@ -407,7 +423,7 @@ static int acpuclk_set_vdd_level(int vdd)
 int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
 	struct clkctl_acpu_speed *tgt_s, *strt_s;
-	int rc = 0;
+	int res, rc = 0;
 	int freq_index = 0;
 
 	if (reason == SETRATE_CPUFREQ)
@@ -434,9 +450,7 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		/* Notify avs before changing frequency */
 		rc = avs_adjust_freq(freq_index, 1);
 		if (rc) {
-			printk(KERN_ERR
-				"acpuclock: Unable to increase ACPU "
-				"vdd.\n");
+			pr_err("Unable to increase ACPU vdd (%d)\n", rc);
 			goto out;
 		}
 #endif
@@ -444,13 +458,15 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		if (tgt_s->vdd > strt_s->vdd) {
 			rc = acpuclk_set_vdd_level(tgt_s->vdd);
 			if (rc) {
-				printk(KERN_ERR
-					"acpuclock: Unable to increase ACPU "
-					"vdd.\n");
+				pr_err("Unable to increase ACPU vdd (%d)\n",
+					rc);
 				goto out;
 			}
 		}
 	}
+
+	dprintk("Switching from ACPU rate %u KHz -> %u KHz\n",
+		strt_s->acpuclk_khz, tgt_s->acpuclk_khz);
 
 	if (strt_s->pll != ACPU_PLL_3 && tgt_s->pll != ACPU_PLL_3) {
 		config_pll(tgt_s);
@@ -476,10 +492,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		goto out;
 
 	if (strt_s->axiclk_khz != tgt_s->axiclk_khz) {
-		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+		res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
 			tgt_s->axiclk_khz * 1000);
-		if (rc < 0)
-			pr_err("Setting AXI min rate failed!\n");
+		if (res < 0)
+			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
 	/* Nothing else to do for power collapse */
@@ -488,19 +504,19 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 #ifdef CONFIG_MSM_CPU_AVS
 	/* notify avs after changing frequency */
-	rc = avs_adjust_freq(freq_index, 0);
-	if (rc)
-		printk(KERN_ERR
-			"acpuclock: Unable to drop ACPU vdd.\n");
+	res = avs_adjust_freq(freq_index, 0);
+	if (res)
+		pr_warning("Unable to drop ACPU vdd (%d)\n", res);
 #endif
 
 	/* Drop VDD level if we can. */
 	if (tgt_s->vdd < strt_s->vdd) {
-		rc = acpuclk_set_vdd_level(tgt_s->vdd);
-		if (rc)
-			printk(KERN_ERR
-				"acpuclock: Unable to drop ACPU vdd.\n");
+		res = acpuclk_set_vdd_level(tgt_s->vdd);
+		if (res)
+			pr_warning("Unable to drop ACPU vdd (%d)\n", res);
 	}
+
+	dprintk("ACPU speed change complete\n");
 out:
 	if (reason == SETRATE_CPUFREQ)
 		mutex_unlock(&drv_state.lock);
@@ -511,7 +527,7 @@ static void __init acpuclk_init(void)
 {
 	struct clkctl_acpu_speed *speed;
 	uint32_t div, sel, regval;
-	int rc;
+	int res;
 
 	/* Determine the source of the Scorpion clock. */
 	regval = readl(SPSS_CLK_SEL_ADDR);
@@ -557,17 +573,16 @@ static void __init acpuclk_init(void)
 		scpll_init();
 
 	if (speed->acpuclk_khz == 0) {
-		printk(KERN_WARNING "Warning - ACPU clock reports invalid "
-			"speed\n");
+		pr_err("Error - ACPU clock reports invalid speed\n");
 		return;
 	}
 
 	drv_state.current_speed = speed;
-	rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, speed->axiclk_khz * 1000);
-	if (rc < 0)
-		pr_err("Setting AXI min rate failed!\n");
+	res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, speed->axiclk_khz * 1000);
+	if (res < 0)
+		pr_warning("Setting AXI min rate failed (%d)\n", res);
 
-	printk(KERN_INFO "ACPU running at %d KHz\n", speed->acpuclk_khz);
+	pr_info("ACPU running at %d KHz\n", speed->acpuclk_khz);
 }
 
 unsigned long acpuclk_get_rate(void)
