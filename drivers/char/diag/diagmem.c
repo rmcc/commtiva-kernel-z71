@@ -135,10 +135,14 @@ void diagmem_free(struct diagchar_dev *driver, void *buf, int pool_type)
 void diagmem_init(struct diagchar_dev *driver)
 {
 	mutex_init(&driver->diagmem_mutex);
-	driver->diagpool = mempool_create_kmalloc_pool(driver->poolsize,
-						       driver->itemsize);
-	driver->diag_hdlc_pool = mempool_create_kmalloc_pool(
-	driver->poolsize_hdlc, driver->itemsize_hdlc);
+
+	if (driver->count == 0)
+		driver->diagpool = mempool_create_kmalloc_pool(
+					driver->poolsize, driver->itemsize);
+
+	if (driver->count_hdlc_pool == 0)
+		driver->diag_hdlc_pool = mempool_create_kmalloc_pool(
+				driver->poolsize_hdlc, driver->itemsize_hdlc);
 
 	if (!driver->diagpool)
 		printk(KERN_INFO "Cannot allocate diag mempool\n");

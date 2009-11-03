@@ -139,9 +139,8 @@ static int diagchar_open(struct inode *inode, struct file *file)
 		driver->data_ready[i] |= EVENT_MASKS_TYPE;
 		driver->data_ready[i] |= LOG_MASKS_TYPE;
 
-		if (driver->ref_count == 0 && driver->count == 0 &&
-					 driver->count_hdlc_pool == 0)
-				diagmem_init(driver);
+		if (driver->ref_count == 0)
+			diagmem_init(driver);
 		driver->ref_count++;
 		mutex_unlock(&driver->diagchar_mutex);
 		return 0;
