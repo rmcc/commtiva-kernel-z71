@@ -66,6 +66,7 @@
 #include <mach/qdsp5v2/audio_interct.h>
 #include <mach/qdsp5v2/mi2s.h>
 #include <mach/qdsp5v2/afe.h>
+#include <mach/qdsp5v2/lpa.h>
 #include <mach/vreg.h>
 #include <mach/pmic.h>
 
@@ -274,6 +275,7 @@ struct snddev_icodec_drv_state {
 	struct vreg *vreg_gp16;
 	struct vreg *vreg_msme;
 	struct vreg *vreg_rf2;
+	struct lpa_drv *lpa;
 };
 
 static struct snddev_icodec_drv_state snddev_icodec_drv;
@@ -283,6 +285,7 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	int trc;
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
+	struct lpa_codec_config lpa_config;
 
 	/* Voltage regulator voting
 	 * Vote GP16, MSME, RF2
@@ -303,8 +306,21 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	clk_enable(drv->lpa_p_clk);
 	clk_enable(drv->lpa_codec_clk);
 	clk_enable(drv->lpa_core_clk);
-	/* Set audio interconnect reg to ADSP */
-	audio_interct_codec(AUDIO_INTERCT_ADSP);
+
+	/* Enable LPA sub system
+	 */
+	drv->lpa = lpa_get();
+	if (!drv->lpa)
+		goto error_lpa;
+	lpa_config.sample_rate = icodec->sample_rate;
+	lpa_config.sample_width = 16;
+	lpa_config.output_interface = LPA_OUTPUT_INTF_WB_CODEC;
+	lpa_config.num_channels = icodec->data->channel_mode;
+	lpa_cmd_codec_config(drv->lpa, &lpa_config);
+
+	/* Set audio interconnect reg to LPA */
+	audio_interct_codec(AUDIO_INTERCT_LPA);
+
 	/* Set MI2S */
 	mi2s_set_codec_output_path((icodec->data->channel_mode == 2 ? 1 : 0),
 	WT_16_BIT);
@@ -316,6 +332,7 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	 * If OSR is to be changed, need clock API for setting the divider
 	 */
 	adie_codec_setpath(icodec->adie_path, icodec->sample_rate, 256);
+	lpa_cmd_enable_codec(drv->lpa, 1);
 	/* Start AFE */
 	afe_config.sample_rate = icodec->sample_rate / 1000;
 	afe_config.channel_mode = icodec->data->channel_mode;
@@ -333,6 +350,11 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 error_afe:
 	adie_codec_close(icodec->adie_path);
 error_adie:
+	lpa_put(drv->lpa);
+error_lpa:
+	clk_disable(drv->lpa_p_clk);
+	clk_disable(drv->lpa_codec_clk);
+	clk_disable(drv->lpa_core_clk);
 	clk_disable(drv->rx_sclk);
 	clk_disable(drv->rx_mclk);
 error_invalid_freq:
@@ -414,6 +436,10 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 	icodec->adie_path = NULL;
 
 	afe_disable(AFE_HW_PATH_CODEC_RX);
+
+	/* Disable LPA Sub system */
+	lpa_cmd_enable_codec(drv->lpa, 0);
+	lpa_put(drv->lpa);
 
 	/* Disable MI2S RX master block */
 	/* Disable MI2S RX bit clock */
@@ -880,6 +906,7 @@ static int __init snddev_icodec_init(void)
 	mutex_init(&icodec_drv->tx_lock);
 	icodec_drv->rx_active = 0;
 	icodec_drv->tx_active = 0;
+	icodec_drv->lpa = NULL;
 	return 0;
 
 error_vreg_rf2:

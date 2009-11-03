@@ -82,6 +82,7 @@
 #include <mach/msm_hsusb.h>
 #include <mach/rpc_hsusb.h>
 #include <mach/msm_spi.h>
+#include <mach/qdsp5v2/msm_lpa.h>
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
 #include <mach/msm_ts.h>
@@ -878,6 +879,33 @@ static struct resource msm_mi2s_resources[] = {
 
 };
 
+static struct msm_lpa_platform_data lpa_pdata = {
+	.obuf_hlb_size = 0x2BFF8,
+	.dsp_proc_id = 0,
+	.app_proc_id = 2,
+	.nosb_config = {
+		.llb_min_addr = 0,
+		.llb_max_addr = 0x3ff8,
+		.sb_min_addr = 0,
+		.sb_max_addr = 0,
+	},
+	.sb_config = {
+		.llb_min_addr = 0,
+		.llb_max_addr = 0x37f8,
+		.sb_min_addr = 0x3800,
+		.sb_max_addr = 0x3ff8,
+	}
+};
+
+static struct resource msm_lpa_resources[] = {
+	{
+		.name = "lpa",
+		.start = 0xa5000000,
+		.end = 0xa50000a0,
+		.flags = IORESOURCE_MEM,
+	}
+};
+
 struct platform_device msm_aictl_device = {
 	.name = "audio_interct",
 	.id   = 0,
@@ -890,6 +918,16 @@ struct platform_device msm_mi2s_device = {
 	.id   = 0,
 	.num_resources = ARRAY_SIZE(msm_mi2s_resources),
 	.resource = msm_mi2s_resources,
+};
+
+struct platform_device msm_lpa_device = {
+	.name = "lpa",
+	.id   = 0,
+	.num_resources = ARRAY_SIZE(msm_lpa_resources),
+	.resource = msm_lpa_resources,
+	.dev		= {
+		.platform_data = &lpa_pdata,
+	},
 };
 
 #define DEC0_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
@@ -2066,6 +2104,7 @@ static struct platform_device *devices[] __initdata = {
 	&hs_device,
 	&msm_aictl_device,
 	&msm_mi2s_device,
+	&msm_lpa_device,
 	&msm_device_adspdec,
 	&qup_device_i2c,
 #if defined(CONFIG_MARIMBA_CORE) && \
