@@ -392,6 +392,7 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define GLBL_CLK_ENA_2_SC	0x03C0
 #define SDAC_NS			0x009C
 #define TV_NS			0x00CC
+#define HDMI_NS			0x0484
 #define MI2S_RX_NS		0x0070
 #define MI2S_TX_NS		0x0078
 #define MI2S_NS			0x02E0
@@ -402,20 +403,19 @@ static struct clk_freq_tbl dummy_freq = F_END;
 
 static uint32_t pll_count[NUM_PLL];
 
-static uint32_t chld_grp_3d_src[] = {C(IMEM), C(GRP_3D), C(NONE)};
-static uint32_t chld_mdp_lcdc_p[] = {C(MDP_LCDC_PAD_P), C(NONE)};
-static uint32_t chld_mi2s_codec_rx[] = {C(MI2S_CODEC_RX_S), C(NONE)};
-static uint32_t chld_mi2s_codec_tx[] = {C(MI2S_CODEC_TX_S), C(NONE)};
-static uint32_t chld_mi2s[] = {C(MI2S_S), C(NONE)};
-static uint32_t chld_sdac_m[] = {C(SDAC_S), C(NONE)};
-static uint32_t chld_tv[] = {C(TV_DAC), C(TV_ENC), C(TSIF_REF), C(NONE)};
-static uint32_t chld_usb_src[] = {
-	C(USB_HS), C(USB_HS_CORE),
-	C(USB_HS2), C(USB_HS2_CORE),
-	C(USB_HS3), C(USB_HS3_CORE),
-	C(NONE),
-};
-uint32_t chld_vfe[] = {C(VFE_MDC), C(VFE_CAMIF), C(NONE)};
+static uint32_t chld_grp_3d_src[] = 	{C(IMEM), C(GRP_3D), C(NONE)};
+static uint32_t chld_mdp_lcdc_p[] = 	{C(MDP_LCDC_PAD_P), C(NONE)};
+static uint32_t chld_mi2s_codec_rx[] =	{C(MI2S_CODEC_RX_S), C(NONE)};
+static uint32_t chld_mi2s_codec_tx[] =	{C(MI2S_CODEC_TX_S), C(NONE)};
+static uint32_t chld_mi2s[] = 		{C(MI2S_S), C(NONE)};
+static uint32_t chld_sdac_m[] = 	{C(SDAC_S), C(NONE)};
+static uint32_t chld_tv[] = 		{C(TV_DAC), C(TV_ENC), C(TSIF_REF),
+					 C(HDMI), C(NONE)};
+static uint32_t chld_usb_src[] = 	{C(USB_HS), C(USB_HS_CORE),
+					 C(USB_HS2), C(USB_HS2_CORE),
+					 C(USB_HS3), C(USB_HS3_CORE),
+					 C(NONE)};
+uint32_t chld_vfe[] = 			{C(VFE_MDC), C(VFE_CAMIF), C(NONE)};
 
 static struct clk_local clk_local_tbl[] = {
 	CLK_NORATE(MDC,		MDC_NS, B(9), B(11)),
@@ -452,6 +452,7 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_SLAVE(USB_HS3,	USBH3_NS,	B(9),	USB_HS_SRC),
 	CLK_SLAVE(USB_HS3_CORE,	USBH3_NS,	B(4),	USB_HS_SRC),
 	CLK_MND8(TV,	TV_NS, 23, 16, 0, B(11), clk_tbl_tv, chld_tv),
+	CLK_SLAVE(HDMI,		HDMI_NS, B(9),		TV),
 	CLK_SLAVE(TV_DAC,	TV_NS, B(12),		TV),
 	CLK_SLAVE(TV_ENC,	TV_NS, B(9),		TV),
 	/* Hacking root & branch into one param. */
@@ -913,6 +914,9 @@ static struct reg_init {
 	{REG(0x00E0), 0x3 << 25 | 0x7, 0x0},
 	{REG(0x0468), 0x7, 0x0}, /* UART3 src = TCXO. */
 	{REG(MDP_VSYNC_REG), 0xC, 0x4}, /* MDP VSYNC src = LPXO. */
+	/* HDMI div = div-1, non-inverted. tv_enc_src = tv_clk_src */
+	{REG(HDMI_NS), 0x7, 0x0},
+	{REG(0x00CC), 0x3 << 14, 0x0}, /* tv_clk_src_div2 = div-1 */
 
 	/* USBH core clocks src = USB_HS_SRC. */
 	{REG(USBH_NS), B(15), B(15)},
