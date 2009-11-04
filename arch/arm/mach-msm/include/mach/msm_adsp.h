@@ -84,6 +84,11 @@ int msm_adsp_write(struct msm_adsp_module *module,
 #define QDSP_uPJpegFtmActionCmdQueue      32
 #define QDSP_apuAfeQueue                  33
 #define QDSP_mpuRmtQueue                  34
-#define QDSP_MAX_NUM_QUEUES               35
+#define QDSP_uPAudPreProcAudRecCmdQueue   35
+#define QDSP_uPAudRec0BitStreamQueue      36
+#define QDSP_uPAudRec0CmdQueue            37
+#define QDSP_uPAudRec1BitStreamQueue      38
+#define QDSP_uPAudRec1CmdQueue            39
+#define QDSP_MAX_NUM_QUEUES               40
 
 #endif

@@ -188,6 +188,7 @@ struct adsp_rtos_mp_mtoa_type {
 #define IMG_MAX         2
 #define ENTRIES_MAX     36
 #define MODULES_MAX     64
+#define QUEUES_MAX      64
 
 struct queue_to_offset_type {
 	uint32_t	queue;
@@ -214,7 +215,7 @@ struct adsp_rtos_mp_mtoa_init_info_type {
 	/*
 	 * queue_offsets[] is to store only queue_offsets
 	 */
-	uint32_t	queue_offsets[IMG_MAX][ENTRIES_MAX];
+	uint32_t	queue_offsets[IMG_MAX][QUEUES_MAX];
 };
 
 struct adsp_rtos_mp_mtoa_s_type {
