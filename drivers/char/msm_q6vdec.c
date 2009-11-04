@@ -771,12 +771,15 @@ static int vdec_release(struct inode *inode, struct file *file)
 {
 	int ret;
 	struct vdec_msg_list *l, *n;
+	struct vdec_mem_list *m, *k;
 	struct vdec_data *vd = file->private_data;
 
 	vdec_ref--;
 
 	vd->running = 0;
 	wake_up_all(&vd->vdec_msg_evt);
+	if (!vd->close_decode)
+		vdec_close(vd, NULL);
 
 	dalrpc_dealloc_cb(vd->vdec_handle, vd->vdec_decode_done_evt_cb);
 	dalrpc_dealloc_cb(vd->vdec_handle, vd->vdec_reuse_frame_evt_cb);
@@ -795,9 +798,9 @@ static int vdec_release(struct inode *inode, struct file *file)
 		kfree(l);
 	}
 
-	list_for_each_entry_safe(l, n, &vd->vdec_mem_list_head, list) {
-		list_del(&l->list);
-		kfree(l);
+	list_for_each_entry_safe(m, k, &vd->vdec_mem_list_head, list) {
+		list_del(&m->list);
+		kfree(m);
 	}
 
 	kfree(vd);
