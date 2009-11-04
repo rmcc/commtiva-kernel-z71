@@ -327,7 +327,7 @@ static inline pte_t pte_mkspecial(pte_t pte) { return pte; }
 #define pgprot_writebackwacache(prot) \
 	__pgprot((pgprot_val(prot) & ~L_PTE_MT_MASK) | L_PTE_MT_WRITEALLOC)
 
-#if __LINUX_ARM_ARCH__ >= 7
+#if __LINUX_ARM_ARCH__ >= 7 || defined(CONFIG_ARCH_MSM)
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK|L_PTE_EXEC, L_PTE_MT_BUFFERABLE)
 #else
