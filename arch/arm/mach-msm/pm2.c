@@ -355,18 +355,28 @@ enum {
  * Configure Hardware for Power Down/Up
  *****************************************************************************/
 
+#if defined(CONFIG_ARCH_MSM7X30)
+#define APPS_CLK_SLEEP_EN (MSM_GCC_BASE + 0x020)
+#define APPS_PWRDOWN      (MSM_ACC_BASE + 0x01c)
+#else /* defined(CONFIG_ARCH_MSM7X30) */
 #define APPS_CLK_SLEEP_EN (MSM_CSR_BASE + 0x11c)
 #define APPS_PWRDOWN      (MSM_CSR_BASE + 0x440)
 #define APPS_STANDBY_CTL  (MSM_CSR_BASE + 0x108)
+#endif /* defined(CONFIG_ARCH_MSM7X30) */
 
 /*
  * Configure hardware registers in preparation for Apps power down.
  */
 static void msm_pm_config_hw_before_power_down(void)
 {
+#if defined(CONFIG_ARCH_MSM7X30)
+	writel(0x0b, APPS_CLK_SLEEP_EN);
+	writel(1, APPS_PWRDOWN);
+#else
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 	writel(1, APPS_PWRDOWN);
 	writel(0, APPS_STANDBY_CTL);
+#endif
 }
 
 /*
@@ -383,7 +393,9 @@ static void msm_pm_config_hw_after_power_up(void)
  */
 static void msm_pm_config_hw_before_swfi(void)
 {
-#ifdef CONFIG_ARCH_MSM_SCORPION
+#if defined(CONFIG_ARCH_MSM7X30)
+	writel(0x03, APPS_CLK_SLEEP_EN);
+#elif defined(CONFIG_ARCH_QSD8X50)
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 #else
 	writel(0x0f, APPS_CLK_SLEEP_EN);
