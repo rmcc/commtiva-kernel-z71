@@ -126,6 +126,8 @@
 #undef CPU_PABORT_HANDLER
 #undef MULTI_PABORT
 
+#ifdef __ASSEMBLY__
+
 #ifdef CONFIG_CPU_PABRT_IFAR
 # ifdef CPU_PABORT_HANDLER
 #  define MULTI_PABORT 1
@@ -155,5 +157,7 @@
 #else
 # define CPU_PABORT_IFSR(reg)	mov reg, #5                          @asm macro;
 #endif
+
+#endif /* __ASSEMBLY__ */
 
 #endif
