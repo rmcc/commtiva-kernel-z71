@@ -28,12 +28,12 @@
 #ifdef CONFIG_MSM_CPU_FREQ_SCREEN
 static void msm_early_suspend(struct early_suspend *handler)
 {
-       acpuclk_set_rate(CONFIG_MSM_CPU_FREQ_SCREEN_OFF * 1000, SETRATE_CPUFREQ);
+       acpuclk_set_rate(CONFIG_MSM_CPU_FREQ_SCREEN_OFF, SETRATE_CPUFREQ);
 }
 
 static void msm_late_resume(struct early_suspend *handler)
 {
-       acpuclk_set_rate(CONFIG_MSM_CPU_FREQ_SCREEN_ON * 1000, SETRATE_CPUFREQ);
+       acpuclk_set_rate(CONFIG_MSM_CPU_FREQ_SCREEN_ON, SETRATE_CPUFREQ);
 }
 
 static struct early_suspend msm_power_suspend = {
@@ -74,7 +74,7 @@ static int msm_cpufreq_target(struct cpufreq_policy *policy,
 	freqs.new = table[index].frequency;
 	freqs.cpu = smp_processor_id();
 	cpufreq_notify_transition(&freqs, CPUFREQ_PRECHANGE);
-	ret = acpuclk_set_rate(table[index].frequency * 1000, SETRATE_CPUFREQ);
+	ret = acpuclk_set_rate(table[index].frequency, SETRATE_CPUFREQ);
 	if (!ret)
 		cpufreq_notify_transition(&freqs, CPUFREQ_POSTCHANGE);
 	return ret;
