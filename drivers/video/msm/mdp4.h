@@ -37,6 +37,15 @@ extern boolean mdp_is_in_isr;
 extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 
+#define MDP4_OVERLAYPROC0_BASE	0x10000
+#define MDP4_OVERLAYPROC1_BASE	0x18000
+
+#define MDP4_VIDEO_BASE 0x20000
+#define MDP4_VIDEO_OFF 0x10000
+
+#define MDP4_RGB_BASE 0x40000
+#define MDP4_RGB_OFF 0x10000
+
 enum {		/* display */
 	PRIMARY_INTF_SEL,
 	SECONDARY_INTF_SEL,
@@ -106,7 +115,7 @@ enum {
 
 enum {
 	OVERLAY_PIPE_RGB1,
-	OVERLAY_PIPE_RGB2
+	OVERLAY_PIPE_RGB2,
 };
 
 enum {
@@ -124,17 +133,35 @@ enum {
 	MDP4_MIXER1
 };
 
+#define MDP4_MAX_MIXER	2
+
 enum {
 	OVERLAY_PLANE_INTERLEAVED,
-	OVERLAY_PLANE_PSEUDO_PLANAR,
-	OVERLAY_PLANE_PLANAR
+	OVERLAY_PLANE_PLANAR,
+	OVERLAY_PLANE_PSEUDO_PLANAR
 };
+
 enum {
-	MDP4_MIXER_STAGE_NONE,	/* pipe not used */
+	MDP4_MIXER_STAGE_UNUNSED,	/* pipe not used */
 	MDP4_MIXER_STAGE_BASE,
-	MDP4_MIXER_STAGE_0,
-	MDP4_MIXER_STAGE_1,
-	MDP4_MIXER_STAGE_2
+	MDP4_MIXER_STAGE0,	/* zorder 0 */
+	MDP4_MIXER_STAGE1,	/* zorder 1 */
+	MDP4_MIXER_STAGE2	/* zorder 2 */
+};
+
+#define MDP4_MAX_STAGE	4
+
+enum {
+	MDP4_FRAME_FORMAT_LINEAR,
+	MDP4_FRAME_FORMAT_ARGB_TILE,
+	MDP4_FRAME_FORMAT_VIDEO_SUPERTILE
+};
+
+enum {
+	MDP4_CHROMA_RGB,
+	MDP4_CHROMA_H2V1,
+	MDP4_CHROMA_H1V2,
+	MDP4_CHROMA_420
 };
 
 #define MDP4_BLEND_BG_TRANSP_EN		BIT(9)
@@ -158,9 +185,19 @@ enum {
 #define MDP4_FORMAT_90_ROTATED		BIT(12)
 #define MDP4_FORMAT_ALPHA_ENABLE	BIT(8)
 
+#define MDP4_OP_DEINT_ODD_REF  	BIT(19)
+#define MDP4_OP_IGC_LUT_EN	BIT(16)
+#define MDP4_OP_DITHER_EN     	BIT(15)
 #define MDP4_OP_FLIP_UD		BIT(14)
 #define MDP4_OP_FLIP_LR		BIT(13)
-#define MDP4_OP_IGC_LUT_EN	BIT(16)
+#define MDP4_OP_CSC_EN		BIT(11)
+#define MDP4_OP_SRC_DATA_YCBCR	BIT(9)
+#define MDP4_OP_SCALEY_FIR 		(0 << 4)
+#define MDP4_OP_SCALEY_MN_PHASE 	(1 << 4)
+#define MDP4_OP_SCALEY_PIXEL_RPT	(2 << 4)
+#define MDP4_OP_SCALEX_FIR 		(0 << 2)
+#define MDP4_OP_SCALEX_MN_PHASE 	(1 << 2)
+#define MDP4_OP_SCALEX_PIXEL_RPT 	(2 << 2)
 #define MDP4_OP_SCALEY_EN	BIT(1)
 #define MDP4_OP_SCALEX_EN	BIT(0)
 
@@ -168,22 +205,43 @@ enum {
 
 #define MDP4_MAX_PLANE		4
 
+#define MDP4_MAX_VIDEO_PIPE 2
+#define MDP4_MAX_RGB_PIPE 2
+#define MDP4_MAX_OVERLAY_PIPE 	16
+
+
 struct mdp4_overlay_pipe {
 	uint32 pipe_type;		/* rgb, video/graphic */
 	uint32 pipe_num;
+	uint32 pipe_ndx;
 	uint32 mixer_num;		/* which mixer used */
 	uint32 mixer_stage;		/* which stage of mixer used */
-	uint32 src_width;
-	uint32 src_height;
-	uint32 src_x;
-	uint32 src_y;
-	uint32 dst_width;
-	uint32 dst_height;
-	uint32 dst_x;
-	uint32 dst_y;
-	uint32 flags;
-	uint32 src_addr[MDP4_MAX_PLANE];
-	uint32 y_stride[MDP4_MAX_PLANE];
+	uint32 src_format;
+	uint32 src_width;	/* source img width */
+	uint32 src_height;	/* source img height */
+	uint32 src_w;		/* roi */
+	uint32 src_h;		/* roi */
+	uint32 src_x;		/* roi */
+	uint32 src_y;		/* roi */
+	uint32 dst_w;		/* roi */
+	uint32 dst_h;		/* roi */
+	uint32 dst_x;		/* roi */
+	uint32 dst_y;		/* roi */
+	uint32 op_mode;
+	uint32 transp;
+	uint32 blend_op;
+	uint32 phasex_step;
+	uint32 phasey_step;
+	uint32 alpha;
+	uint32 is_fg;		/* control alpha & color key */
+	uint32 srcp0_addr;	/* interleave, luma */
+	uint32 srcp0_ystride;
+	uint32 srcp1_addr;	/* pseudoplanar, chroma plane */
+	uint32 srcp1_ystride;
+	uint32 srcp2_addr;	/* planar color 2*/
+	uint32 srcp2_ystride;
+	uint32 srcp3_addr;	/* alpha/color 3 */
+	uint32 srcp3_ystride;
 	uint32 fetch_plane;
 	uint32 frame_format;		/* video */
 	uint32 chroma_site;		/* video */
@@ -213,9 +271,8 @@ struct mdp4_overlay_pipe {
 	uint32 element2; /* 0 = C0, 1 = C1, 2 = C2, 3 = C3 */
 	uint32 element1; /* 0 = C0, 1 = C1, 2 = C2, 3 = C3 */
 	uint32 element0; /* 0 = C0, 1 = C1, 2 = C2, 3 = C3 */
-	uint32 op_flags;
+	struct completion comp;
 };
-
 
 void mdp4_sw_reset(unsigned long bits);
 void mdp4_display_intf_sel(int output, unsigned long intf);
@@ -238,17 +295,42 @@ void mdp4_dma_p_cfg(void);
 void mdp4_hw_init(void);
 void mdp4_isr_read(int);
 void mdp4_clear_lcdc(void);
+void mdp4_mixer_blend_init(int mixer_num);
+void mdp4_vg_qseed_init(int vg_num);
+void mdp4_vg_csc_mv_setup(int vp_num);
+void mdp4_vg_csc_pre_bv_setup(int vp_num);
+void mdp4_vg_csc_post_bv_setup(int vp_num);
+void mdp4_vg_csc_pre_lv_setup(int vp_num);
+void mdp4_vg_csc_post_lv_setup(int vp_num);
 irqreturn_t mdp4_isr(int irq, void *ptr);
 void mdp4_overlay_format_to_pipe(uint32 format, struct mdp4_overlay_pipe *pipe);
 uint32 mdp4_overlay_format(struct mdp4_overlay_pipe *pipe);
 uint32 mdp4_overlay_unpack_pattern(struct mdp4_overlay_pipe *pipe);
-uint32 mdp4_overlay_operation(struct mdp4_overlay_pipe *pipe);
+uint32 mdp4_overlay_op_mode(struct mdp4_overlay_pipe *pipe);
 void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd);
 void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe);
-void mdp4_overlay_reg_flush(uint32 bits);
-void mdp4_mixer_stage_setup(struct mdp4_overlay_pipe *pipe);
+void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all);
+void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe);
+void mdp4_mixer_stage_up(struct mdp4_overlay_pipe *pipe);
+void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe);
+int mdp4_mixer_stage_can_run(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlayproc_cfg(struct mdp4_overlay_pipe *pipe);
 void mdp4_mddi_overlay(struct msm_fb_data_type *mfd);
+int mdp4_overlay_format2type(uint32 format);
+int mdp4_overlay_format2pipe(struct mdp4_overlay_pipe *pipe);
+int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req);
+int mdp4_overlay_unset(struct fb_info *info, int ndx);
+int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req,
+				struct file **pp_src_file);
+struct mdp4_overlay_pipe *mdp4_overlay_pipe_alloc(void);
+void mdp4_overlay_pipe_free(struct mdp4_overlay_pipe *pipe);
+void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd);
+void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe);
+int mdp4_overlay_active(int mixer);
+void mdp4_overlay_done(int mixer);
+void mdp4_mddi_overlay_restore(void);
+void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
 
 #ifdef CONFIG_DEBUG_FS
 int mdp4_debugfs_init(void);

@@ -203,6 +203,7 @@ typedef struct mdp_ibuf_s {
 struct mdp_dma_data {
 	boolean busy;
 	boolean waiting;
+	struct mutex ov_mutex;
 	struct semaphore mutex;
 	struct completion comp;
 };

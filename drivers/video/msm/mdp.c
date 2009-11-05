@@ -68,6 +68,7 @@
 #include <linux/io.h>
 #include <linux/debugfs.h>
 #include <linux/delay.h>
+#include <linux/mutex.h>
 
 #include <asm/system.h>
 #include <asm/mach-types.h>
@@ -356,6 +357,9 @@ void mdp_disable_irq(uint32 term)
 
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
+
+	dmb();	/* memory barrier */
+
 	/* kick off PPP engine */
 	if (term == MDP_PPP_TERM) {
 		if (mdp_debug[MDP_PPP_BLOCK])
@@ -688,6 +692,7 @@ static void mdp_drv_init(void)
 	dma2_data.waiting = FALSE;
 	init_completion(&dma2_data.comp);
 	init_MUTEX(&dma2_data.mutex);
+	mutex_init(&dma2_data.ov_mutex);
 
 	dma3_data.busy = FALSE;
 	dma3_data.waiting = FALSE;

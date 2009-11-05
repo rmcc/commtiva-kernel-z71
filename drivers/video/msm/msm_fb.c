@@ -45,6 +45,7 @@
 #include "mddihosti.h"
 #include "tvenc.h"
 #include "mdp.h"
+#include "mdp4.h"
 
 #ifdef CONFIG_FB_MSM_LOGO
 #define INIT_IMAGE_FILE "/logo.rle"
@@ -1348,6 +1349,68 @@ static int msmfb_blit(struct fb_info *info, void __user *p)
 	return 0;
 }
 
+#ifdef CONFIG_FB_MSM_OVERLAY
+static int msmfb_overlay_set(struct fb_info *info, void __user *p)
+{
+	struct mdp_overlay req;
+	int ret;
+
+	if (copy_from_user(&req, p, sizeof(req)))
+		return -EFAULT;
+
+	ret = mdp4_overlay_set(info, &req);
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_set ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	if (copy_to_user(p, &req, sizeof(req))) {
+		printk(KERN_ERR "%s:msmfb_overlay_set copy2user failed \n",
+			__func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int msmfb_overlay_unset(struct fb_info *info, unsigned long *argp)
+{
+	int	ret, ndx;
+
+	ret = copy_from_user(&ndx, argp, sizeof(ndx));
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_unset ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	return mdp4_overlay_unset(info, ndx);
+}
+
+static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
+{
+	int	ret;
+	struct msmfb_overlay_data req;
+	struct file *p_src_file = 0;
+
+	ret = copy_from_user(&req, argp, sizeof(req));
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_play ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	ret = mdp4_overlay_play(info, &req, &p_src_file);
+
+	if (p_src_file)
+		put_pmem_file(p_src_file);
+
+	return ret;
+}
+
+#endif
+
 DECLARE_MUTEX(msm_fb_ioctl_ppp_sem);
 DEFINE_MUTEX(msm_fb_ioctl_lut_sem);
 DEFINE_MUTEX(msm_fb_ioctl_hist_sem);
@@ -1408,6 +1471,23 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		return -EPERM;
 
 	switch (cmd) {
+#ifdef CONFIG_FB_MSM_OVERLAY
+	case MSMFB_OVERLAY_SET:
+		down(&msm_fb_ioctl_ppp_sem);
+		ret = msmfb_overlay_set(info, argp);
+		up(&msm_fb_ioctl_ppp_sem);
+		break;
+	case MSMFB_OVERLAY_UNSET:
+		down(&msm_fb_ioctl_ppp_sem);
+		ret = msmfb_overlay_unset(info, argp);
+		up(&msm_fb_ioctl_ppp_sem);
+		break;
+	case MSMFB_OVERLAY_PLAY:
+		down(&msm_fb_ioctl_ppp_sem);
+		ret = msmfb_overlay_play(info, argp);
+		up(&msm_fb_ioctl_ppp_sem);
+		break;
+#endif
 	case MSMFB_BLIT:
 		down(&msm_fb_ioctl_ppp_sem);
 		ret = msmfb_blit(info, argp);
