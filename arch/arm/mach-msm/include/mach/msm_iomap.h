@@ -119,7 +119,11 @@
 #define MSM_ACC_PHYS          0xC0101000
 #define MSM_ACC_SIZE          SZ_4K
 
-#define MSM_GCC_BASE	      IOMEM(0xE0008000)
+#define MSM_SAW_BASE          IOMEM(0xE0008000)
+#define MSM_SAW_PHYS          0xC0102000
+#define MSM_SAW_SIZE          SZ_4K
+
+#define MSM_GCC_BASE	      IOMEM(0xE0009000)
 #define MSM_GCC_PHYS	      0xC0182000
 #define MSM_GCC_SIZE	      SZ_4K
 
