@@ -121,6 +121,7 @@ struct pmic8058_kp {
 
 	struct device *dev;
 	u16 keystate[MATRIX_MAX_ROWS];
+	u16 stuckstate[MATRIX_MAX_ROWS];
 
 	u32	flags;
 };
@@ -341,13 +342,26 @@ static int pmic8058_kp_scan_matrix(struct pmic8058_kp *kp, unsigned int events)
 	}
 	return rc;
 }
-
-/* REVISIT */
+/*
+ * NOTE: We are reading recent and old data registers blindly
+ * whenever key-stuck interrupt happens, because events counter doesn't
+ * get updated when this interrupt happens due to key stuck doesn't get
+ * considered as key state change.
+ *
+ * We are not using old data register contents after they are being read
+ * because it might report the key which was pressed before the key being stuck
+ * as stuck key because it's pressed status is stored in the old data
+ * register.
+ */
 static irqreturn_t pmic8058_kp_stuck_irq(int irq, void *data)
 {
+	u16 new_state[MATRIX_MAX_ROWS];
+	u16 old_state[MATRIX_MAX_ROWS];
+	int rc;
 	struct pmic8058_kp *kp = data;
 
-	dev_dbg(kp->dev, "some key got stuck\n");
+	rc = pmic8058_kp_read_matrix(kp, new_state, old_state);
+	__pmic8058_kp_scan_matrix(kp, new_state, kp->stuckstate);
 
 	return IRQ_HANDLED;
 }
@@ -594,6 +608,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 
 	/* initialize keypad state */
 	memset(kp->keystate, 0xff, sizeof(kp->keystate));
+	memset(kp->stuckstate, 0xff, sizeof(kp->stuckstate));
 
 	rc = pmic8058_kpd_init(kp);
 	if (rc < 0) {
