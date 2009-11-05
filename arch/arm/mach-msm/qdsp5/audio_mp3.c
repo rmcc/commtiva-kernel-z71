@@ -579,6 +579,8 @@ static int audplay_dsp_send_data_avail(struct audio *audio,
 	cmd.buf_ptr		= audio->out[idx].addr;
 	cmd.buf_size		= len/2;
 	cmd.partition_number	= 0;
+	/* complete all the writes to the input buffer */
+	wmb();
 	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
 }
 /* Caller holds irq_lock */
@@ -694,6 +696,8 @@ static void audmp3_async_send_data(struct audio *audio, unsigned needed)
 				cmd.buf_ptr	= (unsigned) next_buf->paddr;
 				cmd.buf_size = next_buf->buf.data_len >> 1;
 				cmd.partition_number	= 0;
+				/* complete the writes to the input buffer */
+				wmb();
 				audplay_send_queue0(audio, &cmd, sizeof(cmd));
 				audio->out_needed = 0;
 				audio->drv_status |= ADRV_STATUS_OBUF_GIVEN;
@@ -939,6 +943,11 @@ static long audmp3_process_event_req(struct audio *audio, void __user *arg)
 				  drv_evt->payload.aio_buf.buf_len, 0);
 		mutex_unlock(&audio->lock);
 	}
+
+	/* order reads from the output buffer */
+	if (drv_evt->event_type == AUDIO_EVENT_READ_DONE)
+		rmb();
+
 	if (!rc && copy_to_user(arg, &usr_evt, sizeof(usr_evt)))
 		rc = -EFAULT;
 
@@ -1625,7 +1634,8 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 			break;
 		} else {
 			MM_DBG("read from in[%d]\n", audio->read_next);
-
+			/* order reads from the output buffer */
+			rmb();
 			if (copy_to_user
 			    (buf, audio->in[audio->read_next].data,
 			     audio->in[audio->read_next].used)) {

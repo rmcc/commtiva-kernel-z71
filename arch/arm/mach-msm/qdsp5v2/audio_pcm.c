@@ -418,6 +418,8 @@ static int audplay_dsp_send_data_avail(struct audio *audio,
 	cmd.buf_ptr		= audio->out[idx].addr;
 	cmd.buf_size		= len/2;
 	cmd.partition_number	= 0;
+	/* complete writes to the input buffer */
+	wmb();
 	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
 }
 
@@ -472,6 +474,8 @@ static void audpcm_async_send_data(struct audio *audio, unsigned needed)
 				cmd.buf_ptr	= (unsigned) next_buf->paddr;
 				cmd.buf_size = next_buf->buf.data_len >> 1;
 				cmd.partition_number	= 0;
+				/* complete writes to the input buffer */
+				wmb();
 				audplay_send_queue0(audio, &cmd, sizeof(cmd));
 				audio->out_needed = 0;
 				audio->drv_status |= ADRV_STATUS_OBUF_GIVEN;

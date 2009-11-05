@@ -466,6 +466,8 @@ static int audplay_dsp_send_data_avail(struct audio *audio,
 	cmd.buf_ptr = audio->out[idx].addr;
 	cmd.buf_size = len / 2;
 	cmd.partition_number = 0;
+	/* complete writes to the input buffer */
+	wmb();
 	return audplay_send_queue0(audio, &cmd, sizeof(cmd));
 }
 
@@ -1018,7 +1020,8 @@ static ssize_t audamrnb_read(struct file *file, char __user *buf, size_t count,
 			break;
 		} else {
 			MM_DBG("read from in[%d]\n", audio->read_next);
-
+			/* order reads from the output buffer */
+			rmb();
 			if (copy_to_user
 			    (buf, audio->in[audio->read_next].data,
 			     audio->in[audio->read_next].used)) {
