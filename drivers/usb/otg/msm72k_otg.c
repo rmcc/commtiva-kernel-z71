@@ -274,6 +274,7 @@ static int msm_otg_suspend(struct msm_otg *dev)
 {
 	unsigned long timeout;
 	int vbus = 0;
+	unsigned otgsc;
 
 	disable_irq(dev->irq);
 	if (dev->in_lpm)
@@ -282,6 +283,18 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	/* Don't reset if mini-A cable is connected */
 	if (!is_host())
 		otg_reset(dev);
+
+	/* In case of fast plug-in and plug-out inside the otg_reset() the
+	 * servicing of BSV is missed (in the window of after phy and link
+	 * reset). Handle it if any missing bsv is detected */
+	if (is_b_sess_vld() && !is_host()) {
+		otgsc = readl(USB_OTGSC);
+		writel(otgsc, USB_OTGSC);
+		pr_info("%s:Process mising BSV\n", __func__);
+		msm_otg_start_peripheral(&dev->otg, 1);
+		enable_irq(dev->irq);
+		return -1;
+	}
 
 	ulpi_read(dev, 0x14);/* clear PHY interrupt latch register */
 	/* If there is no pmic notify support turn on phy comparators. */
@@ -511,13 +524,13 @@ static void otg_reset(struct msm_otg *dev)
 
 	writel(USBCMD_RESET, USB_USBCMD);
 	timeout = jiffies + USB_LINK_RESET_TIMEOUT;
-	while (readl(USB_USBCMD) & USBCMD_RESET) {
+	do {
 		if (time_after(jiffies, timeout)) {
 			pr_err("msm_otg: usb link reset timeout\n");
 			break;
 		}
 		msleep(1);
-	}
+	} while (readl(USB_USBCMD) & USBCMD_RESET);
 
 	/* select ULPI phy */
 	writel(0x80000000, USB_PORTSC);
