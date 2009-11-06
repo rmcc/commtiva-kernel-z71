@@ -975,6 +975,8 @@ static long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 	case IOCTL_KGSL_DEVICE_WAITTIMESTAMP:
 		result = kgsl_ioctl_device_waittimestamp(private,
 							(void __user *)arg);
+		/* order reads to the buffer written to by the GPU */
+		rmb();
 		break;
 
 	case IOCTL_KGSL_RINGBUFFER_ISSUEIBCMDS:

@@ -212,7 +212,7 @@ static void kgsl_ringbuffer_submit(struct kgsl_ringbuffer *rb)
 	GSL_RB_UPDATE_WPTR_POLLING(rb);
 	/* Drain write buffer and data memory barrier */
 	dsb();
-	dmb();
+	wmb();
 
 	/* Memory fence to ensure all data has posted.  On some systems,
 	* like 7x27, the register block is not allocated as strongly ordered
