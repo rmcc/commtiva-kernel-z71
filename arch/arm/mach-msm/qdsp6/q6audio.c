@@ -901,10 +901,9 @@ static void _audio_rx_path_enable(int reconf)
 
 	sz = acdb_get_config_table(adev, sample_rate);
 	audio_set_table(ac_control, adev, sz);
-	if (!reconf)
-		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, adev);
-	qdsp6_standby(ac_control);
-	qdsp6_start(ac_control);
+
+	if (reconf)
+		qdsp6_standby(ac_control);
 
 	adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
 	adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
@@ -913,6 +912,9 @@ static void _audio_rx_path_enable(int reconf)
 	adie_proceed_to_stage(adie, ADIE_PATH_RX, ADIE_STAGE_DIGITAL_ANALOG_READY);
 
 	audio_rx_analog_enable(1);
+
+	if (reconf)
+		qdsp6_start(ac_control);
 }
 
 static void _audio_tx_path_enable(int reconf)
@@ -925,10 +927,9 @@ static void _audio_tx_path_enable(int reconf)
 
 	sz = acdb_get_config_table(adev, sample_rate);
 	audio_set_table(ac_control, adev, sz);
-	if (!reconf)
-		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, adev);
-	qdsp6_standby(ac_control);
-	qdsp6_start(ac_control);
+
+	if (reconf)
+		qdsp6_standby(ac_control);
 
 	adie_set_path(adie, audio_tx_path_id, ADIE_PATH_TX);
 
@@ -938,10 +939,13 @@ static void _audio_tx_path_enable(int reconf)
 		adie_set_path_freq_plan(adie, ADIE_PATH_TX, 8000);
 
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_READY);
+	audio_tx_analog_enable(1);
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_ANALOG_READY);
 
-	audio_tx_analog_enable(1);
-	audio_tx_mute(ac_control, adev, tx_mute_status);
+	if (reconf)
+		qdsp6_start(ac_control);
+
+	audio_tx_mute(ac_control, audio_tx_device_id, tx_mute_status);
 }
 
 static void _audio_rx_path_disable(void)
@@ -954,9 +958,8 @@ static void _audio_rx_path_disable(void)
 
 static void _audio_tx_path_disable(void)
 {
-	audio_tx_analog_enable(0);
-
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_ANALOG_OFF);
+	audio_tx_analog_enable(0);
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_OFF);
 }
 
