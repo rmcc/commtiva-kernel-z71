@@ -117,6 +117,8 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int pcm_open(struct inode *inode, struct file *file)
 {
 	struct pcm *pcm;
+
+	pr_info("pcm_out: open\n");
 	pcm = kzalloc(sizeof(struct pcm), GFP_KERNEL);
 
 	if (!pcm)
@@ -150,7 +152,10 @@ static ssize_t pcm_write(struct file *file, const char __user *buf,
 		ab = ac->buf + ac->cpu_buf;
 
 		if (ab->used)
-			wait_event(ac->wait, (ab->used == 0));
+			if (!wait_event_timeout(ac->wait, (ab->used == 0), 5*HZ)) {
+				pr_err("pcm_write: timeout. dsp dead?\n");
+				BUG();
+			}
 
 		xfer = count;
 		if (xfer > ab->size)
@@ -176,6 +181,7 @@ static int pcm_release(struct inode *inode, struct file *file)
 	if (pcm->ac)
 		q6audio_close(pcm->ac);
 	kfree(pcm);
+	pr_info("pcm_out: release\n");
 	return 0;
 }
 

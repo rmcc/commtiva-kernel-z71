@@ -100,6 +100,7 @@ static int q6_in_open(struct inode *inode, struct file *file)
 {
 	int rc;
 
+	pr_info("pcm_in: open\n");
 	mutex_lock(&pcm_in_lock);
 	if (pcm_in_opened) {
 		pr_err("pcm_in: busy\n");
@@ -131,7 +132,10 @@ static ssize_t q6_in_read(struct file *file, char __user *buf,
 		ab = ac->buf + ac->cpu_buf;
 
 		if (ab->used)
-			wait_event(ac->wait, (ab->used == 0));
+			if (!wait_event_timeout(ac->wait, (ab->used == 0), 5*HZ)) {
+				pr_err("pcm_read: timeout. dsp dead?\n");
+				BUG();
+			}
 
 		xfer = count;
 		if (xfer > ab->size)
@@ -164,6 +168,7 @@ static int q6_in_release(struct inode *inode, struct file *file)
 		rc = q6audio_close(file->private_data);
 	pcm_in_opened = 0;
 	mutex_unlock(&pcm_in_lock);
+	pr_info("pcm_in: release\n");
 	return rc;
 }
 

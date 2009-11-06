@@ -262,7 +262,10 @@ int dal_call_raw(struct dal_client *client,
 	smd_write(dch->sch, data, data_len);
 	spin_unlock_irqrestore(&dch->lock, flags);
 
-	wait_event(client->wait, (client->status != -EBUSY));
+	if (!wait_event_timeout(client->wait, (client->status != -EBUSY), 5*HZ)) {
+		pr_err("dal: call timed out. dsp is probably dead.\n");
+		BUG();
+	}
 
 	return client->status;
 }

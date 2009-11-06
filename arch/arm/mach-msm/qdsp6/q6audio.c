@@ -334,7 +334,10 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 	r = dal_call(ac->client, AUDIO_OP_CONTROL, 5, ptr, len, &tmp, sizeof(tmp));
 	if (r != 4)
 		return -EIO;
-	wait_event(ac->wait, (ac->cb_status != -EBUSY));
+	if (!wait_event_timeout(ac->wait, (ac->cb_status != -EBUSY), 5*HZ)) {
+		pr_err("audio_ioctl: timeout. dsp dead?\n");
+		BUG();
+	}
 	return ac->cb_status;
 }
 
