@@ -38,14 +38,22 @@ enum mi2s_ret_enum_type {
 	MI2S_TRUE
 };
 
+#define MI2S_CHAN_MONO_RAW 0
+#define MI2S_CHAN_MONO_PACKED 1
+#define MI2S_CHAN_STEREO 2
+#define MI2S_CHAN_4CHANNELS 3
+#define MI2S_CHAN_6CHANNELS 4
+#define MI2S_CHAN_8CHANNELS 5
+#define MI2S_CHAN_MAX_OUTBOUND_CHANNELS MI2S__CHAN_8CHANNELS
+
 bool mi2s_set_hdmi_output_path(uint8_t channels, uint8_t size,
 				uint8_t sd_line);
 
 bool mi2s_set_hdmi_input_path(uint8_t channels, uint8_t size, uint8_t sd_line);
 
-bool mi2s_set_codec_output_path(bool stereo, uint8_t size);
+bool mi2s_set_codec_output_path(uint8_t channels, uint8_t size);
 
-bool mi2s_set_codec_input_path(bool stereo, uint8_t size);
+bool mi2s_set_codec_input_path(uint8_t channels, uint8_t size);
 
 #endif /* #ifndef MI2S_H */
 

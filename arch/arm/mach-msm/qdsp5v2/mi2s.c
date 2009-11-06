@@ -97,6 +97,8 @@ printk(KERN_DEBUG format, ## arg)
 #define MI2S_MODE__MI2S_TX_RX_WORD_TYPE__16_BIT 0x1
 #define MI2S_MODE__MI2S_TX_RX_WORD_TYPE__24_BIT 0x2
 #define MI2S_MODE__MI2S_TX_RX_WORD_TYPE__32_BIT 0x3
+#define MI2S_TX_MODE__MI2S_TX_CODEC_16_MONO_MODE__RAW 0x0
+#define MI2S_TX_MODE__MI2S_TX_CODEC_16_MONO_MODE__PACKED 0x1
 #define MI2S_TX_MODE__MI2S_TX_STEREO_MODE__MONO_SAMPLE   0x0
 #define MI2S_TX_MODE__MI2S_TX_STEREO_MODE__STEREO_SAMPLE 0x1
 #define MI2S_TX_MODE__MI2S_TX_CH_TYPE__2_CHANNEL 0x0
@@ -104,6 +106,7 @@ printk(KERN_DEBUG format, ## arg)
 #define MI2S_TX_MODE__MI2S_TX_CH_TYPE__6_CHANNEL 0x2
 #define MI2S_TX_MODE__MI2S_TX_CH_TYPE__8_CHANNEL 0x3
 #define MI2S_TX_MODE__MI2S_TX_DMA_ACK_SYNCH_EN__SYNC_ENABLE 0x1
+#define MI2S_RX_MODE__MI2S_RX_CODEC_16_MONO_MODE__PACKED 0x1
 #define MI2S_RX_MODE__MI2S_RX_STEREO_MODE__MONO_SAMPLE   0x0
 #define MI2S_RX_MODE__MI2S_RX_STEREO_MODE__STEREO_SAMPLE 0x1
 #define MI2S_RX_MODE__MI2S_RX_CH_TYPE__2_CH 0x0
@@ -114,6 +117,8 @@ printk(KERN_DEBUG format, ## arg)
 #define HWIO_AUDIO1_MI2S_MODE_MI2S_TX_RX_WORD_TYPE_SHFT  		0x8
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK		0x4
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT		0x2
+#define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_P_MONO_BMSK                    0x2
+#define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_P_MONO_SHFT                    0x1
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_BMSK			0x18
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_SHFT			0x3
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_4_0_CH_MAP_BMSK			0x80
@@ -125,6 +130,8 @@ printk(KERN_DEBUG format, ## arg)
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_I2S_LINE_SHFT			0x5
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_BMSK		0x4
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_SHFT		0x2
+#define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CODEC_P_MONO_BMSK              0x2
+#define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CODEC_P_MONO_SHFT              0x1
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CH_TYPE_BMSK			0x18
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CH_TYPE_SHFT			0x3
 #define HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_DMA_ACK_SYNCH_EN_BMSK		0x1
@@ -262,12 +269,20 @@ static void mi2s_set_output_num_channels(struct mi2s_state *mi2s,
 	uint32_t val;
 	if (!IS_ERR(baddr)) {
 		val = readl(baddr + MI2S_TX_MODE_OFFSET);
-		if (channels == 1) {
+		if (channels == MI2S_CHAN_MONO_RAW) {
 			val = (val &
 			~HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK) |
 			(MI2S_TX_MODE__MI2S_TX_STEREO_MODE__MONO_SAMPLE <<
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT);
-		} else if (channels == 2) {
+		} else if (channels == MI2S_CHAN_MONO_PACKED) {
+			val = (val &
+			~(HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK |
+			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_P_MONO_BMSK)) |
+			((MI2S_TX_MODE__MI2S_TX_STEREO_MODE__MONO_SAMPLE <<
+			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT) |
+			(MI2S_TX_MODE__MI2S_TX_CODEC_16_MONO_MODE__PACKED <<
+			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_P_MONO_SHFT));
+		} else if (channels == MI2S_CHAN_STEREO) {
 			val = (val &
 			~(HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK |
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_BMSK)) |
@@ -275,7 +290,7 @@ static void mi2s_set_output_num_channels(struct mi2s_state *mi2s,
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT) |
 			(MI2S_TX_MODE__MI2S_TX_CH_TYPE__2_CHANNEL <<
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_SHFT));
-		} else if (channels == 4) {
+		} else if (channels == MI2S_CHAN_4CHANNELS) {
 			val = (val &
 			~(HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK |
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_BMSK)) |
@@ -283,7 +298,7 @@ static void mi2s_set_output_num_channels(struct mi2s_state *mi2s,
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT) |
 			(MI2S_TX_MODE__MI2S_TX_CH_TYPE__4_CHANNEL <<
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_SHFT));
-		} else if (channels == 6) {
+		} else if (channels == MI2S_CHAN_6CHANNELS) {
 			val = (val &
 			~(HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK |
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_BMSK)) |
@@ -291,7 +306,7 @@ static void mi2s_set_output_num_channels(struct mi2s_state *mi2s,
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_SHFT) |
 			(MI2S_TX_MODE__MI2S_TX_CH_TYPE__6_CHANNEL <<
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_SHFT));
-		} else if (channels == 8) {
+		} else if (channels == MI2S_CHAN_8CHANNELS) {
 			val = (val &
 			~(HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK |
 			HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_CH_TYPE_BMSK)) |
@@ -376,12 +391,20 @@ static void mi2s_set_input_num_channels(struct mi2s_state *mi2s, uint8_t dev_id,
 
 	if (!IS_ERR(baddr)) {
 		val = readl(baddr + MI2S_RX_MODE_OFFSET);
-		if (channels == 1) {
+		if (channels == MI2S_CHAN_MONO_RAW) {
 			val = (val &
 			~HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_BMSK) |
 			(MI2S_RX_MODE__MI2S_RX_STEREO_MODE__MONO_SAMPLE <<
 			HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_SHFT);
-		} else if (channels == 2) {
+		} else if (channels == MI2S_CHAN_MONO_PACKED) {
+			val = (val &
+			~(HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_BMSK |
+			HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CODEC_P_MONO_BMSK)) |
+			((MI2S_RX_MODE__MI2S_RX_STEREO_MODE__MONO_SAMPLE <<
+			HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_SHFT) |
+			(MI2S_RX_MODE__MI2S_RX_CODEC_16_MONO_MODE__PACKED <<
+			HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CODEC_P_MONO_SHFT));
+		} else if (channels == MI2S_CHAN_STEREO) {
 			val = (val &
 			~(HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_STEREO_MODE_BMSK |
 			HWIO_AUDIO1_MI2S_RX_MODE_MI2S_RX_CH_TYPE_BMSK)) |
@@ -538,7 +561,7 @@ bool mi2s_set_hdmi_input_path(uint8_t channels, uint8_t size, uint8_t sd_line)
 }
 EXPORT_SYMBOL(mi2s_set_hdmi_input_path);
 
-bool mi2s_set_codec_output_path(bool stereo, uint8_t size)
+bool mi2s_set_codec_output_path(uint8_t channels, uint8_t size)
 {
 	bool ret_val = MI2S_TRUE;
 	struct mi2s_state *mi2s = &the_mi2s_state;
@@ -556,7 +579,7 @@ bool mi2s_set_codec_output_path(bool stereo, uint8_t size)
 	else
 		ret_val = MI2S_FALSE;
 
-	mi2s_set_output_num_channels(mi2s, CODEC_TX, (stereo ? 2 : 1));
+	mi2s_set_output_num_channels(mi2s, CODEC_TX, channels);
 
 	/* Enable SD line */
 	mi2s_set_sd(mi2s, CODEC_TX, MI2S_SD_0_EN_MAP | MI2S_SD_0_TX_MAP);
@@ -570,7 +593,7 @@ bool mi2s_set_codec_output_path(bool stereo, uint8_t size)
 }
 EXPORT_SYMBOL(mi2s_set_codec_output_path);
 
-bool mi2s_set_codec_input_path(bool stereo, uint8_t size)
+bool mi2s_set_codec_input_path(uint8_t channels, uint8_t size)
 {
 	bool ret_val = MI2S_TRUE;
 	struct mi2s_state *mi2s = &the_mi2s_state;
@@ -588,7 +611,7 @@ bool mi2s_set_codec_input_path(bool stereo, uint8_t size)
 	else
 		ret_val = MI2S_FALSE;
 
-	mi2s_set_input_num_channels(mi2s, CODEC_RX, (stereo ? 2 : 1));
+	mi2s_set_input_num_channels(mi2s, CODEC_RX, channels);
 
 	/* Enable SD line */
 	mi2s_set_sd(mi2s, CODEC_RX, MI2S_SD_0_EN_MAP);
