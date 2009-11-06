@@ -255,9 +255,13 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 {
 	int rc, read_rows;
 	u8 scan_val;
+	static u8 rows[] = {
+		5, 6, 7, 8, 10, 10, 12, 12, 15, 15, 15, 18,
+	};
 
 	if (kp->flags & KEYF_FIX_LAST_ROW)
-		read_rows = MATRIX_MAX_ROWS;
+		read_rows = rows[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN
+					 + 1];
 	else
 		read_rows = kp->pdata->num_rows;
 
@@ -382,7 +386,16 @@ static irqreturn_t pmic8058_kp_irq(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
-
+/*
+ * NOTE: Last row multi-interrupt issue
+ *
+ * In PMIC Rev A0, if any key in the last row of the keypad matrix
+ * is pressed and held, the H/W keeps on generating interrupts.
+ * Software work-arounds it by programming the keypad controller next level
+ * up rows (for 8x12 matrix it is 15 rows) so the keypad controller
+ * thinks of more-rows than the actual ones, so the actual last-row
+ * in the matrix won't generate multiple interrupts.
+ */
 static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 {
 	int bits, rc, cycles;
@@ -409,7 +422,9 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 
 	/* Use max rows to fix last row problem if actual rows are less */
 	if (kp->flags & KEYF_FIX_LAST_ROW)
-		bits = KEYP_CTRL_SCAN_ROWS_BITS;
+		bits = row_bits[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN
+					 + 1];
+
 	ctrl_val |= (bits << KEYP_CTRL_SCAN_ROWS_SHIFT);
 
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
