@@ -280,6 +280,8 @@ static long adsp_write_cmd(struct adsp_device *adev, void __user *arg)
 		rc = -EINVAL;
 		goto end;
 	}
+	/* complete the writes to the buffer */
+	wmb();
 	rc = msm_adsp_write(adev->module, cmd.queue, cmd_data, cmd.len);
 end:
 	mutex_unlock(&adev->module->pmem_regions_lock);
@@ -393,6 +395,8 @@ static long adsp_get_event(struct adsp_device *adev, void __user *arg)
 		rc = -ETOOSMALL;
 		goto end;
 	}
+	/* order the reads to the buffer */
+	rmb();
 	if (data->msg_id != EVENT_MSG_ID) {
 		if (copy_to_user((void *)(evt.data), data->data.msg16,
 					data->size)) {

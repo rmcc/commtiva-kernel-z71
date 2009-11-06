@@ -420,6 +420,8 @@ static int vdec_queue(struct vdec_data *vd, void *argp)
 	rpc.size = sizeof(struct vdec_input_buf_info);
 	rpc.osize = sizeof(struct vdec_queue_status);
 
+	/* complete the writes to the buffer */
+	wmb();
 	ret = dal_call(vd->vdec_handle, VDEC_DALRPC_QUEUE, 8,
 		       &rpc, sizeof(rpc), &rpc_res, sizeof(rpc_res));
 	if (ret < 4) {
@@ -611,6 +613,9 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 		if (vd->close_decode)
 			ret = -EINTR;
+		else
+			/* order the reads from the buffer */
+			rmb();
 		break;
 
 	case VDEC_IOCTL_CLOSE:
