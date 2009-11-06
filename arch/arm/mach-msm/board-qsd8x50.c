@@ -102,6 +102,9 @@
 #include "smd_private.h"
 #include "proc_comm.h"
 #include <linux/msm_kgsl.h>
+#ifdef CONFIG_USB_ANDROID
+#include <linux/usb/android.h>
+#endif
 
 #define TOUCHPAD_SUSPEND 	34
 #define TOUCHPAD_IRQ 		38
@@ -138,6 +141,7 @@ static struct resource smc91x_resources[] = {
 	},
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
 	.nluns          = 0x02,
 	.buf_size       = 16384,
@@ -153,6 +157,82 @@ static struct platform_device mass_storage_device = {
 		.platform_data          = &usb_mass_storage_pdata,
 	},
 };
+#endif
+
+#ifdef CONFIG_USB_ANDROID
+/* dynamic composition */
+static struct usb_composition usb_func_composition[] = {
+	{
+		.product_id         = 0x9015,
+		/* MSC + ADB */
+		.functions	    = 0x12 /* 10010 */
+	},
+	{
+		.product_id         = 0xF000,
+		/* MSC */
+		.functions	    = 0x02, /* 0010 */
+	},
+	{
+		.product_id         = 0xF005,
+		/* MODEM ONLY */
+		.functions	    = 0x03,
+	},
+
+	{
+		.product_id         = 0x8080,
+		/* DIAG + MODEM */
+		.functions	    = 0x34,
+	},
+	{
+		.product_id         = 0x8082,
+		/* DIAG + ADB + MODEM */
+		.functions	    = 0x0314,
+	},
+	{
+		.product_id         = 0x8085,
+		/* DIAG + ADB + MODEM + NMEA + MSC*/
+		.functions	    = 0x25314,
+	},
+	{
+		.product_id         = 0x9016,
+		/* DIAG + GENERIC MODEM + GENERIC NMEA*/
+		.functions	    = 0x764,
+	},
+	{
+		.product_id         = 0x9017,
+		/* DIAG + GENERIC MODEM + GENERIC NMEA + MSC*/
+		.functions	    = 0x2764,
+	},
+	{
+		.product_id         = 0x9018,
+		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
+		.functions	    = 0x27614,
+	},
+	{
+		.product_id         = 0xF009,
+		/* CDC-ECM*/
+		.functions	    = 0x08,
+	}
+};
+static struct android_usb_platform_data android_usb_pdata = {
+	.vendor_id	= 0x05C6,
+	.product_id	= 0x9018,
+	.functions	= 0x27614,
+	.version	= 0x0100,
+	.compositions   = usb_func_composition,
+	.num_compositions = ARRAY_SIZE(usb_func_composition),
+	.product_name	= "Qualcomm HSUSB Device",
+	.manufacturer_name = "Qualcomm Incorporated",
+	.nluns = 1,
+};
+static struct platform_device android_usb_device = {
+	.name	= "android_usb",
+	.id		= -1,
+	.dev		= {
+		.platform_data = &android_usb_pdata,
+	},
+};
+#endif
 
 static struct platform_device smc91x_device = {
 	.name           = "smc91x",
@@ -241,6 +321,7 @@ static struct platform_device s1r72v05_device = {
 	},
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_function_map usb_functions_map[] = {
 	{"diag", 0},
 	{"adb", 1},
@@ -302,6 +383,7 @@ static struct usb_composition usb_func_composition[] = {
 		.functions	    = 0x0F, /* 01111 */
 	},
 };
+#endif
 
 static struct platform_device hs_device = {
 	.name   = "msm-handset",
@@ -538,6 +620,7 @@ static int msm_hsusb_native_phy_reset(void __iomem *addr)
 }
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
+#ifdef CONFIG_USB_FUNCTION
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
 	.vendor_id          = 0x5c6,
@@ -551,6 +634,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.config_gpio    = NULL,
 
 	.phy_reset = msm_hsusb_native_phy_reset,
+#endif
 };
 
 static struct vreg *vreg_usb;
@@ -1832,6 +1916,62 @@ static struct platform_device msm_batt_device = {
 	.dev.platform_data  = &msm_psy_batt_data,
 };
 
+static int hsusb_rpc_connect(int connect)
+{
+	if (connect)
+		return msm_hsusb_rpc_connect();
+	else
+		return msm_hsusb_rpc_close();
+}
+
+static int hsusb_chg_init(int connect)
+{
+	if (connect)
+		return msm_chg_rpc_connect();
+	else
+		return msm_chg_rpc_close();
+}
+
+void hsusb_chg_vbus_draw(unsigned mA)
+{
+	if (mA)
+		msm_chg_usb_i_is_available(mA);
+	else
+		msm_chg_usb_i_is_not_available();
+}
+
+void hsusb_chg_connected(enum chg_type chgtype)
+{
+	switch (chgtype) {
+	case CHG_TYPE_HOSTPC:
+		pr_debug("Charger Type: HOST PC\n");
+		msm_chg_usb_charger_connected(0);
+		msm_chg_usb_i_is_available(100);
+		break;
+	case CHG_TYPE_WALL_CHARGER:
+		pr_debug("Charger Type: WALL CHARGER\n");
+		msm_chg_usb_charger_connected(2);
+		msm_chg_usb_i_is_available(1500);
+		break;
+	case CHG_TYPE_INVALID:
+		pr_debug("Charger Type: DISCONNECTED\n");
+		msm_chg_usb_i_is_not_available();
+		msm_chg_usb_charger_disconnected();
+		break;
+	}
+}
+
+static struct msm_otg_platform_data msm_otg_pdata = {
+	.rpc_connect	= hsusb_rpc_connect,
+	.phy_reset	= msm_hsusb_native_phy_reset,
+};
+
+static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
+	/* charging apis */
+	.chg_init = hsusb_chg_init,
+	.chg_connected = hsusb_chg_connected,
+	.chg_vbus_draw = hsusb_chg_vbus_draw,
+};
 
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
@@ -1849,7 +1989,14 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c,
 	&qsd_device_spi,
 	&msm_device_hsusb_peripheral,
+	&msm_device_gadget_peripheral,
+#ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
+#endif
+#ifdef CONFIG_USB_ANDROID
+	&android_usb_device,
+#endif
+	&msm_device_otg,
 	&msm_device_tssc,
 	&msm_audio_device,
 	&msm_device_uart_dm1,
@@ -2226,6 +2373,8 @@ static void __init qsd8x50_init(void)
 		msm_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
+	msm_device_otg.dev.platform_data = &msm_otg_pdata;
+	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
 	msm_device_tsif.dev.platform_data = &tsif_platform_data;

@@ -204,6 +204,7 @@ static struct platform_device smc911x_device = {
 	.resource       = smc911x_resources,
 };
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
 	.nluns          = 0x02,
 	.buf_size       = 16384,
@@ -219,7 +220,9 @@ static struct platform_device mass_storage_device = {
 	.platform_data          = &usb_mass_storage_pdata,
 	},
 };
+#endif
 
+#ifdef CONFIG_USB_FUNCTION
 static struct usb_function_map usb_functions_map[] = {
 	{"diag", 0},
 	{"adb", 1},
@@ -272,6 +275,7 @@ static struct usb_composition usb_func_composition[] = {
 	},
 
 };
+#endif
 
 static struct platform_device hs_device = {
 	.name   = "msm-handset",
@@ -327,6 +331,7 @@ static void msm_fsusb_setup_gpio(unsigned int enable)
 }
 #endif
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
+#ifdef CONFIG_USB_FUNCTION
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_180NM),
 	.vendor_id          = 0x5c6,
@@ -338,6 +343,7 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
+#endif
 };
 
 static struct vreg *vreg_usb;
@@ -922,7 +928,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
 	&msm_device_hsusb_otg,
 	&msm_device_hsusb_peripheral,
+#ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
+#endif
 	&msm_audio_device,
 	&msm_device_uart_dm1,
 	&msm_bluesleep_device,
