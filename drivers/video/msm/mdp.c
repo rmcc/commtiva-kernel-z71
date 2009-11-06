@@ -373,8 +373,8 @@ void mdp_disable_irq_nolock(uint32 term)
 
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
-
-	dmb();	/* memory barrier */
+	/* complete all the writes before starting */
+	wmb();
 
 	/* kick off PPP engine */
 	if (term == MDP_PPP_TERM) {
