@@ -508,21 +508,27 @@ static void ep0_complete(struct usb_ep *ep, struct usb_request *req)
 		req->complete(&ui->ep0in.ep, req);
 }
 
-static void ep0_queue_ack_complete(struct usb_ep *ep, struct usb_request *req)
+static void ep0_queue_ack_complete(struct usb_ep *ep,
+	struct usb_request *_req)
 {
+	struct msm_request *r = to_msm_request(_req);
 	struct msm_endpoint *ept = to_msm_endpoint(ep);
+	struct usb_info *ui = ept->ui;
+	struct usb_request *req = ui->setup_req;
 
 	/* queue up the receive of the ACK response from the host */
-	if (req->status == 0) {
-		struct usb_info *ui = ept->ui;
+	if (_req->status == 0 && _req->actual == _req->length) {
 		req->length = 0;
-		req->complete = ep0_complete;
 		if (ui->ep0_dir == USB_DIR_IN)
 			usb_ept_queue_xfer(&ui->ep0out, req);
 		else
 			usb_ept_queue_xfer(&ui->ep0in, req);
+		_req->complete = r->gadget_complete;
+		r->gadget_complete = 0;
+		if (_req->complete)
+			_req->complete(&ui->ep0in.ep, _req);
 	} else
-		ep0_complete(ep, req);
+		ep0_complete(ep, _req);
 }
 
 static void ep0_setup_ack_complete(struct usb_ep *ep, struct usb_request *req)
