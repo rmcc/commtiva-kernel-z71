@@ -394,47 +394,24 @@ static struct platform_device hs_device = {
 };
 
 #ifdef CONFIG_USB_FS_HOST
+static struct msm_gpio fsusb_config[] = {
+	{ GPIO_CFG(139, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), "fs_dat" },
+	{ GPIO_CFG(140, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), "fs_se0" },
+	{ GPIO_CFG(141, 3, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), "fs_oe_n" },
+};
+
 static int fsusb_gpio_init(void)
 {
-	int rc;
-	/* FSUSB GPIOs */
-	rc = gpio_request(139, "fs_dat");
-	if (rc) {
-		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       139, rc);
-		return rc;
-	}
-	rc = gpio_request(140, "fs_se0");
-	if (rc) {
-		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       140, rc);
-		return rc;
-	}
-	rc = gpio_request(141, "fs_oe_n");
-	if (rc) {
-		pr_err("gpio_request failed on pin %d (rc=%d)\n",
-		       141, rc);
-		return rc;
-	}
-	return 0;
+	return msm_gpios_request(fsusb_config, ARRAY_SIZE(fsusb_config));
 }
-
-static unsigned fsusb_config[] = {
-	GPIO_CFG(139, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
-	GPIO_CFG(140, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
-	GPIO_CFG(141, 3, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),
-};
 
 static void msm_fsusb_setup_gpio(unsigned int enable)
 {
-	int rc, i;
+	if (enable)
+		msm_gpios_enable(fsusb_config, ARRAY_SIZE(fsusb_config));
+	else
+		msm_gpios_disable(fsusb_config, ARRAY_SIZE(fsusb_config));
 
-	for (i = 0; i < ARRAY_SIZE(fsusb_config); i++) {
-		rc = gpio_tlmm_config(fsusb_config[i],
-			enable ? GPIO_ENABLE : GPIO_DISABLE);
-		if (rc)
-			pr_err("configure/unconfigure fsusb gpios failed \n");
-	}
 }
 #endif
 
