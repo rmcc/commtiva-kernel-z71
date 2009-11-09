@@ -197,21 +197,12 @@ struct kgsl_ringbuffer {
 #define GSL_RB_MEMPTRS_SCRATCH_MASK 0x1
 #define GSL_RB_INIT_TIMESTAMP(rb)
 
-#define GSL_RB_GET_SOP_TIMESTAMP(rb, data) \
-	kgsl_sharedmem_read(&(rb)->device->memstore, (data), \
-		 KGSL_DEVICE_MEMSTORE_OFFSET(soptimestamp), 4)
 #else
 #define GSL_RB_MEMPTRS_SCRATCH_MASK 0x0
 #define GSL_RB_INIT_TIMESTAMP(rb) \
 		kgsl_yamato_regwrite((rb)->device->id, REG_CP_TIMESTAMP, 0)
 
-#define GSL_RB_GET_SOP_TIMESTAMP(rb, data) \
-	kgsl_yamato_regread((rb)->device->id, REG_CP_TIMESTAMP, (data))
 #endif /* GSL_RB_USE_MEMTIMESTAMP */
-
-#define GSL_RB_GET_EOP_TIMESTAMP(rb, data) \
-	kgsl_sharedmem_read(&(rb)->device->memstore, (data), \
-		 KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp), 4)
 
 /* mem rptr */
 #ifdef GSL_RB_USE_MEM_RPTR
@@ -252,35 +243,20 @@ int kgsl_ringbuffer_issueibcmds(struct kgsl_device *, int drawctxt_index,
 				uint32_t *timestamp,
 				unsigned int flags);
 
-uint32_t kgsl_ringbuffer_readtimestamp(struct kgsl_device *,
-					enum kgsl_timestamp_type type);
-
-int kgsl_ringbuffer_freememontimestamp(struct kgsl_device *,
-					struct kgsl_pmem_entry *,
-					uint32_t timestamp,
-					enum kgsl_timestamp_type type);
-
 int kgsl_ringbuffer_init(struct kgsl_device *device);
 
 int kgsl_ringbuffer_close(struct kgsl_ringbuffer *rb);
 
 uint32_t kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
-					struct kgsl_drawctxt *drawctxt,
 					int pmodeoff,
 					unsigned int *cmdaddr,
-					int sizedwords,
-					unsigned int flags);
+					int sizedwords);
 
 int kgsl_ringbuffer_gettimestampshadow(struct kgsl_device *device,
 					unsigned int *sopaddr,
 					unsigned int *eopaddr);
 
-int kgsl_ringbuffer_check_timestamp(struct kgsl_device *device,
-					unsigned int timestamp);
-
 void kgsl_ringbuffer_watchdog(void);
-
-void kgsl_ringbuffer_memqueue_drain(struct kgsl_device *device);
 
 void kgsl_cp_intrcallback(struct kgsl_device *device);
 

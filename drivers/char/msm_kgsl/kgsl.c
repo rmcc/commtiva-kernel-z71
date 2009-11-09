@@ -75,6 +75,7 @@
 #include "kgsl.h"
 #include "kgsl_drawctxt.h"
 #include "kgsl_ringbuffer.h"
+#include "kgsl_cmdstream.h"
 #include "kgsl_log.h"
 #include "kgsl_drm.h"
 
@@ -482,11 +483,11 @@ done:
 	return result;
 }
 
-static long kgsl_ioctl_rb_readtimestamp(struct kgsl_file_private *private,
-				       void __user *arg)
+static long kgsl_ioctl_cmdstream_readtimestamp(struct kgsl_file_private
+						*private, void __user *arg)
 {
 	int result = 0;
-	struct kgsl_ringbuffer_readtimestamp param;
+	struct kgsl_cmdstream_readtimestamp param;
 
 	if (copy_from_user(&param, arg, sizeof(param))) {
 		result = -EFAULT;
@@ -494,7 +495,7 @@ static long kgsl_ioctl_rb_readtimestamp(struct kgsl_file_private *private,
 	}
 
 	param.timestamp =
-		kgsl_ringbuffer_readtimestamp(&kgsl_driver.yamato_device,
+		kgsl_cmdstream_readtimestamp(&kgsl_driver.yamato_device,
 							param.type);
 	if (result != 0)
 		goto done;
@@ -507,11 +508,11 @@ done:
 	return result;
 }
 
-static long kgsl_ioctl_rb_freememontimestamp(struct kgsl_file_private *private,
-					    void __user *arg)
+static long kgsl_ioctl_cmdstream_freememontimestamp(struct kgsl_file_private
+						*private, void __user *arg)
 {
 	int result = 0;
-	struct kgsl_ringbuffer_freememontimestamp param;
+	struct kgsl_cmdstream_freememontimestamp param;
 	struct kgsl_pmem_entry *entry = NULL;
 
 	if (copy_from_user(&param, arg, sizeof(param))) {
@@ -527,7 +528,7 @@ static long kgsl_ioctl_rb_freememontimestamp(struct kgsl_file_private *private,
 			goto done;
 		}
 
-		result = kgsl_ringbuffer_freememontimestamp(
+		result = kgsl_cmdstream_freememontimestamp(
 					&kgsl_driver.yamato_device,
 					entry,
 					param.timestamp,
@@ -740,14 +741,15 @@ static long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		result = kgsl_ioctl_rb_issueibcmds(private, (void __user *)arg);
 		break;
 
-	case IOCTL_KGSL_RINGBUFFER_READTIMESTAMP:
+	case IOCTL_KGSL_CMDSTREAM_READTIMESTAMP:
 		result =
-		    kgsl_ioctl_rb_readtimestamp(private, (void __user *)arg);
+		    kgsl_ioctl_cmdstream_readtimestamp(private,
+							(void __user *)arg);
 		break;
 
-	case IOCTL_KGSL_RINGBUFFER_FREEMEMONTIMESTAMP:
+	case IOCTL_KGSL_CMDSTREAM_FREEMEMONTIMESTAMP:
 		result =
-		    kgsl_ioctl_rb_freememontimestamp(private,
+		    kgsl_ioctl_cmdstream_freememontimestamp(private,
 						    (void __user *)arg);
 		break;
 

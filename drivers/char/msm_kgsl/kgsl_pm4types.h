@@ -156,6 +156,10 @@
 /* copy sequencer instruction memory to system memory */
 #define PM4_IM_STORE            0x2c
 
+/* program an offset that will added to the BIN_BASE value of
+ * the 3D_DRAW_INDX_BIN packet */
+#define PM4_SET_BIN_BASE_OFFSET     0x4B
+
 
 /* packet header building macros */
 #define pm4_type0_packet(regindx, cnt) \
