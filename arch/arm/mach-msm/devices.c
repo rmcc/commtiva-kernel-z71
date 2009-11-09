@@ -365,6 +365,20 @@ static struct resource resources_hsusb_peripheral[] = {
 		.end	= INT_USB_HS,
 		.flags	= IORESOURCE_IRQ,
 	},
+#ifdef CONFIG_ARCH_MSM7X01A
+	{
+		.name	= "vbus_interrupt",
+		.start	= MSM_GPIO_TO_INT(112),
+		.end	= MSM_GPIO_TO_INT(112),
+		.flags	= IORESOURCE_IRQ,
+	},
+	{
+		.name	= "id_interrupt",
+		.start	= MSM_GPIO_TO_INT(114),
+		.end	= MSM_GPIO_TO_INT(114),
+		.flags	= IORESOURCE_IRQ,
+	},
+#endif
 };
 
 static struct resource resources_gadget_peripheral[] = {

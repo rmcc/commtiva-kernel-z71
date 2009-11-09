@@ -86,9 +86,6 @@ struct msm_hsusb_platform_data {
 	int num_compositions;
 	struct usb_function_map *function_map;
 	int num_functions;
-	/* ULPI data pins used for LPM */
-	unsigned ulpi_data_1_pin;
-	unsigned ulpi_data_3_pin;
 	/* gpio mux function used for LPM */
 	int (*config_gpio)(int config);
 	/* ROC info for AHB Mode */
