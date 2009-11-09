@@ -835,7 +835,14 @@ static int pm8058_ist(void *data)
 	current->flags |= PF_NOFREEZE;
 
 	while (!kthread_should_stop()) {
-		wait_for_completion_interruptible(&chip->irq_completion);
+		int	rc;
+		rc = wait_for_completion_interruptible(&chip->irq_completion);
+		if (rc) {
+			pr_err("%s: wait_for_completion_interruptible: "
+			       "rc=%d\n", __func__, rc);
+			complete(&chip->irq_completion);
+			continue;
+		}
 
 		local_irq_disable();
 		pm8058_handle_isr(chip);
