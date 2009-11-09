@@ -980,9 +980,12 @@ static void usb_reset(struct usb_info *ui)
 {
 	unsigned long flags;
 	unsigned otgsc, cfg_val;
+	struct msm_otg *otg = to_msm_otg(ui->xceiv);
 
 	INFO("msm72k_udc: reset controller\n");
 
+	if (otg->set_clk)
+		otg->set_clk(ui->xceiv, 1);
 	spin_lock_irqsave(&ui->lock, flags);
 	ui->running = 0;
 	spin_unlock_irqrestore(&ui->lock, flags);
@@ -1045,6 +1048,8 @@ static void usb_reset(struct usb_info *ui)
 	writel(otgsc, USB_OTGSC);
 	writel(STS_URI | STS_SLI | STS_UI | STS_PCI, USB_USBINTR);
 
+	if (otg->set_clk)
+		otg->set_clk(ui->xceiv, 0);
 	spin_lock_irqsave(&ui->lock, flags);
 	ui->running = 1;
 	spin_unlock_irqrestore(&ui->lock, flags);

@@ -233,6 +233,21 @@ static void msm_otg_debugfs_cleanup() { }
 
 #endif
 
+static int msm_otg_set_clk(struct otg_transceiver *xceiv, int on)
+{
+	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
+
+	if (!dev || (dev != the_msm_otg))
+		return -ENODEV;
+
+	if (on)
+		/* enable clocks */
+		clk_enable(dev->clk);
+	else
+		clk_disable(dev->clk);
+
+	return 0;
+}
 static void msm_otg_start_peripheral(struct otg_transceiver *xceiv, int on)
 {
 	if (!xceiv->gadget)
@@ -286,7 +301,6 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	}
 
 	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL | ULPI_STP_CTRL, USB_USBCMD);
-	clk_disable(dev->clk);
 	clk_disable(dev->pclk);
 	if (dev->cclk)
 		clk_disable(dev->cclk);
@@ -320,7 +334,6 @@ static int msm_otg_resume(struct msm_otg *dev)
 
 	wake_lock(&dev->wlock);
 
-	clk_enable(dev->clk);
 	clk_enable(dev->pclk);
 	if (dev->cclk)
 		clk_enable(dev->cclk);
@@ -488,6 +501,7 @@ static void otg_reset(struct msm_otg *dev)
 {
 	unsigned long timeout;
 
+	clk_enable(dev->clk);
 	if (dev->phy_reset)
 		dev->phy_reset(dev->regs);
 	/*disable all phy interrupts*/
@@ -511,6 +525,7 @@ static void otg_reset(struct msm_otg *dev)
 	ulpi_write(dev, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
 	writel(0x0, USB_AHB_BURST);
 	writel(0x00, USB_AHB_MODE);
+	clk_disable(dev->clk);
 
 	if (dev->otg.gadget)
 		enable_sess_valid(dev);
@@ -595,7 +610,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	}
 
 	/* enable clocks */
-	clk_enable(dev->clk);
 	clk_enable(dev->pclk);
 	if (dev->cclk)
 		clk_enable(dev->cclk);
@@ -607,7 +621,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	if (dev->pmic_notif_init) {
 		ret = dev->pmic_notif_init();
 		if (ret && ret != -ENOTSUPP) {
-			clk_disable(dev->clk);
 			clk_disable(dev->pclk);
 			if (dev->cclk)
 				clk_disable(dev->cclk);
@@ -623,7 +636,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 					"msm_otg", dev);
 	if (ret) {
 		pr_info("%s: request irq failed\n", __func__);
-		clk_disable(dev->clk);
 		clk_disable(dev->pclk);
 		if (dev->cclk)
 			clk_disable(dev->cclk);
@@ -634,6 +646,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	dev->otg.set_peripheral = msm_otg_set_peripheral;
 	dev->otg.set_host = msm_otg_set_host;
 	dev->otg.set_suspend = msm_otg_set_suspend;
+	dev->set_clk = msm_otg_set_clk;
 	if (otg_set_transceiver(&dev->otg)) {
 		WARN_ON(1);
 		goto free_regs;
@@ -674,7 +687,6 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 	if (dev->cclk)
 		clk_disable(dev->cclk);
 	clk_disable(dev->pclk);
-	clk_disable(dev->clk);
 	if (dev->cclk)
 		clk_put(dev->cclk);
 	clk_put(dev->pclk);
