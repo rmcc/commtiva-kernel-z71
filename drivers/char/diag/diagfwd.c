@@ -100,7 +100,9 @@ static void diag_smd_send_req(void)
 			} else {
 				smd_read_from_cb(driver->ch, buf, r);
 				driver->in_busy = 1;
-				diag_write(buf, r);
+				driver->usb_write_ptr->buf = buf;
+				driver->usb_write_ptr->length = r;
+				diag_write(driver->usb_write_ptr);
 			}
 		}
 	}
@@ -125,7 +127,9 @@ static void diag_smd_qdsp_send_req(void)
 			} else {
 				smd_read_from_cb(driver->chqdsp, buf, r);
 				driver->in_busy_qdsp = 1;
-				diag_write(buf, r);
+				driver->usb_write_ptr_qdsp->buf = buf;
+				driver->usb_write_ptr_qdsp->length = r;
+				diag_write(driver->usb_write_ptr_qdsp);
 			}
 		}
 
@@ -419,7 +423,9 @@ int diagfwd_connect(void)
 	driver->in_busy = 0;
 	driver->in_busy_qdsp = 0;
 
-	diag_read(driver->usb_buf_out, USB_MAX_OUT_BUF);
+	driver->usb_read_ptr->buf = driver->usb_buf_out;
+	driver->usb_read_ptr->length = USB_MAX_OUT_BUF;
+	diag_read(driver->usb_read_ptr);
 	return 0;
 }
 
@@ -434,8 +440,9 @@ int diagfwd_disconnect(void)
 	return 0;
 }
 
-int diagfwd_write_complete(unsigned char *buf, int len, int status)
+int diagfwd_write_complete(struct diag_request *diag_write_ptr)
 {
+	unsigned char *buf = diag_write_ptr->buf;
 	/*Determine if the write complete is for data from arm9/apps/q6 */
 	/* Need a context variable here instead */
 	if (buf == (void *)driver->usb_buf_in) {
@@ -444,14 +451,17 @@ int diagfwd_write_complete(unsigned char *buf, int len, int status)
 	} else if (buf == (void *)driver->usb_buf_in_qdsp) {
 		driver->in_busy_qdsp = 0;
 		diag_smd_qdsp_send_req();
-	} else
-		diagmem_free(driver, buf, POOL_TYPE_HDLC);
-
+	} else {
+		diagmem_free(driver, (unsigned char *)buf, POOL_TYPE_HDLC);
+		diagmem_free(driver, (unsigned char *)diag_write_ptr,
+							 POOL_TYPE_USB_STRUCT);
+	}
 	return 0;
 }
 
-int diagfwd_read_complete(unsigned char *buf, int len, int status)
+int diagfwd_read_complete(struct diag_request *diag_read_ptr)
 {
+	int len = diag_read_ptr->actual;
 	driver->read_len = len;
 	schedule_work(&(driver->diag_read_work));
 	return 0;
@@ -522,7 +532,9 @@ static struct platform_driver msm_smd_ch1_driver = {
 void diag_read_work_fn(struct work_struct *work)
 {
 	diag_process_hdlc(driver->usb_buf_out, driver->read_len);
-	diag_read(driver->usb_buf_out, USB_MAX_OUT_BUF);
+	driver->usb_read_ptr->buf = driver->usb_buf_out;
+	driver->usb_read_ptr->length = USB_MAX_OUT_BUF;
+	diag_read(driver->usb_read_ptr);
 }
 
 void diagfwd_init(void)
@@ -559,6 +571,21 @@ void diagfwd_init(void)
 				      sizeof(struct diag_master_table),
 				       GFP_KERNEL)) == NULL)
 		goto err;
+	if (driver->usb_write_ptr == NULL)
+			driver->usb_write_ptr = kzalloc(
+				sizeof(struct diag_request), GFP_KERNEL);
+			if (driver->usb_write_ptr == NULL)
+					goto err;
+	if (driver->usb_write_ptr_qdsp == NULL)
+			driver->usb_write_ptr_qdsp = kzalloc(
+				sizeof(struct diag_request), GFP_KERNEL);
+			if (driver->usb_write_ptr_qdsp == NULL)
+					goto err;
+	if (driver->usb_read_ptr == NULL)
+			driver->usb_read_ptr = kzalloc(
+				sizeof(struct diag_request), GFP_KERNEL);
+			if (driver->usb_read_ptr == NULL)
+				goto err;
 	if (driver->pkt_buf == NULL &&
 	     (driver->pkt_buf = kzalloc(PKT_SIZE,
 					 GFP_KERNEL)) == NULL)
@@ -583,6 +610,9 @@ err:
 		kfree(driver->data_ready);
 		kfree(driver->table);
 		kfree(driver->pkt_buf);
+		kfree(driver->usb_write_ptr);
+		kfree(driver->usb_write_ptr_qdsp);
+		kfree(driver->usb_read_ptr);
 }
 
 void diagfwd_exit(void)
@@ -610,4 +640,7 @@ void diagfwd_exit(void)
 	kfree(driver->data_ready);
 	kfree(driver->table);
 	kfree(driver->pkt_buf);
+	kfree(driver->usb_write_ptr);
+	kfree(driver->usb_write_ptr_qdsp);
+	kfree(driver->usb_read_ptr);
 }
