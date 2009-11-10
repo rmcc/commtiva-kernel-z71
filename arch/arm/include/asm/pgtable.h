@@ -330,9 +330,11 @@ static inline pte_t pte_mkspecial(pte_t pte) { return pte; }
 #if __LINUX_ARM_ARCH__ >= 7 || defined(CONFIG_ARCH_MSM)
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK|L_PTE_EXEC, L_PTE_MT_BUFFERABLE)
+#define COHERENT_IS_NORMAL 1
 #else
 #define pgprot_dmacoherent(prot) \
 	__pgprot_modify(prot, L_PTE_MT_MASK|L_PTE_EXEC, L_PTE_MT_UNCACHED)
+#define COHERENT_IS_NORMAL 0
 #endif
 
 #define pmd_none(pmd)		(!pmd_val(pmd))
