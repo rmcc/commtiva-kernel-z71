@@ -77,7 +77,7 @@ static void timer_func(unsigned long func_paramter)
 }
 DEFINE_TIMER(timer, timer_func, 0, 0);
 
-void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
+void msm_dmov_enqueue_cmd_ext(unsigned id, struct msm_dmov_cmd *cmd)
 {
 	unsigned long irq_flags;
 	unsigned int status;
@@ -92,13 +92,11 @@ void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 	status = readl(DMOV_STATUS(id));
 	if (list_empty(&ready_commands[id]) &&
 		(status & DMOV_STATUS_CMD_PTR_RDY)) {
-#if 0
-		if (list_empty(&active_commands[id])) {
-			PRINT_FLOW("msm_dmov_enqueue_cmd(%d), enable interrupt\n", id);
-			writel(DMOV_CONFIG_IRQ_EN, DMOV_CONFIG(id));
-		}
-#endif
-		PRINT_IO("msm_dmov_enqueue_cmd(%d), start command, status %x\n", id, status);
+		if (cmd->exec_func)
+			cmd->exec_func(cmd);
+		PRINT_IO(
+		 "msm_dmov_enqueue_cmd_ext(%d), start command, status %x\n",
+		 id, status);
 		list_add_tail(&cmd->list, &active_commands[id]);
 		if (!channel_active)
 			enable_irq(INT_ADM_AARM);
@@ -110,12 +108,25 @@ void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
 			mod_timer(&timer, jiffies + HZ);
 		}
 		if (list_empty(&active_commands[id]))
-			PRINT_ERROR("msm_dmov_enqueue_cmd(%d), error datamover stalled, status %x\n", id, status);
+			PRINT_ERROR(
+			 "msm_dmov_enqueue_cmd_ext(%d), stalled, status %x\n",
+			 id, status);
 
-		PRINT_IO("msm_dmov_enqueue_cmd(%d), enqueue command, status %x\n", id, status);
+		PRINT_IO(
+		 "msm_dmov_enqueue_cmd_ext(%d), enqueue command, status %x\n",
+		 id, status);
 		list_add_tail(&cmd->list, &ready_commands[id]);
 	}
 	spin_unlock_irqrestore(&msm_dmov_lock, irq_flags);
+}
+EXPORT_SYMBOL(msm_dmov_enqueue_cmd_ext);
+
+void msm_dmov_enqueue_cmd(unsigned id, struct msm_dmov_cmd *cmd)
+{
+	/* Disable callback function (for backwards compatibility) */
+	cmd->exec_func = NULL;
+
+	msm_dmov_enqueue_cmd_ext(id, cmd);
 }
 EXPORT_SYMBOL(msm_dmov_enqueue_cmd);
 
@@ -161,6 +172,7 @@ int msm_dmov_exec_cmd(unsigned id, unsigned int cmdptr)
 
 	cmd.dmov_cmd.cmdptr = cmdptr;
 	cmd.dmov_cmd.complete_func = dmov_exec_cmdptr_complete_func;
+	cmd.dmov_cmd.exec_func = NULL;
 	cmd.id = id;
 	init_completion(&cmd.complete);
 
@@ -264,6 +276,8 @@ static irqreturn_t msm_datamover_irq_handler(int irq, void *dev_id)
 				cmd = list_entry(ready_commands[id].next, typeof(*cmd), list);
 				list_del(&cmd->list);
 				list_add_tail(&cmd->list, &active_commands[id]);
+				if (cmd->exec_func)
+					cmd->exec_func(cmd);
 				PRINT_FLOW("msm_datamover_irq_handler id %d, start command\n", id);
 				writel(cmd->cmdptr, DMOV_CMD_PTR(id));
 			}
