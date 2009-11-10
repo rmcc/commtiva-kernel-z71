@@ -160,7 +160,7 @@ struct msm_fb_platform_data {
 
 struct msm_i2c_platform_data {
 	int clk_freq;
-	uint32_t *rmutex;
+	uint32_t rmutex;
 	const char *rsl_id;
 	uint32_t pm_lat;
 	int pri_clk;

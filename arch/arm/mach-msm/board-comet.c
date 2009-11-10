@@ -89,7 +89,6 @@
 #include "devices.h"
 #include "timer.h"
 #include "pm.h"
-#include "smd_private.h"
 
 #define TOUCHPAD_SUSPEND	34
 #define TOUCHPAD_IRQ           144
@@ -1436,7 +1435,7 @@ static void __init msm_device_i2c_init(void)
 	if (gpio_request(61, "i2c_sec_dat"))
 		pr_err("failed to request gpio i2c_sec_dat\n");
 
-	msm_i2c_pdata.rmutex = (uint32_t *)smem_alloc(SMEM_I2C_MUTEX, 8);
+	msm_i2c_pdata.rmutex = 1;
 	msm_i2c_pdata.pm_lat =
 		msm_pm_data[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN]
 		.latency;
