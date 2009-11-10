@@ -46,6 +46,7 @@
 #define HDLC_OUT_BUF_SIZE 8192
 #define POOL_TYPE_COPY 1
 #define POOL_TYPE_HDLC 0
+#define POOL_TYPE_USB_STRUCT 2
 /* Number of maximum USB requests that the USB layer should handle at
    one time. */
 #define MAX_DIAG_USB_REQUESTS 12
@@ -84,13 +85,17 @@ struct diagchar_dev {
 	unsigned int poolsize;
 	unsigned int itemsize_hdlc;
 	unsigned int poolsize_hdlc;
+	unsigned int itemsize_usb_struct;
+	unsigned int poolsize_usb_struct;
 
 	/* State for the mempool for the char driver */
 	mempool_t *diagpool;
 	mempool_t *diag_hdlc_pool;
+	mempool_t *diag_usb_struct_pool;
 	struct mutex diagmem_mutex;
 	int count;
 	int count_hdlc_pool;
+	int count_usb_struct_pool;
 	int used;
 
 	/* State for diag forwarding */
@@ -114,6 +119,10 @@ struct diagchar_dev {
 	struct diag_master_table *table;
 	uint8_t *pkt_buf;
 	int pkt_length;
+	struct diag_request *usb_write_ptr;
+	struct diag_request *usb_read_ptr;
+	struct diag_request *usb_write_ptr_svc;
+	struct diag_request *usb_write_ptr_qdsp;
 };
 
 extern struct diagchar_dev *driver;

@@ -83,6 +83,9 @@ static unsigned int poolsize = 20; /*Number of items in the mempool */
 /* for hdlc buffer */
 static unsigned int itemsize_hdlc = 8192; /*Size of item in the mempool */
 static unsigned int poolsize_hdlc = 8;  /*Number of items in the mempool */
+/* for usb structure buffer */
+static unsigned int itemsize_usb_struct = 20; /*Size of item in the mempool */
+static unsigned int poolsize_usb_struct = 8; /*Number of items in the mempool */
 /* This is the maximum number of user-space clients supported */
 static unsigned int max_clients = 5;
 /* Timer variables */
@@ -109,10 +112,15 @@ static void drain_timer_func(unsigned long data)
 {
 	timer_in_progress = 0;
 	if (buf_hdlc) {
-		diag_write(buf_hdlc, driver->used);
+		driver->usb_write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				 POOL_TYPE_USB_STRUCT));
+		driver->usb_write_ptr_svc->buf = buf_hdlc;
+		driver->usb_write_ptr_svc->length = driver->used;
+		diag_write(driver->usb_write_ptr_svc);
 		buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-		printk(KERN_INFO "\n Number of bytes written"
+		printk(KERN_INFO "\n Number of bytes written "
 				 "from timer is %d ", driver->used);
 #endif
 		driver->used = 0;
@@ -400,7 +408,12 @@ static int diagchar_write(struct file *file, const char __user *buf,
 						 POOL_TYPE_HDLC);
 
 	if (HDLC_OUT_BUF_SIZE - driver->used <= payload_size + 7) {
-		err = diag_write(buf_hdlc, driver->used);
+		driver->usb_write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				POOL_TYPE_USB_STRUCT));
+		driver->usb_write_ptr_svc->buf = buf_hdlc;
+		driver->usb_write_ptr_svc->length = driver->used;
+		err = diag_write(driver->usb_write_ptr_svc);
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
@@ -429,7 +442,12 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	and start aggregation in a newly allocated buffer */
 	if ((unsigned int) enc.dest >=
 		 (unsigned int)(buf_hdlc + HDLC_OUT_BUF_SIZE)) {
-		err = diag_write(buf_hdlc, driver->used);
+		driver->usb_write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				POOL_TYPE_USB_STRUCT));
+		driver->usb_write_ptr_svc->buf = buf_hdlc;
+		driver->usb_write_ptr_svc->length = driver->used;
+		err = diag_write(driver->usb_write_ptr_svc);
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
@@ -455,7 +473,12 @@ static int diagchar_write(struct file *file, const char __user *buf,
 
 	driver->used = (uint32_t) enc.dest - (uint32_t) buf_hdlc;
 	if (pkt_type == DATA_TYPE_RESPONSE) {
-		err = diag_write(buf_hdlc, driver->used);
+		driver->usb_write_ptr_svc = (struct diag_request *)
+			(diagmem_alloc(driver, sizeof(struct diag_request),
+				 POOL_TYPE_USB_STRUCT));
+		driver->usb_write_ptr_svc->buf = buf_hdlc;
+		driver->usb_write_ptr_svc->length = driver->used;
+		err = diag_write(driver->usb_write_ptr_svc);
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
@@ -551,11 +574,13 @@ static int __init diagchar_init(void)
 	if (driver) {
 		driver->used = 0;
 		timer_in_progress = 0;
-		driver->itemsize = itemsize;
 		setup_timer(&drain_timer, drain_timer_func, 1234);
+		driver->itemsize = itemsize;
 		driver->poolsize = poolsize;
 		driver->itemsize_hdlc = itemsize_hdlc;
 		driver->poolsize_hdlc = poolsize_hdlc;
+		driver->itemsize_usb_struct = itemsize_usb_struct;
+		driver->poolsize_usb_struct = poolsize_usb_struct;
 		driver->num_clients = max_clients;
 		mutex_init(&driver->diagchar_mutex);
 		spin_lock_init(&diagchar_write_lock);
