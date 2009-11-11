@@ -922,6 +922,8 @@ static void _audio_tx_path_enable(int reconf)
 	uint32_t adev, sample_rate;
 	int sz;
 
+	audio_tx_analog_enable(1);
+
 	adev = audio_tx_device_id;
 	sample_rate = q6_device_to_rate(adev);
 
@@ -939,7 +941,6 @@ static void _audio_tx_path_enable(int reconf)
 		adie_set_path_freq_plan(adie, ADIE_PATH_TX, 8000);
 
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_READY);
-	audio_tx_analog_enable(1);
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_ANALOG_READY);
 
 	if (reconf)
