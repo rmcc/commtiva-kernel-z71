@@ -1289,7 +1289,7 @@ out:
 	return rc;
 }
 
-static int __exit msm_tsif_remove(struct platform_device *pdev)
+static int __devexit msm_tsif_remove(struct platform_device *pdev)
 {
 	struct msm_tsif_device *tsif_device = platform_get_drvdata(pdev);
 	dev_info(&pdev->dev, "Unload\n");
@@ -1309,7 +1309,7 @@ static int __exit msm_tsif_remove(struct platform_device *pdev)
 
 static struct platform_driver msm_tsif_driver = {
 	.probe          = msm_tsif_probe,
-	.remove         = msm_tsif_remove,
+	.remove         = __devexit_p(msm_tsif_remove),
 #if 0
 	.suspend      = msm_tsif_suspend,
 	.resume       = msm_tsif_resume,
