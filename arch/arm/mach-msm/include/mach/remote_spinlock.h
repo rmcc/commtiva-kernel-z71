@@ -39,7 +39,7 @@
 struct dek_spinlock {
 	volatile uint8_t self_lock;
 	volatile uint8_t other_lock;
-	volatile uint8_t turn;
+	volatile uint8_t next_yield;
 	uint8_t pad;
 };
 
@@ -106,25 +106,24 @@ static inline void __raw_remote_swp_spin_unlock(raw_remote_spinlock_t *lock)
 	: "cc");
 }
 
-#define DEK_LOCK_REQUEST	1
-#define DEK_LOCK_YIELD		0
-#define DEK_TURN_SELF		0
-#define DEK_TURN_OTHER		1
+#define DEK_LOCK_REQUEST		1
+#define DEK_LOCK_YIELD			(!DEK_LOCK_REQUEST)
+#define DEK_YIELD_TURN_SELF		0
 static inline void __raw_remote_dek_spin_lock(raw_remote_spinlock_t *lock)
 {
 	lock->dek.self_lock = DEK_LOCK_REQUEST;
 
 	while (lock->dek.other_lock) {
 
-		if (lock->dek.turn != DEK_TURN_SELF)
+		if (lock->dek.next_yield == DEK_YIELD_TURN_SELF)
 			lock->dek.self_lock = DEK_LOCK_YIELD;
 
 		while (lock->dek.other_lock)
 			;
 
-		lock->dek.self_lock = DEK_LOCK_YIELD;
+		lock->dek.self_lock = DEK_LOCK_REQUEST;
 	}
-	lock->dek.turn = DEK_TURN_OTHER;
+	lock->dek.next_yield = DEK_YIELD_TURN_SELF;
 
 	smp_mb();
 }
