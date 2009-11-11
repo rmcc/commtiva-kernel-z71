@@ -114,6 +114,9 @@ int mdp_hw_cursor_update(struct fb_info *info, struct fb_cursor *cursor)
 
 		MDP_OUTP(MDP_BASE + 0x90044, (img->height << 16) | img->width);
 		MDP_OUTP(MDP_BASE + 0x90048, mfd->cursor_buf_phys);
+		/* order the writes the cursor_buf before updating the
+		 * hardware */
+		dma_coherent_pre_ops();
 		MDP_OUTP(MDP_BASE + 0x90060,
 			 (transp_en << 3) | (calpha_en << 1) |
 			 (inp32(MDP_BASE + 0x90060) & 0x1));
