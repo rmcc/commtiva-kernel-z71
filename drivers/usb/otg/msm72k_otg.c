@@ -518,8 +518,8 @@ static void otg_reset(struct msm_otg *dev)
 	if (dev->phy_reset)
 		dev->phy_reset(dev->regs);
 	/*disable all phy interrupts*/
-	ulpi_write(dev, 0x1F, 0x0F);
-	ulpi_write(dev, 0x1F, 0x12);
+	ulpi_write(dev, 0xFF, 0x0F);
+	ulpi_write(dev, 0xFF, 0x12);
 	msleep(100);
 
 	writel(USBCMD_RESET, USB_USBCMD);
