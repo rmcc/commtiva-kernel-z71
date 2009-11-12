@@ -64,6 +64,7 @@
 #define MDPOP_DITHER            BIT(10)	/* enable dither */
 #define MDPOP_SHARPENING	BIT(11) /* enable sharpening */
 #define MDPOP_BLUR		BIT(12) /* enable blur */
+#define MDPOP_FG_PM_ALPHA       BIT(13)
 
 struct mdp_table_entry {
 	uint32_t reg;
@@ -440,6 +441,13 @@ struct mdp_dma_data {
 #define PPP_OP_BG_CHROMA_SITE_COSITE 0
 #define PPP_OP_BG_CHROMA_SITE_OFFSITE BIT(27)
 #define PPP_OP_DEINT_EN BIT(29)
+
+#define PPP_BLEND_BG_USE_ALPHA_SEL      (1 << 0)
+#define PPP_BLEND_BG_ALPHA_REVERSE      (1 << 3)
+#define PPP_BLEND_BG_SRCPIXEL_ALPHA     (0 << 1)
+#define PPP_BLEND_BG_DSTPIXEL_ALPHA     (1 << 1)
+#define PPP_BLEND_BG_CONSTANT_ALPHA     (2 << 1)
+#define PPP_BLEND_BG_CONST_ALPHA_VAL(x) ((x) << 24)
 
 #define PPP_OP_DST_RGB 0
 #define PPP_OP_DST_YCBCR BIT(30)
