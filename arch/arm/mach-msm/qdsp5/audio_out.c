@@ -395,6 +395,7 @@ static int audio_dsp_send_buffer(struct audio *audio, unsigned idx, unsigned len
 	cmd.arm_to_dsp_buf_len	= len;
 
 	LOG(EV_SEND_BUFFER, idx);
+	dma_coherent_pre_ops();
 	return audpp_send_queue2(&cmd, sizeof(cmd));
 }
 

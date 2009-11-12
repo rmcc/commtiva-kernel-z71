@@ -463,6 +463,7 @@ static ssize_t audio_amrnb_in_read(struct file *file,
 		data = (uint8_t *) audio->in[index].data;
 		size = audio->in[index].size;
 		if (count >= size) {
+			dma_coherent_post_ops();
 			if (copy_to_user(buf, data, size)) {
 				rc = -EFAULT;
 				break;

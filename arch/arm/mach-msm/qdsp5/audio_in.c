@@ -782,6 +782,8 @@ static ssize_t audio_in_read(struct file *file,
 		data = (uint8_t *) audio->in[index].data;
 		size = audio->in[index].size;
 		if (count >= size) {
+			/* order the reads on the buffer */
+			dma_coherent_post_ops();
 			if (copy_to_user(buf, data, size)) {
 				rc = -EFAULT;
 				break;
