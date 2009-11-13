@@ -60,16 +60,23 @@ static long mp3_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = q6audio_set_stream_volume(mp3->ac, vol);
 		break;
 	}
-	case AUDIO_START:
+	case AUDIO_START: {
+		uint32_t acdb_id;
+		if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
+			pr_info("pcm_out: copy acdb_id from user failed\n");
+			rc = -EFAULT;
+			break;
+		}
 		if (mp3->ac) {
 			rc = -EBUSY;
 		} else {
 			mp3->ac = q6audio_open_mp3(BUFSZ,
-				mp3->sample_rate, mp3->channel_count);
+				mp3->sample_rate, mp3->channel_count, acdb_id);
 			if (!mp3->ac)
 				rc = -ENOMEM;
 		}
 		break;
+	}
 	case AUDIO_STOP:
 		break;
 	case AUDIO_FLUSH:

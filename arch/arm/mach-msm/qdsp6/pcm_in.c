@@ -50,19 +50,27 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			return -EFAULT;
 		return 0;
 	}
-	case AUDIO_START:
+	case AUDIO_START: {
+		uint32_t acdb_id;
 		rc = 0;
+
+		if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
+			rc = -EFAULT;
+			break;
+		}
+
 		mutex_lock(&pcm_in_lock);
 		if (file->private_data) {
 			rc = -EBUSY;
 		} else {
 			file->private_data = q6audio_open_pcm(
-				BUFSZ, sample_rate, channel_count, AUDIO_FLAG_READ);
+				BUFSZ, sample_rate, channel_count, AUDIO_FLAG_READ, acdb_id);
 			if (!file->private_data)
 				rc = -ENOMEM;
 		}
 		mutex_unlock(&pcm_in_lock);
 		break;
+	}
 	case AUDIO_STOP:
 		break;
 	case AUDIO_FLUSH:
