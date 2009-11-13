@@ -241,12 +241,26 @@ config MMC_MSM_SDC1_SUPPORT
 	help
 	  Select Y to enable Slot 1.
 
+config MMC_MSM_SDC1_8_BIT_SUPPORT
+	boolean "Qualcomm SDC1 8bit support"
+	depends on MMC_MSM_SDC1_SUPPORT
+	default n
+	help
+	  Select Y to enable 8bit support for Slot 1.
+
 config MMC_MSM_SDC2_SUPPORT
 	boolean "Qualcomm SDC2 support"
 	depends on MMC_MSM
 	default y
 	help
 	  Select Y to enable Slot 2.
+
+config MMC_MSM_SDC2_8_BIT_SUPPORT
+	boolean "Qualcomm SDC2 8bit support"
+	depends on MMC_MSM_SDC2_SUPPORT
+	default n
+	help
+	  Select Y to enable 8bit support for Slot 2.
 
 config MMC_MSM_SDC3_SUPPORT
 	boolean "Qualcomm SDC3 support"
@@ -255,9 +269,24 @@ config MMC_MSM_SDC3_SUPPORT
 	help
 	  Select Y to enable Slot 3.
 
+config MMC_MSM_SDC3_8_BIT_SUPPORT
+	boolean "Qualcomm SDC3 8bit support"
+	depends on MMC_MSM_SDC3_SUPPORT
+	default n
+	help
+	  Select Y to enable 8bit support for Slot 3.
+
 config MMC_MSM_SDC4_SUPPORT
 	boolean "Qualcomm SDC4 support"
 	depends on MMC_MSM
 	default n
 	help
 	  Select Y to enable Slot 4.
+
+config MMC_MSM_SDC4_8_BIT_SUPPORT
+	boolean "Qualcomm SDC4 8bit support"
+	depends on MMC_MSM_SDC4_SUPPORT
+	default n
+	help
+	  Select Y to enable 8bit support for Slot 4.
+

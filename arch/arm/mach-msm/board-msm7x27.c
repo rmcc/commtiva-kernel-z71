@@ -1403,6 +1403,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 static struct mmc_platform_data msm7x2x_sdcc_data = {
 	.ocr_mask	= MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
+	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
 };
 
 static void __init msm7x2x_init_mmc(void)

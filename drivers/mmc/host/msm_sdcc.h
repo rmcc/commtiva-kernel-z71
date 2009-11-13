@@ -28,8 +28,9 @@
 #define MMCICLOCK		0x004
 #define MCI_CLK_ENABLE		(1 << 8)
 #define MCI_CLK_PWRSAVE		(1 << 9)
-#define MCI_CLK_WIDEBUS_1	(1 << 10)
+#define MCI_CLK_WIDEBUS_1	(0 << 10)
 #define MCI_CLK_WIDEBUS_4	(2 << 10)
+#define MCI_CLK_WIDEBUS_8	(3 << 10)
 #define MCI_CLK_FLOWENA		(1 << 12)
 #define MCI_CLK_INVERTOUT	(1 << 13)
 #define MCI_CLK_SELECTIN	(1 << 15)

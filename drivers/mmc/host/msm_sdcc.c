@@ -68,7 +68,6 @@ static unsigned int msmsdcc_fmin = 144000;
 static unsigned int msmsdcc_fmid = 24576000;
 static unsigned int msmsdcc_temp = 25000000;
 static unsigned int msmsdcc_fmax = 49152000;
-static unsigned int msmsdcc_4bit = 1;
 static unsigned int msmsdcc_pwrsave = 1;
 
 #define VERBOSE_COMMAND_TIMEOUTS	0
@@ -857,8 +856,12 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		clk |= MCI_CLK_ENABLE;
 	}
 
-	if (ios->bus_width == MMC_BUS_WIDTH_4)
+	if (ios->bus_width == MMC_BUS_WIDTH_8)
+		clk |= MCI_CLK_WIDEBUS_8;
+	else if (ios->bus_width == MMC_BUS_WIDTH_4)
 		clk |= MCI_CLK_WIDEBUS_4;
+	else
+		clk |= MCI_CLK_WIDEBUS_1;
 
 	if (ios->clock > 400000 && msmsdcc_pwrsave)
 		clk |= MCI_CLK_PWRSAVE;
@@ -1259,9 +1262,7 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc->f_min = msmsdcc_fmin;
 	mmc->f_max = msmsdcc_fmax;
 	mmc->ocr_avail = plat->ocr_mask;
-
-	if (msmsdcc_4bit)
-		mmc->caps |= MMC_CAP_4_BIT_DATA;
+	mmc->caps |= plat->mmc_bus_width;
 
 	mmc->caps |= MMC_CAP_MMC_HIGHSPEED | MMC_CAP_SD_HIGHSPEED;
 #ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
@@ -1340,6 +1341,9 @@ msmsdcc_probe(struct platform_device *pdev)
 	       mmc_hostname(mmc), (unsigned long long)memres->start,
 	       (unsigned int) irqres->start,
 	       (unsigned int) plat->status_irq, host->dma.channel);
+
+	printk(KERN_INFO "%s: 8 bit data mode %s\n", mmc_hostname(mmc),
+		(mmc->caps & MMC_CAP_8_BIT_DATA ? "enabled" : "disabled"));
 	printk(KERN_INFO "%s: 4 bit data mode %s\n", mmc_hostname(mmc),
 	       (mmc->caps & MMC_CAP_4_BIT_DATA ? "enabled" : "disabled"));
 	printk(KERN_INFO "%s: polling status mode %s\n", mmc_hostname(mmc),
@@ -1554,17 +1558,6 @@ static int __init msmsdcc_nopwrsave_setup(char *__unused)
 	return 1;
 }
 
-static int __init msmsdcc_4bit_setup(char *__unused)
-{
-	msmsdcc_4bit = 1;
-	return 1;
-}
-
-static int __init msmsdcc_1bit_setup(char *__unused)
-{
-	msmsdcc_4bit = 0;
-	return 1;
-}
 
 static int __init msmsdcc_fmin_setup(char *str)
 {
@@ -1587,8 +1580,6 @@ static int __init msmsdcc_fmax_setup(char *str)
 }
 #endif
 
-__setup("msmsdcc_4bit", msmsdcc_4bit_setup);
-__setup("msmsdcc_1bit", msmsdcc_1bit_setup);
 __setup("msmsdcc_pwrsave", msmsdcc_pwrsave_setup);
 __setup("msmsdcc_nopwrsave", msmsdcc_nopwrsave_setup);
 __setup("msmsdcc_fmin=", msmsdcc_fmin_setup);
@@ -1598,7 +1589,6 @@ module_init(msmsdcc_init);
 module_exit(msmsdcc_exit);
 module_param(msmsdcc_fmin, uint, 0444);
 module_param(msmsdcc_fmax, uint, 0444);
-module_param(msmsdcc_4bit, uint, 0444);
 
 MODULE_DESCRIPTION("Qualcomm MSM 7X00A Multimedia Card Interface driver");
 MODULE_LICENSE("GPL");
