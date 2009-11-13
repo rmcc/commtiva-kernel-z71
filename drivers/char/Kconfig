@@ -1139,6 +1139,11 @@ config MSM_KGSL_DRM
 	bool "Build a DRM interface for the MSM_KGSL driver"
 	depends on MSM_KGSL && DRM
 
+config KGSL_PER_PROCESS_PAGE_TABLE
+	bool "Enable Per Process page tables for the KGSL driver"
+	default n
+	depends on MSM_KGSL_MMU
+
 source "drivers/s390/char/Kconfig"
 
 config MSM_Q6VDEC
