@@ -414,6 +414,22 @@ static void msm_gpio_irq_unmask(unsigned int irq)
 	gpio_configure(irq - NR_MSM_IRQS, MSM_GPIOF_ENABLE_INTERRUPT);
 }
 
+static void msm_gpio_irq_disable(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	msm_gpio_irq_mask(irq);
+	desc->status |= IRQ_MASKED;
+}
+
+static void msm_gpio_irq_enable(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	msm_gpio_irq_unmask(irq);
+	desc->status &= ~IRQ_MASKED;
+}
+
 static int msm_gpio_irq_set_wake(unsigned int irq, unsigned int on)
 {
 	return gpio_configure(irq - NR_MSM_IRQS, on ? MSM_GPIOF_ENABLE_WAKE : MSM_GPIOF_DISABLE_WAKE);
@@ -450,6 +466,8 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.ack       = msm_gpio_irq_ack,
 	.mask      = msm_gpio_irq_mask,
 	.unmask    = msm_gpio_irq_unmask,
+	.disable   = msm_gpio_irq_disable,
+	.enable    = msm_gpio_irq_enable,
 	.set_wake  = msm_gpio_irq_set_wake,
 	.set_type  = msm_gpio_irq_set_type,
 };
