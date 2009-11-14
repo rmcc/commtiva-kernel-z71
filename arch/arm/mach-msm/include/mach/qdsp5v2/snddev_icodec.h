@@ -29,6 +29,7 @@
 #define __MACH_QDSP5_V2_SNDDEV_ICODEC_H
 #include <mach/qdsp5v2/adie_marimba.h>
 #include <mach/qdsp5v2/audio_def.h>
+#include <mach/pmic.h>
 
 struct snddev_icodec_data {
 	u32 capability; /* RX or TX */
@@ -39,6 +40,7 @@ struct snddev_icodec_data {
 	struct adie_codec_dev_profile *profile;
 	/* Afe setting */
 	u8 channel_mode;
+	enum hsed_controller pmctl_id; /* tx only enable mic bias */
 	u32 default_sample_rate;
 };
 #endif

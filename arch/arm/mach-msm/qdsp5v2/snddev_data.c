@@ -210,6 +210,7 @@ static struct snddev_icodec_data snddev_iearpiece_data = {
 	.acdb_id = 1,
 	.profile = &iearpiece_profile,
 	.channel_mode = 1,
+	.pmctl_id = PM_HSED_CONTROLLER_0,
 	.default_sample_rate = 8000,
 };
 

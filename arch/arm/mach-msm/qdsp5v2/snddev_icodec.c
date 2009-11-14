@@ -372,7 +372,7 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;;
 
-	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_PWM_TCXO);
+	pmic_hsed_enable(icodec->data->pmctl_id, PM_HSED_ENABLE_PWM_TCXO);
 	/* Voltage regulator voting
 	 * Vote GP16, MSME, RF2
 	 */
