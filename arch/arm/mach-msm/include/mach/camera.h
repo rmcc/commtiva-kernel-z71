@@ -295,6 +295,7 @@ int  msm_camio_clk_config(uint32_t freq);
 void msm_camio_clk_rate_set(int rate);
 void msm_camio_clk_rate_set_2(struct clk *clk, int rate);
 void msm_camio_clk_axi_rate_set(int rate);
+void msm_disable_io_gpio_clk(struct platform_device *);
 
 void msm_camio_camif_pad_reg_reset(void);
 void msm_camio_camif_pad_reg_reset_2(void);

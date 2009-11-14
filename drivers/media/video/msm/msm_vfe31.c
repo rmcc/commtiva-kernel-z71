@@ -83,26 +83,25 @@ static struct vfe31_cmd_type vfe31_cmd[] = {
 	{V31_AXI_OUT_CFG, V31_AXI_OUT_LEN, V31_AXI_OUT_OFF, 0xFF},
 	{V31_CAMIF_CFG, V31_CAMIF_LEN, V31_CAMIF_OFF, 0xFF},
 	{V31_AXI_INPUT_CFG},
-	{V31_BLACK_LEVEL_CFG},
-	{V31_ROLL_OFF_CFG},
+	{V31_BLACK_LEVEL_CFG, V31_BLACK_LEVEL_LEN, V31_BLACK_LEVEL_OFF, 0xFF},
+	{V31_ROLL_OFF_CFG, V31_ROLL_OFF_CFG_LEN, V31_ROLL_OFF_CFG_OFF, 0xFF},
 	{V31_DEMUX_CFG, V31_DEMUX_LEN, V31_DEMUX_OFF, 0xFF},
-	{V31_DEMOSAIC_0_CFG},
-	{V31_DEMOSAIC_1_CFG},
-	{V31_DEMOSAIC_2_CFG},
-	{V31_FOV_CFG, V31_FOV_CFG_LEN, V31_FOV_CFG_OFF, 0xFF},
-	{V31_MAIN_SCALER_CFG, V31_MAIN_SCALER_CFG_LEN,
-		V31_MAIN_SCALER_CFG_OFF, 0xFF},
-	{V31_WB_CFG},
-	{V31_COLOR_COR_CFG},
-	{V31_RGB_G_CFG},
-	{V31_LA_CFG},
-	{V31_CHROMA_EN_CFG},
-	{V31_CHROMA_SUP_CFG},
-	{V31_MCE_CFG},
+	{V31_DEMOSAIC_0_CFG, V31_DEMOSAIC_0_LEN, V31_DEMOSAIC_0_OFF, 0xFF},
+	{V31_DEMOSAIC_1_CFG, V31_DEMOSAIC_1_LEN, V31_DEMOSAIC_1_OFF, 0xFF},
+	{V31_DEMOSAIC_2_CFG, V31_DEMOSAIC_2_LEN, V31_DEMOSAIC_2_OFF, 0xFF},
+	{V31_FOV_CFG, V31_FOV_LEN, V31_FOV_OFF, 0xFF},
+	{V31_MAIN_SCALER_CFG, V31_MAIN_SCALER_LEN, V31_MAIN_SCALER_OFF, 0xFF},
+	{V31_WB_CFG, V31_WB_LEN, V31_WB_OFF, 0xFF},
+	{V31_COLOR_COR_CFG, V31_COLOR_COR_LEN, V31_COLOR_COR_OFF, 0xFF},
+	{V31_RGB_G_CFG, V31_RGB_G_LEN, V31_RGB_G_OFF, 0xFF},
+	{V31_LA_CFG, V31_LA_LEN, V31_LA_OFF, 0xFF },
+	{V31_CHROMA_EN_CFG, V31_CHROMA_EN_LEN, V31_CHROMA_EN_OFF, 0xFF},
+	{V31_CHROMA_SUP_CFG, V31_CHROMA_SUP_LEN, V31_CHROMA_SUP_OFF, 0xFF},
+	{V31_MCE_CFG, V31_MCE_LEN, V31_MCE_OFF, 0xFF},
 	{V31_SK_ENHAN_CFG},
 	{V31_ASF_CFG},
-	{V31_S2Y_CFG},
-	{V31_S2CbCr_CFG},
+	{V31_S2Y_CFG, V31_S2Y_LEN, V31_S2Y_OFF, 0xFF},
+	{V31_S2CbCr_CFG, V31_S2CbCr_LEN, V31_S2CbCr_OFF, 0xFF},
 	{V31_CHROMA_SUBS_CFG, V31_CHROMA_SUBS_LEN, V31_CHROMA_SUBS_OFF, 0xFF},
 	{V31_OUT_CLAMP_CFG, V31_OUT_CLAMP_LEN, V31_OUT_CLAMP_OFF, 0xFF},
 	{V31_FRAME_SKIP_CFG, V31_FRAME_SKIP_LEN, V31_FRAME_SKIP_OFF, 0xFF},
@@ -110,22 +109,23 @@ static struct vfe31_cmd_type vfe31_cmd[] = {
 	{V31_DUMMY_2},
 	{V31_DUMMY_3},
 	{V31_UPDATE},
-	{V31_BL_LVL_UPDATE},
-	{V31_DEMUX_UPDATE},
-	{V31_DEMOSAIC_1_UPDATE},
-	{V31_DEMOSAIC_2_UPDATE},
-	{V31_FOV_UPDATE},
-	{V31_MAIN_SCALER_UPDATE},
-	{V31_WB_UPDATE},
+	{V31_BL_LVL_UPDATE, V31_BLACK_LEVEL_LEN, V31_BLACK_LEVEL_OFF, 0xFF},
+	{V31_DEMUX_UPDATE, V31_DEMUX_LEN, V31_DEMUX_OFF, 0xFF},
+	{V31_DEMOSAIC_1_UPDATE, V31_DEMOSAIC_1_LEN, V31_DEMOSAIC_1_OFF, 0xFF},
+	{V31_DEMOSAIC_2_UPDATE, V31_DEMOSAIC_2_LEN, V31_DEMOSAIC_2_OFF, 0xFF},
+	{V31_FOV_UPDATE, V31_FOV_LEN, V31_FOV_OFF, 0xFF},
+	{V31_MAIN_SCALER_UPDATE, V31_MAIN_SCALER_LEN, V31_MAIN_SCALER_OFF,
+	0xFF},
+	{V31_WB_UPDATE, V31_WB_LEN, V31_WB_OFF, 0xFF},
 	{V31_COLOR_COR_UPDATE},
-	{V31_RGB_G_UPDATE},
-	{V31_LA_UPDATE},
-	{V31_CHROMA_EN_UPDATE},
-	{V31_CHROMA_SUP_UPDATE},
-	{V31_MCE_UPDATE},
+	{V31_RGB_G_UPDATE, V31_RGB_G_LEN, V31_CHROMA_EN_OFF, 0xFF},
+	{V31_LA_UPDATE, V31_LA_LEN, V31_LA_OFF, 0xFF },
+	{V31_CHROMA_EN_UPDATE, V31_CHROMA_EN_LEN, V31_CHROMA_EN_OFF, 0xFF},
+	{V31_CHROMA_SUP_UPDATE, V31_CHROMA_SUP_LEN, V31_CHROMA_SUP_OFF, 0xFF},
+	{V31_MCE_UPDATE, V31_MCE_LEN, V31_MCE_OFF, 0xFF},
 	{V31_SK_ENHAN_UPDATE},
-	{V31_S2CbCr_UPDATE},
-	{V31_S2Y_UPDATE},
+	{V31_S2CbCr_UPDATE, V31_S2CbCr_LEN, V31_S2CbCr_OFF, 0xFF},
+	{V31_S2Y_UPDATE, V31_S2Y_LEN, V31_S2Y_OFF, 0xFF},
 	{V31_ASF_UPDATE},
 	{V31_FRAME_SKIP_UPDATE},
 	{V31_CAMIF_FRAME_UPDATE},
@@ -354,6 +354,7 @@ static int vfe31_disable(struct camera_enable_cmd *enable,
 	vfe_stop();
 
 	msm_camio_disable(dev);
+	msm_disable_io_gpio_clk(dev);
 	return 0;
 }
 
@@ -370,7 +371,6 @@ static void vfe31_release(struct platform_device *pdev)
 	kfree(vfe31_ctrl);
 	vfe31_ctrl = NULL;
 	release_mem_region(vfemem->start, (vfemem->end - vfemem->start) + 1);
-
 	msm_camio_disable(pdev);
 
 	vfe_syncdata = NULL;
@@ -600,8 +600,9 @@ static int vfe31_start(void)
 	}
 
 	msm_io_dump(vfe31_ctrl->vfebase, 0x600);
-
+	dmb();
 	msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+	dmb();
 	msm_io_w(1, vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
 
 	spin_lock_irqsave(&vfe31_ctrl->state_lock, flags);
@@ -609,7 +610,6 @@ static int vfe31_start(void)
 	spin_unlock_irqrestore(&vfe31_ctrl->state_lock, flags);
 	return 0;
 }
-
 #define CHECKED_COPY_FROM_USER(in) {					\
 	if (copy_from_user((in), (void __user *)cmd->value,		\
 			cmd->length)) {					\
@@ -617,14 +617,39 @@ static int vfe31_start(void)
 		break;							\
 	}								\
 }
+void vfe31_program_dmi_cfg(enum VFE31_DMI_RAM_SEL bankSel)
+{
+	/* set bit 8 for auto increment. */
+	uint32_t value = VFE_DMI_CFG_DEFAULT;
+	value += (uint32_t)bankSel;
+
+	msm_io_w(value, vfe31_ctrl->vfebase + VFE_DMI_CFG);
+	/* by default, always starts with offset 0.*/
+	msm_io_w(0, vfe31_ctrl->vfebase + VFE_DMI_ADDR);
+}
+void vfe31_write_gamma_cfg(enum VFE31_DMI_RAM_SEL channel_sel,
+						const uint32_t *tbl)
+{
+	int i;
+	uint32_t value, value1, value2;
+	vfe31_program_dmi_cfg(channel_sel);
+	/* for loop for extracting init table. */
+	for (i = 0 ; i < (VFE31_GAMMA_NUM_ENTRIES/2) ; i++) {
+		value = *tbl++;
+		value1 = value & 0x0000FFFF;
+		value2 = (value & 0xFFFF0000)>>16;
+		msm_io_w((value1), vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
+		msm_io_w((value2), vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
+	}
+	vfe31_program_dmi_cfg(NO_MEM_SELECTED);
+}
 
 static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 {
-	int rc = 0;
+	int i , rc = 0;
+	uint32_t old_val = 0 , new_val = 0;
 	uint32_t *cmdp = NULL;
-
-	CDBG("%s: cmdID = %d\n", __func__, cmd->id);
-
+	uint32_t *cmdp_local = NULL;
 	switch (cmd->id) {
 	case V31_RESET:
 		vfe31_reset();
@@ -635,22 +660,196 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		break;
 
 	case V31_OPERATION_CFG: {
-		int i;
 		if (cmd->length != V31_OPERATION_CFG_LEN) {
 			rc = -EINVAL;
 			goto proc_general_done;
 		}
 
 		cmdp = kmalloc(V31_OPERATION_CFG_LEN, GFP_ATOMIC);
-		CHECKED_COPY_FROM_USER(cmdp);
-
-		for (i = 0; i < V31_OPERATION_CFG_LEN/4; i++)
-			CDBG("cmdp[%d] = 0x%x\n", i, cmdp[i]);
-
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			V31_OPERATION_CFG_LEN)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
 		rc = vfe31_operation_config(cmdp);
-	}
+		}
+		break;
+	case V31_MCE_UPDATE:
+	case V31_MCE_CFG:{
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		/* Incrementing with 4 so as to point to the 2nd Register as
+		the 2nd register has the mce_enable bit */
+		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_CHROMA_EN_OFF + 4);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		cmdp_local = cmdp;
+		new_val = *cmdp_local;
+		old_val &= MCE_EN_MASK;
+		new_val = new_val | old_val;
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_CHROMA_EN_OFF + 4,
+					&new_val, 4);
+		cmdp_local += 1;
+
+		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_CHROMA_EN_OFF + 8);
+		new_val = *cmdp_local;
+		old_val &= MCE_Q_K_MASK;
+		new_val = new_val | old_val;
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_CHROMA_EN_OFF + 8,
+		&new_val, 4);
+		cmdp_local += 1;
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+		cmdp_local, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+	case V31_DEMOSAIC_2_UPDATE:
+	case V31_DEMOSAIC_2_CFG: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		cmdp_local = cmdp;
+		new_val = *cmdp_local;
+		old_val &= BPC_MASK;
+		new_val = new_val | old_val;
+		*cmdp_local = new_val;
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF,
+					cmdp_local, 4);
+		cmdp_local += 1;
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+			cmdp_local, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+	case V31_DEMOSAIC_1_UPDATE:
+	case V31_DEMOSAIC_1_CFG: {
+		uint32_t temp;
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		cmdp_local = cmdp;
+		temp = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
+		*cmdp_local = *cmdp_local | temp;
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF,
+		cmdp_local, 4);
+		cmdp_local += 1;
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+		cmdp_local, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+	case V31_ROLL_OFF_CFG: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value) , cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		cmdp_local = cmdp;
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+		cmdp_local, 16);
+		cmdp_local += 4;
+		vfe31_program_dmi_cfg(ROLLOFF_RAM);
+		/* for loop for extrcting init table. */
+		for (i = 0 ; i < (VFE31_ROLL_OFF_INIT_TABLE_SIZE * 2) ; i++) {
+			msm_io_w(*cmdp_local ,
+			vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
+			cmdp_local++;
+		}
+		CDBG("done writing init table \n");
+		/* by default, always starts with offset 0. */
+		msm_io_w(LENS_ROLL_OFF_DELTA_TABLE_OFFSET,
+		vfe31_ctrl->vfebase + VFE_DMI_ADDR);
+		/* for loop for extracting delta table. */
+		for (i = 0 ; i < (VFE31_ROLL_OFF_DELTA_TABLE_SIZE * 2) ; i++) {
+			msm_io_w(*cmdp_local,
+			vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
+			cmdp_local++;
+		}
+		vfe31_program_dmi_cfg(NO_MEM_SELECTED);
+		}
 		break;
 
+	case V31_LA_CFG: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+				cmdp, (vfe31_cmd[cmd->id].length));
+
+		/* If the value is 0x00 then write in to LUT bank0
+		if the value is 0x01 then write in to LUT bank1 */
+		if (*cmdp == 0x0)
+			vfe31_program_dmi_cfg(LUMA_ADAPT_LUT_RAM_BANK0);
+		else
+			vfe31_program_dmi_cfg(LUMA_ADAPT_LUT_RAM_BANK1);
+		cmdp += 1;
+		/* for loop for extracting init table. */
+		for (i = 0 ; i < VFE31_LA_TABLE_LENGTH ; i++) {
+			msm_io_w(*cmdp, vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
+			cmdp++;
+		}
+		vfe31_program_dmi_cfg(NO_MEM_SELECTED);
+		cmdp -= 1;
+		}
+		break;
+	case V31_RGB_G_UPDATE:
+	case V31_RGB_G_CFG: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_RGB_G_OFF,
+				cmdp, 4);
+		cmdp += 1;
+		vfe31_write_gamma_cfg(RGBLUT_RAM_CH0_BANK0 , cmdp);
+		vfe31_write_gamma_cfg(RGBLUT_RAM_CH1_BANK0 , cmdp);
+		vfe31_write_gamma_cfg(RGBLUT_RAM_CH2_BANK0 , cmdp);
+		cmdp -= 1;
+		}
+		break;
 	case V31_STOP:
 		vfe_stop();
 		break;

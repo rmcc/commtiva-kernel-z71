@@ -116,7 +116,17 @@
 /* bit 0-21 are error irq bits */
 #define VFE_IMASK_ERROR_ONLY_1  0x003fffff
 
+/* For BPC bit 0,bit 12-17 and bit 26 -20 are set to zero and other's 1 */
+#define BPC_MASK 0xF80C0FFE
 
+/* For BPC bit 1 and 2 are set to zero and other's 1 */
+#define ABF_MASK 0xFFFFFFF9
+
+/* For MCE enable bit 28 set to zero and other's 1 */
+#define MCE_EN_MASK 0xEFFFFFFF
+
+/* For MCE Q_K bit 28 to 31 set to zero and other's 1 */
+#define MCE_Q_K_MASK 0x0FFFFFFF
 
 
 #define VFE_REG_UPDATE_TRIGGER           1
@@ -125,6 +135,28 @@
 #define LENS_ROLL_OFF_DELTA_TABLE_OFFSET 32
 #define VFE_AF_PINGPONG_STATUS_BIT       0x100
 #define VFE_AWB_PINGPONG_STATUS_BIT      0x200
+
+#define VFE31_INIT_TABLE_SIZE 26
+
+enum VFE31_DMI_RAM_SEL {
+	 NO_MEM_SELECTED          = 0,
+	 ROLLOFF_RAM              = 0x1,
+	 RGBLUT_RAM_CH0_BANK0     = 0x2,
+	 RGBLUT_RAM_CH0_BANK1     = 0x3,
+	 RGBLUT_RAM_CH1_BANK0     = 0x4,
+	 RGBLUT_RAM_CH1_BANK1     = 0x5,
+	 RGBLUT_RAM_CH2_BANK0     = 0x6,
+	 RGBLUT_RAM_CH2_BANK1     = 0x7,
+	 STATS_HIST_CB_EVEN_RAM   = 0x8,
+	 STATS_HIST_CB_ODD_RAM    = 0x9,
+	 STATS_HIST_CR_EVEN_RAM   = 0xa,
+	 STATS_HIST_CR_ODD_RAM    = 0xb,
+	 RGBLUT_CHX_BANK0         = 0xc,
+	 RGBLUT_CHX_BANK1         = 0xd,
+	 LUMA_ADAPT_LUT_RAM_BANK0 = 0xe,
+	 LUMA_ADAPT_LUT_RAM_BANK1 = 0xf
+
+};
 
 enum  VFE_STATE {
 	VFE_STATE_IDLE,
@@ -242,6 +274,15 @@ enum  VFE_STATE {
 #define V31_DEMUX_OFF             0x00000284
 #define V31_DEMUX_LEN             20
 
+#define V31_DEMOSAIC_0_OFF        0x00000298
+#define V31_DEMOSAIC_0_LEN        4
+/* ABF     */
+#define V31_DEMOSAIC_1_OFF        0x000002A4
+#define V31_DEMOSAIC_1_LEN        180
+/* BPC     */
+#define V31_DEMOSAIC_2_OFF        0x0000029C
+#define V31_DEMOSAIC_2_LEN        8
+
 #define V31_OUT_CLAMP_OFF         0x00000524
 #define V31_OUT_CLAMP_LEN         8
 
@@ -257,19 +298,50 @@ enum  VFE_STATE {
 #define V31_CHROMA_SUBS_OFF       0x000004F8
 #define V31_CHROMA_SUBS_LEN       12
 
-#define V31_FOV_CFG_OFF           0x00000360
-#define V31_FOV_CFG_LEN           8
+#define V31_FOV_OFF           0x00000360
+#define V31_FOV_LEN           8
 
-#define V31_MAIN_SCALER_CFG_OFF 0x00000368
-#define V31_MAIN_SCALER_CFG_LEN 28
+#define V31_MAIN_SCALER_OFF 0x00000368
+#define V31_MAIN_SCALER_LEN 28
+
+#define V31_S2Y_OFF 0x000004D0
+#define V31_S2Y_LEN 20
+
+#define V31_S2CbCr_OFF 0x000004E4
+#define V31_S2CbCr_LEN 20
+
+#define V31_CHROMA_EN_OFF 0x000003C4
+#define V31_CHROMA_EN_LEN 36
+
+#define V31_BLACK_LEVEL_OFF 0x00000264
+#define V31_BLACK_LEVEL_LEN 16
+
+#define V31_ROLL_OFF_CFG_OFF 0x00000274
+#define V31_ROLL_OFF_CFG_LEN 16
+
+#define V31_COLOR_COR_OFF 0x00000388
+#define V31_COLOR_COR_LEN 52
+
+#define V31_WB_OFF 0x00000384
+#define V31_WB_LEN 4
+
+#define V31_RGB_G_OFF 0x000003BC
+#define V31_RGB_G_LEN 4
+
+#define V31_LA_OFF 0x000003C0
+#define V31_LA_LEN 4
+
+#define V31_CHROMA_SUP_OFF 0x000003E8
+#define V31_CHROMA_SUP_LEN 12
+
+#define V31_MCE_OFF 0x000003E8
+#define V31_MCE_LEN 36
 
 struct vfe_cmd_hw_version {
 	uint32_t minorVersion;
 	uint32_t majorVersion;
 	uint32_t coreVersion;
 };
-
-
 
 enum VFE_AXI_OUTPUT_MODE {
 	VFE_AXI_OUTPUT_MODE_Output1,
@@ -419,9 +491,13 @@ enum VFE_YUV_INPUT_COSITING_MODE {
 #define VFE_STATS_BUFFER_COUNT 3
 
 /* 13*1  */
-#define  VFE_ROLL_OFF_INIT_TABLE_SIZE  13
+#define VFE31_ROLL_OFF_INIT_TABLE_SIZE  13
 /* 13*16 */
-#define  VFE_ROLL_OFF_DELTA_TABLE_SIZE 208
+#define VFE31_ROLL_OFF_DELTA_TABLE_SIZE 208
+
+#define VFE31_GAMMA_NUM_ENTRIES  64
+
+#define VFE31_LA_TABLE_LENGTH    64
 
 struct vfe_cmds_demosaic_abf {
 	uint8_t   enable;
@@ -713,7 +789,7 @@ struct vfe_message {
 
 /* New one for 7x30 */
 struct msm_vfe31_cmd {
-	int  id;
+	int32_t  id;
 	uint16_t length;
 	void     *value;
 };
@@ -810,6 +886,9 @@ struct vfe31_frame_extra {
 #define VFE_CLAMP_MIN                   0x00000528
 #define VFE_REALIGN_BUF                 0x0000052C
 #define VFE_STATS_CFG                   0x00000530
+#define VFE_DMI_CFG                     0x00000598
+#define VFE_DMI_ADDR                    0x0000059C
+#define VFE_DMI_DATA_LO                 0x000005A4
 
 struct vfe31_ctrl_type {
 	uint16_t operation_mode;     /* streaming or snapshot */

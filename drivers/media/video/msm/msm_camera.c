@@ -1811,14 +1811,12 @@ static int __msm_release(struct msm_sync *sync)
 	mutex_lock(&sync->lock);
 	if (sync->opencnt)
 		sync->opencnt--;
-
 	if (!sync->opencnt) {
 		/*sensor release*/
 		sync->sctrl.s_release();
 		/* need to clean up system resource */
 		if (sync->vfefn.vfe_release)
 			sync->vfefn.vfe_release(sync->pdev);
-
 		kfree(sync->cropinfo);
 		sync->cropinfo = NULL;
 		sync->croplen = 0;
@@ -1842,7 +1840,7 @@ static int __msm_release(struct msm_sync *sync)
 		msm_queue_drain(&sync->pict_q, list_pict);
 
 		wake_unlock(&sync->wake_lock);
-
+		msm_disable_io_gpio_clk(sync->pdev);
 		sync->apps_id = NULL;
 		CDBG("%s: completed\n", __func__);
 	}
