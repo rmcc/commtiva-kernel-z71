@@ -393,11 +393,9 @@ static void msm_pm_config_hw_after_power_up(void)
  */
 static void msm_pm_config_hw_before_swfi(void)
 {
-#if defined(CONFIG_ARCH_MSM7X30)
-	writel(0x03, APPS_CLK_SLEEP_EN);
-#elif defined(CONFIG_ARCH_QSD8X50)
+#if defined(CONFIG_ARCH_QSD8X50)
 	writel(0x1f, APPS_CLK_SLEEP_EN);
-#else
+#elif !defined(CONFIG_ARCH_MSM7X30)
 	writel(0x0f, APPS_CLK_SLEEP_EN);
 #endif
 }
