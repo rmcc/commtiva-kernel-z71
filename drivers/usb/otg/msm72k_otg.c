@@ -633,14 +633,15 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	 */
 	if (dev->pmic_notif_init) {
 		ret = dev->pmic_notif_init();
-		if (ret && ret != -ENOTSUPP) {
+		if (!ret) {
+			dev->pmic_notif_supp = 1;
+			dev->pmic_enable_ldo(1);
+		} else if (ret != -ENOTSUPP) {
 			clk_disable(dev->pclk);
 			if (dev->cclk)
 				clk_disable(dev->cclk);
 			goto free_regs;
 		}
-		dev->pmic_notif_supp = 1;
-		dev->pmic_enable_ldo(1);
 	}
 
 	otg_reset(dev);
