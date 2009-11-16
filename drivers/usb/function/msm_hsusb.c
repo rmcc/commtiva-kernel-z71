@@ -67,6 +67,7 @@
 #define TRUE			1
 #define FALSE			0
 #define USB_LINK_RESET_TIMEOUT	(msecs_to_jiffies(10))
+#define USB_CHG_DET_DELAY	msecs_to_jiffies(1000)
 
 #define is_phy_45nm()     (PHY_MODEL(ui->phy_info) == USB_PHY_MODEL_45NM)
 #define is_phy_external() (PHY_TYPE(ui->phy_info) == USB_PHY_EXTERNAL)
@@ -121,8 +122,6 @@ static void usb_disable_pullup(struct usb_info *ui);
 
 static struct workqueue_struct *usb_work;
 static void usb_chg_stop(struct work_struct *w);
-static int usb_chg_detect_type(struct usb_info *ui);
-static void usb_chg_set_type(struct usb_info *ui);
 
 #define USB_STATE_IDLE    0
 #define USB_STATE_ONLINE  1
@@ -145,9 +144,10 @@ struct lpm_info {
 };
 
 enum charger_type {
-	CHG_HOST_PC,
-	CHG_WALL = 2,
-	CHG_UNDEFINED,
+	USB_CHG_TYPE__SDP,
+	USB_CHG_TYPE__CARKIT,
+	USB_CHG_TYPE__WALLCHARGER,
+	USB_CHG_TYPE__INVALID
 };
 
 struct usb_info {
@@ -197,6 +197,7 @@ struct usb_info {
 	struct usb_endpoint ept[32];
 
 	struct delayed_work work;
+	struct delayed_work chg_legacy_det;
 	unsigned phy_status;
 	unsigned phy_fail_count;
 	struct usb_composition *composition;
@@ -269,45 +270,68 @@ struct usb_device_descriptor desc_device = {
 
 static void flush_endpoint(struct usb_endpoint *ept);
 
-static int usb_chg_detect_type(struct usb_info *ui)
+#define USB_WALLCHARGER_CHG_CURRENT 1800
+static int usb_get_max_power(struct usb_info *ui)
 {
-	int ret = CHG_UNDEFINED;
+	unsigned long flags;
+	enum charger_type temp;
+	int suspended;
+	int configured;
 
-	msleep(10);
-	switch (PHY_TYPE(ui->phy_info)) {
-	case USB_PHY_EXTERNAL:
-		if (ulpi_write(ui, 0x30, 0x3A))
-			return ret;
+	spin_lock_irqsave(&ui->lock, flags);
+	temp = ui->chg_type;
+	suspended = ui->usb_state == USB_STATE_SUSPENDED ? 1 : 0;
+	configured = ui->configured;
+	spin_unlock_irqrestore(&ui->lock, flags);
 
-		/* 50ms is requried for charging circuit to powerup
-		 * and start functioning
-		 */
-		msleep(50);
-		if ((readl(USB_PORTSC) & PORTSC_LS) == PORTSC_LS)
-			ret = CHG_WALL;
-		else
-			ret = CHG_HOST_PC;
+	if (temp == USB_CHG_TYPE__INVALID)
+		return -ENODEV;
 
-		ulpi_write(ui, 0x30, 0x3B);
-		break;
-	case USB_PHY_INTEGRATED:
-	{
-		unsigned running = readl(USB_USBCMD) & USBCMD_RS;
+	if (temp == USB_CHG_TYPE__WALLCHARGER)
+		return USB_WALLCHARGER_CHG_CURRENT;
 
-		if (!running)
-			return CHG_UNDEFINED;
+	if (suspended || !configured)
+		return 0;
 
-		if ((readl(USB_PORTSC) & PORTSC_LS) == PORTSC_LS)
-			ret = CHG_WALL;
-		else
-			ret = CHG_HOST_PC;
-		break;
+	return ui->maxpower * 2;
+}
+
+static void usb_chg_legacy_detect(struct work_struct *w)
+{
+	struct usb_info *ui = the_usb_info;
+	unsigned long flags;
+	enum charger_type temp = USB_CHG_TYPE__INVALID;
+	int maxpower;
+	int ret = 0;
+
+	spin_lock_irqsave(&ui->lock, flags);
+
+	if (ui->usb_state == USB_STATE_NOTATTACHED) {
+		ret = -ENODEV;
+		goto chg_legacy_det_out;
 	}
-	default:
-		pr_err("%s: undefined phy type\n", __func__);
+
+	if ((readl(USB_PORTSC) & PORTSC_LS) == PORTSC_LS) {
+		ui->chg_type = temp = USB_CHG_TYPE__WALLCHARGER;
+		goto chg_legacy_det_out;
 	}
 
-	return ret;
+	ui->chg_type = temp = USB_CHG_TYPE__SDP;
+chg_legacy_det_out:
+	spin_unlock_irqrestore(&ui->lock, flags);
+
+	if (ret)
+		return;
+
+	msm_chg_usb_charger_connected(temp);
+	maxpower = usb_get_max_power(ui);
+	if (maxpower > 0)
+		msm_chg_usb_i_is_available(maxpower);
+
+	if (temp == USB_CHG_TYPE__WALLCHARGER)
+		pr_info("\n%s: WALL-CHARGER\n", __func__);
+	else
+		pr_info("\n%s: Standard Downstream Port\n", __func__);
 }
 
 int usb_msm_get_next_strdesc_id(char *str)
@@ -1507,13 +1531,23 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 				break;
 			}
 		}
-		ui->flags = USB_FLAG_RESUME;
-		queue_delayed_work(usb_work, &ui->work, 0);
+
+		/* pci interrutpt would also be generated when resuming
+		 * from bus suspend, following check would avoid kick
+		 * starting usb main thread in case of pci interrupts
+		 * during enumeration
+		 */
+		if (ui->configured && ui->chg_type == USB_CHG_TYPE__SDP) {
+			ui->usb_state = USB_STATE_CONFIGURED;
+			ui->flags = USB_FLAG_RESUME;
+			queue_delayed_work(usb_work, &ui->work, 0);
+		}
 	}
 
 	if (n & STS_URI) {
 		pr_info("hsusb reset interrupt\n");
 		ui->usb_state = USB_STATE_DEFAULT;
+		ui->configured = 0;
 		writel(readl(USB_ENDPTSETUPSTAT), USB_ENDPTSETUPSTAT);
 		writel(readl(USB_ENDPTCOMPLETE), USB_ENDPTCOMPLETE);
 		writel(0xffffffff, USB_ENDPTFLUSH);
@@ -1534,6 +1568,8 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 
 	if (n & STS_SLI) {
 		pr_info("hsusb suspend interrupt\n");
+		ui->usb_state = USB_STATE_SUSPENDED;
+
 		/* stop usb charging */
 		schedule_work(&ui->chg_stop);
 	}
@@ -1564,8 +1600,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 			/* Wait for 100ms to stabilize VBUS before initializing
 			 * USB and detecting charger type
 			 */
-			queue_delayed_work(usb_work, &ui->work,
-						DELAY_FOR_USB_VBUS_STABILIZE);
+			queue_delayed_work(usb_work, &ui->work, 0);
 		} else {
 			int i;
 
@@ -1573,6 +1608,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 
 			printk(KERN_INFO "usb cable disconnected\n");
 			ui->usb_state = USB_STATE_NOTATTACHED;
+			ui->configured = 0;
 			for (i = 0; i < ui->num_funcs; i++) {
 				struct usb_function_info *fi = ui->func[i];
 				if (!fi ||
@@ -1615,6 +1651,7 @@ static void usb_prepare(struct usb_info *ui)
 	INIT_WORK(&ui->chg_stop, usb_chg_stop);
 	INIT_WORK(&ui->li.wakeup_phy, usb_lpm_wakeup_phy);
 	INIT_DELAYED_WORK(&ui->work, usb_do_work);
+	INIT_DELAYED_WORK(&ui->chg_legacy_det, usb_chg_legacy_detect);
 }
 
 static int usb_is_online(struct usb_info *ui)
@@ -2340,14 +2377,9 @@ static void usb_do_work(struct work_struct *w)
 					msm_hsusb_suspend_locks_acquire(ui, 1);
 					ui->state = USB_STATE_ONLINE;
 					usb_enable_pullup(ui);
-					usb_chg_set_type(ui);
-					if ((ui->chg_type == CHG_WALL) &&
-						(PHY_TYPE(ui->phy_info) ==
-							USB_PHY_EXTERNAL)) {
-						usb_disable_pullup(ui);
-						msleep(500);
-						usb_lpm_enter(ui);
-					}
+					schedule_delayed_work(
+							&ui->chg_legacy_det,
+							USB_CHG_DET_DELAY);
 					pr_info("hsusb: IDLE -> ONLINE\n");
 				} else {
 					ui->usb_state = USB_STATE_NOTATTACHED;
@@ -2369,9 +2401,20 @@ static void usb_do_work(struct work_struct *w)
 			 * the signal to go offline, we must honor it
 			 */
 			if (flags & USB_FLAG_VBUS_OFFLINE) {
-				msm_chg_usb_i_is_not_available();
-				ui->chg_type = CHG_UNDEFINED;
-				msm_chg_usb_charger_disconnected();
+				enum charger_type temp;
+				unsigned long f;
+
+				cancel_delayed_work_sync(&ui->chg_legacy_det);
+
+				spin_lock_irqsave(&ui->lock, f);
+				temp = ui->chg_type;
+				ui->chg_type = USB_CHG_TYPE__INVALID;
+				spin_unlock_irqrestore(&ui->lock, f);
+
+				if (temp != USB_CHG_TYPE__INVALID) {
+					msm_chg_usb_i_is_not_available();
+					msm_chg_usb_charger_disconnected();
+				}
 
 				/* reset usb core and usb phy */
 				disable_irq(ui->irq);
@@ -2395,14 +2438,10 @@ static void usb_do_work(struct work_struct *w)
 			}
 			if ((flags & USB_FLAG_RESUME) ||
 					(flags & USB_FLAG_CONFIGURE)) {
-				if (ui->online) {
-					ui->usb_state = USB_STATE_CONFIGURED;
-					msm_chg_usb_i_is_available
-							(ui->maxpower * 2);
-				} else {
-					ui->usb_state = USB_STATE_DEFAULT;
-					msm_chg_usb_i_is_available(100);
-				}
+				int maxpower = usb_get_max_power(ui);
+
+				if (maxpower > 0)
+					msm_chg_usb_i_is_available(maxpower);
 				break;
 			}
 			goto reset;
@@ -2426,16 +2465,11 @@ static void usb_do_work(struct work_struct *w)
 					goto reset;
 				}
 				usb_enable_pullup(ui);
-				enable_irq(ui->irq);
-				usb_chg_set_type(ui);
-				if ((ui->chg_type == CHG_WALL) &&
-					(PHY_TYPE(ui->phy_info) ==
-						USB_PHY_EXTERNAL)) {
-					usb_disable_pullup(ui);
-					msleep(500);
-					usb_lpm_enter(ui);
-				}
+				schedule_delayed_work(
+						&ui->chg_legacy_det,
+						USB_CHG_DET_DELAY);
 				pr_info("hsusb: OFFLINE -> ONLINE\n");
+				enable_irq(ui->irq);
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -2601,27 +2635,15 @@ static void usb_disable_pullup(struct usb_info *ui)
 static void usb_chg_stop(struct work_struct *w)
 {
 	struct usb_info *ui = the_usb_info;
+	enum charger_type temp;
+	unsigned long flags;
 
-	if (ui->chg_type == CHG_HOST_PC)
+	spin_lock_irqsave(&ui->lock, flags);
+	temp = ui->chg_type;
+	spin_unlock_irqrestore(&ui->lock, flags);
+
+	if (temp == USB_CHG_TYPE__SDP)
 		msm_chg_usb_i_is_not_available();
-}
-
-static void usb_chg_set_type(struct usb_info *ui)
-{
-	ui->chg_type = usb_chg_detect_type(ui);
-	switch (ui->chg_type) {
-	case CHG_WALL:
-		pr_info("\n*********** Charger Type: WALL CHARGER\n\n");
-		msm_chg_usb_charger_connected(CHG_WALL);
-		msm_chg_usb_i_is_available(1500);
-		break;
-	case CHG_HOST_PC:
-		pr_info("\n*********** Charger Type: HOST PC\n\n");
-		msm_chg_usb_charger_connected(CHG_HOST_PC);
-		break;
-	default:
-		pr_err("%s:undefned charger type", __func__);
-	}
 }
 
 static void usb_vbus_online(struct usb_info *ui)
@@ -3223,7 +3245,7 @@ static int __init usb_probe(struct platform_device *pdev)
 	ui->selfpowered = 0;
 	ui->remote_wakeup = 0;
 	ui->maxpower = 0xFA;
-	ui->chg_type = CHG_UNDEFINED;
+	ui->chg_type = USB_CHG_TYPE__INVALID;
 	/* to allow swfi latency, driver latency
 	 * must be above listed swfi latency
 	 */
