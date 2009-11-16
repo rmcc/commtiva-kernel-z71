@@ -40,7 +40,8 @@ struct snddev_icodec_data {
 	struct adie_codec_dev_profile *profile;
 	/* Afe setting */
 	u8 channel_mode;
-	enum hsed_controller pmctl_id; /* tx only enable mic bias */
+	enum hsed_controller *pmctl_id; /* tx only enable mic bias */
+	u32 pmctl_id_sz;
 	u32 default_sample_rate;
 	void (*pamp_on) (void);
 	void (*pamp_off) (void);
