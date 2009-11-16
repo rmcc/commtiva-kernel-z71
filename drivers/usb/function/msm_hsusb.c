@@ -3306,16 +3306,13 @@ static int usb_platform_suspend(struct platform_device *pdev,
 
 	return ret;
 }
-#else
-static int usb_platform_suspend(struct platform_device *pdev,
-		pm_message_t state)
-{
-}
 #endif
 
 static struct platform_driver usb_driver = {
 	.probe = usb_probe,
+#ifdef CONFIG_PM
 	.suspend = usb_platform_suspend,
+#endif
 	.driver = { .name = DRIVER_NAME, },
 };
 
