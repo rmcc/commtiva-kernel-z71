@@ -61,9 +61,9 @@ enum {
 };
 
 #define MPP_CFG(level, control) ((((level) & 0x0FFFF) << 16) | \
-				 ((control) & 0x0FFFFF))
+				 ((control) & 0x0FFFF))
 #define MPP_CFG_INPUT(level, dbus) ((((level) & 0x0FFFF) << 16) | \
-				 ((control) & 0x0FFFFF))
+				 ((dbus) & 0x0FFFF))
 
 /* Use mpp number starting from 0 */
 int mpp_config_digital_out(unsigned mpp, unsigned config);
