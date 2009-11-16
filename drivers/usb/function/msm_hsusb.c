@@ -1671,18 +1671,19 @@ static int usb_suspend_phy(struct usb_info *ui)
 	 */
 	switch (PHY_TYPE(ui->phy_info)) {
 	case USB_PHY_INTEGRATED:
-		if (!is_phy_45nm()) {
+		if (!is_phy_45nm())
 			ulpi_read(ui, 0x14);
-			ulpi_write(ui, 0x08, 0x09);
-		}
 
+		/* turn on/off otg comparators */
 		if (ui->vbus_sn_notif &&
 			ui->usb_state == USB_STATE_NOTATTACHED)
-			/* turn off OTG PHY comparators */
 			ulpi_write(ui, 0x00, 0x30);
 		else
-			/* turn on the PHY comparators */
-			ulpi_write(ui, 0x01 | (1 << is_phy_45nm()), 0x30);
+			ulpi_write(ui, 0x01, 0x30);
+
+		if (!is_phy_45nm())
+			ulpi_write(ui, 0x08, 0x09);
+
 		break;
 
 	case USB_PHY_UNDEFINED:
