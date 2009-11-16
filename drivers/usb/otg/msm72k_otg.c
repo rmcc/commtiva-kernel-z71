@@ -493,7 +493,7 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 	}
 
 	otgsc = readl(USB_OTGSC);
-	if (!otgsc & OTGSC_INTR_STS_MASK)
+	if (!(otgsc & OTGSC_INTR_STS_MASK))
 		return IRQ_HANDLED;
 
 	if ((otgsc & OTGSC_IDIS) && (otgsc & OTGSC_IDIE)) {
