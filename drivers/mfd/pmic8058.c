@@ -134,6 +134,9 @@
 #define	PM8058_GPIO_FUNC_MASK		0x0E
 #define	PM8058_GPIO_FUNC_SHIFT		1
 
+/* Bank 5 */
+#define	PM8058_GPIO_NON_INT_POL_INV	0x08
+
 #define	MAX_PM_IRQ		256
 #define	MAX_PM_BLOCKS		(MAX_PM_IRQ / 8 + 1)
 #define	MAX_PM_MASTERS		(MAX_PM_BLOCKS / 8 + 1)
@@ -294,11 +297,14 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 			PM8058_GPIO_BANK_MASK) |
 		((param->function << PM8058_GPIO_FUNC_SHIFT) &
 			PM8058_GPIO_FUNC_MASK);
+	bank[5] = PM8058_GPIO_WRITE |
+		((5 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
+		(param->inv_int_pol ? 0 : PM8058_GPIO_NON_INT_POL_INV);
 
 	local_irq_save(irqsave);
 	/* Remember bank1 for later use */
 	pmic_chip->gpio_bank1[gpio] = bank[1];
-	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 5);
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 6);
 	local_irq_restore(irqsave);
 
 	if (rc)
