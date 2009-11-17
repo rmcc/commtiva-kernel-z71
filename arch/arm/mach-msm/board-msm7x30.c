@@ -367,6 +367,7 @@ static struct pm8058_platform_data pm8058_7x30_data = {
 	.pm_irqs = {
 		[PM8058_IRQ_KEYPAD - PM8058_FIRST_IRQ] = 74,
 		[PM8058_IRQ_KEYSTUCK - PM8058_FIRST_IRQ] = 75,
+		[PM8058_IRQ_CHGVAL - PM8058_FIRST_IRQ] = 15,
 	},
 	.init = pm8058_gpios_init,
 };
@@ -1493,10 +1494,50 @@ static int msm_hsusb_rpc_phy_reset(void __iomem *addr)
 	return msm_hsusb_phy_reset();
 }
 
+static int ldo_on;
+static struct vreg *usb_vreg;
+static int msm_pmic_enable_ldo(int enable)
+{
+	if (ldo_on == enable)
+		return 0;
+
+	ldo_on = enable;
+
+	if (enable)
+		return vreg_enable(usb_vreg);
+	else
+		return vreg_disable(usb_vreg);
+}
+
+static int msm_pmic_notify_init(void)
+{
+	usb_vreg = vreg_get(NULL, "usb");
+	if (IS_ERR(usb_vreg)) {
+		pr_err("%s: usb vreg get failed\n", __func__);
+		vreg_put(usb_vreg);
+		return PTR_ERR(usb_vreg);
+	}
+
+	return 0;
+}
+
+static void msm_pmic_notify_deinit(void)
+{
+	msm_pmic_enable_ldo(0);
+	vreg_put(usb_vreg);
+}
+
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_rpc_phy_reset,
+
+	/* vbus notification through pmic call backs */
+	.pmic_notif_init         = msm_pmic_notify_init,
+	.pmic_notif_deinit       = msm_pmic_notify_deinit,
+	.pmic_enable_ldo         = msm_pmic_enable_ldo,
+
 	.core_clk	= 1,
+	.pmic_vbus_irq	= 1,
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {

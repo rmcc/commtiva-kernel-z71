@@ -424,13 +424,13 @@ static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 		msm_otg_start_peripheral(xceiv, 0);
 		dev->otg.gadget = 0;
 		disable_sess_valid(dev);
-		if (dev->pmic_notif_supp)
+		if (dev->pmic_notif_supp && dev->pmic_unregister_vbus_sn)
 			dev->pmic_unregister_vbus_sn(&msm_otg_set_vbus_state);
 		return 0;
 	}
 	dev->otg.gadget = gadget;
 	enable_sess_valid(dev);
-	if (dev->pmic_notif_supp)
+	if (dev->pmic_notif_supp && dev->pmic_register_vbus_sn)
 		dev->pmic_register_vbus_sn(&msm_otg_set_vbus_state);
 	pr_info("peripheral driver registered w/ tranceiver\n");
 
@@ -480,6 +480,23 @@ static void msm_otg_set_vbus_state(int online)
 
 	if (online)
 		msm_otg_set_suspend(&dev->otg, 0);
+}
+
+/* pmic irq handlers are called from thread context and
+ * are allowed to sleep
+ */
+static irqreturn_t pmic_vbus_on_irq(int irq, void *data)
+{
+	struct msm_otg *dev = the_msm_otg;
+
+	if (!dev->otg.gadget)
+		return IRQ_HANDLED;
+
+	pr_info("%s: vbus notification from pmic\n", __func__);
+
+	msm_otg_set_suspend(&dev->otg, 0);
+
+	return IRQ_HANDLED;
 }
 
 static irqreturn_t msm_otg_irq(int irq, void *data)
@@ -549,6 +566,7 @@ static void otg_reset(struct msm_otg *dev)
 static int __init msm_otg_probe(struct platform_device *pdev)
 {
 	int ret = 0;
+	int vbus_on_irq = 0;
 	struct resource *res;
 	struct msm_otg *dev;
 	struct msm_otg_platform_data *pdata;
@@ -558,9 +576,9 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	dev->otg.dev = &pdev->dev;
+	pdata = pdev->dev.platform_data;
 
 	if (pdev->dev.platform_data) {
-		pdata = pdev->dev.platform_data;
 		dev->rpc_connect = pdata->rpc_connect;
 		dev->phy_reset = pdata->phy_reset;
 		dev->core_clk  = pdata->core_clk;
@@ -570,6 +588,15 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		dev->pmic_register_vbus_sn = pdata->pmic_register_vbus_sn;
 		dev->pmic_unregister_vbus_sn = pdata->pmic_unregister_vbus_sn;
 		dev->pmic_enable_ldo = pdata->pmic_enable_ldo;
+	}
+
+	if (pdata && pdata->pmic_vbus_irq) {
+		vbus_on_irq = platform_get_irq_byname(pdev, "vbus_on");
+		if (vbus_on_irq < 0) {
+			pr_err("%s: unable to get vbus on irq\n", __func__);
+			ret = vbus_on_irq;
+			goto free_dev;
+		}
 	}
 
 	if (dev->rpc_connect) {
@@ -657,13 +684,14 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	}
 
 	the_msm_otg = dev;
+	dev->vbus_on_irq = vbus_on_irq;
 	dev->otg.set_peripheral = msm_otg_set_peripheral;
 	dev->otg.set_host = msm_otg_set_host;
 	dev->otg.set_suspend = msm_otg_set_suspend;
 	dev->set_clk = msm_otg_set_clk;
 	if (otg_set_transceiver(&dev->otg)) {
 		WARN_ON(1);
-		goto free_regs;
+		goto free_otg_irq;
 	}
 
 	wake_lock_init(&dev->wlock,
@@ -672,7 +700,19 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	msm_otg_debugfs_init(dev);
 	device_init_wakeup(&pdev->dev, 1);
 
+	if (vbus_on_irq) {
+		ret = request_irq(vbus_on_irq, pmic_vbus_on_irq,
+				IRQF_TRIGGER_RISING, "msm_otg_vbus_on", NULL);
+		if (ret) {
+			pr_info("%s: request_irq for vbus_on"
+					"interrupt failed\n", __func__);
+			goto free_otg_irq;
+		}
+	}
+
 	return 0;
+free_otg_irq:
+	free_irq(dev->irq, dev);
 free_regs:
 	iounmap(dev->regs);
 put_cclk:
@@ -697,6 +737,8 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 		dev->pmic_notif_deinit();
 
 	free_irq(dev->irq, pdev);
+	if (dev->vbus_on_irq)
+		free_irq(dev->irq, 0);
 	iounmap(dev->regs);
 	if (dev->cclk)
 		clk_disable(dev->cclk);

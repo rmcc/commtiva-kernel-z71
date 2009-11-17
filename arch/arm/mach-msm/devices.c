@@ -30,6 +30,9 @@
 
 #include <asm/mach/mmc.h>
 #include <mach/msm_hsusb.h>
+#ifdef CONFIG_PMIC8058
+#include <linux/mfd/pmic8058.h>
+#endif
 
 static struct resource resources_uart1[] = {
 	{
@@ -366,7 +369,7 @@ static struct resource resources_hsusb_peripheral[] = {
 		.end	= INT_USB_HS,
 		.flags	= IORESOURCE_IRQ,
 	},
-#ifdef CONFIG_ARCH_MSM7X01A
+#ifdef CONFIG_PMIC8058
 	{
 		.name	= "vbus_interrupt",
 		.start	= MSM_GPIO_TO_INT(112),
@@ -547,6 +550,14 @@ static struct resource resources_otg[] = {
 		.end	= INT_USB_HS,
 		.flags	= IORESOURCE_IRQ,
 	},
+#ifdef CONFIG_ARCH_MSM7X30
+	{
+		.name	= "vbus_on",
+		.start	= PM8058_IRQ_CHGVAL,
+		.end	= PM8058_IRQ_CHGVAL,
+		.flags	= IORESOURCE_IRQ,
+	},
+#endif
 };
 
 struct platform_device msm_device_otg = {
