@@ -69,6 +69,122 @@ enum COLORFORMATX {
  COLORX_8_8_8 = 14,
 };
 
+enum SURFACEFORMAT {
+ FMT_1_REVERSE                  = 0,
+ FMT_1                          = 1,
+ FMT_8                          = 2,
+ FMT_1_5_5_5                    = 3,
+ FMT_5_6_5                      = 4,
+ FMT_6_5_5                      = 5,
+ FMT_8_8_8_8                    = 6,
+ FMT_2_10_10_10                 = 7,
+ FMT_8_A                        = 8,
+ FMT_8_B                        = 9,
+ FMT_8_8                        = 10,
+ FMT_Cr_Y1_Cb_Y0                = 11,
+ FMT_Y1_Cr_Y0_Cb                = 12,
+ FMT_5_5_5_1                    = 13,
+ FMT_8_8_8_8_A                  = 14,
+ FMT_4_4_4_4                    = 15,
+ FMT_10_11_11                   = 16,
+ FMT_11_11_10                   = 17,
+ FMT_DXT1                       = 18,
+ FMT_DXT2_3                     = 19,
+ FMT_DXT4_5                     = 20,
+ FMT_24_8                       = 22,
+ FMT_24_8_FLOAT                 = 23,
+ FMT_16                         = 24,
+ FMT_16_16                      = 25,
+ FMT_16_16_16_16                = 26,
+ FMT_16_EXPAND                  = 27,
+ FMT_16_16_EXPAND               = 28,
+ FMT_16_16_16_16_EXPAND         = 29,
+ FMT_16_FLOAT                   = 30,
+ FMT_16_16_FLOAT                = 31,
+ FMT_16_16_16_16_FLOAT          = 32,
+ FMT_32                         = 33,
+ FMT_32_32                      = 34,
+ FMT_32_32_32_32                = 35,
+ FMT_32_FLOAT                   = 36,
+ FMT_32_32_FLOAT                = 37,
+ FMT_32_32_32_32_FLOAT          = 38,
+ FMT_32_AS_8                    = 39,
+ FMT_32_AS_8_8                  = 40,
+ FMT_16_MPEG                    = 41,
+ FMT_16_16_MPEG                 = 42,
+ FMT_8_INTERLACED               = 43,
+ FMT_32_AS_8_INTERLACED         = 44,
+ FMT_32_AS_8_8_INTERLACED       = 45,
+ FMT_16_INTERLACED              = 46,
+ FMT_16_MPEG_INTERLACED         = 47,
+ FMT_16_16_MPEG_INTERLACED      = 48,
+ FMT_DXN                        = 49,
+ FMT_8_8_8_8_AS_16_16_16_16     = 50,
+ FMT_DXT1_AS_16_16_16_16        = 51,
+ FMT_DXT2_3_AS_16_16_16_16      = 52,
+ FMT_DXT4_5_AS_16_16_16_16      = 53,
+ FMT_2_10_10_10_AS_16_16_16_16  = 54,
+ FMT_10_11_11_AS_16_16_16_16    = 55,
+ FMT_11_11_10_AS_16_16_16_16    = 56,
+ FMT_32_32_32_FLOAT             = 57,
+ FMT_DXT3A                      = 58,
+ FMT_DXT5A                      = 59,
+ FMT_CTX1                       = 60,
+ FMT_DXT3A_AS_1_1_1_1           = 61
+};
+
+#define RB_EDRAM_INFO_EDRAM_SIZE_SIZE                      4
+#define RB_EDRAM_INFO_EDRAM_MAPPING_MODE_SIZE              2
+#define RB_EDRAM_INFO_UNUSED0_SIZE                         8
+#define RB_EDRAM_INFO_EDRAM_RANGE_SIZE                     18
+
+struct rb_edram_info_t {
+	unsigned int edram_size:RB_EDRAM_INFO_EDRAM_SIZE_SIZE;
+	unsigned int edram_mapping_mode:RB_EDRAM_INFO_EDRAM_MAPPING_MODE_SIZE;
+	unsigned int unused0:RB_EDRAM_INFO_UNUSED0_SIZE;
+	unsigned int edram_range:RB_EDRAM_INFO_EDRAM_RANGE_SIZE;
+};
+
+union reg_rb_edram_info {
+	unsigned int val;
+	struct rb_edram_info_t f;
+};
+
+#define CP_RB_CNTL_RB_BUFSZ_SIZE                           6
+#define CP_RB_CNTL_UNUSED0_SIZE                            2
+#define CP_RB_CNTL_RB_BLKSZ_SIZE                           6
+#define CP_RB_CNTL_UNUSED1_SIZE                            2
+#define CP_RB_CNTL_BUF_SWAP_SIZE                           2
+#define CP_RB_CNTL_UNUSED2_SIZE                            2
+#define CP_RB_CNTL_RB_POLL_EN_SIZE                         1
+#define CP_RB_CNTL_UNUSED3_SIZE                            6
+#define CP_RB_CNTL_RB_NO_UPDATE_SIZE                       1
+#define CP_RB_CNTL_UNUSED4_SIZE                            3
+#define CP_RB_CNTL_RB_RPTR_WR_ENA_SIZE                     1
+
+struct cp_rb_cntl_t {
+	unsigned int rb_bufsz:CP_RB_CNTL_RB_BUFSZ_SIZE;
+	unsigned int unused0:CP_RB_CNTL_UNUSED0_SIZE;
+	unsigned int rb_blksz:CP_RB_CNTL_RB_BLKSZ_SIZE;
+	unsigned int unused1:CP_RB_CNTL_UNUSED1_SIZE;
+	unsigned int buf_swap:CP_RB_CNTL_BUF_SWAP_SIZE;
+	unsigned int unused2:CP_RB_CNTL_UNUSED2_SIZE;
+	unsigned int rb_poll_en:CP_RB_CNTL_RB_POLL_EN_SIZE;
+	unsigned int unused3:CP_RB_CNTL_UNUSED3_SIZE;
+	unsigned int rb_no_update:CP_RB_CNTL_RB_NO_UPDATE_SIZE;
+	unsigned int unused4:CP_RB_CNTL_UNUSED4_SIZE;
+	unsigned int rb_rptr_wr_ena:CP_RB_CNTL_RB_RPTR_WR_ENA_SIZE;
+};
+
+union reg_cp_rb_cntl {
+	unsigned int val:32;
+	struct cp_rb_cntl_t f;
+};
+
+#define RB_COLOR_INFO__COLOR_FORMAT_MASK                   0x0000000fL
+#define RB_COPY_DEST_INFO__COPY_DEST_FORMAT__SHIFT         0x00000004
+
+
 #define SQ_INT_CNTL__PS_WATCHDOG_MASK                      0x00000001L
 #define SQ_INT_CNTL__VS_WATCHDOG_MASK                      0x00000002L
 
@@ -266,5 +382,23 @@ enum COLORFORMATX {
 #define REG_VGT_INDX_OFFSET              0x2102
 #define REG_VGT_MAX_VTX_INDX             0x2100
 #define REG_VGT_MIN_VTX_INDX             0x2101
+
+#define REG_TP0_CHICKEN			 0x0E1E
+#define REG_TC_CNTL_STATUS             	 0x0E00
+#define REG_PA_SC_AA_CONFIG            	 0x2301
+#define REG_VGT_VERTEX_REUSE_BLOCK_CNTL  0x2316
+#define REG_SQ_INTERPOLATOR_CNTL         0x2182
+#define REG_RB_DEPTH_INFO                0x2002
+#define REG_COHER_DEST_BASE_0            0x2006
+#define REG_PA_SC_SCREEN_SCISSOR_BR      0x200F
+#define REG_RB_FOG_COLOR                 0x2109
+#define REG_RB_STENCILREFMASK_BF         0x210C
+#define REG_PA_SC_LINE_STIPPLE           0x2283
+#define REG_SQ_PS_CONST                  0x2308
+#define REG_VGT_VERTEX_REUSE_BLOCK_CNTL  0x2316
+#define REG_RB_DEPTH_CLEAR               0x231D
+#define REG_RB_SAMPLE_COUNT_CTL          0x2324
+#define REG_SQ_CONSTANT_0                0x4000
+#define REG_SQ_FETCH_0                   0x4800
 
 #endif /* _YAMATO_REG_H */

@@ -55,6 +55,7 @@
  *
  */
 #include "kgsl_ringbuffer.h"
+#include "kgsl_cmdstream.h"
 
 #include "kgsl.h"
 #include "kgsl_device.h"
@@ -206,6 +207,8 @@ done:
 
 static void kgsl_ringbuffer_submit(struct kgsl_ringbuffer *rb)
 {
+	unsigned int value;
+
 	BUG_ON(rb->wptr == 0);
 
 	GSL_RB_UPDATE_WPTR_POLLING(rb);
@@ -213,9 +216,18 @@ static void kgsl_ringbuffer_submit(struct kgsl_ringbuffer *rb)
 	dsb();
 	dmb();
 
-	BUG_ON(rb->wptr > rb->sizedwords);
+	/* Memory fence to ensure all data has posted.  On some systems,
+	* like 7x27, the register block is not allocated as strongly ordered
+	* memory.  Adding a memory fence ensures ordering during ringbuffer
+	* submits.*/
+	mb();
 
 	kgsl_yamato_regwrite(rb->device, REG_CP_RB_WPTR, rb->wptr);
+
+	/* force wptr register to be updated */
+	do {
+		kgsl_yamato_regread(rb->device, REG_CP_RB_WPTR, &value);
+	} while (value != rb->wptr);
 
 	rb->flags |= KGSL_FLAGS_ACTIVE;
 }
@@ -251,7 +263,7 @@ kgsl_ringbuffer_waitspace(struct kgsl_ringbuffer *rb, unsigned int numcmds,
 
 		freecmds = rb->rptr - rb->wptr;
 
-	} while (freecmds < numcmds);
+	} while ((freecmds != 0) && (freecmds < numcmds));
 
 	KGSL_CMD_VDBG("return %d\n", 0);
 
@@ -259,41 +271,38 @@ kgsl_ringbuffer_waitspace(struct kgsl_ringbuffer *rb, unsigned int numcmds,
 }
 
 
-static unsigned int *kgsl_ringbuffer_addcmds(struct kgsl_ringbuffer *rb,
+static unsigned int *kgsl_ringbuffer_allocspace(struct kgsl_ringbuffer *rb,
 					     unsigned int numcmds)
 {
-	unsigned int *ptr;
-	int status = 0;
+	unsigned int	*ptr = NULL;
+	int				status = 0;
 
 	BUG_ON(numcmds >= rb->sizedwords);
-
-	/* update host copy of read pointer when running in safe mode */
-	/*NOTE: this was safemode only, but seems to be required*/
-	GSL_RB_GET_READPTR(rb, &rb->rptr);
 
 	/* check for available space */
 	if (rb->wptr >= rb->rptr) {
 		/* wptr ahead or equal to rptr */
-		if ((rb->wptr + numcmds)
-			> (rb->sizedwords - GSL_RB_NOP_SIZEDWORDS)) {
+		/* reserve dwords for nop packet */
+		if ((rb->wptr + numcmds) > (rb->sizedwords -
+				GSL_RB_NOP_SIZEDWORDS))
 			status = kgsl_ringbuffer_waitspace(rb, numcmds, 1);
-		}
 	} else {
 		/* wptr behind rptr */
 		if ((rb->wptr + numcmds) >= rb->rptr)
-			status = kgsl_ringbuffer_waitspace(rb, numcmds, 0);
-
+			status  = kgsl_ringbuffer_waitspace(rb, numcmds, 0);
 		/* check for remaining space */
-		if ((rb->wptr + numcmds)
-			> (rb->sizedwords - GSL_RB_NOP_SIZEDWORDS))
+		/* reserve dwords for nop packet */
+		if ((rb->wptr + numcmds) > (rb->sizedwords -
+				GSL_RB_NOP_SIZEDWORDS))
 			status = kgsl_ringbuffer_waitspace(rb, numcmds, 1);
 	}
 
-	ptr = (unsigned int *)rb->buffer_desc.hostptr + rb->wptr;
-	rb->wptr += numcmds;
-	BUG_ON(rb->wptr > rb->sizedwords);
+	if (status == 0) {
+		ptr = (unsigned int *)rb->buffer_desc.hostptr + rb->wptr;
+		rb->wptr += numcmds;
+	}
 
-	return (status == 0) ? ptr : NULL;
+	return ptr;
 }
 
 static int kgsl_ringbuffer_load_pm4_ucode(struct kgsl_device *device)
@@ -369,8 +378,8 @@ static int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb)
 {
 	int status;
 	/*cp_rb_cntl_u cp_rb_cntl; */
-	unsigned int cp_rb_cntl = 0;
-	unsigned int *cmds;
+	union reg_cp_rb_cntl cp_rb_cntl;
+	unsigned int *cmds, rb_cntl;
 	struct kgsl_device *device = rb->device;
 
 	KGSL_CMD_VDBG("enter (rb=%p)\n", rb);
@@ -389,18 +398,22 @@ static int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb)
 			     (rb->memptrs_desc.gpuaddr
 			      + GSL_RB_MEMPTRS_WPTRPOLL_OFFSET));
 
-
+	/* setup WPTR delay */
 	kgsl_yamato_regwrite(device, REG_CP_RB_WPTR_DELAY, 0 /*0x70000010 */);
 
 	/*setup REG_CP_RB_CNTL */
-	cp_rb_cntl = (kgsl_ringbuffer_sizelog2quadwords(rb->sizedwords)
-				<< CP_RB_CNTL__RB_BUFSZ__SHIFT)
-			| (rb->blksizequadwords << CP_RB_CNTL__RB_BLKSZ__SHIFT)
-			| (GSL_RB_CNTL_POLL_EN << CP_RB_CNTL__RB_POLL_EN__SHIFT)
-			| (GSL_RB_CNTL_NO_UPDATE
-				<< CP_RB_CNTL__RB_NO_UPDATE__SHIFT);
+	kgsl_yamato_regread(device, REG_CP_RB_CNTL, &rb_cntl);
+	cp_rb_cntl.val = rb_cntl;
+	/* size of ringbuffer */
+	cp_rb_cntl.f.rb_bufsz =
+		kgsl_ringbuffer_sizelog2quadwords(rb->sizedwords);
+	/* quadwords to read before updating mem RPTR */
+	cp_rb_cntl.f.rb_blksz = rb->blksizequadwords;
+	cp_rb_cntl.f.rb_poll_en = GSL_RB_CNTL_POLL_EN; /* WPTR polling */
+	/* mem RPTR writebacks */
+	cp_rb_cntl.f.rb_no_update =  GSL_RB_CNTL_NO_UPDATE;
 
-	kgsl_yamato_regwrite(device, REG_CP_RB_CNTL, cp_rb_cntl);
+	kgsl_yamato_regwrite(device, REG_CP_RB_CNTL, cp_rb_cntl.val);
 
 	kgsl_yamato_regwrite(device, REG_CP_RB_BASE, rb->buffer_desc.gpuaddr);
 
@@ -451,7 +464,7 @@ static int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb)
 	kgsl_yamato_regwrite(device, REG_CP_ME_CNTL, 0);
 
 	/* ME_INIT */
-	cmds = kgsl_ringbuffer_addcmds(rb, 19);
+	cmds = kgsl_ringbuffer_allocspace(rb, 19);
 
 	GSL_RB_WRITE(cmds, PM4_HDR_ME_INIT);
 	/* All fields present (bits 9:0) */
@@ -593,7 +606,7 @@ int kgsl_ringbuffer_close(struct kgsl_ringbuffer *rb)
 {
 	KGSL_CMD_VDBG("enter (rb=%p)\n", rb);
 
-	kgsl_ringbuffer_memqueue_drain(rb->device);
+	kgsl_cmdstream_memqueue_drain(rb->device);
 
 	kgsl_ringbuffer_stop(rb);
 
@@ -614,37 +627,28 @@ int kgsl_ringbuffer_close(struct kgsl_ringbuffer *rb)
 	return 0;
 }
 
-uint32_t
-kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
-				struct kgsl_drawctxt *drawctxt,
+static uint32_t
+kgsl_ringbuffer_addcmds(struct kgsl_ringbuffer *rb,
 				int pmodeoff, unsigned int *cmds,
-				int sizedwords,
-				unsigned int flags)
+				int sizedwords)
 {
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
 	unsigned int pmodesizedwords;
 	unsigned int *ringcmds;
 	unsigned int timestamp;
-
-	KGSL_CMD_VDBG("enter (device=%p, drawctxt=%p, pmodeoff=%d, cmds=%p,"
-			" sizedwords=%d)\n",
-			device, drawctxt, pmodeoff, cmds, sizedwords);
-
-	kgsl_drawctxt_switch(rb->device, drawctxt, flags);
 
 	/* reserve space to temporarily turn off protected mode
 	*  error checking if needed
 	*/
 	pmodesizedwords = pmodeoff ? 8 : 0;
 
-	ringcmds = kgsl_ringbuffer_addcmds(rb,
+	ringcmds = kgsl_ringbuffer_allocspace(rb,
 					pmodesizedwords + sizedwords + 6);
 
 	if (pmodeoff) {
 		/* disable protected mode error checking */
-		GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_ME_INIT, 2));
-		GSL_RB_WRITE(ringcmds, 0x00000080);
-		GSL_RB_WRITE(ringcmds, 0x00000000);
+		*ringcmds++ = pm4_type3_packet(PM4_ME_INIT, 2);
+		*ringcmds++ = 0x00000080;
+		*ringcmds++ = 0x00000000;
 	}
 
 	memcpy(ringcmds, cmds, (sizedwords << 2));
@@ -652,27 +656,27 @@ kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
 	ringcmds += sizedwords;
 
 	if (pmodeoff) {
-		GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1));
-		GSL_RB_WRITE(ringcmds, 0);
+		*ringcmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+		*ringcmds++ = 0;
 
 		/* re-enable protected mode error checking */
-		GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_ME_INIT, 2));
-		GSL_RB_WRITE(ringcmds, 0x00000080);
-		GSL_RB_WRITE(ringcmds, GSL_RB_PROTECTED_MODE_CONTROL);
+		*ringcmds++ = pm4_type3_packet(PM4_ME_INIT, 2);
+		*ringcmds++ = 0x00000080;
+		*ringcmds++ = GSL_RB_PROTECTED_MODE_CONTROL;
 	}
 
 	rb->timestamp++;
 	timestamp = rb->timestamp;
 
 	/* start-of-pipeline and end-of-pipeline timestamps */
-	GSL_RB_WRITE(ringcmds, pm4_type0_packet(REG_CP_TIMESTAMP, 1));
-	GSL_RB_WRITE(ringcmds, rb->timestamp);
-	GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_EVENT_WRITE, 3));
-	GSL_RB_WRITE(ringcmds, CACHE_FLUSH_TS);
-	GSL_RB_WRITE(ringcmds,
-		     (device->memstore.gpuaddr +
-		      KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp)));
-	GSL_RB_WRITE(ringcmds, rb->timestamp);
+	*ringcmds++ = pm4_type0_packet(REG_CP_TIMESTAMP, 1);
+	*ringcmds++ = rb->timestamp;
+	*ringcmds++ = pm4_type3_packet(PM4_EVENT_WRITE, 3);
+	*ringcmds++ = CACHE_FLUSH_TS;
+	*ringcmds++ =
+		     (rb->device->memstore.gpuaddr +
+		      KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp));
+	*ringcmds++ = rb->timestamp;
 
 	kgsl_ringbuffer_submit(rb);
 
@@ -682,6 +686,24 @@ kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
 	KGSL_CMD_VDBG("return %d\n", timestamp);
 
 	/* return timestamp of issued coREG_ands */
+	return timestamp;
+}
+
+uint32_t
+kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
+						int pmodeoff,
+						unsigned int *cmds,
+						int sizedwords)
+{
+	unsigned int timestamp;
+	struct kgsl_ringbuffer *rb = &device->ringbuffer;
+
+	KGSL_CMD_VDBG("enter (device->id=%d, pmodeoff=%d, cmds=%p, "
+		"sizedwords=%d)\n", device->id, pmodeoff, cmds, sizedwords);
+
+	timestamp = kgsl_ringbuffer_addcmds(rb, pmodeoff, cmds, sizedwords);
+
+	KGSL_CMD_VDBG("return %d\n)", timestamp);
 	return timestamp;
 }
 
@@ -712,101 +734,19 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device *device,
 	link[1] = ibaddr;
 	link[2] = sizedwords;
 
-	*timestamp = kgsl_ringbuffer_issuecmds(device,
-					&device->drawctxt[drawctxt_index],
-					0, &link[0], 3, flags);
+	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
+	kgsl_drawctxt_switch(device, &device->drawctxt[drawctxt_index], flags);
+	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
+
+	*timestamp = kgsl_ringbuffer_addcmds(&device->ringbuffer,
+					0, &link[0], 3);
+
+	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
+
 	KGSL_CMD_INFO("ctxt %d g %08x sd %d ts %d\n",
 			drawctxt_index, ibaddr, sizedwords, *timestamp);
 
 	KGSL_CMD_VDBG("return %d\n", 0);
-
-	return 0;
-}
-
-uint32_t
-kgsl_ringbuffer_readtimestamp(struct kgsl_device *device,
-			      enum kgsl_timestamp_type type)
-{
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
-	uint32_t timestamp = 0;
-
-	KGSL_CMD_VDBG("enter (device_id=%d, type=%d)\n", device->id, type);
-
-	if (!(rb->flags & KGSL_FLAGS_STARTED)) {
-		KGSL_CMD_ERR("Device not started.\n");
-		return 0;
-	}
-
-	if (type == KGSL_TIMESTAMP_CONSUMED)
-		GSL_RB_GET_SOP_TIMESTAMP(rb, (unsigned int *)&timestamp);
-	else if (type == KGSL_TIMESTAMP_RETIRED)
-		GSL_RB_GET_EOP_TIMESTAMP(rb, (unsigned int *)&timestamp);
-
-	KGSL_CMD_VDBG("return %d\n", timestamp);
-
-	return timestamp;
-}
-
-int kgsl_ringbuffer_check_timestamp(struct kgsl_device *device,
-					unsigned int timestamp)
-{
-	unsigned int ts_processed;
-	int ts_diff;
-	GSL_RB_GET_EOP_TIMESTAMP(&device->ringbuffer,
-				(unsigned int *)&ts_processed);
-
-	ts_diff = ts_processed - timestamp;
-
-	return (ts_diff >= 0) || (ts_diff < -20000);
-
-}
-
-void kgsl_ringbuffer_memqueue_drain(struct kgsl_device *device)
-{
-	struct kgsl_pmem_entry *entry, *entry_tmp;
-	uint32_t ts_processed;
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
-
-	GSL_RB_GET_EOP_TIMESTAMP(&device->ringbuffer,
-				 (unsigned int *)&ts_processed);
-
-	if (!(device->ringbuffer.flags & KGSL_FLAGS_STARTED))
-		return;
-
-	list_for_each_entry_safe(entry, entry_tmp, &rb->memqueue, free_list) {
-		/*NOTE: this assumes that the free list is sorted by
-		 * timestamp, but I'm not yet sure that it is a valid
-		 * assumption
-		 */
-		if (!kgsl_ringbuffer_check_timestamp(device,
-						entry->free_timestamp))
-			break;
-
-		KGSL_MEM_DBG("ts_processed %d gpuaddr %x)\n",
-				ts_processed, entry->memdesc.gpuaddr);
-		kgsl_remove_pmem_entry(entry);
-	}
-
-}
-
-
-int
-kgsl_ringbuffer_freememontimestamp(struct kgsl_device *device,
-				   struct kgsl_pmem_entry *entry,
-				   uint32_t timestamp,
-				   enum kgsl_timestamp_type type)
-{
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
-
-	KGSL_MEM_DBG("enter (dev %p gpuaddr %x ts %d)\n",
-			device, entry->memdesc.gpuaddr, timestamp);
-	(void)type; /* unref. For now just use EOP timestamp */
-
-	/* move the entry from list to free_list */
-	list_del(&entry->list);
-	entry->list.prev = 0;
-	list_add_tail(&entry->free_list, &rb->memqueue);
-	entry->free_timestamp = timestamp;
 
 	return 0;
 }

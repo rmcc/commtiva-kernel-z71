@@ -65,7 +65,7 @@
 #include "kgsl_log.h"
 #include "kgsl_pm4types.h"
 
-
+/* #define DISABLE_SHADOW_WRITES */
 /*
 *
 *  Memory Map for Register, Constant & Instruction Shadow, and Command Buffers
@@ -114,7 +114,11 @@
 
 #define ALU_CONSTANTS	2048	/* DWORDS */
 #define NUM_REGISTERS	1024	/* DWORDS */
-#define CMD_BUFFER_LEN	1024	/* DWORDS */
+#ifdef DISABLE_SHADOW_WRITES
+#define CMD_BUFFER_LEN  9216	/* DWORDS */
+#else
+#define CMD_BUFFER_LEN	3072	/* DWORDS */
+#endif
 #define TEX_CONSTANTS		(32*6)	/* DWORDS */
 #define BOOL_CONSTANTS		8	/* DWORDS */
 #define LOOP_CONSTANTS		56	/* DWORDS */
@@ -132,7 +136,11 @@
 
 #define ALU_SHADOW_SIZE		LCC_SHADOW_SIZE	/* 8KB */
 #define REG_SHADOW_SIZE		0x1000	/* 4KB */
-#define CMD_BUFFER_SIZE		0x1000 /* 4KB */
+#ifdef DISABLE_SHADOW_WRITES
+#define CMD_BUFFER_SIZE     0x9000	/* 36KB */
+#else
+#define CMD_BUFFER_SIZE		0x3000	/* 12KB */
+#endif
 #define TEX_SHADOW_SIZE		(TEX_CONSTANTS*4)	/* 768 bytes */
 #define SHADER_SHADOW_SIZE      (SHADER_INSTRUCT*12)	/* 6KB */
 
@@ -143,23 +151,6 @@
 
 #define CONTEXT_SIZE		(SHADER_OFFSET + 3 * SHADER_SHADOW_SIZE)
 
-/* Flags */
-#define CTXT_FLAGS_NOT_IN_USE		0x00000000
-#define CTXT_FLAGS_IN_USE		0x00000001
-
-/* state shadow memory allocated */
-#define CTXT_FLAGS_STATE_SHADOW		0x00000010
-/* gmem shadow memory allocated */
-#define CTXT_FLAGS_GMEM_SHADOW		0x00000100
-/* gmem must be copied to shadow */
-#define CTXT_FLAGS_GMEM_SAVE		0x00000200
-/* gmem can be restored from shadow */
-#define CTXT_FLAGS_GMEM_RESTORE		0x00000400
-/* shader must be copied to shadow */
-#define CTXT_FLAGS_SHADER_SAVE		0x00002000
-/* shader can be restored from shadow */
-#define CTXT_FLAGS_SHADER_RESTORE	0x00004000
-
 /* temporary work structure */
 struct tmp_ctx {
 	unsigned int *start;	/* Command & Vertex buffer start */
@@ -168,8 +159,6 @@ struct tmp_ctx {
 	/* address of buffers, needed when creating IB1 command buffers. */
 	uint32_t bool_shadow;	/* bool constants */
 	uint32_t loop_shadow;	/* loop constants */
-	uint32_t quad_vertices;	/* vertices of quad */
-	uint32_t quad_texcoord;	/* tex-coordinates of quad */
 
 #if defined(PM4_IM_STORE)
 	uint32_t shader_shared;	/* shared shader instruction shadow */
@@ -180,19 +169,12 @@ struct tmp_ctx {
 	/* Addresses in command buffer where separately handled registers
 	 * are saved
 	 */
-	uint32_t reg_values[2];
+	uint32_t reg_values[4];
+	uint32_t chicken_restore;
 
 	uint32_t gmem_base;	/* Base gpu address of GMEM */
 
-	/* 256 KB GMEM surface = 4 bytes-per-pixel x 256 pixels/row x 256 rows.
-	 * width & height must be a multiples of 32, in case tiled textures are
-	 * used.
-	 */
-	int gmem_size;		/* Size of surface used to store GMEM */
-	int width;		/* Width of surface used to store GMEM */
-	int height;		/* Height of surface used to store GMEM */
-	int pitch;		/* Pitch of surface used to store GMEM */
-} ctx_t;
+};
 
 /* Helper function to calculate IEEE754 single precision float values
 *  without FPU
@@ -325,12 +307,12 @@ static unsigned int sys2gmem_tex_const[SYS2GMEM_TEX_CONST_LEN] = {
 	/* Texture, FormatXYZW=Unsigned, ClampXYZ=Wrap/Repeat,
 	 * RFMode=ZeroClamp-1, Dim=1:2d
 	 */
-	0x00100002 | 0 << 31,	/* Pitch = TBD */
+	0x00000002,		/* Pitch = TBD */
 
 	/* Format=6:8888_WZYX, EndianSwap=0:None, ReqSize=0:256bit, DimHi=0,
 	 * NearestClamp=1:OGL Mode
 	 */
-	0x00000806,		/* Address[31:12] = TBD */
+	0x00000800,		/* Address[31:12] = TBD */
 
 	/* Width, Height, EndianSwap=0:None */
 	0,			/* Width & Height = TBD */
@@ -343,7 +325,7 @@ static unsigned int sys2gmem_tex_const[SYS2GMEM_TEX_CONST_LEN] = {
 	/* VolMag=VolMin=0:Point, MinMipLvl=0, MaxMipLvl=1, LodBiasH=V=0,
 	 * Dim3d=0
 	 */
-	1 << 6,
+	0,
 
 	/* BorderColor=0:ABGRBlack, ForceBC=0:diable, TriJuice=0, Aniso=0,
 	 * Dim=1:2d, MipPacking=0
@@ -364,10 +346,44 @@ static unsigned int gmem_copy_quad[QUAD_LEN] = {
 #define TEXCOORD_LEN			8
 
 static unsigned int gmem_copy_texcoord[TEXCOORD_LEN] = {
-	0x00000000, 0x3f000000,
-	0x3f000000, 0x3f000000,
+	0x00000000, 0x3f800000,
+	0x3f800000, 0x3f800000,
 	0x00000000, 0x00000000,
-	0x3f000000, 0x00000000
+	0x3f800000, 0x00000000
+};
+
+#define NUM_COLOR_FORMATS   13
+
+static enum SURFACEFORMAT surface_format_table[NUM_COLOR_FORMATS] = {
+	FMT_4_4_4_4,		/* COLORX_4_4_4_4 */
+	FMT_1_5_5_5,		/* COLORX_1_5_5_5 */
+	FMT_5_6_5,		/* COLORX_5_6_5 */
+	FMT_8,			/* COLORX_8 */
+	FMT_8_8,		/* COLORX_8_8 */
+	FMT_8_8_8_8,		/* COLORX_8_8_8_8 */
+	FMT_8_8_8_8,		/* COLORX_S8_8_8_8 */
+	FMT_16_FLOAT,		/* COLORX_16_FLOAT */
+	FMT_16_16_FLOAT,	/* COLORX_16_16_FLOAT */
+	FMT_16_16_16_16_FLOAT,	/* COLORX_16_16_16_16_FLOAT */
+	FMT_32_FLOAT,		/* COLORX_32_FLOAT */
+	FMT_32_32_FLOAT,	/* COLORX_32_32_FLOAT */
+	FMT_32_32_32_32_FLOAT,	/* COLORX_32_32_32_32_FLOAT */
+};
+
+static unsigned int format2bytesperpixel[NUM_COLOR_FORMATS] = {
+	2,			/* COLORX_4_4_4_4 */
+	2,			/* COLORX_1_5_5_5 */
+	2,			/* COLORX_5_6_5 */
+	1,			/* COLORX_8 */
+	2,			/* COLORX_8_8 8*/
+	4,			/* COLORX_8_8_8_8 */
+	4,			/* COLORX_S8_8_8_8 */
+	2,			/* COLORX_16_FLOAT */
+	4,			/* COLORX_16_16_FLOAT */
+	8,			/* COLORX_16_16_16_16_FLOAT */
+	4,			/* COLORX_32_FLOAT */
+	8,			/* COLORX_32_32_FLOAT */
+	16,			/* COLORX_32_32_32_32_FLOAT */
 };
 
 /* shader linkage info */
@@ -377,10 +393,11 @@ static unsigned int gmem_copy_texcoord[TEXCOORD_LEN] = {
 #define PM4_REG(reg)		((0x4 << 16) | (GSL_HAL_SUBBLOCK_OFFSET(reg)))
 
 /* functions */
-static void config_gmemsize(struct tmp_ctx *ctx, int gmem_size)
+static void config_gmemsize(struct gmem_shadow_t *shadow, int gmem_size)
 {
 	int w = 64, h = 64;	/* 16KB surface, minimum */
 
+	shadow->format = COLORX_8_8_8_8;
 	/* convert from bytes to 32-bit words */
 	gmem_size = (gmem_size + 3) / 4;
 
@@ -391,11 +408,12 @@ static void config_gmemsize(struct tmp_ctx *ctx, int gmem_size)
 		else
 			h *= 2;
 
-	ctx->width = w;
-	ctx->pitch = w;
-	ctx->height = h;
+	shadow->width = w;
+	shadow->pitch = w;
+	shadow->height = h;
+	shadow->gmem_pitch = shadow->pitch;
 
-	ctx->gmem_size = ctx->pitch * ctx->height * 4;
+	shadow->size = shadow->pitch * shadow->height * 4;
 }
 
 static unsigned int gpuaddr(unsigned int *cmd, struct kgsl_memdesc *memdesc)
@@ -441,20 +459,124 @@ static unsigned int *reg_to_mem(unsigned int *cmds, uint32_t dst,
 	return cmds;
 }
 
+#ifdef DISABLE_SHADOW_WRITES
+
+static void build_reg_to_mem_range(unsigned int start, unsigned int end,
+				   unsigned int **cmd,
+				   struct kgsl_drawctxt *drawctxt)
+{
+	unsigned int i = start;
+
+	for (i = start; i <= end; i++) {
+		*(*cmd)++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
+		*(*cmd)++ = i | (1 << 30);
+		*(*cmd)++ =
+		    ((drawctxt->gpustate.gpuaddr + REG_OFFSET) & 0xFFFFE000) +
+		    (i - 0x2000) * 4;
+	}
+}
+
+#endif
+
+/* chicken restore */
+static unsigned int *build_chicken_restore_cmds(struct kgsl_drawctxt *drawctxt,
+						struct tmp_ctx *ctx)
+{
+	unsigned int *start = ctx->cmd;
+	unsigned int *cmds = start;
+
+	*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0;
+
+	*cmds++ = pm4_type0_packet(REG_TP0_CHICKEN, 1);
+	ctx->chicken_restore = gpuaddr(cmds, &drawctxt->gpustate);
+	*cmds++ = 0x00000000;
+
+	/* create indirect buffer command for above command sequence */
+	create_ib1(drawctxt, drawctxt->chicken_restore, start, cmds);
+
+	return cmds;
+}
+
 /* save h/w regs, alu constants, texture contants, etc. ...
 *  requires: bool_shadow_gpuaddr, loop_shadow_gpuaddr
 */
-static void build_regsave_cmds(struct kgsl_drawctxt *drawctxt,
-				struct tmp_ctx *ctx)
+static void build_regsave_cmds(struct kgsl_device *device,
+			       struct kgsl_drawctxt *drawctxt,
+			       struct tmp_ctx *ctx)
 {
 	unsigned int *start = ctx->cmd;
 	unsigned int *cmd = start;
+	unsigned int pm_override1;
+
+	kgsl_yamato_regread(device, REG_RBBM_PM_OVERRIDE1, &pm_override1);
+
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0;
+
+#ifdef DISABLE_SHADOW_WRITES
+	/* Make sure the HW context has the correct register values
+	 * before reading them. */
+	*cmd++ = pm4_type3_packet(PM4_CONTEXT_UPDATE, 1);
+	*cmd++ = 0;
+#endif
+
+	/* Enable clock override for REG_FIFOS_SCLK */
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmd++ = pm_override1 | (1 << 6);
+
+#ifdef DISABLE_SHADOW_WRITES
+	/* Write HW registers into shadow */
+	build_reg_to_mem_range(REG_RB_SURFACE_INFO, REG_RB_DEPTH_INFO, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_COHER_DEST_BASE_0,
+			       REG_PA_SC_SCREEN_SCISSOR_BR, &cmd, drawctxt);
+	build_reg_to_mem_range(REG_PA_SC_WINDOW_OFFSET,
+			       REG_PA_SC_WINDOW_SCISSOR_BR, &cmd, drawctxt);
+	build_reg_to_mem_range(REG_VGT_MAX_VTX_INDX, REG_RB_FOG_COLOR, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_RB_STENCILREFMASK_BF,
+			       REG_PA_CL_VPORT_ZOFFSET, &cmd, drawctxt);
+	build_reg_to_mem_range(REG_SQ_PROGRAM_CNTL, REG_SQ_WRAPPING_1, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_RB_DEPTHCONTROL, REG_RB_MODECONTROL, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_PA_SU_POINT_SIZE, REG_PA_SC_LINE_STIPPLE,
+			       &cmd, drawctxt);
+	build_reg_to_mem_range(REG_PA_SC_VIZ_QUERY, REG_PA_SC_VIZ_QUERY, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_PA_SC_LINE_CNTL, REG_SQ_PS_CONST, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_PA_SC_AA_MASK, REG_PA_SC_AA_MASK, &cmd,
+			       drawctxt);
+	build_reg_to_mem_range(REG_VGT_VERTEX_REUSE_BLOCK_CNTL,
+			       REG_RB_DEPTH_CLEAR, &cmd, drawctxt);
+	build_reg_to_mem_range(REG_RB_SAMPLE_COUNT_CTL, REG_RB_COLOR_DEST_MASK,
+			       &cmd, drawctxt);
+	build_reg_to_mem_range(REG_PA_SU_POLY_OFFSET_FRONT_SCALE,
+			       REG_PA_SU_POLY_OFFSET_BACK_OFFSET, &cmd,
+			       drawctxt);
+
+	/* Copy ALU constants */
+	cmd =
+	    reg_to_mem(cmd, (drawctxt->gpustate.gpuaddr) & 0xFFFFE000,
+		       REG_SQ_CONSTANT_0, ALU_CONSTANTS);
+
+	/* Copy Tex constants */
+	cmd =
+	    reg_to_mem(cmd,
+		       (drawctxt->gpustate.gpuaddr + TEX_OFFSET) & 0xFFFFE000,
+		       REG_SQ_FETCH_0, TEX_CONSTANTS);
+#else
 
 	/* Insert a wait for idle packet before reading the registers.
-	 * This is to fix a hang/reset seen during stress testing.
-	 */
+	 * This is to fix a hang/reset seen during stress testing.  In this
+	 * hang, CP encountered a timeout reading SQ's boolean constant
+	 * register. There is logic in the HW that blocks reading of this
+	 * register when the SQ block is not idle, which we believe is
+	 * contributing to the hang.*/
 	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
-	*cmd++ = 0x0;
+	*cmd++ = 0;
 
 	/* H/w registers are already shadowed; just need to disable shadowing
 	 * to prevent corruption.
@@ -479,15 +601,24 @@ static void build_regsave_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmd++ = (drawctxt->gpustate.gpuaddr + TEX_OFFSET) & 0xFFFFE000;
 	*cmd++ = 1 << 16;	/* Tex, start=0 */
 	*cmd++ = 0x0;		/* count = 0 */
+#endif
 
 	/* Need to handle some of the registers separately */
 	*cmd++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
-	*cmd++ = REG_PA_SU_FACE_DATA;
+	*cmd++ = REG_SQ_GPR_MANAGEMENT;
 	*cmd++ = ctx->reg_values[0];
 
 	*cmd++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
-	*cmd++ = REG_SQ_GPR_MANAGEMENT;
+	*cmd++ = REG_TP0_CHICKEN;
 	*cmd++ = ctx->reg_values[1];
+
+	*cmd++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
+	*cmd++ = REG_RBBM_PM_OVERRIDE1;
+	*cmd++ = ctx->reg_values[2];
+
+	*cmd++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
+	*cmd++ = REG_RBBM_PM_OVERRIDE2;
+	*cmd++ = ctx->reg_values[3];
 
 	/* Copy Boolean constants */
 	cmd = reg_to_mem(cmd, ctx->bool_shadow, REG_SQ_CF_BOOLEANS,
@@ -496,19 +627,57 @@ static void build_regsave_cmds(struct kgsl_drawctxt *drawctxt,
 	/* Copy Loop constants */
 	cmd = reg_to_mem(cmd, ctx->loop_shadow, REG_SQ_CF_LOOP, LOOP_CONSTANTS);
 
+	/* Restore RBBM_PM_OVERRIDE1 */
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0;
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmd++ = pm_override1;
+
 	/* create indirect buffer command for above command sequence */
 	create_ib1(drawctxt, drawctxt->reg_save, start, cmd);
 
 	ctx->cmd = cmd;
 }
 
-
 /*copy colour, depth, & stencil buffers from graphics memory to system memory*/
-static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
-				struct tmp_ctx *ctx)
+static unsigned int *build_gmem2sys_cmds(struct kgsl_device *device,
+					 struct kgsl_drawctxt *drawctxt,
+					 struct tmp_ctx *ctx,
+					 struct gmem_shadow_t *shadow)
 {
-	unsigned int *start = ctx->cmd;
-	unsigned int *cmds = start;
+	unsigned int *cmds = shadow->gmem_save_commands;
+	unsigned int *start = cmds;
+	unsigned int pm_override1;
+	/* Calculate the new offset based on the adjusted base */
+	unsigned int bytesperpixel = format2bytesperpixel[shadow->format];
+	unsigned int addr =
+	    (shadow->gmemshadow.gpuaddr + shadow->offset * bytesperpixel);
+	unsigned int offset = (addr - (addr & 0xfffff000)) / bytesperpixel;
+
+	kgsl_yamato_regread(device, REG_RBBM_PM_OVERRIDE1, &pm_override1);
+
+	/* Store TP0_CHICKEN register */
+	*cmds++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
+	*cmds++ = REG_TP0_CHICKEN;
+	if (ctx)
+		*cmds++ = ctx->chicken_restore;
+	else
+		cmds++;
+
+	*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0;
+
+	/* Enable clock override for REG_FIFOS_SCLK */
+	*cmds++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmds++ = pm_override1 | (1 << 6);
+
+	/* Set TP0_CHICKEN to zero */
+	*cmds++ = pm4_type0_packet(REG_TP0_CHICKEN, 1);
+	*cmds++ = 0x00000000;
+
+	/* Set PA_SC_AA_CONFIG to 0 */
+	*cmds++ = pm4_type0_packet(REG_PA_SC_AA_CONFIG, 1);
+	*cmds++ = 0x00000000;
 
 	/* program shader */
 
@@ -517,18 +686,19 @@ static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmds++ = (0x1 << 16) | SHADER_CONST_ADDR;
 	*cmds++ = 0;
 	/* valid(?) vtx constant flag & addr */
-	*cmds++ = ctx->quad_vertices | 0x3;
+	*cmds++ = shadow->quad_vertices.gpuaddr | 0x3;
 	/* limit = 12 dwords */
 	*cmds++ = 0x00000030;
 
-	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
-	*cmds++ = PM4_REG(REG_VGT_INDX_OFFSET);
-	*cmds++ = 0x00000000;
+	/* Invalidate L2 cache to make sure vertices are updated */
+	*cmds++ = pm4_type0_packet(REG_TC_CNTL_STATUS, 1);
+	*cmds++ = 0x1;
 
-	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 4);
 	*cmds++ = PM4_REG(REG_VGT_MAX_VTX_INDX);
 	*cmds++ = 0x00ffffff;	/* REG_VGT_MAX_VTX_INDX */
 	*cmds++ = 0x0;		/* REG_VGT_MIN_VTX_INDX */
+	*cmds++ = 0x00000000;	/* REG_VGT_INDX_OFFSET */
 
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_PA_SC_AA_MASK);
@@ -555,18 +725,26 @@ static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
 	/* disable X/Y/Z transforms, X/Y/Z are premultiplied by W */
 	*cmds++ = 0x00000b00;
 
-	/* change colour buffer to RGBA8888, MSAA = 1, and matching pitch */
+	/* program surface info */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_RB_SURFACE_INFO);
-	*cmds++ = ctx->pitch;	/* pitch, MSAA = 1 */
+	*cmds++ = shadow->gmem_pitch;	/* pitch, MSAA = 1 */
 
 	/* RB_COLOR_INFO Endian=none, Linear, Format=RGBA8888, Swap=0,
 	 *                Base=gmem_base
 	 */
 	/* gmem base assumed 4K aligned. */
-	BUG_ON(ctx->gmem_base & 0xFFF);
-	*cmds++ = (COLORX_8_8_8_8 << RB_COLOR_INFO__COLOR_FORMAT__SHIFT) |
-	    ctx->gmem_base;
+	if (ctx) {
+		BUG_ON(ctx->gmem_base & 0xFFF);
+		*cmds++ =
+		    (shadow->
+		     format << RB_COLOR_INFO__COLOR_FORMAT__SHIFT) | ctx->
+		    gmem_base;
+	} else {
+		unsigned int temp = *cmds;
+		*cmds++ = (temp & ~RB_COLOR_INFO__COLOR_FORMAT_MASK) |
+			(shadow->format << RB_COLOR_INFO__COLOR_FORMAT__SHIFT);
+	}
 
 	/* disable Z */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
@@ -582,34 +760,20 @@ static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmds++ = PM4_REG(REG_PA_SU_SC_MODE_CNTL);
 	*cmds++ = 0x00080240;
 
-	/* set the scissor to the extents of the draw surface */
+	/* Use maximum scissor values -- quad vertices already have the
+	 * correct bounds */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_PA_SC_SCREEN_SCISSOR_TL);
 	*cmds++ = (0 << 16) | 0;
-	*cmds++ = (ctx->height << 16) | ctx->width;
+	*cmds++ = (0x1fff << 16) | (0x1fff);
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_PA_SC_WINDOW_SCISSOR_TL);
 	*cmds++ = (unsigned int)((1U << 31) | (0 << 16) | 0);
-	*cmds++ = (ctx->height << 16) | ctx->width;
-
-	/* set the viewport to the extents of the draw surface */
-	{
-		unsigned int xscale = uint2float(ctx->width / 2);
-		unsigned int xoffset = xscale;
-		unsigned int yscale = uint2float(-ctx->height / 2);
-		unsigned int yoffset = uint2float(ctx->height / 2);
-
-		*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 5);
-		*cmds++ = PM4_REG(REG_PA_CL_VPORT_XSCALE);
-		*cmds++ = xscale;
-		*cmds++ = xoffset;
-		*cmds++ = yscale;
-		*cmds++ = yoffset;
-	}
+	*cmds++ = (0x1fff << 16) | (0x1fff);
 
 	/* load the viewport so that z scale = clear depth and
-	*  z offset = 0.0f
-	*/
+	 *  z offset = 0.0f
+	 */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_PA_CL_VPORT_ZSCALE);
 	*cmds++ = 0xbf800000;	/* -1.0f */
@@ -623,14 +787,17 @@ static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 6);
 	*cmds++ = PM4_REG(REG_RB_COPY_CONTROL);
 	*cmds++ = 0;		/* RB_COPY_CONTROL */
-	*cmds++ = drawctxt->gmemshadow.gpuaddr;	/* RB_COPY_DEST_BASE */
-	*cmds++ = ctx->pitch >> 5;	/* RB_COPY_DEST_PITCH */
+	*cmds++ = addr & 0xfffff000;	/* RB_COPY_DEST_BASE */
+	*cmds++ = shadow->pitch >> 5;	/* RB_COPY_DEST_PITCH */
 
 	/* Endian=none, Linear, Format=RGBA8888,Swap=0,!Dither,
 	 *  MaskWrite:R=G=B=A=1
 	 */
-	*cmds++ = 0x0003c058;
-	*cmds++ = 0;		/* RB_COPY_DEST_PIXEL_OFFSET */
+	*cmds++ = 0x0003c008 |
+	    (shadow->format << RB_COPY_DEST_INFO__COPY_DEST_FORMAT__SHIFT);
+	/* Make sure we stay in offsetx field. */
+	BUG_ON(offset & 0xfffff000);
+	*cmds++ = offset;
 
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_RB_MODECONTROL);
@@ -642,21 +809,53 @@ static void build_gmem2sys_cmds(struct kgsl_drawctxt *drawctxt,
 	/* PrimType=RectList, NumIndices=3, SrcSel=AutoIndex */
 	*cmds++ = 0x00030088;
 
+	/* Restore RBBM_PM_OVERRIDE1 */
+	*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0;
+	*cmds++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmds++ = pm_override1;
 	/* create indirect buffer command for above command sequence */
-	create_ib1(drawctxt, drawctxt->gmem_save, start, cmds);
+	create_ib1(drawctxt, shadow->gmem_save, start, cmds);
 
-	ctx->cmd = cmds;
+	return cmds;
 }
 
 /* context restore */
 
 /*copy colour, depth, & stencil buffers from system memory to graphics memory*/
-static void build_sys2gmem_cmds(struct kgsl_drawctxt *drawctxt,
-				struct tmp_ctx *ctx)
+static unsigned int *build_sys2gmem_cmds(struct kgsl_device *device,
+					 struct kgsl_drawctxt *drawctxt,
+					 struct tmp_ctx *ctx,
+					 struct gmem_shadow_t *shadow)
 {
-	unsigned int *start = ctx->cmd;
-	unsigned int *cmds = start;
+	unsigned int *cmds = shadow->gmem_restore_commands;
+	unsigned int *start = cmds;
+	unsigned int pm_override1;
 
+	kgsl_yamato_regread(device, REG_RBBM_PM_OVERRIDE1, &pm_override1);
+
+	/* Store TP0_CHICKEN register */
+	*cmds++ = pm4_type3_packet(PM4_REG_TO_MEM, 2);
+	*cmds++ = REG_TP0_CHICKEN;
+	if (ctx)
+		*cmds++ = ctx->chicken_restore;
+	else
+		cmds++;
+
+	*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0;
+
+	/* Enable clock override for REG_FIFOS_SCLK */
+	*cmds++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmds++ = pm_override1 | (1 << 6);
+
+	/* Set TP0_CHICKEN to zero */
+	*cmds++ = pm4_type0_packet(REG_TP0_CHICKEN, 1);
+	*cmds++ = 0x00000000;
+
+	/* Set PA_SC_AA_CONFIG to 0 */
+	*cmds++ = pm4_type0_packet(REG_PA_SC_AA_CONFIG, 1);
+	*cmds++ = 0x00000000;
 	/* shader constants */
 
 	/* vertex buffer constants */
@@ -664,17 +863,20 @@ static void build_sys2gmem_cmds(struct kgsl_drawctxt *drawctxt,
 
 	*cmds++ = (0x1 << 16) | (9 * 6);
 	/* valid(?) vtx constant flag & addr */
-	*cmds++ = ctx->quad_vertices | 0x3;
+	*cmds++ = shadow->quad_vertices.gpuaddr | 0x3;
 	/* limit = 12 dwords */
 	*cmds++ = 0x00000030;
 	/* valid(?) vtx constant flag & addr */
-	*cmds++ = ctx->quad_texcoord | 0x3;
+	*cmds++ = shadow->quad_texcoords.gpuaddr | 0x3;
 	/* limit = 8 dwords */
 	*cmds++ = 0x00000020;
 	*cmds++ = 0;
 	*cmds++ = 0;
 
-	/* load the patched vertex shader stream */
+	/* Invalidate L2 cache to make sure vertices are updated */
+	*cmds++ = pm4_type0_packet(REG_TC_CNTL_STATUS, 1);
+	*cmds++ = 0x1;
+
 	cmds = program_shader(cmds, 0, sys2gmem_vtx_pgm, SYS2GMEM_VTX_PGM_LEN);
 
 	/* Load the patched fragment shader stream */
@@ -687,6 +889,10 @@ static void build_sys2gmem_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmds++ = 0x10030002;
 	*cmds++ = 0x00000008;
 
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+	*cmds++ = PM4_REG(REG_PA_SC_AA_MASK);
+	*cmds++ = 0x0000ffff;	/* REG_PA_SC_AA_MASK */
+
 	/* PA_SC_VIZ_QUERY */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_PA_SC_VIZ_QUERY);
@@ -697,72 +903,88 @@ static void build_sys2gmem_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmds++ = PM4_REG(REG_RB_COLORCONTROL);
 	*cmds++ = 0x00000c20;
 
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 4);
+	*cmds++ = PM4_REG(REG_VGT_MAX_VTX_INDX);
+	*cmds++ = 0x00ffffff;	/* mmVGT_MAX_VTX_INDX */
+	*cmds++ = 0x0;		/* mmVGT_MIN_VTX_INDX */
+	*cmds++ = 0x00000000;	/* mmVGT_INDX_OFFSET */
+
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
+	*cmds++ = PM4_REG(REG_VGT_VERTEX_REUSE_BLOCK_CNTL);
+	*cmds++ = 0x00000002;	/* mmVGT_VERTEX_REUSE_BLOCK_CNTL */
+	*cmds++ = 0x00000002;	/* mmVGT_OUT_DEALLOC_CNTL */
+
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+	*cmds++ = PM4_REG(REG_SQ_INTERPOLATOR_CNTL);
+	//*cmds++ = 0x0000ffff; //mmSQ_INTERPOLATOR_CNTL
+	*cmds++ = 0xffffffff;	//mmSQ_INTERPOLATOR_CNTL
+
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+	*cmds++ = PM4_REG(REG_PA_SC_AA_CONFIG);
+	*cmds++ = 0x00000000;	/* REG_PA_SC_AA_CONFIG */
+
+	/* set REG_PA_SU_SC_MODE_CNTL
+	 * Front_ptype = draw triangles
+	 * Back_ptype = draw triangles
+	 * Provoking vertex = last
+	 */
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+	*cmds++ = PM4_REG(REG_PA_SU_SC_MODE_CNTL);
+	*cmds++ = 0x00080240;
+
 	/* texture constants */
 	*cmds++ =
 	    pm4_type3_packet(PM4_SET_CONSTANT, (SYS2GMEM_TEX_CONST_LEN + 1));
 	*cmds++ = (0x1 << 16) | (0 * 6);
 	memcpy(cmds, sys2gmem_tex_const, SYS2GMEM_TEX_CONST_LEN << 2);
-	cmds[0] |= (ctx->pitch >> 5) << 22;
-	cmds[1] |= drawctxt->gmemshadow.gpuaddr;
-	cmds[2] |= (ctx->width - 1) | (ctx->height - 1) << 13;
-	cmds[5] |= drawctxt->gmemshadow.gpuaddr;
+	cmds[0] |= (shadow->pitch >> 5) << 22;
+	cmds[1] |=
+	    shadow->gmemshadow.gpuaddr | surface_format_table[shadow->format];
+	cmds[2] |=
+	    (shadow->width + shadow->offset_x - 1) | (shadow->height +
+						      shadow->offset_y -
+						      1) << 13;
 	cmds += SYS2GMEM_TEX_CONST_LEN;
 
-	/* PA_CL_VTE_CNTL */
-	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
-	*cmds++ = PM4_REG(REG_PA_CL_VTE_CNTL);
-	/* disable X/Y/Z transforms, X/Y/Z are premultiplied by W */
-	*cmds++ = 0x00000b00;
-
-	/* change colour buffer to RGBA8888, MSAA = 1, and matching pitch */
+	/* program surface info */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_RB_SURFACE_INFO);
-	*cmds++ = ctx->pitch;	/* pitch, MSAA = 1 */
+	*cmds++ = shadow->gmem_pitch;	/* pitch, MSAA = 1 */
 
 	/* RB_COLOR_INFO Endian=none, Linear, Format=RGBA8888, Swap=0,
 	 *                Base=gmem_base
 	 */
-	*cmds++ = (COLORX_8_8_8_8 << RB_COLOR_INFO__COLOR_FORMAT__SHIFT) |
-	    ctx->gmem_base;
+	if (ctx)
+		*cmds++ =
+		    (shadow->
+		     format << RB_COLOR_INFO__COLOR_FORMAT__SHIFT) | ctx->
+		    gmem_base;
+	else {
+		unsigned int temp = *cmds;
+		*cmds++ = (temp & ~RB_COLOR_INFO__COLOR_FORMAT_MASK) |
+			(shadow->format << RB_COLOR_INFO__COLOR_FORMAT__SHIFT);
+	}
 
 	/* RB_DEPTHCONTROL */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
 	*cmds++ = PM4_REG(REG_RB_DEPTHCONTROL);
 	*cmds++ = 0;		/* disable Z */
 
-	/* set REG_PA_SU_SC_MODE_CNTL
-	 *              Front_ptype = draw triangles
-	 *              Back_ptype = draw triangles
-	 *              Provoking vertex = last
-	 */
-	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
-	*cmds++ = PM4_REG(REG_PA_SU_SC_MODE_CNTL);
-	*cmds++ = 0x00080240;
-
-	/* set the scissor to the extents of the draw surface */
+	/* Use maximum scissor values -- quad vertices already
+	 * have the correct bounds */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_PA_SC_SCREEN_SCISSOR_TL);
 	*cmds++ = (0 << 16) | 0;
-	*cmds++ = (ctx->height << 16) | ctx->width;
+	*cmds++ = ((0x1fff) << 16) | 0x1fff;
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
 	*cmds++ = PM4_REG(REG_PA_SC_WINDOW_SCISSOR_TL);
 	*cmds++ = (unsigned int)((1U << 31) | (0 << 16) | 0);
-	*cmds++ = (ctx->height << 16) | ctx->width;
+	*cmds++ = ((0x1fff) << 16) | 0x1fff;
 
-	/* set the viewport to the extents of the draw surface */
-	{
-		unsigned int xscale = uint2float(ctx->width / 2);
-		unsigned int xoffset = xscale;
-		unsigned int yscale = uint2float(-ctx->height / 2);
-		unsigned int yoffset = uint2float(ctx->height / 2);
-
-		*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 5);
-		*cmds++ = PM4_REG(REG_PA_CL_VPORT_XSCALE);
-		*cmds++ = xscale;
-		*cmds++ = xoffset;
-		*cmds++ = yscale;
-		*cmds++ = yoffset;
-	}
+	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+	*cmds++ = PM4_REG(REG_PA_CL_VTE_CNTL);
+	/* disable X/Y/Z transforms, X/Y/Z are premultiplied by W */
+	*cmds++ = 0x00000b00;
 
 	/*load the viewport so that z scale = clear depth and z offset = 0.0f */
 	*cmds++ = pm4_type3_packet(PM4_SET_CONSTANT, 3);
@@ -797,10 +1019,16 @@ static void build_sys2gmem_cmds(struct kgsl_drawctxt *drawctxt,
 	/* PrimType=RectList, NumIndices=3, SrcSel=AutoIndex */
 	*cmds++ = 0x00030088;
 
-	/* create indirect buffer command for above command sequence */
-	create_ib1(drawctxt, drawctxt->gmem_restore, start, cmds);
+	/* Restore RBBM_PM_OVERRIDE1 */
+	*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmds++ = 0;
+	*cmds++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmds++ = pm_override1;
 
-	ctx->cmd = cmds;
+	/* create indirect buffer command for above command sequence */
+	create_ib1(drawctxt, shadow->gmem_restore, start, cmds);
+
+	return cmds;
 }
 
 /* restore h/w regs, alu constants, texture constants, etc. ... */
@@ -812,22 +1040,32 @@ static unsigned *reg_range(unsigned int *cmd, unsigned int start,
 	return cmd;
 }
 
-static void build_regrestore_cmds(struct kgsl_drawctxt *drawctxt,
-					 struct tmp_ctx *ctx)
+static void build_regrestore_cmds(struct kgsl_device *device,
+				  struct kgsl_drawctxt *drawctxt,
+				  struct tmp_ctx *ctx)
 {
 	unsigned int *start = ctx->cmd;
 	unsigned int *cmd = start;
+	unsigned int pm_override1;
 
-	/*
-	   *cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
-	   *cmd++ = 0;
-	*/
+	kgsl_yamato_regread(device, REG_RBBM_PM_OVERRIDE1, &pm_override1);
 
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0;
+
+	/* Enable clock override for REG_FIFOS_SCLK */
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmd++ = pm_override1 | (1 << 6);
 
 	/* H/W Registers */
 	/* deferred pm4_type3_packet(PM4_LOAD_CONSTANT_CONTEXT, ???); */
 	cmd++;
+#ifdef DISABLE_SHADOW_WRITES
+	/* Force mismatch */
+	*cmd++ = ((drawctxt->gpustate.gpuaddr + REG_OFFSET) & 0xFFFFE000) | 1;
+#else
 	*cmd++ = (drawctxt->gpustate.gpuaddr + REG_OFFSET) & 0xFFFFE000;
+#endif
 
 	cmd = reg_range(cmd, REG_RB_SURFACE_INFO, REG_PA_SC_SCREEN_SCISSOR_BR);
 	cmd = reg_range(cmd, REG_PA_SC_WINDOW_OFFSET,
@@ -836,7 +1074,7 @@ static void build_regrestore_cmds(struct kgsl_drawctxt *drawctxt,
 	cmd = reg_range(cmd, REG_SQ_PROGRAM_CNTL, REG_SQ_WRAPPING_1);
 	cmd = reg_range(cmd, REG_RB_DEPTHCONTROL, REG_RB_MODECONTROL);
 	cmd = reg_range(cmd, REG_PA_SU_POINT_SIZE,
-			REG_PA_SC_VIZ_QUERY /*REG_VGT_ENHANCE */);
+			REG_PA_SC_VIZ_QUERY); /*REG_VGT_ENHANCE */
 	cmd = reg_range(cmd, REG_PA_SC_LINE_CNTL, REG_RB_COLOR_DEST_MASK);
 	cmd = reg_range(cmd, REG_PA_SU_POLY_OFFSET_FRONT_SCALE,
 			REG_PA_SU_POLY_OFFSET_BACK_OFFSET);
@@ -844,30 +1082,53 @@ static void build_regrestore_cmds(struct kgsl_drawctxt *drawctxt,
 	/* Now we know how many register blocks we have, we can compute command
 	 * length
 	 */
-	start[0] =
-	    pm4_type3_packet(PM4_LOAD_CONSTANT_CONTEXT, (cmd - start) - 1);
+	start[4] =
+	    pm4_type3_packet(PM4_LOAD_CONSTANT_CONTEXT, (cmd - start) - 5);
 	/* Enable shadowing for the entire register block. */
-	start[2] |= (1 << 24) | (4 << 16);
+#ifdef DISABLE_SHADOW_WRITES
+	start[6] |= (0 << 24) | (4 << 16);	/* Disable shadowing. */
+#else
+	start[6] |= (1 << 24) | (4 << 16);
+#endif
 
 	/* Need to handle some of the registers separately */
-	*cmd++ = pm4_type0_packet(REG_PA_SU_FACE_DATA, 1);
-	ctx->reg_values[0] = gpuaddr(cmd, &drawctxt->gpustate);
-	*cmd++ = 0;
-
 	*cmd++ = pm4_type0_packet(REG_SQ_GPR_MANAGEMENT, 1);
-	ctx->reg_values[1] = gpuaddr(cmd, &drawctxt->gpustate);
+	ctx->reg_values[0] = gpuaddr(cmd, &drawctxt->gpustate);
 	*cmd++ = 0x00040400;
+
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0;
+	*cmd++ = pm4_type0_packet(REG_TP0_CHICKEN, 1);
+	ctx->reg_values[1] = gpuaddr(cmd, &drawctxt->gpustate);
+	*cmd++ = 0x00000000;
+
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	ctx->reg_values[2] = gpuaddr(cmd, &drawctxt->gpustate);
+	*cmd++ = 0x00000000;
+
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE2, 1);
+	ctx->reg_values[3] = gpuaddr(cmd, &drawctxt->gpustate);
+	*cmd++ = 0x00000000;
 
 	/* ALU Constants */
 	*cmd++ = pm4_type3_packet(PM4_LOAD_CONSTANT_CONTEXT, 3);
 	*cmd++ = drawctxt->gpustate.gpuaddr & 0xFFFFE000;
+#ifdef DISABLE_SHADOW_WRITES
+	*cmd++ = (0 << 24) | (0 << 16) | 0;	/* Disable shadowing */
+#else
 	*cmd++ = (1 << 24) | (0 << 16) | 0;
+#endif
 	*cmd++ = ALU_CONSTANTS;
 
 	/* Texture Constants */
 	*cmd++ = pm4_type3_packet(PM4_LOAD_CONSTANT_CONTEXT, 3);
 	*cmd++ = (drawctxt->gpustate.gpuaddr + TEX_OFFSET) & 0xFFFFE000;
+#ifdef DISABLE_SHADOW_WRITES
+	/* Disable shadowing */
+	*cmd++ = (0 << 24) | (1 << 16) | 0;
+#else
 	*cmd++ = (1 << 24) | (1 << 16) | 0;
+#endif
 	*cmd++ = TEX_CONSTANTS;
 
 	/* Boolean Constants */
@@ -890,6 +1151,12 @@ static void build_regrestore_cmds(struct kgsl_drawctxt *drawctxt,
 	ctx->loop_shadow = gpuaddr(cmd, &drawctxt->gpustate);
 	cmd += LOOP_CONSTANTS;
 
+	/* Restore RBBM_PM_OVERRIDE1 */
+	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+	*cmd++ = 0;
+	*cmd++ = pm4_type0_packet(REG_RBBM_PM_OVERRIDE1, 1);
+	*cmd++ = pm_override1;
+
 	/* create indirect buffer command for above command sequence */
 	create_ib1(drawctxt, drawctxt->reg_restore, start, cmd);
 
@@ -897,43 +1164,59 @@ static void build_regrestore_cmds(struct kgsl_drawctxt *drawctxt,
 }
 
 /* quad for saving/restoring gmem */
+static void set_gmem_copy_quad(struct gmem_shadow_t *shadow)
+{
+	/* set vertex buffer values */
+	gmem_copy_quad[1] = uint2float(shadow->height + shadow->gmem_offset_y);
+	gmem_copy_quad[3] = uint2float(shadow->width + shadow->gmem_offset_x);
+	gmem_copy_quad[4] = uint2float(shadow->height + shadow->gmem_offset_y);
+	gmem_copy_quad[9] = uint2float(shadow->width + shadow->gmem_offset_x);
+
+	gmem_copy_quad[0] = uint2float(shadow->gmem_offset_x);
+	gmem_copy_quad[6] = uint2float(shadow->gmem_offset_x);
+	gmem_copy_quad[7] = uint2float(shadow->gmem_offset_y);
+	gmem_copy_quad[10] = uint2float(shadow->gmem_offset_y);
+
+	BUG_ON(shadow->offset_x);
+	BUG_ON(shadow->offset_y);
+
+	memcpy(shadow->quad_vertices.hostptr, gmem_copy_quad, QUAD_LEN << 2);
+
+	memcpy(shadow->quad_texcoords.hostptr, gmem_copy_texcoord,
+	       TEXCOORD_LEN << 2);
+}
+
+/* quad for saving/restoring gmem */
 static void build_quad_vtxbuff(struct kgsl_drawctxt *drawctxt,
-				struct tmp_ctx *ctx)
+		       struct tmp_ctx *ctx, struct gmem_shadow_t *shadow)
 {
 	unsigned int *cmd = ctx->cmd;
 
 	/* quad vertex buffer location (in GPU space) */
-	ctx->quad_vertices = gpuaddr(cmd, &drawctxt->gpustate);
+	shadow->quad_vertices.hostptr = cmd;
+	shadow->quad_vertices.gpuaddr = gpuaddr(cmd, &drawctxt->gpustate);
 
-	/* set vertex buffer values */
-	gmem_copy_quad[1] = uint2float(ctx->height);
-	gmem_copy_quad[3] = uint2float(ctx->width);
-	gmem_copy_quad[4] = uint2float(ctx->height);
-	gmem_copy_quad[9] = uint2float(ctx->width);
-
-	/* copy quad data to vertex buffer */
-	memcpy(cmd, gmem_copy_quad, QUAD_LEN << 2);
 	cmd += QUAD_LEN;
 
 	/* tex coord buffer location (in GPU space) */
-	ctx->quad_texcoord = gpuaddr(cmd, &drawctxt->gpustate);
+	shadow->quad_texcoords.hostptr = cmd;
+	shadow->quad_texcoords.gpuaddr = gpuaddr(cmd, &drawctxt->gpustate);
 
-	/* copy tex coord data to tex coord buffer */
-	memcpy(cmd, gmem_copy_texcoord, TEXCOORD_LEN << 2);
 	cmd += TEXCOORD_LEN;
+
+	set_gmem_copy_quad(shadow);
 
 	ctx->cmd = cmd;
 }
 
 static void
 build_shader_save_restore_cmds(struct kgsl_drawctxt *drawctxt,
-				struct tmp_ctx *ctx)
+			       struct tmp_ctx *ctx)
 {
 	unsigned int *cmd = ctx->cmd;
 	unsigned int *save, *restore, *fixup;
 #if defined(PM4_IM_STORE)
-	unsigned int *startSizeVtx, *startSizePix, *startSizeShared, *boolean1,
-	    *boolean2, *boolean3;
+	unsigned int *startSizeVtx, *startSizePix, *startSizeShared;
 #endif
 	unsigned int *partition1;
 	unsigned int *shaderBases, *partition2;
@@ -1015,17 +1298,7 @@ build_shader_save_restore_cmds(struct kgsl_drawctxt *drawctxt,
 
 	/* save shader partitioning and instructions */
 
-	/* Reserve space for boolean values used for conditional
-	 * shared shader saving.
-	 */
-	boolean1 = cmd++;
-	boolean2 = cmd++;
-	boolean3 = cmd++;
 	save = cmd;		/* start address */
-
-	*boolean1 = 1;
-	*boolean2 = 1;
-	*boolean3 = 0;
 
 	*cmd++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
 	*cmd++ = 0;
@@ -1045,65 +1318,11 @@ build_shader_save_restore_cmds(struct kgsl_drawctxt *drawctxt,
 
 #if defined(PM4_IM_STORE)
 
-	/* Write zero into boolean value */
-	*cmd++ = pm4_type3_packet(PM4_MEM_WRITE, 2);
-	*cmd++ = gpuaddr(boolean1, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;
-	/* Make sure the memory write has finished */
-	*cmd++ = pm4_type3_packet(PM4_WAIT_REG_MEM, 5);
-	*cmd++ = 0x00000013;	/* MEMSPACE = memory, FUNCTION = equal */
-	*cmd++ = gpuaddr(boolean1, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;	/* Reference */
-	*cmd++ = 0xffffffff;	/* Mask */
-	*cmd++ = 0x00000001;	/* Wait interval */
-
-	/* Write one into boolean value if vertex shader size is nonzero */
-	*cmd++ = pm4_type3_packet(PM4_COND_WRITE, 6);
-	/* Write mem, poll register, function = not equal */
-	*cmd++ = 0x00000104;
-	*cmd++ = REG_SQ_VS_PROGRAM;
-	*cmd++ = 0x00000000;
-	*cmd++ = 0x00fff000;
-	*cmd++ = gpuaddr(boolean1, &drawctxt->gpustate);
-	*cmd++ = 0x00000001;
-
-	/* Conditional execution based on the boolean value */
-	*cmd++ = pm4_type3_packet(PM4_COND_EXEC, 2);
-	*cmd++ = gpuaddr(boolean1, &drawctxt->gpustate) >> 2;
-	*cmd++ = 3;
-
 	/* store the vertex shader instructions */
 	*cmd++ = pm4_type3_packet(PM4_IM_STORE, 2);
 	*cmd++ = ctx->shader_vertex + 0x0;	/* 0x0 = Vertex */
 	/* TBD #1: start/size (to restore) */
 	*cmd++ = gpuaddr(startSizeVtx, &drawctxt->gpustate);
-
-	/* Write zero into boolean value */
-	*cmd++ = pm4_type3_packet(PM4_MEM_WRITE, 2);
-	*cmd++ = gpuaddr(boolean2, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;
-	/* Make sure the memory write has finished */
-	*cmd++ = pm4_type3_packet(PM4_WAIT_REG_MEM, 5);
-	*cmd++ = 0x00000013;	/* MEMSPACE = memory, FUNCTION = equal */
-	*cmd++ = gpuaddr(boolean2, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;	/* Reference */
-	*cmd++ = 0xffffffff;	/* Mask */
-	*cmd++ = 0x00000001;	/* Wait interval */
-
-	/* Write one into boolean value if pixel shader size is nonzero */
-	*cmd++ = pm4_type3_packet(PM4_COND_WRITE, 6);
-	/* Write mem, poll register, function = not equal */
-	*cmd++ = 0x00000104;
-	*cmd++ = REG_SQ_PS_PROGRAM;
-	*cmd++ = 0x00000000;
-	*cmd++ = 0x00fff000;
-	*cmd++ = gpuaddr(boolean2, &drawctxt->gpustate);
-	*cmd++ = 0x00000001;
-
-	/* Conditional execution based on the boolean value */
-	*cmd++ = pm4_type3_packet(PM4_COND_EXEC, 2);
-	*cmd++ = gpuaddr(boolean2, &drawctxt->gpustate) >> 2;
-	*cmd++ = 3;
 
 	/* store the pixel shader instructions */
 	*cmd++ = pm4_type3_packet(PM4_IM_STORE, 2);
@@ -1112,33 +1331,6 @@ build_shader_save_restore_cmds(struct kgsl_drawctxt *drawctxt,
 	*cmd++ = gpuaddr(startSizePix, &drawctxt->gpustate);
 
 	/* store the shared shader instructions if vertex base is nonzero */
-
-	/* Write zero into boolean value */
-	*cmd++ = pm4_type3_packet(PM4_MEM_WRITE, 2);
-	*cmd++ = gpuaddr(boolean3, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;
-	/* Make sure the memory write has finished */
-	*cmd++ = pm4_type3_packet(PM4_WAIT_REG_MEM, 5);
-	*cmd++ = 0x00000013;	/* MEMSPACE = memory, FUNCTION = equal */
-	*cmd++ = gpuaddr(boolean3, &drawctxt->gpustate);
-	*cmd++ = 0x00000000;	/* Reference */
-	*cmd++ = 0xffffffff;	/* Mask */
-	*cmd++ = 0x00000001;	/* Wait interval */
-
-	/* Write one into boolean value if vertex base is nonzero */
-	*cmd++ = pm4_type3_packet(PM4_COND_WRITE, 6);
-	/* Write mem, poll register, function = not equal */
-	*cmd++ = 0x00000104;
-	*cmd++ = REG_SQ_INST_STORE_MANAGMENT;
-	*cmd++ = 0x00000000;
-	*cmd++ = 0xffff0000;
-	*cmd++ = gpuaddr(boolean3, &drawctxt->gpustate);
-	*cmd++ = 0x00000001;
-
-	/* Conditional execution based on the boolean value */
-	*cmd++ = pm4_type3_packet(PM4_COND_EXEC, 2);
-	*cmd++ = gpuaddr(boolean3, &drawctxt->gpustate) >> 2;
-	*cmd++ = 3;
 
 	*cmd++ = pm4_type3_packet(PM4_IM_STORE, 2);
 	*cmd++ = ctx->shader_shared + 0x2;	/* 0x2 = Shared */
@@ -1159,8 +1351,7 @@ build_shader_save_restore_cmds(struct kgsl_drawctxt *drawctxt,
 /* create buffers for saving/restoring registers, constants, & GMEM */
 static int
 create_gpustate_shadow(struct kgsl_device *device,
-			struct kgsl_drawctxt *drawctxt,
-			struct tmp_ctx *ctx)
+		       struct kgsl_drawctxt *drawctxt, struct tmp_ctx *ctx)
 {
 	uint32_t flags;
 
@@ -1173,10 +1364,10 @@ create_gpustate_shadow(struct kgsl_device *device,
 		return -ENOMEM;
 
 	if (kgsl_mmu_map(drawctxt->pagetable,
-				drawctxt->gpustate.physaddr,
-				drawctxt->gpustate.size,
-				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
-				&drawctxt->gpustate.gpuaddr)) {
+			 drawctxt->gpustate.physaddr,
+			 drawctxt->gpustate.size,
+			 GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
+			 &drawctxt->gpustate.gpuaddr)) {
 		return -EINVAL;
 	}
 
@@ -1190,8 +1381,9 @@ create_gpustate_shadow(struct kgsl_device *device,
 	    = (unsigned int *)((char *)drawctxt->gpustate.hostptr + CMD_OFFSET);
 
 	/* build indirect command buffers to save & restore regs/constants */
-	build_regrestore_cmds(drawctxt, ctx);
-	build_regsave_cmds(drawctxt, ctx);
+	kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);
+	build_regrestore_cmds(device, drawctxt, ctx);
+	build_regsave_cmds(device, drawctxt, ctx);
 
 	build_shader_save_restore_cmds(drawctxt, ctx);
 
@@ -1203,21 +1395,23 @@ static int
 create_gmem_shadow(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 		   struct tmp_ctx *ctx)
 {
-	unsigned int flags = KGSL_MEMFLAGS_CONPHYS | KGSL_MEMFLAGS_ALIGN8K;
+	unsigned int flags = KGSL_MEMFLAGS_CONPHYS | KGSL_MEMFLAGS_ALIGN8K, i;
 
-	config_gmemsize(ctx, device->gmemspace.sizebytes);
+	config_gmemsize(&drawctxt->context_gmem_shadow,
+			device->gmemspace.sizebytes);
 	ctx->gmem_base = device->gmemspace.gpu_base;
 
 	/* allocate memory for GMEM shadow */
-	if (kgsl_sharedmem_alloc(flags, ctx->gmem_size,
-				 &drawctxt->gmemshadow) != 0)
+	if (kgsl_sharedmem_alloc(flags, drawctxt->context_gmem_shadow.size,
+				 &drawctxt->context_gmem_shadow.gmemshadow) !=
+	    0)
 		return -ENOMEM;
 
 	if (kgsl_mmu_map(drawctxt->pagetable,
-				drawctxt->gmemshadow.physaddr,
-				drawctxt->gmemshadow.size,
-				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
-				&drawctxt->gmemshadow.gpuaddr)) {
+			 drawctxt->context_gmem_shadow.gmemshadow.physaddr,
+			 drawctxt->context_gmem_shadow.gmemshadow.size,
+			 GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
+			 &drawctxt->context_gmem_shadow.gmemshadow.gpuaddr)) {
 		return -EINVAL;
 	}
 
@@ -1225,14 +1419,41 @@ create_gmem_shadow(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 	drawctxt->flags |= CTXT_FLAGS_GMEM_SHADOW | CTXT_FLAGS_GMEM_SAVE;
 
 	/* blank out gmem shadow. */
-	kgsl_sharedmem_set(&drawctxt->gmemshadow, 0, 0, ctx->gmem_size);
+	kgsl_sharedmem_set(&drawctxt->context_gmem_shadow.gmemshadow, 0, 0,
+			   drawctxt->context_gmem_shadow.size);
 
 	/* build quad vertex buffer */
-	build_quad_vtxbuff(drawctxt, ctx);
+	build_quad_vtxbuff(drawctxt, ctx, &drawctxt->context_gmem_shadow);
+
+	/* build TP0_CHICKEN register restore command buffer */
+	ctx->cmd = build_chicken_restore_cmds(drawctxt, ctx);
 
 	/* build indirect command buffers to save & restore gmem */
-	build_gmem2sys_cmds(drawctxt, ctx);
-	build_sys2gmem_cmds(drawctxt, ctx);
+	/* Idle because we are reading PM override registers */
+	kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);
+	drawctxt->context_gmem_shadow.gmem_save_commands = ctx->cmd;
+	ctx->cmd =
+	    build_gmem2sys_cmds(device, drawctxt, ctx,
+				&drawctxt->context_gmem_shadow);
+	drawctxt->context_gmem_shadow.gmem_restore_commands = ctx->cmd;
+	ctx->cmd =
+	    build_sys2gmem_cmds(device, drawctxt, ctx,
+				&drawctxt->context_gmem_shadow);
+
+	for (i = 0; i < KGSL_MAX_GMEM_SHADOW_BUFFERS; i++) {
+		build_quad_vtxbuff(drawctxt, ctx,
+				   &drawctxt->user_gmem_shadow[i]);
+
+		drawctxt->user_gmem_shadow[i].gmem_save_commands = ctx->cmd;
+		ctx->cmd =
+		    build_gmem2sys_cmds(device, drawctxt, ctx,
+					&drawctxt->user_gmem_shadow[i]);
+
+		drawctxt->user_gmem_shadow[i].gmem_restore_commands = ctx->cmd;
+		ctx->cmd =
+		    build_sys2gmem_cmds(device, drawctxt, ctx,
+					&drawctxt->user_gmem_shadow[i]);
+	}
 
 	return 0;
 }
@@ -1254,9 +1475,8 @@ int kgsl_drawctxt_close(struct kgsl_device *device)
 
 int
 kgsl_drawctxt_create(struct kgsl_device *device,
-			struct kgsl_pagetable *pagetable,
-			unsigned int flags,
-			unsigned int *drawctxt_id)
+		     struct kgsl_pagetable *pagetable,
+		     unsigned int flags, unsigned int *drawctxt_id)
 {
 	struct kgsl_drawctxt *drawctxt;
 	int index;
@@ -1295,6 +1515,10 @@ kgsl_drawctxt_create(struct kgsl_device *device,
 
 	if (!(flags & KGSL_CONTEXT_NO_GMEM_ALLOC)) {
 		/* create gmem shadow */
+		memset(drawctxt->user_gmem_shadow, 0,
+		       sizeof(struct gmem_shadow_t) *
+				KGSL_MAX_GMEM_SHADOW_BUFFERS);
+
 		if (create_gmem_shadow(device, drawctxt, &ctx)
 				!= 0) {
 			kgsl_drawctxt_destroy(device, index);
@@ -1346,14 +1570,17 @@ int kgsl_drawctxt_destroy(struct kgsl_device *device, unsigned int drawctxt_id)
 			kgsl_sharedmem_free(&drawctxt->gpustate);
 
 		/* destroy gmem shadow, if allocated */
-		if (drawctxt->gmemshadow.gpuaddr != 0)
+		if (drawctxt->context_gmem_shadow.gmemshadow.gpuaddr != 0)
 			kgsl_mmu_unmap(drawctxt->pagetable,
-					drawctxt->gmemshadow.gpuaddr,
-					drawctxt->gmemshadow.size);
-			drawctxt->gmemshadow.gpuaddr = 0;
+				       drawctxt->context_gmem_shadow.gmemshadow.
+				       gpuaddr,
+				       drawctxt->context_gmem_shadow.gmemshadow.
+				       size);
+		drawctxt->context_gmem_shadow.gmemshadow.gpuaddr = 0;
 
-		if (drawctxt->gmemshadow.physaddr != 0)
-			kgsl_sharedmem_free(&drawctxt->gmemshadow);
+		if (drawctxt->context_gmem_shadow.gmemshadow.physaddr != 0)
+			kgsl_sharedmem_free(&drawctxt->context_gmem_shadow.
+					    gmemshadow);
 
 		drawctxt->flags = CTXT_FLAGS_NOT_IN_USE;
 
@@ -1361,6 +1588,115 @@ int kgsl_drawctxt_destroy(struct kgsl_device *device, unsigned int drawctxt_id)
 		device->drawctxt_count--;
 	}
 	KGSL_CTXT_INFO("return\n");
+	return 0;
+}
+
+/* Binds a user specified buffer as GMEM shadow area */
+int kgsl_drawctxt_bind_gmem_shadow(struct kgsl_device *device,
+		unsigned int drawctxt_id,
+		const struct kgsl_gmem_desc *gmem_desc,
+		unsigned int shadow_x,
+		unsigned int shadow_y,
+		const struct kgsl_buffer_desc
+		*shadow_buffer, unsigned int buffer_id)
+{
+	struct kgsl_drawctxt *drawctxt;
+
+    /* Shadow struct being modified */
+    struct gmem_shadow_t *shadow;
+	unsigned int i;
+
+	if (device->flags & KGSL_FLAGS_SAFEMODE)
+		/* No need to bind any buffers since safe mode
+		* skips context switch */
+		return 0;
+
+	drawctxt = &device->drawctxt[drawctxt_id];
+
+	shadow = &drawctxt->user_gmem_shadow[buffer_id];
+
+	if (!shadow_buffer->enabled) {
+		/* Disable shadow */
+		KGSL_MEM_ERR("shadow is disabled in bind_gmem\n");
+		shadow->gmemshadow.size = 0;
+	} else {
+		/* Binding to a buffer */
+		unsigned int width, height;
+
+		BUG_ON(gmem_desc->x % 2); /* Needs to be a multiple of 2 */
+		BUG_ON(gmem_desc->y % 2);  /* Needs to be a multiple of 2 */
+		BUG_ON(gmem_desc->width % 2); /* Needs to be a multiple of 2 */
+		/* Needs to be a multiple of 2 */
+		BUG_ON(gmem_desc->height % 2);
+		/* Needs to be a multiple of 32 */
+		BUG_ON(gmem_desc->pitch % 32);
+
+		BUG_ON(shadow_x % 2);  /* Needs to be a multiple of 2 */
+		BUG_ON(shadow_y % 2);  /* Needs to be a multiple of 2 */
+
+		BUG_ON(shadow_buffer->format < COLORX_4_4_4_4);
+		BUG_ON(shadow_buffer->format > COLORX_32_32_32_32_FLOAT);
+		/* Needs to be a multiple of 32 */
+		BUG_ON(shadow_buffer->pitch % 32);
+
+		BUG_ON(buffer_id < 0);
+		BUG_ON(buffer_id > KGSL_MAX_GMEM_SHADOW_BUFFERS);
+
+		width = gmem_desc->width;
+		height = gmem_desc->height;
+
+		shadow->width = width;
+		shadow->format = shadow_buffer->format;
+
+		shadow->height = height;
+		shadow->pitch = shadow_buffer->pitch;
+
+		memset(&shadow->gmemshadow, 0, sizeof(struct kgsl_memdesc));
+		shadow->gmemshadow.hostptr = shadow_buffer->hostptr;
+		shadow->gmemshadow.gpuaddr = shadow_buffer->gpuaddr;
+		shadow->gmemshadow.physaddr = shadow->gmemshadow.gpuaddr;
+		shadow->gmemshadow.size = shadow_buffer->size;
+
+		/* Calculate offset */
+		shadow->offset =
+		    (int)(shadow_buffer->pitch) * ((int)shadow_y -
+						   (int)gmem_desc->y) +
+		    (int)shadow_x - (int)gmem_desc->x;
+
+		shadow->offset_x = shadow_x;
+		shadow->offset_y = shadow_y;
+		shadow->gmem_offset_x = gmem_desc->x;
+		shadow->gmem_offset_y = gmem_desc->y;
+
+		shadow->size = shadow->gmemshadow.size;
+
+		shadow->gmem_pitch = gmem_desc->pitch;
+
+		/* Modify quad vertices */
+		set_gmem_copy_quad(shadow);
+
+		/* Idle because we are reading PM override registers */
+		kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);
+
+		/* Modify commands */
+		build_gmem2sys_cmds(device, drawctxt, NULL, shadow);
+		build_sys2gmem_cmds(device, drawctxt, NULL, shadow);
+
+		/* Release context GMEM shadow if found */
+		if (drawctxt->context_gmem_shadow.gmemshadow.physaddr != 0) {
+			kgsl_sharedmem_free(&drawctxt->context_gmem_shadow.
+					    gmemshadow);
+			drawctxt->context_gmem_shadow.gmemshadow.physaddr = 0;
+		}
+	}
+
+	/* Enable GMEM shadowing if we have any of the user buffers enabled */
+	drawctxt->flags &= ~CTXT_FLAGS_GMEM_SHADOW;
+	for (i = 0; i < KGSL_MAX_GMEM_SHADOW_BUFFERS; i++) {
+		if (drawctxt->user_gmem_shadow[i].gmemshadow.size > 0)
+			drawctxt->flags |= CTXT_FLAGS_GMEM_SHADOW;
+	}
+
 	return 0;
 }
 
@@ -1382,23 +1718,20 @@ kgsl_drawctxt_switch(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 		KGSL_CTXT_INFO("active_ctxt flags %08x\n", active_ctxt->flags);
 		/* save registers and constants. */
 		KGSL_CTXT_DBG("save regs");
-		kgsl_ringbuffer_issuecmds(device, active_ctxt, 0,
-					  active_ctxt->reg_save, 3, flags);
+		kgsl_ringbuffer_issuecmds(device, 0, active_ctxt->reg_save, 3);
 
 		if (active_ctxt->flags & CTXT_FLAGS_SHADER_SAVE) {
 			/* save shader partitioning and instructions. */
 			KGSL_CTXT_DBG("save shader");
-			kgsl_ringbuffer_issuecmds(device, active_ctxt, 1,
-						  active_ctxt->shader_save, 3,
-						  flags);
+			kgsl_ringbuffer_issuecmds(device, 1,
+					active_ctxt->shader_save, 3);
 
 			/* fixup shader partitioning parameter for
 			 *  SET_SHADER_BASES.
 			 */
 			KGSL_CTXT_DBG("save shader fixup");
-			kgsl_ringbuffer_issuecmds(device, active_ctxt, 0,
-						  active_ctxt->shader_fixup, 3,
-						  flags);
+			kgsl_ringbuffer_issuecmds(device, 0,
+					active_ctxt->shader_fixup, 3);
 
 			active_ctxt->flags |= CTXT_FLAGS_SHADER_RESTORE;
 		}
@@ -1408,10 +1741,31 @@ kgsl_drawctxt_switch(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 			/* save gmem.
 			 * (note: changes shader. shader must already be saved.)
 			 */
+			unsigned int i, numbuffers = 0;
 			KGSL_CTXT_DBG("save gmem");
-			kgsl_ringbuffer_issuecmds(device, active_ctxt, 1,
-						  active_ctxt->gmem_save, 3,
-						  flags);
+			for (i = 0; i < KGSL_MAX_GMEM_SHADOW_BUFFERS; i++) {
+				if (active_ctxt->user_gmem_shadow[i].gmemshadow.
+				    size > 0) {
+					kgsl_ringbuffer_issuecmds(device, 1,
+					  active_ctxt->user_gmem_shadow[i].
+						gmem_save, 3);
+
+					/* Restore TP0_CHICKEN */
+					kgsl_ringbuffer_issuecmds(device, 0,
+					  active_ctxt->chicken_restore, 3);
+
+					numbuffers++;
+				}
+			}
+			if (numbuffers == 0) {
+				kgsl_ringbuffer_issuecmds(device, 1,
+					 active_ctxt->context_gmem_shadow.
+						gmem_save, 3);
+
+				/* Restore TP0_CHICKEN */
+				kgsl_ringbuffer_issuecmds(device, 0,
+					 active_ctxt->chicken_restore, 3);
+			}
 
 			active_ctxt->flags |= CTXT_FLAGS_GMEM_RESTORE;
 		}
@@ -1433,24 +1787,44 @@ kgsl_drawctxt_switch(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 		 *  (note: changes shader. shader must not already be restored.)
 		 */
 		if (drawctxt->flags & CTXT_FLAGS_GMEM_RESTORE) {
+			unsigned int i, numbuffers = 0;
 			KGSL_CTXT_DBG("restore gmem");
-			kgsl_ringbuffer_issuecmds(device, drawctxt, 1,
-						  drawctxt->gmem_restore, 3,
-						  flags);
+
+			for (i = 0; i < KGSL_MAX_GMEM_SHADOW_BUFFERS; i++) {
+				if (drawctxt->user_gmem_shadow[i].gmemshadow.
+				    size > 0) {
+					kgsl_ringbuffer_issuecmds(device, 1,
+					  drawctxt->user_gmem_shadow[i].
+						gmem_restore, 3);
+
+					/* Restore TP0_CHICKEN */
+					kgsl_ringbuffer_issuecmds(device, 0,
+					  drawctxt->chicken_restore, 3);
+					numbuffers++;
+				}
+			}
+			if (numbuffers == 0) {
+				kgsl_ringbuffer_issuecmds(device, 1,
+				  drawctxt->context_gmem_shadow.gmem_restore,
+					3);
+
+				/* Restore TP0_CHICKEN */
+				kgsl_ringbuffer_issuecmds(device, 0,
+				  drawctxt->chicken_restore, 3);
+			}
 			drawctxt->flags &= ~CTXT_FLAGS_GMEM_RESTORE;
 		}
 
 		/* restore registers and constants. */
 		KGSL_CTXT_DBG("restore regs");
-		kgsl_ringbuffer_issuecmds(device, drawctxt, 0,
-					  drawctxt->reg_restore, 3, flags);
+		kgsl_ringbuffer_issuecmds(device, 0,
+					  drawctxt->reg_restore, 3);
 
 		/* restore shader instructions & partitioning. */
 		if (drawctxt->flags & CTXT_FLAGS_SHADER_RESTORE)
 			KGSL_CTXT_DBG("restore shader");
-			kgsl_ringbuffer_issuecmds(device, drawctxt, 0,
-						  drawctxt->shader_restore, 3,
-						  flags);
+		kgsl_ringbuffer_issuecmds(device, 0,
+					  drawctxt->shader_restore, 3);
 	} else {
 		KGSL_CTXT_DBG("restore default pagetable");
 		kgsl_mmu_setpagetable(device, device->mmu.defaultpagetable);

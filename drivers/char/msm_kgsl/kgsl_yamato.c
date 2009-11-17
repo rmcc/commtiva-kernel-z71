@@ -65,6 +65,7 @@
 #include "kgsl.h"
 #include "kgsl_log.h"
 #include "kgsl_pm4types.h"
+#include "kgsl_cmdstream.h"
 
 #include "yamato_reg.h"
 
@@ -121,7 +122,7 @@ void kgsl_yamato_idle_check(struct work_struct *work)
 
 static int kgsl_yamato_gmeminit(struct kgsl_device *device)
 {
-	unsigned int rb_edram_info =  0;
+	union reg_rb_edram_info rb_edram_info;
 	unsigned int gmem_size;
 	unsigned int edram_value = 0;
 
@@ -133,13 +134,14 @@ static int kgsl_yamato_gmeminit(struct kgsl_device *device)
 	while (gmem_size >>= 1)
 		edram_value++;
 
-	rb_edram_info = (edram_value & RB_EDRAM_INFO__EDRAM_SIZE_MASK)
-			| (0 << RB_EDRAM_INFO__EDRAM_MAPPING_MODE__SHIFT)
-			| (((device->gmemspace.gpu_base >> 14)
-				& RB_EDRAM_INFO__EDRAM_RANGE_MASK)
-				<< RB_EDRAM_INFO__EDRAM_RANGE__SHIFT);
+	rb_edram_info.val = 0;
 
-	kgsl_yamato_regwrite(device, REG_RB_EDRAM_INFO, rb_edram_info);
+	rb_edram_info.f.edram_size = edram_value;
+	rb_edram_info.f.edram_mapping_mode = 0; /* EDRAM_MAP_UPPER */
+	/* must be aligned to size */
+	rb_edram_info.f.edram_range = (device->gmemspace.gpu_base >> 14);
+
+	kgsl_yamato_regwrite(device, REG_RB_EDRAM_INFO, rb_edram_info.val);
 
 	return 0;
 }
@@ -234,7 +236,9 @@ irqreturn_t kgsl_yamato_isr(int irq, void *data)
 
 int kgsl_yamato_tlbinvalidate(struct kgsl_device *device)
 {
-	unsigned int link[4];
+#ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
+	unsigned int link[2];
+#endif
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
 	if (!kgsl_mmu_enable)
@@ -245,28 +249,26 @@ int kgsl_yamato_tlbinvalidate(struct kgsl_device *device)
 			device,
 			device->drawctxt_active,
 			device->mmu.hwpagetable);
+#ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
 	/* if there is an active draw context, invalidate via command stream,
 	* otherwise invalidate via direct register writes
 	*/
 	if (device->drawctxt_active) {
-		/* wait for graphics pipe to be idle */
-		link[0] = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
-		link[1] = 0x00000000;
-
-		link[2] = pm4_type0_packet(REG_MH_MMU_INVALIDATE, 1);
-		link[3] = mh_mmu_invalidate;
+		link[0] = pm4_type0_packet(REG_MH_MMU_INVALIDATE, 1);
+		link[1] = mh_mmu_invalidate;
 
 		KGSL_MEM_DBG("cmds\n");
-		kgsl_ringbuffer_issuecmds(device, device->drawctxt_active, 1,
-					  &link[0], 4,
-					  KGSL_CONTEXT_SAVE_GMEM);
+		kgsl_ringbuffer_issuecmds(device, 1,
+					  &link[0], 2);
 	} else {
+#endif
 		KGSL_MEM_DBG("regs\n");
-		kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);
 
 		kgsl_yamato_regwrite(device, REG_MH_MMU_INVALIDATE,
-				     mh_mmu_invalidate);
+			     mh_mmu_invalidate);
+#ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
 	}
+#endif
 
 	return 0;
 }
@@ -343,7 +345,7 @@ int kgsl_yamato_cleanup_pt(struct kgsl_device *device,
 
 int kgsl_yamato_setpagetable(struct kgsl_device *device)
 {
-	unsigned int link[10];
+	unsigned int link[27];
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
 	if (!kgsl_mmu_enable)
@@ -366,24 +368,34 @@ int kgsl_yamato_setpagetable(struct kgsl_device *device)
 		link[2] = pm4_type0_packet(REG_MH_MMU_PT_BASE, 1);
 		link[3] = device->mmu.hwpagetable->base.gpuaddr;
 
-		/* define virtual address range */
-		link[4] = pm4_type0_packet(REG_MH_MMU_VA_RANGE, 1);
-		link[5] =
-		    (device->mmu.hwpagetable->
-		     va_base | (device->mmu.hwpagetable->va_range >> 16));
+		link[4]  = pm4_type3_packet(PM4_SET_CONSTANT, 2);
+		link[5]  = (0x4 << 16) | (REG_PA_SU_SC_MODE_CNTL - 0x2000);
+		link[6]  = 0;          /* disable faceness generation */
+		link[7]  = pm4_type3_packet(PM4_SET_BIN_BASE_OFFSET, 1);
+		link[8]  = device->mmu.dummyspace.gpuaddr;
+		link[9]  = pm4_type3_packet(PM4_DRAW_INDX_BIN, 6);
+		link[10] = 0;          /* viz query info */
+		link[11] = 0x0003C004; /* draw indicator */
+		link[12] = 0;          /* bin base */
+		link[13] = 3;          /* bin size */
+		link[14] = device->mmu.dummyspace.gpuaddr; /* dma base */
+		link[15] = 6;          /* dma size */
+		link[16] = pm4_type3_packet(PM4_DRAW_INDX_BIN, 6);
+		link[17] = 0;          /* viz query info */
+		link[18] = 0x0003C004; /* draw indicator */
+		link[19] = 0;          /* bin base */
+		link[20] = 3;          /* bin size */
+		link[21] = device->mmu.dummyspace.gpuaddr; /* dma base */
+		link[22] = 6;          /* dma size */
+		link[23] = pm4_type0_packet(REG_MH_MMU_INVALIDATE, 1);
+		link[24] = mh_mmu_invalidate;
+		link[25] = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
+		link[26] = 0x00000000;
 
-		link[6] = pm4_type0_packet(REG_MH_MMU_INVALIDATE, 1);
-		link[7] = mh_mmu_invalidate;
-
-		link[8] = pm4_type3_packet(PM4_WAIT_FOR_IDLE, 1);
-		link[9] = 0x00000000;
-
-		kgsl_ringbuffer_issuecmds(device, device->drawctxt_active, 1,
-					  &link[0], 10,
-					  KGSL_CONTEXT_SAVE_GMEM);
+		kgsl_ringbuffer_issuecmds(device, 1,
+					  &link[0], 27);
 	} else {
 		KGSL_MEM_DBG("regs\n");
-		kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);
 
 		kgsl_yamato_regwrite(device, REG_MH_MMU_PT_BASE,
 				     device->mmu.hwpagetable->base.gpuaddr);
@@ -523,11 +535,17 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 		goto error_iounmap;
 	}
 
+	status = kgsl_cmdstream_init(device);
+	if (status != 0) {
+		status = -ENODEV;
+		goto error_close_mmu;
+	}
+
 	status = kgsl_sharedmem_alloc(memflags, sizeof(device->memstore),
 					&device->memstore);
 	if (status != 0)  {
 		status = -ENODEV;
-		goto error_close_mmu;
+		goto error_close_cmdstream;
 	}
 	kgsl_sharedmem_set(&device->memstore, 0, 0, device->memstore.size);
 
@@ -536,6 +554,8 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	device->flags |= KGSL_FLAGS_INITIALIZED;
 	return 0;
 
+error_close_cmdstream:
+	kgsl_cmdstream_close(device);
 error_iounmap:
 	iounmap(regspace->mmio_virt_base);
 	regspace->mmio_virt_base = NULL;
@@ -555,6 +575,8 @@ int kgsl_yamato_close(struct kgsl_device *device)
 		kgsl_sharedmem_free(&device->memstore);
 
 	kgsl_mmu_close(device);
+
+	kgsl_cmdstream_close(device);
 
 	if (regspace->mmio_virt_base != NULL) {
 		KGSL_MEM_INFO("iounmap(regs) = %p\n", regspace->mmio_virt_base);
@@ -893,7 +915,7 @@ int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 			device, timestamp, msecs);
 
 	timeout = wait_event_interruptible_timeout(device->ib1_wq,
-			kgsl_ringbuffer_check_timestamp(device, timestamp),
+			kgsl_cmdstream_check_timestamp(device, timestamp),
 			msecs_to_jiffies(msecs));
 
 	if (timeout > 0)
@@ -910,7 +932,7 @@ int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 int kgsl_yamato_runpending(struct kgsl_device *device)
 {
 	if (device->flags & KGSL_FLAGS_INITIALIZED)
-		kgsl_ringbuffer_memqueue_drain(device);
+		kgsl_cmdstream_memqueue_drain(device);
 	return 0;
 }
 

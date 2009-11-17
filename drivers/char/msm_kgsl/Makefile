@@ -2,6 +2,7 @@ ccflags-y := -Iinclude/drm
 
 msm_kgsl-y = \
 	kgsl_drawctxt.o \
+	kgsl_cmdstream.o \
 	kgsl.o \
 	kgsl_log.o \
 	kgsl_mmu.o \
