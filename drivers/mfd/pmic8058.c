@@ -1029,6 +1029,18 @@ static int pm8058_probe(struct i2c_client *client,
 		set_irq_wake(chip->dev->irq, 1);
 	}
 
+	if (pdata->init) {
+		rc = pdata->init();
+		if (rc != 0) {
+			pr_err("%s: board init failed\n", __func__);
+			free_irq(chip->dev->irq, &chip->irq_completion);
+			kthread_stop(chip->pm_task);
+			chip->dev = NULL;
+			kfree(chip);
+			return -ENODEV;
+		}
+	}
+
 	return 0;
 }
 

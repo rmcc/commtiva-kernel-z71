@@ -50,6 +50,7 @@
 struct pm8058_platform_data {
 	/* This table is only needed for misc interrupts. */
 	unsigned int	pm_irqs[PM8058_IRQS];	/* block*8 + bit-pos */
+	int 		(*init)(void);
 };
 
 /* GPIO parameters */
