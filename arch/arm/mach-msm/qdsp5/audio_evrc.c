@@ -188,26 +188,30 @@ static int audevrc_enable(struct audio *audio)
 	audio->out_tail = 0;
 	audio->out_needed = 0;
 
-	cfg.tx_rate = RPC_AUD_DEF_SAMPLE_RATE_NONE;
-	cfg.rx_rate = RPC_AUD_DEF_SAMPLE_RATE_48000;
-	cfg.def_method = RPC_AUD_DEF_METHOD_PLAYBACK;
-	cfg.codec = RPC_AUD_DEF_CODEC_EVRC;
-	cfg.snd_method = RPC_SND_METHOD_MIDI;
+	if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK) {
+		cfg.tx_rate = RPC_AUD_DEF_SAMPLE_RATE_NONE;
+		cfg.rx_rate = RPC_AUD_DEF_SAMPLE_RATE_48000;
+		cfg.def_method = RPC_AUD_DEF_METHOD_PLAYBACK;
+		cfg.codec = RPC_AUD_DEF_CODEC_EVRC;
+		cfg.snd_method = RPC_SND_METHOD_MIDI;
 
-	rc = audmgr_enable(&audio->audmgr, &cfg);
-	if (rc < 0)
-		return rc;
+		rc = audmgr_enable(&audio->audmgr, &cfg);
+		if (rc < 0)
+			return rc;
+	}
 
 	if (msm_adsp_enable(audio->audplay)) {
 		MM_ERR("msm_adsp_enable(audplay) failed\n");
-		audmgr_disable(&audio->audmgr);
+		if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK)
+			audmgr_disable(&audio->audmgr);
 		return -ENODEV;
 	}
 
 	if (audpp_enable(audio->dec_id, audevrc_dsp_event, audio)) {
 		MM_ERR("audpp_enable() failed\n");
 		msm_adsp_disable(audio->audplay);
-		audmgr_disable(&audio->audmgr);
+		if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK)
+			audmgr_disable(&audio->audmgr);
 		return -ENODEV;
 	}
 	audio->enabled = 1;
@@ -224,7 +228,8 @@ static int audevrc_disable(struct audio *audio)
 		wake_up(&audio->read_wait);
 		msm_adsp_disable(audio->audplay);
 		audpp_disable(audio->dec_id, audio);
-		audmgr_disable(&audio->audmgr);
+		if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK)
+			audmgr_disable(&audio->audmgr);
 		audio->out_needed = 0;
 	}
 	return 0;
@@ -1400,16 +1405,19 @@ static int audevrc_open(struct inode *inode, struct file *file)
 				audio->phys, (int)audio->data);
 	}
 
-	rc = audmgr_open(&audio->audmgr);
-	if (rc)
-		goto err;
+	if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK) {
+		rc = audmgr_open(&audio->audmgr);
+		if (rc)
+			goto err;
+	}
 
 	rc = msm_adsp_get(audio->module_name, &audio->audplay,
 			&audplay_adsp_ops_evrc, audio);
 
 	if (rc) {
 		MM_ERR("failed to get %s module\n", audio->module_name);
-		audmgr_close(&audio->audmgr);
+		if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK)
+			audmgr_close(&audio->audmgr);
 		goto err;
 	}
 
