@@ -600,6 +600,22 @@ static void pm8058_irq_unmask(unsigned int irq)
 	pm8058_config_irq(chip, &block, &config);
 }
 
+static void pm8058_irq_disable(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	pm8058_irq_mask(irq);
+	desc->status |= IRQ_MASKED;
+}
+
+static void pm8058_irq_enable(unsigned int irq)
+{
+	struct irq_desc *desc = irq_to_desc(irq);
+
+	pm8058_irq_unmask(irq);
+	desc->status &= ~IRQ_MASKED;
+}
+
 static void pm8058_irq_ack(unsigned int irq)
 {
 	int	pm_irq;
@@ -911,6 +927,8 @@ static struct irq_chip pm8058_irq_chip = {
 	.ack       = pm8058_irq_ack,
 	.mask      = pm8058_irq_mask,
 	.unmask    = pm8058_irq_unmask,
+	.disable   = pm8058_irq_disable,
+	.enable    = pm8058_irq_enable,
 	.set_type  = pm8058_irq_set_type,
 	.set_wake  = pm8058_irq_set_wake,
 };
