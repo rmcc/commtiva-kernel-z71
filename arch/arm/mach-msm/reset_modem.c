@@ -179,14 +179,15 @@ static ssize_t reset_modem_write(struct file *fp, const char __user *buf,
 
 		if (r < 0)
 			return r;
-	} else { /* if (!strncmp(cmd, "reset", 5)) */
+	} else if (!strncmp(cmd, "reset", 5)) {
 		printk(KERN_ERR "INFO:%s:%i:%s: "
 		       "MODEM RESTART: RESET\n",
 		       __FILE__,
 		       __LINE__,
 		       __func__);
 		smsm_reset_modem(SMSM_RESET);
-	}
+	} else
+		return -EINVAL;
 
 	return count;
 }
