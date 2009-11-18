@@ -41,9 +41,19 @@ struct msm_snddev_info {
 	} dev_ops;
 	u8 opened;
 	void *private_data;
+	bool state;
 };
 
 void msm_snddev_register(struct msm_snddev_info *);
 void msm_snddev_unregister(struct msm_snddev_info *);
+int msm_snddev_devcount(void);
+int msm_snddev_query(int dev_id);
+unsigned short msm_snddev_route_dec(int popp_id);
+unsigned short msm_snddev_route_enc(int enc_id);
+int msm_snddev_set_dec(int popp_id, int copp_id, int set);
+int msm_snddev_set_enc(int popp_id, int copp_id, int set);
+int msm_snddev_is_set(int popp_id, int copp_id);
 int msm_get_voc_route(u32 *rx_id, u32 *tx_id);
+int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type);
+struct msm_snddev_info *audio_dev_ctrl_find_dev(u32 dev_id);
 #endif

@@ -64,6 +64,8 @@
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <mach/debug_audio_mm.h>
+#include <mach/qdsp5v2/qdsp5audppmsg.h>
+#include <mach/qdsp5v2/audpp.h>
 
 #define AUDIO_DEV_CTL_MAX_DEV 16
 
@@ -79,6 +81,14 @@ struct audio_dev_ctrl_state {
 
 static struct audio_dev_ctrl_state audio_dev_ctrl;
 
+struct audio_routing_info {
+	int running;
+	unsigned short mixer_mask[5];
+	unsigned short audrec_mixer_mask[2];
+};
+
+static struct audio_routing_info routing_info;
+
 void msm_snddev_register(struct msm_snddev_info *dev_info)
 {
 	mutex_lock(&audio_dev_ctrl.lock);
@@ -89,6 +99,90 @@ void msm_snddev_register(struct msm_snddev_info *dev_info)
 		pr_err("%s: device registry max out\n", __func__);
 	mutex_unlock(&audio_dev_ctrl.lock);
 }
+EXPORT_SYMBOL(msm_snddev_register);
+
+int msm_snddev_devcount(void)
+{
+	return audio_dev_ctrl.num_dev;
+}
+EXPORT_SYMBOL(msm_snddev_devcount);
+
+int msm_snddev_query(int dev_id)
+{
+	if (dev_id <= audio_dev_ctrl.num_dev)
+			return 0;
+	return -ENODEV;
+}
+EXPORT_SYMBOL(msm_snddev_query);
+
+int msm_snddev_is_set(int popp_id, int copp_id)
+{
+	return routing_info.mixer_mask[popp_id] & (0x1 << copp_id);
+}
+EXPORT_SYMBOL(msm_snddev_is_set);
+
+unsigned short msm_snddev_route_enc(int enc_id)
+{
+	return routing_info.audrec_mixer_mask[enc_id];
+}
+EXPORT_SYMBOL(msm_snddev_route_enc);
+
+unsigned short msm_snddev_route_dec(int popp_id)
+{
+	return routing_info.mixer_mask[popp_id];
+}
+EXPORT_SYMBOL(msm_snddev_route_dec);
+
+int msm_snddev_set_dec(int popp_id, int copp_id, int set)
+{
+	if (set)
+		routing_info.mixer_mask[popp_id] |= (0x1 << copp_id);
+	else
+		routing_info.mixer_mask[popp_id] &= ~(0x1 << copp_id);
+
+	if (routing_info.running & (0x1 << popp_id))
+		audpp_route_stream(popp_id, routing_info.mixer_mask[popp_id]);
+	return 0;
+}
+EXPORT_SYMBOL(msm_snddev_set_dec);
+
+int msm_snddev_set_enc(int popp_id, int copp_id, int set)
+{
+	if (set)
+		routing_info.audrec_mixer_mask[popp_id] |= (0x1 << copp_id);
+	else
+		routing_info.audrec_mixer_mask[popp_id] &= ~(0x1 << copp_id);
+	return 0;
+}
+EXPORT_SYMBOL(msm_snddev_set_enc);
+
+int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type)
+{
+	int rc = 0;
+
+	mutex_lock(&audio_dev_ctrl.lock);
+	switch (stream_type) {
+	case AUDIO_ROUTE_STREAM_VOICE_RX:
+		if (!(dev_info->capability & SNDDEV_CAP_RX) |
+		    !(dev_info->capability & SNDDEV_CAP_VOICE)) {
+			rc = -EINVAL;
+			break;
+		}
+		audio_dev_ctrl.voice_rx_dev = dev_info;
+		break;
+	case AUDIO_ROUTE_STREAM_VOICE_TX:
+		if (!(dev_info->capability & SNDDEV_CAP_TX) |
+		    !(dev_info->capability & SNDDEV_CAP_VOICE)) {
+			rc = -EINVAL;
+			break;
+		}
+		audio_dev_ctrl.voice_tx_dev = dev_info;
+		break;
+	}
+	mutex_unlock(&audio_dev_ctrl.lock);
+	return rc;
+}
+EXPORT_SYMBOL(msm_set_voc_route);
 
 int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 {
@@ -123,21 +217,21 @@ int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 }
 EXPORT_SYMBOL(msm_get_voc_route);
 
-static struct msm_snddev_info *audio_dev_ctrl_find_dev(
-	struct audio_dev_ctrl_state *dev_ctrl, u32 dev_id)
+struct msm_snddev_info *audio_dev_ctrl_find_dev(u32 dev_id)
 {
 	struct msm_snddev_info *info;
 
-	if ((dev_ctrl->num_dev - 1) < dev_id) {
+	if ((audio_dev_ctrl.num_dev - 1) < dev_id) {
 		info = ERR_PTR(-ENODEV);
 		goto error;
 	}
 
-	info = dev_ctrl->devs[dev_id];
+	info = audio_dev_ctrl.devs[dev_id];
 error:
 	return info;
 
 }
+EXPORT_SYMBOL(audio_dev_ctrl_find_dev);
 
 static int audio_dev_ctrl_get_devices(struct audio_dev_ctrl_state *dev_ctrl,
 				      void __user *arg)
@@ -201,7 +295,7 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 			rc = -EFAULT;
 			break;
 		}
-		dev_info = audio_dev_ctrl_find_dev(dev_ctrl, dev_id);
+		dev_info = audio_dev_ctrl_find_dev(dev_id);
 		if (IS_ERR(dev_info))
 			rc = PTR_ERR(dev_info);
 		else {
@@ -222,7 +316,7 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 			rc = -EFAULT;
 			break;
 		}
-		dev_info = audio_dev_ctrl_find_dev(dev_ctrl, dev_id);
+		dev_info = audio_dev_ctrl_find_dev(dev_id);
 		if (IS_ERR(dev_info))
 			rc = PTR_ERR(dev_info);
 		else {
@@ -243,8 +337,7 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 		}
 		pr_debug("%s: route cfg %d %d type\n", __func__,
 		route_cfg.dev_id, route_cfg.stream_type);
-		dev_info = audio_dev_ctrl_find_dev(dev_ctrl,
-			   route_cfg.dev_id);
+		dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 		if (IS_ERR(dev_info)) {
 			pr_err("%s: pass invalid dev_id\n", __func__);
 			rc = PTR_ERR(dev_info);
