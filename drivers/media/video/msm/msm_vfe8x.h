@@ -896,7 +896,7 @@ struct vfe_message {
 
 /* New one for 8k */
 struct msm_vfe_command_8k {
-	int32_t  id;
+	int id;
 	uint16_t length;
 	void     *value;
 };

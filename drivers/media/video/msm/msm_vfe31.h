@@ -713,7 +713,7 @@ struct vfe_message {
 
 /* New one for 7x30 */
 struct msm_vfe31_cmd {
-	int32_t  id;
+	int  id;
 	uint16_t length;
 	void     *value;
 };

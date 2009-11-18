@@ -222,7 +222,6 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 	}
 }
 
-static struct mutex vfe_lock;
 static void  *vfe_syncdata;
 
 static void vfe31_proc_ops(enum VFE31_MESSAGE_ID id, void *msg, size_t len)
@@ -230,7 +229,7 @@ static void vfe31_proc_ops(enum VFE31_MESSAGE_ID id, void *msg, size_t len)
 	struct msm_vfe_resp *rp;
 
 	rp = vfe31_ctrl->resp->vfe_alloc(sizeof(struct msm_vfe_resp),
-		vfe31_ctrl->syncdata);
+		vfe31_ctrl->syncdata, GFP_KERNEL);
 	if (!rp) {
 		CDBG("rp: cannot allocate buffer\n");
 		return;
@@ -272,7 +271,8 @@ static void vfe31_proc_ops(enum VFE31_MESSAGE_ID id, void *msg, size_t len)
 		break;
 	}
 
-	vfe31_ctrl->resp->vfe_resp(rp, MSM_CAM_Q_VFE_MSG, vfe31_ctrl->syncdata);
+	vfe31_ctrl->resp->vfe_resp(rp, MSM_CAM_Q_VFE_MSG, vfe31_ctrl->syncdata,
+		GFP_KERNEL);
 }
 
 static void vfe_send_outmsg(uint8_t output_mode, uint32_t pyaddr,
@@ -297,8 +297,7 @@ static void vfe_send_outmsg(uint8_t output_mode, uint32_t pyaddr,
 
 static int vfe31_enable(struct camera_enable_cmd *enable)
 {
-	int rc = 0;
-	return rc;
+	return 0;
 }
 
 void vfe_stop(void)
@@ -352,12 +351,10 @@ void vfe_stop(void)
 static int vfe31_disable(struct camera_enable_cmd *enable,
 	struct platform_device *dev)
 {
-	int rc = 0;
-
 	vfe_stop();
 
 	msm_camio_disable(dev);
-	return rc;
+	return 0;
 }
 
 static void vfe31_release(struct platform_device *pdev)
@@ -371,6 +368,7 @@ static void vfe31_release(struct platform_device *pdev)
 	free_irq(vfe31_ctrl->vfeirq, 0);
 	iounmap(vfe31_ctrl->vfebase);
 	kfree(vfe31_ctrl);
+	vfe31_ctrl = NULL;
 	release_mem_region(vfemem->start, (vfemem->end - vfemem->start) + 1);
 
 	msm_camio_disable(pdev);
@@ -437,18 +435,18 @@ static int vfe31_config_axi(int mode, struct axidata *ad, uint32_t *ao)
 	if (outp1) {
 		for (i = 0; i < 2; i++) {
 			p1 = ao + 6 + i;
-			*p1 = (regp1->paddr + regp1->y_off);
+			*p1 = (regp1->paddr + regp1->info.y_off);
 
 			p1 = ao + 12 + i;
-			*p1 = (regp1->paddr + regp1->cbcr_off);
+			*p1 = (regp1->paddr + regp1->info.cbcr_off);
 
 			regp1++;
 		}
 
 		outp1->free_buf.available = 1;
 		outp1->free_buf.paddr = regp1->paddr;
-		outp1->free_buf.y_off = regp1->y_off;
-		outp1->free_buf.cbcr_off = regp1->cbcr_off;
+		outp1->free_buf.y_off = regp1->info.y_off;
+		outp1->free_buf.cbcr_off = regp1->info.cbcr_off;
 
 		CDBG("vfe31_config_axi: free_buf paddr = 0x%x, y_off = %d,"
 			" cbcr_off = %d\n",
@@ -612,12 +610,20 @@ static int vfe31_start(void)
 	return 0;
 }
 
+#define CHECKED_COPY_FROM_USER(in) {					\
+	if (copy_from_user((in), (void __user *)cmd->value,		\
+			cmd->length)) {					\
+		rc = -EFAULT;						\
+		break;							\
+	}								\
+}
+
 static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 {
 	int rc = 0;
 	uint32_t *cmdp = NULL;
 
-	CDBG("vfe31_proc_general: cmdID = %d\n", cmd->id);
+	CDBG("%s: cmdID = %d\n", __func__, cmd->id);
 
 	switch (cmd->id) {
 	case V31_RESET:
@@ -636,12 +642,7 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		}
 
 		cmdp = kmalloc(V31_OPERATION_CFG_LEN, GFP_ATOMIC);
-		if (copy_from_user(cmdp,
-					(void __user *)(cmd->value),
-					V31_OPERATION_CFG_LEN)) {
-			rc = -EFAULT;
-			goto proc_general_done;
-		}
+		CHECKED_COPY_FROM_USER(cmdp);
 
 		for (i = 0; i < V31_OPERATION_CFG_LEN/4; i++)
 			CDBG("cmdp[%d] = 0x%x\n", i, cmdp[i]);
@@ -664,13 +665,7 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 			goto proc_general_done;
 		}
 
-		if (copy_from_user(cmdp,
-					(void __user *)(cmd->value),
-					vfe31_cmd[cmd->id].length)) {
-
-			rc = -EFAULT;
-			goto proc_general_done;
-		}
+		CHECKED_COPY_FROM_USER(cmdp);
 
 		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
 			cmdp, (vfe31_cmd[cmd->id].length));
@@ -691,20 +686,20 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 
 	long rc = 0;
 
-	uint32_t *axio = NULL;
-	struct vfe_cmd_stats_setting *scfg = NULL;
-
 	if (cmd->cmd_type != CMD_FRAME_BUF_RELEASE &&
 		cmd->cmd_type != CMD_STATS_BUF_RELEASE &&
 		cmd->cmd_type != CMD_STATS_AF_BUF_RELEASE) {
 
 		if (copy_from_user(&vfecmd,
 				(void __user *)(cmd->value),
-				sizeof(struct msm_vfe31_cmd)))
+				sizeof(vfecmd))) {
+			pr_err("%s %d: copy_from_user failed\n", __func__,
+				__LINE__);
 			return -EFAULT;
+		}
 	}
 
-	CDBG("vfe31_config: cmdType = %d\n", cmd->cmd_type);
+	CDBG("%s: cmdType = %d\n", __func__, cmd->cmd_type);
 
 	switch (cmd->cmd_type) {
 	case CMD_GENERAL:
@@ -759,6 +754,7 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	case CMD_AXI_CFG_OUT2:
 	case CMD_RAW_PICT_AXI_CFG: {
 		struct axidata *axid;
+		uint32_t *axio = NULL;
 
 		axid = data;
 		if (!axid)
@@ -777,6 +773,7 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		}
 
 		vfe31_config_axi(OUTPUT_2, axid, axio);
+		kfree(axio);
 
 	}
 		break;
@@ -784,10 +781,7 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		break;
 	}
 
-	kfree(scfg);
-	kfree(axio);
-
-	CDBG("vfe31_config done: rc = %d\n", (int) rc);
+	CDBG("%s done: rc = %d\n", __func__, (int) rc);
 	return rc;
 }
 
@@ -1066,20 +1060,20 @@ static int vfe31_resource_init(struct msm_vfe_callback *presp,
 
 	vfemem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!vfemem) {
-		CDBG("no mem resource?\n");
+		pr_err("%s: no mem resource?\n", __func__);
 		return -ENODEV;
 	}
 
 	vfeirq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (!vfeirq) {
-		CDBG("no irq resource?\n");
+		pr_err("%s: no irq resource?\n", __func__);
 		return -ENODEV;
 	}
 
 	vfeio = request_mem_region(vfemem->start,
 		resource_size(vfemem), pdev->name);
 	if (!vfeio) {
-		CDBG("VFE region already claimed\n");
+		pr_err("%s: VFE region already claimed\n", __func__);
 		return -EBUSY;
 	}
 
@@ -1095,6 +1089,7 @@ static int vfe31_resource_init(struct msm_vfe_callback *presp,
 		ioremap(vfemem->start, (vfemem->end - vfemem->start) + 1);
 	if (!vfe31_ctrl->vfebase) {
 		rc = -ENOMEM;
+		pr_err("%s: vfe ioremap failed\n", __func__);
 		goto cmd_init_failed2;
 	}
 
@@ -1156,7 +1151,6 @@ static int vfe31_init(struct msm_vfe_callback *presp,
 
 void msm_camvfe_fn_init(struct msm_camvfe_fn *fptr, void *data)
 {
-	mutex_init(&vfe_lock);
 	fptr->vfe_init    = vfe31_init;
 	fptr->vfe_enable  = vfe31_enable;
 	fptr->vfe_config  = vfe31_config;

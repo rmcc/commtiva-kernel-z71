@@ -19,8 +19,6 @@
 #include <linux/delay.h>
 #include <linux/clk.h>
 #include <linux/io.h>
-
-#include <mach/clk.h>
 #include <mach/gpio.h>
 #include <mach/board.h>
 #include <mach/camera.h>
@@ -63,23 +61,19 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 
 	switch (clktype) {
 	case CAMIO_VFE_MDC_CLK:
-		camio_vfe_mdc_clk =
-		clk = clk_get(NULL, "vfe_mdc_clk");
+		camio_vfe_mdc_clk = clk = clk_get(NULL, "vfe_mdc_clk");
 		break;
 
 	case CAMIO_MDC_CLK:
-		camio_mdc_clk =
-		clk = clk_get(NULL, "mdc_clk");
+		camio_mdc_clk = clk = clk_get(NULL, "mdc_clk");
 		break;
 
 	case CAMIO_VFE_CLK:
-		camio_vfe_clk =
-		clk = clk_get(NULL, "vfe_clk");
+		camio_vfe_clk = clk = clk_get(NULL, "vfe_clk");
 		break;
 
 	case CAMIO_VFE_AXI_CLK:
-		camio_vfe_axi_clk =
-		clk = clk_get(NULL, "vfe_axi_clk");
+		camio_vfe_axi_clk = clk = clk_get(NULL, "vfe_axi_clk");
 		break;
 
 	default:
@@ -152,8 +146,7 @@ int msm_camio_enable(struct platform_device *pdev)
 		goto enable_fail;
 	}
 
-	appbase = ioremap(camio_ext.appphy,
-		camio_ext.appsz);
+	appbase = ioremap(camio_ext.appphy, camio_ext.appsz);
 	if (!appbase) {
 		rc = -ENOMEM;
 		goto apps_no_mem;
@@ -166,8 +159,7 @@ int msm_camio_enable(struct platform_device *pdev)
 		goto mdc_busy;
 	}
 
-	mdcbase = ioremap(camio_ext.mdcphy,
-		camio_ext.mdcsz);
+	mdcbase = ioremap(camio_ext.mdcphy, camio_ext.mdcsz);
 	if (!mdcbase) {
 		rc = -ENOMEM;
 		goto mdc_no_mem;
@@ -223,15 +215,13 @@ void msm_camio_camif_pad_reg_reset(void)
 		CAM_PCLK_SRC_SEL_BMSK |
 		CAM_PCLK_INVERT_BMSK |
 		EXT_CAM_HSYNC_POL_SEL_BMSK |
-		EXT_CAM_VSYNC_POL_SEL_BMSK |
-		MDDI_CLK_CHICKEN_BIT_BMSK;
+	    EXT_CAM_VSYNC_POL_SEL_BMSK | MDDI_CLK_CHICKEN_BIT_BMSK;
 
 	value = 1 << CAM_SEL_SHFT |
 		3 << CAM_PCLK_SRC_SEL_SHFT |
 		0 << CAM_PCLK_INVERT_SHFT |
 		0 << EXT_CAM_HSYNC_POL_SEL_SHFT |
-		0 << EXT_CAM_VSYNC_POL_SEL_SHFT |
-		0 << MDDI_CLK_CHICKEN_BIT_SHFT;
+	    0 << EXT_CAM_VSYNC_POL_SEL_SHFT | 0 << MDDI_CLK_CHICKEN_BIT_SHFT;
 	writel((reg & (~mask)) | (value & mask), mdcbase);
 	msleep(10);
 
