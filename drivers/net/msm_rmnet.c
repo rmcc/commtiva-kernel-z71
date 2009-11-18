@@ -27,7 +27,6 @@
 #include <linux/etherdevice.h>
 #include <linux/skbuff.h>
 #include <linux/wakelock.h>
-#include <linux/timer.h>
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 #include <linux/earlysuspend.h>
@@ -44,8 +43,6 @@ static const char *ch_name[3] = {
 	"DATA7",
 };
 
-#define SMD_POLL_MILLISECS 1
-
 struct rmnet_private
 {
 	smd_channel_t *ch;
@@ -59,7 +56,8 @@ struct rmnet_private
 	unsigned long timeout_us;
 #endif
 	struct sk_buff *skb;
-	struct timer_list smd_poll_timer;
+	spinlock_t lock;
+	struct tasklet_struct tsklt;
 };
 
 static int count_this_packet(void *_hdr, int len)
@@ -240,14 +238,70 @@ static void smd_net_data_handler(unsigned long arg)
 
 static DECLARE_TASKLET(smd_net_data_tasklet, smd_net_data_handler, 0);
 
+static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct rmnet_private *p = netdev_priv(dev);
+	smd_channel_t *ch = p->ch;
+	int smd_ret;
+
+	smd_ret = smd_write(ch, skb->data, skb->len);
+	if (smd_ret != skb->len) {
+		pr_err("%s: smd_write returned error %d", __func__, smd_ret);
+		goto xmit_out;
+	}
+
+	if (count_this_packet(skb->data, skb->len)) {
+		p->stats.tx_packets++;
+		p->stats.tx_bytes += skb->len;
+#ifdef CONFIG_MSM_RMNET_DEBUG
+		p->wakeups_xmit += rmnet_cause_wakeup(p);
+#endif
+	}
+
+xmit_out:
+	/* data xmited, safe to release skb */
+	dev_kfree_skb_irq(skb);
+	return 0;
+}
+
+static void _rmnet_resume_flow(unsigned long param)
+{
+	struct net_device *dev = (struct net_device *)param;
+	struct rmnet_private *p = netdev_priv(dev);
+	struct sk_buff *skb = NULL;
+	unsigned long flags;
+
+	/* xmit and enable the flow only once even if
+	   multiple tasklets were scheduled by smd_net_notify */
+	spin_lock_irqsave(&p->lock, flags);
+	if (p->skb && (smd_write_avail(p->ch) >= p->skb->len)) {
+		skb = p->skb;
+		p->skb = NULL;
+		spin_unlock_irqrestore(&p->lock, flags);
+		_rmnet_xmit(skb, dev);
+		netif_wake_queue(dev);
+	} else
+		spin_unlock_irqrestore(&p->lock, flags);
+}
+
 static void smd_net_notify(void *_dev, unsigned event)
 {
+	struct rmnet_private *p = netdev_priv((struct net_device *)_dev);
+
 	if (event != SMD_EVENT_DATA)
 		return;
 
-	smd_net_data_tasklet.data = (unsigned long) _dev;
+	spin_lock(&p->lock);
+	if (p->skb && (smd_write_avail(p->ch) >= p->skb->len))
+		tasklet_hi_schedule(&p->tsklt);
 
-	tasklet_schedule(&smd_net_data_tasklet);
+	spin_unlock(&p->lock);
+
+	if (smd_read_avail(p->ch) &&
+	    (smd_read_avail(p->ch) >= smd_cur_packet_size(p->ch))) {
+		smd_net_data_tasklet.data = (unsigned long) _dev;
+		tasklet_schedule(&smd_net_data_tasklet);
+	}
 }
 
 static int rmnet_open(struct net_device *dev)
@@ -269,87 +323,37 @@ static int rmnet_open(struct net_device *dev)
 
 static int rmnet_stop(struct net_device *dev)
 {
-	pr_info("rmnet_stop()\n");
-	netif_stop_queue(dev);
-	return 0;
-}
-
-
-static void rmnet_poll_smd_write(unsigned long param)
-{
-	struct net_device * dev = (struct net_device *)param;
 	struct rmnet_private *p = netdev_priv(dev);
-	smd_channel_t *ch = p->ch;
-	int smd_ret;
 
-	/* this should never happen */
-	if (p == 0 || (p->skb) == 0 || (p->skb->len) == 0) {
-		pr_err("fatal: rmnet rmnet_poll_smd_write rcvd skb length 0");
-		return;
-	}
+	pr_info("rmnet_stop()\n");
 
-	if (smd_write_avail(ch) >= p->skb->len) {
-		smd_ret = smd_write(ch, p->skb->data, p->skb->len);
-		if (smd_ret != p->skb->len) {
-			pr_err("fatal: smd_write returned error %d", smd_ret);
-			return;
-		}
-		/* data xmited, safe to release skb */
-		dev_kfree_skb_irq(p->skb);
-		p->skb = 0;
-		netif_wake_queue((struct net_device *)dev);
-	} else {
-		init_timer(&p->smd_poll_timer);
-		p->smd_poll_timer.expires = jiffies +
-			((SMD_POLL_MILLISECS*HZ)/1000);
-		p->smd_poll_timer.function = rmnet_poll_smd_write;
-		p->smd_poll_timer.data = param;
-		add_timer(&p->smd_poll_timer);
-	}
+	netif_stop_queue(dev);
+	tasklet_disable(&p->tsklt);
+
+	return 0;
 }
 
 static int rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct rmnet_private *p = netdev_priv(dev);
 	smd_channel_t *ch = p->ch;
-	int smd_ret;
+	unsigned long flags;
 
 	if (netif_queue_stopped(dev)) {
 		pr_err("fatal: rmnet_xmit called when netif_queue is stopped");
 		return 0;
 	}
 
+	spin_lock_irqsave(&p->lock, flags);
 	if (smd_write_avail(ch) < skb->len) {
-		rmnet_stop(dev);
-		/* schedule a function to poll at exponential interval */
-		init_timer(&p->smd_poll_timer);
-		p->smd_poll_timer.expires = jiffies
-			+ ((SMD_POLL_MILLISECS*HZ)/1000);
-		p->smd_poll_timer.function = rmnet_poll_smd_write;
-		if (p->skb)
-			pr_err("fatal: p->skb was non-zero when"
-				"we tried to scheduled timer");
+		netif_stop_queue(dev);
 		p->skb = skb;
-		p->smd_poll_timer.data = (unsigned long)dev;
-		add_timer(&p->smd_poll_timer);
-	} else {
-		smd_ret = smd_write(ch, skb->data, skb->len);
-		if (smd_ret != skb->len) {
-			pr_err("fatal: smd_write returned error %d", smd_ret);
-			return 0;
-		}
-
-		if (count_this_packet(skb->data, skb->len)) {
-			p->stats.tx_packets++;
-			p->stats.tx_bytes += skb->len;
-#ifdef CONFIG_MSM_RMNET_DEBUG
-			p->wakeups_xmit += rmnet_cause_wakeup(p);
-#endif
-		}
-		/* data xmited, safe to release skb */
-		dev_kfree_skb_irq(skb);
+		spin_unlock_irqrestore(&p->lock, flags);
+		return 0;
 	}
+	spin_unlock_irqrestore(&p->lock, flags);
 
+	_rmnet_xmit(skb, dev);
 
 	return 0;
 }
@@ -378,7 +382,7 @@ static void __init rmnet_setup(struct net_device *dev)
 	dev->set_multicast_list = rmnet_set_multicast_list;
 	dev->tx_timeout = rmnet_tx_timeout;
 
-	dev->watchdog_timeo = 20; /* ??? */
+	dev->watchdog_timeo = 1000; /* 10 seconds? */
 
 	ether_setup(dev);
 
@@ -412,8 +416,11 @@ static int __init rmnet_init(void)
 
 		d = &(dev->dev);
 		p = netdev_priv(dev);
-		p->skb = 0;
 		p->chname = ch_name[n];
+		p->skb = NULL;
+		spin_lock_init(&p->lock);
+		tasklet_init(&p->tsklt, _rmnet_resume_flow,
+				(unsigned long)dev);
 		wake_lock_init(&p->wake_lock, WAKE_LOCK_SUSPEND, ch_name[n]);
 #ifdef CONFIG_MSM_RMNET_DEBUG
 		p->timeout_us = timeout_us;
