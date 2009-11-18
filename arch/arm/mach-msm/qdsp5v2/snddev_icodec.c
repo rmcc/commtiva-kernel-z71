@@ -272,7 +272,6 @@ struct snddev_icodec_drv_state {
 	struct clk *lpa_core_clk;
 	struct clk *lpa_p_clk;
 	struct vreg *vreg_gp16;
-	struct vreg *vreg_ncp;
 	struct vreg *vreg_msme;
 	struct vreg *vreg_rf2;
 };
@@ -289,10 +288,9 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
 
 	/* Voltage regulator voting
-	 * Vote GP16, NCP, MSME, RF2
+	 * Vote GP16, MSME, RF2
 	 */
 	vreg_enable(drv->vreg_gp16);
-	vreg_enable(drv->vreg_ncp);
 	vreg_enable(drv->vreg_msme);
 	vreg_enable(drv->vreg_rf2);
 
@@ -345,7 +343,6 @@ error_adie:
 	clk_disable(drv->rx_mclk);
 error_invalid_freq:
 	vreg_disable(drv->vreg_gp16);
-	vreg_disable(drv->vreg_ncp);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
 
@@ -361,10 +358,9 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 
 	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_PWM_TCXO);
 	/* Voltage regulator voting
-	 * Vote GP16, NCP, MSME, RF2
+	 * Vote GP16, MSME, RF2
 	 */
 	vreg_enable(drv->vreg_gp16);
-	vreg_enable(drv->vreg_ncp);
 	vreg_enable(drv->vreg_msme);
 	vreg_enable(drv->vreg_rf2);
 
@@ -410,7 +406,6 @@ error_adie:
 	clk_disable(drv->tx_mclk);
 error_invalid_freq:
 	vreg_disable(drv->vreg_gp16);
-	vreg_disable(drv->vreg_ncp);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
 
@@ -433,7 +428,6 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 	clk_disable(drv->rx_mclk);
 
 	vreg_disable(drv->vreg_gp16);
-	vreg_disable(drv->vreg_ncp);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
 
@@ -458,7 +452,6 @@ static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 	/* Disable mic bias */
 	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 	vreg_disable(drv->vreg_gp16);
-	vreg_disable(drv->vreg_ncp);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
 
@@ -649,7 +642,6 @@ static void debugfs_adie_loopback(u32 loop)
 
 	if (loop) {
 		vreg_enable(drv->vreg_gp16);
-		vreg_enable(drv->vreg_ncp);
 		vreg_enable(drv->vreg_msme);
 		vreg_enable(drv->vreg_rf2);
 
@@ -694,7 +686,6 @@ static void debugfs_adie_loopback(u32 loop)
 		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 
 		vreg_disable(drv->vreg_gp16);
-		vreg_disable(drv->vreg_ncp);
 		vreg_disable(drv->vreg_msme);
 		vreg_disable(drv->vreg_rf2);
 
@@ -718,7 +709,6 @@ static void debugfs_afe_loopback(u32 loop)
 
 	if (loop) {
 		vreg_enable(drv->vreg_gp16);
-		vreg_enable(drv->vreg_ncp);
 		vreg_enable(drv->vreg_msme);
 		vreg_enable(drv->vreg_rf2);
 
@@ -786,7 +776,6 @@ static void debugfs_afe_loopback(u32 loop)
 		pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
 
 		vreg_disable(drv->vreg_gp16);
-		vreg_disable(drv->vreg_ncp);
 		vreg_disable(drv->vreg_msme);
 		vreg_disable(drv->vreg_rf2);
 
@@ -876,9 +865,6 @@ static int __init snddev_icodec_init(void)
 	icodec_drv->vreg_gp16 = vreg_get(NULL, "gp16");
 	if (IS_ERR(icodec_drv->vreg_gp16))
 		goto error_vreg_gp16;
-	icodec_drv->vreg_ncp = vreg_get(NULL, "ncp");
-	if (IS_ERR(icodec_drv->vreg_ncp))
-		goto error_vreg_ncp;
 	icodec_drv->vreg_msme = vreg_get(NULL, "s2");
 	if (IS_ERR(icodec_drv->vreg_msme))
 		goto error_vreg_msme;
@@ -906,8 +892,6 @@ static int __init snddev_icodec_init(void)
 error_vreg_rf2:
 	vreg_put(icodec_drv->vreg_msme);
 error_vreg_msme:
-	vreg_put(icodec_drv->vreg_ncp);
-error_vreg_ncp:
 	vreg_put(icodec_drv->vreg_gp16);
 error_vreg_gp16:
 	clk_put(icodec_drv->lpa_p_clk);
@@ -943,7 +927,6 @@ static void __exit snddev_icodec_exit(void)
 	platform_driver_unregister(&snddev_icodec_driver);
 
 	vreg_put(icodec_drv->vreg_gp16);
-	vreg_put(icodec_drv->vreg_ncp);
 	vreg_put(icodec_drv->vreg_msme);
 	vreg_put(icodec_drv->vreg_rf2);
 
