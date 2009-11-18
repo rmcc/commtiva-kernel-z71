@@ -23,6 +23,7 @@
 
 #include <mach/msm_rpcrouter.h>
 #include <mach/msm_otg.h>
+#include <mach/msm_hsusb.h>
 
 int msm_hsusb_rpc_connect(void);
 int msm_hsusb_phy_reset(void);
@@ -42,6 +43,13 @@ int msm_chg_usb_i_is_available(uint32_t sample);
 int msm_chg_usb_i_is_not_available(void);
 int msm_chg_usb_charger_disconnected(void);
 int msm_chg_rpc_close(void);
+
+#ifdef CONFIG_USB_GADGET_MSM_72K
+int hsusb_chg_init(int connect);
+void hsusb_chg_vbus_draw(unsigned mA);
+void hsusb_chg_connected(enum chg_type chgtype);
+#endif
+
 
 int msm_fsusb_rpc_init(struct msm_otg_ops *ops);
 int msm_fsusb_init_phy(void);

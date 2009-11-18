@@ -1982,54 +1982,12 @@ static int hsusb_rpc_connect(int connect)
 		return msm_hsusb_rpc_close();
 }
 
-static int hsusb_chg_init(int connect)
-{
-	if (connect)
-		return msm_chg_rpc_connect();
-	else
-		return msm_chg_rpc_close();
-}
-
-void hsusb_chg_vbus_draw(unsigned mA)
-{
-	if (mA)
-		msm_chg_usb_i_is_available(mA);
-	else
-		msm_chg_usb_i_is_not_available();
-}
-
-void hsusb_chg_connected(enum chg_type chgtype)
-{
-	switch (chgtype) {
-	case CHG_TYPE_HOSTPC:
-		pr_debug("Charger Type: HOST PC\n");
-		msm_chg_usb_charger_connected(0);
-		msm_chg_usb_i_is_available(100);
-		break;
-	case CHG_TYPE_WALL_CHARGER:
-		pr_debug("Charger Type: WALL CHARGER\n");
-		msm_chg_usb_charger_connected(2);
-		msm_chg_usb_i_is_available(1500);
-		break;
-	case CHG_TYPE_INVALID:
-		pr_debug("Charger Type: DISCONNECTED\n");
-		msm_chg_usb_i_is_not_available();
-		msm_chg_usb_charger_disconnected();
-		break;
-	}
-}
-
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_native_phy_reset,
 };
 
-static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
-	/* charging apis */
-	.chg_init = hsusb_chg_init,
-	.chg_connected = hsusb_chg_connected,
-	.chg_vbus_draw = hsusb_chg_vbus_draw,
-};
+static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
 
 static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
