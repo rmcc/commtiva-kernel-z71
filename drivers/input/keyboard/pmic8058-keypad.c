@@ -256,10 +256,11 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 	int rc, read_rows;
 	u8 scan_val;
 	static u8 rows[] = {
-		5, 6, 7, 8, 10, 10, 12, 12, 15, 15, 15, 18,
+		5, 6, 7, 8, 10, 10, 12, 12, 15, 15, 15, 18, 18, 18
 	};
 
-	if (kp->flags & KEYF_FIX_LAST_ROW)
+	if (kp->flags & KEYF_FIX_LAST_ROW &&
+			(kp->pdata->num_rows != MATRIX_MAX_ROWS))
 		read_rows = rows[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN
 					 + 1];
 	else
@@ -434,7 +435,8 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 		bits = row_bits[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN];
 
 	/* Use max rows to fix last row problem if actual rows are less */
-	if (kp->flags & KEYF_FIX_LAST_ROW)
+	if (kp->flags & KEYF_FIX_LAST_ROW &&
+			 (kp->pdata->num_rows != MATRIX_MAX_ROWS))
 		bits = row_bits[kp->pdata->num_rows - KEYP_CTRL_SCAN_ROWS_MIN
 					 + 1];
 
