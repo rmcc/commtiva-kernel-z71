@@ -128,7 +128,8 @@ static int request_gpio(unsigned int gpio, unsigned long flags)
 	}
 	chip_index = gpio - chip->start;
 	if (chip->state[chip_index].refcount == 0) {
-		chip->configure(chip, gpio, flags);
+		if (chip->configure)
+			chip->configure(chip, gpio, flags);
 		chip->state[chip_index].flags = flags;
 		chip->state[chip_index].refcount++;
 	} else if ((flags & IRQF_SHARED) && (chip->state[chip_index].flags & IRQF_SHARED))
@@ -194,7 +195,7 @@ int gpio_configure(unsigned int gpio, unsigned long flags)
 
 	spin_lock_irqsave(&gpio_chips_lock, irq_flags);
 	chip = get_gpio_chip_locked(gpio);
-	if (chip)
+	if (chip && chip->configure)
 		ret = chip->configure(chip, gpio, flags);
 	spin_unlock_irqrestore(&gpio_chips_lock, irq_flags);
 	return ret;
