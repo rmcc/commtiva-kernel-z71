@@ -377,14 +377,14 @@ static int __msm_get_frame(struct msm_sync *sync,
 	struct msm_queue_cmd *qcmd = NULL;
 	struct msm_vfe_phy_info *pphy;
 
-	spin_lock_irqsave(&sync->prev_frame_q_lock, flags);
-	if (!list_empty(&sync->prev_frame_q)) {
-		qcmd = list_first_entry(&sync->prev_frame_q,
+	spin_lock_irqsave(&sync->frame_q_lock, flags);
+	if (!list_empty(&sync->frame_q)) {
+		qcmd = list_first_entry(&sync->frame_q,
 			struct msm_queue_cmd, list);
-		sync->prev_frame_q_len--;
+		sync->frame_q_len--;
 		list_del_init(&qcmd->list);
 	}
-	spin_unlock_irqrestore(&sync->prev_frame_q_lock, flags);
+	spin_unlock_irqrestore(&sync->frame_q_lock, flags);
 
 	if (!qcmd) {
 		pr_err("%s: no preview frame.\n", __func__);
@@ -1545,16 +1545,16 @@ static void msm_deliver_frame(struct msm_sync *sync,
 	CDBG("%s: qcmd %p phy_y %x, phy_cbcr %x\n", __func__,
 		qcmd, fphy->y_phy, fphy->cbcr_phy);
 
-	spin_lock_irqsave(&sync->prev_frame_q_lock, flags);
-	sync->prev_frame_q_len++;
-	if (sync->prev_frame_q_len > sync->prev_frame_q_max) {
-		sync->prev_frame_q_max = sync->prev_frame_q_len;
-		pr_info("%s: new prev_frame_q_max %d\n", __func__,
-			sync->prev_frame_q_max);
+	spin_lock_irqsave(&sync->frame_q_lock, flags);
+	sync->frame_q_len++;
+	if (sync->frame_q_len > sync->frame_q_max) {
+		sync->frame_q_max = sync->frame_q_len;
+		pr_info("%s: new frame_q_max %d\n", __func__,
+			sync->frame_q_max);
 	}
-	list_add_tail(&qcmd->list, &sync->prev_frame_q);
-	wake_up(&sync->prev_frame_wait);
-	spin_unlock_irqrestore(&sync->prev_frame_q_lock, flags);
+	list_add_tail(&qcmd->list, &sync->frame_q);
+	wake_up(&sync->frame_wait);
+	spin_unlock_irqrestore(&sync->frame_q_lock, flags);
 
 	CDBG("%s: woke up frame thread\n", __func__);
 }
@@ -1919,9 +1919,9 @@ static int __msm_release(struct msm_sync *sync)
 		}
 
 		sync->msg_event_q_len = 0;
-		sync->prev_frame_q_len = 0;
+		sync->frame_q_len = 0;
 		MSM_DRAIN_QUEUE(sync, msg_event_q);
-		MSM_DRAIN_QUEUE(sync, prev_frame_q);
+		MSM_DRAIN_QUEUE(sync, frame_q);
 		MSM_DRAIN_QUEUE(sync, pict_frame_q);
 
 		wake_unlock(&sync->wake_lock);
@@ -1975,10 +1975,10 @@ static int msm_unblock_poll_frame(struct msm_sync *sync)
 {
 	unsigned long flags;
 	CDBG("%s\n", __func__);
-	spin_lock_irqsave(&sync->prev_frame_q_lock, flags);
+	spin_lock_irqsave(&sync->frame_q_lock, flags);
 	sync->unblock_poll_frame = 1;
-	wake_up(&sync->prev_frame_wait);
-	spin_unlock_irqrestore(&sync->prev_frame_q_lock, flags);
+	wake_up(&sync->frame_wait);
+	spin_unlock_irqrestore(&sync->frame_q_lock, flags);
 	return 0;
 }
 
@@ -1989,10 +1989,10 @@ static unsigned int __msm_poll_frame(struct msm_sync *sync,
 	int rc = 0;
 	unsigned long flags;
 
-	poll_wait(filep, &sync->prev_frame_wait, pll_table);
+	poll_wait(filep, &sync->frame_wait, pll_table);
 
-	spin_lock_irqsave(&sync->prev_frame_q_lock, flags);
-	if (!list_empty_careful(&sync->prev_frame_q))
+	spin_lock_irqsave(&sync->frame_q_lock, flags);
+	if (!list_empty_careful(&sync->frame_q))
 		/* frame ready */
 		rc = POLLIN | POLLRDNORM;
 	if (sync->unblock_poll_frame) {
@@ -2000,7 +2000,7 @@ static unsigned int __msm_poll_frame(struct msm_sync *sync,
 		rc |= POLLPRI;
 		sync->unblock_poll_frame = 0;
 	}
-	spin_unlock_irqrestore(&sync->prev_frame_q_lock, flags);
+	spin_unlock_irqrestore(&sync->frame_q_lock, flags);
 
 	return rc;
 }
@@ -2382,11 +2382,11 @@ static int msm_sync_init(struct msm_sync *sync,
 	INIT_LIST_HEAD(&sync->msg_event_q);
 	init_waitqueue_head(&sync->msg_event_wait);
 
-	spin_lock_init(&sync->prev_frame_q_lock);
-	sync->prev_frame_q_len = 0;
-	sync->prev_frame_q_max = 0;
-	INIT_LIST_HEAD(&sync->prev_frame_q);
-	init_waitqueue_head(&sync->prev_frame_wait);
+	spin_lock_init(&sync->frame_q_lock);
+	sync->frame_q_len = 0;
+	sync->frame_q_max = 0;
+	INIT_LIST_HEAD(&sync->frame_q);
+	init_waitqueue_head(&sync->frame_wait);
 
 	spin_lock_init(&sync->pict_frame_q_lock);
 	INIT_LIST_HEAD(&sync->pict_frame_q);
