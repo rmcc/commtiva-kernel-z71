@@ -92,10 +92,11 @@
 #define	PM8058_IRQF_BITS_SHIFT		4
 #define	PM8058_IRQF_WRITE		0x80
 
+#define	PM8058_IRQF_MASK_ALL		(PM8058_IRQF_MASK_FE | \
+					PM8058_IRQF_MASK_RE)
 #define PM8058_IRQF_W_C_M		(PM8058_IRQF_WRITE |	\
 					PM8058_IRQF_CLR |	\
-					PM8058_IRQF_MASK_FE |	\
-					PM8058_IRQF_MASK_RE)
+					PM8058_IRQF_MASK_ALL)
 
 /* GPIO registers */
 #define	SSBI_REG_ADDR_GPIO_BASE		0x150
@@ -162,6 +163,9 @@ struct pm8058_chip {
 	int	pm_max_masters;
 
 	u8	config[PM8058_IRQS];
+	u8	wake_enable[PM8058_IRQS];
+	u16	count_wakeable;
+
 	u8	revision;
 
 	u8	gpio_bank1[PM8058_GPIOS];
@@ -659,6 +663,26 @@ static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
 	return pm8058_config_irq(chip, &block, &config);
 }
 
+static int pm8058_irq_set_wake(unsigned int irq, unsigned int on)
+{
+	struct	pm8058_chip *chip = get_irq_data(irq);
+
+	irq -= PM8058_FIRST_IRQ;
+	if (on) {
+		if (!chip->wake_enable[irq]) {
+			chip->wake_enable[irq] = 1;
+			chip->count_wakeable++;
+		}
+	} else {
+		if (chip->wake_enable[irq]) {
+			chip->wake_enable[irq] = 0;
+			chip->count_wakeable--;
+		}
+	}
+
+	return 0;
+}
+
 static inline int
 pm8058_read_root(struct pm8058_chip *chip, u8 *rp)
 {
@@ -888,6 +912,7 @@ static struct irq_chip pm8058_irq_chip = {
 	.mask      = pm8058_irq_mask,
 	.unmask    = pm8058_irq_unmask,
 	.set_type  = pm8058_irq_set_type,
+	.set_wake  = pm8058_irq_set_wake,
 };
 
 static int pm8058_probe(struct i2c_client *client,
@@ -976,8 +1001,8 @@ static int pm8058_probe(struct i2c_client *client,
 	}
 
 	rc = request_irq(chip->dev->irq, pm8058_int_handler,
-				IRQF_DISABLED | IRQF_TRIGGER_LOW,
-				"pm8058-irq", &chip->irq_completion);
+			 IRQ_NOAUTOEN | IRQF_DISABLED | IRQF_TRIGGER_LOW,
+			 "pm8058-irq", &chip->irq_completion);
 	if (rc < 0)
 		pr_err("%s: could not request irq %d: %d\n", __func__,
 					 chip->dev->irq, rc);
@@ -1011,6 +1036,59 @@ static int __devexit pm8058_remove(struct i2c_client *client)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int pm8058_suspend(struct i2c_client *client, pm_message_t mesg)
+{
+	struct	pm8058_chip *chip;
+	int	i;
+	unsigned long	irqsave;
+
+	chip = i2c_get_clientdata(client);
+
+	for (i = 0; i < PM8058_IRQS; i++) {
+		local_irq_save(irqsave);
+		if (chip->config[i] && !chip->wake_enable[i]) {
+			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
+			      == PM8058_IRQF_MASK_ALL))
+				pm8058_irq_mask(i + PM8058_FIRST_IRQ);
+		}
+		local_irq_restore(irqsave);
+	}
+
+	if (!chip->count_wakeable)
+		disable_irq(chip->dev->irq);
+
+	return 0;
+}
+
+static int pm8058_resume(struct i2c_client *client)
+{
+	struct	pm8058_chip *chip;
+	int	i;
+	unsigned long	irqsave;
+
+	chip = i2c_get_clientdata(client);
+
+	for (i = 0; i < PM8058_IRQS; i++) {
+		local_irq_save(irqsave);
+		if (chip->config[i] && !chip->wake_enable[i]) {
+			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
+			      == PM8058_IRQF_MASK_ALL))
+				pm8058_irq_unmask(i + PM8058_FIRST_IRQ);
+		}
+		local_irq_restore(irqsave);
+	}
+
+	if (!chip->count_wakeable)
+		enable_irq(chip->dev->irq);
+
+	return 0;
+}
+#else
+#define	pm8058_suspend		NULL
+#define	pm8058_resume		NULL
+#endif
+
 static const struct i2c_device_id pm8058_ids[] = {
 	{ "pm8058-core", 0 },
 	{ },
@@ -1022,6 +1100,8 @@ static struct i2c_driver pm8058_driver = {
 	.id_table	= pm8058_ids,
 	.probe		= pm8058_probe,
 	.remove		= __devexit_p(pm8058_remove),
+	.suspend	= pm8058_suspend,
+	.resume		= pm8058_resume,
 };
 
 static int __init pm8058_init(void)
