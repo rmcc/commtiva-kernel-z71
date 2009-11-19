@@ -2003,6 +2003,10 @@ struct sdcc_gpio {
 	uint32_t size;
 };
 
+static struct msm_gpio sdc1_lvlshft_cfg_data[] = {
+	{GPIO_CFG(35, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), "sdc1_lvlshft"},
+};
+
 static struct msm_gpio sdc1_cfg_data[] = {
 	{GPIO_CFG(38, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc1_clk"},
 	{GPIO_CFG(39, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_cmd"},
@@ -2189,6 +2193,32 @@ static struct mmc_platform_data msm7x30_sdc4_data = {
 };
 #endif
 
+static void msm_sdc1_lvlshft_enable(void)
+{
+	int rc;
+
+	/* Enable LDO5, an input to the FET that powers slot 1 */
+	rc = vreg_set_level(vreg_mmc, 2850);
+	if (rc)
+		printk(KERN_ERR "%s: vreg_set_level() = %d \n",	__func__, rc);
+
+	rc = vreg_enable(vreg_mmc);
+	if (rc)
+		printk(KERN_ERR "%s: vreg_enable() = %d \n", __func__, rc);
+
+	/* Enable GPIO 35, to turn on the FET that powers slot 1 */
+	rc = msm_gpios_request_enable(sdc1_lvlshft_cfg_data,
+				ARRAY_SIZE(sdc1_lvlshft_cfg_data));
+	if (rc)
+		printk(KERN_ERR "%s: Failed to enable GPIO 35\n", __func__);
+
+	rc = gpio_direction_output(GPIO_PIN(sdc1_lvlshft_cfg_data[0].gpio_cfg),
+				1);
+	if (rc)
+		printk(KERN_ERR "%s: Failed to turn on GPIO 35\n", __func__);
+}
+
+
 static void __init msm7x30_init_rmt_storage(void)
 {
 	char *build_id;
@@ -2239,6 +2269,10 @@ static void __init msm7x30_init_mmc(void)
 	}
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
+	if (machine_is_msm7x30_fluid()) {
+		msm7x30_sdc1_data.ocr_mask =  MMC_VDD_27_28 | MMC_VDD_28_29;
+		msm_sdc1_lvlshft_enable();
+	}
 	sdcc_vreg_data[0].vreg_data = vreg_s3;
 	sdcc_vreg_data[0].level = 1800;
 	msm_add_sdcc(1, &msm7x30_sdc1_data);
