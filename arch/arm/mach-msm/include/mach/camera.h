@@ -102,6 +102,26 @@ struct msm_sensor_ctrl {
 	int (*s_config)(void __user *);
 };
 
+/* this structure is used in kernel */
+struct msm_queue_cmd {
+	struct list_head list_config;
+	struct list_head list_control;
+	struct list_head list_frame;
+	struct list_head list_pict;
+	enum msm_queue type;
+	void *command;
+	int on_heap;
+};
+
+struct msm_device_queue {
+	struct list_head list;
+	spinlock_t lock;
+	wait_queue_head_t wait;
+	int max;
+	int len;
+	const char *name;
+};
+
 struct msm_sync {
 	/* These two queues are accessed from a process context only
 	 * They contain pmem descriptors for the preview frames and the stats
@@ -115,28 +135,18 @@ struct msm_sync {
 	 * config thread.  Thus it is the only queue that is accessed from
 	 * both interrupt and process context.
 	 */
-	spinlock_t msg_event_q_lock;
-	int msg_event_q_max;
-	int msg_event_q_len;
-	struct list_head msg_event_q;
-	wait_queue_head_t msg_event_wait;
+	struct msm_device_queue event_q;
 
 	/* This queue contains preview frames. It is accessed by the DSP (in
 	 * in interrupt context, and by the frame thread.
 	 */
-	spinlock_t frame_q_lock;
-	int frame_q_max;
-	int frame_q_len;
-	struct list_head frame_q;
-	wait_queue_head_t frame_wait;
+	struct msm_device_queue frame_q;
 	int unblock_poll_frame;
 
 	/* This queue contains snapshot frames.  It is accessed by the DSP (in
 	 * interrupt context, and by the control thread.
 	 */
-	spinlock_t pict_frame_q_lock;
-	struct list_head pict_frame_q;
-	wait_queue_head_t pict_frame_wait;
+	struct msm_device_queue pict_q;
 
 	struct msm_camera_sensor_info *sdata;
 	struct msm_camvfe_fn vfefn;
@@ -167,20 +177,6 @@ struct msm_device {
 	atomic_t opened;
 };
 
-struct msm_control_device_queue {
-	spinlock_t ctrl_status_q_lock;
-	struct list_head ctrl_status_q;
-	wait_queue_head_t ctrl_status_wait;
-};
-
-/* this structure is used in kernel */
-struct msm_queue_cmd {
-	struct list_head list;
-	enum msm_queue type;
-	void *command;
-	int on_heap;
-};
-
 struct msm_control_device {
 	struct msm_device *pmsm;
 
@@ -192,7 +188,7 @@ struct msm_control_device {
 	/* This queue used by the config thread to send responses back to the
 	 * control thread.  It is accessed only from a process context.
 	 */
-	struct msm_control_device_queue ctrl_q;
+	struct msm_device_queue ctrl_q;
 };
 
 struct register_address_value_pair {
