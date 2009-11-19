@@ -80,6 +80,7 @@
 #include <mach/gpio.h>
 #include <mach/board.h>
 #include <mach/sirc.h>
+#include <mach/dma.h>
 #include <mach/rpc_hsusb.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
@@ -804,6 +805,14 @@ static struct resource qsd_spi_resources[] = {
 		.end	= 0xA1200000 + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
+	{
+		.name   = "spidm_channels",
+		.flags  = IORESOURCE_DMA,
+	},
+	{
+		.name   = "spidm_crci",
+		.flags  = IORESOURCE_DMA,
+	},
 };
 
 static struct platform_device qsd_device_spi = {
@@ -822,8 +831,50 @@ static struct spi_board_info msm_spi_board_info[] __initdata = {
 		.chip_select	= 0,
 		.max_speed_hz	= 10000000,
 		.platform_data	= &bma_pdata,
-	}
+	},
 };
+
+#define CT_CSR_PHYS		0xA8700000
+#define TCSR_SPI_MUX		(ct_csr_base + 0x54)
+static int msm_qsd_spi_dma_config(void)
+{
+	void __iomem *ct_csr_base = 0;
+	u32 spi_mux;
+	int ret = 0;
+
+	ct_csr_base = ioremap(CT_CSR_PHYS, PAGE_SIZE);
+	if (!ct_csr_base) {
+		pr_err("%s: Could not remap %x\n", __func__, CT_CSR_PHYS);
+		return -1;
+	}
+
+	spi_mux = readl(TCSR_SPI_MUX);
+	switch (spi_mux) {
+	case (1):
+		qsd_spi_resources[4].start  = DMOV_HSUART1_RX_CHAN;
+		qsd_spi_resources[4].end    = DMOV_HSUART1_TX_CHAN;
+		qsd_spi_resources[5].start  = DMOV_HSUART1_RX_CRCI;
+		qsd_spi_resources[5].end    = DMOV_HSUART1_TX_CRCI;
+		break;
+	case (2):
+		qsd_spi_resources[4].start  = DMOV_HSUART2_RX_CHAN;
+		qsd_spi_resources[4].end    = DMOV_HSUART2_TX_CHAN;
+		qsd_spi_resources[5].start  = DMOV_HSUART2_RX_CRCI;
+		qsd_spi_resources[5].end    = DMOV_HSUART2_TX_CRCI;
+		break;
+	case (3):
+		qsd_spi_resources[4].start  = DMOV_CE_OUT_CHAN;
+		qsd_spi_resources[4].end    = DMOV_CE_IN_CHAN;
+		qsd_spi_resources[5].start  = DMOV_CE_OUT_CRCI;
+		qsd_spi_resources[5].end    = DMOV_CE_IN_CRCI;
+		break;
+	default:
+		ret = -1;
+	}
+
+	iounmap(ct_csr_base);
+	return ret;
+}
 
 static struct msm_gpio qsd_spi_gpio_config_data[] = {
 	{ GPIO_CFG(17, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA), "spi_clk" },
@@ -857,7 +908,8 @@ static void msm_qsd_spi_gpio_release(void)
 static struct msm_spi_platform_data qsd_spi_pdata = {
 	.max_clock_speed = 19200000,
 	.gpio_config  = msm_qsd_spi_gpio_config,
-	.gpio_release = msm_qsd_spi_gpio_release
+	.gpio_release = msm_qsd_spi_gpio_release,
+	.dma_config = msm_qsd_spi_dma_config,
 };
 
 static void __init msm_qsd_spi_init(void)
