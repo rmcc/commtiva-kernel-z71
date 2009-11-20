@@ -302,9 +302,6 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 				break;
 			case AUDPP_DEC_STATUS_PLAY:
 				pr_info("decoder status: play \n");
-				/* send  mixer command */
-				audpp_route_stream(audio->dec_id,
-						AUDPP_CMD_CFG_DEV_MIXER_DEV_0);
 				audio->dec_state =
 					MSM_AUD_DECODER_STATE_SUCCESS;
 				wake_up(&audio->wait);
@@ -1042,6 +1039,11 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = -EPERM;
 		break;
 
+	case AUDIO_GET_SESSION_ID:
+		if (copy_to_user((void *) arg, &audio->dec_id,
+					sizeof(unsigned short)))
+			return -EFAULT;
+		break;
 	default:
 		rc = -EINVAL;
 	}

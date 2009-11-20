@@ -32,6 +32,7 @@
 #include <mach/qdsp5v2/qdsp5audppcmdi.h>
 #include <mach/qdsp5v2/qdsp5audppmsg.h>
 #include <mach/qdsp5v2/audpp.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 #include "../qdsp5/evlog.h"
 
@@ -180,21 +181,6 @@ int is_audpp_enable(void)
 }
 EXPORT_SYMBOL(is_audpp_enable);
 
-int audpp_register_event_callback(struct audpp_event_callback *ecb)
-{
-	struct audpp_state *audpp = &the_audpp_state;
-	int i;
-
-	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
-		if (NULL == audpp->cb_tbl[i]) {
-			audpp->cb_tbl[i] = ecb;
-			return 0;
-		}
-	}
-	return -1;
-}
-EXPORT_SYMBOL(audpp_register_event_callback);
-
 int audpp_unregister_event_callback(struct audpp_event_callback *ecb)
 {
 	struct audpp_state *audpp = &the_audpp_state;
@@ -250,6 +236,7 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 {
 	struct audpp_state *audpp = data;
 	uint16_t msg[8];
+	uint16_t mixer_mask = 0x0;
 
 	if (id == AUDPP_MSG_AVSYNC_MSG) {
 		getevent(audpp->avsync, sizeof(audpp->avsync));
@@ -273,6 +260,9 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 			unsigned cid = msg[0];
 			pr_info("audpp: status %d %d %d\n", cid, msg[1],
 				msg[2]);
+			audpp_route_stream(cid,
+					msm_snddev_route_dec(mixer_mask));
+
 			if ((cid < 5) && audpp->func[cid])
 				audpp->func[cid] (audpp->private[cid], id, msg);
 			break;
