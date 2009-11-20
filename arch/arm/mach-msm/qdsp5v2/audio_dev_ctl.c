@@ -211,7 +211,8 @@ int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 	if (!rc) {
 		pr_err("failed to get voice tx and rx opened  within 30s\n");
 		rc = -ENODEV;
-	}
+	} else
+		rc = 0;
 
 	return rc;
 }

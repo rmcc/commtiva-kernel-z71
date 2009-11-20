@@ -112,11 +112,12 @@ struct voice_init {
 
 /* Device information payload structure */
 struct voice_device {
-	struct voice_header hdr;
-	uint32_t rx_device;
-	uint32_t tx_device;
-	uint32_t rx_volume;
-	uint32_t tx_volume;
+  struct voice_header hdr;
+  uint32_t rx_device;
+  uint32_t tx_device;
+  uint32_t rx_volume;
+  uint32_t rx_mute;
+  uint32_t tx_mute;
 };
 
 /*Voice command structure*/
@@ -251,7 +252,8 @@ static int voice_cmd_device_info(struct voice_data *v)
 	cmd.tx_device = v->tx_device;
 	cmd.rx_device = v->rx_device;
 	cmd.rx_volume = v->rx_volume;
-	cmd.tx_volume = v->tx_volume;
+	cmd.rx_mute = 0;
+	cmd.tx_mute = 0;
 
 	err = dalrpc_fcn_5(VOICE_DALRPC_CMD, v->handle, &cmd,
 			 sizeof(struct voice_device));
@@ -299,8 +301,8 @@ static int __init voice_init(void)
 	v->state = VOICE_RELEASED;
 	v->tx_device = 0;
 	v->rx_device = 1;
-	v->tx_volume = 5;
-	v->rx_volume = 5;
+	v->tx_volume = 0x4000;
+	v->rx_volume = 0x4000;
 	init_completion(&voice.complete);
 
 	 /* get device handle */
