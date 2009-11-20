@@ -367,6 +367,18 @@ struct audpp_cmd_cfg_adec_params_evrc {
 } __attribute__ ((packed));
 
 /*
+ * Command Structure to configure Per decoder Parameters (AMRWB)
+ */
+
+#define AUDPP_CMD_CFG_ADEC_PARAMS_AMRWB_LEN \
+	sizeof(struct audpp_cmd_cfg_adec_params_amrwb)
+
+struct audpp_cmd_cfg_adec_params_amrwb {
+	struct audpp_cmd_cfg_adec_params_common    	common;
+	unsigned short			stereo_cfg;
+} __attribute__((packed));
+
+/*
  * Command Structure to configure the  HOST PCM interface
  */
 
