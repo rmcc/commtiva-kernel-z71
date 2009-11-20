@@ -546,19 +546,22 @@ static int msm_pcm_new(struct snd_card *card,
 	if (!card->dev->coherent_dma_mask)
 		card->dev->coherent_dma_mask = DMA_32BIT_MASK;
 
-	if (codec_dai->playback.channels_min) {
-		ret = pcm_preallocate_dma_buffer(pcm,
-			SNDRV_PCM_STREAM_PLAYBACK);
-		if (ret)
-			return ret;
-	}
+	ret = snd_pcm_new_stream(pcm, SNDRV_PCM_STREAM_PLAYBACK, 1);
+	if (ret)
+		return ret;
+	ret = snd_pcm_new_stream(pcm, SNDRV_PCM_STREAM_CAPTURE, 1);
+	if (ret)
+		return ret;
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_PLAYBACK, &msm_pcm_ops);
+	snd_pcm_set_ops(pcm, SNDRV_PCM_STREAM_CAPTURE, &msm_pcm_ops);
 
-	if (codec_dai->capture.channels_min) {
-		ret = pcm_preallocate_dma_buffer(pcm,
-			SNDRV_PCM_STREAM_CAPTURE);
-		if (ret)
-			msm_pcm_free_dma_buffers(pcm);
-	}
+	ret = pcm_preallocate_dma_buffer(pcm, SNDRV_PCM_STREAM_PLAYBACK);
+	if (ret)
+		return ret;
+
+	ret = pcm_preallocate_dma_buffer(pcm, SNDRV_PCM_STREAM_CAPTURE);
+	if (ret)
+		msm_pcm_free_dma_buffers(pcm);
 	return ret;
 }
 
