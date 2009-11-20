@@ -1212,7 +1212,7 @@ static struct msm_acpu_clock_platform_data msm7x2x_clock_data = {
 	.vdd_switch_time_us = 62,
 	.power_collapse_khz = 19200000,
 	.wait_for_irq_khz = 128000000,
-	.max_axi_khz = 128000,
+	.max_axi_khz = 160000,
 };
 
 void msm_serial_debug_init(unsigned int base, int irq,
@@ -1549,8 +1549,6 @@ static void __init msm7x2x_init(void)
 			       "%s: Err: Config GPIO-85 INT\n",
 				__func__);
 		}
-
-		msm7x2x_clock_data.max_axi_khz = 160000;
 	}
 
 	if (cpu_is_msm7x27())
