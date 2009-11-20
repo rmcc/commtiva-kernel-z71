@@ -174,7 +174,8 @@ msm_i2c_interrupt(int irq, void *devid)
 				goto out_err;
 			}
 		} else if (dev->msg->len == 1 && dev->rd_acked == 0 &&
-				(status & I2C_STATUS_RX_DATA_STATE))
+				((status & I2C_STATUS_RX_DATA_STATE) ==
+				 I2C_STATUS_RX_DATA_STATE))
 			writel(I2C_WRITE_DATA_LAST_BYTE,
 				dev->base + I2C_WRITE_DATA);
 	} else {
@@ -436,7 +437,8 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			while (retries != 2000) {
 				uint32_t status = readl(dev->base + I2C_STATUS);
 
-					if (status & I2C_STATUS_RX_DATA_STATE)
+					if ((status & I2C_STATUS_RX_DATA_STATE)
+						== I2C_STATUS_RX_DATA_STATE)
 						break;
 				retries++;
 			}
