@@ -20,6 +20,14 @@
 #include <mach/msm_iomap.h>
 
 extern unsigned long msm_nand_phys;
+extern unsigned long msm_nandc01_phys;
+extern unsigned long msm_nandc10_phys;
+extern unsigned long msm_nandc11_phys;
+extern unsigned long ebi2_register_base;
+
+#define NC01(X) ((X) + msm_nandc01_phys - msm_nand_phys)
+#define NC10(X) ((X) + msm_nandc10_phys - msm_nand_phys)
+#define NC11(X) ((X) + msm_nandc11_phys - msm_nand_phys)
 
 #define NAND_REG(off) (msm_nand_phys + (off))
 
@@ -170,8 +178,10 @@ extern unsigned long msm_nand_phys;
 #define CLEAN_DATA_16			0xFFFF
 #define CLEAN_DATA_32			0xFFFFFFFF
 
+#define EBI2_REG(off)   		(ebi2_register_base + (off))
+#define EBI2_CFG_REG		       	EBI2_REG(0x0004)
+#define EBI2_NAND_ADM_MUX       	EBI2_REG(0x005C)
 
 extern struct flash_platform_data msm_nand_data;
-
 
 #endif
