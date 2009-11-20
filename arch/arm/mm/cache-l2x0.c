@@ -48,6 +48,11 @@ static inline void cache_sync(void)
 	sync_writel(0, L2X0_CACHE_SYNC, 1);
 }
 
+void l2x0_cache_sync(void)
+{
+	cache_sync();
+}
+
 static inline void l2x0_inv_all(void)
 {
 	/* invalidate all ways */
