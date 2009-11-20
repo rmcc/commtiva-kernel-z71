@@ -183,6 +183,13 @@ config PHYS_OFFSET
 	default "0x20000000" if ARCH_QSD8X50
 	default "0x10000000"
 
+config PMEM_GPU0
+	bool "Enable PMEM GPU0 region"
+	default y
+	depends on ARCH_QSD8X50 && ANDROID_PMEM
+	help
+	  Enable the PMEM GPU0 device
+
 config MSM_AMSS_VERSION
 	int
 	default 6210 if MSM_AMSS_VERSION_6210
