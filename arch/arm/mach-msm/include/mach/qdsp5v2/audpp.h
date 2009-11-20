@@ -28,13 +28,16 @@ typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
 #define MSM_AUD_DECODER_MASK  0x0000FFFF
 #define MSM_AUD_OP_MASK  0xFFFF0000
 
-
 #define AUDPP_MIXER_0 AUDPP_CMD_CFG_DEV_MIXER_DEV_0
 #define AUDPP_MIXER_1 AUDPP_CMD_CFG_DEV_MIXER_DEV_1
 #define AUDPP_MIXER_2 AUDPP_CMD_CFG_DEV_MIXER_DEV_2
 #define AUDPP_MIXER_3 AUDPP_CMD_CFG_DEV_MIXER_DEV_3
 #define AUDPP_MIXER_4 AUDPP_CMD_CFG_DEV_MIXER_DEV_4
 
+enum obj_type {
+	COPP,
+	POPP
+};
 
 enum msm_aud_decoder_state {
 	MSM_AUD_DECODER_STATE_NONE = 0,
@@ -64,20 +67,17 @@ int audpp_send_queue3(void *cmd, unsigned len);
 
 void audpp_route_stream(unsigned short dec_id, unsigned short mixer_mask);
 
-int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan);
+int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan,
+					enum obj_type objtype);
 int audpp_pause(unsigned id, int pause);
 int audpp_flush(unsigned id);
 void audpp_avsync(int id, unsigned rate);
 unsigned audpp_avsync_sample_count(int id);
 unsigned audpp_avsync_byte_count(int id);
-int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
-	struct audpp_cmd_cfg_object_params_mbadrc *mbadrc);
 int audpp_dsp_set_eq(unsigned id, unsigned enable,
-	struct audpp_cmd_cfg_object_params_eqalizer *eq);
-int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
-	struct audpp_cmd_cfg_object_params_pcm *iir);
+	struct audpp_cmd_cfg_object_params_eqalizer *eq,
+			enum obj_type objtype);
 int audpp_dsp_set_vol_pan(unsigned id,
-	struct audpp_cmd_cfg_object_params_volume *vol_pan);
-int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
-	struct audpp_cmd_cfg_object_params_qconcert *qconcert_plus);
+	struct audpp_cmd_cfg_object_params_volume *vol_pan,
+			enum obj_type objtype);
 #endif

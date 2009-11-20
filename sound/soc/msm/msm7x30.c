@@ -74,7 +74,8 @@ static int msm_volume_put(struct snd_kcontrol *kcontrol,
 	int volume = ucontrol->value.integer.value[1];
 
 	spin_lock_irq(&the_locks.mixer_lock);
-	ret = audpp_set_volume_and_pan(dec_id, (unsigned) volume, 0);
+	ret = audpp_set_volume_and_pan(dec_id, (unsigned) volume, 0,
+			POPP);
 	spin_unlock_irq(&the_locks.mixer_lock);
 	if (!ret)
 		msm_vol_ctl.volume = volume;
