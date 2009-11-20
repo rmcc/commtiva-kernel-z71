@@ -36,6 +36,8 @@
 
 #include <linux/types.h>
 
+/* Remote spinlock definitions. */
+
 struct dek_spinlock {
 	volatile uint8_t self_lock;
 	volatile uint8_t other_lock;
@@ -206,5 +208,21 @@ int _remote_spin_lock_init(remote_spinlock_id_t, _remote_spinlock_t *lock);
 #define _remote_spin_trylock(lock)	__raw_remote_ex_spin_trylock(*lock)
 #endif
 
-#endif /* __ASM__ARCH_QC_REMOTE_SPINLOCK_H */
+/* Remote mutex definitions. */
 
+typedef struct {
+	_remote_spinlock_t	r_spinlock;
+	uint32_t		delay_us;
+} _remote_mutex_t;
+
+struct remote_mutex_id {
+	remote_spinlock_id_t	r_spinlock_id;
+	uint32_t		delay_us;
+};
+
+int _remote_mutex_init(struct remote_mutex_id *id, _remote_mutex_t *lock);
+void _remote_mutex_lock(_remote_mutex_t *lock);
+void _remote_mutex_unlock(_remote_mutex_t *lock);
+int _remote_mutex_trylock(_remote_mutex_t *lock);
+
+#endif /* __ASM__ARCH_QC_REMOTE_SPINLOCK_H */
