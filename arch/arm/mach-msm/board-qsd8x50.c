@@ -664,6 +664,21 @@ static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
 	.cached = 0,
 };
 
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+
+static struct android_pmem_platform_data android_pmem_kernel_smi_pdata = {
+	.name = PMEM_KERNEL_SMI_DATA_NAME,
+	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
+	 * the only valid choice at this time. The board structure is
+	 * set to all zeros by the C runtime initialization and that is now
+	 * the enum value of PMEM_ALLOCATORTYPE_BITMAP, now forced to 0 in
+	 * include/linux/android_pmem.h.
+	 */
+	.cached = 0,
+};
+
+#endif
+
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
@@ -723,6 +738,14 @@ static struct platform_device android_pmem_kernel_ebi1_device = {
 	.id = 5,
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
+
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+static struct platform_device android_pmem_kernel_smi_device = {
+	.name = "android_pmem",
+	.id = 6,
+	.dev = { .platform_data = &android_pmem_kernel_smi_pdata },
+};
+#endif
 
 static struct resource msm_fb_resources[] = {
 	{
@@ -2019,6 +2042,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
 	&android_pmem_kernel_ebi1_device,
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+	&android_pmem_kernel_smi_device,
+#endif
 	&android_pmem_device,
 	&android_pmem_adsp_device,
 #ifdef CONFIG_PMEM_GPU0
@@ -2419,6 +2445,22 @@ static void __init pmem_kernel_ebi1_size_setup(char **p)
 }
 __early_param("pmem_kernel_ebi1_size=", pmem_kernel_ebi1_size_setup);
 
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+static unsigned pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+static void __init pmem_kernel_smi_size_setup(char **p)
+{
+	pmem_kernel_smi_size = memparse(*p, p);
+
+	/* Make sure that we don't allow more SMI memory then is
+	   available - the kernel mapping code has no way of knowing
+	   if it has gone over the edge */
+
+	if (pmem_kernel_smi_size > MSM_PMEM_GPU0_SIZE)
+		pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+}
+__early_param("pmem_kernel_smi_size=", pmem_kernel_smi_size_setup);
+#endif
+
 static unsigned pmem_mdp_size = MSM_PMEM_MDP_SIZE;
 static void __init pmem_mdp_size_setup(char **p)
 {
@@ -2504,6 +2546,24 @@ static void __init qsd8x50_allocate_memory_regions(void)
 		pr_info("allocating %lu bytes at %p (%lx physical) for kernel"
 			" ebi1 pmem arena\n", size, addr, __pa(addr));
 	}
+
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+	size = pmem_kernel_smi_size;
+	if (size > MSM_PMEM_GPU0_SIZE) {
+		printk(KERN_ERR "pmem kernel smi arena size %lu is too big\n",
+			size);
+
+		size = MSM_PMEM_GPU0_SIZE;
+	}
+
+	android_pmem_kernel_smi_pdata.start = MSM_PMEM_GPU0_BASE;
+	android_pmem_kernel_smi_pdata.size = size;
+
+	pr_info("allocating %lu bytes at %lx (%lx physical)"
+		"for pmem kernel smi arena\n", size,
+		(long unsigned int) MSM_PMEM_GPU0_BASE,
+		__pa(MSM_PMEM_GPU0_BASE));
+#endif
 
 	size = pmem_mdp_size;
 	if (size) {

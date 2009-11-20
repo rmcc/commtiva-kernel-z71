@@ -183,6 +183,13 @@ config PHYS_OFFSET
 	default "0x20000000" if ARCH_QSD8X50
 	default "0x10000000"
 
+config KERNEL_PMEM_SMI_REGION
+	bool "Enable in-kernel PMEM region for SMI"
+	default n
+	depends on ARCH_QSD8X50 && !PMEM_GPU0
+	help
+	   Enable the in-kernel PMEM alloator to use SMI memory.
+
 config PMEM_GPU0
 	bool "Enable PMEM GPU0 region"
 	default y
