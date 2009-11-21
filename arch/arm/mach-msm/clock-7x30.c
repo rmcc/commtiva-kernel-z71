@@ -401,6 +401,16 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MDP_VSYNC_REG		0x0460
 #define PLL_ENA_REG		0x0260
 
+static uint32_t *pll_status_addr[NUM_PLL] = {
+	[PLL_0] = MSM_CLK_CTL_BASE + 0x318,
+	[PLL_1] = MSM_CLK_CTL_BASE + 0x334,
+	[PLL_2] = MSM_CLK_CTL_BASE + 0x350,
+	[PLL_3] = MSM_CLK_CTL_BASE + 0x36C,
+	[PLL_4] = MSM_CLK_CTL_BASE + 0x254,
+	[PLL_5] = MSM_CLK_CTL_BASE + 0x258,
+	[PLL_6] = MSM_CLK_CTL_BASE + 0x4EC,
+};
+
 static uint32_t pll_count[NUM_PLL];
 
 static uint32_t chld_grp_3d_src[] = 	{C(IMEM), C(GRP_3D), C(NONE)};
@@ -544,10 +554,13 @@ static struct clk_local clk_local_tbl[] = {
 static DEFINE_SPINLOCK(clock_reg_lock);
 static DEFINE_SPINLOCK(pll_vote_lock);
 
+#define PLL_ACTIVE_MASK	B(16)
 void pll_enable(uint32_t pll)
 {
 	uint32_t reg_val;
 	unsigned long flags;
+
+	BUG_ON(pll >= NUM_PLL);
 
 	spin_lock_irqsave(&pll_vote_lock, flags);
 	if (!pll_count[pll]) {
@@ -557,6 +570,10 @@ void pll_enable(uint32_t pll)
 	}
 	pll_count[pll]++;
 	spin_unlock_irqrestore(&pll_vote_lock, flags);
+
+	/* Wait until PLL is enabled. */
+	while ((readl(pll_status_addr[pll]) & PLL_ACTIVE_MASK) == 0)
+		;
 }
 
 static void src_enable(uint32_t src)
@@ -573,6 +590,8 @@ void pll_disable(uint32_t pll)
 {
 	uint32_t reg_val;
 	unsigned long flags;
+
+	BUG_ON(pll >= NUM_PLL);
 
 	spin_lock_irqsave(&pll_vote_lock, flags);
 	if (pll_count[pll])
