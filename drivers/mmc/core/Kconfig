@@ -14,6 +14,21 @@ config MMC_UNSAFE_RESUME
 	  This option is usually just for embedded systems which use
 	  a MMC/SD card for rootfs. Most people should say N here.
 
+config MMC_AUTO_SUSPEND
+	bool "Enable auto suspend feature"
+	depends on PM && MMC_UNSAFE_RESUME && EXPERIMENTAL
+	default n
+	help
+	  If you say Y here, it allows MMC core to provide an interface for
+	  the host drivers to register a callback that the core will call if
+	  the MMC bus is idle for a certain amount of time.
+
+	  The idle timeout is run-time configurable via sysfs interface. A
+	  module paramter "idle_timeout" is also provided to configure the
+	  value through kernel command-line. The default value is set to 20 sec.
+
+	  This feature is supported only for SD/MMC cards.
+
 config MMC_EMBEDDED_SDIO
 	boolean "MMC embedded SDIO device support (EXPERIMENTAL)"
 	depends on EXPERIMENTAL

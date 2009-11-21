@@ -733,6 +733,64 @@ void mmc_detect_change(struct mmc_host *host, unsigned long delay)
 
 EXPORT_SYMBOL(mmc_detect_change);
 
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+void mmc_schedule_autosuspend(struct mmc_host *host, unsigned long delay)
+{
+	schedule_delayed_work(&host->auto_suspend, delay);
+}
+
+/* Return value = 0 when resume is done
+ * Return value = 1 when suspend is done
+ */
+int mmc_auto_suspend(struct mmc_host *host, int suspend)
+{
+	int	status = -1;
+	unsigned long next_timeout, timeout;
+	unsigned long j = jiffies;
+
+	if (host->card && mmc_card_sdio(host->card))
+		return -1;
+
+	mutex_lock(&host->auto_suspend_mutex);
+	if (suspend) {
+		if (host->auto_suspend_state)
+			goto out;
+
+		timeout = host->last_busy + host->idle_timeout;
+		if (time_after_eq(j, timeout)) {
+			host->auto_suspend_state = 1;
+			host->ops->auto_suspend(host, 1); /* suspend host */
+			status = 1;
+			goto out;
+		}
+	} else {
+		host->last_busy = j;
+		if (host->auto_suspend_state) {
+			host->ops->auto_suspend(host, 0); /* resume host */
+			host->auto_suspend_state = 0;
+			status = 0;
+		}
+	}
+
+	if (host->idle_timeout >= 0) {
+		next_timeout = host->idle_timeout - (j - host->last_busy);
+		mmc_schedule_autosuspend(host, next_timeout);
+	}
+out:
+	mutex_unlock(&host->auto_suspend_mutex);
+	return status;
+}
+EXPORT_SYMBOL(mmc_auto_suspend);
+
+void mmc_auto_suspend_work(struct work_struct *work)
+{
+	struct mmc_host *host =
+		container_of(work, struct mmc_host, auto_suspend.work);
+
+	/* Try suspending the host */
+	mmc_auto_suspend(host, 1);
+}
+#endif
 
 void mmc_rescan(struct work_struct *work)
 {
@@ -743,6 +801,12 @@ void mmc_rescan(struct work_struct *work)
 
 	mmc_bus_get(host);
 
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+	if (!mmc_auto_suspend(host, 0)) { /* i.e resumed */
+		mmc_bus_put(host);
+		goto out;
+	}
+#endif
 	if (host->bus_ops == NULL) {
 		/*
 		 * Only we can add a new handler, so it's safe to
@@ -821,7 +885,10 @@ void mmc_stop_host(struct mmc_host *host)
 	spin_unlock_irqrestore(&host->lock, flags);
 #endif
 
-	cancel_delayed_work_sync(&host->detect);
+	cancel_delayed_work(&host->detect);
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+	cancel_delayed_work(&host->auto_suspend);
+#endif
 	mmc_flush_scheduled_work();
 
 	mmc_bus_get(host);
@@ -849,7 +916,10 @@ void mmc_stop_host(struct mmc_host *host)
  */
 int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 {
-	cancel_delayed_work_sync(&host->detect);
+	cancel_delayed_work(&host->detect);
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+	cancel_delayed_work(&host->auto_suspend);
+#endif
 	mmc_flush_scheduled_work();
 
 	mmc_bus_get(host);
@@ -866,9 +936,7 @@ int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 		}
 	}
 	mmc_bus_put(host);
-
 	mmc_power_off(host);
-
 	return 0;
 }
 

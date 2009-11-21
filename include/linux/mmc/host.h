@@ -77,6 +77,9 @@ struct mmc_host_ops {
 	int	(*get_cd)(struct mmc_host *host);
 
 	void	(*enable_sdio_irq)(struct mmc_host *host, int enable);
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+	int	(*auto_suspend)(struct mmc_host *host, int on);
+#endif
 };
 
 struct mmc_card;
@@ -170,6 +173,13 @@ struct mmc_host {
 	} embedded_sdio_data;
 #endif
 
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+	struct delayed_work	auto_suspend;
+	struct mutex		auto_suspend_mutex;
+	unsigned long 		last_busy;
+	int			idle_timeout;
+	unsigned long		auto_suspend_state;
+#endif
 	unsigned long		private[0] ____cacheline_aligned;
 };
 

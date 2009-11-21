@@ -153,4 +153,8 @@ static inline void mmc_claim_host(struct mmc_host *host)
 
 extern u32 mmc_vddrange_to_ocrmask(int vdd_min, int vdd_max);
 
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+extern int mmc_auto_suspend(struct mmc_host *, int);
+#endif
+
 #endif
