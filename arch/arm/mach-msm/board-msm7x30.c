@@ -104,10 +104,35 @@
 #define MSM_PMEM_ADSP_SIZE      0x2000000
 #define PMEM_KERNEL_EBI1_SIZE   0x600000
 
-
-
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
+
+/* Macros assume PMIC GPIOs start at 0 */
+#define PM8058_GPIO_PM_TO_SYS(pm_gpio)     (pm_gpio + NR_GPIO_IRQS)
+#define PM8058_GPIO_SYS_TO_PM(sys_gpio)    (sys_gpio - NR_GPIO_IRQS)
+
+int pm8058_gpios_init(void)
+{
+	int rc;
+	struct pm8058_gpio backlight_drv = {
+		.direction      = PM_GPIO_DIR_OUT,
+		.output_buffer  = PM_GPIO_OUT_BUF_CMOS,
+		.output_value   = 1,
+		.pull           = PM_GPIO_PULL_NO,
+		.out_strength   = PM_GPIO_STRENGTH_HIGH,
+		.function       = PM_GPIO_FUNC_NORMAL,
+	};
+
+	if (machine_is_msm7x30_fluid()) {
+		rc = pm8058_gpio_config(25, &backlight_drv); /* pmic gpio 26 */
+		if (rc) {
+			pr_err("%s PMIC GPIO 25 write failed\n", __func__);
+			return rc;
+		}
+	}
+
+	return 0;
+}
 
 static const unsigned int fluid_keymap[] = {
 	KEY(0, 0, KEY_7),
@@ -321,7 +346,8 @@ static struct pm8058_platform_data pm8058_7x30_data = {
 	.pm_irqs = {
 		[PM8058_IRQ_KEYPAD - PM8058_FIRST_IRQ] = 74,
 		[PM8058_IRQ_KEYSTUCK - PM8058_FIRST_IRQ] = 75,
-	}
+	},
+	.init = pm8058_gpios_init,
 };
 
 static struct i2c_board_info pm8058_boardinfo[] __initdata = {
