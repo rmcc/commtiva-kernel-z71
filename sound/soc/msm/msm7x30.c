@@ -315,7 +315,7 @@ static int snd_dev_ctl_index(int idx)
 		return PTR_ERR(dev_info);
 	}
 	if (sizeof(dev_info->name) <= 44)
-		sprintf(&name[idx][0] , "%s\n", dev_info->name);
+		sprintf(&name[idx][0] , "%s", dev_info->name);
 
 	snd_dev_controls[idx].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	snd_dev_controls[idx].access = SNDRV_CTL_ELEM_ACCESS_READWRITE;
