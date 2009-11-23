@@ -106,6 +106,7 @@ static void mdp_dma2_update_lcd(struct msm_fb_data_type *mfd)
 	uint16 mddi_vdo_packet_reg;
 	struct msm_fb_panel_data *pdata =
 	    (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
+	uint32 ystride = mfd->fbi->fix.line_length;
 
 	dma2_cfg_reg = DMA_PACK_TIGHT | DMA_PACK_ALIGN_LSB |
 	    DMA_OUT_SEL_AHB | DMA_IBUF_NONCONTIGUOUS;
@@ -180,7 +181,7 @@ static void mdp_dma2_update_lcd(struct msm_fb_data_type *mfd)
 
 	src = (uint8 *) iBuf->buf;
 	/* starting input address */
-	src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width) * outBpp;
+	src += iBuf->dma_x * outBpp + iBuf->dma_y * ystride;
 
 	mdp_curr_dma2_update_width = iBuf->dma_w;
 	mdp_curr_dma2_update_height = iBuf->dma_h;
@@ -192,11 +193,11 @@ static void mdp_dma2_update_lcd(struct msm_fb_data_type *mfd)
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0184,
 			(iBuf->dma_h << 16 | iBuf->dma_w));
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0188, src);
-	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x018C, iBuf->ibuf_width * outBpp);
+	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x018C, ystride);
 #else
 	MDP_OUTP(MDP_BASE + 0x90004, (iBuf->dma_h << 16 | iBuf->dma_w));
 	MDP_OUTP(MDP_BASE + 0x90008, src);
-	MDP_OUTP(MDP_BASE + 0x9000c, iBuf->ibuf_width * outBpp);
+	MDP_OUTP(MDP_BASE + 0x9000c, ystride);
 #endif
 
 	if (mfd->panel_info.bpp == 18) {
@@ -500,9 +501,8 @@ void mdp_set_dma_pan_info(struct fb_info *info, struct mdp_dirty_region *dirty,
 	down(&mfd->sem);
 	iBuf = &mfd->ibuf;
 	iBuf->buf = (uint8 *) info->fix.smem_start;
-	iBuf->buf +=
-	    (info->var.xoffset +
-	     info->var.yoffset * info->var.xres_virtual) * bpp;
+	iBuf->buf += info->var.xoffset * bpp +
+			info->var.yoffset * info->fix.line_length;
 
 	iBuf->ibuf_width = info->var.xres_virtual;
 	iBuf->bpp = bpp;
