@@ -236,7 +236,7 @@ struct kgsl_ringbuffer {
 #define GSL_RB_STATS(x)
 #endif /* GSL_STATS_RINGBUFFER */
 
-struct kgsl_pmem_entry;
+struct kgsl_mem_entry;
 
 int kgsl_ringbuffer_issueibcmds(struct kgsl_device *, int drawctxt_index,
 				uint32_t ibaddr, int sizedwords,

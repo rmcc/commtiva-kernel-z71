@@ -54,19 +54,19 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#include "kgsl_ringbuffer.h"
-#include "kgsl_cmdstream.h"
+#include <linux/firmware.h>
+#include <linux/io.h>
+#include <linux/sched.h>
+#include <linux/wait.h>
 
 #include "kgsl.h"
 #include "kgsl_device.h"
 #include "kgsl_log.h"
 #include "kgsl_pm4types.h"
+#include "kgsl_ringbuffer.h"
+#include "kgsl_cmdstream.h"
 
 #include "yamato_reg.h"
-#include <linux/firmware.h>
-#include <linux/io.h>
-#include <linux/sched.h>
-
 
 #define GSL_RB_NOP_SIZEDWORDS				2
 /* protected mode error checking below register address 0x800
@@ -577,15 +577,6 @@ int kgsl_ringbuffer_init(struct kgsl_device *device)
 		return status;
 	}
 
-	/*setup default pagetable here, because this is the last allocation
-	  of the init process*/
-	status = kgsl_yamato_setup_pt(device, device->mmu.defaultpagetable);
-	if (status != 0) {
-		kgsl_ringbuffer_close(rb);
-		KGSL_CMD_VDBG("return %d\n", status);
-		return status;
-	}
-
 	/* overlay structure on memptrs memory */
 	rb->memptrs = (struct kgsl_rbmemptrs *) rb->memptrs_desc.hostptr;
 
@@ -609,9 +600,6 @@ int kgsl_ringbuffer_close(struct kgsl_ringbuffer *rb)
 	kgsl_cmdstream_memqueue_drain(rb->device);
 
 	kgsl_ringbuffer_stop(rb);
-
-	/*this must happen before first sharedmem_free */
-	kgsl_yamato_cleanup_pt(rb->device, rb->device->mmu.defaultpagetable);
 
 	if (rb->buffer_desc.hostptr)
 		kgsl_sharedmem_free(&rb->buffer_desc);
@@ -734,14 +722,11 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device *device,
 	link[1] = ibaddr;
 	link[2] = sizedwords;
 
-	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
 	kgsl_drawctxt_switch(device, &device->drawctxt[drawctxt_index], flags);
-	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
 
 	*timestamp = kgsl_ringbuffer_addcmds(&device->ringbuffer,
 					0, &link[0], 3);
 
-	/*kgsl_yamato_idle(device, KGSL_TIMEOUT_DEFAULT);*/
 
 	KGSL_CMD_INFO("ctxt %d g %08x sd %d ts %d\n",
 			drawctxt_index, ibaddr, sizedwords, *timestamp);

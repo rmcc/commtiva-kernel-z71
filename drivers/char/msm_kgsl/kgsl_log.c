@@ -68,7 +68,9 @@ unsigned int kgsl_cmd_log = KGSL_LOG_LEVEL_DEFAULT;
 unsigned int kgsl_ctxt_log = KGSL_LOG_LEVEL_DEFAULT;
 unsigned int kgsl_mem_log = KGSL_LOG_LEVEL_DEFAULT;
 
-unsigned int kgsl_mmu_enable;
+#ifdef CONFIG_MSM_KGSL_MMU
+unsigned int kgsl_cache_enable;
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 static int kgsl_log_set(unsigned int *log_val, void *data, u64 val)
@@ -275,21 +277,22 @@ static const struct file_operations kgsl_mmu_regs_fops = {
 };
 #endif /*DEBUG*/
 
-static int kgsl_mmu_enable_set(void *data, u64 val)
+#ifdef CONFIG_MSM_KGSL_MMU
+static int kgsl_cache_enable_set(void *data, u64 val)
 {
-	kgsl_mmu_enable = (val != 0);
+	kgsl_cache_enable = (val != 0);
 	return 0;
 }
 
-static int kgsl_mmu_enable_get(void *data, u64 *val)
+static int kgsl_cache_enable_get(void *data, u64 *val)
 {
-	*val = kgsl_mmu_enable;
+	*val = kgsl_cache_enable;
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(kgsl_mmu_enable_fops, kgsl_mmu_enable_get,
-			kgsl_mmu_enable_set, "%llu\n");
-
+DEFINE_SIMPLE_ATTRIBUTE(kgsl_cache_enable_fops, kgsl_cache_enable_get,
+			kgsl_cache_enable_set, "%llu\n");
+#endif /*CONFIG_MSM_KGSL_MMU*/
 
 #endif /* CONFIG_DEBUG_FS */
 
@@ -318,8 +321,12 @@ int kgsl_debug_init(void)
 	debugfs_create_file("mmu_regs", 0444, dent, 0,
 				&kgsl_mmu_regs_fops);
 #endif
-	debugfs_create_file("mmu_enable", 0644, dent, 0,
-				&kgsl_mmu_enable_fops);
+
+#ifdef CONFIG_MSM_KGSL_MMU
+    debugfs_create_file("cache_enable", 0644, dent, 0,
+				&kgsl_cache_enable_fops);
+#endif
+
 #endif /* CONFIG_DEBUG_FS */
 	return 0;
 }

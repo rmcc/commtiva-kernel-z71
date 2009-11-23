@@ -65,7 +65,7 @@ int kgsl_cmdstream_check_timestamp(struct kgsl_device *device,
 
 int
 kgsl_cmdstream_freememontimestamp(struct kgsl_device *device,
-				  struct kgsl_pmem_entry *entry,
+				  struct kgsl_mem_entry *entry,
 				  uint32_t timestamp,
 				  enum kgsl_timestamp_type type);
 

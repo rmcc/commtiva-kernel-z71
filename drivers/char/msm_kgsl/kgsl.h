@@ -71,12 +71,17 @@ struct kgsl_driver {
 
 extern struct kgsl_driver kgsl_driver;
 
-struct kgsl_pmem_entry {
+struct kgsl_mem_entry {
 	struct kgsl_memdesc memdesc;
 	struct file *pmem_file;
 	struct list_head list;
 	struct list_head free_list;
 	uint32_t free_timestamp;
+#ifdef CONFIG_MSM_KGSL_MMU
+	/* back pointer to private structure under whose context this
+	* allocation is made */
+	struct kgsl_file_private *priv;
+#endif
 };
 
 enum kgsl_status {
@@ -104,7 +109,7 @@ while (1) { \
 #define KGSL_POST_HWACCESS() \
 	mutex_unlock(&kgsl_driver.mutex)
 
-void kgsl_remove_pmem_entry(struct kgsl_pmem_entry *entry);
+void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry);
 
 int kgsl_pwrctrl(unsigned int pwrflag);
 int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
