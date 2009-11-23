@@ -739,9 +739,6 @@ static void vfe_proc_ops(enum VFE_MESSAGE_ID id, void *data)
 	struct msm_vfe_resp *rp;
 	struct vfe_message *msg;
 
-	CDBG("ctrl->vfeOperationMode = %d, msgId = %d, len = %d\n",
-	     ctrl->vfeOperationMode, id, len);
-
 	if (id >= ARRAY_SIZE(vfe_funcs) || vfe_funcs[id].fn == invalid) {
 		pr_err("%s: invalid VFE message id %d\n", __func__, id);
 		return;
