@@ -221,7 +221,8 @@ static uint8_t msm_pmem_region_lookup(struct hlist_head *ptype,
 static int msm_pmem_frame_ptov_lookup(struct msm_sync *sync,
 		unsigned long pyaddr,
 		unsigned long pcbcraddr,
-		struct msm_pmem_info *pmem_info)
+		struct msm_pmem_info *pmem_info,
+		int clear_active)
 {
 	struct msm_pmem_region *region;
 	struct hlist_node *node, *n;
@@ -235,7 +236,8 @@ static int msm_pmem_frame_ptov_lookup(struct msm_sync *sync,
 			 * a registerd pmem buffer
 			 */
 			memcpy(pmem_info, &region->info, sizeof(*pmem_info));
-			region->info.active = 0;
+			if (clear_active)
+				region->info.active = 0;
 			return 0;
 		}
 	}
@@ -394,7 +396,8 @@ static int __msm_get_frame(struct msm_sync *sync,
 	rc = msm_pmem_frame_ptov_lookup(sync,
 			pphy->y_phy,
 			pphy->cbcr_phy,
-			&pmem_info);
+			&pmem_info,
+			1); /* mark frame in use */
 
 	if (rc < 0) {
 		pr_err("%s: cannot get frame, invalid lookup address "
@@ -699,7 +702,8 @@ static int msm_divert_frame(struct msm_sync *sync,
 	rc = msm_pmem_frame_ptov_lookup(sync,
 			data->phy.y_phy,
 			data->phy.cbcr_phy,
-			&pinfo);
+			&pinfo,
+			0);  /* do clear the active flag */
 	if (rc < 0) {
 		CDBG("%s: msm_pmem_frame_ptov_lookup failed\n", __func__);
 		return rc;
