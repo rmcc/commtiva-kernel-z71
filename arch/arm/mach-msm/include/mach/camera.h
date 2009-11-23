@@ -156,7 +156,10 @@ struct msm_sync {
 	uint8_t opencnt;
 	void *cropinfo;
 	int  croplen;
-	uint32_t pict_pp;
+
+	uint32_t pp_mask;
+	struct msm_queue_cmd *pp_prev;
+	struct msm_queue_cmd *pp_snap;
 
 	const char *apps_id;
 

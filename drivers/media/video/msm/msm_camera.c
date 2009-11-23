@@ -553,7 +553,9 @@ static struct msm_queue_cmd *__msm_control(struct msm_sync *sync,
 {
 	int rc;
 
+	CDBG("Inside __msm_control\n");
 	msm_enqueue(&sync->event_q, &qcmd->list_config);
+	/* wake up config thread */
 
 	if (!queue)
 		return NULL;
@@ -564,6 +566,7 @@ static struct msm_queue_cmd *__msm_control(struct msm_sync *sync,
 			queue->wait,
 			!list_empty_careful(&queue->list),
 			timeout);
+	CDBG("Waiting over for config status \n");
 	if (list_empty_careful(&queue->list)) {
 		if (!rc)
 			rc = -ETIMEDOUT;
@@ -572,10 +575,9 @@ static struct msm_queue_cmd *__msm_control(struct msm_sync *sync,
 			return ERR_PTR(rc);
 		}
 	}
-
 	qcmd = msm_dequeue(queue, list_control);
 	BUG_ON(!qcmd);
-
+	CDBG("__msm_control done \n");
 	return qcmd;
 }
 
@@ -701,6 +703,7 @@ static int msm_control(struct msm_control_device *ctrl_pmsm,
 
 end:
 	free_qcmd(qcmd_resp);
+	CDBG(" msm_control done\n");
 	CDBG("%s: rc %d\n", __func__, rc);
 	return rc;
 }
@@ -716,9 +719,9 @@ static int msm_divert_frame(struct msm_sync *sync,
 	struct msm_postproc buf;
 	int rc;
 
-	CDBG("%s: preview PP sync->pict_pp %d\n", __func__, sync->pict_pp);
+	pr_info("%s: preview PP sync->pp_mask %d\n", __func__, sync->pp_mask);
 
-	if (!(sync->pict_pp & PP_PREV)) {
+	if (!(sync->pp_mask & PP_PREV)) {
 		pr_err("%s: diverting preview frame but not in PP_PREV!\n",
 			__func__);
 		return -EINVAL;
@@ -759,9 +762,9 @@ static int msm_divert_snapshot(struct msm_sync *sync,
 	struct msm_postproc buf;
 	struct msm_pmem_region region;
 
-	CDBG("%s: preview PP sync->pict_pp %d\n", __func__, sync->pict_pp);
+	CDBG("%s: preview PP sync->pp_mask %d\n", __func__, sync->pp_mask);
 
-	if (!(sync->pict_pp & (PP_SNAP|PP_RAW_SNAP))) {
+	if (!(sync->pp_mask & (PP_SNAP|PP_RAW_SNAP))) {
 		pr_err("%s: diverting snapshot but not in PP_SNAP!\n",
 			__func__);
 		return -EINVAL;
@@ -893,11 +896,15 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 				rc = -EFAULT;
 				goto failure;
 			}
-		} else if (data->type == VFE_MSG_OUTPUT1 ||
-				data->type == VFE_MSG_OUTPUT2) {
-			rc = msm_divert_frame(sync, data, &se);
-		} else if (data->type == VFE_MSG_SNAPSHOT) {
-			rc = msm_divert_snapshot(sync, data, &se);
+		} else {
+			if ((sync->pp_mask & PP_PREV) &&
+				(data->type == VFE_MSG_OUTPUT1 ||
+				 data->type == VFE_MSG_OUTPUT2))
+					rc = msm_divert_frame(sync, data, &se);
+			else if ((sync->pp_mask & (PP_SNAP|PP_RAW_SNAP)) &&
+				  data->type == VFE_MSG_SNAPSHOT)
+					rc = msm_divert_snapshot(sync,
+								data, &se);
 		}
 		break;
 
@@ -999,7 +1006,7 @@ static int msm_ctrl_cmd_done(struct msm_control_device *ctrl_pmsm,
 		command->value = NULL;
 
 
-	/* wake up control thread */
+		/* wake up control thread */
 	msm_enqueue(&ctrl_pmsm->ctrl_q, &qcmd->list_control);
 
 	return 0;
@@ -1530,15 +1537,61 @@ static int msm_pp_grab(struct msm_sync *sync, void __user *arg)
 				__func__);
 			return -EINVAL;
 		}
-		if (sync->pict_pp) {
+		if (sync->pp_mask) {
 			pr_err("%s: postproc %x is already enabled\n",
-				__func__, sync->pict_pp & enable);
+				__func__, sync->pp_mask & enable);
 			return -EINVAL;
 		}
 
-		sync->pict_pp |= enable;
+		CDBG("%s: sync->pp_mask %d enable %d\n", __func__,
+			sync->pp_mask, enable);
+		sync->pp_mask |= enable;
 	}
 
+	return 0;
+}
+
+static int msm_pp_release(struct msm_sync *sync, void __user *arg)
+{
+	uint32_t mask;
+	if (copy_from_user(&mask, arg, sizeof(uint32_t))) {
+		ERR_COPY_FROM_USER();
+		return -EFAULT;
+	}
+
+	mask &= PP_MASK;
+	if (!(sync->pp_mask & mask)) {
+		pr_warning("%s: pp not in progress for %x\n", __func__,
+			mask);
+		return -EINVAL;
+	}
+
+	if ((mask & PP_PREV) && (sync->pp_mask & PP_PREV)) {
+		if (!sync->pp_prev) {
+			pr_err("%s: no preview frame to deliver!\n", __func__);
+			return -EINVAL;
+		}
+		pr_info("%s: delivering pp_prev\n", __func__);
+
+		msm_enqueue(&sync->frame_q, &sync->pp_prev->list_frame);
+		sync->pp_prev = NULL;
+		goto done;
+	}
+
+	if (((mask & PP_SNAP) && (sync->pp_mask & PP_SNAP)) ||
+			((mask & PP_RAW_SNAP) &&
+			 (sync->pp_mask & PP_RAW_SNAP))) {
+		if (!sync->pp_snap) {
+			pr_err("%s: no snapshot to deliver!\n", __func__);
+			return -EINVAL;
+		}
+		pr_info("%s: delivering pp_snap\n", __func__);
+		msm_enqueue(&sync->pict_q, &sync->pp_snap->list_pict);
+		sync->pp_snap = NULL;
+	}
+
+done:
+	sync->pp_mask = 0;
 	return 0;
 }
 
@@ -1648,6 +1701,13 @@ static long msm_ioctl_config(struct file *filep, unsigned int cmd,
 		 * frame.
 		 */
 		rc = msm_pp_grab(pmsm->sync, argp);
+		break;
+
+	case MSM_CAM_IOCTL_PICT_PP_DONE:
+		/* Release the preview of snapshot frame
+		 * that was grabbed.
+		 */
+		rc = msm_pp_release(pmsm->sync, argp);
 		break;
 
 	case MSM_CAM_IOCTL_SENSOR_IO_CFG:
@@ -1924,27 +1984,37 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 		qcmd->on_heap++;
 
 	CDBG("%s: vdata->type %d\n", __func__, vdata->type);
-	switch (vdata->type) {
-	case VFE_MSG_OUTPUT1:
-	case VFE_MSG_OUTPUT2:
-		if (sync->pict_pp & PP_PREV) {
+		switch (vdata->type) {
+		case VFE_MSG_OUTPUT1:
+		case VFE_MSG_OUTPUT2:
+		if (sync->pp_mask & PP_PREV) {
 			CDBG("%s: PP_PREV in progress: phy_y %x phy_cbcr %x\n",
 				__func__,
 				vdata->phy.y_phy,
 				vdata->phy.cbcr_phy);
-			break;
-		}
+			if (sync->pp_prev)
+				pr_warning("%s: overwriting pp_prev!\n",
+					__func__);
+			pr_info("%s: sending preview to config\n", __func__);
+			sync->pp_prev = qcmd;
+				break;
+			}
 		CDBG("%s: msm_enqueue frame_q\n", __func__);
 		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
 
 		break;
 
-	case VFE_MSG_SNAPSHOT:
-		if (sync->pict_pp & (PP_SNAP | PP_RAW_SNAP)) {
-			CDBG("%s: PP_SNAP in progress: pict_pp %x\n",
-				__func__, sync->pict_pp);
-			break;
-		}
+		case VFE_MSG_SNAPSHOT:
+		if (sync->pp_mask & (PP_SNAP | PP_RAW_SNAP)) {
+			CDBG("%s: PP_SNAP in progress: pp_mask %x\n",
+				__func__, sync->pp_mask);
+			if (sync->pp_snap)
+				pr_warning("%s: overwriting pp_snap!\n",
+					__func__);
+			pr_info("%s: sending snapshot to config\n", __func__);
+			sync->pp_snap = qcmd;
+				break;
+			}
 
 		msm_enqueue(&sync->pict_q, &qcmd->list_pict);
 
