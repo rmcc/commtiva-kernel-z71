@@ -106,6 +106,7 @@
 
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
+#define PMIC_GPIO_SD_DET	35  /* PMIC GPIO Number 36 */
 
 /* Macros assume PMIC GPIOs start at 0 */
 #define PM8058_GPIO_PM_TO_SYS(pm_gpio)     (pm_gpio + NR_GPIO_IRQS)
@@ -123,6 +124,15 @@ int pm8058_gpios_init(void)
 		.function       = PM_GPIO_FUNC_NORMAL,
 	};
 
+#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+	struct pm8058_gpio sdcc_det = {
+		.direction      = PM_GPIO_DIR_IN,
+		.pull           = PM_GPIO_PULL_UP_1P5,
+		.vin_sel        = 2,
+		.function       = PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol    = 0,
+	};
+#endif
 	if (machine_is_msm7x30_fluid()) {
 		rc = pm8058_gpio_config(25, &backlight_drv); /* pmic gpio 26 */
 		if (rc) {
@@ -131,6 +141,13 @@ int pm8058_gpios_init(void)
 		}
 	}
 
+#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+		rc = pm8058_gpio_config(PMIC_GPIO_SD_DET, &sdcc_det);
+		if (rc) {
+			pr_err("%s PMIC_GPIO_SD_DET config failed\n", __func__);
+			return rc;
+		}
+#endif
 	return 0;
 }
 
@@ -2243,6 +2260,14 @@ out:
 }
 #endif
 
+#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+static unsigned int msm7x30_sdcc_slot_status(struct device *dev)
+{
+	return (unsigned int)
+		gpio_get_value(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SD_DET));
+}
+#endif
+
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data msm7x30_sdc1_data = {
 	.ocr_mask	= MMC_VDD_165_195,
@@ -2276,6 +2301,11 @@ static struct mmc_platform_data msm7x30_sdc4_data = {
 	.ocr_mask	= MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
+#ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+	.status      = msm7x30_sdcc_slot_status,
+	.status_irq  = MSM_GPIO_TO_INT(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SD_DET)),
+	.irq_flags   = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+#endif
 };
 #endif
 
