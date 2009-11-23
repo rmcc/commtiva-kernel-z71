@@ -124,11 +124,11 @@ struct msm_sync {
 	/* This queue contains preview frames. It is accessed by the DSP (in
 	 * in interrupt context, and by the frame thread.
 	 */
-	spinlock_t prev_frame_q_lock;
-	int prev_frame_q_max;
-	int prev_frame_q_len;
-	struct list_head prev_frame_q;
-	wait_queue_head_t prev_frame_wait;
+	spinlock_t frame_q_lock;
+	int frame_q_max;
+	int frame_q_len;
+	struct list_head frame_q;
+	wait_queue_head_t frame_wait;
 	int unblock_poll_frame;
 
 	/* This queue contains snapshot frames.  It is accessed by the DSP (in
