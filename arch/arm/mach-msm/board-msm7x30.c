@@ -1272,7 +1272,7 @@ static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
 #endif
 static struct android_pmem_platform_data android_pmem_pdata = {
 	.name = "pmem",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.allocator_type = PMEM_ALLOCATORTYPE_ALLORNOTHING,
 	.cached = 1,
 };
 
