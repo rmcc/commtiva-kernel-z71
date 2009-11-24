@@ -1707,6 +1707,15 @@ kgsl_drawctxt_switch(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 {
 	struct kgsl_drawctxt *active_ctxt = device->drawctxt_active;
 
+	if (drawctxt) {
+		if (flags & KGSL_CONTEXT_SAVE_GMEM)
+			/* Set the flag in context so that the save is done
+			* when this context is switched out. */
+			drawctxt->flags |= CTXT_FLAGS_GMEM_SAVE;
+		else
+			/* Remove GMEM saving flag from the context */
+			drawctxt->flags &= ~CTXT_FLAGS_GMEM_SAVE;
+	}
 	/* already current? */
 	if (active_ctxt == drawctxt)
 		return;
@@ -1737,7 +1746,7 @@ kgsl_drawctxt_switch(struct kgsl_device *device, struct kgsl_drawctxt *drawctxt,
 		}
 
 		if (active_ctxt->flags & CTXT_FLAGS_GMEM_SAVE
-			&& flags & KGSL_CONTEXT_SAVE_GMEM) {
+			&& active_ctxt->flags & CTXT_FLAGS_GMEM_SHADOW) {
 			/* save gmem.
 			 * (note: changes shader. shader must already be saved.)
 			 */
