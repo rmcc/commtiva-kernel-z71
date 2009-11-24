@@ -650,8 +650,13 @@ static int pm8058_irq_set_type(unsigned int irq, unsigned int flow_type)
 			chip->irq_i2e[pm_irq] = irq + PM8058_FIRST_IRQ;
 			chip->pdata.pm_irqs[irq] = pm_irq;
 
-			if (pm_irq > chip->pm_max_irq)
+			if (pm_irq > chip->pm_max_irq) {
 				chip->pm_max_irq = pm_irq;
+				chip->pm_max_blocks =
+					chip->pm_max_irq / 8 + 1;
+				chip->pm_max_masters =
+					chip->pm_max_blocks / 8 + 1;
+			}
 		}
 	}
 	pm_irq = chip->pdata.pm_irqs[irq];
