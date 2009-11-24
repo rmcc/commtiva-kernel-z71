@@ -376,6 +376,8 @@ static irqreturn_t pmic8058_kp_irq(int irq, void *data)
 	u8 ctrl_val, events;
 	int rc;
 
+	mdelay(1);
+
 	dev_dbg(kp->dev, "key sense irq\n");
 	__dump_kp_regs(kp, "pmic8058_kp_irq");
 
