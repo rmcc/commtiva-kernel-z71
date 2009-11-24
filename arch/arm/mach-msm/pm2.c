@@ -370,7 +370,6 @@ enum {
 static void msm_pm_config_hw_before_power_down(void)
 {
 #if defined(CONFIG_ARCH_MSM7X30)
-	writel(0x0b, APPS_CLK_SLEEP_EN);
 	writel(1, APPS_PWRDOWN);
 #else
 	writel(0x1f, APPS_CLK_SLEEP_EN);
@@ -384,8 +383,12 @@ static void msm_pm_config_hw_before_power_down(void)
  */
 static void msm_pm_config_hw_after_power_up(void)
 {
+#if defined(CONFIG_ARCH_MSM7X30)
+	writel(0, APPS_PWRDOWN);
+#else
 	writel(0, APPS_PWRDOWN);
 	writel(0, APPS_CLK_SLEEP_EN);
+#endif
 }
 
 /*
@@ -395,7 +398,7 @@ static void msm_pm_config_hw_before_swfi(void)
 {
 #if defined(CONFIG_ARCH_QSD8X50)
 	writel(0x1f, APPS_CLK_SLEEP_EN);
-#elif !defined(CONFIG_ARCH_MSM7X30)
+#elif defined(CONFIG_ARCH_MSM7X27)
 	writel(0x0f, APPS_CLK_SLEEP_EN);
 #endif
 }
