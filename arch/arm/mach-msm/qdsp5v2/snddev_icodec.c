@@ -581,17 +581,15 @@ static int snddev_icodec_set_freq(struct msm_snddev_info *dev_info, u32 rate)
 		goto error;
 	}
 
-	if (rate != 8000 && rate != 16000 && rate != 48000) {
-		rc = -EINVAL;
-		goto error;
+	icodec = dev_info->private_data;
+	icodec->sample_rate = adie_codec_getfreq(icodec->data->profile, rate);
+
+	if (icodec->enabled) {
+		snddev_icodec_close(dev_info);
+		snddev_icodec_open(dev_info);
 	}
 
-	icodec = dev_info->private_data;
-
-	if (icodec->enabled)
-		pr_info("%s: set freq while enabled no dynamic switch yet\n",
-		__func__);
-	icodec->sample_rate = rate;
+	return icodec->sample_rate;
 
 error:
 	return rc;
@@ -639,6 +637,7 @@ static int snddev_icodec_probe(struct platform_device *pdev)
 	msm_snddev_register(dev_info);
 	icodec->data = pdata;
 	icodec->sample_rate = pdata->default_sample_rate;
+	dev_info->sample_rate = pdata->default_sample_rate;
 error:
 	return rc;
 }

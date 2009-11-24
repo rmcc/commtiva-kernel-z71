@@ -42,6 +42,7 @@ struct msm_snddev_info {
 	u8 opened;
 	void *private_data;
 	bool state;
+	u32 sample_rate;
 };
 
 void msm_snddev_register(struct msm_snddev_info *);

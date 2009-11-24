@@ -108,12 +108,30 @@ static struct platform_device msm_iearpiece_device = {
 static struct adie_codec_action_unit imic_8KHz_osr256_actions[] =
 	HANDSET_TX_8000_OSR_256;
 
+static struct adie_codec_action_unit imic_16KHz_osr256_actions[] =
+	HANDSET_TX_16000_OSR_256;
+
+static struct adie_codec_action_unit imic_48KHz_osr256_actions[] =
+	HANDSET_TX_48000_OSR_256;
+
 static struct adie_codec_hwsetting_entry imic_settings[] = {
 	{
 		.freq_plan = 8000,
 		.osr = 256,
 		.actions = imic_8KHz_osr256_actions,
 		.action_sz = ARRAY_SIZE(imic_8KHz_osr256_actions),
+	},
+	{
+		.freq_plan = 16000,
+		.osr = 256,
+		.actions = imic_16KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(imic_16KHz_osr256_actions),
+	},
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = imic_48KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(imic_48KHz_osr256_actions),
 	}
 };
 
@@ -217,12 +235,30 @@ static struct platform_device msm_ihs_mono_rx_device = {
 static struct adie_codec_action_unit ihs_mono_tx_8KHz_osr256_actions[] =
 	HEADSET_MONO_TX_8000_OSR_256;
 
+static struct adie_codec_action_unit ihs_mono_tx_16KHz_osr256_actions[] =
+	HEADSET_MONO_TX_16000_OSR_256;
+
+static struct adie_codec_action_unit ihs_mono_tx_48KHz_osr256_actions[] =
+	HEADSET_MONO_TX_48000_OSR_256;
+
 static struct adie_codec_hwsetting_entry ihs_mono_tx_settings[] = {
 	{
 		.freq_plan = 8000,
 		.osr = 256,
 		.actions = ihs_mono_tx_8KHz_osr256_actions,
 		.action_sz = ARRAY_SIZE(ihs_mono_tx_8KHz_osr256_actions),
+	},
+	{
+		.freq_plan = 16000,
+		.osr = 256,
+		.actions = ihs_mono_tx_16KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ihs_mono_tx_16KHz_osr256_actions),
+	},
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ihs_mono_tx_48KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ihs_mono_tx_48KHz_osr256_actions),
 	}
 };
 
