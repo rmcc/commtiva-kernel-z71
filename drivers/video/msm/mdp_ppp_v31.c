@@ -101,15 +101,15 @@ static int16 mdp_scale_pixel_repeat_C0[MDP_SCALE_COEFF_NUM] = {
 static int16 mdp_scale_pixel_repeat_C1[MDP_SCALE_COEFF_NUM] = {
 	511, 511, 511, 511, 511, 511, 511, 511,
 	511, 511, 511, 511, 511, 511, 511, 511,
-	0, 0, 0, 0, 0, 0, 0, 0,
-	0, 0, 0, 0, 0, 0, 0, 0
+	511, 511, 511, 511, 511, 511, 511, 511,
+	511, 511, 511, 511, 511, 511, 511, 511
 };
 
 static int16 mdp_scale_pixel_repeat_C2[MDP_SCALE_COEFF_NUM] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,
-	511, 511, 511, 511, 511, 511, 511, 511,
-	511, 511, 511, 511, 511, 511, 511, 511
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0
 };
 
 static int16 mdp_scale_pixel_repeat_C3[MDP_SCALE_COEFF_NUM] = {
@@ -357,12 +357,12 @@ static void mdp_calc_scaleInitPhase_3p1(uint32 in_w,
 	} else {
 		/* decide whether to use FIR or M/N for scaling */
 
-		if (is_pp_x == 0)
+		if (src_ROI_width > (4 * dst_ROI_width))
 			scale_unit_sel_x = 1;	/* use M/N scalar */
 		else
 			scale_unit_sel_x = 0;	/* use FIR scalar */
 
-		if (is_pp_y == 0)
+		if (src_ROI_height > (4 * dst_ROI_height))
 			scale_unit_sel_y = 1;	/* use M/N scalar */
 		else
 			scale_unit_sel_y = 0;	/* use FIR scalar */
@@ -502,7 +502,10 @@ void mdp_set_scale(MDPIBUF *iBuf,
 	uint32 dst_roi_height_scale;
 	struct phase_val pval;
 	boolean use_pr;
-	uint32 ppp_scale_config = BIT(6);
+	uint32 ppp_scale_config = 0;
+
+	if (!inputRGB)
+		ppp_scale_config |= BIT(6);
 
 	if (iBuf->mdpImg.mdpOp & MDPOP_ASCALE) {
 		if (iBuf->mdpImg.mdpOp & MDPOP_ROT90) {
@@ -623,7 +626,9 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					     mdp_scale_0p4_to_0p6_C3);
 				}
 				ppp_scale_config |= (SCALE_D1_SET << 2);
-			} else {
+			} else
+			    if (((dst_roi_width_scale * 4) / iBuf->roi.width) >=
+				1) {
 				if ((use_pr)
 				    && (mdp_scale_0p2_to_0p4_mode !=
 					MDP_SCALE_PR)) {
@@ -648,7 +653,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					     mdp_scale_0p2_to_0p4_C3);
 				}
 				ppp_scale_config |= (SCALE_D0_SET << 2);
-			}
+			} else
+				ppp_scale_config |= BIT(0);
 
 			/* y-direction */
 			if ((dst_roi_height_scale == iBuf->roi.height) &&
@@ -734,7 +740,9 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					     mdp_scale_0p4_to_0p6_C3);
 				}
 				ppp_scale_config |= (SCALE_D1_SET << 4);
-			} else {
+			} else
+			    if (((dst_roi_height_scale * 4) /
+				 iBuf->roi.height) >= 1) {
 				if ((use_pr)
 				    && (mdp_scale_0p2_to_0p4_mode !=
 					MDP_SCALE_PR)) {
@@ -759,7 +767,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					     mdp_scale_0p2_to_0p4_C3);
 				}
 				ppp_scale_config |= (SCALE_D0_SET << 4);
-			}
+			} else
+				ppp_scale_config |= BIT(1);
 
 			if (iBuf->mdpImg.mdpOp & MDPOP_SHARPENING) {
 				ppp_scale_config |= BIT(7);
