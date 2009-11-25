@@ -183,13 +183,8 @@ static int mddi_probe(struct platform_device *pdev)
 		if (unlikely(!msm_pmdh_base))
 			return -ENOMEM;
 
-		if (mddi_pdata && mddi_pdata->mddi_power_on) {
-			rc = mddi_pdata->mddi_power_on(1);
-			if (rc) {
-				pr_err("%s: can't power on mddi\n", __func__);
-				return rc;
-			}
-		}
+		if (mddi_pdata && mddi_pdata->mddi_power_save)
+			mddi_pdata->mddi_power_save(1);
 
 		mddi_resource_initialized = 1;
 		return 0;
