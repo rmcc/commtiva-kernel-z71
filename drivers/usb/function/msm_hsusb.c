@@ -1548,6 +1548,8 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		pr_info("hsusb reset interrupt\n");
 		ui->usb_state = USB_STATE_DEFAULT;
 		ui->configured = 0;
+		schedule_work(&ui->chg_stop);
+
 		writel(readl(USB_ENDPTSETUPSTAT), USB_ENDPTSETUPSTAT);
 		writel(readl(USB_ENDPTCOMPLETE), USB_ENDPTCOMPLETE);
 		writel(0xffffffff, USB_ENDPTFLUSH);
