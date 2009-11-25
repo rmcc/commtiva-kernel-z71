@@ -79,5 +79,22 @@ typedef struct {
 		_remote_spin_unlock(&((lock)->remote)); \
 		spin_unlock_irqrestore(&((lock)->local), flags); \
 	} while (0)
+#define remote_spin_trylock(lock) \
+	({ \
+		spin_trylock(&((lock)->local)) \
+		? _remote_spin_trylock(&((lock)->remote)) \
+			? 1 \
+			: ({ spin_unlock(&((lock)->local)); 0; }) \
+		: 0; \
+	})
+#define remote_spin_trylock_irqsave(lock, flags) \
+	({ \
+		spin_trylock_irqsave(&((lock)->local), flags) \
+		? _remote_spin_trylock(&((lock)->remote)) \
+			? 1 \
+			: ({ spin_unlock_irqrestore(&((lock)->local), flags); \
+				0; }) \
+		: 0; \
+	})
 
 #endif

@@ -69,6 +69,25 @@ static inline void __raw_remote_ex_spin_lock(raw_remote_spinlock_t *lock)
 	smp_mb();
 }
 
+static inline int __raw_remote_ex_spin_trylock(raw_remote_spinlock_t *lock)
+{
+	unsigned long tmp;
+
+	__asm__ __volatile__(
+"	ldrex	%0, [%1]\n"
+"	teq	%0, #0\n"
+"	strexeq	%0, %2, [%1]\n"
+	: "=&r" (tmp)
+	: "r" (&lock->lock), "r" (1)
+	: "cc");
+
+	if (tmp == 0) {
+		smp_mb();
+		return 1;
+	}
+	return 0;
+}
+
 static inline void __raw_remote_ex_spin_unlock(raw_remote_spinlock_t *lock)
 {
 	smp_mb();
@@ -93,6 +112,23 @@ static inline void __raw_remote_swp_spin_lock(raw_remote_spinlock_t *lock)
 	: "cc");
 
 	smp_mb();
+}
+
+static inline int __raw_remote_swp_spin_trylock(raw_remote_spinlock_t *lock)
+{
+	unsigned long tmp;
+
+	__asm__ __volatile__(
+"	swp	%0, %2, [%1]\n"
+	: "=&r" (tmp)
+	: "r" (&lock->lock), "r" (1)
+	: "cc");
+
+	if (tmp == 0) {
+		smp_mb();
+		return 1;
+	}
+	return 0;
 }
 
 static inline void __raw_remote_swp_spin_unlock(raw_remote_spinlock_t *lock)
@@ -128,6 +164,21 @@ static inline void __raw_remote_dek_spin_lock(raw_remote_spinlock_t *lock)
 	smp_mb();
 }
 
+static inline int __raw_remote_dek_spin_trylock(raw_remote_spinlock_t *lock)
+{
+	lock->dek.self_lock = DEK_LOCK_REQUEST;
+
+	if (lock->dek.other_lock) {
+		lock->dek.self_lock = DEK_LOCK_YIELD;
+		return 0;
+	}
+
+	lock->dek.next_yield = DEK_YIELD_TURN_SELF;
+
+	smp_mb();
+	return 1;
+}
+
 static inline void __raw_remote_dek_spin_unlock(raw_remote_spinlock_t *lock)
 {
 	smp_mb();
@@ -142,14 +193,17 @@ int _remote_spin_lock_init(remote_spinlock_id_t, _remote_spinlock_t *lock);
  * shared memory */
 #define _remote_spin_lock(lock)		__raw_remote_dek_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_dek_spin_unlock(*lock)
+#define _remote_spin_trylock(lock)	__raw_remote_dek_spin_trylock(*lock)
 #elif defined(CONFIG_REMOTE_SPINLOCK_SWP)
 /* Use SWP-based locks when LDREX/STREX are unavailable for shared memory. */
 #define _remote_spin_lock(lock)		__raw_remote_swp_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_swp_spin_unlock(*lock)
+#define _remote_spin_trylock(lock)	__raw_remote_swp_spin_trylock(*lock)
 #else
 /* Use LDREX/STREX for shared memory locking, when available */
 #define _remote_spin_lock(lock)		__raw_remote_ex_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_ex_spin_unlock(*lock)
+#define _remote_spin_trylock(lock)	__raw_remote_ex_spin_trylock(*lock)
 #endif
 
 #endif /* __ASM__ARCH_QC_REMOTE_SPINLOCK_H */
