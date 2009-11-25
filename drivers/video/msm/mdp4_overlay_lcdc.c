@@ -145,8 +145,8 @@ int mdp_lcdc_on(struct platform_device *pdev)
 
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
-	buf +=
-	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
+	buf += fbi->var.xoffset * bpp +
+		fbi->var.yoffset * fbi->fix.line_length;
 
 	if (bpp == 2)
 		format = MDP_RGB_565;
@@ -170,7 +170,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	pipe->src_y = 0;
 	pipe->src_x = 0;
 	pipe->src_addr[0] = (uint32) buf;
-	pipe->y_stride[0] = fbi->var.xres_virtual * bpp;
+	pipe->y_stride[0] = fbi->fix.line_length;
 
 	mdp4_overlay_rgb_setup(pipe);
 
@@ -309,8 +309,8 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	/* no need to power on cmd block since it's lcdc mode */
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
-	buf +=
-	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
+	buf += fbi->var.xoffset * bpp +
+		fbi->var.yoffset * fbi->fix.line_length;
 
 	pipe = &lcdc_pipe;
 	pipe->src_addr[0] = (uint32) buf;

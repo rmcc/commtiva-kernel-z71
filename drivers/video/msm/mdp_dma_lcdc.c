@@ -147,8 +147,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
-	buf +=
-	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
+	buf += fbi->var.xoffset * bpp + fbi->var.yoffset * fbi->fix.line_length;
 
 	dma2_cfg_reg = DMA_PACK_ALIGN_LSB | DMA_DITHER_EN | DMA_OUT_SEL_LCDC;
 
@@ -193,7 +192,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	/* active window width and height */
 	MDP_OUTP(MDP_BASE + 0x90004, ((fbi->var.yres) << 16) | (fbi->var.xres));
 	/* buffer ystride */
-	MDP_OUTP(MDP_BASE + 0x9000c, fbi->var.xres_virtual * bpp);
+	MDP_OUTP(MDP_BASE + 0x9000c, fbi->fix.line_length);
 	/* x/y coordinate = always 0 for lcdc */
 	MDP_OUTP(MDP_BASE + 0x90010, 0);
 	/* dma config */
@@ -322,8 +321,8 @@ void mdp_lcdc_update(struct msm_fb_data_type *mfd)
 	/* no need to power on cmd block since it's lcdc mode */
 	bpp = fbi->var.bits_per_pixel / 8;
 	buf = (uint8 *) fbi->fix.smem_start;
-	buf +=
-	    (fbi->var.xoffset + fbi->var.yoffset * fbi->var.xres_virtual) * bpp;
+	buf += fbi->var.xoffset * bpp +
+		fbi->var.yoffset * fbi->fix.line_length;
 	/* starting address */
 	MDP_OUTP(MDP_BASE + 0x90008, (uint32) buf);
 
