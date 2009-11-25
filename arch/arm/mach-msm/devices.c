@@ -486,6 +486,10 @@ int msm_add_host(unsigned int host, struct msm_usb_host_platform_data *plat)
 }
 #if defined(CONFIG_ARCH_MSM7X30)
 #define MSM_NAND_PHYS		0xA0200000
+#define MSM_NANDC01_PHYS	0xA0240000
+#define MSM_NANDC10_PHYS	0xA0280000
+#define MSM_NANDC11_PHYS	0xA02C0000
+#define EBI2_REG_BASE		0xA0000000
 #else
 #define MSM_NAND_PHYS		0xA0A00000
 #endif
@@ -503,6 +507,32 @@ static struct resource resources_nand[] = {
 		.end    = MSM_NAND_PHYS + 0x7FF,
 		.flags  = IORESOURCE_MEM,
 	},
+#if defined(CONFIG_ARCH_MSM7X30)
+	[2] = {
+		.name   = "msm_nandc01_phys",
+		.start  = MSM_NANDC01_PHYS,
+		.end    = MSM_NANDC01_PHYS + 0x7FF,
+		.flags  = IORESOURCE_MEM,
+	},
+	[3] = {
+		.name   = "msm_nandc10_phys",
+		.start  = MSM_NANDC10_PHYS,
+		.end    = MSM_NANDC10_PHYS + 0x7FF,
+		.flags  = IORESOURCE_MEM,
+	},
+	[4] = {
+		.name   = "msm_nandc11_phys",
+		.start  = MSM_NANDC11_PHYS,
+		.end    = MSM_NANDC11_PHYS + 0x7FF,
+		.flags  = IORESOURCE_MEM,
+	},
+	[5] = {
+		.name   = "ebi2_reg_base",
+		.start  = EBI2_REG_BASE,
+		.end    = EBI2_REG_BASE + 0x60,
+		.flags  = IORESOURCE_MEM,
+	},
+#endif
 };
 
 static struct resource resources_otg[] = {
