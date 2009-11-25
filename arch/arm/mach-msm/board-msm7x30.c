@@ -1685,11 +1685,17 @@ static struct msm_gpio fluid_vee_reset_gpio[] = {
 	{ GPIO_CFG(20, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), "vee_reset" },
 };
 
-static void display_power(int on)
+static void display_common_power(int on)
 {
-	int rc;
+	int rc, flag_on = !!on;
+	static int display_common_power_save_on;
 	struct vreg *vreg_ldo12, *vreg_ldo15 = NULL;
 	struct vreg *vreg_ldo20, *vreg_ldo16, *vreg_ldo8 = NULL;
+
+	if (display_common_power_save_on == flag_on)
+		return;
+
+	display_common_power_save_on = flag_on;
 
 	if (on) {
 		/* reset Toshiba WeGA chip -- toggle reset pin -- gpio_180 */
@@ -1878,7 +1884,7 @@ static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 }
 
 static struct mddi_platform_data mddi_pdata = {
-	.mddi_power_save = display_power,
+	.mddi_power_save = display_common_power,
 	.mddi_sel_clk = msm_fb_mddi_sel_clk,
 };
 
@@ -1957,7 +1963,7 @@ static void lcdc_toshiba_panel_power(int on)
 {
 	int rc;
 
-	display_power(on);
+	display_common_power(on);
 
 	if (on) {
 		rc = msm_gpios_enable(lcd_panel_gpios,
@@ -1975,7 +1981,7 @@ static void lcdc_sharp_panel_power(int on)
 {
 	int rc;
 
-	display_power(on);
+	display_common_power(on);
 
 	if (on) {
 		rc = msm_gpios_enable(lcd_sharp_panel_gpios,
@@ -1991,6 +1997,14 @@ static void lcdc_sharp_panel_power(int on)
 
 static void lcdc_panel_power(int on)
 {
+	int flag_on = !!on;
+	static int lcdc_power_save_on;
+
+	if (lcdc_power_save_on == flag_on)
+		return;
+
+	lcdc_power_save_on = flag_on;
+
 	if (machine_is_msm7x30_fluid())
 		lcdc_sharp_panel_power(on);
 	else
