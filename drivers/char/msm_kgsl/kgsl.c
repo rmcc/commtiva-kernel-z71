@@ -105,12 +105,19 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 			clk_disable(kgsl_driver.grp_clk);
 
 			clk_disable(kgsl_driver.imem_clk);
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_CLK_ON);
 			kgsl_driver.power_flags |= KGSL_PWRFLAGS_CLK_OFF;
 		}
 		return KGSL_SUCCESS;
 	case KGSL_PWRFLAGS_CLK_ON:
 		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_CLK_OFF) {
+			if (kgsl_driver.max_axi_freq) {
+				pm_qos_update_requirement(
+					PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
+					kgsl_driver.max_axi_freq);
+			}
 			if (kgsl_driver.grp_pclk)
 				clk_enable(kgsl_driver.grp_pclk);
 			clk_enable(kgsl_driver.grp_clk);
@@ -147,8 +154,6 @@ static int kgsl_suspend(struct platform_device *dev, pm_message_t state)
 {
 	mutex_lock(&kgsl_driver.mutex);
 	if (kgsl_driver.power_flags != 0) {
-		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-			PM_QOS_DEFAULT_VALUE);
 		if (kgsl_driver.yamato_device.hwaccess_blocked == KGSL_FALSE)
 			kgsl_yamato_suspend(&kgsl_driver.yamato_device);
 		kgsl_driver.is_suspended = KGSL_TRUE;
@@ -162,10 +167,6 @@ static int kgsl_resume(struct platform_device *dev)
 {
 	mutex_lock(&kgsl_driver.mutex);
 	if (kgsl_driver.power_flags != 0) {
-		if (kgsl_driver.max_axi_freq) {
-			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
-				DRIVER_NAME, kgsl_driver.max_axi_freq);
-		}
 		kgsl_yamato_wake(&kgsl_driver.yamato_device);
 		kgsl_driver.is_suspended = KGSL_FALSE;
 	}
@@ -180,11 +181,6 @@ static int kgsl_first_open_locked(void)
 
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
-
-	if (kgsl_driver.max_axi_freq) {
-		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-					  kgsl_driver.max_axi_freq);
-	}
 
 	kgsl_driver.power_flags =
 	    KGSL_PWRFLAGS_CLK_OFF | KGSL_PWRFLAGS_POWER_OFF;
@@ -230,9 +226,6 @@ static int kgsl_last_release_locked(void)
 	kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_OFF);
 	kgsl_pwrctrl(KGSL_PWRFLAGS_POWER_OFF);
 	kgsl_driver.power_flags = 0;
-
-	pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-			PM_QOS_DEFAULT_VALUE);
 
 	return 0;
 }
