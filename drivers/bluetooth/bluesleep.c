@@ -137,9 +137,9 @@ static void hsuart_power(int on)
 {
 	if (on) {
 		msm_hs_request_clock_on(bsi->uport);
-		msm_hs_set_mctrl_locked(bsi->uport, TIOCM_RTS);
+		msm_hs_set_mctrl(bsi->uport, TIOCM_RTS);
 	} else {
-		msm_hs_set_mctrl_locked(bsi->uport, 0);
+		msm_hs_set_mctrl(bsi->uport, 0);
 		msm_hs_request_clock_off(bsi->uport);
 	}
 }
