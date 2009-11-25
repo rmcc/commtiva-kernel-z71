@@ -229,7 +229,7 @@ static void vfe31_proc_ops(enum VFE31_MESSAGE_ID id, void *msg, size_t len)
 	struct msm_vfe_resp *rp;
 
 	rp = vfe31_ctrl->resp->vfe_alloc(sizeof(struct msm_vfe_resp),
-		vfe31_ctrl->syncdata, GFP_KERNEL);
+		vfe31_ctrl->syncdata, GFP_ATOMIC);
 	if (!rp) {
 		CDBG("rp: cannot allocate buffer\n");
 		return;
@@ -272,7 +272,7 @@ static void vfe31_proc_ops(enum VFE31_MESSAGE_ID id, void *msg, size_t len)
 	}
 
 	vfe31_ctrl->resp->vfe_resp(rp, MSM_CAM_Q_VFE_MSG, vfe31_ctrl->syncdata,
-		GFP_KERNEL);
+		GFP_ATOMIC);
 }
 
 static void vfe_send_outmsg(uint8_t output_mode, uint32_t pyaddr,
@@ -1339,13 +1339,13 @@ static int vfe31_init(struct msm_vfe_callback *presp,
 	struct platform_device *dev)
 {
 	int rc = 0;
-
 	rc = vfe31_resource_init(presp, dev, vfe_syncdata);
 	if (rc < 0)
 		return rc;
 
 	/* Bring up all the required GPIOs and Clocks */
-	return msm_camio_enable(dev);
+	rc = msm_camio_enable(dev);
+	return rc;
 }
 
 void msm_camvfe_fn_init(struct msm_camvfe_fn *fptr, void *data)
