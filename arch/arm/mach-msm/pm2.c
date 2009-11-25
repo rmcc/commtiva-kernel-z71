@@ -1652,7 +1652,7 @@ static int __init msm_pm_init(void)
 	}
 #endif /* CONFIG_ARCH_MSM_SCORPION */
 
-	ret = msm_timer_init_time_sync();
+	ret = msm_timer_init_time_sync(msm_pm_timeout);
 	if (ret)
 		return ret;
 
