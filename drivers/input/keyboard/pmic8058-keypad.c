@@ -370,13 +370,24 @@ static irqreturn_t pmic8058_kp_stuck_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+/*
+ * NOTE: Any row multiple interrupt issue - PMIC4 Rev A0
+ *
+ * If the S/W responds to the key-event interrupt too early and reads the
+ * recent data, the keypad FSM will mistakenly go to the IDLE state, instead
+ * of the scan pause state as it is supposed too. Since the key is still
+ * pressed, the keypad scanner will go through the debounce, scan, and generate
+ * another key event interrupt. The workaround for this issue is to add delay
+ * of 1ms between servicing the key event interrupt and reading the recent data.
+ */
 static irqreturn_t pmic8058_kp_irq(int irq, void *data)
 {
 	struct pmic8058_kp *kp = data;
 	u8 ctrl_val, events;
 	int rc;
 
-	mdelay(1);
+	if (pmic8058_is_rev_a0())
+		mdelay(1);
 
 	dev_dbg(kp->dev, "key sense irq\n");
 	__dump_kp_regs(kp, "pmic8058_kp_irq");
