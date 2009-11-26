@@ -25,6 +25,7 @@
 
 #include <mach/msm_rpcrouter.h>
 #include <mach/board.h>
+#include <mach/rpc_server_handset.h>
 
 #include "keypad-surf-ffa.h"
 
@@ -39,7 +40,9 @@
 #define HS_RPC_VERS_2 0x00020001
 
 #define HS_SUBSCRIBE_SRVC_PROC 0x03
+#define HS_REPORT_EVNT_PROC    0x05
 #define HS_EVENT_CB_PROC	1
+#define HS_EVENT_DATA_VER	1
 
 #define RPC_KEYPAD_NULL_PROC 0
 #define RPC_KEYPAD_PASS_KEY_CODE_PROC 2
@@ -52,6 +55,47 @@
 #define HS_REL_K		0xFF	/* key release */
 
 #define KEY(hs_key, input_key) ((hs_key << 24) | input_key)
+
+enum hs_event {
+	HS_EVNT_EXT_PWR = 0,	/* External Power status        */
+	HS_EVNT_HSD,		/* Headset Detection            */
+	HS_EVNT_HSTD,		/* Headset Type Detection       */
+	HS_EVNT_HSSD,		/* Headset Switch Detection     */
+	HS_EVNT_KPD,
+	HS_EVNT_FLIP,		/* Flip / Clamshell status (open/close) */
+	HS_EVNT_CHARGER,	/* Battery is being charged or not */
+	HS_EVNT_ENV,		/* Events from runtime environment like DEM */
+	HS_EVNT_REM,		/* Events received from HS counterpart on a
+				remote processor*/
+	HS_EVNT_DIAG,		/* Diag Events  */
+	HS_EVNT_LAST,		 /* Should always be the last event type */
+	HS_EVNT_MAX		/* Force enum to be an 32-bit number */
+};
+
+enum hs_src_state {
+	HS_SRC_STATE_UNKWN = 0,
+	HS_SRC_STATE_LO,
+	HS_SRC_STATE_HI,
+};
+
+struct hs_event_data {
+	uint32_t	ver;		/* Version number */
+	enum hs_event	event_type;     /* Event Type	*/
+	enum hs_event	enum_disc;     /* discriminator */
+	uint32_t	data_length;	/* length of the next field */
+	enum hs_src_state	data;    /* Pointer to data */
+	uint32_t	data_size;	/* Elements to be processed in data */
+};
+
+enum hs_return_value {
+	HS_EKPDLOCKED     = -2,	/* Operation failed because keypad is locked */
+	HS_ENOTSUPPORTED  = -1,	/* Functionality not supported */
+	HS_FALSE          =  0, /* Inquired condition is not true */
+	HS_FAILURE        =  0, /* Requested operation was not successful */
+	HS_TRUE           =  1, /* Inquired condition is true */
+	HS_SUCCESS        =  1, /* Requested operation was successful */
+	HS_MAX_RETURN     =  0x7FFFFFFF/* Force enum to be a 32 bit number */
+};
 
 struct hs_key_data {
 	uint32_t ver;        /* Version number to track sturcture changes */
@@ -251,6 +295,60 @@ static void process_hs_rpc_request(uint32_t proc, void *data)
 	else
 		pr_err("%s: unknown rpc proc %d\n", __func__, proc);
 }
+
+static int hs_rpc_report_event_arg(struct msm_rpc_client *client,
+					void *buffer, void *data)
+{
+	struct hs_event_rpc_req {
+		uint32_t hs_event_data_ptr;
+		struct hs_event_data data;
+	};
+
+	struct hs_event_rpc_req *req = buffer;
+
+	req->hs_event_data_ptr	= cpu_to_be32(0x1);
+	req->data.ver		= cpu_to_be32(HS_EVENT_DATA_VER);
+	req->data.event_type	= cpu_to_be32(HS_EVNT_HSD);
+	req->data.enum_disc	= cpu_to_be32(HS_EVNT_HSD);
+	req->data.data_length	= cpu_to_be32(0x1);
+	req->data.data		= cpu_to_be32(*(enum hs_src_state *)data);
+	req->data.data_size	= cpu_to_be32(sizeof(enum hs_src_state));
+
+	return sizeof(*req);
+}
+
+static int hs_rpc_report_event_res(struct msm_rpc_client *client,
+					void *buffer, void *data)
+{
+	enum hs_return_value result;
+
+	result = be32_to_cpu(*(enum hs_return_value *)buffer);
+	pr_debug("%s: request completed: 0x%x\n", __func__, result);
+
+	if (result == HS_SUCCESS)
+		return 0;
+
+	return 1;
+}
+
+void report_headset_status(bool connected)
+{
+	int rc = -1;
+	enum hs_src_state status;
+
+	if (connected == true)
+		status = HS_SRC_STATE_HI;
+	else
+		status = HS_SRC_STATE_LO;
+
+	rc = msm_rpc_client_req(rpc_client, HS_REPORT_EVNT_PROC,
+				hs_rpc_report_event_arg, &status,
+				hs_rpc_report_event_res, NULL, -1);
+
+	if (rc)
+		pr_err("%s: couldn't send rpc client request\n", __func__);
+}
+EXPORT_SYMBOL(report_headset_status);
 
 static int hs_rpc_register_subs_arg(struct msm_rpc_client *client,
 				    void *buffer, void *data)
