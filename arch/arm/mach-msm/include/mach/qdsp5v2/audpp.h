@@ -28,6 +28,9 @@ typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
 #define MSM_AUD_DECODER_MASK  0x0000FFFF
 #define MSM_AUD_OP_MASK  0xFFFF0000
 
+#define NON_TUNNEL_MODE_PLAYBACK 1
+#define TUNNEL_MODE_PLAYBACK 0
+
 #define AUDPP_MIXER_0 AUDPP_CMD_CFG_DEV_MIXER_DEV_0
 #define AUDPP_MIXER_1 AUDPP_CMD_CFG_DEV_MIXER_DEV_1
 #define AUDPP_MIXER_2 AUDPP_CMD_CFG_DEV_MIXER_DEV_2
