@@ -77,50 +77,16 @@
 #include "msm_fb.h"
 #include "mdp4.h"
 
-static struct mdp4_overlay_pipe mddi_pipe;
+static struct mdp4_overlay_pipe *mddi_pipe;
+static struct msm_fb_data_type *mddi_mfd;
 
-static void mdp4_dmap_cfg(struct msm_fb_data_type *mfd)
-{
-	uint32	dma2_cfg_reg;
-
-	dma2_cfg_reg = DMA_PACK_TIGHT | DMA_DITHER_EN;
-
-	if (mfd->fb_imgType == MDP_BGR_565)
-		dma2_cfg_reg |= DMA_PACK_PATTERN_BGR;
-	else
-		dma2_cfg_reg |= DMA_PACK_PATTERN_RGB;
-
-	if (mfd->panel_info.bpp == 18) {
-		dma2_cfg_reg |= DMA_DSTC0G_6BITS |	/* 666 18BPP */
-		    DMA_DSTC1B_6BITS | DMA_DSTC2R_6BITS;
-	} else {
-		dma2_cfg_reg |= DMA_DSTC0G_6BITS |	/* 565 16BPP */
-		    DMA_DSTC1B_5BITS | DMA_DSTC2R_5BITS;
-	}
-
-	/* dma2 config register */
-	MDP_OUTP(MDP_BASE + 0x90000, dma2_cfg_reg);
-
-}
-
-static void mdp4_dmap_xy(struct mdp4_overlay_pipe *pipe)
-{
-
-	/* dma_p source */
-	MDP_OUTP(MDP_BASE + 0x90004,
-			(pipe->src_height << 16 | pipe->src_width));
-	MDP_OUTP(MDP_BASE + 0x90008, pipe->src_addr[0]);
-	MDP_OUTP(MDP_BASE + 0x9000c, pipe->y_stride[0]);
-
-	/* dma_p dest */
-	MDP_OUTP(MDP_BASE + 0x90010, (pipe->dst_y << 16 | pipe->dst_x));
-}
+#define WHOLESCREEN
 
 void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 {
 	MDPIBUF *iBuf = &mfd->ibuf;
 	uint8 *src;
-	int bpp;
+	int bpp, ptype;
 	uint32 format;
 	uint32 mddi_ld_param;
 	uint16 mddi_vdo_packet_reg;
@@ -128,6 +94,8 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 	if (mfd->key != MFD_KEY)
 		return;
+
+	mddi_mfd = mfd;		/* keep it */
 
 	bpp = iBuf->bpp;
 
@@ -138,83 +106,146 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 	else
 		format = MDP_ARGB_8888;
 
-	pipe = &mddi_pipe;
-	memset(pipe, 0, sizeof(*pipe));
-
-	mdp4_overlay_format_to_pipe(format, pipe);
-
-	src = (uint8 *) iBuf->buf;
-	/* starting input address */
-	src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width) * bpp;
-
-
-	/* use RGB1 pipe */
-	pipe->pipe_type = OVERLAY_TYPE_RGB;
-	pipe->pipe_num = OVERLAY_PIPE_RGB1;
-	pipe->mixer_stage  = MDP4_MIXER_STAGE_BASE;
-	pipe->mixer_num  = MDP4_MIXER0;
-	pipe->src_height = iBuf->dma_h;
-	pipe->src_width = iBuf->dma_w;
-	pipe->src_y = 0;
-	pipe->src_x = 0;
-	pipe->dst_height = iBuf->dma_h;
-	pipe->dst_width = iBuf->dma_w;
-	pipe->dst_y = iBuf->dma_y;
-	pipe->dst_x = iBuf->dma_x;
-	pipe->src_addr[0] = (uint32) src;
-	pipe->y_stride[0] = iBuf->ibuf_width * bpp;
-
-	mddi_ld_param = 0;
-	mddi_vdo_packet_reg = mfd->panel_info.mddi.vdopkt;
-
-	if (mfd->panel_info.type == MDDI_PANEL) {
-		if (mfd->panel_info.pdest == DISPLAY_1)
-			mddi_ld_param = 0;
-		else
-			mddi_ld_param = 1;
-	} else {
-		mddi_ld_param = 2;
-	}
-
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
-	MDP_OUTP(MDP_BASE + 0x00090, mddi_ld_param);
-	MDP_OUTP(MDP_BASE + 0x00094,
-		 (MDDI_VDO_PACKET_DESC << 16) | mddi_vdo_packet_reg);
+	if (mddi_pipe == NULL) {
+		ptype = mdp4_overlay_format2type(format);
+		pipe = mdp4_overlay_pipe_alloc();
+		pipe->pipe_type = ptype;
+		/* use RGB1 pipe */
+		pipe->pipe_num  = OVERLAY_PIPE_RGB1;
+		pipe->mixer_num  = MDP4_MIXER0;
+		pipe->src_format = format;
+		mdp4_overlay_format2pipe(pipe);
 
-	mdp4_dmap_xy(pipe);
-	mdp4_dmap_cfg(mfd);
+		mddi_pipe = pipe; /* keep it */
+
+		mddi_ld_param = 0;
+		mddi_vdo_packet_reg = mfd->panel_info.mddi.vdopkt;
+
+		if (mfd->panel_info.type == MDDI_PANEL) {
+			if (mfd->panel_info.pdest == DISPLAY_1)
+				mddi_ld_param = 0;
+			else
+				mddi_ld_param = 1;
+		} else {
+			mddi_ld_param = 2;
+		}
+
+		MDP_OUTP(MDP_BASE + 0x00090, mddi_ld_param);
+		MDP_OUTP(MDP_BASE + 0x00094,
+			 (MDDI_VDO_PACKET_DESC << 16) | mddi_vdo_packet_reg);
+	} else {
+		pipe = mddi_pipe;
+	}
+
+
+	src = (uint8 *) iBuf->buf;
+
+#ifdef WHOLESCREEN
+	{
+		struct fb_info *fbi;
+
+		fbi = mfd->fbi;
+		pipe->src_height = fbi->var.yres;
+		pipe->src_width = fbi->var.xres;
+		pipe->src_h = fbi->var.yres;
+		pipe->src_w = fbi->var.xres;
+		pipe->src_y = 0;
+		pipe->src_x = 0;
+		pipe->dst_h = fbi->var.yres;
+		pipe->dst_w = fbi->var.xres;
+		pipe->dst_y = 0;
+		pipe->dst_x = 0;
+		pipe->srcp0_addr = (uint32)src;
+		pipe->srcp0_ystride = fbi->var.xres_virtual * bpp;
+	}
+
+#else
+	if (mdp4_overlay_active(MDP4_MIXER0)) {
+		struct fb_info *fbi;
+
+		fbi = mfd->fbi;
+		pipe->src_height = fbi->var.yres;
+		pipe->src_width = fbi->var.xres;
+		pipe->src_h = fbi->var.yres;
+		pipe->src_w = fbi->var.xres;
+		pipe->src_y = 0;
+		pipe->src_x = 0;
+		pipe->dst_h = fbi->var.yres;
+		pipe->dst_w = fbi->var.xres;
+		pipe->dst_y = 0;
+		pipe->dst_x = 0;
+		pipe->srcp0_addr = (uint32) src;
+		pipe->srcp0_ystride = fbi->var.xres_virtual * bpp;
+	} else {
+		/* starting input address */
+		src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width) * bpp;
+
+		pipe->src_height = iBuf->dma_h;
+		pipe->src_width = iBuf->dma_w;
+		pipe->src_h = iBuf->dma_h;
+		pipe->src_w = iBuf->dma_w;
+		pipe->src_y = 0;
+		pipe->src_x = 0;
+		pipe->dst_h = iBuf->dma_h;
+		pipe->dst_w = iBuf->dma_w;
+		pipe->dst_y = iBuf->dma_y;
+		pipe->dst_x = iBuf->dma_x;
+		pipe->srcp0_addr = (uint32) src;
+		pipe->srcp0_ystride = iBuf->ibuf_width * bpp;
+	}
+#endif
+
+	pipe->mixer_stage  = MDP4_MIXER_STAGE_BASE;
 
 	mdp4_overlay_rgb_setup(pipe);
 
-	mdp4_mixer_stage_setup(pipe);
+	mdp4_mixer_stage_up(pipe);
 
 	mdp4_overlayproc_cfg(pipe);
 
+	mdp4_overlay_dmap_xy(pipe);
+
+	mdp4_overlay_dmap_cfg(mfd);
+
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+
+}
+
+void mdp4_mddi_overlay_restore(void)
+{
+	mdp4_mddi_overlay(mddi_mfd);
+}
+
+void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe)
+{
+	down(&mfd->sem);
+	mdp_enable_irq(MDP_OVERLAY0_TERM);
+	mfd->dma->busy = TRUE;
+	INIT_COMPLETION(pipe->comp);
+
+	/* start OVERLAY pipe */
+	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
+	up(&mfd->sem);
+
+	/* wait until DMA finishes the current job */
+	wait_for_completion_killable(&pipe->comp);
+	mdp_disable_irq(MDP_OVERLAY0_TERM);
+
 }
 
 void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 {
 	down(&mfd->dma->mutex);
+
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
-		down(&mfd->sem);
-		mfd->ibuf_flushed = TRUE;
 		mdp4_overlay_update_lcd(mfd);
 
-		mdp_enable_irq(MDP_OVERLAY0_TERM);
-		mfd->dma->busy = TRUE;
-		INIT_COMPLETION(mfd->dma->comp);
-
-		/* schedule DMA to start */
-		mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
-		up(&mfd->sem);
-
-		/* wait until DMA finishes the current job */
-		wait_for_completion_killable(&mfd->dma->comp);
-		mdp_disable_irq(MDP_OVERLAY0_TERM);
+		mdp4_mddi_overlay_kickoff(mfd, mddi_pipe);
 
 	/* signal if pan function is waiting for the update completion */
 		if (mfd->pan_waiting) {
