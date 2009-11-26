@@ -17,6 +17,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/wait.h>
@@ -89,7 +90,8 @@ static DEFINE_MUTEX(audpp_dec_lock);
 
 #define MAX_EVENT_CALLBACK_CLIENTS 	1
 
-#define AUDPP_CONCURRENCY_DEFAULT 0	/* All non tunnel mode */
+#define AUDPP_CONCURRENCY_DEFAULT 5	/* All non tunnel mode except one task
+					 * till hpcm support is added */
 #define AUDPP_MAX_DECODER_CNT 5
 #define AUDPP_CODEC_MASK 0x000000FF
 #define AUDPP_MODE_MASK 0x00000F00
@@ -416,10 +418,10 @@ void audpp_avsync(int id, unsigned rate)
 	the_audpp_state.avsync[0] &= the_audpp_state.avsync_mask;
 	local_irq_restore(flags);
 
+	memset(&cmd, 0, sizeof(cmd));
 	cmd.cmd_id = AUDPP_CMD_AVSYNC;
-	cmd.object_number = id;
-	cmd.interrupt_interval_lsw = rate;
-	cmd.interrupt_interval_msw = rate >> 16;
+	cmd.stream_id = id;
+	cmd.interrupt_interval = rate;
 	audpp_send_queue1(&cmd, sizeof(cmd));
 }
 EXPORT_SYMBOL(audpp_avsync);
@@ -470,111 +472,68 @@ unsigned audpp_avsync_byte_count(int id)
 }
 EXPORT_SYMBOL(audpp_avsync_byte_count);
 
-int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan)
+int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan,
+			enum obj_type objtype)
 {
 	/* cmd, obj_cfg[7], cmd_type, volume, pan */
-	uint16_t cmd[11];
+	uint16_t cmd[7];
 
-	if (id > 6)
-		return -EINVAL;
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
 
 	memset(cmd, 0, sizeof(cmd));
 	cmd[0] = AUDPP_CMD_CFG_OBJECT_PARAMS;
-	cmd[1 + id] = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd[8] = AUDPP_CMD_VOLUME_PAN;
-	cmd[9] = volume;
-	cmd[10] = pan;
+	if (objtype)
+		cmd[1] = AUDPP_CMD_POPP_STREAM;
+	else
+		cmd[1] = AUDPP_CMD_COPP_STREAM;
+	cmd[2] = id;
+	cmd[3] = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd[4] = AUDPP_CMD_VOLUME_PAN;
+	cmd[5] = volume;
+	cmd[6] = pan;
 
 	return audpp_send_queue3(cmd, sizeof(cmd));
 }
 EXPORT_SYMBOL(audpp_set_volume_and_pan);
 
-/* Implementation of COPP features */
-int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
-			 struct audpp_cmd_cfg_object_params_mbadrc *mbadrc)
-{
-	struct audpp_cmd_cfg_object_params_mbadrc cmd;
-
-	if (id != 6)
-		return -EINVAL;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_MBADRC;
-
-	if (enable) {
-		memcpy(&cmd.num_bands, &mbadrc->num_bands,
-		       sizeof(*mbadrc) -
-		       (AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2));
-		cmd.enable = AUDPP_CMD_ADRC_FLAG_ENA;
-	} else
-		cmd.enable = AUDPP_CMD_ADRC_FLAG_DIS;
-
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-EXPORT_SYMBOL(audpp_dsp_set_mbadrc);
-
-int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
-				struct audpp_cmd_cfg_object_params_qconcert *
-				qconcert_plus)
-{
-	struct audpp_cmd_cfg_object_params_qconcert cmd;
-	if (id != 6)
-		return -EINVAL;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_QCONCERT;
-
-	if (enable) {
-		memcpy(&cmd.op_mode, &qconcert_plus->op_mode,
-		       sizeof(struct audpp_cmd_cfg_object_params_qconcert) -
-		       (AUDPP_CMD_CFG_OBJECT_PARAMS_COMMON_LEN + 2));
-		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_ENA;
-	} else
-		cmd.enable_flag = AUDPP_CMD_ADRC_FLAG_DIS;
-
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-
-int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
-			 struct audpp_cmd_cfg_object_params_pcm *iir)
-{
-	struct audpp_cmd_cfg_object_params_pcm cmd;
-
-	if (id != 6)
-		return -EINVAL;
-
-	memset(&cmd, 0, sizeof(cmd));
-	cmd.common.comman_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_IIR_TUNING_FILTER;
-
-	if (enable) {
-		cmd.active_flag = AUDPP_CMD_IIR_FLAG_ENA;
-		cmd.num_bands = iir->num_bands;
-		memcpy(&cmd.params_filter, &iir->params_filter,
-		       sizeof(iir->params_filter));
-	} else
-		cmd.active_flag = AUDPP_CMD_IIR_FLAG_DIS;
-
-	return audpp_send_queue3(&cmd, sizeof(cmd));
-}
-EXPORT_SYMBOL(audpp_dsp_set_rx_iir);
-
 /* Implementation Of COPP + POPP */
 int audpp_dsp_set_eq(unsigned id, unsigned enable,
-		     struct audpp_cmd_cfg_object_params_eqalizer *eq)
+		     struct audpp_cmd_cfg_object_params_eqalizer *eq,
+				enum obj_type objtype)
 {
 	struct audpp_cmd_cfg_object_params_eqalizer cmd;
-	unsigned short *id_ptr = (unsigned short *)&cmd;
 
-	if (id > 6 || id == 5)
-		return -EINVAL;
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
 
 	memset(&cmd, 0, sizeof(cmd));
-	id_ptr[1 + id] = AUDPP_CMD_CFG_OBJ_UPDATE;
-	cmd.common.command_type = AUDPP_CMD_EQUALIZER;
+	if (objtype)
+		cmd.common.stream = AUDPP_CMD_POPP_STREAM;
+	else
+		cmd.common.stream = AUDPP_CMD_COPP_STREAM;
 
+	cmd.common.stream_id = id;
+	cmd.common.obj_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.command_type = AUDPP_CMD_EQUALIZER;
 	if (enable) {
 		cmd.eq_flag = AUDPP_CMD_EQ_FLAG_ENA;
 		cmd.num_bands = eq->num_bands;
@@ -587,16 +546,32 @@ int audpp_dsp_set_eq(unsigned id, unsigned enable,
 EXPORT_SYMBOL(audpp_dsp_set_eq);
 
 int audpp_dsp_set_vol_pan(unsigned id,
-			  struct audpp_cmd_cfg_object_params_volume *vol_pan)
+			  struct audpp_cmd_cfg_object_params_volume *vol_pan,
+					enum obj_type objtype)
 {
 	struct audpp_cmd_cfg_object_params_volume cmd;
-	unsigned short *id_ptr = (unsigned short *)&cmd;
 
-	if (id > 6)
-		return -EINVAL;
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
 
 	memset(&cmd, 0, sizeof(cmd));
-	id_ptr[1 + id] = AUDPP_CMD_CFG_OBJ_UPDATE;
+	cmd.common.cmd_id = AUDPP_CMD_CFG_OBJECT_PARAMS;
+	if (objtype)
+		cmd.common.stream = AUDPP_CMD_POPP_STREAM;
+	else
+		cmd.common.stream = AUDPP_CMD_COPP_STREAM;
+
+	cmd.common.stream_id = id;
+	cmd.common.obj_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
 	cmd.common.command_type = AUDPP_CMD_VOLUME_PAN;
 
 	cmd.volume = vol_pan->volume;
@@ -617,10 +592,11 @@ int audpp_pause(unsigned id, int pause)
 	memset(pause_cmd, 0, sizeof(pause_cmd));
 
 	pause_cmd[0] = AUDPP_CMD_DEC_CTRL;
+	pause_cmd[1] = id;
 	if (pause == 1)
-		pause_cmd[1 + id] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_PAUSE_V;
+		pause_cmd[2] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_PAUSE_V;
 	else if (pause == 0)
-		pause_cmd[1 + id] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_RESUME_V;
+		pause_cmd[2] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_RESUME_V;
 	else
 		return -EINVAL;
 
@@ -638,7 +614,8 @@ int audpp_flush(unsigned id)
 	memset(flush_cmd, 0, sizeof(flush_cmd));
 
 	flush_cmd[0] = AUDPP_CMD_DEC_CTRL;
-	flush_cmd[1 + id] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_FLUSH_V;
+	flush_cmd[1] = id;
+	flush_cmd[2] = AUDPP_CMD_UPDATE_V | AUDPP_CMD_FLUSH_V;
 
 	return audpp_send_queue1(flush_cmd, sizeof(flush_cmd));
 }

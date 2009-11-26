@@ -319,7 +319,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			audio->out_needed = 0;
 			audio->running = 1;
 			audpp_set_volume_and_pan(audio->dec_id, audio->volume,
-					0);
+					0, POPP);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			pr_info("audio_dsp_event: CFG_MSG DISABLE\n");
 			audio->running = 0;
@@ -886,7 +886,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		spin_lock_irqsave(&audio->dsp_lock, flags);
 		audio->volume = arg;
 		if (audio->running)
-			audpp_set_volume_and_pan(audio->dec_id, arg, 0);
+			audpp_set_volume_and_pan(audio->dec_id, arg, 0,
+					POPP);
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
 		return 0;
 	}
