@@ -2099,6 +2099,13 @@ static void __init qsd8x50_init_host(void)
 #endif
 }
 
+static struct vreg *vreg_mmc;
+
+#if (defined(CONFIG_MMC_MSM_SDC1_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC2_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC3_SUPPORT)\
+	|| defined(CONFIG_MMC_MSM_SDC4_SUPPORT))
+
 struct sdcc_gpio {
 	struct msm_gpio *cfg_data;
 	uint32_t size;
@@ -2167,7 +2174,6 @@ static struct sdcc_gpio sdcc_cfg_data[] = {
 };
 
 static unsigned long vreg_sts, gpio_sts;
-static struct vreg *vreg_mmc;
 
 static void msm_sdcc_setup_gpio(int dev_id, unsigned int enable)
 {
@@ -2224,6 +2230,8 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	set_bit(pdev->id, &vreg_sts);
 	return 0;
 }
+
+#endif
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data qsd8x50_sdc1_data = {
