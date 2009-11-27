@@ -196,6 +196,11 @@ void msm_camio_disable(struct platform_device *pdev)
 	msm_camio_clk_disable(CAMIO_VFE_MDC_CLK);
 }
 
+void msm_disable_io_gpio_clk(struct platform_device *pdev)
+{
+	return;
+}
+
 void msm_camio_camif_pad_reg_reset(void)
 {
 	uint32_t reg;

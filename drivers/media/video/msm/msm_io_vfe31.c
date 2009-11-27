@@ -61,6 +61,7 @@
 #include <mach/gpio.h>
 #include <mach/board.h>
 #include <mach/camera.h>
+#include <mach/vreg.h>
 
 #define CAMIF_CFG_RMSK             0x1fffff
 #define CAM_SEL_BMSK               0x2
@@ -151,6 +152,51 @@ void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len)
 	msm_io_dump(dest_addr, len);
 }
 
+static void msm_camera_vreg_enable(void)
+{
+	struct vreg *sensor_vreg;
+	int rc;
+
+	sensor_vreg = vreg_get(NULL, "gp2");
+	if (IS_ERR(sensor_vreg)) {
+		printk(KERN_INFO "%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "gp2", PTR_ERR(sensor_vreg));
+		return;
+	}
+	if (sensor_vreg) {
+		rc = vreg_set_level(sensor_vreg, 1800);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg_set level failed (%d)\n",
+				__func__, rc);
+		}
+		rc = vreg_enable(sensor_vreg);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg_enable() = %d \n",
+				__func__, rc);
+		}
+	}
+}
+
+static void msm_camera_vreg_disable(void)
+{
+	struct vreg *sensor_vreg;
+	int rc;
+
+	sensor_vreg = vreg_get(NULL, "gp2");
+	if (IS_ERR(sensor_vreg)) {
+		printk(KERN_INFO "%s: sensor_vreg(%s) failed (%ld)\n",
+			__func__, "gp2", PTR_ERR(sensor_vreg));
+		return;
+	}
+	if (sensor_vreg) {
+		rc = vreg_disable(sensor_vreg);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg disable failed (%d)\n",
+				__func__, rc);
+		}
+	}
+}
+
 int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 {
 	int rc = 0;
@@ -202,7 +248,6 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 		clk_enable(clk);
 	else
 		rc = -1;
-
 	return rc;
 }
 
@@ -339,18 +384,21 @@ enable_fail:
 
 void msm_camio_disable(struct platform_device *pdev)
 {
-	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
-	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
-
 	iounmap(mdcbase);
 	release_mem_region(camio_ext.mdcphy, camio_ext.mdcsz);
 	iounmap(appbase);
 	release_mem_region(camio_ext.appphy, camio_ext.appsz);
 	iounmap(camifpadbase);
 	release_mem_region(camio_ext.camifpadphy, camio_ext.camifpadsz);
+}
+
+void msm_disable_io_gpio_clk(struct platform_device *pdev)
+{
+	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
+	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
 
 	camdev->camera_gpio_off();
-
+	CDBG("disable clocks \n");
 	msm_camio_clk_disable(CAMIO_VFE_CAMIF_CLK);
 	msm_camio_clk_disable(CAMIO_VFE_CLK);
 	msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
@@ -400,13 +448,11 @@ void msm_camio_camif_pad_reg_reset_2(void)
 {
 	uint32_t reg;
 	uint32_t mask, value;
-
 	reg = (msm_io_r(camifpadbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 1 << CAM_PAD_REG_SW_RESET_SHFT;
 	msm_io_w((reg & (~mask)) | (value & mask), camifpadbase);
 	mdelay(10);
-
 	reg = (msm_io_r(camifpadbase)) & CAMIF_CFG_RMSK;
 	mask = CAM_PAD_REG_SW_RESET_BMSK;
 	value = 0 << CAM_PAD_REG_SW_RESET_SHFT;
@@ -435,12 +481,12 @@ void msm_camio_clk_sel(enum msm_camio_clk_src_type srctype)
 		}
 	}
 }
-
 int msm_camio_probe_on(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
 	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
 	camdev->camera_gpio_on();
+	msm_camera_vreg_enable();
 	return msm_camio_clk_enable(CAMIO_CAM_MCLK_CLK);
 }
 
@@ -448,8 +494,8 @@ int msm_camio_probe_off(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
 	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
-
 	camdev->camera_gpio_off();
+	msm_camera_vreg_disable();
 	return msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
 }
 
