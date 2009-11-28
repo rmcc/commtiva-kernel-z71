@@ -505,7 +505,8 @@ static void dalrpc_sendwait(struct daldevice_handle *h)
 	} while (len);
 	mutex_unlock(&h->port->write_lock);
 
-	wait_for_completion(&h->read_completion);
+	if (!h->msg.hdr.async)
+		wait_for_completion(&h->read_completion);
 }
 
 int daldevice_attach(uint32_t device_id, char *port, int cpu,
@@ -602,11 +603,12 @@ int daldevice_attach(uint32_t device_id, char *port, int cpu,
 }
 EXPORT_SYMBOL(daldevice_attach);
 
-static void dalrpc_ddi_prologue(uint32_t ddi_idx, struct daldevice_handle *h)
+static void dalrpc_ddi_prologue(uint32_t ddi_idx, struct daldevice_handle *h,
+							uint32_t idx_async)
 {
 	h->msg.hdr.proto_ver = DALRPC_PROTOCOL_VERSION;
 	h->msg.hdr.prio = 0;
-	h->msg.hdr.async = 0;
+	h->msg.hdr.async = idx_async;
 	h->msg.hdr.msgid = DALRPC_MSGID_DDI;
 	h->msg.hdr.from = h;
 	h->msg.hdr.to = h->remote_handle;
@@ -620,7 +622,7 @@ int daldevice_detach(void *handle)
 	if (!client_exists(h))
 		return -EINVAL;
 
-	dalrpc_ddi_prologue(0, h);
+	dalrpc_ddi_prologue(0, h, 0);
 
 	if (!h->remote_handle)
 		goto norpc;
@@ -654,7 +656,7 @@ uint32_t dalrpc_fcn_0(uint32_t ddi_idx, void *handle, uint32_t s1)
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 4;
 	h->msg.hdr.proto_id = 0;
@@ -679,7 +681,7 @@ uint32_t dalrpc_fcn_1(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8;
 	h->msg.hdr.proto_id = 1;
@@ -705,7 +707,7 @@ uint32_t dalrpc_fcn_2(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 4;
 	h->msg.hdr.proto_id = 2;
@@ -733,7 +735,7 @@ uint32_t dalrpc_fcn_3(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 12;
 	h->msg.hdr.proto_id = 3;
@@ -760,7 +762,7 @@ uint32_t dalrpc_fcn_4(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8;
 	h->msg.hdr.proto_id = 4;
@@ -782,7 +784,7 @@ uint32_t dalrpc_fcn_5(uint32_t ddi_idx, void *handle, const void *ibuf,
 		      uint32_t ilen)
 {
 	struct daldevice_handle *h = handle;
-	uint32_t ret;
+	uint32_t ret, idx_async;
 
 	if ((ilen + 4) > DALRPC_MAX_PARAMS_SIZE)
 		return -EINVAL;
@@ -790,9 +792,11 @@ uint32_t dalrpc_fcn_5(uint32_t ddi_idx, void *handle, const void *ibuf,
 	if (!client_exists(h))
 		return -EINVAL;
 
+	idx_async = (ddi_idx & 0x80000000) >> 31;
+
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, idx_async);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 4 +
 		ROUND_BUFLEN(ilen);
@@ -802,7 +806,10 @@ uint32_t dalrpc_fcn_5(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	dalrpc_sendwait(h);
 
-	ret = h->msg.param[0];
+	if (h->msg.hdr.async)
+		ret = DALRPC_SUCCESS;
+	else
+		ret = h->msg.param[0];
 	mutex_unlock(&h->client_lock);
 	return ret;
 }
@@ -822,7 +829,7 @@ uint32_t dalrpc_fcn_6(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8 +
 		ROUND_BUFLEN(ilen);
@@ -857,7 +864,7 @@ uint32_t dalrpc_fcn_7(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8 +
 		ROUND_BUFLEN(ilen);
@@ -900,7 +907,7 @@ uint32_t dalrpc_fcn_8(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8 +
 		ROUND_BUFLEN(ilen);
@@ -940,7 +947,7 @@ uint32_t dalrpc_fcn_9(uint32_t ddi_idx, void *handle, void *obuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 4;
 	h->msg.hdr.proto_id = 9;
@@ -979,7 +986,7 @@ uint32_t dalrpc_fcn_10(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 12 +
 		ROUND_BUFLEN(ilen);
@@ -1021,7 +1028,7 @@ uint32_t dalrpc_fcn_11(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8;
 	h->msg.hdr.proto_id = 11;
@@ -1058,7 +1065,7 @@ uint32_t dalrpc_fcn_12(uint32_t ddi_idx, void *handle, uint32_t s1,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 8;
 	h->msg.hdr.proto_id = 12;
@@ -1099,7 +1106,7 @@ uint32_t dalrpc_fcn_13(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 12 +
 		ROUND_BUFLEN(ilen) + ROUND_BUFLEN(ilen2);
@@ -1145,7 +1152,7 @@ uint32_t dalrpc_fcn_14(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 12 +
 		ROUND_BUFLEN(ilen);
@@ -1198,7 +1205,7 @@ uint32_t dalrpc_fcn_15(uint32_t ddi_idx, void *handle, const void *ibuf,
 
 	mutex_lock(&h->client_lock);
 
-	dalrpc_ddi_prologue(ddi_idx, h);
+	dalrpc_ddi_prologue(ddi_idx, h, 0);
 
 	h->msg.hdr.len = sizeof(struct dalrpc_msg_hdr) + 16 +
 		ROUND_BUFLEN(ilen) + ROUND_BUFLEN(ilen2);
