@@ -1165,7 +1165,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 static unsigned int halibut_sdcc_slot_status(struct device *dev)
 {
-	return (unsinged int) gpio_get_value(49);
+	return (unsigned int) gpio_get_value(49);
 }
 #endif
 
