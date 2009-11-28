@@ -97,6 +97,8 @@
 #include "pm.h"
 #include <linux/msm_kgsl.h>
 
+#include "smd_private.h"
+
 #define MSM_PMEM_SF_SIZE	0x1000000
 #define MSM_FB_SIZE		0x200000
 #define MSM_PMEM_GPU1_SIZE      0x1000000
@@ -2484,10 +2486,68 @@ static void msm_sdc1_lvlshft_enable(void)
 }
 
 
+#define RAMFS_INFO_MAGICNUMBER		0x654D4D43
+#define RAMFS_INFO_VERSION		0x00000001
+#define RAMFS_MODEMSTORAGE_ID		0x4D454653
+
+struct shared_ramfs_entry {
+	uint32_t client_id;   	/* Client id to uniquely identify a client */
+	uint32_t base_addr;	/* Base address of shared RAMFS memory */
+	uint32_t size;		/* Size of the shared RAMFS memory */
+	uint32_t reserved;	/* Reserved attribute for future use */
+};
+struct shared_ramfs_table {
+	uint32_t magic_id;  	/* Identify RAMFS details in SMEM */
+	uint32_t version;	/* Version of shared_ramfs_table */
+	uint32_t entries;	/* Total number of valid entries   */
+	struct shared_ramfs_entry ramfs_entry[3];	/* List all entries */
+};
+
 static void __init msm7x30_init_rmt_storage(void)
 {
 	char *build_id;
-	resource_size_t shared_ram_efs_base;
+	resource_size_t shared_ramfs_base;
+	resource_size_t shared_ramfs_size;
+	struct shared_ramfs_table *ramfs_table;
+	struct shared_ramfs_entry *ramfs_entry;
+	int index;
+
+	ramfs_table = smem_alloc(SMEM_SEFS_INFO,
+			sizeof(struct shared_ramfs_table));
+
+	if (!ramfs_table) {
+		printk(KERN_WARNING "%s: No RAMFS table in SMEM\n", __func__);
+		goto usebuildid;
+	}
+
+	if ((ramfs_table->magic_id != (u32) RAMFS_INFO_MAGICNUMBER) ||
+		(ramfs_table->version != (u32) RAMFS_INFO_VERSION)) {
+		printk(KERN_WARNING "%s: Magic / Version mismatch:, "
+		       "magic_id=%#x, format_version=%#x\n", __func__,
+		       ramfs_table->magic_id, ramfs_table->version);
+		goto usebuildid;
+	}
+
+	for (index = 0; index < ramfs_table->entries; index++) {
+		ramfs_entry = &ramfs_table->ramfs_entry[index];
+
+		/* Find a match for the Modem Storage RAMFS area */
+		if (ramfs_entry->client_id == (u32) RAMFS_MODEMSTORAGE_ID) {
+			shared_ramfs_base = ramfs_entry->base_addr;
+			shared_ramfs_size = ramfs_entry->size;
+
+			printk(KERN_INFO "%s: RAMFS Info (from SMEM): "
+				"Baseaddr = 0x%08x, Size = 0x%08x\n", __func__,
+				shared_ramfs_base, shared_ramfs_size);
+
+			goto registerdevice;
+		}
+	}
+
+usebuildid:
+
+	printk(KERN_ERR "%s: RAMFS Info not available in SMEM, falling back on"
+			"build id from socinfo\n", __func__);
 
 	build_id = socinfo_get_build_id();
 
@@ -2498,19 +2558,24 @@ static void __init msm7x30_init_rmt_storage(void)
 	}
 
 	if (build_id[8] == 'B') {        /* LPDDR1 Configuration */
-		shared_ram_efs_base = 0x0C800000;
+		shared_ramfs_base = 0x0C800000;
 	} else if (build_id[8] == 'A') { /* LPDDR2 Configuration */
-		shared_ram_efs_base = 0x44800000;
+		shared_ramfs_base = 0x44800000;
 	} else {                        /* Unknown Configuration */
 		printk(KERN_ERR "%s: Unknown LPDDR configuration \n", __func__);
 		goto out;
 	}
+	shared_ramfs_size = SZ_1M + SZ_2M;
 
-	printk(KERN_INFO "%s: Shared RAM EFS Base address = 0x%08x\n", __func__,
-			shared_ram_efs_base);
+	printk(KERN_INFO "%s: RAMFS Info (using build id from socinfo): "
+		"Baseaddr = 0x%08x, Size = 0x%08x\n", __func__,
+		shared_ramfs_base, shared_ramfs_size);
 
-	rmt_storage_resources[0].start = shared_ram_efs_base;
-	rmt_storage_resources[0].end = shared_ram_efs_base + SZ_1M + SZ_2M - 1;
+registerdevice:
+
+	rmt_storage_resources[0].start = shared_ramfs_base;
+	rmt_storage_resources[0].end = shared_ramfs_base
+					+ shared_ramfs_size - 1;
 	platform_device_register(&rmt_storage_device);
 
 out:
