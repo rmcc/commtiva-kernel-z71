@@ -36,7 +36,7 @@ unsigned long msm_nandc01_phys;
 unsigned long msm_nandc10_phys;
 unsigned long msm_nandc11_phys;
 unsigned long ebi2_register_base;
-uint32_t dual_nand_ctlr_feature_enable;
+uint32_t dual_nand_ctlr_present;
 
 #define MSM_NAND_DMA_BUFFER_SIZE SZ_4K
 #define MSM_NAND_DMA_BUFFER_SLOTS \
@@ -1120,8 +1120,8 @@ err_dma_map_oobbuf_failed:
 	return err;
 }
 
-static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
-					struct mtd_oob_ops *ops)
+static int msm_nand_read_oob_pingpong(struct mtd_info *mtd, loff_t from,
+			struct mtd_oob_ops *ops)
 {
 	struct msm_nand_chip *chip = mtd->priv;
 
@@ -1130,10 +1130,10 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 		unsigned cmdptr;
 		struct {
 			uint32_t cmd;
-			uint32_t nandc11_addr1;
-			uint32_t chipsel;
 			uint32_t nandc01_addr0;
 			uint32_t nandc10_addr0;
+			uint32_t nandc11_addr1;
+			uint32_t chipsel;
 			uint32_t cfg0;
 			uint32_t cfg1;
 			uint32_t exec;
@@ -1148,6 +1148,7 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 			uint32_t nc10_flash_dev_cmd1;
 			uint32_t nc10_flash_dev_cmd_vld_default;
 			uint32_t nc10_flash_dev_cmd1_default;
+			uint32_t ebi2_cfg_default;
 			struct {
 				uint32_t flash_status;
 				uint32_t buffer_status;
@@ -1181,11 +1182,6 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 
 	oob_len = ops->ooblen;
 	cwperpage = (mtd->writesize >> 9);
-
-#if VERBOSE
-	pr_info("msm_nand_ping_pong_read_oob %llx %p %x %p %x\n",
-		from, ops->datbuf, ops->len, ops->oobbuf, ops->ooblen);
-#endif
 
 	if (from & (mtd->writesize - 1)) {
 		pr_err("%s: unsupported from, 0x%llx\n",
@@ -1226,14 +1222,19 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 	else
 		page_count = ops->len / (mtd->writesize + mtd->oobsize);
 
+#if VERBOSE
+	pr_info("msm_nand_read_oob_pingpong %llx %p %x %p %x\n",
+		from, ops->datbuf, ops->len, ops->oobbuf, ops->ooblen);
+#endif
+
 	if (ops->datbuf) {
 		data_dma_addr_curr = data_dma_addr =
 			dma_map_single(chip->dev, ops->datbuf, ops->len,
 				       DMA_FROM_DEVICE);
 		if (dma_mapping_error(chip->dev, data_dma_addr)) {
-			pr_err("msm_nand_ping_pong_read_oob: "
-				"failed to get dma addr "
-			       "for %p\n", ops->datbuf);
+			pr_err("msm_nand_read_oob_pingpong: "
+				"failed to get dma addr for %p\n",
+				ops->datbuf);
 			return -EIO;
 		}
 	}
@@ -1243,9 +1244,9 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 			dma_map_single(chip->dev, ops->oobbuf,
 				       ops->ooblen, DMA_BIDIRECTIONAL);
 		if (dma_mapping_error(chip->dev, oob_dma_addr)) {
-			pr_err("msm_nand_ping_pong_read_oob: "
-				"failed to get dma addr "
-			       "for %p\n", ops->oobbuf);
+			pr_err("msm_nand_read_oob_pingpong: "
+				"failed to get dma addr for %p\n",
+				ops->oobbuf);
 			err = -EIO;
 			goto err_dma_map_oobbuf_failed;
 		}
@@ -1255,49 +1256,32 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 		   (dma_buffer = msm_nand_get_dma_buffer(
 			    chip, sizeof(*dma_buffer))));
 
+	oob_col = start_sector * 0x210;
+	if (chip->CFG1 & CFG1_WIDE_FLASH)
+		oob_col >>= 1;
+
 	err = 0;
 	while (page_count-- > 0) {
 		cmd = dma_buffer->cmd;
 
-		oob_col = start_sector * 0x210;
-		if (chip->CFG1 & CFG1_WIDE_FLASH)
-			oob_col >>= 1;
-
 		if (ops->mode != MTD_OOB_RAW) {
 			dma_buffer->data.cmd = NAND_CMD_PAGE_READ_ECC;
-			dma_buffer->data.cfg1 = chip->CFG1;
 			if (start_sector == (cwperpage - 1)) {
 				dma_buffer->data.cfg0 = (chip->CFG0 &
 							~(7U << 6));
 			} else {
-			dma_buffer->data.cfg0 = (chip->CFG0 & ~(7U << 6))
-				| ((((cwperpage >> 1)-1) - start_sector) << 6);
-				dma_buffer->data.cfg0 = 0xa85408d0;
+				dma_buffer->data.cfg0 = (chip->CFG0 &
+				~(7U << 6))
+				| (((cwperpage >> 1)-1) << 6);
 			}
+			dma_buffer->data.cfg1 = chip->CFG1;
 		} else {
 			dma_buffer->data.cmd = NAND_CMD_PAGE_READ;
-			dma_buffer->data.cfg0 = (NAND_CFG0_RAW & ~(7U << 6))
-				| ((((cwperpage >> 1)-1) - start_sector) << 6);
+			dma_buffer->data.cfg0 = ((NAND_CFG0_RAW & ~(7U << 6))
+				| ((((cwperpage >> 1)-1) << 6)));
 			dma_buffer->data.cfg1 = NAND_CFG1_RAW |
-						(chip->CFG1 & CFG1_WIDE_FLASH);
+					(chip->CFG1 & CFG1_WIDE_FLASH);
 		}
-
-		/* ADM MUX config values */
-		dma_buffer->data.adm_mux_data_ack_req_nc01 = 0xA3C;
-		dma_buffer->data.adm_mux_cmd_ack_req_nc01 = 0x53C;
-		dma_buffer->data.adm_mux_data_ack_req_nc10 = 0xF28;
-		dma_buffer->data.adm_mux_cmd_ack_req_nc10  = 0xF14;
-		dma_buffer->data.adm_default_mux = 0xFC0;
-		dma_buffer->data.nc10_flash_dev_cmd_vld_default = 0x1D;
-		dma_buffer->data.nc10_flash_dev_cmd1_default = 0xF00F3000;
-
-		/* flash0 + undoc bit */
-		dma_buffer->data.chipsel = (1<<4) | 4;
-
-		/* GO bit for the EXEC register */
-		dma_buffer->data.exec = 1;
-		/* config ebi2 cfg reg ( 0xA000_0004 ) */
-		dma_buffer->data.ebi2_cfg = 0x4010080;
 
 		if (start_sector == (cwperpage - 1)) {
 			dma_buffer->data.nandc10_addr0 = (page << 16) | oob_col;
@@ -1310,7 +1294,25 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 			dma_buffer->data.nc10_flash_dev_cmd1 = 0xF00FE005;
 		}
 
+		dma_buffer->data.adm_mux_data_ack_req_nc01 = 0x00000A3C;
+		dma_buffer->data.adm_mux_cmd_ack_req_nc01  = 0x0000053C;
+		dma_buffer->data.adm_mux_data_ack_req_nc10 = 0x00000F28;
+		dma_buffer->data.adm_mux_cmd_ack_req_nc10  = 0x00000F14;
+		dma_buffer->data.adm_default_mux = 0x00000FC0;
+		dma_buffer->data.nc10_flash_dev_cmd_vld_default = 0x1D;
+		dma_buffer->data.nc10_flash_dev_cmd1_default = 0xF00F3000;
+
+		/* config ebi2 cfg reg ( 0xA000_0004 ) */
+		dma_buffer->data.ebi2_cfg = 0x4010080;
+		dma_buffer->data.ebi2_cfg_default = 0x4010000;
+
 		dma_buffer->data.nandc11_addr1 = (page >> 16) & 0xff;
+		/* flash0 + undoc bit */
+		dma_buffer->data.chipsel = 1<<4 | 4;
+
+		/* GO bit for the EXEC register */
+		dma_buffer->data.exec = 1;
+
 		BUILD_BUG_ON(8 != ARRAY_SIZE(dma_buffer->data.result));
 
 		for (n = start_sector; n < cwperpage; n++) {
@@ -1421,6 +1423,7 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 					cmd->len = 8;
 					cmd++;
 				} else {
+					cmd->cmd = 0;
 					cmd->src = msm_virt_to_dma(chip,
 					&dma_buffer->data.nc10_flash_dev_cmd1);
 					cmd->dst = NC10(NAND_DEV_CMD1);
@@ -1521,8 +1524,8 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 					cmd->dst = msm_virt_to_dma(chip,
 						&dma_buffer->data.result[n]);
 					/* NAND_FLASH_STATUS +
-					   NAND_BUFFER_STATUS
-					*/
+					 * NAND_BUFFER_STATUS
+					 */
 					cmd->len = 8;
 					cmd++;
 
@@ -1654,6 +1657,13 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 					cmd++;
 			}
 		}
+		/* ADM --> Default mux state (0xFC0) */
+		cmd->cmd = 0;
+		cmd->src = msm_virt_to_dma(chip,
+			&dma_buffer->data.adm_default_mux);
+		cmd->dst = EBI2_NAND_ADM_MUX;
+		cmd->len = 4;
+		cmd++;
 
 		cmd->cmd = 0;
 		cmd->src = msm_virt_to_dma(chip,
@@ -1669,11 +1679,10 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 		cmd->len = 4;
 		cmd++;
 
-		/* ADM --> Default mux state (0xFC0) */
 		cmd->cmd = 0;
 		cmd->src = msm_virt_to_dma(chip,
-			&dma_buffer->data.adm_default_mux);
-		cmd->dst = EBI2_NAND_ADM_MUX;
+				&dma_buffer->data.ebi2_cfg_default);
+		cmd->dst = EBI2_CFG_REG;
 		cmd->len = 4;
 		cmd++;
 
@@ -1766,7 +1775,7 @@ static int msm_nand_ping_pong_read_oob(struct mtd_info *mtd, loff_t from,
 
 #if VERBOSE
 		if (rawerr && !pageerr) {
-			pr_err("msm_nand_ping_pong_read_oob "
+			pr_err("msm_nand_read_oob_pingpong "
 				"%llx %x %x empty page\n",
 			       (loff_t)page * mtd->writesize, ops->len,
 			       ops->ooblen);
@@ -1816,10 +1825,10 @@ err_dma_map_oobbuf_failed:
 							pages_read;
 	ops->oobretlen = ops->ooblen - oob_len;
 	if (err)
-		pr_err("msm_nand_ping_pong_read_oob "
+		pr_err("msm_nand_read_oob_pingpong "
 			"%llx %x %x failed %d, corrected %d\n",
-		       from, ops->datbuf ? ops->len : 0, ops->ooblen, err,
-		       total_ecc_errors);
+			from, ops->datbuf ? ops->len : 0, ops->ooblen, err,
+			total_ecc_errors);
 	return err;
 }
 
@@ -1838,10 +1847,10 @@ msm_nand_read(struct mtd_info *mtd, loff_t from, size_t len,
 	ops.ooblen = 0;
 	ops.datbuf = buf;
 	ops.oobbuf = NULL;
-	if (!dual_nand_ctlr_feature_enable)
+	if (!dual_nand_ctlr_present)
 		ret =  msm_nand_read_oob(mtd, from, &ops);
 	else
-		ret = msm_nand_ping_pong_read_oob(mtd, from, &ops);
+		ret = msm_nand_read_oob_pingpong(mtd, from, &ops);
 	*retlen = ops.retlen;
 	return ret;
 }
@@ -2146,7 +2155,7 @@ err_dma_map_oobbuf_failed:
 }
 
 static int
-msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
+msm_nand_write_oob_pingpong(struct mtd_info *mtd, loff_t to,
 				struct mtd_oob_ops *ops)
 {
 	struct msm_nand_chip *chip = mtd->priv;
@@ -2155,10 +2164,10 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 		unsigned cmdptr;
 		struct {
 			uint32_t cmd;
-			uint32_t nandc11_addr1;
-			uint32_t chipsel;
 			uint32_t nandc01_addr0;
 			uint32_t nandc10_addr0;
+			uint32_t nandc11_addr1;
+			uint32_t chipsel;
 			uint32_t cfg0;
 			uint32_t cfg1;
 			uint32_t exec;
@@ -2174,6 +2183,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 			uint32_t nc10_flash_dev_cmd0;
 			uint32_t nc01_flash_dev_cmd_vld_default;
 			uint32_t nc10_flash_dev_cmd0_default;
+			uint32_t ebi2_cfg_default;
 			uint32_t flash_status[8];
 		} data;
 	} *dma_buffer;
@@ -2199,11 +2209,6 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 
 	oob_len = ops->ooblen;
 	cwperpage = (mtd->writesize >> 9);
-
-#if VERBOSE
-	pr_info("\n msm_nand_ping_pong_write_oob %llx %p %x %p %x\n",
-		to, ops->datbuf, ops->len, ops->oobbuf, ops->ooblen);
-#endif
 
 	if (to & (mtd->writesize - 1)) {
 		pr_err("%s: unsupported to, 0x%llx\n", __func__, to);
@@ -2246,7 +2251,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 			dma_map_single(chip->dev, ops->datbuf,
 				       ops->len, DMA_TO_DEVICE);
 		if (dma_mapping_error(chip->dev, data_dma_addr)) {
-			pr_err("msm_nand_ping_pong_write_oob:"
+			pr_err("msm_nand_write_oob_pingpong:"
 				"failed to get dma addr "
 			       "for %p\n", ops->datbuf);
 			return -EIO;
@@ -2257,7 +2262,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 			dma_map_single(chip->dev, ops->oobbuf,
 				       ops->ooblen, DMA_TO_DEVICE);
 		if (dma_mapping_error(chip->dev, oob_dma_addr)) {
-			pr_err("msm_nand_ping_pong_write_oob:"
+			pr_err("msm_nand_write_oob_pingpong:"
 				"failed to get dma addr "
 			       "for %p\n", ops->oobbuf);
 			err = -EIO;
@@ -2304,6 +2309,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 
 		/* config ebi2 cfg reg ( 0xA000_0004 ) */
 		dma_buffer->data.ebi2_cfg = 0x4010080;
+		dma_buffer->data.ebi2_cfg_default = 0x4010000;
 
 		dma_buffer->data.nandc11_addr1 = (page >> 16) & 0xff;
 		dma_buffer->data.nandc01_addr0 = (page << 16) | 0x0;
@@ -2378,7 +2384,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 				cmd++;
 			}
 
-			if (n % 2 == 0) { /* NC01 ctrl */
+			if (n % 2 == 0) {
 				/* MASK CMD ACK/REQ --> NC10 (0xF14)*/
 				cmd->cmd = 0;
 				cmd->src = msm_virt_to_dma(chip,
@@ -2394,7 +2400,7 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 				cmd->dst = NC01(NAND_FLASH_CMD);
 				cmd->len = 4;
 				cmd++;
-			} else { /* NC10 ctrl */
+			} else {
 				/* MASK CMD ACK/REQ --> NC01 (0x53C)*/
 				cmd->cmd = 0;
 				cmd->src = msm_virt_to_dma(chip,
@@ -2554,6 +2560,12 @@ msm_nand_ping_pong_write_oob(struct mtd_info *mtd, loff_t to,
 		cmd->len = 4;
 		cmd++;
 
+		cmd->cmd = 0;
+		cmd->src = msm_virt_to_dma(chip,
+				&dma_buffer->data.ebi2_cfg_default);
+		cmd->dst = EBI2_CFG_REG;
+		cmd->len = 4;
+		cmd++;
 
 		dma_buffer->cmd[0].cmd |= CMD_OCB;
 		cmd[-1].cmd |= CMD_OCU | CMD_LC;
@@ -2616,7 +2628,7 @@ err_dma_map_oobbuf_failed:
 		dma_unmap_single(chip->dev, data_dma_addr, ops->len,
 				DMA_TO_DEVICE);
 	if (err)
-		pr_err("msm_nand_ping_pong_write_oob %llx %x %x failed %d\n",
+		pr_err("msm_nand_write_oob_pingpong %llx %x %x failed %d\n",
 		       to, ops->len, ops->ooblen, err);
 	return err;
 }
@@ -2633,10 +2645,10 @@ static int msm_nand_write(struct mtd_info *mtd, loff_t to, size_t len,
 	ops.ooblen = 0;
 	ops.datbuf = (uint8_t *)buf;
 	ops.oobbuf = NULL;
-	if (!dual_nand_ctlr_feature_enable)
+	if (!dual_nand_ctlr_present)
 		ret =  msm_nand_write_oob(mtd, to, &ops);
 	else
-		ret =  msm_nand_ping_pong_write_oob(mtd, to, &ops);
+		ret =  msm_nand_write_oob_pingpong(mtd, to, &ops);
 	*retlen = ops.retlen;
 	return ret;
 }
@@ -5831,7 +5843,7 @@ int msm_nand_scan(struct mtd_info *mtd, int maxchips)
 		|  (516 <<  9)  /* 516 user data bytes */
 		|   (10 << 19)  /* 10 parity bytes */
 		|    (5 << 27)  /* 5 address cycles */
-		|    (1 << 30)  /* Read status before data */
+		|    (0 << 30)  /* Do not read status before data */
 		|    (1 << 31)  /* Send read cmd */
 		/* 0 spare bytes for 16 bit nand or 1 spare bytes for 8 bit */
 		| ((wide_bus) ? (0 << 23) : (1 << 23));
@@ -5872,8 +5884,13 @@ int msm_nand_scan(struct mtd_info *mtd, int maxchips)
 	mtd->unpoint = NULL;
 	mtd->read = msm_nand_read;
 	mtd->write = msm_nand_write;
-	mtd->read_oob = msm_nand_read_oob;
-	mtd->write_oob = msm_nand_write_oob;
+	if (!dual_nand_ctlr_present) {
+		mtd->read_oob = msm_nand_read_oob;
+		mtd->write_oob = msm_nand_write_oob;
+	} else {
+		mtd->read_oob = msm_nand_read_oob_pingpong;
+		mtd->write_oob = msm_nand_write_oob_pingpong;
+	}
 	/* mtd->sync = msm_nand_sync; */
 	mtd->lock = NULL;
 	/* mtd->unlock = msm_nand_unlock; */
@@ -5918,6 +5935,46 @@ struct msm_nand_info {
 	struct msm_nand_chip	msm_nand;
 };
 
+/* duplicating the NC01 XFR contents to NC10 */
+static int msm_nand_nc10_xfr_settings(struct mtd_info *mtd)
+{
+	struct msm_nand_chip *chip = mtd->priv;
+
+	struct {
+		dmov_s cmd[2];
+		unsigned cmdptr;
+	} *dma_buffer;
+	dmov_s *cmd;
+
+	wait_event(chip->wait_queue,
+		(dma_buffer = msm_nand_get_dma_buffer(
+				chip, sizeof(*dma_buffer))));
+
+	cmd = dma_buffer->cmd;
+
+	/* Copying XFR register contents from NC01 --> NC10 */
+	cmd->cmd = 0;
+	cmd->src = NC01(NAND_XFR_STEP1);
+	cmd->dst = NC10(NAND_XFR_STEP1);
+	cmd->len = 28;
+	cmd++;
+
+	BUILD_BUG_ON(2 != ARRAY_SIZE(dma_buffer->cmd));
+	BUG_ON(cmd - dma_buffer->cmd > ARRAY_SIZE(dma_buffer->cmd));
+	dma_buffer->cmd[0].cmd |= CMD_OCB;
+	cmd[-1].cmd |= CMD_OCU | CMD_LC;
+	dma_buffer->cmdptr = (msm_virt_to_dma(chip, dma_buffer->cmd) >> 3)
+				| CMD_PTR_LP;
+
+	dsb();
+	msm_dmov_exec_cmd(chip->dma_channel, DMOV_CMD_PTR_LIST
+			| DMOV_CMD_ADDR(msm_virt_to_dma(chip,
+			&dma_buffer->cmdptr)));
+	dsb();
+	msm_nand_release_dma_buffer(chip, dma_buffer, sizeof(*dma_buffer));
+	return 0;
+}
+
 #ifdef CONFIG_MTD_PARTITIONS
 static void setup_mtd_device(struct platform_device *pdev,
 			     struct msm_nand_info *info)
@@ -5958,7 +6015,7 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "msm_nand_phys");
 	if (!res || !res->start) {
-		pr_err("invalid msm_nand_phys resource");
+		pr_err("msm_nand_phys resource invalid/absent\n");
 		return -ENODEV;
 	}
 	msm_nand_phys = res->start;
@@ -5967,7 +6024,7 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "msm_nandc01_phys");
 	if (!res || !res->start) {
-		pr_err("invalid msm_nandc01_phys resource");
+		pr_info("msm_nandc01_phys resource invalid/absent\n");
 		goto no_dual_nand_ctlr_support;
 	}
 	msm_nandc01_phys = res->start;
@@ -5976,7 +6033,7 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "msm_nandc10_phys");
 	if (!res || !res->start) {
-		pr_err("invalid msm_nandc10_phys resource");
+		pr_info("msm_nandc10_phys resource invalid/absent\n");
 		goto no_dual_nand_ctlr_support;
 	}
 	msm_nandc10_phys = res->start;
@@ -5985,24 +6042,24 @@ static int __devinit msm_nand_probe(struct platform_device *pdev)
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "msm_nandc11_phys");
 	if (!res || !res->start) {
-		pr_err("invalid msm_nandc11_phys resource");
+		pr_info("msm_nandc11_phys resource invalid/absent\n");
 		goto no_dual_nand_ctlr_support;
 	}
-
 	msm_nandc11_phys = res->start;
 	pr_info("msm_nand: nandc11 phys addr 0x%lx \n", msm_nandc11_phys);
 
 	res = platform_get_resource_byname(pdev,
 					IORESOURCE_MEM, "ebi2_reg_base");
 	if (!res || !res->start) {
-		pr_err("invalid ebi2_register_base resource");
+		pr_info("ebi2_register_base resource invalid/absent\n");
 		goto no_dual_nand_ctlr_support;
-	} else
-		dual_nand_ctlr_feature_enable = 1;
-
+	}
 	ebi2_register_base = res->start;
 	pr_info("msm_nand: ebi2 register base phys addr 0x%lx \n",
 						 ebi2_register_base);
+
+	dual_nand_ctlr_present = 1;
+	pr_info("msm_nand: Dual Nand Controller present, pingpong enabled \n");
 
 no_dual_nand_ctlr_support:
 	res = platform_get_resource_byname(pdev,
@@ -6038,6 +6095,9 @@ no_dual_nand_ctlr_support:
 	info->mtd.name = pdev->dev.bus_id;
 	info->mtd.priv = &info->msm_nand;
 	info->mtd.owner = THIS_MODULE;
+
+	if (dual_nand_ctlr_present)
+		msm_nand_nc10_xfr_settings(&info->mtd);
 
 	if (msm_nand_scan(&info->mtd, 1))
 		if (msm_onenand_scan(&info->mtd, 1)) {
