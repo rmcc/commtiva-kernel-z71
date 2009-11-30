@@ -266,4 +266,12 @@ struct kgsl_bind_gmem_shadow {
 #define IOCTL_KGSL_DRAWCTXT_BIND_GMEM_SHADOW \
     _IOW(KGSL_IOC_TYPE, 0x22, struct kgsl_bind_gmem_shadow)
 
+struct kgsl_drawctxt_set_bin_base_offset {
+	unsigned int drawctxt_id;
+	unsigned int offset;
+};
+
+#define IOCTL_KGSL_DRAWCTXT_SET_BIN_BASE_OFFSET \
+	_IOW(KGSL_IOC_TYPE, 0x25, struct kgsl_drawctxt_set_bin_base_offset)
+
 #endif /* _MSM_KGSL_H */
