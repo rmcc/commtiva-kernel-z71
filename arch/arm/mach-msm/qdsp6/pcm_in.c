@@ -54,7 +54,9 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		uint32_t acdb_id;
 		rc = 0;
 
-		if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
+		if (arg == 0) {
+			acdb_id = 0;
+		} else if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
 			rc = -EFAULT;
 			break;
 		}
