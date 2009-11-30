@@ -48,6 +48,8 @@
 /* mv = (750mV + (raw*25mV))*(2-VREF_SEL_VAL)) */
 #define VDD_RAW(_mv) ((((_mv) - 750) / 25) | (VREF_SEL_VAL << VREF_SEL_SHIFT))
 
+#define MAX_AXI_KHZ 192000
+
 struct clock_state {
 	struct clkctl_acpu_speed	*current_speed;
 	struct mutex			lock;
@@ -86,16 +88,18 @@ static struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	{ 24576,  SRC_LPXO, 0, 0,  30720,  1200, VDD_RAW(1200) },
 	{ 61440,  PLL_3,    5, 11, 61440,  1200, VDD_RAW(1200) },
 	{ 122880, PLL_3,    5, 5,  61440,  1200, VDD_RAW(1200) },
-	{ 128000, SRC_AXI,  1, 0,  128000, 1200, VDD_RAW(1200) },
 	{ 184320, PLL_3,    5, 4,  61440,  1200, VDD_RAW(1200) },
+	{ MAX_AXI_KHZ, SRC_AXI, 1, 0, 61440, 1200, VDD_RAW(1200) },
 	{ 245760, PLL_3,    5, 2,  61440,  1200, VDD_RAW(1200) },
-	{ 368640, PLL_3,    5, 1,  128000, 1200, VDD_RAW(1200) },
-	{ 768000, PLL_1,    2, 0,  128000, 1200, VDD_RAW(1200) },
-	{ 806400, PLL_2,    3, 0,  128000, 1200, VDD_RAW(1200) },
+	{ 368640, PLL_3,    5, 1,  122800, 1200, VDD_RAW(1200) },
+	{ 768000, PLL_1,    2, 0,  153600, 1200, VDD_RAW(1200) },
+	/* ACPU @ 806.4MHz requires MSMC1 @ 1.2V. Voting
+	 * for AXI @ 192MHz accomplishes this implicitly. */
+	{ 806400, PLL_2,    3, 0,  192000, 1200, VDD_RAW(1200) },
 	{ 0 }
 };
 
-#define POWER_COLLAPSE_HZ 128000000
+#define POWER_COLLAPSE_HZ (MAX_AXI_KHZ * 1000)
 unsigned long acpuclk_power_collapse(void)
 {
 	int ret = acpuclk_get_rate();
@@ -103,7 +107,7 @@ unsigned long acpuclk_power_collapse(void)
 	return ret * 1000;
 }
 
-#define WAIT_FOR_IRQ_HZ 128000000
+#define WAIT_FOR_IRQ_HZ (MAX_AXI_KHZ * 1000)
 unsigned long acpuclk_wait_for_irq(void)
 {
 	int ret = acpuclk_get_rate();
@@ -272,7 +276,6 @@ uint32_t acpuclk_get_switch_time(void)
 	return drv_state.acpu_switch_time_us;
 }
 
-#define MAX_AXI_KHZ 128000
 unsigned long clk_get_max_axi_khz(void)
 {
 	return MAX_AXI_KHZ;
