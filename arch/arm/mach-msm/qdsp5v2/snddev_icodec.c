@@ -322,8 +322,8 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	audio_interct_codec(AUDIO_INTERCT_LPA);
 
 	/* Set MI2S */
-	mi2s_set_codec_output_path((icodec->data->channel_mode == 2 ? 1 : 0),
-	WT_16_BIT);
+	mi2s_set_codec_output_path((icodec->data->channel_mode == 2 ?
+	MI2S_CHAN_STEREO : MI2S_CHAN_MONO_PACKED), WT_16_BIT);
 	/* Configure ADIE */
 	trc = adie_codec_open(icodec->data->profile, &icodec->adie_path);
 	if (IS_ERR_VALUE(trc))
@@ -390,8 +390,8 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	clk_enable(drv->tx_sclk);
 
 	/* Set MI2S */
-	mi2s_set_codec_input_path((icodec->data->channel_mode == 2 ? 1 : 0),
-	WT_16_BIT);
+	mi2s_set_codec_input_path((icodec->data->channel_mode == 2 ?
+	MI2S_CHAN_STEREO : MI2S_CHAN_MONO_RAW), WT_16_BIT);
 	/* Configure ADIE */
 	trc = adie_codec_open(icodec->data->profile, &icodec->adie_path);
 	if (IS_ERR_VALUE(trc))
