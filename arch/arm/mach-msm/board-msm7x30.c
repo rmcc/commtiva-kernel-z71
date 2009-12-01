@@ -86,6 +86,7 @@
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
 #include <mach/msm_ts.h>
+#include <mach/pmic.h>
 
 #include <asm/mach/mmc.h>
 #include <mach/vreg.h>
@@ -1558,6 +1559,30 @@ static struct platform_device msm_device_kgsl = {
 	},
 };
 
+static int mddi_toshiba_pmic_bl(int level)
+{
+	int ret = -EPERM;
+
+	ret = pmic_set_led_intensity(LED_LCD, level);
+
+	if (ret)
+		printk(KERN_WARNING "%s: can't set lcd backlight!\n",
+					__func__);
+	return ret;
+}
+
+static struct msm_panel_common_pdata mddi_toshiba_pdata = {
+	.pmic_backlight = mddi_toshiba_pmic_bl,
+};
+
+static struct platform_device mddi_toshiba_device = {
+	.name   = "mddi_toshiba",
+	.id     = 0,
+	.dev    = {
+		.platform_data = &mddi_toshiba_pdata,
+	}
+};
+
 static unsigned wega_reset_gpio =
 	GPIO_CFG(180, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
 
@@ -2093,6 +2118,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&msm_fb_device,
+	&mddi_toshiba_device,
 	&lcdc_toshiba_panel_device,
 	&msm_rotator_device,
 	&lcdc_sharp_panel_device,
