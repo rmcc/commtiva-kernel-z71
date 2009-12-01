@@ -3068,6 +3068,41 @@ static struct attribute_group msm_hsusb_attr_grp = {
 	.attrs = msm_hsusb_attrs,
 };
 
+#define msm_hsusb_func_attr(function, index)				\
+static ssize_t  show_##function(struct device *dev,			\
+		struct device_attribute *attr, char *buf)		\
+{									\
+	struct usb_info *ui = the_usb_info;				\
+	struct usb_function_info *fi = ui->func[index];			\
+									\
+	return sprintf(buf, "%d", fi->enabled);				\
+									\
+}									\
+									\
+static DEVICE_ATTR(function, S_IRUGO, show_##function, NULL);
+
+msm_hsusb_func_attr(diag, 0);
+msm_hsusb_func_attr(adb, 1);
+msm_hsusb_func_attr(modem, 2);
+msm_hsusb_func_attr(nmea, 3);
+msm_hsusb_func_attr(mass_storage, 4);
+msm_hsusb_func_attr(ethernet, 5);
+
+static struct attribute *msm_hsusb_func_attrs[] = {
+	&dev_attr_diag.attr,
+	&dev_attr_adb.attr,
+	&dev_attr_modem.attr,
+	&dev_attr_nmea.attr,
+	&dev_attr_mass_storage.attr,
+	&dev_attr_ethernet.attr,
+	NULL,
+};
+
+static struct attribute_group msm_hsusb_func_attr_grp = {
+	.name  = "functions",
+	.attrs = msm_hsusb_func_attrs,
+};
+
 static int __init usb_probe(struct platform_device *pdev)
 {
 	struct resource *res;
@@ -3171,11 +3206,18 @@ static int __init usb_probe(struct platform_device *pdev)
 		goto free_str_desc;
 	}
 
+	ret = sysfs_create_group(&pdev->dev.kobj, &msm_hsusb_func_attr_grp);
+	if (ret) {
+		pr_err("%s: unable to create functions sysfs group\n",
+				__func__);
+		goto free_func;
+	}
+
 	ui->addr = ioremap(res->start, resource_size(res));
 	if (!ui->addr) {
 		pr_err("%s: unable ioremap\n", __func__);
 		ret = -ENOMEM;
-		goto free_func;
+		goto free_func_sysfs_grp;
 	}
 
 	ui->buf = dma_alloc_coherent(&pdev->dev, 4096, &ui->dma, GFP_KERNEL);
@@ -3322,6 +3364,8 @@ free_dma_coherent:
 	dma_free_coherent(&pdev->dev, 4096, ui->buf, ui->dma);
 free_iounmap:
 	iounmap(ui->addr);
+free_func_sysfs_grp:
+	sysfs_remove_group(&pdev->dev.kobj, &msm_hsusb_func_attr_grp);
 free_func:
 	kfree(ui->func);
 free_str_desc:
@@ -3429,6 +3473,7 @@ static void usb_exit(void)
 	/* free the usb_info structure */
 	free_usb_info();
 	switch_dev_unregister(&ui->sdev);
+	sysfs_remove_group(&ui->pdev->dev.kobj, &msm_hsusb_func_attr_grp);
 	sysfs_remove_group(&ui->pdev->dev.kobj, &msm_hsusb_attr_grp);
 	usb_debugfs_uninit();
 	platform_driver_unregister(&usb_driver);
