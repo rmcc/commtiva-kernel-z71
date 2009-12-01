@@ -1300,6 +1300,7 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		iBuf.mdpImg.mdpOp |= MDPOP_ALPHAB;
 		iBuf.mdpImg.alpha = req->alpha;
 	}
+
 	/* rotation check */
 	if (req->flags & MDP_FLIP_LR)
 		iBuf.mdpImg.mdpOp |= MDPOP_LR;
@@ -1309,6 +1310,14 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		iBuf.mdpImg.mdpOp |= MDPOP_ROT90;
 	if (req->flags & MDP_DITHER)
 		iBuf.mdpImg.mdpOp |= MDPOP_DITHER;
+
+	if (req->flags & MDP_BLEND_FG_PREMULT) {
+#ifdef CONFIG_FB_MSM_MDP31
+		iBuf.mdpImg.mdpOp |= MDPOP_FG_PM_ALPHA;
+#else
+		return -EINVAL;
+#endif
+	}
 
 	if (req->flags & MDP_DEINTERLACE) {
 #ifdef CONFIG_FB_MSM_MDP31
