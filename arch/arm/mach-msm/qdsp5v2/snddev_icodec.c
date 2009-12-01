@@ -627,7 +627,7 @@ static int snddev_icodec_probe(struct platform_device *pdev)
 	dev_info->opened = 0;
 	msm_snddev_register(dev_info);
 	icodec->data = pdata;
-	icodec->sample_rate = 8000; /* Default to 8KHz */
+	icodec->sample_rate = pdata->default_sample_rate;
 error:
 	return rc;
 }
