@@ -648,11 +648,17 @@ static void msm_serial_hs_rx_tlet(unsigned long tlet_ptr)
 
 	rx_count = msm_hs_read(uport, UARTDM_RX_TOTAL_SNAP_ADDR);
 
+	/* order the read of rx.buffer */
+	dma_coherent_post_ops();
+
 	if (0 != (uport->read_status_mask & CREAD)) {
 		retval = tty_insert_flip_string(tty, msm_uport->rx.buffer,
 						rx_count);
 		BUG_ON(retval != rx_count);
 	}
+
+	/* order the read of rx.buffer and the start of next rx xfer */
+	dma_coherent_pre_ops();
 
 	msm_hs_start_rx_locked(uport);
 
