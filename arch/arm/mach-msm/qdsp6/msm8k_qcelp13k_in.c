@@ -80,7 +80,8 @@
 
 struct qcelp {
 	u32 cad_w_handle;
-	struct msm_audio_qcelp_config cfg;
+	struct msm_audio_stream_config str_cfg;
+	struct msm_audio_qcelp_enc_config cfg;
 	struct msm_voicerec_mode voicerec_mode;
 };
 
@@ -100,7 +101,6 @@ static int msm8k_qcelp_in_open(struct inode *inode, struct file *f)
 	f->private_data = qcelp;
 	memset(qcelp, 0, sizeof(struct qcelp));
 
-	qcelp->cfg.channels = 1;
 	qcelp->cfg.cdma_rate = CDMA_RATE_FULL;
 	qcelp->cfg.min_bit_rate = 1;
 	qcelp->cfg.max_bit_rate = 4;
@@ -109,7 +109,7 @@ static int msm8k_qcelp_in_open(struct inode *inode, struct file *f)
 	cos.op_code = CAD_OPEN_OP_READ;
 	qcelp->cad_w_handle = cad_open(&cos);
 	qcelp->voicerec_mode.rec_mode = VOC_REC_UPLINK;
-
+	qcelp->str_cfg.buffer_size = QCELP_MAX_BUFFER_SIZE;
 	if (qcelp->cad_w_handle == 0) {
 		kfree(qcelp);
 		return -ENODEV;
@@ -183,7 +183,7 @@ static int msm8k_qcelp_in_ioctl(struct inode *inode, struct file *f,
 
 		cad_stream_info.priority = 0;
 		cad_stream_info.buf_mem_type = CAD_STREAM_BUF_MEM_HEAP;
-		cad_stream_info.ses_buf_max_size = QCELP_MAX_BUFFER_SIZE;
+		cad_stream_info.ses_buf_max_size = p->str_cfg.buffer_size;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_INFO,
 			&cad_stream_info,
 			sizeof(struct cad_stream_info_struct_type));
@@ -205,7 +205,6 @@ static int msm8k_qcelp_in_ioctl(struct inode *inode, struct file *f,
 
 		cad_qcelp_fmt.size = sizeof(struct cad_qcelp13k_format);
 		cad_qcelp_fmt.version = 1;
-		cad_qcelp_fmt.channels = p->cfg.channels;
 		cad_qcelp_fmt.cdma_rate = p->cfg.cdma_rate;
 		cad_qcelp_fmt.min_bit_rate = p->cfg.min_bit_rate;
 		cad_qcelp_fmt.max_bit_rate = p->cfg.max_bit_rate;
@@ -233,14 +232,24 @@ static int msm8k_qcelp_in_ioctl(struct inode *inode, struct file *f,
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
 			NULL, 0);
 		break;
-	case AUDIO_GET_CONFIG:
-		if (copy_to_user((void *)arg, &p->cfg,
-				sizeof(struct msm_audio_qcelp_config)))
+	case AUDIO_GET_STREAM_CONFIG:
+		if (copy_to_user((void *)arg, &p->str_cfg,
+			sizeof(struct msm_audio_stream_config)))
 			return -EFAULT;
 		break;
-	case AUDIO_SET_CONFIG:
+	case AUDIO_SET_STREAM_CONFIG:
+		if (copy_from_user(&p->str_cfg, (void *)arg,
+			sizeof(struct msm_audio_stream_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_GET_QCELP_ENC_CONFIG:
+		if (copy_to_user((void *)arg, &p->cfg,
+				sizeof(struct msm_audio_qcelp_enc_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_SET_QCELP_ENC_CONFIG:
 		if (copy_from_user(&p->cfg, (void *)arg,
-				sizeof(struct msm_audio_qcelp_config)))
+				sizeof(struct msm_audio_qcelp_enc_config)))
 			return -EFAULT;
 		if (p->cfg.min_bit_rate > 4 || p->cfg.min_bit_rate < 1) {
 			pr_err("invalid min bitrate\n");

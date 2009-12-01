@@ -80,7 +80,8 @@
 
 struct evrc {
 	u32 cad_w_handle;
-	struct msm_audio_evrc_config cfg;
+	struct msm_audio_evrc_enc_config cfg;
+	struct msm_audio_stream_config str_cfg;
 	struct msm_voicerec_mode voicerec_mode;
 };
 
@@ -100,19 +101,15 @@ static int msm8k_evrc_in_open(struct inode *inode, struct file *f)
 	f->private_data = evrc;
 	memset(evrc, 0, sizeof(struct evrc));
 
-	evrc->cfg.channels = 1;
 	evrc->cfg.cdma_rate = CDMA_RATE_FULL;
 	evrc->cfg.min_bit_rate = 1;
 	evrc->cfg.max_bit_rate = 4;
-	evrc->cfg.bit_rate_reduction = 0;
-	evrc->cfg.hi_pass_filter = 1;
-	evrc->cfg.noise_suppressor = 0;
-	evrc->cfg.post_filter = 0;
 
 	cos.format = CAD_FORMAT_EVRC;
 	cos.op_code = CAD_OPEN_OP_READ;
 	evrc->cad_w_handle = cad_open(&cos);
 	evrc->voicerec_mode.rec_mode = VOC_REC_UPLINK;
+	evrc->str_cfg.buffer_size = EVRC_MAX_BUF_SIZE;
 
 	if (evrc->cad_w_handle == 0) {
 		kfree(evrc);
@@ -164,7 +161,6 @@ static int msm8k_evrc_in_ioctl(struct inode *inode, struct file *f,
 	int rc = 0;
 	struct evrc *p = f->private_data;
 	u32 stream_device[1];
-	u32 evrc_bool_flags = 0;
 	struct cad_device_struct_type cad_dev;
 	struct cad_stream_device_struct_type cad_stream_dev;
 	struct cad_stream_info_struct_type cad_stream_info;
@@ -188,7 +184,7 @@ static int msm8k_evrc_in_ioctl(struct inode *inode, struct file *f,
 
 		cad_stream_info.priority = 0;
 		cad_stream_info.buf_mem_type = CAD_STREAM_BUF_MEM_HEAP;
-		cad_stream_info.ses_buf_max_size = EVRC_MAX_BUF_SIZE;
+		cad_stream_info.ses_buf_max_size = p->str_cfg.buffer_size;
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_INFO,
 			&cad_stream_info,
 			sizeof(struct cad_stream_info_struct_type));
@@ -210,21 +206,9 @@ static int msm8k_evrc_in_ioctl(struct inode *inode, struct file *f,
 
 		cad_evrc_fmt.size = sizeof(struct cad_evrc_format);
 		cad_evrc_fmt.version = 1;
-		cad_evrc_fmt.channel_count = p->cfg.channels;
 		cad_evrc_fmt.cdma_rate = p->cfg.cdma_rate;
 		cad_evrc_fmt.min_bit_rate = p->cfg.min_bit_rate;
 		cad_evrc_fmt.max_bit_rate = p->cfg.max_bit_rate;
-
-		if (p->cfg.bit_rate_reduction)
-			evrc_bool_flags |= 0x01;
-		if (p->cfg.hi_pass_filter)
-			evrc_bool_flags |= 0x02;
-		if (p->cfg.noise_suppressor)
-			evrc_bool_flags |= 0x04;
-		if (p->cfg.post_filter)
-			evrc_bool_flags |= 0x08;
-
-		cad_evrc_fmt.evrc_bool_flags = evrc_bool_flags;
 
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
 			&cad_evrc_fmt,
@@ -249,14 +233,24 @@ static int msm8k_evrc_in_ioctl(struct inode *inode, struct file *f,
 		rc = cad_ioctl(p->cad_w_handle, CAD_IOCTL_CMD_STREAM_FLUSH,
 			NULL, 0);
 		break;
-	case AUDIO_GET_CONFIG:
-		if (copy_to_user((void *)arg, &p->cfg,
-				sizeof(struct msm_audio_evrc_config)))
+	case AUDIO_GET_STREAM_CONFIG:
+		if (copy_to_user((void *)arg, &p->str_cfg,
+			sizeof(struct msm_audio_stream_config)))
 			return -EFAULT;
 		break;
-	case AUDIO_SET_CONFIG:
+	case AUDIO_SET_STREAM_CONFIG:
+		if (copy_from_user(&p->str_cfg, (void *)arg,
+			sizeof(struct msm_audio_stream_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_GET_EVRC_ENC_CONFIG:
+		if (copy_to_user((void *)arg, &p->cfg,
+			sizeof(struct msm_audio_evrc_enc_config)))
+			return -EFAULT;
+		break;
+	case AUDIO_SET_EVRC_ENC_CONFIG:
 		if (copy_from_user(&p->cfg, (void *)arg,
-				sizeof(struct msm_audio_evrc_config)))
+				sizeof(struct msm_audio_evrc_enc_config)))
 			return -EFAULT;
 		if (p->cfg.min_bit_rate > 4 || p->cfg.min_bit_rate < 1) {
 			pr_err("invalid min bitrate\n");
@@ -267,21 +261,6 @@ static int msm8k_evrc_in_ioctl(struct inode *inode, struct file *f,
 			return -EINVAL;
 		}
 
-		if (p->cfg.bit_rate_reduction)
-			evrc_bool_flags |= 0x01;
-		if (p->cfg.hi_pass_filter)
-			evrc_bool_flags |= 0x02;
-		if (p->cfg.noise_suppressor)
-			evrc_bool_flags |= 0x04;
-		if (p->cfg.post_filter)
-			evrc_bool_flags |= 0x08;
-
-		if (evrc_bool_flags != 0x01 && evrc_bool_flags != 0x02 &&
-			evrc_bool_flags != 0x04 && evrc_bool_flags != 0x08) {
-
-			pr_err("invalid bitmap for bool flags\n");
-			return -EINVAL;
-		}
 		if (p->cfg.cdma_rate > CDMA_RATE_ERASURE ||
 			p->cfg.cdma_rate < CDMA_RATE_BLANK) {
 			pr_err("invalid evrc cdma rate\n");
