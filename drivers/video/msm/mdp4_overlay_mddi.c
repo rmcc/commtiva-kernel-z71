@@ -208,7 +208,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 	mdp4_overlay_dmap_xy(pipe);
 
-	mdp4_overlay_dmap_cfg(mfd);
+	mdp4_overlay_dmap_cfg(mfd, 0);
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
