@@ -447,6 +447,8 @@ static void tsif_dma_schedule(struct msm_tsif_device *tsif_device)
 			"schedule xfer[%d] -> [%2d]{%2d}\n",
 			i, dmwi0, xfer->wi);
 #endif
+		/* complete all the writes to box */
+		dma_coherent_pre_ops();
 		msm_dmov_enqueue_cmd(tsif_device->dma, &xfer->hdr);
 	}
 	if (!found)
@@ -483,6 +485,9 @@ static void tsif_dmov_complete_func(struct msm_dmov_cmd *cmd,
 	i = xfer - tsif_device->xfer;
 	data_offset = tsif_device->dmov_cmd[i]->box.dst_row_addr -
 		      tsif_device->data_buffer_dma;
+
+	/* order reads from the xferred buffer */
+	dma_coherent_post_ops();
 	if (result & DMOV_RSLT_DONE) {
 		int w = data_offset / TSIF_PKT_SIZE;
 		tsif_device->stat_rx++;
