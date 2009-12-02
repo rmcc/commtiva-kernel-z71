@@ -182,7 +182,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	pipe->srcp0_ystride = fbi->fix.line_length;
 
 	mdp4_overlay_dmap_xy(pipe);
-	mdp4_overlay_dmap_cfg(mfd);
+	mdp4_overlay_dmap_cfg(mfd, 1);
 
 	mdp4_overlay_rgb_setup(pipe);
 

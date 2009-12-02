@@ -91,7 +91,7 @@ struct mdp4_overlay_ctrl {
 static struct mdp4_overlay_ctrl *ctrl = &mdp4_overlay_db;
 
 
-void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd)
+void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd, int lcdc)
 {
 	uint32	dma2_cfg_reg;
 
@@ -113,6 +113,9 @@ void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd)
 		dma2_cfg_reg |= DMA_DSTC0G_8BITS |	/* 888 16BPP */
 		    DMA_DSTC1B_8BITS | DMA_DSTC2R_8BITS;
 	}
+
+	if (lcdc)
+		dma2_cfg_reg |= DMA_PACK_ALIGN_MSB;
 
 	/* dma2 config register */
 	MDP_OUTP(MDP_BASE + 0x90000, dma2_cfg_reg);
