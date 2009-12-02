@@ -131,6 +131,51 @@ static struct usb_device_descriptor device_desc = {
 
 static void enable_adb(struct android_dev *dev, int enable);
 
+#define android_func_attr(function, index)				\
+static ssize_t  show_##function(struct device *dev,			\
+		struct device_attribute *attr, char *buf)		\
+{									\
+									\
+	unsigned long n = _android_dev->functions;			\
+	int val = 0;							\
+									\
+	while (n) {							\
+		if ((n & 0x0F) == index)				\
+			val = 1;					\
+		n = n >> 4;						\
+	}								\
+	return sprintf(buf, "%d", val);					\
+									\
+}									\
+									\
+static DEVICE_ATTR(function, S_IRUGO, show_##function, NULL);
+
+android_func_attr(adb, ANDROID_ADB);
+android_func_attr(mass_storage, ANDROID_MSC);
+android_func_attr(acm_modem, ANDROID_ACM_MODEM);
+android_func_attr(acm_nmea, ANDROID_ACM_NMEA);
+android_func_attr(diag, ANDROID_DIAG);
+android_func_attr(modem, ANDROID_GENERIC_MODEM);
+android_func_attr(nmea, ANDROID_GENERIC_NMEA);
+android_func_attr(cdc_ecm, ANDROID_CDC_ECM);
+
+static struct attribute *android_func_attrs[] = {
+	&dev_attr_adb.attr,
+	&dev_attr_mass_storage.attr,
+	&dev_attr_acm_modem.attr,
+	&dev_attr_acm_nmea.attr,
+	&dev_attr_diag.attr,
+	&dev_attr_modem.attr,
+	&dev_attr_nmea.attr,
+	&dev_attr_cdc_ecm.attr,
+	NULL,
+};
+
+static struct attribute_group android_func_attr_grp = {
+	.name  = "functions",
+	.attrs = android_func_attrs,
+};
+
 static int  android_bind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = _android_dev;
@@ -507,6 +552,9 @@ static int __init android_probe(struct platform_device *pdev)
 	}
 	if (sysfs_create_group(&pdev->dev.kobj, &android_attr_grp))
 		pr_err("%s: Failed to create the sysfs entry \n", __func__);
+	if (sysfs_create_group(&pdev->dev.kobj, &android_func_attr_grp))
+		pr_err("%s: Failed to create the functions sysfs entry \n",
+				__func__);
 
 	return 0;
 }
