@@ -22,7 +22,7 @@ struct dal_client;
 typedef void (*dal_event_func_t)(void *data, int len, void *cookie);
 
 struct dal_client *dal_attach(uint32_t device_id, const char *name,
-			      dal_event_func_t func, void *cookie);
+			uint32_t cpu, dal_event_func_t func, void *cookie);
 
 int dal_detach(struct dal_client *client);
 
