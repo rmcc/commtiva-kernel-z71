@@ -42,5 +42,7 @@ struct snddev_icodec_data {
 	u8 channel_mode;
 	enum hsed_controller pmctl_id; /* tx only enable mic bias */
 	u32 default_sample_rate;
+	void (*pamp_on) (void);
+	void (*pamp_off) (void);
 };
 #endif

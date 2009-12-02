@@ -59,6 +59,7 @@
 #include <mach/qdsp5v2/marimba_profile.h>
 #include <mach/qdsp5v2/aux_pcm.h>
 #include <mach/qdsp5v2/snddev_ecodec.h>
+#include <mach/board.h>
 
 /* define the value for BT_SCO */
 #define BT_SCO_PCM_CTL_VAL (PCM_CTL__RPCM_WIDTH__LINEAR_V |\
@@ -94,6 +95,8 @@ static struct snddev_icodec_data snddev_iearpiece_data = {
 	.channel_mode = 1,
 	.pmctl_id = 0,
 	.default_sample_rate = 48000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_iearpiece_device = {
@@ -129,6 +132,8 @@ static struct snddev_icodec_data snddev_imic_data = {
 	.channel_mode = 1,
 	.pmctl_id = PM_HSED_CONTROLLER_0,
 	.default_sample_rate = 8000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_imic_device = {
@@ -163,6 +168,8 @@ static struct snddev_icodec_data snddev_ihs_stereo_rx_data = {
 	.profile = &ihs_stereo_rx_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_ihs_stereo_rx_device = {
@@ -197,6 +204,8 @@ static struct snddev_icodec_data snddev_ihs_mono_rx_data = {
 	.profile = &ihs_mono_rx_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 48000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_ihs_mono_rx_device = {
@@ -232,6 +241,8 @@ static struct snddev_icodec_data snddev_ihs_mono_tx_data = {
 	.channel_mode = 1,
 	.pmctl_id = PM_HSED_CONTROLLER_1,
 	.default_sample_rate = 8000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_ihs_mono_tx_device = {
@@ -266,12 +277,52 @@ static struct snddev_icodec_data snddev_ifmradio_handset_data = {
 	.profile = &ifmradio_handset_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 8000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
 };
 
 static struct platform_device msm_ifmradio_handset_device = {
 	.name = "msm_snddev_icodec",
 	.id = 5,
 	.dev = { .platform_data = &snddev_ifmradio_handset_data },
+};
+
+static struct adie_codec_action_unit ispeaker_rx_48KHz_osr256_actions[] =
+   SPEAKER_STEREO_RX_48000_OSR_256;
+
+static struct adie_codec_hwsetting_entry ispeaker_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ispeaker_rx_48KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ispeaker_rx_48KHz_osr256_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ispeaker_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ispeaker_rx_settings,
+	.setting_sz = ARRAY_SIZE(ispeaker_rx_settings),
+};
+
+static struct snddev_icodec_data snddev_ispeaker_rx_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "speaker_stereo_rx",
+	.copp_id = 0,
+	.acdb_id = 1,
+	.profile = &ispeaker_rx_profile,
+	.channel_mode = 2,
+	.pmctl_id = 0,
+	.default_sample_rate = 48000,
+	.pamp_on = &msm_snddev_poweramp_on,
+	.pamp_off = &msm_snddev_poweramp_off,
+};
+
+static struct platform_device msm_ispeaker_rx_device = {
+	.name = "msm_snddev_icodec",
+	.id = 6,
+	.dev = { .platform_data = &snddev_ispeaker_rx_data },
+
 };
 
 static struct snddev_ecodec_data snddev_bt_sco_earpiece_data = {
@@ -317,6 +368,7 @@ static struct platform_device *snd_devices[] = {
 	&msm_ihs_mono_tx_device,
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
+	&msm_ispeaker_rx_device,
 };
 
 void __init msm_snddev_init(void)

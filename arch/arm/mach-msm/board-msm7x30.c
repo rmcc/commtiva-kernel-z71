@@ -475,6 +475,35 @@ static void config_gpio_table(uint32_t *table, int len)
 	}
 }
 
+static uint32_t audio_pamp_gpio_config =
+   GPIO_CFG(82, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+
+static int __init snddev_poweramp_gpio_init(void)
+{
+	int rc;
+
+	pr_info("snddev_poweramp_gpio_init \n");
+	rc = gpio_tlmm_config(audio_pamp_gpio_config, GPIO_ENABLE);
+	if (rc) {
+		printk(KERN_ERR
+			"%s: gpio_tlmm_config(%#x)=%d\n",
+			__func__, audio_pamp_gpio_config, rc);
+	}
+	return rc;
+}
+
+void msm_snddev_poweramp_on(void)
+{
+	gpio_set_value(82, 1);	/* enable spkr poweramp */
+	pr_info("%s: power on amplifier\n", __func__);
+}
+
+void msm_snddev_poweramp_off(void)
+{
+	gpio_set_value(82, 0);	/* disable spkr poweramp */
+	pr_info("%s: power off amplifier\n", __func__);
+}
+
 static void msm_camera_vreg_config_on(void)
 {
 	struct vreg *vreg_gp2, *vreg_gp3;
@@ -2835,6 +2864,7 @@ static void __init msm7x30_init(void)
 	qup_device_i2c_init();
 	buses_init();
 	msm7x30_init_marimba();
+	snddev_poweramp_gpio_init();
 	msm_snddev_init();
 	i2c_register_board_info(2, msm_marimba_board_info,
 			ARRAY_SIZE(msm_marimba_board_info));
