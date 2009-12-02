@@ -44,8 +44,10 @@ extern void register_cb(void *);
 #define USE_PERIODS_MAX         1024
 #define USE_PERIODS_MIN         1
 
+#define PLAYBACK_STREAMS	4
+#define CAPTURE_STREAMS		1
+
 struct audio_locks {
-	struct mutex lock;
 	struct mutex mixer_lock;
 	wait_queue_head_t eos_wait;
 };
