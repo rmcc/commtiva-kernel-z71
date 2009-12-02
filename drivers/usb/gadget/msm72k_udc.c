@@ -30,6 +30,7 @@
 #include <linux/debugfs.h>
 #include <linux/workqueue.h>
 #include <linux/pm_qos_params.h>
+#include <linux/switch.h>
 
 #include <mach/msm72k_otg.h>
 #include <linux/io.h>
@@ -183,6 +184,7 @@ struct usb_info {
 
 	struct usb_gadget		gadget;
 	struct usb_gadget_driver	*driver;
+	struct switch_dev sdev;
 
 #define ep0out ept[0]
 #define ep0in  ept[16]
@@ -196,12 +198,24 @@ struct usb_info {
 };
 
 static const struct usb_ep_ops msm72k_ep_ops;
-
+static struct usb_info *the_usb_info;
 
 static int msm72k_wakeup(struct usb_gadget *_gadget);
 static int msm72k_pullup(struct usb_gadget *_gadget, int is_active);
 static int msm72k_set_halt(struct usb_ep *_ep, int value);
 static void flush_endpoint(struct msm_endpoint *ept);
+
+static ssize_t print_switch_name(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%s\n", DRIVER_NAME);
+}
+
+static ssize_t print_switch_state(struct switch_dev *sdev, char *buf)
+{
+	struct usb_info *ui = the_usb_info;
+
+	return sprintf(buf, "%s\n", (ui->online ? "online" : "offline"));
+}
 
 static inline enum chg_type is_wall_charger(struct usb_info *ui)
 {
@@ -1062,8 +1076,6 @@ static void usb_start(struct usb_info *ui)
 	spin_unlock_irqrestore(&ui->lock, flags);
 }
 
-static struct usb_info *the_usb_info;
-
 static int usb_free(struct usb_info *ui, int ret)
 {
 	INFO("usb_free(%d)\n", ret);
@@ -1209,6 +1221,7 @@ static void usb_do_work(struct work_struct *w)
 					ui->driver->disconnect(&ui->gadget);
 				}
 
+				switch_set_state(&ui->sdev, 0);
 				/* power down phy, clock down usb */
 				otg_set_suspend(ui->xceiv, 1);
 
@@ -1223,6 +1236,7 @@ static void usb_do_work(struct work_struct *w)
 				break;
 			}
 			if (flags & USB_FLAG_CONFIGURED) {
+				switch_set_state(&ui->sdev, 1);
 				ui->chg_current = ui->b_max_pow;
 				ui->chg_vbus_draw(ui->b_max_pow);
 				break;
@@ -1877,6 +1891,14 @@ static int msm72k_probe(struct platform_device *pdev)
 	ui->gadget.dev.parent = &pdev->dev;
 	ui->gadget.dev.dma_mask = pdev->dev.dma_mask;
 
+	ui->sdev.name = DRIVER_NAME;
+	ui->sdev.print_name = print_switch_name;
+	ui->sdev.print_state = print_switch_state;
+
+	retval = switch_dev_register(&ui->sdev);
+	if (retval)
+		return usb_free(ui, retval);
+
 	the_usb_info = ui;
 
 	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
@@ -1891,6 +1913,7 @@ static int msm72k_probe(struct platform_device *pdev)
 	if (retval) {
 		pr_err("%s: Cannot bind the transceiver, retval:(%d)\n",
 				__func__, retval);
+		switch_dev_unregister(&ui->sdev);
 		return usb_free(ui, retval);
 	}
 
@@ -1994,6 +2017,7 @@ int usb_gadget_unregister_driver(struct usb_gadget_driver *driver)
 	msm72k_pullup(&dev->gadget, 0);
 	dev->state = USB_STATE_IDLE;
 	dev->online = 0;
+	switch_set_state(&dev->sdev, 0);
 	device_remove_file(&dev->gadget.dev, &dev_attr_wakeup);
 	device_remove_file(&dev->gadget.dev, &dev_attr_usb_state);
 	device_remove_file(&dev->gadget.dev, &dev_attr_usb_speed);
