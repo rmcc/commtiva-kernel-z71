@@ -703,8 +703,7 @@ static int audio_enable_eq(struct audio *audio, int enable)
 	audio->eq_enable = enable;
 
 	if (audio->running) {
-		audpp_dsp_set_eq(audio->dec_id, enable, &audio->eq,
-				POPP);
+		audpp_dsp_set_eq(audio->dec_id, enable, &audio->eq, POPP);
 		audio->eq_needs_commit = 0;
 	}
 	return 0;
@@ -993,8 +992,9 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case AUDIO_GET_SESSION_ID:
 		if (copy_to_user((void *) arg, &audio->dec_id,
 					sizeof(unsigned short)))
-			return -EFAULT;
-		rc = 0;
+			rc = -EFAULT;
+		else
+			rc = 0;
 		break;
 	default:
 		rc = -EINVAL;
