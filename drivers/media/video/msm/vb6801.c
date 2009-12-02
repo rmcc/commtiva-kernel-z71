@@ -297,7 +297,7 @@ static int vb6801_i2c_rxdata(unsigned short saddr,
 		{
 			.addr = saddr,
 			.flags = I2C_M_RD,
-			.len = length,
+			.len = 2,
 			.buf = rxdata,
 		},
 	};
@@ -449,14 +449,6 @@ static int32_t vb6801_i2c_write_table(struct vb6801_i2c_reg_conf_t *regs,
 static int32_t vb6801_reset(const struct msm_camera_sensor_info *data)
 {
 	int rc;
-	rc = gpio_request(data->sensor_pwd, "vb6801");
-	if (!rc) {
-		gpio_direction_output(data->sensor_pwd, 1);
-		CDBG("sensor_pwd SUcceeded\n");
-	} else {
-		CDBG("sensor_pwd FAiled\n");
-		goto reset_done;
-	}
 
 	rc = gpio_request(data->sensor_reset, "vb6801");
 	if (!rc) {
@@ -468,7 +460,6 @@ static int32_t vb6801_reset(const struct msm_camera_sensor_info *data)
 	} else
 		CDBG("sensor_reset FAiled\n");
 
-reset_done:
 	return rc;
 }
 
@@ -484,19 +475,31 @@ static int32_t vb6801_set_default_focus(void)
 static void vb6801_get_pict_fps(uint16_t fps, uint16_t *pfps)
 {
 	/* input fps is preview fps in Q8 format */
-	uint32_t divider, pclk_mult;
+	uint32_t divider; /*Q10 */
+	uint32_t pclk_mult; /*Q10 */
+	uint32_t d1;
+	uint32_t d2;
 
-	divider =
-	    (((vb6801_ctrl->s_dynamic_params.preview_linesPerFrame) *
-	      (vb6801_ctrl->s_dynamic_params.preview_pixelsPerLine)) * 0x400) /
-	    (vb6801_ctrl->s_dynamic_params.snapshot_linesPerFrame *
-	     vb6801_ctrl->s_dynamic_params.snapshot_pixelsPerLine);
+	d1 =
+		(uint32_t)(
+		(vb6801_ctrl->s_dynamic_params.preview_linesPerFrame *
+		0x00000400) /
+		vb6801_ctrl->s_dynamic_params.snapshot_linesPerFrame);
+
+	d2 =
+		(uint32_t)(
+		(vb6801_ctrl->s_dynamic_params.preview_pixelsPerLine *
+		0x00000400) /
+		vb6801_ctrl->s_dynamic_params.snapshot_pixelsPerLine);
+
+
+	divider = (uint32_t) (d1 * d2) / 0x00000400;
 
 	pclk_mult = (48 * 0x400) / 60;
 
 	/* Verify PCLK settings and frame sizes. */
-	*pfps = (uint16_t) (fps * divider * pclk_mult / 0x00000400 /
-			    0x00000400);
+	*pfps = (uint16_t)((((fps * pclk_mult) / 0x00000400) * divider)/
+				0x00000400);
 }
 
 static uint16_t vb6801_get_prev_lines_pf(void)
@@ -1010,21 +1013,18 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 
 	/* PLL Mulitplier: min , max 106 */
 	pll_op_freq_mhz = vt_sys_clk_div * vt_sys_clk_freq_mhz;
-	pll_multiplier = pll_op_freq_mhz / (pll_ip_freq_mhz * 0x0001000);
-	pll_multiplier =
-	    (vt_sys_clk_div * vt_sys_clk_freq_mhz) /
-	    (pll_ip_freq_mhz * 0x0001000);
+	pll_multiplier = (pll_op_freq_mhz * 0x0001000) / pll_ip_freq_mhz;
 
 	/* Calculate the acutal pll output frequency
 	 * - the pll_multiplier calculation introduces a quantisation error
 	 *   due the integer nature of the pll multiplier */
-	pll_op_freq_mhz = pll_ip_freq_mhz * pll_multiplier * 0x0001000;
+	pll_op_freq_mhz = (pll_ip_freq_mhz * pll_multiplier) / 0x0001000;
 
 	/* Re-calculate video timing clock frequencies based
 	 * on actual PLL freq */
 	vt_sys_clk_freq_mhz = pll_op_freq_mhz / vt_sys_clk_div;
-	vt_pix_clk_freq_mhz =
-	    (vt_sys_clk_freq_mhz * 0x0001000) / (vt_pix_clk_div * 0x0001000);
+	vt_pix_clk_freq_mhz = ((vt_sys_clk_freq_mhz * 0x0001000) /
+				vt_pix_clk_div)/0x0001000;
 
 	/* Output System Clock Divider: valid value 1, 2, 4, 6, 8
 	 * op_sys_clk_div = vt_sys_clk_div;*/
@@ -1033,7 +1033,7 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 		op_sys_clk_div = 1;
 
 	/* Calculate output timing clock frequencies */
-	op_sys_clk_freq_mhz = pll_op_freq_mhz / (op_sys_clk_div * 0x0001000);
+	op_sys_clk_freq_mhz = pll_op_freq_mhz / op_sys_clk_div;
 	op_pix_clk_freq_mhz =
 	    (op_sys_clk_freq_mhz * 0x0001000) / (op_pix_clk_div * 0x0001000);
 
@@ -1050,7 +1050,7 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 	    additional_rows + y_output_size + min_vt_frame_blanking_lines;
 
 	vt_frame_length_lines =
-	    ((1000 * target_vt_frame_length_ms) / vt_line_length_us) + 0x000800;
+	    ((1000 * target_vt_frame_length_ms) / vt_line_length_us);
 
 	if (vt_frame_length_lines <= min_vt_frame_length_lines)
 		vt_frame_length_lines = min_vt_frame_length_lines;
@@ -1081,9 +1081,9 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 	CDBG("op_pix_clk_div        = %d\n", op_pix_clk_div);
 	CDBG("op_pix_clk_freq_mhz   = %d\n", op_pix_clk_freq_mhz);
 	CDBG("vt_line_length_pck    = %d\n", vt_line_length_pck);
-	CDBG("vt_line_length_us     = %d\n", vt_line_length_us);
+	CDBG("vt_line_length_us     = %d\n", vt_line_length_us/0x0001000);
 	CDBG("vt_frame_length_lines = %d\n", vt_frame_length_lines);
-	CDBG("vt_frame_length_ms    = %d\n", vt_frame_length_ms);
+	CDBG("vt_frame_length_ms    = %d\n", vt_frame_length_ms/0x0001000);
 	CDBG("frame_rate_fps        = %d\n", frame_rate_fps);
 	CDBG("ccp2_data_format = %d\n", ccp2_data_format);
 	CDBG("x_output_size = %d\n", x_output_size);
@@ -1091,7 +1091,7 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 	CDBG("x_odd_inc = %d\n", x_odd_inc);
 	CDBG("y_odd_inc = %d\n", y_odd_inc);
 	CDBG("(vt_frame_length_lines * frame_rate_factor ) = %d\n",
-	     (vt_frame_length_lines * vb6801_ctrl->factor_fps));
+	    (vt_frame_length_lines * vb6801_ctrl->factor_fps));
 	CDBG("coarse_integration_time = %d\n", coarse_integration_time);
 	CDBG("pinfo->vcm_dac_code = %d\n", pinfo->vcm_dac_code);
 	CDBG("capture_mode = %d\n", capture_mode);
@@ -1106,7 +1106,7 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 	}
 
 	/* Wait 100ms */
-	mdelay(200);
+	mdelay(100);
 
 	if (capture_mode == 0) {
 
@@ -1246,8 +1246,8 @@ static int vb6801_config_sensor(int32_t ext_clk_freq_mhz,
 
 static int vb6801_sensor_init_done(const struct msm_camera_sensor_info *data)
 {
+	gpio_direction_output(data->sensor_reset, 0);
 	gpio_free(data->sensor_reset);
-	gpio_free(data->sensor_pwd);
 	return 0;
 }
 
@@ -1520,13 +1520,19 @@ static int vb6801_probe_init_sensor(const struct msm_camera_sensor_info *data)
 	rc = vb6801_i2c_read_table(rreg, ARRAY_SIZE(rreg));
 	if (rc < 0) {
 		CDBG("I2C Read Table FAILED!!!\n");
-		goto init_probe_done;
+		goto init_probe_fail;
 	}
 
 	/* 4. Compare sensor ID to VB6801 ID: */
-	if (rreg[0].bdata != 0x03 || rreg[1].bdata != 0x53)
+	if (rreg[0].bdata != 0x03 || rreg[1].bdata != 0x53) {
 		CDBG("vb6801_sensor_init: sensor ID don't match!\n");
+		goto init_probe_fail;
+	}
 
+	goto init_probe_done;
+
+init_probe_fail:
+	vb6801_sensor_init_done(data);
 init_probe_done:
 	return rc;
 }
