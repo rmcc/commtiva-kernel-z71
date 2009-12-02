@@ -37,6 +37,7 @@
 #include "qsd-pcm.h"
 
 static int rc = 1;
+atomic_t copy_count;
 
 #define SND_DRIVER        "snd_qsd"
 #define MAX_PCM_DEVICES	SNDRV_CARDS
@@ -150,6 +151,7 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 	prtd->pcm_buf_pos = 0;
+	atomic_set(&copy_count, 0);
 
 	if (prtd->enabled)
 		return 0;
@@ -231,7 +233,7 @@ qsd_pcm_playback_pointer(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
 
-	if (prtd->pcm_irq_pos == prtd->pcm_size)
+	if (prtd->pcm_irq_pos >= prtd->pcm_size)
 		prtd->pcm_irq_pos = 0;
 	return bytes_to_frames(runtime, (prtd->pcm_irq_pos));
 }
@@ -336,6 +338,9 @@ static int qsd_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
+
+	if (!atomic_add_unless(&copy_count, 1, 2))
+		runtime->status->state = SNDRV_PCM_STATE_RUNNING;
 
 	fbytes = frames_to_bytes(runtime, frames);
 	prtd->cbs.buffer = (void *)buf;
