@@ -66,6 +66,18 @@
 
 #include <mach/pmic8058-keypad.h>
 
+#define MATRIX_MIN_ROWS		5
+#define MATRIX_MIN_COLS		5
+
+#define MAX_SCAN_DELAY		128
+#define MIN_SCAN_DELAY		1
+
+#define MAX_DEBOUNCE_B0_TIME	20
+#define MIN_DEBOUNCE_B0_TIME	5
+
+#define MAX_DEBOUNCE_A0_TIME	8
+#define MIN_DEBOUNCE_A0_TIME	1
+
 #define KEYP_CTRL			0x148
 
 #define KEYP_CTRL_EVNTS			BIT(0)
@@ -512,6 +524,8 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	if (!pdata || !pdata->num_cols || !pdata->num_rows ||
 		pdata->num_cols > MATRIX_MAX_COLS ||
 		pdata->num_rows > MATRIX_MAX_ROWS ||
+		pdata->num_cols < MATRIX_MIN_COLS ||
+		pdata->num_rows < MATRIX_MIN_ROWS ||
 		!pdata->keymap) {
 		dev_err(&pdev->dev, "invalid platform data\n");
 		return -EINVAL;
