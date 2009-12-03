@@ -896,7 +896,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		}
 		if (ui->online) {
 			ui->usb_state = USB_STATE_CONFIGURED;
-			ui->flags |= USB_FLAG_CONFIGURED;
+			ui->flags = USB_FLAG_CONFIGURED;
 			schedule_work(&ui->work);
 		} else
 			ui->usb_state = USB_STATE_DEFAULT;
@@ -933,7 +933,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	if (n & STS_SLI) {
 		INFO("msm72k_udc: suspend\n");
 		ui->usb_state = USB_STATE_SUSPENDED;
-		ui->flags |= USB_FLAG_SUSPEND;
+		ui->flags = USB_FLAG_SUSPEND;
 		schedule_work(&ui->work);
 	}
 
@@ -1717,7 +1717,7 @@ static int msm72k_udc_vbus_draw(struct usb_gadget *_gadget, unsigned mA)
 
 	spin_lock_irqsave(&ui->lock, flags);
 	ui->b_max_pow = mA;
-	ui->flags |= USB_FLAG_CONFIGURED;
+	ui->flags = USB_FLAG_CONFIGURED;
 	spin_unlock_irqrestore(&ui->lock, flags);
 
 	schedule_work(&ui->work);
