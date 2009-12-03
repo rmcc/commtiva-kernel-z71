@@ -752,6 +752,7 @@ static ssize_t audio_voicememo_read(struct file *file,
 			break;
 		} else {
 			mutex_lock(&audio->dsp_lock);
+			dma_coherent_post_ops();
 			if (copy_to_user
 				(buf, audio->in[audio->read_next].data,
 				audio->in[audio->read_next].used)) {

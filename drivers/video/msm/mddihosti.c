@@ -445,6 +445,7 @@ static void mddi_report_state_change(uint32 int_reg)
 			 * linked list done interrupt, due to an underrun
 			 * condition. Recovery attempt is to send again.
 			 */
+			dma_coherent_pre_ops();
 			/* Write to primary pointer register again */
 			mddi_host_reg_out(PRI_PTR,
 					  &llist_dma[pmhctl->llist_info.
@@ -784,6 +785,7 @@ static void mddi_queue_forward_linked_list(void)
 
 		pmhctl->int_type.llist_ptr_write_2++;
 
+		dma_coherent_pre_ops();
 		mddi_host_reg_out(PRI_PTR, &llist_dma[first_pkt_index]);
 
 		/* enable interrupt when complete */
@@ -916,6 +918,8 @@ static void mddi_process_rev_packets(void)
 		mddi_invalidate_cache_lines((uint32 *) pmhctl->rev_ptr_start,
 					    MDDI_REV_BUFFER_SIZE);
 	}
+	/* order the reads */
+	dma_coherent_post_ops();
 	for (i = 0; i < rev_packet_count; i++) {
 		mddi_rev_packet_type *rev_pkt_ptr;
 
@@ -1341,6 +1345,7 @@ static void mddi_host_isr(void)
 	pmhctl->saved_int_en = int_en;
 	int_reg = int_reg & int_en;
 	pmhctl->int_type.count++;
+
 
 #ifndef FEATURE_MDDI_DISABLE_REVERSE
 	status_reg = mddi_host_reg_in(STAT);
@@ -2055,6 +2060,7 @@ void mddi_queue_forward_packets(uint16 first_llist_idx,
 		mddi_host_enable_io_clock();
 		pmhctl->int_type.llist_ptr_write_1++;
 		/* Write to primary pointer register */
+		dma_coherent_pre_ops();
 		mddi_host_reg_out(PRI_PTR, &llist_dma[first_llist_idx]);
 
 		/* enable interrupt when complete */
