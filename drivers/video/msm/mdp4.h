@@ -331,6 +331,9 @@ void mdp4_overlay_done(int mixer);
 void mdp4_mddi_overlay_restore(void);
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);
+void mdp4_rgb_igc_lut_setup(int num);
+void mdp4_vg_igc_lut_setup(int num);
+void mdp4_mixer_gc_lut_setup(int mixer_num);
 
 #ifdef CONFIG_DEBUG_FS
 int mdp4_debugfs_init(void);
