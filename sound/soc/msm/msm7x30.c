@@ -47,7 +47,7 @@ EXPORT_SYMBOL(the_locks);
 struct msm_volume msm_vol_ctl;
 static struct snd_kcontrol_new snd_msm_controls[];
 
-char name[20][44];
+char snddev_name[AUDIO_DEV_CTL_MAX_DEV][44];
 
 static int msm_volume_info(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_info *uinfo)
@@ -315,7 +315,7 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 	return rc;
 }
 
-static struct snd_kcontrol_new snd_dev_controls[16];
+static struct snd_kcontrol_new snd_dev_controls[AUDIO_DEV_CTL_MAX_DEV];
 #define CIMP_CONTROLS	ARRAY_SIZE(snd_msm_controls)
 
 static int snd_dev_ctl_index(int idx)
@@ -328,11 +328,11 @@ static int snd_dev_ctl_index(int idx)
 		return PTR_ERR(dev_info);
 	}
 	if (sizeof(dev_info->name) <= 44)
-		sprintf(&name[idx][0] , "%s", dev_info->name);
+		sprintf(&snddev_name[idx][0] , "%s", dev_info->name);
 
 	snd_dev_controls[idx].iface = SNDRV_CTL_ELEM_IFACE_MIXER;
 	snd_dev_controls[idx].access = SNDRV_CTL_ELEM_ACCESS_READWRITE;
-	snd_dev_controls[idx].name = &name[idx][0];
+	snd_dev_controls[idx].name = &snddev_name[idx][0];
 	snd_dev_controls[idx].index = 5 + idx;
 	snd_dev_controls[idx].info = msm_device_info;
 	snd_dev_controls[idx].get = msm_device_get;

@@ -29,7 +29,9 @@
 #define __MACH_QDSP5_V2_SNDDEV_H
 #include <mach/qdsp5v2/audio_def.h>
 
-#define AUDIO_DEV_CTL_MAX_DEV 16
+#define AUDIO_DEV_CTL_MAX_DEV 64
+#define DIR_TX	1
+#define DIR_RX	2
 
 struct msm_snddev_info {
 	const char *name;
