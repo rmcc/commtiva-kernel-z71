@@ -87,6 +87,7 @@
 #include <mach/pmic8058-keypad.h>
 #include <mach/msm_ts.h>
 #include <mach/pmic.h>
+#include <mach/qdsp5v2/aux_pcm.h>
 
 #include <asm/mach/mmc.h>
 #include <mach/vreg.h>
@@ -691,6 +692,30 @@ static struct platform_device msm_camera_sensor_mt9t013 = {
 #endif
 #endif /*CONFIG_MSM_CAMERA*/
 
+static unsigned aux_pcm_gpio_on[] = {
+	GPIO_CFG(138, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),   /* PCM_DOUT */
+	GPIO_CFG(139, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),   /* PCM_DIN  */
+	GPIO_CFG(140, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),   /* PCM_SYNC */
+	GPIO_CFG(141, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),   /* PCM_CLK  */
+};
+
+static int __init aux_pcm_gpio_init(void)
+{
+	int pin, rc;
+
+	pr_info("aux_pcm_gpio_init \n");
+	for (pin = 0; pin < ARRAY_SIZE(aux_pcm_gpio_on); pin++) {
+		rc = gpio_tlmm_config(aux_pcm_gpio_on[pin],
+					GPIO_ENABLE);
+		if (rc) {
+			printk(KERN_ERR
+				"%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, aux_pcm_gpio_on[pin], rc);
+		}
+	}
+	return rc;
+}
+
 static int __init buses_init(void)
 {
 	if (gpio_tlmm_config(GPIO_CFG(PMIC_GPIO_INT, 1, GPIO_INPUT,
@@ -905,6 +930,47 @@ static struct resource msm_lpa_resources[] = {
 		.end = 0xa50000a0,
 		.flags = IORESOURCE_MEM,
 	}
+};
+
+static struct resource msm_aux_pcm_resources[] = {
+
+	{
+		.name = "aux_codec_reg_addr",
+		.start = 0xac9c00c0,
+		.end = 0xac9c00c8,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name   = "aux_pcm_dout",
+		.start  = 138,
+		.end    = 138,
+		.flags  = IORESOURCE_IO,
+	},
+	{
+		.name   = "aux_pcm_din",
+		.start  = 139,
+		.end    = 139,
+		.flags  = IORESOURCE_IO,
+	},
+	{
+		.name   = "aux_pcm_syncout",
+		.start  = 140,
+		.end    = 140,
+		.flags  = IORESOURCE_IO,
+	},
+	{
+		.name   = "aux_pcm_clkin_a",
+		.start  = 141,
+		.end    = 141,
+		.flags  = IORESOURCE_IO,
+	},
+};
+
+static struct platform_device msm_aux_pcm_device = {
+	.name   = "msm_aux_pcm",
+	.id     = 0,
+	.num_resources  = ARRAY_SIZE(msm_aux_pcm_resources),
+	.resource       = msm_aux_pcm_resources,
 };
 
 struct platform_device msm_aictl_device = {
@@ -2157,6 +2223,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_camera_sensor_mt9p012,
 #endif
 	&msm_device_ss_mfc_720p,
+	&msm_aux_pcm_device,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -2789,6 +2856,7 @@ static void __init msm7x30_init(void)
 	msm_device_ssbi6.dev.platform_data = &msm_i2c_ssbi6_pdata;
 	msm_device_ssbi7.dev.platform_data = &msm_i2c_ssbi7_pdata;
 #endif
+	aux_pcm_gpio_init();
 }
 
 static unsigned pmem_sf_size = MSM_PMEM_SF_SIZE;

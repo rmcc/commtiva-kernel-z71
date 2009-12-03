@@ -54,6 +54,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#include <mach/debug_audio_mm.h>
 #include <linux/module.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
@@ -62,14 +63,6 @@
 #include <mach/qdsp5v2/qdsp5afemsg.h>
 #include <mach/qdsp5v2/afe.h>
 #include <mach/msm_adsp.h>
-
-#define DEBUG
-#ifdef DEBUG
-#define dprintk(format, arg...) \
-printk(KERN_DEBUG format, ## arg)
-#else
-#define dprintk(format, arg...) do {} while (0)
-#endif
 
 #define AFE_MAX_TIMEOUT 30 /* 30 ms */
 #define AFE_MAX_CLNT 6 /* 6 HW path defined so far */
@@ -81,6 +74,7 @@ struct msm_afe_state {
 	u8                     in_use;
 	u8                     codec_config[AFE_MAX_CLNT];
 	wait_queue_head_t      wait;
+	u8			aux_conf_flag;
 };
 
 static struct msm_afe_state the_afe_state;
@@ -94,13 +88,13 @@ static void afe_dsp_event(void *data, unsigned id, size_t len,
 {
 	struct msm_afe_state *afe = data;
 
-	dprintk("%s: msg_id %d \n", __func__, id);
+	MM_INFO("%s: msg_id %d \n", __func__, id);
 
 	switch (id) {
 	case AFE_APU_MSG_CODEC_CONFIG_ACK: {
 		struct afe_msg_codec_config_ack afe_ack;
 		getevent(&afe_ack, AFE_APU_MSG_CODEC_CONFIG_ACK_LEN);
-		dprintk("%s: device_id: %d device activity: %d\n", __func__,
+		MM_INFO("%s: device_id: %d device activity: %d\n", __func__,
 		afe_ack.device_id, afe_ack.device_activity);
 		if (afe_ack.device_activity == AFE_MSG_CODEC_CONFIG_DISABLED)
 			afe->codec_config[afe_ack.device_id] = 0;
@@ -112,7 +106,7 @@ static void afe_dsp_event(void *data, unsigned id, size_t len,
 		break;
 	}
 	default:
-		pr_err("unexpected message from afe \n");
+		MM_ERR("unexpected message from afe \n");
 	}
 
 	return;
@@ -123,13 +117,13 @@ static void afe_dsp_codec_config(struct msm_afe_state *afe,
 {
 	struct afe_cmd_codec_config cmd;
 
-	dprintk("%s() %p\n", __func__, config);
+	MM_INFO("%s() %p\n", __func__, config);
 	memset(&cmd, 0, sizeof(cmd));
 	cmd.cmd_id = AFE_CMD_CODEC_CONFIG_CMD;
 	cmd.device_id = path_id;
 	cmd.activity = enable;
 	if (config) {
-		dprintk("%s: sample_rate %x ch mode %x vol %x\n",
+		MM_INFO("%s: sample_rate %x ch mode %x vol %x\n",
 			__func__, config->sample_rate,
 			config->channel_mode, config->volume);
 		cmd.sample_rate = config->sample_rate;
@@ -144,13 +138,13 @@ int afe_enable(u8 path_id, struct msm_afe_config *config)
 	struct msm_afe_state *afe = &the_afe_state;
 	int rc;
 
-	dprintk("%s: path %d\n", __func__, path_id);
+	MM_INFO("%s: path %d\n", __func__, path_id);
 	mutex_lock(&afe->lock);
-	if (!afe->in_use) {
+	if (!afe->in_use && !afe->aux_conf_flag) {
 		/* enable afe */
 		rc = msm_adsp_get("AFETASK", &afe->mod, &afe->adsp_ops, afe);
 		if (rc < 0) {
-			pr_err("%s: failed to get AFETASK module\n", __func__);
+			MM_ERR("%s: failed to get AFETASK module\n", __func__);
 			goto error;
 		}
 		rc = msm_adsp_enable(afe->mod);
@@ -163,7 +157,7 @@ int afe_enable(u8 path_id, struct msm_afe_config *config)
 		afe->codec_config[path_id],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		pr_err("AFE failed to respond within 30ms\n");
+		MM_ERR("AFE failed to respond within 30ms\n");
 		rc = -ENODEV;
 		goto error;
 	} else
@@ -175,6 +169,42 @@ error:
 }
 EXPORT_SYMBOL(afe_enable);
 
+int afe_config_aux_codec(int pcm_ctl_value, int aux_codec_intf_value,
+				int data_format_pad)
+{
+	struct afe_cmd_aux_codec_config cmd;
+	struct msm_afe_state *afe = &the_afe_state;
+	int rc = 0;
+
+	MM_INFO(" configure aux codec \n");
+	mutex_lock(&afe->lock);
+	if (!afe->in_use && !afe->aux_conf_flag) {
+		/* enable afe */
+		rc = msm_adsp_get("AFETASK", &afe->mod, &afe->adsp_ops, afe);
+		if (rc < 0) {
+			MM_ERR("%s: failed to get AFETASK module\n", __func__);
+			goto error;
+		}
+		rc = msm_adsp_enable(afe->mod);
+		if (rc < 0)
+			goto error;
+	}
+	afe->aux_conf_flag = 1;
+	memset(&cmd, 0, sizeof(cmd));
+	cmd.cmd_id = AFE_CMD_AUX_CODEC_CONFIG_CMD;
+	cmd.dma_path_ctl = 0;
+	cmd.pcm_ctl = pcm_ctl_value;
+	cmd.eight_khz_int_mode = 0;
+	cmd.aux_codec_intf_ctl = aux_codec_intf_value;
+	cmd.data_format_padding_info = data_format_pad;
+
+	afe_send_queue(afe, &cmd, sizeof(cmd));
+error:
+	mutex_unlock(&afe->lock);
+	return rc;
+}
+EXPORT_SYMBOL(afe_config_aux_codec);
+
 int afe_disable(u8 path_id)
 {
 	struct msm_afe_state *afe = &the_afe_state;
@@ -183,23 +213,24 @@ int afe_disable(u8 path_id)
 	mutex_lock(&afe->lock);
 
 	BUG_ON(!afe->in_use);
-	dprintk("%s() path_id:%d codec state:%d\n", __func__, path_id,
+	MM_INFO("%s() path_id:%d codec state:%d\n", __func__, path_id,
 	afe->codec_config[path_id]);
 	afe_dsp_codec_config(afe, path_id, 0, NULL);
 	rc = wait_event_timeout(afe->wait,
 		!afe->codec_config[path_id],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		pr_err("AFE failed to respond within 30ms\n");
+		MM_ERR("AFE failed to respond within 30ms\n");
 		rc = -1;
 		goto error;
 	} else
 		rc = 0;
 	afe->in_use--;
-	dprintk("%s() in_use:%d \n", __func__, afe->in_use);
+	MM_INFO("%s() in_use:%d \n", __func__, afe->in_use);
 	if (!afe->in_use) {
 		msm_adsp_disable(afe->mod);
 		msm_adsp_put(afe->mod);
+		afe->aux_conf_flag = 0;
 	}
 error:
 	mutex_unlock(&afe->lock);
@@ -211,7 +242,7 @@ static int __init afe_init(void)
 {
 	struct msm_afe_state *afe = &the_afe_state;
 
-	dprintk("AFE driver init\n");
+	MM_INFO("AFE driver init\n");
 
 	memset(afe, 0, sizeof(struct msm_afe_state));
 	afe->adsp_ops.event = afe_dsp_event;
@@ -223,7 +254,7 @@ static int __init afe_init(void)
 
 static void __exit afe_exit(void)
 {
-	dprintk("AFE driver exit\n");
+	MM_INFO("AFE driver exit\n");
 	if (the_afe_state.mod)
 		msm_adsp_put(the_afe_state.mod);
 	return;
