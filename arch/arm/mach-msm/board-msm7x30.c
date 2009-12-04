@@ -100,6 +100,7 @@
 #endif
 #include "pm.h"
 #include <linux/msm_kgsl.h>
+#include <mach/msm_serial_hs.h>
 
 
 #define MSM_PMEM_SF_SIZE	0x1000000
@@ -1608,6 +1609,11 @@ static struct platform_device lcdc_sharp_panel_device = {
 	}
 };
 
+static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
+       .inject_rx_on_wakeup = 1,
+       .rx_to_inject = 0xFD,
+};
+
 static struct resource msm_fb_resources[] = {
 	{
 		.flags  = IORESOURCE_DMA,
@@ -2891,6 +2897,8 @@ static void __init msm7x30_init(void)
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
 #endif
+	msm_uart_dm1_pdata.wakeup_irq = gpio_to_irq(136);
+	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	rmt_storage_add_ramfs();
 	msm7x30_init_mmc();
