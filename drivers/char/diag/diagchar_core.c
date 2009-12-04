@@ -111,19 +111,23 @@ static uint16_t delayed_rsp_id = 1;
 static void drain_timer_func(unsigned long data)
 {
 	timer_in_progress = 0;
-	if (buf_hdlc) {
-		driver->usb_write_ptr_svc = (struct diag_request *)
+
+	if (spin_trylock_bh(&diagchar_write_lock)) {
+		if (buf_hdlc) {
+			driver->usb_write_ptr_svc = (struct diag_request *)
 			(diagmem_alloc(driver, sizeof(struct diag_request),
 				 POOL_TYPE_USB_STRUCT));
-		driver->usb_write_ptr_svc->buf = buf_hdlc;
-		driver->usb_write_ptr_svc->length = driver->used;
-		diag_write(driver->usb_write_ptr_svc);
-		buf_hdlc = NULL;
+			driver->usb_write_ptr_svc->buf = buf_hdlc;
+			driver->usb_write_ptr_svc->length = driver->used;
+			diag_write(driver->usb_write_ptr_svc);
+			buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-		printk(KERN_INFO "\n Number of bytes written "
+			printk(KERN_INFO "\n Number of bytes written "
 				 "from timer is %d ", driver->used);
 #endif
-		driver->used = 0;
+			driver->used = 0;
+		}
+		spin_unlock_bh(&diagchar_write_lock);
 	}
 }
 
@@ -357,10 +361,6 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	void *buf_copy;
 	int payload_size;
 
-	if (!timer_in_progress)	{
-		timer_in_progress = 1;
-		ret = mod_timer(&drain_timer, jiffies + msecs_to_jiffies(500));
-	}
 	if (!driver->usb_connected) {
 		/*Drop the diag payload */
 		return -EIO;
@@ -494,6 +494,10 @@ static int diagchar_write(struct file *file, const char __user *buf,
 
 	spin_unlock_bh(&diagchar_write_lock);
 	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
+	if (!timer_in_progress)	{
+		timer_in_progress = 1;
+		ret = mod_timer(&drain_timer, jiffies + msecs_to_jiffies(500));
+	}
 	return 0;
 
 fail_free_hdlc:
