@@ -290,3 +290,9 @@ config MMC_MSM_SDC4_8_BIT_SUPPORT
 	help
 	  Select Y to enable 8bit support for Slot 4.
 
+config MMC_MSM_PROG_DONE_SCAN
+	bool "Perform prog done scan as needed for SDIO"
+	depends on MMC_MSM
+	default n
+	help
+	  Enable prog_done scan after cmd53-dummycmd52 for SDIO
