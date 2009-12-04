@@ -1211,7 +1211,6 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("usb_hs3_clk",		USB_HS3_CLK,		NULL, OFF),
 	CLK_PCOM("usb_hs3_pclk",	USB_HS3_PCLK,		NULL, OFF),
 	CLK_PCOM("usb_hs3_core_clk",	USB_HS3_CORE_CLK,	NULL, OFF),
-	CLK_PCOM("usb_otg_clk",	USB_OTG_CLK,	NULL, 0),
 	CLK_PCOM("vdc_clk",	VDC_CLK,	NULL, OFF | CLK_MIN),
 	CLK_PCOM("vfe_camif_clk",	VFE_CAMIF_CLK, 	NULL, 0),
 	CLK_PCOM("vfe_clk",	VFE_CLK,	NULL, 0),
