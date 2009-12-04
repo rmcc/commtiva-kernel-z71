@@ -412,6 +412,9 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	long timeout;
 	int err;
 
+	enable_irq(dev->in_irq);
+	enable_irq(dev->out_irq);
+	enable_irq(dev->err_irq);
 	writel(QUP_RESET_STATE, dev->base + QUP_STATE);
 	ret = qup_i2c_poll_state(dev, QUP_RESET_STATE);
 	if (ret) {
@@ -449,8 +452,10 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		dev->err = 0;
 		dev->complete = &complete;
 
-		if (qup_i2c_poll_state(dev, QUP_I2C_MAST_GEN) != 0)
-			return -EIO;
+		if (qup_i2c_poll_state(dev, QUP_I2C_MAST_GEN) != 0) {
+			ret = -EIO;
+			goto out_err;
+		}
 #if DEBUG
 		qup_print_status(dev);
 #endif
@@ -461,13 +466,15 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		if (dev->msg->flags == I2C_M_RD) {
 			if (dev->cnt > dev->in_fifo_sz) {
 				dev_err(dev->dev, "No Block mode support\n");
-				return -EPROTONOSUPPORT;
+				ret = -EPROTONOSUPPORT;
+				goto out_err;
 			}
 			writel(dev->cnt, dev->base + QUP_MX_READ_CNT);
 		} else {
 			if (dev->cnt > dev->out_fifo_sz) {
 				dev_err(dev->dev, "No Block mode support\n");
-				return -EPROTONOSUPPORT;
+				ret = -EPROTONOSUPPORT;
+				goto out_err;
 			} else if (rem > 1) {
 				struct i2c_msg *next = msgs + 1;
 				if (next->addr == msgs->addr &&
@@ -475,7 +482,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 					if (next->len > dev->in_fifo_sz) {
 						dev_err(dev->dev,
 						"No Block mode support\n");
-						return -EPROTONOSUPPORT;
+						ret = -EPROTONOSUPPORT;
+						goto out_err;
 					}
 					writel(next->len, dev->base +
 							QUP_MX_READ_CNT);
@@ -484,8 +492,10 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		}
 
 		err = qup_update_state(dev, QUP_RUN_STATE);
-		if (err < 0)
-			return err;
+		if (err < 0) {
+			ret = err;
+			goto out_err;
+		}
 #if DEBUG
 		qup_print_status(dev);
 #endif
@@ -497,8 +507,10 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 
 			/* Transition to PAUSE state only possible from RUN */
 			err = qup_update_state(dev, QUP_PAUSE_STATE);
-			if (err < 0)
-				return err;
+			if (err < 0) {
+				ret = err;
+				goto out_err;
+			}
 #if DEBUG
 			qup_print_status(dev);
 #endif
@@ -537,8 +549,10 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				}
 			}
 			err = qup_update_state(dev, QUP_RUN_STATE);
-			if (err < 0)
-				return err;
+			if (err < 0) {
+				ret = err;
+				goto out_err;
+			}
 			dev_dbg(dev->dev, "idx:%d, rem:%d, num:%d, mode:%d\n",
 				idx, rem, num, dev->mode);
 #if DEBUG
@@ -602,6 +616,9 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	dev->pos = 0;
 	dev->err = 0;
 	dev->cnt = 0;
+	disable_irq(dev->err_irq);
+	disable_irq(dev->in_irq);
+	disable_irq(dev->out_irq);
 	return ret;
 }
 
@@ -791,6 +808,9 @@ qup_i2c_probe(struct platform_device *pdev)
 		free_irq(dev->in_irq, dev);
 		goto err_request_irq_failed;
 	}
+	disable_irq(dev->err_irq);
+	disable_irq(dev->in_irq);
+	disable_irq(dev->out_irq);
 	pdata->msm_i2c_config_gpio(dev->adapter.nr, 1);
 
 	return 0;
