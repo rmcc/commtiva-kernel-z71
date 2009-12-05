@@ -325,6 +325,78 @@ static struct platform_device msm_ispeaker_rx_device = {
 
 };
 
+static struct adie_codec_action_unit ifmradio_speaker_osr64_actions[] =
+	FM_SPEAKER_OSR_64;
+
+static struct adie_codec_hwsetting_entry ifmradio_speaker_settings[] = {
+	{
+		.freq_plan = 8000,
+		.osr = 256,
+		.actions = ifmradio_speaker_osr64_actions,
+		.action_sz = ARRAY_SIZE(ifmradio_speaker_osr64_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ifmradio_speaker_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ifmradio_speaker_settings,
+	.setting_sz = ARRAY_SIZE(ifmradio_speaker_settings),
+};
+
+static struct snddev_icodec_data snddev_ifmradio_speaker_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_FM),
+	.name = "fmradio_speaker_rx",
+	.copp_id = 0,
+	.acdb_id = 1,
+	.profile = &ifmradio_speaker_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 8000,
+	.pamp_on = &msm_snddev_poweramp_on,
+	.pamp_off = &msm_snddev_poweramp_off,
+};
+
+static struct platform_device msm_ifmradio_speaker_device = {
+	.name = "msm_snddev_icodec",
+	.id = 7,
+	.dev = { .platform_data = &snddev_ifmradio_speaker_data },
+};
+
+static struct adie_codec_action_unit ifmradio_headset_osr64_actions[] =
+	FM_HEADSET_STEREO_CLASS_D_LEGACY_OSR_64;
+
+static struct adie_codec_hwsetting_entry ifmradio_headset_settings[] = {
+	{
+		.freq_plan = 8000,
+		.osr = 256,
+		.actions = ifmradio_headset_osr64_actions,
+		.action_sz = ARRAY_SIZE(ifmradio_headset_osr64_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ifmradio_headset_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ifmradio_headset_settings,
+	.setting_sz = ARRAY_SIZE(ifmradio_headset_settings),
+};
+
+static struct snddev_icodec_data snddev_ifmradio_headset_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_FM),
+	.name = "fmradio_headset_rx",
+	.copp_id = 0,
+	.acdb_id = 1,
+	.profile = &ifmradio_headset_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 8000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
+};
+
+static struct platform_device msm_ifmradio_headset_device = {
+	.name = "msm_snddev_icodec",
+	.id = 8,
+	.dev = { .platform_data = &snddev_ifmradio_headset_data },
+};
+
 static struct snddev_ecodec_data snddev_bt_sco_earpiece_data = {
 	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
 	.name = "bt_sco_rx",
@@ -369,6 +441,8 @@ static struct platform_device *snd_devices[] = {
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
 	&msm_ispeaker_rx_device,
+	&msm_ifmradio_headset_device,
+	&msm_ifmradio_speaker_device,
 };
 
 void __init msm_snddev_init(void)
