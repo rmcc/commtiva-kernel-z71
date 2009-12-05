@@ -132,6 +132,8 @@
 #define PMIC_VREG_WLAN_LEVEL	2600
 #define PMIC_VREG_GP6_LEVEL	2900
 
+#define FPGA_SDCC_STATUS	0x70000280
+
 static struct resource smc91x_resources[] = {
 	[0] = {
 		.flags  = IORESOURCE_MEM,
@@ -2260,11 +2262,37 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 
 #endif
 
+static int msm_sdcc_get_wpswitch(struct device *dv)
+{
+	void __iomem *wp_addr = 0;
+	uint32_t ret = 0;
+	struct platform_device *pdev;
+
+	if (machine_is_qsd8x50_ffa())
+		return -1;
+
+	pdev = container_of(dv, struct platform_device, dev);
+
+	wp_addr = ioremap(FPGA_SDCC_STATUS, 4);
+	if (!wp_addr) {
+		pr_err("%s: Could not remap %x\n", __func__, FPGA_SDCC_STATUS);
+		return -ENOMEM;
+	}
+
+	ret = (readl(wp_addr) >> ((pdev->id - 1) << 1)) & (0x03);
+	pr_info("%s: WP/CD Status for Slot %d = 0x%x \n", __func__,
+							pdev->id, ret);
+	iounmap(wp_addr);
+	return ((ret == 0x02) ? 1 : 0);
+
+}
+
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 static struct mmc_platform_data qsd8x50_sdc1_data = {
 	.ocr_mask	= MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
+	.wpswitch	= msm_sdcc_get_wpswitch,
 };
 #endif
 
@@ -2273,6 +2301,7 @@ static struct mmc_platform_data qsd8x50_sdc2_data = {
 	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd  = msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
+	.wpswitch	= msm_sdcc_get_wpswitch,
 };
 #endif
 
@@ -2293,6 +2322,7 @@ static struct mmc_platform_data qsd8x50_sdc4_data = {
 	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd  = msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
+	.wpswitch	= msm_sdcc_get_wpswitch,
 };
 #endif
 

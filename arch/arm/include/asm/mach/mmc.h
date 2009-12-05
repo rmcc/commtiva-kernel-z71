@@ -24,6 +24,7 @@ struct mmc_platform_data {
 	int (*register_status_notify)(void (*callback)(int card_present, void *dev_id), void *dev_id);
 	unsigned long irq_flags;
 	unsigned long mmc_bus_width;
+	int (*wpswitch) (struct device *);
 };
 
 #endif
