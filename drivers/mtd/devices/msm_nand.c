@@ -2996,6 +2996,7 @@ struct onenand_information {
 };
 
 static struct onenand_information onenand_info;
+static uint32_t nand_sfcmd_mode;
 
 uint32_t flash_onenand_probe(struct msm_nand_chip *chip)
 {
@@ -3026,16 +3027,27 @@ uint32_t flash_onenand_probe(struct msm_nand_chip *chip)
 	dmov_s *cmd;
 
 	int err = 0;
+	uint32_t initialsflashcmd = 0;
+
+	initialsflashcmd = flash_rd_reg(chip, NAND_SFLASHC_CMD);
+
+	if ((initialsflashcmd & 0x10) == 0x10)
+		nand_sfcmd_mode = NAND_SFCMD_ASYNC;
+	else
+		nand_sfcmd_mode = NAND_SFCMD_BURST;
+
+	printk(KERN_INFO "SFLASHC Async Mode bit: %x \n", nand_sfcmd_mode);
 
 	wait_event(chip->wait_queue, (dma_buffer = msm_nand_get_dma_buffer
 				(chip, sizeof(*dma_buffer))));
 
 	cmd = dma_buffer->cmd;
 
-	dma_buffer->data.bcfg = SFLASH_BCFG;
+	dma_buffer->data.bcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 	dma_buffer->data.cmd = SFLASH_PREPCMD(7, 0, 0,
 						NAND_SFCMD_DATXS,
-						NAND_SFCMD_ASYNC,
+						nand_sfcmd_mode,
 						NAND_SFCMD_REGRD);
 	dma_buffer->data.exec = 1;
 	dma_buffer->data.status = CLEAN_DATA_32;
@@ -3375,44 +3387,46 @@ int msm_onenand_read_oob(struct mtd_info *mtd,
 				(mtd->erasesize - 1)) / mtd->writesize) << 2;
 		onenand_startbuffer = DATARAM0_0 << 8;
 		onenand_sysconfig1 = (ops->mode == MTD_OOB_RAW) ?
-			ONENAND_SYSCFG1_ECCDIS : ONENAND_SYSCFG1_ECCENA;
+			ONENAND_SYSCFG1_ECCDIS(nand_sfcmd_mode) :
+			ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode);
 
-		dma_buffer->data.sfbcfg = SFLASH_BCFG;
+		dma_buffer->data.sfbcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 		dma_buffer->data.sfcmd[0] =  SFLASH_PREPCMD(7, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfcmd[1] =  SFLASH_PREPCMD(0, 0, 32,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_INTHI);
 		dma_buffer->data.sfcmd[2] =  SFLASH_PREPCMD(3, 7, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGRD);
 		dma_buffer->data.sfcmd[3] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATRD);
 		dma_buffer->data.sfcmd[4] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATRD);
 		dma_buffer->data.sfcmd[5] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATRD);
 		dma_buffer->data.sfcmd[6] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATRD);
 		dma_buffer->data.sfcmd[7] =  SFLASH_PREPCMD(32, 0, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATRD);
 		dma_buffer->data.sfcmd[8] =  SFLASH_PREPCMD(4, 10, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfexec = 1;
 		dma_buffer->data.sfstat[0] = CLEAN_DATA_32;
@@ -3449,7 +3463,7 @@ int msm_onenand_read_oob(struct mtd_info *mtd,
 		dma_buffer->data.data4 = (CLEAN_DATA_16 << 16) |
 						(CLEAN_DATA_16);
 		dma_buffer->data.data5 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data6 = (ONENAND_STARTADDR3_RES << 16) |
 						(ONENAND_STARTADDR1_RES);
 		dma_buffer->data.macro[0] = 0x0200;
@@ -4090,48 +4104,50 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 				(mtd->erasesize - 1)) / mtd->writesize) << 2;
 		onenand_startbuffer = DATARAM0_0 << 8;
 		onenand_sysconfig1 = (ops->mode == MTD_OOB_RAW) ?
-			ONENAND_SYSCFG1_ECCDIS : ONENAND_SYSCFG1_ECCENA;
+			ONENAND_SYSCFG1_ECCDIS(nand_sfcmd_mode) :
+			ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode);
 
-		dma_buffer->data.sfbcfg = SFLASH_BCFG;
+		dma_buffer->data.sfbcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 		dma_buffer->data.sfcmd[0] =  SFLASH_PREPCMD(6, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfcmd[1] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATWR);
 		dma_buffer->data.sfcmd[2] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATWR);
 		dma_buffer->data.sfcmd[3] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATWR);
 		dma_buffer->data.sfcmd[4] =  SFLASH_PREPCMD(256, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATWR);
 		dma_buffer->data.sfcmd[5] =  SFLASH_PREPCMD(32, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_DATWR);
 		dma_buffer->data.sfcmd[6] =  SFLASH_PREPCMD(1, 6, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfcmd[7] =  SFLASH_PREPCMD(0, 0, 32,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_INTHI);
 		dma_buffer->data.sfcmd[8] =  SFLASH_PREPCMD(3, 7, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGRD);
 		dma_buffer->data.sfcmd[9] =  SFLASH_PREPCMD(4, 10, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfexec = 1;
 		dma_buffer->data.sfstat[0] = CLEAN_DATA_32;
@@ -4169,7 +4185,7 @@ static int msm_onenand_write_oob(struct mtd_info *mtd, loff_t to,
 		dma_buffer->data.data4 = (CLEAN_DATA_16 << 16) |
 						(CLEAN_DATA_16);
 		dma_buffer->data.data5 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data6 = (ONENAND_STARTADDR3_RES << 16) |
 						(ONENAND_STARTADDR1_RES);
 		dma_buffer->data.macro[0] = 0x0200;
@@ -4690,22 +4706,23 @@ static int msm_onenand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	onenand_startaddr8 = 0x0000;
 	onenand_startbuffer = DATARAM0_0 << 8;
 
-	dma_buffer->data.sfbcfg = SFLASH_BCFG;
+	dma_buffer->data.sfbcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 	dma_buffer->data.sfcmd[0] = SFLASH_PREPCMD(7, 0, 0,
 						NAND_SFCMD_CMDXS,
-						NAND_SFCMD_ASYNC,
+						nand_sfcmd_mode,
 						NAND_SFCMD_REGWR);
 	dma_buffer->data.sfcmd[1] = SFLASH_PREPCMD(0, 0, 32,
 						NAND_SFCMD_CMDXS,
-						NAND_SFCMD_ASYNC,
+						nand_sfcmd_mode,
 						NAND_SFCMD_INTHI);
 	dma_buffer->data.sfcmd[2] = SFLASH_PREPCMD(3, 7, 0,
 						NAND_SFCMD_DATXS,
-						NAND_SFCMD_ASYNC,
+						nand_sfcmd_mode,
 						NAND_SFCMD_REGRD);
 	dma_buffer->data.sfcmd[3] = SFLASH_PREPCMD(4, 10, 0,
 						NAND_SFCMD_CMDXS,
-						NAND_SFCMD_ASYNC,
+						nand_sfcmd_mode,
 						NAND_SFCMD_REGWR);
 	dma_buffer->data.sfexec = 1;
 	dma_buffer->data.sfstat[0] = CLEAN_DATA_32;
@@ -4727,7 +4744,7 @@ static int msm_onenand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	dma_buffer->data.addr6 = (ONENAND_START_ADDRESS_3 << 16) |
 						(ONENAND_START_ADDRESS_1);
 	dma_buffer->data.data0 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 	dma_buffer->data.data1 = (onenand_startaddr8 << 16) |
 						(onenand_startaddr1);
 	dma_buffer->data.data2 = (onenand_startbuffer << 16) |
@@ -4737,7 +4754,7 @@ static int msm_onenand_erase(struct mtd_info *mtd, struct erase_info *instr)
 	dma_buffer->data.data4 = (CLEAN_DATA_16 << 16) |
 						(CLEAN_DATA_16);
 	dma_buffer->data.data5 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 	dma_buffer->data.data6 = (ONENAND_STARTADDR3_RES << 16) |
 						(ONENAND_STARTADDR1_RES);
 
@@ -5153,22 +5170,23 @@ static int msm_onenand_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		}
 
 		onenand_startaddr8 = 0x0000;
-		dma_buffer->data.sfbcfg = SFLASH_BCFG;
+		dma_buffer->data.sfbcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 		dma_buffer->data.sfcmd[0] = SFLASH_PREPCMD(7, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfcmd[1] = SFLASH_PREPCMD(0, 0, 32,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_INTHI);
 		dma_buffer->data.sfcmd[2] = SFLASH_PREPCMD(3, 7, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGRD);
 		dma_buffer->data.sfcmd[3] = SFLASH_PREPCMD(4, 10, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfexec = 1;
 		dma_buffer->data.sfstat[0] = CLEAN_DATA_32;
@@ -5190,7 +5208,7 @@ static int msm_onenand_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		dma_buffer->data.addr6 = (ONENAND_START_ADDRESS_3 << 16) |
 						(ONENAND_START_ADDRESS_1);
 		dma_buffer->data.data0 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data1 = (onenand_startaddr8 << 16) |
 						(onenand_startaddr1);
 		dma_buffer->data.data2 = (onenand_startblock << 16) |
@@ -5200,7 +5218,7 @@ static int msm_onenand_unlock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		dma_buffer->data.data4 = (CLEAN_DATA_16 << 16) |
 						(CLEAN_DATA_16);
 		dma_buffer->data.data5 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data6 = (ONENAND_STARTADDR3_RES << 16) |
 						(ONENAND_STARTADDR1_RES);
 
@@ -5516,22 +5534,23 @@ static int msm_onenand_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		}
 
 		onenand_startaddr8 = 0x0000;
-		dma_buffer->data.sfbcfg = SFLASH_BCFG;
+		dma_buffer->data.sfbcfg = SFLASH_BCFG |
+					(nand_sfcmd_mode ? 0 : (1 << 24));
 		dma_buffer->data.sfcmd[0] = SFLASH_PREPCMD(7, 0, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfcmd[1] = SFLASH_PREPCMD(0, 0, 32,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_INTHI);
 		dma_buffer->data.sfcmd[2] = SFLASH_PREPCMD(3, 7, 0,
 							NAND_SFCMD_DATXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGRD);
 		dma_buffer->data.sfcmd[3] = SFLASH_PREPCMD(4, 10, 0,
 							NAND_SFCMD_CMDXS,
-							NAND_SFCMD_ASYNC,
+							nand_sfcmd_mode,
 							NAND_SFCMD_REGWR);
 		dma_buffer->data.sfexec = 1;
 		dma_buffer->data.sfstat[0] = CLEAN_DATA_32;
@@ -5553,7 +5572,7 @@ static int msm_onenand_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		dma_buffer->data.addr6 = (ONENAND_START_ADDRESS_3 << 16) |
 						(ONENAND_START_ADDRESS_1);
 		dma_buffer->data.data0 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data1 = (onenand_startaddr8 << 16) |
 						(onenand_startaddr1);
 		dma_buffer->data.data2 = (onenand_startblock << 16) |
@@ -5563,7 +5582,7 @@ static int msm_onenand_lock(struct mtd_info *mtd, loff_t ofs, uint64_t len)
 		dma_buffer->data.data4 = (CLEAN_DATA_16 << 16) |
 						(CLEAN_DATA_16);
 		dma_buffer->data.data5 = (ONENAND_CLRINTR << 16) |
-						(ONENAND_SYSCFG1_ECCENA);
+				(ONENAND_SYSCFG1_ECCENA(nand_sfcmd_mode));
 		dma_buffer->data.data6 = (ONENAND_STARTADDR3_RES << 16) |
 						(ONENAND_STARTADDR1_RES);
 

@@ -162,8 +162,9 @@ extern unsigned long ebi2_register_base;
 #define ONENAND_CMD_UNLOCK              0x0023
 #define ONENAND_CMD_LOCK                0x002A
 
-#define ONENAND_SYSCFG1_ECCENA		0x40E0
-#define ONENAND_SYSCFG1_ECCDIS		0x41E0
+#define ONENAND_SYSCFG1_ECCENA(mode)	(0x40E0 | (mode ? 0 : 0x8002))
+#define ONENAND_SYSCFG1_ECCDIS(mode)	(0x41E0 | (mode ? 0 : 0x8002))
+
 #define ONENAND_CLRINTR			0x0000
 #define ONENAND_STARTADDR1_RES		0x07FF
 #define ONENAND_STARTADDR3_RES		0x07FF
