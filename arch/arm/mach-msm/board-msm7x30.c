@@ -503,6 +503,38 @@ void msm_snddev_poweramp_off(void)
 	pr_info("%s: power off amplifier\n", __func__);
 }
 
+void msm_snddev_hsed_pamp_on(void)
+{
+	struct vreg *vreg_ncp;
+	int rc;
+
+	vreg_ncp = vreg_get(NULL, "ncp");
+	if (IS_ERR(vreg_ncp)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "ncp", PTR_ERR(vreg_ncp));
+		return;
+	}
+	rc = vreg_enable(vreg_ncp);
+	if (rc)
+		pr_err("%s: vreg_enable failed (%d)\n", __func__, rc);
+}
+
+void msm_snddev_hsed_pamp_off(void)
+{
+	struct vreg *vreg_ncp;
+	int rc;
+
+	vreg_ncp = vreg_get(NULL, "ncp");
+	if (IS_ERR(vreg_ncp)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "ncp", PTR_ERR(vreg_ncp));
+		return;
+	}
+	rc = vreg_disable(vreg_ncp);
+	if (rc)
+		pr_err("%s: vreg_disable failed (%d)\n", __func__, rc);
+}
+
 static void msm_camera_vreg_config_on(void)
 {
 	struct vreg *vreg_gp2, *vreg_gp3;
