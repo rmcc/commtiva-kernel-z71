@@ -322,7 +322,7 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	buf += fbi->var.xoffset * bpp +
 		fbi->var.yoffset * fbi->fix.line_length;
 
-	down(&mfd->dma->mutex);
+	mutex_lock(&mfd->dma->ov_mutex);
 
 	pipe = lcdc_pipe;
 	pipe->srcp0_addr = (uint32) buf;
@@ -341,5 +341,5 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	wait_for_completion_killable(&lcdc_pipe->comp);
 	mdp_disable_irq(MDP_OVERLAY0_TERM);
 
-	up(&mfd->dma->mutex);
+	mutex_unlock(&mfd->dma->ov_mutex);
 }
