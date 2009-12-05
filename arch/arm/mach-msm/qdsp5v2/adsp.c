@@ -470,7 +470,11 @@ static void adsp_rtos_mtoa_cb(void *context, uint32_t param,
 	struct adsp_rtos_mp_mtoa_init_info_type	*sptr;
 	int32_t		i_no, e_idx;
 	static uint32_t	init_info_completed;
-	static uint32_t	init_info_len;
+	static uint32_t init_info_len =
+				sizeof(struct adsp_rtos_mp_mtoa_header_type);
+	static uint32_t	next_init_info_byte;
+	static uint32_t expected_byte = 1;
+	uint32_t hdr_len = sizeof(struct adsp_rtos_mp_mtoa_header_type);
 
 	if (len) {
 		args = (struct adsp_rtos_mp_mtoa_s_type *) evt_buf;
@@ -478,14 +482,25 @@ static void adsp_rtos_mtoa_cb(void *context, uint32_t param,
 		proc_id = args->mp_mtoa_header.proc_id;
 	}
 
-	if (!init_info_completed) {
+	if (!init_info_completed && event == RPC_ADSP_RTOS_INIT_INFO) {
 		memcpy(((char *)adsp_info.raw_event) + init_info_len,
-								evt_buf, len);
-		init_info_len += len;
-		if (len < 440) {
+						(char *)evt_buf + hdr_len + 4,
+							len - ((hdr_len + 4)));
+		init_info_len += (len - (hdr_len + 4));
+		evt_buf += hdr_len;
+		next_init_info_byte = *(uint32_t *) evt_buf;
+		expected_byte += len;
+		if (next_init_info_byte &&
+				(expected_byte != next_init_info_byte)) {
+			MM_ERR("INIT_INFO - expecting next byte to be %d\n"
+				"\tbut ADSPSVC indicated next byte to be %d\n",
+				expected_byte, next_init_info_byte);
+			return;
+		}
+		if (!next_init_info_byte) {
 			args = adsp_info.raw_event;
-			event = adsp_info.raw_event->mp_mtoa_header.event;
-			proc_id = adsp_info.raw_event->mp_mtoa_header.proc_id;
+			args->mp_mtoa_header.event = event;
+			args->mp_mtoa_header.proc_id = proc_id;
 			init_info_completed = 1;
 		} else
 			return;
