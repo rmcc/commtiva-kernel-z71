@@ -1681,7 +1681,9 @@ static int pmem_kapi_free_index_buddybestfit(const int32_t physaddr, int id)
 
 static int pmem_kapi_free_index_bitmap(const int32_t physaddr, int id)
 {
-	return bit_from_paddr(id, physaddr);
+	return (physaddr >= pmem[id].base &&
+		physaddr < (pmem[id].base + pmem[id].size)) ?
+		bit_from_paddr(id, physaddr) : -1;
 }
 
 int pmem_kfree(const int32_t physaddr)
