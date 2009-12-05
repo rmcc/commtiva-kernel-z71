@@ -344,11 +344,17 @@ static int snddev_icodec_open_rx(struct snddev_icodec_state *icodec)
 	adie_codec_proceed_stage(icodec->adie_path, ADIE_CODEC_DIGITAL_READY);
 	adie_codec_proceed_stage(icodec->adie_path,
 	ADIE_CODEC_DIGITAL_ANALOG_READY);
+
+	/* Enable power amplifier */
+	if (icodec->data->pamp_on)
+		icodec->data->pamp_on();
+
 	icodec->enabled = 1;
 	return 0;
 
 error_afe:
 	adie_codec_close(icodec->adie_path);
+	icodec->adie_path = NULL;
 error_adie:
 	lpa_put(drv->lpa);
 error_lpa:
@@ -414,6 +420,7 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 
 error_afe:
 	adie_codec_close(icodec->adie_path);
+	icodec->adie_path = NULL;
 error_adie:
 	clk_disable(drv->tx_sclk);
 	clk_disable(drv->tx_mclk);
@@ -429,6 +436,10 @@ error_invalid_freq:
 static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 {
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
+
+	/* Disable power amplifier */
+	if (icodec->data->pamp_off)
+		icodec->data->pamp_off();
 
 	/* Disable ADIE */
 	adie_codec_proceed_stage(icodec->adie_path, ADIE_CODEC_DIGITAL_OFF);
