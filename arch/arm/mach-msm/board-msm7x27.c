@@ -1592,6 +1592,7 @@ static void __init msm7x2x_init(void)
 #endif
 	lcdc_gordon_gpio_init();
 	msm_fb_add_devices();
+	rmt_storage_add_ramfs();
 	msm7x2x_init_mmc();
 	bt_power_init();
 
