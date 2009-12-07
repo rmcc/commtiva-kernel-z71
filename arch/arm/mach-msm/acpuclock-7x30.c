@@ -29,7 +29,6 @@
 #include <mach/msm_iomap.h>
 #include <asm/mach-types.h>
 
-#include "proc_comm.h"
 #include "smd_private.h"
 #include "clock.h"
 #include "acpuclock.h"
@@ -110,33 +109,6 @@ unsigned long acpuclk_wait_for_irq(void)
 	int ret = acpuclk_get_rate();
 	acpuclk_set_rate(WAIT_FOR_IRQ_HZ, SETRATE_SWFI);
 	return ret * 1000;
-}
-
-static int pc_pll_request(unsigned id, unsigned on)
-{
-	int rc = 0;
-	on = !!on;
-
-	if (on)
-		dprintk("Enabling PLL %d\n", id);
-	else
-		dprintk("Disabling PLL %d\n", id);
-
-	if (id >= NUM_PLL)
-		return -EINVAL;
-
-	rc = msm_proc_comm(PCOM_CLKCTL_RPC_PLL_REQUEST, &id, &on);
-	if (rc < 0)
-		return rc;
-	else if ((int) id < 0)
-		return -EINVAL;
-
-	if (on)
-		dprintk("PLL enabled\n");
-	else
-		dprintk("PLL disabled\n");
-
-	return rc;
 }
 
 #define STS_PMIC_DATA_SHIFT	10
@@ -235,13 +207,10 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	dprintk("Switching from ACPU rate %u KHz -> %u KHz\n",
 	       strt_s->acpu_clk_khz, tgt_s->acpu_clk_khz);
 
-	/* Turn on target PLL if needed. */
+	/* Make sure target PLL is on. */
 	if (strt_s->src != tgt_s->src && tgt_s->src >= 0) {
-		rc = pc_pll_request(tgt_s->src, 1);
-		if (rc < 0) {
-			pr_err("PLL%d enable failed (%d)\n", tgt_s->src, rc);
-			goto out;
-		}
+		dprintk("Enabling PLL %d\n", tgt_s->src);
+		pll_enable(tgt_s->src);
 	}
 
 	/* Perform the frequency switch */
@@ -263,11 +232,8 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	/* Turn off previous PLL if not used. */
 	if (strt_s->src != tgt_s->src && strt_s->src >= 0) {
-		res = pc_pll_request(strt_s->src, 0);
-		if (res < 0) {
-			pr_warning("PLL%d disable failed (%d)\n",
-					strt_s->src, res);
-		}
+		dprintk("Disabling PLL %d\n", strt_s->src);
+		pll_disable(strt_s->src);
 	}
 
 	/* Nothing else to do for power collapse. */
@@ -368,6 +334,10 @@ static void __init acpuclk_init(void)
 	}
 
 	drv_state.current_speed = s;
+
+	/* Initialize current PLL's reference count. */
+	if (s->src >= 0)
+		pll_enable(s->src);
 
 	res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK, s->axi_clk_khz * 1000);
 	if (res < 0)
