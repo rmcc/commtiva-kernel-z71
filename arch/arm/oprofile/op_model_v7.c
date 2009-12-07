@@ -505,6 +505,9 @@ static int irqs[] = {
 #ifdef CONFIG_ARCH_QSD8X50
       INT_ARM11_PM,
 #endif
+#ifdef CONFIG_ARCH_MSM7X30
+	INT_ARM11_PM,
+#endif
 
 };
 
