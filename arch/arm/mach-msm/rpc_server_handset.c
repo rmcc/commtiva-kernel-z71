@@ -453,14 +453,9 @@ static int __devinit hs_rpc_init(void)
 {
 	int rc;
 
-	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa() ||
-		machine_is_qsd8x50_surf() || machine_is_qsd8x50_ffa() ||
-		machine_is_msm7x30_surf() || machine_is_msm7x30_ffa() ||
-		machine_is_msm7x25_surf() || machine_is_msm7x25_ffa()) {
-		rc = hs_rpc_cb_init();
-		if (rc)
-			pr_err("%s: failed to initialize\n", __func__);
-	}
+	rc = hs_rpc_cb_init();
+	if (rc)
+		pr_err("%s: failed to initialize rpc client\n", __func__);
 
 	rc = msm_rpc_create_server(&hs_rpc_server);
 	if (rc < 0)
