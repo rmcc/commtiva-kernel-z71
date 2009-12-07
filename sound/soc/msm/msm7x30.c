@@ -212,6 +212,7 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 			return rc;
 		} else
 			dev_info->opened = 1;
+			msm_release_voc_thread();
 
 	} else {
 		if (dev_info->opened)

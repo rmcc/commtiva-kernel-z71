@@ -184,6 +184,12 @@ int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type)
 }
 EXPORT_SYMBOL(msm_set_voc_route);
 
+void msm_release_voc_thread(void)
+{
+	wake_up(&audio_dev_ctrl.wait);
+}
+EXPORT_SYMBOL(msm_release_voc_thread);
+
 int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 {
 	int rc = 0;
