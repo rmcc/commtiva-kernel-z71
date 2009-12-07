@@ -2401,6 +2401,7 @@ static struct msm_i2c_platform_data msm_i2c_ssbi7_pdata = {
 
 static struct msm_acpu_clock_platform_data msm7x30_clock_data = {
 	.acpu_switch_time_us = 50,
+	.vdd_switch_time_us = 62,
 };
 
 static void __init msm7x30_init_irq(void)
