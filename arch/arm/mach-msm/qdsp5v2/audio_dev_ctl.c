@@ -83,7 +83,7 @@ static struct audio_dev_ctrl_state audio_dev_ctrl;
 
 struct audio_routing_info {
 	int running;
-	unsigned short mixer_mask[5];
+	unsigned short mixer_mask[6];
 	unsigned short audrec_mixer_mask[2];
 };
 
