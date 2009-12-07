@@ -144,6 +144,20 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 			kgsl_driver.power_flags |= KGSL_PWRFLAGS_POWER_ON;
 		}
 		return KGSL_SUCCESS;
+	case KGSL_PWRFLAGS_IRQ_ON:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_IRQ_OFF) {
+			enable_irq(kgsl_driver.interrupt_num);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_IRQ_OFF);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_IRQ_ON;
+		}
+		return KGSL_SUCCESS;
+	case KGSL_PWRFLAGS_IRQ_OFF:
+		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_IRQ_ON) {
+			disable_irq(kgsl_driver.interrupt_num);
+			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_IRQ_ON);
+			kgsl_driver.power_flags |= KGSL_PWRFLAGS_IRQ_OFF;
+		}
+		return KGSL_SUCCESS;
 	default:
 		return KGSL_FAILURE;
 	}
@@ -182,8 +196,8 @@ static int kgsl_first_open_locked(void)
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
 
-	kgsl_driver.power_flags =
-	    KGSL_PWRFLAGS_CLK_OFF | KGSL_PWRFLAGS_POWER_OFF;
+	kgsl_driver.power_flags = KGSL_PWRFLAGS_CLK_OFF |
+		KGSL_PWRFLAGS_POWER_OFF | KGSL_PWRFLAGS_IRQ_OFF;
 	kgsl_pwrctrl(KGSL_PWRFLAGS_POWER_ON);
 	kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_ON);
 	kgsl_driver.is_suspended = KGSL_FALSE;
@@ -203,7 +217,7 @@ static int kgsl_first_open_locked(void)
 	if (result != 0)
 		goto done;
 
-	enable_irq(kgsl_driver.interrupt_num);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_ON);
 done:
 	return result;
 }
@@ -213,7 +227,7 @@ static int kgsl_last_release_locked(void)
 	BUG_ON(kgsl_driver.grp_clk == NULL);
 	BUG_ON(kgsl_driver.imem_clk == NULL);
 
-	disable_irq(kgsl_driver.interrupt_num);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_OFF);
 
 	kgsl_yamato_stop(&kgsl_driver.yamato_device);
 

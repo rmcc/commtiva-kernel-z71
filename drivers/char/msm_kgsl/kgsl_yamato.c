@@ -817,6 +817,7 @@ int kgsl_yamato_sleep(struct kgsl_device *device, const int idle)
 		/* See if the device is idle. If it is, we can shut down */
 		/* the core clock until the next attempt to access the HW. */
 		if (idle == KGSL_TRUE || kgsl_yamato_isidle(device)) {
+			kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_OFF);
 			/* Turn off the core clocks */
 			status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_OFF);
 
@@ -838,6 +839,7 @@ int kgsl_yamato_wake(struct kgsl_device *device)
 
 	/* Turn on the core clocks */
 	status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_ON);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_ON);
 
 	/* Re-enable HW access */
 	device->hwaccess_blocked = KGSL_FALSE;
