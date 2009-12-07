@@ -54,7 +54,7 @@
 #define LOG_MASK_SIZE 1000
 #define EVENT_MASK_SIZE 1000
 #define REG_TABLE_SIZE 25
-#define PKT_SIZE 1000
+#define PKT_SIZE 4096
 
 struct diag_master_table {
 	uint16_t cmd_code;
