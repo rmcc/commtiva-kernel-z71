@@ -59,6 +59,7 @@ enum {
 	I2C_INTERFACE_SELECT_SCL            = 1U << 8,
 	I2C_INTERFACE_SELECT_SDA            = 1U << 9,
 	I2C_STATUS_RX_DATA_STATE            = 3U << 11,
+	I2C_STATUS_LOW_CLK_STATE            = 3U << 13,
 };
 
 struct msm_i2c_dev {
@@ -78,6 +79,7 @@ struct msm_i2c_dev {
 	int                          err;
 	int                          flush_cnt;
 	int                          rd_acked;
+	int                          one_bit_t;
 	remote_mutex_t               r_lock;
 	int                          suspended;
 	struct mutex                 mlock;
@@ -194,6 +196,24 @@ msm_i2c_interrupt(int irq, void *devid)
 			if (dev->cnt == 1 && dev->rem == 1)
 				data |= I2C_WRITE_DATA_LAST_BYTE;
 
+			status = readl(dev->base + I2C_STATUS);
+			/*
+			 * Due to a hardware timing issue, data line setup time
+			 * may be reduced to less than recommended 250 ns.
+			 * This happens when next byte is written in a
+			 * particular window of clock line being low and master
+			 * not stretching the clock line. Due to setup time
+			 * violation, some slaves may miss first-bit of data, or
+			 * misinterprete data as start condition.
+			 * We introduce delay of just over 1/2 clock cycle to
+			 * ensure master stretches the clock line thereby
+			 * avoiding setup time violation. Delay is introduced
+			 * only if I2C clock FSM is LOW. The delay is not needed
+			 * if I2C clock FSM is HIGH or FORCED_LOW.
+			 */
+			if ((status & I2C_STATUS_LOW_CLK_STATE) ==
+					I2C_STATUS_LOW_CLK_STATE)
+				udelay((dev->one_bit_t >> 1) + 1);
 			writel(data, dev->base + I2C_WRITE_DATA);
 			dev->pos++;
 			dev->cnt--;
@@ -572,6 +592,7 @@ msm_i2c_probe(struct platform_device *pdev)
 		goto err_ioremap_failed;
 	}
 
+	dev->one_bit_t = USEC_PER_SEC/pdata->clk_freq;
 	spin_lock_init(&dev->lock);
 	platform_set_drvdata(pdev, dev);
 
