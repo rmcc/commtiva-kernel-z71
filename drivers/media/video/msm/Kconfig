@@ -63,3 +63,10 @@ config MSM_CAMERA_FLASH
 	default y
 	---help---
 	  Enable support for LED flash for msm camera
+
+config MSM_GEMINI
+	tristate "Qualcomm MSM Gemini Jpeg Engine support"
+	depends on MSM_CAMERA
+	default M
+	---help---
+	  Enable support for Gemini Jpeg Engine
