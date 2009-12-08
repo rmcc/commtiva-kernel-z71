@@ -105,7 +105,7 @@ remote_spinlock_dal_init(const char *chunk_name, _remote_spinlock_t *lock)
 	/* Find first chunk header */
 	cur_header = (struct dal_chunk_header *)
 			(((uint32_t)dal_smem_start + (4095)) & ~4095);
-
+	*lock = NULL;
 	while (cur_header->size != 0
 		&& ((uint32_t)(cur_header + 1) < (uint32_t)dal_smem_end)) {
 
@@ -113,12 +113,14 @@ remote_spinlock_dal_init(const char *chunk_name, _remote_spinlock_t *lock)
 		if (!strncmp(cur_header->name, chunk_name,
 						DAL_CHUNK_NAME_LENGTH)) {
 			*lock = (_remote_spinlock_t)&cur_header->lock;
-			break;
+			return 0;
 		}
 		cur_header = (void *)cur_header + cur_header->size;
 	}
 
-	return 0;
+	pr_err("%s: DAL remote lock \"%s\" not found.\n", __func__,
+		chunk_name);
+	return -EINVAL;
 }
 
 int _remote_spin_lock_init(remote_spinlock_id_t id, _remote_spinlock_t *lock)
