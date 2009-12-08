@@ -1,5 +1,4 @@
-/* linux/arch/arm/mach-msm/irq.c
- *
+/*
  * Copyright (C) 2007 Google, Inc.
  * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
