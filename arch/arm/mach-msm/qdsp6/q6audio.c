@@ -606,7 +606,7 @@ static int q6audio_init(void)
 	sdac_clk = clk_get(0, "sdac_clk");
 	audio_data = dma_alloc_coherent(NULL, 4096, &audio_phys, GFP_KERNEL);
 
-	adsp = dal_attach(AUDIO_DAL_DEVICE, AUDIO_DAL_PORT,
+	adsp = dal_attach(AUDIO_DAL_DEVICE, AUDIO_DAL_PORT, 1,
 			  callback, 0);
 	if (!adsp) {
 		pr_err("audio_init: cannot attach to adsp\n");
@@ -628,14 +628,14 @@ static int q6audio_init(void)
 		goto done;
 	}
 
-	acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0);
+	acdb = dal_attach(ACDB_DAL_DEVICE, ACDB_DAL_PORT, 0, 0, 0);
 	if (!acdb) {
 		pr_err("audio_init: cannot attach to acdb channel\n");
 		res = -ENODEV;
 		goto done;
 	}
 
-	adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0);
+	adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0, 0);
 	if (!adie) {
 		pr_err("audio_init: cannot attach to adie\n");
 		res = -ENODEV;

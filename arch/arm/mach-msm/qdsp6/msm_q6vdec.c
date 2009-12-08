@@ -50,7 +50,7 @@
 #include "dal.h"
 
 #define DALDEVICEID_VDEC_DEVICE		0x02000026
-#define DALDEVICEID_VDEC_PORTNAME	"DSP_DAL_AQ_VID"
+#define DALDEVICEID_VDEC_PORTNAME	"DAL_AQ_VID"
 
 #define VDEC_INTERFACE_VERSION		0x00020000
 
@@ -769,7 +769,7 @@ static int vdec_open(struct inode *inode, struct file *file)
 
 	vd->vdec_handle = dal_attach(DALDEVICEID_VDEC_DEVICE,
 				     DALDEVICEID_VDEC_PORTNAME,
-				     callback, vd);
+				     1, callback, vd);
 
 	if (!vd->vdec_handle) {
 		pr_err("%s: failed to attach \n", __func__);

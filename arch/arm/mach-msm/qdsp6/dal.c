@@ -197,15 +197,9 @@ done:
 static LIST_HEAD(dal_channel_list);
 static DEFINE_MUTEX(dal_channel_list_lock);
 
-static struct dal_channel *dal_open_channel(const char *name)
+static struct dal_channel *dal_open_channel(const char *name, uint32_t cpu)
 {
 	struct dal_channel *dch;
-
-	/* quick sanity check to avoid trying to talk to
-	 * some non-DAL channel...
-	 */
-	if (strncmp(name, "DSP_DAL", 7) && strncmp(name, "SMD_DAL", 7))
-		return 0;
 
 	mutex_lock(&dal_channel_list_lock);
 
@@ -227,8 +221,11 @@ static struct dal_channel *dal_open_channel(const char *name)
 
 found_it:
 	if (!dch->sch) {
-		if (smd_open(name, &dch->sch, dch, dal_channel_notify))
+		if (smd_named_open_on_edge(name, cpu, &dch->sch,
+					dch, dal_channel_notify)) {
+			pr_err("smd open failed\n");
 			dch = NULL;
+		}
 		/* FIXME: wait for channel to open before returning */
 		msleep(100);
 	}
@@ -294,13 +291,7 @@ int dal_call(struct dal_client *client,
 	mutex_lock(&client->write_lock);
 	r = dal_call_raw(client, &hdr, data, data_len, reply, reply_max);
 	mutex_unlock(&client->write_lock);
-#if 0
-	if ((r > 3) && (((uint32_t*) reply)[0] == 0)) {
-		pr_info("dal call OK\n");
-	} else {
-		pr_info("dal call ERROR\n");
-	}
-#endif
+
 	return r;
 }
 
@@ -316,7 +307,7 @@ struct dal_reply_attach {
 };
 
 struct dal_client *dal_attach(uint32_t device_id, const char *name,
-			      dal_event_func_t func, void *cookie)
+			      uint32_t cpu, dal_event_func_t func, void *cookie)
 {
 	struct dal_hdr hdr;
 	struct dal_msg_attach msg;
@@ -326,7 +317,7 @@ struct dal_client *dal_attach(uint32_t device_id, const char *name,
 	unsigned long flags;
 	int r;
 
-	dch = dal_open_channel(name);
+	dch = dal_open_channel(name, cpu);
 	if (!dch)
 		return 0;
 
@@ -428,7 +419,8 @@ int dal_call_f0(struct dal_client *client, uint32_t ddi, uint32_t arg1)
 	return res;
 }
 
-int dal_call_f1(struct dal_client *client, uint32_t ddi, uint32_t arg1, uint32_t arg2)
+int dal_call_f1(struct dal_client *client, uint32_t ddi, uint32_t arg1,
+		uint32_t arg2)
 {
 	uint32_t tmp[2];
 	int res;
