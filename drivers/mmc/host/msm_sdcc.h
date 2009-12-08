@@ -108,14 +108,16 @@
 #define MCI_SDIOINTRCLR		(1 << 22)
 #define MCI_PROGDONECLR		(1 << 23)
 #define MCI_ATACMDCOMPLCLR	(1 << 24)
+#define MCI_SDIOINTROPECLR	(1 << 25)
 #define MCI_CCSTIMEOUTCLR 	(1 << 26)
 
 #define MCI_CLEAR_STATIC_MASK	\
 	(MCI_CMDCRCFAILCLR|MCI_DATACRCFAILCLR|MCI_CMDTIMEOUTCLR|\
 	MCI_DATATIMEOUTCLR|MCI_TXUNDERRUNCLR|MCI_RXOVERRUNCLR|  \
 	MCI_CMDRESPENDCLR|MCI_CMDSENTCLR|MCI_DATAENDCLR|	\
-	MCI_STARTBITERRCLR|MCI_DATABLOCKENDCLR|MCI_SDIOINTRCLR| \
-	MCI_PROGDONECLR|MCI_ATACMDCOMPLCLR|MCI_CCSTIMEOUTCLR)
+	MCI_STARTBITERRCLR|MCI_DATABLOCKENDCLR|MCI_SDIOINTRCLR|	\
+	MCI_SDIOINTROPECLR|MCI_PROGDONECLR|MCI_ATACMDCOMPLCLR|	\
+	MCI_CCSTIMEOUTCLR)
 
 #define MMCIMASK0		0x03c
 #define MCI_CMDCRCFAILMASK	(1 << 0)
@@ -222,7 +224,6 @@ struct msmsdcc_host {
 	struct clk		*clk;		/* main MMC bus clock */
 	struct clk		*pclk;		/* SDCC peripheral bus clock */
 	unsigned int		clks_on;	/* set if clocks are enabled */
-	struct timer_list	command_timer;
 
 	unsigned int		eject;		/* eject state */
 
@@ -254,6 +255,13 @@ struct msmsdcc_host {
 #endif
 	unsigned int prog_scan;
 	unsigned int prog_enable;
+
+	/* Command parameters */
+	unsigned int		cmd_timeout;
+	unsigned int		cmd_pio_irqmask;
+	unsigned int		cmd_datactrl;
+	struct mmc_command	*cmd_cmd;
+	u32					cmd_c;
 };
 
 #endif
