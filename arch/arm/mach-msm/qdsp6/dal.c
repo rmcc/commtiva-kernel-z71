@@ -391,8 +391,8 @@ int dal_detach(struct dal_client *client)
 			     &data, sizeof(data));
 	}
 
-	spin_lock_irqsave(&dch->lock, flags);
 	dch = client->dch;
+	spin_lock_irqsave(&dch->lock, flags);
 	if (dch->active == client) {
 		/* We have received a message header for this client
 		 * but not the body of the message.  Ensure that when

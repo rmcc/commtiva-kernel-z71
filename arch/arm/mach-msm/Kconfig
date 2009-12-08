@@ -647,6 +647,7 @@ config MSM_HW3D
 	  library.
 
 config MSM_ADSP
+	depends on (ARCH_MSM7X01A || ARCH_MSM7X25 || ARCH_MSM7X27)
 	tristate "MSM ADSP driver"
 	depends on ANDROID_PMEM
 	default y
@@ -674,6 +675,13 @@ config MSM_VREG_SWITCH_INVERTED
 	default n
 	help
 	  Reverses the enable and disable for vreg switch.
+
+config MSM_QDSP6
+	tristate "QDSP6 support"
+	depends on ARCH_QSD8X50
+	default y
+	help
+	  Enable support for qdsp6. This provides audio and video functionality.
 
 config MSM_DMA_TEST
 	tristate "MSM DMA test module"
