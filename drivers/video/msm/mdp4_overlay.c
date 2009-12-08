@@ -237,6 +237,8 @@ void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe)
 	format = mdp4_overlay_format(pipe);
 	pattern = mdp4_overlay_unpack_pattern(pipe);
 
+	pipe->op_mode |= MDP4_OP_IGC_LUT_EN;
+
 	mdp4_scale_setup(pipe);
 
 	outpdw(rgb_base + 0x0000, src_size);	/* MDP_RGB_SRC_SIZE */
@@ -285,7 +287,8 @@ void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
 	format = mdp4_overlay_format(pipe);
 	pattern = mdp4_overlay_unpack_pattern(pipe);
 
-	pipe->op_mode |= (MDP4_OP_CSC_EN | MDP4_OP_SRC_DATA_YCBCR);
+	pipe->op_mode |= (MDP4_OP_CSC_EN | MDP4_OP_SRC_DATA_YCBCR |
+				MDP4_OP_IGC_LUT_EN);
 
 	mdp4_scale_setup(pipe);
 
@@ -642,7 +645,7 @@ void mdp4_overlayproc_cfg(struct mdp4_overlay_pipe *pipe)
 	outpdw(overlay_base + 0x0008, data); /* ROI, height + width */
 	outpdw(overlay_base + 0x000c, pipe->srcp0_addr);
 	outpdw(overlay_base + 0x0010, pipe->srcp0_ystride);
-	outpdw(overlay_base + 0x0014, 0x0);	/* 888 */
+	outpdw(overlay_base + 0x0014, 0x4);	/* GC_LUT_EN, 888 */
 }
 
 int mdp4_overlay_active(int mixer)
