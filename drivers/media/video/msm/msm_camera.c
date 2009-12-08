@@ -867,7 +867,9 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 			se.stats_event.msg_id);
 
 		if ((data->type == VFE_MSG_STATS_AF) ||
-				(data->type == VFE_MSG_STATS_WE)) {
+				(data->type == VFE_MSG_STATS_WE) ||
+				(data->type == VFE_MSG_STATS_AEC) ||
+				(data->type == VFE_MSG_STATS_AWB)) {
 
 			stats.buffer =
 			msm_pmem_stats_ptov_lookup(sync,
@@ -1035,11 +1037,11 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&sync->pmem_stats,
 					MSM_PMEM_AEC_AWB, &region[0],
-					NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
+					NUM_STAT_OUTPUT_BUFFERS);
 		axi_data.bufnum2 =
 			msm_pmem_region_lookup(&sync->pmem_stats,
 					MSM_PMEM_AF, &region[axi_data.bufnum1],
-					NUM_AF_STAT_OUTPUT_BUFFERS);
+					NUM_STAT_OUTPUT_BUFFERS);
 		if (!axi_data.bufnum1 || !axi_data.bufnum2) {
 			pr_err("%s: pmem region lookup error\n", __func__);
 			return -EINVAL;
@@ -1050,7 +1052,7 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&sync->pmem_stats,
 					MSM_PMEM_AF, &region[0],
-					NUM_AF_STAT_OUTPUT_BUFFERS);
+					NUM_STAT_OUTPUT_BUFFERS);
 		if (!axi_data.bufnum1) {
 			pr_err("%s %d: pmem region lookup error\n",
 				__func__, __LINE__);
@@ -1062,7 +1064,31 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&sync->pmem_stats,
 			MSM_PMEM_AEC_AWB, &region[0],
-			NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+	case CMD_STATS_AEC_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_AEC, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+	case CMD_STATS_AWB_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_AWB, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
 		if (!axi_data.bufnum1) {
 			pr_err("%s %d: pmem region lookup error\n",
 				__func__, __LINE__);
@@ -1262,6 +1288,13 @@ static int __msm_register_pmem(struct msm_sync *sync,
 
 	case MSM_PMEM_AEC_AWB:
 	case MSM_PMEM_AF:
+	case MSM_PMEM_AEC:
+	case MSM_PMEM_AWB:
+	case MSM_PMEM_RS:
+	case MSM_PMEM_CS:
+	case MSM_PMEM_IHIST:
+	case MSM_PMEM_SKIN:
+
 		rc = msm_pmem_table_add(&sync->pmem_stats, pinfo);
 		break;
 
@@ -1316,7 +1349,7 @@ static int msm_stats_axi_cfg(struct msm_sync *sync,
 	if (cfgcmd->cmd_type != CMD_GENERAL) {
 		axi_data.bufnum1 =
 			msm_pmem_region_lookup(&sync->pmem_stats, pmem_type,
-				&region[0], NUM_WB_EXP_STAT_OUTPUT_BUFFERS);
+				&region[0], NUM_STAT_OUTPUT_BUFFERS);
 		if (!axi_data.bufnum1) {
 			pr_err("%s %d: pmem region lookup error\n",
 				__func__, __LINE__);
@@ -1354,6 +1387,10 @@ static int msm_put_stats_buffer(struct msm_sync *sync, void __user *arg)
 			cfgcmd.cmd_type = CMD_STATS_BUF_RELEASE;
 		else if (buf.type == STAT_AF)
 			cfgcmd.cmd_type = CMD_STATS_AF_BUF_RELEASE;
+		else if (buf.type == STAT_AEC)
+			cfgcmd.cmd_type = CMD_STATS_AEC_BUF_RELEASE;
+		else if (buf.type == STAT_AWB)
+			cfgcmd.cmd_type = CMD_STATS_AWB_BUF_RELEASE;
 		else {
 			pr_err("%s: invalid buf type %d\n",
 				__func__,
