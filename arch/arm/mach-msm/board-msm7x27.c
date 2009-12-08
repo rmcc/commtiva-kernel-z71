@@ -176,6 +176,7 @@ static struct android_usb_platform_data android_usb_pdata = {
 	.product_id	= 0x9018,
 	.functions	= 0x27614,
 	.version	= 0x0100,
+	.serial_number  = "1234567890ABCDEF",
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.product_name	= "Qualcomm HSUSB Device",
