@@ -228,3 +228,4 @@ extern void unreserve_hotplug_pages(unsigned long start_pfn,
 				unsigned long nr_pages);
 #endif /* __LINUX_MEMORY_HOTPLUG_H */
 extern int physical_remove_memory(u64 start, u64 size);
+extern int arch_physical_remove_memory(u64 start, u64 size);
