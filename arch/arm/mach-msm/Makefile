@@ -1,10 +1,10 @@
-obj-y += io.o irq.o timer.o dma.o memory.o
+obj-y += io.o dma.o memory.o
 obj-y += devices.o
 obj-y += proc_comm.o
 obj-y += vreg.o mpp.o
 obj-y += vreg.o
 obj-y += clock.o clock-pcom.o
-obj-y += gpio.o generic_gpio.o
+obj-y += generic_gpio.o
 obj-y += nand_partitions.o
 obj-y += modem_notifier.o
 obj-y += rpc_hsusb.o rpc_pmapp.o rpc_fsusb.o
@@ -14,7 +14,9 @@ obj-y += nohlt.o
 obj-y += pmic.o
 obj-y += internal_power_rail.o
 
-obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o
+obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o timer.o irq.o gpio.o
+obj-$(CONFIG_ARCH_MSM_SCORPION) += timer.o irq.o gpio.o
+
 obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-8x50.o
 obj-$(CONFIG_ARCH_MSM7X30) += acpuclock-7x30.o
 obj-$(CONFIG_MSM_CPU_AVS) += avs.o avs_hw.o
