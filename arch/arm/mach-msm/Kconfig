@@ -647,7 +647,7 @@ config MSM_HW3D
 	  library.
 
 config MSM_ADSP
-	depends on (ARCH_MSM7X01A || ARCH_MSM7X25 || ARCH_MSM7X27)
+	depends on (ARCH_MSM7X01A || ARCH_MSM7X25 || ARCH_MSM7X27 || ARCH_MSM7X30)
 	tristate "MSM ADSP driver"
 	depends on ANDROID_PMEM
 	default y
