@@ -41,6 +41,11 @@
 #define KEY(row, col, val)	(((row % (MATRIX_MAX_ROWS)) << 24) |\
 				 ((col % (MATRIX_MAX_COLS)) << 16)  |\
 				 (val & 0xffff))
+/*
+ * NOTE: Assumption of maximum of five revisions
+ * of PMIC8058 chip.
+ */
+#define MAX_PM8058_REVS		0x5
 
 struct pmic8058_keypad_data {
 	const char *input_name;
@@ -52,7 +57,7 @@ struct pmic8058_keypad_data {
 	unsigned int rows_gpio_start;
 	unsigned int cols_gpio_start;
 
-	unsigned int debounce_ms;
+	unsigned int debounce_ms[MAX_PM8058_REVS];
 	unsigned int scan_delay_ms;
 	unsigned int row_hold_us;
 

@@ -457,9 +457,9 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
 
 	if (pmic8058_is_rev_a0())
-		bits = fls(kp->pdata->debounce_ms) - 1;
+		bits = fls(kp->pdata->debounce_ms[0]) - 1;
 	else
-		bits = kp->pdata->debounce_ms / 5;
+		bits = kp->pdata->debounce_ms[1] / 5;
 
 	scan_val |= (bits << KEYP_SCAN_DBOUNCE_SHIFT);
 
@@ -544,16 +544,18 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	}
 
 	if (pmic8058_is_rev_a0()) {
-		if (!pdata->debounce_ms || !is_power_of_2(pdata->debounce_ms)
-				|| pdata->debounce_ms > MAX_DEBOUNCE_A0_TIME
-				|| pdata->debounce_ms < MIN_DEBOUNCE_A0_TIME) {
+		if (!pdata->debounce_ms
+			|| !is_power_of_2(pdata->debounce_ms[0])
+			|| pdata->debounce_ms[0] > MAX_DEBOUNCE_A0_TIME
+			|| pdata->debounce_ms[0] < MIN_DEBOUNCE_A0_TIME) {
 			dev_err(&pdev->dev, "invalid debounce time supplied\n");
 			return -EINVAL;
 		}
 	} else {
-		if (!pdata->debounce_ms || ((pdata->debounce_ms % 5) != 0)
-				|| pdata->debounce_ms > MAX_DEBOUNCE_B0_TIME
-				|| pdata->debounce_ms < MIN_DEBOUNCE_B0_TIME) {
+		if (!pdata->debounce_ms
+			|| ((pdata->debounce_ms[1] % 5) != 0)
+			|| pdata->debounce_ms[1] > MAX_DEBOUNCE_B0_TIME
+			|| pdata->debounce_ms[1] < MIN_DEBOUNCE_B0_TIME) {
 			dev_err(&pdev->dev, "invalid debounce time supplied\n");
 			return -EINVAL;
 		}
