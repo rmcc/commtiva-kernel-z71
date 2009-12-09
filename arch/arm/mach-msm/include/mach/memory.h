@@ -31,6 +31,9 @@
 
 #endif
 
+#define MAX_PHYSMEM_BITS 32
+#define SECTION_SIZE_BITS 25
+
 #define HAS_ARCH_IO_REMAP_PFN_RANGE
 
 #ifndef __ASSEMBLY__
