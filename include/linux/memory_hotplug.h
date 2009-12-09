@@ -222,4 +222,8 @@ extern void sparse_remove_one_section(struct zone *zone, struct mem_section *ms)
 extern struct page *sparse_decode_mem_map(unsigned long coded_mem_map,
 					  unsigned long pnum);
 
+extern void reserve_hotplug_pages(unsigned long start_pfn,
+				unsigned long nr_pages);
+extern void unreserve_hotplug_pages(unsigned long start_pfn,
+				unsigned long nr_pages);
 #endif /* __LINUX_MEMORY_HOTPLUG_H */

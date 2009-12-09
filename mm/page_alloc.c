@@ -2589,12 +2589,14 @@ static void setup_zone_migrate_reserve(struct zone *zone)
 	struct page *page;
 	unsigned long reserve, block_migratetype;
 
+#ifdef CONFIG_DONT_RESERVE_FROM_MOVABLE_ZONE
+	return;
+#endif
 	/* Get the start pfn, end pfn and the number of blocks to reserve */
 	start_pfn = zone->zone_start_pfn;
 	end_pfn = start_pfn + zone->spanned_pages;
 	reserve = roundup(zone->pages_min, pageblock_nr_pages) >>
 							pageblock_order;
-
 	for (pfn = start_pfn; pfn < end_pfn; pfn += pageblock_nr_pages) {
 		if (!pfn_valid(pfn))
 			continue;
