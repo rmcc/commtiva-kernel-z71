@@ -10,6 +10,12 @@ config ARCH_MSM7X01A
 	select CPU_V6
 	select REMOTE_SPINLOCK_SWP
 
+config ARCH_MSM7X25
+	bool "MSM7x25"
+	select ARCH_MSM_ARM11
+	select CPU_V6
+	select REMOTE_SPINLOCK_SWP
+
 config ARCH_MSM7X27
 	bool "MSM7x27"
 	select ARCH_MSM_ARM11
@@ -29,12 +35,6 @@ config ARCH_QSD8X50
 	select EMULATE_DOMAIN_MANAGER_V7
 	select VERIFY_PERMISSION_FAULT
 	select REMOTE_SPINLOCK_LDREX
-
-config ARCH_MSM7X25
-	bool "MSM7x25"
-	select ARCH_MSM_ARM11
-	select CPU_V6
-	select REMOTE_SPINLOCK_SWP
 
 endchoice
 
