@@ -139,3 +139,15 @@ void *alloc_bootmem_aligned(unsigned long size, unsigned long alignment)
 
 	return (void *)addr;
 }
+
+int platform_physical_remove_pages(unsigned long start_pfn,
+	unsigned long nr_pages)
+{
+	unsigned long start = start_pfn << PAGE_SHIFT;
+	unsigned long size = nr_pages << PAGE_SHIFT;
+	unsigned long virtual = __phys_to_virt(start);
+
+	/* simulate turning off memory by writing bit pattern into it for now */
+	memset((void *)virtual, 0x27, size);
+	return 0;
+}
