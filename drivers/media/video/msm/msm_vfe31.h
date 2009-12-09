@@ -355,6 +355,7 @@ enum  VFE_STATE {
 
 #define V31_ASF_OFF 0x000004A0
 #define V31_ASF_LEN 48
+#define V31_ASF_UPDATE_LEN 36
 
 struct vfe_cmd_hw_version {
 	uint32_t minorVersion;
