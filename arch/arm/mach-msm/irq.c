@@ -29,6 +29,7 @@
 #include <mach/msm_iomap.h>
 #include <mach/fiq.h>
 
+#include "fiq.h"
 #include "smd_private.h"
 
 enum {
@@ -39,7 +40,8 @@ enum {
 	IRQ_DEBUG_SLEEP_REQUEST = 1U << 4,
 };
 static int msm_irq_debug_mask;
-module_param_named(debug_mask, msm_irq_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP);
+module_param_named(debug_mask, msm_irq_debug_mask, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
 
 #define VIC_REG(off) (MSM_VIC_BASE + (off))
 #define VIC_INT_TO_REG_ADDR(base, irq) (base + (irq / 32) * 4)
@@ -488,7 +490,7 @@ void msm_irq_exit_sleep2(uint32_t irq_mask, uint32_t wakeup_reason,
 			DPRINT_REGS(VIC_IRQ_STATUS,
 				"%s: irq %d still pending %x now",
 				__func__, i, pending);
-#if 0 /* debug intetrrupt trigger */
+#ifdef DEBUG_INTERRUPT_TRIGGER
 		if (readl(VIC_IRQ_STATUS0 + reg_offset) & reg_mask)
 			writel(reg_mask, VIC_INT_CLEAR0 + reg_offset);
 #endif
@@ -614,12 +616,8 @@ static void set_fiq_handler(void *start, unsigned int length)
 		flush_icache_range(0x1c, 0x1c + length);
 }
 
-extern unsigned char fiq_glue, fiq_glue_end;
-
 static void (*fiq_func)(void *data, void *regs);
 static unsigned long long fiq_stack[256];
-
-void fiq_glue_setup(void *func, void *data, void *sp);
 
 int msm_fiq_set_handler(void (*func)(void *data, void *regs), void *data)
 {
