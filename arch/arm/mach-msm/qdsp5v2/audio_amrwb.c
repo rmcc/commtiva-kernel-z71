@@ -163,6 +163,7 @@ struct audio {
 	spinlock_t event_queue_lock;
 	struct mutex get_event_lock;
 	int event_abort;
+	uint32_t device_events;
 
 	int eq_enable;
 	int eq_needs_commit;
@@ -193,17 +194,34 @@ static int audamrwb_enable(struct audio *audio)
 	audio->out_needed = 0;
 
 	if (msm_adsp_enable(audio->audplay)) {
-		pr_err("audio: msm_adsp_enable(audplay) failed\n");
+		MM_ERR("audio: msm_adsp_enable(audplay) failed\n");
 		return -ENODEV;
 	}
 
 	if (audpp_enable(audio->dec_id, audamrwb_dsp_event, audio)) {
-		pr_err("audio: audpp_enable() failed\n");
+		MM_ERR("audio: audpp_enable() failed\n");
 		msm_adsp_disable(audio->audplay);
 		return -ENODEV;
 	}
 	audio->enabled = 1;
 	return 0;
+}
+
+static void amrwb_listner(u32 evt_id, union auddev_evt_data *evt_payload,
+			void *private_data)
+{
+	struct audio *audio = (struct audio *) private_data;
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_CHG_AUDIO:
+		MM_ERR("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS)
+			audpp_route_stream(audio->dec_id,
+				msm_snddev_route_dec(audio->dec_id));
+		break;
+	default:
+		MM_ERR("%s:ERROR:wrong event\n", __func__);
+		break;
+	}
 }
 
 /* must be called with audio->lock held */
@@ -244,7 +262,7 @@ static void audamrwb_update_pcm_buf_entry(struct audio *audio,
 				audio->fill_next = 0;
 
 		} else {
-			pr_err
+			MM_ERR
 			  ("audamrwb_update_pcm_buf_entry: expected=%x ret=%x\n"
 			   , audio->in[audio->fill_next].addr,
 			   payload[1 + index * 2]);
@@ -795,7 +813,7 @@ static long audamrwb_ioctl(struct file *file, unsigned int cmd,
 			rc = wait_event_interruptible(audio->write_wait,
 				!audio->wflush);
 			if (rc < 0) {
-				pr_err("%s: AUDIO_FLUSH interrupted\n",
+				MM_ERR("%s: AUDIO_FLUSH interrupted\n",
 					__func__);
 				rc = -EINTR;
 			}
@@ -891,7 +909,7 @@ static long audamrwb_ioctl(struct file *file, unsigned int cmd,
 							config.buffer_size *
 							config.buffer_count);
 			if (!audio->read_data) {
-				pr_err("audamrwb_ioctl: no mem for read buf\n");
+				MM_ERR("audamrwb_ioctl: no mem for read buf\n");
 				rc = -ENOMEM;
 				pmem_kfree(audio->read_phys);
 			} else {
@@ -1047,7 +1065,7 @@ static ssize_t audamrwb_read(struct file *file, char __user *buf, size_t count,
 			if (copy_to_user
 			    (buf, audio->in[audio->read_next].data,
 			     audio->in[audio->read_next].used)) {
-				pr_err("audamrwb_read: invalid addr %x \n",
+				MM_ERR("audamrwb_read: invalid addr %x \n",
 				       (unsigned int)buf);
 				rc = -EFAULT;
 				break;
@@ -1272,6 +1290,7 @@ static int audamrwb_release(struct inode *inode, struct file *file)
 
 	pr_info("%s: audio instance 0x%08x freeing\n", __func__, (int)audio);
 	mutex_lock(&audio->lock);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->dec_id);
 	audamrwb_disable(audio);
 	audamrwb_flush(audio);
 	audamrwb_flush_pcm_buf(audio);
@@ -1313,7 +1332,7 @@ static void audamrwb_post_event(struct audio *audio, int type,
 	} else {
 		e_node = kmalloc(sizeof(struct audamrwb_event), GFP_ATOMIC);
 		if (!e_node) {
-			pr_err("%s: No mem to post event %d\n", __func__, type);
+			MM_ERR("%s: No mem to post event %d\n", __func__, type);
 			return;
 		}
 	}
@@ -1438,7 +1457,7 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 	/* Allocate Mem for audio instance */
 	audio = kzalloc(sizeof(struct audio), GFP_KERNEL);
 	if (!audio) {
-		pr_err("%s: no memory to allocate audio instance \n", __func__);
+		MM_ERR("%s: no memory to allocate audio instance \n", __func__);
 		rc = -ENOMEM;
 		goto done;
 	}
@@ -1455,7 +1474,7 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 			&audio->queue_id);
 
 	if (decid < 0) {
-		pr_err("%s: No free decoder available\n", __func__);
+		MM_ERR("%s: No free decoder available\n", __func__);
 		rc = -ENODEV;
 		pr_info("%s: audio instance 0x%08x freeing\n", __func__,
 			 (int)audio);
@@ -1467,7 +1486,7 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 
 	audio->phys = pmem_kalloc(DMASZ, PMEM_MEMTYPE_EBI1|PMEM_ALIGNMENT_4K);
 	if (IS_ERR((void *)audio->phys)) {
-		pr_err("%s: could not allocate write buffers\n", __func__);
+		MM_ERR("%s: could not allocate write buffers\n", __func__);
 		rc = -ENOMEM;
 		audpp_adec_free(audio->dec_id);
 		pr_info("%s: audio instance 0x%08x freeing\n", __func__,
@@ -1477,7 +1496,7 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 	} else {
 		audio->data = ioremap(audio->phys, DMASZ);
 		if (!audio->data) {
-			pr_err("%s: could not allocate write buffers\n",
+			MM_ERR("%s: could not allocate write buffers\n",
 					__func__);
 			rc = -ENOMEM;
 			pmem_kfree(audio->phys);
@@ -1494,7 +1513,7 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 	rc = msm_adsp_get(audio->module_name, &audio->audplay,
 		&audplay_adsp_ops_amrwb, audio);
 	if (rc) {
-		pr_err("%s: failed to get %s module\n", __func__,
+		MM_ERR("%s: failed to get %s module\n", __func__,
 				audio->module_name);
 		goto err;
 	}
@@ -1531,6 +1550,18 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 	file->private_data = audio;
 	audio->opened = 1;
 	audio->event_abort = 0;
+	audio->device_events = AUDDEV_EVT_DEV_CHG_AUDIO;
+
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_DEC,
+					audio->dec_id,
+					amrwb_listner,
+					(void *)audio);
+	if (rc) {
+		MM_ERR("%s: failed to register listnet\n", __func__);
+		goto event_err;
+	}
+
 #ifdef CONFIG_DEBUG_FS
 	snprintf(name, sizeof name, "msm_amrwb_%04x", audio->dec_id);
 	audio->dentry = debugfs_create_file(name, S_IFREG | S_IRUGO,
@@ -1557,6 +1588,8 @@ static int audamrwb_open(struct inode *inode, struct file *file)
 	}
 done:
 	return rc;
+event_err:
+	msm_adsp_put(audio->audplay);
 err:
 	iounmap(audio->data);
 	pmem_kfree(audio->phys);
