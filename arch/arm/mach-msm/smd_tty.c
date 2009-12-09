@@ -124,11 +124,11 @@ static int smd_tty_open(struct tty_struct *tty, struct file *f)
 	info = smd_tty + n;
 
 	mutex_lock(&smd_tty_lock);
-	wake_lock_init(&info->wake_lock, WAKE_LOCK_SUSPEND, name);
 	tty->driver_data = info;
 
 	if (info->open_count++ == 0) {
 		info->tty = tty;
+		wake_lock_init(&info->wake_lock, WAKE_LOCK_SUSPEND, name);
 		if (!info->ch) {
 			if (n == 36) {
 				/* set smsm state to SMSM_SMD_LOOPBACK state
