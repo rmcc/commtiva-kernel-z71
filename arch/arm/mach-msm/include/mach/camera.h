@@ -40,6 +40,7 @@
 #define NUM_WB_EXP_NEUTRAL_REGION_LINES 4
 #define NUM_WB_EXP_STAT_OUTPUT_BUFFERS  3
 #define NUM_AUTOFOCUS_MULTI_WINDOW_GRIDS 16
+#define NUM_STAT_OUTPUT_BUFFERS      3
 #define NUM_AF_STAT_OUTPUT_BUFFERS      3
 #define MSM_AXI_QOS_PREVIEW	128000
 
@@ -56,8 +57,15 @@ enum vfe_resp_msg {
 	VFE_MSG_SNAPSHOT,
 	VFE_MSG_OUTPUT1,
 	VFE_MSG_OUTPUT2,
+	VFE_MSG_OUTPUT3,
+	VFE_MSG_STATS_AEC,
 	VFE_MSG_STATS_AF,
-	VFE_MSG_STATS_WE,
+	VFE_MSG_STATS_AWB,
+	VFE_MSG_STATS_RS,
+	VFE_MSG_STATS_CS,
+	VFE_MSG_STATS_IHIST,
+	VFE_MSG_STATS_SKIN,
+	VFE_MSG_STATS_WE, /* AEC + AWB */
 };
 
 #define VFE31_OUTPUT_MODE_P (0x1 << 0)
@@ -210,6 +218,7 @@ struct msm_pmem_region {
 struct axidata {
 	uint32_t bufnum1;
 	uint32_t bufnum2;
+	uint32_t bufnum3;
 	struct msm_pmem_region *region;
 };
 

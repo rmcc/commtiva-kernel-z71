@@ -101,6 +101,11 @@
 #define VFE_IRQ_STATUS0_REG_UPDATE_MASK           0x00000020
 #define VFE_IRQ_STATUS0_IMAGE_COMPOSIT_DONE0_MASK 0x00200000
 #define VFE_IRQ_STATUS1_RESET_AXI_HALT_ACK_MASK   0x00800000
+#define VFE_IRQ_STATUS0_STATS_COMPOSIT_MASK       0x01000000
+
+#define VFE_IRQ_STATUS0_STATS_AEC                 0x2000
+#define VFE_IRQ_STATUS0_STATS_AF                  0x4000
+#define VFE_IRQ_STATUS0_STATS_AWB                 0x8000
 
 /* imask for while waiting for stop ack,  driver has already
  * requested stop, waiting for reset irq, and async timer irq.
@@ -128,15 +133,19 @@
 /* For MCE Q_K bit 28 to 31 set to zero and other's 1 */
 #define MCE_Q_K_MASK 0x0FFFFFFF
 
+#define AWB_ENABLE_MASK 0x00000080
 
+#define AF_ENABLE_MASK 0x00000040
+
+#define AE_ENABLE_MASK 0x00000020
 #define VFE_REG_UPDATE_TRIGGER           1
 #define VFE_PM_BUF_MAX_CNT_MASK          0xFF
 #define VFE_DMI_CFG_DEFAULT              0x00000100
 #define LENS_ROLL_OFF_DELTA_TABLE_OFFSET 32
+#define VFE_AE_PINGPONG_STATUS_BIT       0x80
 #define VFE_AF_PINGPONG_STATUS_BIT       0x100
 #define VFE_AWB_PINGPONG_STATUS_BIT      0x200
 
-#define VFE31_INIT_TABLE_SIZE 26
 
 enum VFE31_DMI_RAM_SEL {
 	 NO_MEM_SELECTED          = 0,
@@ -286,7 +295,6 @@ enum  VFE_STATE {
 #define V31_OUT_CLAMP_OFF         0x00000524
 #define V31_OUT_CLAMP_LEN         8
 
-#define V31_OPERATION_CFG_OFF     0xFFFFFFFF
 #define V31_OPERATION_CFG_LEN     28
 
 #define V31_AXI_OUT_OFF           0x00000038
@@ -336,6 +344,17 @@ enum  VFE_STATE {
 
 #define V31_MCE_OFF 0x000003E8
 #define V31_MCE_LEN 36
+#define V31_STATS_AF_OFF 0x0000053c
+#define V31_STATS_AF_LEN 16
+
+#define V31_STATS_AE_OFF 0x00000534
+#define V31_STATS_AE_LEN 8
+
+#define V31_STATS_AWB_OFF 0x0000054c
+#define V31_STATS_AWB_LEN 32
+
+#define V31_ASF_OFF 0x000004A0
+#define V31_ASF_LEN 48
 
 struct vfe_cmd_hw_version {
 	uint32_t minorVersion;
@@ -488,7 +507,6 @@ enum VFE_YUV_INPUT_COSITING_MODE {
 	VFE_YUV_INTERPOLATED
 };
 
-#define VFE_STATS_BUFFER_COUNT 3
 
 /* 13*1  */
 #define VFE31_ROLL_OFF_INIT_TABLE_SIZE  13
@@ -713,8 +731,13 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_UPDATE_ACK,
 	MSG_ID_OUTPUT,
 	MSG_ID_SNAPSHOT_DONE,
-	MSG_ID_STATS_AUTOFOCUS,
-	MSG_ID_STATS_WB_EXP,
+	MSG_ID_STATS_AEC,
+	MSG_ID_STATS_AF,
+	MSG_ID_STATS_AWB, /* 8 */
+	MSM_ID_STATS_RS,
+	MSM_ID_STATS_CS,
+	MSM_ID_STATS_IHIST,
+	MSM_ID_STATS_SKIN,
 	MSG_ID_EPOCH1,
 	MSG_ID_EPOCH2,
 	MSG_ID_SYNC_TIMER0_DONE,
@@ -724,8 +747,13 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_ASYNC_TIMER1_DONE,
 	MSG_ID_ASYNC_TIMER2_DONE,
 	MSG_ID_ASYNC_TIMER3_DONE,
+	MSG_ID_AE_OVERFLOW,
 	MSG_ID_AF_OVERFLOW,
 	MSG_ID_AWB_OVERFLOW,
+	MSG_ID_RS_OVERFLOW,
+	MSG_ID_CS_OVERFLOW,
+	MSG_ID_IHIST_OVERFLOW,
+	MSG_ID_SKIN_OVERFLOW,
 	MSG_ID_AXI_ERROR,
 	MSG_ID_CAMIF_OVERFLOW,
 	MSG_ID_VIOLATION,
@@ -733,15 +761,11 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_BUS_OVERFLOW,
 };
 
-struct vfe_msg_stats_autofocus {
-	uint32_t    afBuffer;
+struct vfe_msg_stats{
+	uint32_t    buffer;
 	uint32_t    frameCounter;
 };
 
-struct vfe_msg_stats_wb_exp {
-	uint32_t awbBuffer;
-	uint32_t frameCounter;
-};
 
 struct vfe_frame_bpc_info {
 	uint32_t greenDefectPixelCount;
@@ -781,8 +805,7 @@ struct vfe_message {
 	enum VFE31_MESSAGE_ID _d;
 	union {
 		struct vfe_msg_output              msgOut;
-		struct vfe_msg_stats_autofocus     msgStatsAf;
-		struct vfe_msg_stats_wb_exp        msgStatsWbExp;
+		struct vfe_msg_stats               msgStats;
 		struct vfe_msg_camif_status        msgCamifError;
    } _u;
 };
@@ -868,6 +891,30 @@ struct vfe31_frame_extra {
 #define VFE_BUS_PING_PONG_STATUS        0x00000180
 #define VFE_AXI_CMD                     0x000001D8
 #define VFE_AXI_STATUS        0x000001DC
+#define VFE_BUS_STATS_PING_PONG_BASE    0x000000F4
+
+#define VFE_BUS_STATS_AEC_WR_PING_ADDR    0x000000F4
+#define VFE_BUS_STATS_AEC_WR_PONG_ADDR    0x000000F8
+#define VFE_BUS_STATS_AEC_UB_CFG          0x000000FC
+#define VFE_BUS_STATS_AF_WR_PING_ADDR     0x00000100
+#define VFE_BUS_STATS_AF_WR_PONG_ADDR     0x00000104
+#define VFE_BUS_STATS_AF_UB_CFG           0x00000108
+#define VFE_BUS_STATS_AWB_WR_PING_ADDR    0x0000010C
+#define VFE_BUS_STATS_AWB_WR_PONG_ADDR    0x00000110
+#define VFE_BUS_STATS_AWB_UB_CFG          0x00000114
+#define VFE_BUS_STATS_RS_WR_PING_ADDR    0x00000118
+#define VFE_BUS_STATS_RS_WR_PONG_ADDR    0x0000011C
+#define VFE_BUS_STATS_RS_UB_CFG          0x00000120
+
+#define VFE_BUS_STATS_CS_WR_PING_ADDR    0x00000124
+#define VFE_BUS_STATS_CS_WR_PONG_ADDR    0x00000128
+#define VFE_BUS_STATS_CS_UB_CFG          0x0000012C
+#define VFE_BUS_STATS_HIST_WR_PING_ADDR   0x00000130
+#define VFE_BUS_STATS_HIST_WR_PONG_ADDR   0x00000134
+#define VFE_BUS_STATS_HIST_UB_CFG          0x00000138
+#define VFE_BUS_STATS_SKIN_WR_PING_ADDR    0x0000013C
+#define VFE_BUS_STATS_SKIN_WR_PONG_ADDR    0x00000140
+#define VFE_BUS_STATS_SKIN_UB_CFG          0x00000144
 #define VFE_CAMIF_COMMAND               0x000001E0
 #define VFE_CAMIF_STATUS                0x00000204
 #define VFE_REG_UPDATE_CMD              0x00000260
@@ -889,6 +936,13 @@ struct vfe31_frame_extra {
 #define VFE_DMI_CFG                     0x00000598
 #define VFE_DMI_ADDR                    0x0000059C
 #define VFE_DMI_DATA_LO                 0x000005A4
+
+struct vfe_stats_control {
+	uint8_t  ackPending;
+	uint32_t nextFrameAddrBuf;
+	uint32_t droppedStatsFrameCount;
+	uint32_t bufToRender;
+};
 
 struct vfe31_ctrl_type {
 	uint16_t operation_mode;     /* streaming or snapshot */
@@ -929,10 +983,26 @@ struct vfe31_ctrl_type {
 	uint32_t output2Period;
 	uint32_t vfeFrameSkipCount;
 	uint32_t vfeFrameSkipPeriod;
+	struct vfe_stats_control afStatsControl;
+	struct vfe_stats_control awbStatsControl;
+	struct vfe_stats_control aecStatsControl;
 };
 
-struct vfe_cmd_stats_wb_exp_ack {
-  uint32_t  nextWbExpOutputBufferAddr;
+#define statsAeNum      0
+#define statsAfNum      1
+#define statsAwbNum     2
+#define statsRsNum      3
+#define statsCsNum      4
+#define statsIhistNum   5
+#define statsSkinNum    6
+
+struct vfe_cmd_stats_ack{
+  uint32_t  nextStatsBuf;
 };
 
+#define VFE_STATS_BUFFER_COUNT            3
+
+struct vfe_cmd_stats_buf{
+   uint32_t statsBuf[VFE_STATS_BUFFER_COUNT];
+};
 #endif /* __MSM_VFE31_H__ */
