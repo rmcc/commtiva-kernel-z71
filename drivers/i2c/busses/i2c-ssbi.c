@@ -356,7 +356,11 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 		"MSM SSBI adapter",
 		sizeof(ssbi->adapter.name));
 
-	remote_spin_lock_init(&ssbi->rspin_lock, pdata->rsl_id);
+	ret = remote_spin_lock_init(&ssbi->rspin_lock, pdata->rsl_id);
+	if (ret) {
+		dev_err(&pdev->dev, "remote spinlock init failed\n");
+		goto err_remote_spinlock_init_failed;
+	}
 
 	ssbi->adapter.nr = pdev->id;
 	ret = i2c_add_numbered_adapter(&ssbi->adapter);
@@ -367,6 +371,7 @@ static int __init i2c_ssbi_probe(struct platform_device *pdev)
 	return 0;
 
 err_add_adapter_failed:
+err_remote_spinlock_init_failed:
 	iounmap(ssbi->base);
 	platform_set_drvdata(pdev, NULL);
 err_probe_ioremap:
