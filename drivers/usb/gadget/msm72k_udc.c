@@ -850,7 +850,7 @@ static void flush_endpoint_sw(struct msm_endpoint *ept)
 	while (req != 0) {
 		req->busy = 0;
 		req->live = 0;
-		req->req.status = -ECONNRESET;
+		req->req.status = -ESHUTDOWN;
 		req->req.actual = 0;
 		if (req->req.complete) {
 			spin_unlock_irqrestore(&ui->lock, flags);
