@@ -1125,6 +1125,8 @@ void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 
 static int _smem_log_init(void)
 {
+	int ret;
+
 	inst[GEN].which_log = GEN;
 	inst[GEN].events =
 		(struct smem_log_item *)smem_alloc(SMEM_SMEM_LOG_EVENTS,
@@ -1175,10 +1177,15 @@ static int _smem_log_init(void)
 	init_waitqueue_head(&inst[POW].read_wait);
 	inst[POW].remote_spinlock = &remote_spinlock;
 
-	remote_spin_lock_init(&remote_spinlock,
+	ret = remote_spin_lock_init(&remote_spinlock,
 			      SMEM_SPINLOCK_SMEM_LOG);
-	remote_spin_lock_init(&remote_spinlock_static,
+	if (ret)
+		return ret;
+
+	ret = remote_spin_lock_init(&remote_spinlock_static,
 			      SMEM_SPINLOCK_STATIC_LOG);
+	if (ret)
+		return ret;
 
 	init_syms();
 
