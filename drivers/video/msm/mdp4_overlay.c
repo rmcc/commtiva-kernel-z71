@@ -1048,7 +1048,7 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 		req->src.format = mfd->fb_imgType;
 
 	if (mutex_lock_interruptible(&mfd->dma->ov_mutex))
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	mixer = info->node; /* minor number of char device */
 
@@ -1083,7 +1083,7 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 		return -ENODEV;
 
 	if (mutex_lock_interruptible(&mfd->dma->ov_mutex))
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	pipe = mdp4_overlay_ndx2pipe(ndx);
 
@@ -1134,7 +1134,7 @@ int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req,
 		return -ENODEV;
 
 	if (mutex_lock_interruptible(&mfd->dma->ov_mutex))
-		return -ERESTARTSYS;
+		return -EINTR;
 
 	img = &req->data;
 	get_img(img, info, &start, &len, &p_src_file);

@@ -217,7 +217,9 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 void mdp4_mddi_overlay_restore(void)
 {
-	mdp4_mddi_overlay(mddi_mfd);
+	/* mutex holded by caller */
+	mdp4_overlay_update_lcd(mddi_mfd);
+	mdp4_mddi_overlay_kickoff(mddi_mfd, mddi_pipe);
 }
 
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
@@ -240,7 +242,7 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 
 void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 {
-	down(&mfd->dma->mutex);
+	mutex_lock(&mfd->dma->ov_mutex);
 
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
 		mdp4_overlay_update_lcd(mfd);
@@ -253,5 +255,6 @@ void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 			complete(&mfd->pan_comp);
 		}
 	}
-	up(&mfd->dma->mutex);
+
+	mutex_unlock(&mfd->dma->ov_mutex);
 }
