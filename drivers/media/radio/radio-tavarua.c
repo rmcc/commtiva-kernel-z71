@@ -90,6 +90,7 @@
 #include <media/tavarua.h>
 #include <linux/mfd/marimba.h>
 #include <linux/platform_device.h>
+#include <linux/workqueue.h>
 
 struct region_params_t {
 	enum tavarua_region_t region;
@@ -142,7 +143,8 @@ struct tavarua_device {
 	/* buffer locks*/
 	spinlock_t buf_lock[TAVARUA_BUF_MAX];
 	/* work queue */
-	struct work_struct work;
+	struct workqueue_struct *wqueue;
+	struct delayed_work work;
 	/* wait queue for blocking event read */
 	wait_queue_head_t event_queue;
 	/* wait queue for raw rds read */
@@ -176,7 +178,8 @@ static irqreturn_t tavarua_isr(int irq, void *dev_id)
 {
 	struct tavarua_device *radio = dev_id;
 	/* schedule a tasklet to handle host intr */
-	schedule_work(&radio->work);
+	queue_delayed_work(radio->wqueue, &radio->work,
+				msecs_to_jiffies(TAVARUA_DELAY));
 	return IRQ_HANDLED;
 }
 
@@ -410,7 +413,8 @@ static void read_int_stat(struct work_struct *work)
 	int retval;
 	enum tavarua_xfr_ctrl_t xfr_status;
 	struct tavarua_device *radio = container_of(work,
-					struct tavarua_device, work);
+					struct tavarua_device, work.work);
+
 	mutex_lock(&radio->lock);
 	tavarua_read_registers(radio, STATUS_REG1, STATUS_REG_NUM);
 
@@ -697,6 +701,9 @@ static int tavarua_request_irq(struct tavarua_device *radio)
 	if (radio == NULL)
 		return -EINVAL;
 
+	radio->wqueue  = create_singlethread_workqueue("kfmradio");
+	if (!radio->wqueue)
+		return -ENOMEM;
 	retval = request_irq(irq, tavarua_isr, IRQ_TYPE_EDGE_FALLING,
 				"fm interrupt", radio);
 	if (retval < 0) {
@@ -723,8 +730,10 @@ static int tavarua_disable_irq(struct tavarua_device *radio)
 		return -EINVAL;
 	irq = radio->irqpin;
 	disable_irq_wake(irq);
-	flush_scheduled_work();
+	cancel_delayed_work_sync(&radio->work);
+	flush_workqueue(radio->wqueue);
 	free_irq(irq, radio);
+	destroy_workqueue(radio->wqueue);
 	return 0;
 }
 
@@ -800,6 +809,27 @@ static int tavarua_set_region(struct tavarua_device *radio,
 			RDCTRL_BAND_OFFSET, RDCTRL_BAND_MASK);
 		break;
 	default:
+		retval = sync_read_xfr(radio, RADIO_CONFIG);
+		if (retval < 0) {
+			FMDBG("failed to get RADIO_CONFIG\n");
+			return retval;
+		}
+		band_low = (radio->region_params.band_low -
+					low_band_limit) / spacing;
+		band_high = (radio->region_params.band_high -
+					low_band_limit) / spacing;
+		FMDBG("low_band: %x, high_band: %x\n", band_low, band_high);
+		radio->sync_xfr_regs[0] = band_low >> 8;
+		radio->sync_xfr_regs[1] = band_low & 0xFF;
+		radio->sync_xfr_regs[2] = band_high >> 8;
+		radio->sync_xfr_regs[3] = band_high & 0xFF;
+		retval = sync_write_xfr(radio, RADIO_CONFIG);
+
+		if (retval < 0) {
+			FMDBG("Could not set regional settings\n");
+			return retval;
+		}
+
 		break;
 	}
 
@@ -859,25 +889,8 @@ static int tavarua_set_region(struct tavarua_device *radio,
 	FMDBG("RDCTRL: %x\n", radio->registers[RDCTRL]);
 	retval = tavarua_write_register(radio, RDCTRL,
 					radio->registers[RDCTRL]);
-
-	if (region == TAVARUA_REGION_OTHER) {
-		retval = sync_read_xfr(radio, RADIO_CONFIG);
-		if (retval < 0)
-			return retval;
-		band_low = (radio->region_params.band_low -
-					low_band_limit) / spacing;
-		band_high = (radio->region_params.band_high -
-					low_band_limit) / spacing;
-		FMDBG("low_band: %x, high_band: %x\n", band_low, band_high);
-		radio->sync_xfr_regs[0] = band_low >> 8;
-		radio->sync_xfr_regs[1] = band_low & 0xFF;
-		radio->sync_xfr_regs[2] = band_high >> 8;
-		radio->sync_xfr_regs[3] = band_high & 0xFF;
-		retval = sync_write_xfr(radio, RADIO_CONFIG);
-	}
-
 	if (retval < 0) {
-		FMDBG("Could not set regional settings\n");
+		FMDBG("Could not set region in rdctrl\n");
 		return retval;
 	}
 
@@ -1775,19 +1788,13 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 
 	if (state == FM_RECV) {
 		retval = tavarua_write_register(radio, STATUS_REG2,
-						RDSRT | RDSPS | RDSAF);
+					RDSDAT | RDSRT | RDSPS | RDSAF);
 	} else {
 		retval = tavarua_write_register(radio, STATUS_REG2, RDSRT |
 						TXRDSDAT | TXRDSDONE);
 	}
 	if (retval < 0)
 		return retval;
-
-	if (state == FM_RECV)
-		radio->registers[STATUS_REG2] = RDSRT | RDSPS | RDSAF;
-	else
-		radio->registers[STATUS_REG2] = RDSRT |
-		TXRDSDAT | TXRDSDONE;
 
 	retval = tavarua_write_register(radio, STATUS_REG3,
 					TRANSFER | ERROR);
@@ -1921,7 +1928,7 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	init_waitqueue_head(&radio->event_queue);
 
 	video_set_drvdata(radio->videodev, radio);
-	INIT_WORK(&radio->work, read_int_stat);
+	INIT_DELAYED_WORK(&radio->work, read_int_stat);
 
 	/* register video device */
 	if (video_register_device(radio->videodev, VFL_TYPE_RADIO, radio_nr)) {

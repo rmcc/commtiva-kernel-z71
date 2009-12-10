@@ -52,6 +52,7 @@
 #endif
 
 #define WAIT_TIMEOUT 2000
+#define TAVARUA_DELAY 20
 /*
  * The frequency is set in units of 62.5 Hz when using V4L2_TUNER_CAP_LOW,
  * 62.5 kHz otherwise.
