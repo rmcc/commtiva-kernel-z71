@@ -1048,8 +1048,19 @@ static int pmem_allocator_bitmap(const int id,
 			return -1;
 		}
 
+		if (new_bitmap_allocs > pmem[id].num_entries) {
+			/* failed sanity check!! */
+#if PMEM_DEBUG
+			printk(KERN_ALERT "pmem: required bitmap_allocs"
+				" number exceeds maximum entries possible"
+				" for current quanta\n");
+#endif
+			return -1;
+		}
+
 		temp = krealloc(pmem[id].allocator.bitmap.bitm_alloc,
-				sizeof(unsigned int),
+				new_bitmap_allocs *
+				sizeof(*pmem[id].allocator.bitmap.bitm_alloc),
 				GFP_KERNEL);
 		if (!temp) {
 #if PMEM_DEBUG
@@ -1062,8 +1073,10 @@ static int pmem_allocator_bitmap(const int id,
 		pmem[id].allocator.bitmap.bitmap_allocs = new_bitmap_allocs;
 		pmem[id].allocator.bitmap.bitm_alloc = temp;
 
-		for (j = i; j < new_bitmap_allocs; j++)
+		for (j = i; j < new_bitmap_allocs; j++) {
 			pmem[id].allocator.bitmap.bitm_alloc[j].bit = -1;
+			pmem[id].allocator.bitmap.bitm_alloc[i].quanta = 0;
+		}
 
 		DLOG("increased # of allocated regions to %d for id %d\n",
 			pmem[id].allocator.bitmap.bitmap_allocs, id);
@@ -2369,8 +2382,10 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 				"%s", pdata->name))
 			goto out_put_kobj;
 
-		for (i = 0; i < PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS; i++)
+		for (i = 0; i < PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS; i++) {
 			pmem[id].allocator.bitmap.bitm_alloc[i].bit = -1;
+			pmem[id].allocator.bitmap.bitm_alloc[i].quanta = 0;
+		}
 
 		pmem[id].allocator.bitmap.bitmap_allocs =
 			PMEM_INITIAL_NUM_BITMAP_ALLOCATIONS;
