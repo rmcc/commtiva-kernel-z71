@@ -360,6 +360,7 @@ int msm_camio_enable(struct platform_device *pdev)
 	}
 
 	camdev->camera_gpio_on();
+	msm_camera_vreg_enable();
 
 	msm_camio_clk_enable(CAMIO_VFE_PBDG_CLK);
 	msm_camio_clk_enable(CAMIO_CAMIF_PAD_PBDG_CLK);
@@ -397,8 +398,10 @@ void msm_disable_io_gpio_clk(struct platform_device *pdev)
 	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
 	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
 
+	msm_camera_vreg_disable();
 	camdev->camera_gpio_off();
-	CDBG("disable clocks \n");
+
+	CDBG("disable clocks\n");
 	msm_camio_clk_disable(CAMIO_VFE_CAMIF_CLK);
 	msm_camio_clk_disable(CAMIO_VFE_CLK);
 	msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
@@ -494,8 +497,8 @@ int msm_camio_probe_off(struct platform_device *pdev)
 {
 	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
 	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
-	camdev->camera_gpio_off();
 	msm_camera_vreg_disable();
+	camdev->camera_gpio_off();
 	return msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
 }
 
