@@ -355,6 +355,20 @@ void mdp_disable_irq(uint32 term)
 	spin_unlock_irqrestore(&mdp_lock, irq_flags);
 }
 
+void mdp_disable_irq_nolock(uint32 term)
+{
+
+	if (!(mdp_irq_mask & term)) {
+		printk(KERN_ERR "MDP IRQ term-0x%x is not set\n", term);
+	} else {
+		mdp_irq_mask &= ~term;
+		if (!mdp_irq_mask && mdp_irq_enabled) {
+			mdp_irq_enabled = 0;
+			disable_irq(INT_MDP);
+		}
+	}
+}
+
 void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 {
 
