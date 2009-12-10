@@ -100,6 +100,8 @@
 #define VFE_IRQ_STATUS0_CAMIF_SOF_MASK            0x00000001
 #define VFE_IRQ_STATUS0_REG_UPDATE_MASK           0x00000020
 #define VFE_IRQ_STATUS0_IMAGE_COMPOSIT_DONE0_MASK 0x00200000
+#define VFE_IRQ_STATUS0_IMAGE_COMPOSIT_DONE1_MASK 0x00400000
+#define VFE_IRQ_STATUS0_IMAGE_COMPOSIT_DONE2_MASK 0x00800000
 #define VFE_IRQ_STATUS1_RESET_AXI_HALT_ACK_MASK   0x00800000
 #define VFE_IRQ_STATUS0_STATS_COMPOSIT_MASK       0x01000000
 
@@ -356,6 +358,8 @@ enum  VFE_STATE {
 #define V31_ASF_OFF 0x000004A0
 #define V31_ASF_LEN 48
 #define V31_ASF_UPDATE_LEN 36
+
+#define V31_CAPTURE_LEN 4
 
 struct vfe_cmd_hw_version {
 	uint32_t minorVersion;
@@ -730,7 +734,10 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_START_ACK,
 	MSG_ID_STOP_ACK,
 	MSG_ID_UPDATE_ACK,
-	MSG_ID_OUTPUT,
+	MSG_ID_OUTPUT_P,
+	MSG_ID_OUTPUT_T,
+	MSG_ID_OUTPUT_S,
+	MSG_ID_OUTPUT_V,
 	MSG_ID_SNAPSHOT_DONE,
 	MSG_ID_STATS_AEC,
 	MSG_ID_STATS_AF,
@@ -794,7 +801,7 @@ struct vfe31_irq_status {
 };
 
 struct vfe_msg_output {
-	uint8_t   output_mode; /* VFE31_OUTPUT_MODE_P/S/V */
+	uint8_t   output_id; /* VFE_MSG_OUTPUT_P/V/S */
 	uint32_t  yBuffer;
 	uint32_t  cbcrBuffer;
 	struct vfe_frame_bpc_info bpcInfo;
@@ -842,6 +849,8 @@ struct vfe31_output_ch {
 	int8_t ch0;
 	int8_t ch1;
 	int8_t ch2;
+	uint32_t  capture_cnt;
+	uint32_t  frame_drop_cnt;
 };
 
 /* no error irq in mask 0 */
@@ -975,7 +984,7 @@ struct vfe31_ctrl_type {
 
 	uint32_t stats_comp;
 	uint8_t vstate;
-	uint32_t vfe_snapshot_count;
+	uint32_t vfe_capture_count;
 
 	uint32_t vfeFrameId;
 	uint32_t output1Pattern;

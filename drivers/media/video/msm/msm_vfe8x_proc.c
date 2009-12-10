@@ -608,32 +608,7 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 			     int *elen)
 {
 	switch (type) {
-	case VFE_MSG_OUTPUT1: {
-		pinfo->y_phy =
-			((struct vfe_message *)data)->_u.msgOutput1.yBuffer;
-		pinfo->cbcr_phy =
-			((struct vfe_message *)data)->_u.msgOutput1.
-			cbcrBuffer;
-
-			ctrl->extdata.bpcInfo =
-		((struct vfe_message *)data)->_u.msgOutput1.bpcInfo;
-
-			ctrl->extdata.asfInfo =
-		((struct vfe_message *)data)->_u.msgOutput1.asfInfo;
-
-			ctrl->extdata.frameCounter =
-			((struct vfe_message *)data)->_u.msgOutput1.
-			frameCounter;
-
-			ctrl->extdata.pmData =
-		((struct vfe_message *)data)->_u.msgOutput1.pmData;
-
-			*ext = &ctrl->extdata;
-			*elen = sizeof(ctrl->extdata);
-	}
-		break;
-
-	case VFE_MSG_OUTPUT2: {
+	case VFE_MSG_OUTPUT_P: {
 		pinfo->y_phy =
 			((struct vfe_message *)data)->_u.msgOutput2.yBuffer;
 		pinfo->cbcr_phy =
@@ -707,8 +682,8 @@ static struct {
 	[VFE_MSG_ID_START_ACK] = { NULL, VFE_MSG_GENERAL },
 	[VFE_MSG_ID_STOP_ACK] = { NULL, VFE_MSG_GENERAL },
 	[VFE_MSG_ID_UPDATE_ACK] = { NULL, VFE_MSG_GENERAL },
-	[VFE_MSG_ID_OUTPUT1] = { vfe_send_output1_msg, VFE_MSG_OUTPUT1 },
-	[VFE_MSG_ID_OUTPUT2] = { vfe_send_output2_msg, VFE_MSG_OUTPUT2 },
+	[VFE_MSG_ID_OUTPUT1] = { vfe_send_output1_msg, VFE_MSG_OUTPUT_P },
+	[VFE_MSG_ID_OUTPUT2] = { vfe_send_output2_msg, VFE_MSG_OUTPUT_P },
 	[VFE_MSG_ID_SNAPSHOT_DONE] = { NULL, VFE_MSG_SNAPSHOT },
 	[VFE_MSG_ID_STATS_AUTOFOCUS] = { vfe_send_af_stats_msg,
 		VFE_MSG_STATS_AF },
