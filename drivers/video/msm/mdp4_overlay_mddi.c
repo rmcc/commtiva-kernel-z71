@@ -225,6 +225,19 @@ void mdp4_mddi_overlay_restore(void)
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
+#ifdef MDP4_NONBLOCKING
+	if (mfd->dma->busy == TRUE) {
+		/* wait until DMA finishes the current job */
+		wait_for_completion_killable(&pipe->comp);
+	}
+	down(&mfd->sem);
+	mdp_enable_irq(MDP_OVERLAY0_TERM);
+	mfd->dma->busy = TRUE;
+	INIT_COMPLETION(pipe->comp);
+	/* start OVERLAY pipe */
+	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
+	up(&mfd->sem);
+#else
 	down(&mfd->sem);
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
@@ -237,6 +250,7 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 	/* wait until DMA finishes the current job */
 	wait_for_completion_killable(&pipe->comp);
 	mdp_disable_irq(MDP_OVERLAY0_TERM);
+#endif
 
 }
 
