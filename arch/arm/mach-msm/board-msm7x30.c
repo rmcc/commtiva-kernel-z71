@@ -1685,7 +1685,7 @@ static struct msm_gpio fluid_vee_reset_gpio[] = {
 	{ GPIO_CFG(20, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA), "vee_reset" },
 };
 
-static int display_power(int on)
+static void display_power(int on)
 {
 	int rc;
 	struct vreg *vreg_ldo12, *vreg_ldo15 = NULL;
@@ -1697,7 +1697,7 @@ static int display_power(int on)
 		if (rc) {
 			pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
 				       __func__, wega_reset_gpio, rc);
-			return rc;
+			return;
 		}
 
 		gpio_set_value(180, 0);	/* bring reset line low to hold reset*/
@@ -1710,7 +1710,7 @@ static int display_power(int on)
 	if (IS_ERR(vreg_ldo20)) {
 		pr_err("%s: gp13 vreg get failed (%ld)\n",
 		       __func__, PTR_ERR(vreg_ldo20));
-		return rc;
+		return;
 	}
 
 	/* 1.8V -- LDO12 */
@@ -1719,7 +1719,7 @@ static int display_power(int on)
 	if (IS_ERR(vreg_ldo12)) {
 		pr_err("%s: gp9 vreg get failed (%ld)\n",
 		       __func__, PTR_ERR(vreg_ldo12));
-		return rc;
+		return;
 	}
 
 	/* 2.6V -- LDO16 */
@@ -1728,7 +1728,7 @@ static int display_power(int on)
 	if (IS_ERR(vreg_ldo16)) {
 		pr_err("%s: gp10 vreg get failed (%ld)\n",
 		       __func__, PTR_ERR(vreg_ldo16));
-		return rc;
+		return;
 	}
 
 	if (machine_is_msm7x30_fluid()) {
@@ -1738,7 +1738,7 @@ static int display_power(int on)
 		if (IS_ERR(vreg_ldo8)) {
 			pr_err("%s: gp7 vreg get failed (%ld)\n",
 				__func__, PTR_ERR(vreg_ldo8));
-			return rc;
+			return;
 		}
 	} else {
 		/* lcd panel power */
@@ -1748,7 +1748,7 @@ static int display_power(int on)
 		if (IS_ERR(vreg_ldo15)) {
 			pr_err("%s: gp6 vreg get failed (%ld)\n",
 				__func__, PTR_ERR(vreg_ldo15));
-			return rc;
+			return;
 		}
 	}
 
@@ -1756,21 +1756,21 @@ static int display_power(int on)
 	if (rc) {
 		pr_err("%s: vreg LDO20 set level failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	rc = vreg_set_level(vreg_ldo12, 1800);
 	if (rc) {
 		pr_err("%s: vreg LDO12 set level failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	rc = vreg_set_level(vreg_ldo16, 2600);
 	if (rc) {
 		pr_err("%s: vreg LDO16 set level failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	if (machine_is_msm7x30_fluid()) {
@@ -1778,14 +1778,14 @@ static int display_power(int on)
 		if (rc) {
 			pr_err("%s: vreg LDO8 set level failed (%d)\n",
 				__func__, rc);
-			return rc;
+			return;
 		}
 	} else {
 		rc = vreg_set_level(vreg_ldo15, 3100);
 		if (rc) {
 			pr_err("%s: vreg LDO15 set level failed (%d)\n",
 				__func__, rc);
-			return rc;
+			return;
 		}
 	}
 
@@ -1797,7 +1797,7 @@ static int display_power(int on)
 	if (rc) {
 		pr_err("%s: LDO20 vreg enable failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	if (on)
@@ -1808,7 +1808,7 @@ static int display_power(int on)
 	if (rc) {
 		pr_err("%s: LDO12 vreg enable failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	if (on)
@@ -1819,7 +1819,7 @@ static int display_power(int on)
 	if (rc) {
 		pr_err("%s: LDO16 vreg enable failed (%d)\n",
 		       __func__, rc);
-		return rc;
+		return;
 	}
 
 	if (machine_is_msm7x30_fluid()) {
@@ -1831,7 +1831,7 @@ static int display_power(int on)
 		if (rc) {
 			pr_err("%s: LDO8 vreg enable failed (%d)\n",
 				__func__, rc);
-			return rc;
+			return;
 		}
 	} else {
 		if (on)
@@ -1841,7 +1841,7 @@ static int display_power(int on)
 		if (rc) {
 			pr_err("%s: LDO15 vreg enable failed (%d)\n",
 				__func__, rc);
-			return rc;
+			return;
 		}
 	}
 	mdelay(5);		/* ensure power is stable */
@@ -1869,8 +1869,6 @@ static int display_power(int on)
 		gpio_set_value(180, 1);	/* bring reset line high */
 		mdelay(10);		/* 10 msec before IO can be accessed */
 	}
-
-	return 0;
 }
 
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
@@ -1880,7 +1878,7 @@ static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 }
 
 static struct mddi_platform_data mddi_pdata = {
-	.mddi_power_on = display_power,
+	.mddi_power_save = display_power,
 	.mddi_sel_clk = msm_fb_mddi_sel_clk,
 };
 
