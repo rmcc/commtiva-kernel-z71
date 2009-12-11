@@ -34,5 +34,6 @@
 #define SNDDEV_CAP_VOICE 0x4 /* Support voice call */
 #define SNDDEV_CAP_PLAYBACK 0x8 /* Support playback */
 #define SNDDEV_CAP_FM 0x10 /* Support FM radio */
+#define SNDDEV_CAP_TTY 0x20 /* Support TTY */
 
 #endif /* _MACH_QDSP5_V2_AUDIO_DEF_H */
