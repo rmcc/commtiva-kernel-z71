@@ -15,6 +15,9 @@
 #include <linux/mman.h>
 #include <linux/nodemask.h>
 #include <linux/initrd.h>
+#ifdef CONFIG_MEMORY_HOTPLUG
+#include <linux/memory_hotplug.h>
+#endif
 
 #include <asm/mach-types.h>
 #include <asm/sections.h>
@@ -333,6 +336,20 @@ static void __init bootmem_free_node(int node, struct meminfo *mi)
 	free_area_init_node(node, zone_size, start_pfn, zhole_size);
 }
 
+#ifdef CONFIG_MEMORY_HOTPLUG
+static void map_reserved_memory(void)
+{
+	struct map_desc map;
+
+	map.pfn = (movable_reserved_start >> PAGE_SHIFT);
+	map.virtual = __phys_to_virt(movable_reserved_start);
+	map.length = movable_reserved_size;
+	map.type = MT_MEMORY;
+
+	create_mapping(&map);
+}
+#endif
+
 void __init bootmem_init(void)
 {
 	struct meminfo *mi = &meminfo;
@@ -382,6 +399,13 @@ void __init bootmem_init(void)
 	for_each_node(node)
 		bootmem_free_node(node, mi);
 
+#ifdef CONFIG_MEMORY_HOTPLUG
+	if (movable_reserved_size) {
+		memend_pfn = (movable_reserved_start + movable_reserved_size)
+			>> PAGE_SHIFT;
+		map_reserved_memory();
+	}
+#endif
 	high_memory = __va((memend_pfn << PAGE_SHIFT) - 1) + 1;
 
 	/*
