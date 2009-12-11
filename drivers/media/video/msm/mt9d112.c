@@ -490,17 +490,10 @@ static long mt9d112_set_sensor_mode(int mode)
 		if (rc < 0)
 			return rc;
 		mdelay(5);
-		rc =
-			mt9d112_set_effect(mode, mt9d112_effect);
-		if (rc < 0)
-			return rc;
+
 		break;
 
 	case SENSOR_SNAPSHOT_MODE:
-		rc =
-			mt9d112_set_effect(mode, mt9d112_effect);
-		if (rc < 0)
-			return rc;
 		/* Switch to lower fps for Snapshot */
 		rc =
 			mt9d112_i2c_write(mt9d112_client->addr,
