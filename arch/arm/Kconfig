@@ -1327,6 +1327,8 @@ source "drivers/accessibility/Kconfig"
 
 source "drivers/leds/Kconfig"
 
+source "drivers/haptic/Kconfig"
+
 source "drivers/switch/Kconfig"
 
 source "drivers/rtc/Kconfig"
