@@ -900,11 +900,13 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 			}
 		} else {
 			if ((sync->pp_mask & PP_PREV) &&
-				(data->type == VFE_MSG_OUTPUT1 ||
-				 data->type == VFE_MSG_OUTPUT2))
+				(data->type == VFE_MSG_OUTPUT_P ||
+				 data->type == VFE_MSG_OUTPUT_V))
 					rc = msm_divert_frame(sync, data, &se);
 			else if ((sync->pp_mask & (PP_SNAP|PP_RAW_SNAP)) &&
-				  data->type == VFE_MSG_SNAPSHOT)
+				  (data->type == VFE_MSG_SNAPSHOT ||
+				   data->type == VFE_MSG_OUTPUT_T ||
+				   data->type == VFE_MSG_OUTPUT_S))
 					rc = msm_divert_snapshot(sync,
 								data, &se);
 		}
@@ -1158,7 +1160,8 @@ static int msm_frame_axi_cfg(struct msm_sync *sync,
 		pmem_type = MSM_PMEM_MAINIMG;
 		axi_data.bufnum2 =
 			msm_pmem_region_lookup(&sync->pmem_frames, pmem_type,
-				&region[axi_data.bufnum1], 8);
+				&region[axi_data.bufnum1],
+				(8-(axi_data.bufnum1)));
 		if (!axi_data.bufnum2) {
 			pr_err("%s %d: pmem region lookup error\n",
 				__func__, __LINE__);
@@ -2020,8 +2023,8 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 
 	CDBG("%s: vdata->type %d\n", __func__, vdata->type);
 		switch (vdata->type) {
-		case VFE_MSG_OUTPUT1:
-		case VFE_MSG_OUTPUT2:
+		case VFE_MSG_OUTPUT_P:
+		case VFE_MSG_OUTPUT_V:
 		if (sync->pp_mask & PP_PREV) {
 			CDBG("%s: PP_PREV in progress: phy_y %x phy_cbcr %x\n",
 				__func__,

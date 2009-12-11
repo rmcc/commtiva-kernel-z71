@@ -55,9 +55,10 @@ enum vfe_resp_msg {
 	VFE_EVENT,
 	VFE_MSG_GENERAL,
 	VFE_MSG_SNAPSHOT,
-	VFE_MSG_OUTPUT1,
-	VFE_MSG_OUTPUT2,
-	VFE_MSG_OUTPUT3,
+	VFE_MSG_OUTPUT_P,   /* preview (continuous mode ) */
+	VFE_MSG_OUTPUT_T,   /* thumbnail (snapshot mode )*/
+	VFE_MSG_OUTPUT_S,   /* main image (snapshot mode )*/
+	VFE_MSG_OUTPUT_V,   /* video   (continuous mode ) */
 	VFE_MSG_STATS_AEC,
 	VFE_MSG_STATS_AF,
 	VFE_MSG_STATS_AWB,
@@ -68,7 +69,7 @@ enum vfe_resp_msg {
 	VFE_MSG_STATS_WE, /* AEC + AWB */
 };
 
-#define VFE31_OUTPUT_MODE_P (0x1 << 0)
+#define VFE31_OUTPUT_MODE_PT (0x1 << 0)
 #define VFE31_OUTPUT_MODE_S (0x1 << 1)
 #define VFE31_OUTPUT_MODE_V (0x1 << 2)
 
@@ -76,7 +77,7 @@ struct msm_vfe_phy_info {
 	uint32_t sbuf_phy;
 	uint32_t y_phy;
 	uint32_t cbcr_phy;
-	uint8_t output_mode; /* VFE31_OUTPUT_MODE_P/S/V */
+	uint8_t  output_id; /* VFE31_OUTPUT_MODE_PT/S/V */
 };
 
 struct msm_vfe_resp {

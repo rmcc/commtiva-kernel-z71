@@ -62,8 +62,7 @@ static void vfe_7x_convert(struct msm_vfe_phy_info *pinfo,
 		void *data, void **ext, int32_t *elen)
 {
 	switch (type) {
-	case VFE_MSG_OUTPUT1:
-	case VFE_MSG_OUTPUT2: {
+	case VFE_MSG_OUTPUT_P: {
 		pinfo->y_phy = ((struct vfe_endframe *)data)->y_address;
 		pinfo->cbcr_phy =
 			((struct vfe_endframe *)data)->cbcr_address;
@@ -141,17 +140,11 @@ static void vfe_7x_ops(void *driver_data, unsigned id, size_t len,
 			break;
 
 		case MSG_OUTPUT1:
-			rp->type = VFE_MSG_OUTPUT1;
-			vfe_7x_convert(&(rp->phy), VFE_MSG_OUTPUT1,
+		case MSG_OUTPUT2:
+			rp->type = VFE_MSG_OUTPUT_P;
+			vfe_7x_convert(&(rp->phy), VFE_MSG_OUTPUT_P,
 				rp->evt_msg.data, &(rp->extdata),
 				&(rp->extlen));
-			break;
-
-		case MSG_OUTPUT2:
-			rp->type = VFE_MSG_OUTPUT2;
-			vfe_7x_convert(&(rp->phy), VFE_MSG_OUTPUT2,
-					rp->evt_msg.data, &(rp->extdata),
-					&(rp->extlen));
 			break;
 
 		case MSG_STATS_AF:
