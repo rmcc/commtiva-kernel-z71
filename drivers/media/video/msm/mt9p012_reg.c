@@ -27,13 +27,8 @@ struct reg_struct const mt9p012_reg_pat[2] = {
 
 		/* vt_sys_clk_div          REG=0x0302 */
 		1,
-#if defined(CONFIG_ARCH_MSM7X30)
-		/* pre_pll_clk_div         REG=0x0304 */
-		4,
-#else
 		/* pre_pll_clk_div         REG=0x0304 */
 		2,
-#endif
 		/* pll_multiplier          REG=0x0306 */
 		60,
 
