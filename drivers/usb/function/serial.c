@@ -170,7 +170,6 @@ struct gs_port {
 	unsigned int msr;
 	unsigned int prev_msr;
 	unsigned int mcr;
-	wait_queue_head_t msr_change_wait;
 	struct work_struct push_work;
 };
 
@@ -277,8 +276,6 @@ static unsigned int gs_buf_put(struct gs_buf *gb, const char *buf,
 			       unsigned int count);
 static unsigned int gs_buf_get(struct gs_buf *gb, char *buf,
 			       unsigned int count);
-/* creates, returns async_icount struct with current port msr,mcr values */
-static struct async_icount gs_current_icount(struct gs_port *port);
 
 /* Globals */
 static struct gs_dev **gs_devices;
@@ -708,11 +705,9 @@ static int gs_open(struct tty_struct *tty, struct file *file)
 	port->port_in_use = 0;
 
 	gs_debug("gs_open: (%d,%p,%p) completed\n", port_num, tty, file);
-	port->msr |= MSR_CTS;
 	/* Queue RX requests */
 	port->n_read = 0;
 	gs_start_rx(dev);
-	wake_up_interruptible(&port->msr_change_wait);
 
 	ret = 0;
 
@@ -758,9 +753,6 @@ static void gs_close(struct tty_struct *tty, struct file *file)
 	down(sem);
 
 	spin_lock_irq(&port->port_lock);
-
-	port->msr &= ~MSR_CTS;
-	wake_up_interruptible(&port->msr_change_wait);
 
 	if (port->port_open_count == 0) {
 		printk(KERN_ERR
@@ -1037,50 +1029,6 @@ static int gs_break(struct tty_struct *tty, int break_state)
 static int gs_ioctl(struct tty_struct *tty, struct file *file,
 		    unsigned int cmd, unsigned long arg)
 {
-	struct gs_port *port = tty->driver_data;
-	DECLARE_WAITQUEUE(wait, current);
-	struct async_icount cnow;
-	struct async_icount cprev;
-
-	if (port == NULL) {
-		printk(KERN_ERR "gs_ioctl: NULL port pointer\n");
-		return -EIO;
-	}
-
-	gs_debug("gs_ioctl: (%d,%p,%p) cmd=0x%4.4x, arg=%lu\n",
-		 port->port_num, tty, file, cmd, arg);
-
-	/* handle ioctls */
-	switch (cmd) {
-	case TIOCMIWAIT:
-		cprev = gs_current_icount(port);
-		while (1) {
-			add_wait_queue(&port->msr_change_wait, &wait);
-			set_current_state(TASK_INTERRUPTIBLE);
-			schedule();
-			remove_wait_queue(&port->msr_change_wait, &wait);
-			if (signal_pending(current))
-				return -ERESTARTSYS;
-			cnow = gs_current_icount(port);
-			if (cnow.rng == cprev.rng &&
-				cnow.dsr == cprev.dsr &&
-				cnow.dcd == cprev.dcd &&
-				cnow.cts == cprev.cts)
-				return -EIO;
-			if (((arg & TIOCM_RI) &&
-					(cnow.rng != cprev.rng)) ||
-				((arg & TIOCM_DSR) &&
-					(cnow.dsr != cprev.dsr)) ||
-				((arg & TIOCM_CD)  &&
-					(cnow.dcd != cprev.dcd)) ||
-				((arg & TIOCM_CTS) &&
-					(cnow.cts != cprev.cts)))
-				return 0;
-			cprev = cnow;
-		}
-		break;
-	}
-
 	/* could not handle ioctl */
 	return -ENOIOCTLCMD;
 }
@@ -1661,23 +1609,15 @@ static int gs_setup(struct usb_ctrlrequest *ctrl,
 		port = dev->dev_port[0];/* ACM only has one port */
 		if (wValue & USB_CDC_SET_CONTROL_LINE_STATE_DTR) {
 			port->mcr |= MCR_DTR;
-			port->msr |= MSR_DSR;
-			wake_up_interruptible(&port->msr_change_wait);
 		} else	{
 			port->mcr &= ~MCR_DTR;
-			port->msr &= ~MSR_DSR;
-			wake_up_interruptible(&port->msr_change_wait);
 		}
 		if (wValue & USB_CDC_SET_CONTROL_LINE_STATE_RTS)
 			port->mcr |= MCR_RTS;
 		else
 			port->mcr &= ~MCR_RTS;
 
-		if (port->prev_msr != port->msr) {
-			dev->interface_num = wIndex;
-			port->prev_msr = port->msr;
-		}
-
+		dev->interface_num = wIndex;
 		ret = 0;
 		break;
 
@@ -1705,8 +1645,8 @@ static void gs_disconnect(void *_ctxt)
 			tty_hangup(port->port_tty);
 		}
 	}
-	port->mcr &= ~(MCR_DTR | MCR_RTS);
-	port->msr &= ~(MSR_DSR | MSR_CD | MSR_RI);
+	port->mcr = 0;
+	port->msr = 0;
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
 }
@@ -1754,9 +1694,6 @@ static void gs_configure(int config, void *_ctxt)
 		return;
 	}
 	dev->dev_config = config;
-
-	port->msr |= MSR_DSR;
-	wake_up_interruptible(&port->msr_change_wait);
 
 	if (dev->dev_in_ep == NULL || dev->dev_out_ep == NULL ||
 	    (dev->dev_notify_ep == NULL)) {
@@ -1995,7 +1932,6 @@ static int gs_alloc_ports(struct gs_dev *dev, gfp_t kmalloc_flags)
 		port->msr = 0;
 		port->prev_msr = 0;
 		port->mcr = 0;
-		init_waitqueue_head(&port->msr_change_wait);
 		port->port_dev = dev;
 		port->port_num = i;
 		port->port_line_coding.dwDTERate =
@@ -2280,27 +2216,27 @@ static int gs_tiocmset(struct tty_struct *tty, struct file *file,
 	if (dev->configured != SERIAL_CONFIGURED)
 		return -EIO;
 
-	if (set & TIOCM_DTR)
-		mcr |= MCR_DTR;
-	if (set & TIOCM_RTS)
-		mcr |= MCR_RTS;
-	if (set & TIOCM_LOOP)
-		mcr |= MCR_LOOP;
+	set &= TIOCM_DSR | TIOCM_RI | TIOCM_CD | TIOCM_CTS;
+
+	if (set & TIOCM_DSR)
+		msr |= MSR_DSR;
 	if (set & TIOCM_RI)
 		msr |= MSR_RI;
 	if (set & TIOCM_CD)
 		msr |= MSR_CD;
+	if (set & TIOCM_CTS)
+		msr |= MSR_CTS;
 
-	if (clear & TIOCM_DTR)
-		mcr &= ~MCR_DTR;
-	if (clear & TIOCM_RTS)
-		mcr &= ~MCR_RTS;
-	if (clear & TIOCM_LOOP)
-		mcr &= ~MCR_LOOP;
+	clear &= TIOCM_DSR | TIOCM_RI | TIOCM_CD | TIOCM_CTS;
+
 	if (clear & TIOCM_RI)
 		msr &= ~MSR_RI;
+	if (clear & TIOCM_DSR)
+		msr &= ~MSR_DSR;
 	if (clear & TIOCM_CD)
 		msr &= ~MSR_CD;
+	if (clear & TIOCM_CTS)
+		msr &= ~MSR_CTS;
 
 	mutex_lock(&port->mutex_lock);
 	port->mcr = mcr;
@@ -2313,31 +2249,4 @@ static int gs_tiocmset(struct tty_struct *tty, struct file *file,
 	mutex_unlock(&port->mutex_lock);
 
 	return 0;
-}
-
-static struct async_icount gs_current_icount(struct gs_port *port)
-{
-	struct async_icount icount;
-
-	if (port->msr & MSR_RI)
-		icount.rng = TIOCM_RI;
-	else
-		icount.rng = 0;
-
-	if (port->msr & MSR_DSR)
-		icount.dsr = TIOCM_DSR;
-	else
-		icount.dsr = 0;
-
-	if (port->msr & MSR_CD)
-		icount.dcd = TIOCM_CD;
-	else
-		icount.dcd = 0;
-
-	if (port->msr & MSR_CTS)
-		icount.cts = TIOCM_CTS;
-	else
-		icount.cts = 0;
-
-	return icount;
 }
