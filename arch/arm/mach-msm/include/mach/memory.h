@@ -17,19 +17,7 @@
 #define __ASM_ARCH_MEMORY_H
 
 /* physical offset of RAM */
-#ifdef CONFIG_MSM_STACKED_MEMORY
-
-#ifdef CONFIG_ARCH_MSM_SCORPION
-#define PHYS_OFFSET		UL(0x20000000)
-#else
-#define PHYS_OFFSET		UL(0x10000000)
-#endif
-
-#else /* !CONFIG_MSM_STACKED_MEMORY */
-
-#define PHYS_OFFSET		UL(0x00200000)
-
-#endif
+#define PHYS_OFFSET UL(CONFIG_PHYS_OFFSET)
 
 #define MAX_PHYSMEM_BITS 32
 #define SECTION_SIZE_BITS 25
