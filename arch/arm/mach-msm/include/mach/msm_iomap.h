@@ -127,6 +127,10 @@
 #define MSM_GCC_PHYS	      0xC0182000
 #define MSM_GCC_SIZE	      SZ_4K
 
+#define MSM_TCSR_BASE	      IOMEM(0xE000A000)
+#define MSM_TCSR_PHYS	      0xAB600000
+#define MSM_TCSR_SIZE	      SZ_4K
+
 #define MSM_SHARED_RAM_BASE   IOMEM(0xE0100000)
 #define MSM_SHARED_RAM_SIZE   SZ_1M
 
