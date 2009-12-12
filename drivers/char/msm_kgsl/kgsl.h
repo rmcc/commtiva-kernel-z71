@@ -43,6 +43,14 @@
 #define DRIVER_NAME "kgsl"
 #define CHIP_REV_251 0x020501
 
+/* Flags to control whether to flush or invalidate a cached memory range */
+#define KGSL_CACHE_INV		0x00000000
+#define KGSL_CACHE_CLEAN	0x00000001
+#define KGSL_CACHE_FLUSH	0x00000002
+
+#define KGSL_CACHE_USER_ADDR	0x00000010
+#define KGSL_CACHE_VMALLOC_ADDR	0x00000020
+
 struct kgsl_driver {
 	struct miscdevice misc;
 	struct platform_device *pdev;
