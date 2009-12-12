@@ -1600,27 +1600,32 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 	}
 
 	mask &= PP_MASK;
-	if (!(sync->pp_mask & mask)) {
+	if (!sync->pp_mask) {
 		pr_warning("%s: pp not in progress for %x\n", __func__,
 			mask);
 		return -EINVAL;
 	}
+	if (sync->pp_mask & PP_PREV) {
 
-	if ((mask & PP_PREV) && (sync->pp_mask & PP_PREV)) {
-		if (!sync->pp_prev) {
-			pr_err("%s: no preview frame to deliver!\n", __func__);
-			return -EINVAL;
+		if (mask & PP_PREV) {
+			if (!sync->pp_prev) {
+				pr_err("%s: no preview frame to deliver!\n",
+					__func__);
+				return -EINVAL;
+			}
+			pr_info("%s: delivering pp_prev\n", __func__);
+
+			msm_enqueue(&sync->frame_q, &sync->pp_prev->list_frame);
+			sync->pp_prev = NULL;
+		} else if (!(mask & PP_PREV)) {
+			sync->pp_mask &= ~PP_PREV;
 		}
-		pr_info("%s: delivering pp_prev\n", __func__);
-
-		msm_enqueue(&sync->frame_q, &sync->pp_prev->list_frame);
-		sync->pp_prev = NULL;
 		goto done;
 	}
 
 	if (((mask & PP_SNAP) && (sync->pp_mask & PP_SNAP)) ||
-			((mask & PP_RAW_SNAP) &&
-			 (sync->pp_mask & PP_RAW_SNAP))) {
+		((mask & PP_RAW_SNAP) && (sync->pp_mask & PP_RAW_SNAP))) {
+
 		if (!sync->pp_snap) {
 			pr_err("%s: no snapshot to deliver!\n", __func__);
 			return -EINVAL;
@@ -1628,10 +1633,11 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 		pr_info("%s: delivering pp_snap\n", __func__);
 		msm_enqueue(&sync->pict_q, &sync->pp_snap->list_pict);
 		sync->pp_snap = NULL;
+		sync->pp_mask &=
+			(mask & PP_SNAP) ? ~PP_SNAP : ~PP_RAW_SNAP;
 	}
 
 done:
-	sync->pp_mask = 0;
 	return 0;
 }
 
