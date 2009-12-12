@@ -1786,6 +1786,11 @@ static int msm_rpcrouter_modem_notify(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
+int msm_rpcrouter_close(void)
+{
+	return smd_close(smd_channel);
+}
+
 static struct notifier_block msm_rpcrouter_nb = {
 	.notifier_call = msm_rpcrouter_modem_notify,
 };

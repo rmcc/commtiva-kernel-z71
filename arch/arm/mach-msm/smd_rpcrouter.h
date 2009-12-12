@@ -196,6 +196,7 @@ int __msm_rpc_read(struct msm_rpc_endpoint *ept,
 		   struct rr_fragment **frag,
 		   unsigned len, long timeout);
 
+int msm_rpcrouter_close(void);
 struct msm_rpc_endpoint *msm_rpcrouter_create_local_endpoint(dev_t dev);
 int msm_rpcrouter_destroy_local_endpoint(struct msm_rpc_endpoint *ept);
 
