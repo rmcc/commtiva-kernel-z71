@@ -42,6 +42,9 @@
 #include <linux/dma-mapping.h>
 #include <linux/dmapool.h>
 #include <linux/wait.h>
+#include <linux/sysfs.h>
+#include <linux/stat.h>
+#include <linux/device.h>
 #include <linux/wakelock.h>
 
 #include <asm/atomic.h>
@@ -141,6 +144,54 @@ static struct uart_ops msm_hs_ops;
 #define UARTDM_TO_MSM(uart_port) \
 	container_of((uart_port), struct msm_hs_port, uport)
 
+static ssize_t show_clock(struct device *dev, struct device_attribute *attr,
+			  char *buf)
+{
+	int state = 1;
+	enum msm_hs_clk_states_e clk_state;
+	unsigned long flags;
+
+	struct platform_device *pdev = container_of(dev, struct
+						    platform_device, dev);
+	struct msm_hs_port *msm_uport = &q_uart_port[pdev->id];
+
+	spin_lock_irqsave(&msm_uport->uport.lock, flags);
+	clk_state = msm_uport->clk_state;
+	spin_unlock_irqrestore(&msm_uport->uport.lock, flags);
+
+	if (clk_state <= MSM_HS_CLK_OFF)
+		state = 0;
+
+	return sprintf(buf, "%d\n", state);
+}
+
+static ssize_t set_clock(struct device *dev, struct device_attribute *attr,
+			 const char *buf, size_t count)
+{
+	int state;
+	struct platform_device *pdev = container_of(dev, struct
+						    platform_device, dev);
+	struct msm_hs_port *msm_uport = &q_uart_port[pdev->id];
+
+	state = buf[0] - '0';
+	switch (state) {
+	case 0: {
+		msm_hs_request_clock_off(&msm_uport->uport);
+		break;
+	}
+	case 1: {
+		msm_hs_request_clock_on(&msm_uport->uport);
+		break;
+	}
+	default: {
+		return -EINVAL;
+	}
+	}
+	return count;
+}
+
+static DEVICE_ATTR(clock, S_IWUSR | S_IRUGO, show_clock, set_clock);
+
 static inline unsigned int use_low_power_wakeup(struct msm_hs_port *msm_uport)
 {
 	return (msm_uport->wakeup.irq >= 0);
@@ -180,6 +231,8 @@ static int __devexit msm_hs_remove(struct platform_device *pdev)
 
 	msm_uport = &q_uart_port[pdev->id];
 	dev = msm_uport->uport.dev;
+
+	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_clock.attr);
 
 	dma_unmap_single(dev, msm_uport->rx.mapped_cmd_ptr, sizeof(dmov_box),
 			 DMA_TO_DEVICE);
@@ -1332,6 +1385,10 @@ static int __init msm_hs_probe(struct platform_device *pdev)
 		     HRTIMER_MODE_REL);
 	msm_uport->clk_off_timer.function = msm_hs_clk_off_retry;
 	msm_uport->clk_off_delay = ktime_set(0, 1000000);  /* 1ms */
+
+	ret = sysfs_create_file(&pdev->dev.kobj, &dev_attr_clock.attr);
+	if (unlikely(ret))
+		return ret;
 
 	uport->line = pdev->id;
 	return uart_add_one_port(&msm_hs_driver, uport);
