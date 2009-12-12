@@ -271,6 +271,7 @@ struct usb_device_descriptor desc_device = {
 };
 
 static void flush_endpoint(struct usb_endpoint *ept);
+static void msm_hsusb_suspend_locks_acquire(struct usb_info *, int);
 
 static ssize_t print_switch_name(struct switch_dev *sdev, char *buf)
 {
@@ -342,9 +343,29 @@ chg_legacy_det_out:
 	if (maxpower > 0)
 		msm_chg_usb_i_is_available(maxpower);
 
-	if (temp == USB_CHG_TYPE__WALLCHARGER)
+	/* USB driver prevents idle and suspend power collapse(pc)
+	 * while usb cable is connected. But when dedicated charger is
+	 * connected, driver can vote for idle and suspend pc. In order
+	 * to allow pc, driver has to initiate low power mode which it
+	 * cannot do as phy cannot be accessed when dedicated charger
+	 * is connected due to phy lockup issues. Just to allow idle &
+	 * suspend pc when dedicated charger is connected, release the
+	 * wakelock, set driver latency to default and act as if we are
+	 * in low power mode so that, driver will re-acquire wakelocks
+	 * for any sub-sequent usb interrupts.
+	 */
+	if (temp == USB_CHG_TYPE__WALLCHARGER) {
 		pr_info("\n%s: WALL-CHARGER\n", __func__);
-	else
+		spin_lock_irqsave(&ui->lock, flags);
+		if (ui->usb_state == USB_STATE_NOTATTACHED) {
+			spin_unlock_irqrestore(&ui->lock, flags);
+			return;
+		}
+		ui->in_lpm = 1;
+		spin_unlock_irqrestore(&ui->lock, flags);
+
+		msm_hsusb_suspend_locks_acquire(ui, 0);
+	} else
 		pr_info("\n%s: Standard Downstream Port\n", __func__);
 }
 
@@ -2440,6 +2461,12 @@ static void usb_do_work(struct work_struct *w)
 				spin_unlock_irqrestore(&ui->lock, f);
 
 				if (temp != USB_CHG_TYPE__INVALID) {
+					/* re-acquire wakelock and restore axi
+					 * freq if they have been reduced by
+					 * charger work item
+					 */
+					msm_hsusb_suspend_locks_acquire(ui, 1);
+
 					msm_chg_usb_i_is_not_available();
 					msm_chg_usb_charger_disconnected();
 				}
