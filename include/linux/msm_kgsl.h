@@ -237,6 +237,7 @@ struct kgsl_sharedmem_free {
 #define IOCTL_KGSL_SHAREDMEM_FREE \
 	_IOW(KGSL_IOC_TYPE, 0x21, struct kgsl_sharedmem_free)
 
+
 struct kgsl_gmem_desc {
 	unsigned int x;
 	unsigned int y;
@@ -265,6 +266,21 @@ struct kgsl_bind_gmem_shadow {
 
 #define IOCTL_KGSL_DRAWCTXT_BIND_GMEM_SHADOW \
     _IOW(KGSL_IOC_TYPE, 0x22, struct kgsl_bind_gmem_shadow)
+
+/* add a block of memory into the GPU address space */
+struct kgsl_sharedmem_from_vmalloc {
+	unsigned int gpuaddr;	/*output param */
+	unsigned int hostptr;
+	/* If set from user space then will attempt to
+	 * allocate even if low watermark is crossed */
+	int force_no_low_watermark;
+};
+
+#define IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC \
+	_IOWR(KGSL_IOC_TYPE, 0x23, struct kgsl_sharedmem_from_vmalloc)
+
+#define IOCTL_KGSL_SHAREDMEM_FLUSH_CACHE \
+	_IOW(KGSL_IOC_TYPE, 0x24, struct kgsl_sharedmem_free)
 
 struct kgsl_drawctxt_set_bin_base_offset {
 	unsigned int drawctxt_id;

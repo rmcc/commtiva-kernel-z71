@@ -108,7 +108,7 @@ int kgsl_cmdstream_check_timestamp(struct kgsl_device *device,
 
 void kgsl_cmdstream_memqueue_drain(struct kgsl_device *device)
 {
-	struct kgsl_pmem_entry *entry, *entry_tmp;
+	struct kgsl_mem_entry *entry, *entry_tmp;
 	uint32_t ts_processed;
 	struct kgsl_ringbuffer *rb = &device->ringbuffer;
 
@@ -126,13 +126,13 @@ void kgsl_cmdstream_memqueue_drain(struct kgsl_device *device)
 		KGSL_MEM_DBG("ts_processed %d ts_free %d gpuaddr %x)\n",
 			     ts_processed, entry->free_timestamp,
 			     entry->memdesc.gpuaddr);
-		kgsl_remove_pmem_entry(entry);
+		kgsl_remove_mem_entry(entry);
 	}
 }
 
 int
 kgsl_cmdstream_freememontimestamp(struct kgsl_device *device,
-				  struct kgsl_pmem_entry *entry,
+				  struct kgsl_mem_entry *entry,
 				  uint32_t timestamp,
 				  enum kgsl_timestamp_type type)
 {

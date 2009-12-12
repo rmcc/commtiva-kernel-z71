@@ -37,7 +37,9 @@
 #define GSL_PT_PAGE_RV		0x00000002
 #define GSL_PT_PAGE_DIRTY	0x00000004
 
-extern unsigned int kgsl_mmu_enable;
+#ifdef CONFIG_MSM_KGSL_MMU
+extern unsigned int kgsl_cache_enable;
+#endif
 
 struct kgsl_device;
 
@@ -86,7 +88,6 @@ struct kgsl_mmu {
 	struct kgsl_memdesc    dummyspace;
 	/* current page table object being used by device mmu */
 	struct kgsl_pagetable  *hwpagetable;
-	struct kgsl_pagetable  *defaultpagetable;
 };
 
 
@@ -108,14 +109,18 @@ int kgsl_mmu_destroypagetableobject(struct kgsl_pagetable *pagetable);
 int kgsl_mmu_setpagetable(struct kgsl_device *device,
 				struct kgsl_pagetable *pagetable);
 
+#ifdef CONFIG_MSM_KGSL_MMU
 int kgsl_mmu_map(struct kgsl_pagetable *pagetable,
-		 unsigned int physaddr,
+		 unsigned int address,
 		 int range,
 		 unsigned int protflags,
 		 unsigned int *gpuaddr);
 
 int kgsl_mmu_unmap(struct kgsl_pagetable *pagetable,
 					unsigned int gpuaddr, int range);
+
+pte_t *get_pte_from_virtaddr(unsigned int virtaddr);
+#endif
 
 int kgsl_mmu_querystats(struct kgsl_pagetable *pagetable,
 			struct kgsl_ptstats *stats);

@@ -241,9 +241,9 @@ int kgsl_yamato_tlbinvalidate(struct kgsl_device *device)
 #endif
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
-	if (!kgsl_mmu_enable)
+#ifndef CONFIG_MSM_KGSL_MMU
 		return 0;
-
+#endif
 
 	KGSL_MEM_DBG("device %p ctxt %p pt %p\n",
 			device,
@@ -272,84 +272,15 @@ int kgsl_yamato_tlbinvalidate(struct kgsl_device *device)
 
 	return 0;
 }
-/*in order to have all memory be virtualized, we need to have some "global"
-* memory regions at the same virtual addresses. This function sets it up.
-* It should be called first for the mmu->defaultpagetable and then for
-* every pagetable created for clients. Note that the first time through, it
-* sets the gpuaddr field in all memdescs.
-* Also, there's probably a less kludgy way to do this.
-*/
-int kgsl_yamato_setup_pt(struct kgsl_device *device,
-			struct kgsl_pagetable *pagetable)
-{
-	int result = 0;
-	unsigned int gpuaddr = 0;
-	BUG_ON(device->ringbuffer.buffer_desc.physaddr == 0);
-	BUG_ON(device->ringbuffer.memptrs_desc.physaddr == 0);
-	BUG_ON(device->memstore.physaddr == 0);
-
-	result = kgsl_mmu_map(pagetable,
-				device->ringbuffer.buffer_desc.physaddr,
-				device->ringbuffer.buffer_desc.size,
-				GSL_PT_PAGE_RV,
-				&gpuaddr);
-
-	if (device->ringbuffer.buffer_desc.gpuaddr == 0)
-		device->ringbuffer.buffer_desc.gpuaddr = gpuaddr;
-	BUG_ON(device->ringbuffer.buffer_desc.gpuaddr != gpuaddr);
-
-	result = kgsl_mmu_map(pagetable,
-				device->ringbuffer.memptrs_desc.physaddr,
-				device->ringbuffer.memptrs_desc.size,
-				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
-				&gpuaddr);
-
-	if (device->ringbuffer.memptrs_desc.gpuaddr == 0)
-		device->ringbuffer.memptrs_desc.gpuaddr = gpuaddr;
-	BUG_ON(device->ringbuffer.memptrs_desc.gpuaddr != gpuaddr);
-
-	result = kgsl_mmu_map(pagetable,
-				device->memstore.physaddr,
-				device->memstore.size,
-				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
-				&gpuaddr);
-
-	if (device->memstore.gpuaddr == 0)
-		device->memstore.gpuaddr = gpuaddr;
-	BUG_ON(device->memstore.gpuaddr != gpuaddr);
-
-	return result;
-}
-
-int kgsl_yamato_cleanup_pt(struct kgsl_device *device,
-				struct kgsl_pagetable *pagetable)
-{
-	int result = 0;
-	BUG_ON(device->ringbuffer.buffer_desc.gpuaddr == 0);
-	BUG_ON(device->ringbuffer.memptrs_desc.gpuaddr == 0);
-	BUG_ON(device->memstore.gpuaddr == 0);
-
-	result = kgsl_mmu_unmap(pagetable,
-				device->ringbuffer.buffer_desc.gpuaddr,
-				device->ringbuffer.buffer_desc.size);
-
-	result = kgsl_mmu_unmap(pagetable,
-				device->ringbuffer.memptrs_desc.gpuaddr,
-				device->ringbuffer.memptrs_desc.size);
-
-	result = kgsl_mmu_unmap(pagetable,
-				device->memstore.gpuaddr,
-				device->memstore.size);
-	return result;
-}
 
 int kgsl_yamato_setpagetable(struct kgsl_device *device)
 {
 	unsigned int link[27];
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
-	if (!kgsl_mmu_enable)
+#ifndef CONFIG_MSM_KGSL_MMU
 		return 0;
+#endif
 
 	KGSL_MEM_DBG("device %p ctxt %p pt %p\n",
 			device,
@@ -556,13 +487,13 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 
 error_close_cmdstream:
 	kgsl_cmdstream_close(device);
+error_close_mmu:
+	kgsl_mmu_close(device);
 error_iounmap:
 	iounmap(regspace->mmio_virt_base);
 	regspace->mmio_virt_base = NULL;
 error_release_mem:
 	release_mem_region(regspace->mmio_phys_base, regspace->sizebytes);
-error_close_mmu:
-	kgsl_mmu_close(device);
 error:
 	return status;
 }
@@ -718,6 +649,24 @@ int kgsl_yamato_getproperty(struct kgsl_device *device,
 			}
 			if (copy_to_user(value, &shadowprop,
 				sizeof(shadowprop))) {
+				status = -EFAULT;
+				break;
+			}
+			status = 0;
+		}
+		break;
+	case KGSL_PROP_MMU_ENABLE:
+		{
+#ifdef CONFIG_MSM_KGSL_MMU
+			int mmuProp = 1;
+#else
+			int mmuProp = 0;
+#endif
+			if (sizebytes != sizeof(int)) {
+				status = -EINVAL;
+				break;
+			}
+			if (copy_to_user(value, &mmuProp, sizeof(mmuProp))) {
 				status = -EFAULT;
 				break;
 			}
@@ -922,8 +871,12 @@ int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 
 	if (timeout > 0)
 		status = 0;
-	else if (timeout == 0)
-		status = -ETIMEDOUT;
+	else if (timeout == 0) {
+		if (kgsl_cmdstream_check_timestamp(device, timestamp))
+			status = 0;
+		else
+			status = -ETIMEDOUT;
+	}
 	else
 		status = timeout;
 
@@ -967,17 +920,17 @@ int __init kgsl_yamato_config(struct kgsl_devconfig *devconfig,
 	 *	2 = translate within va_range, otherwise fault
 	 */
 	devconfig->mmu_config = 1 /* mmu enable */
-		    | (2 << MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_R0_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_R1_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_R2_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_R3_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__CP_R4_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__VGT_R0_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__VGT_R1_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)
-		    | (2 << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT);
+		    | (1 << MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_R2_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_R3_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__CP_R4_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__VGT_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__VGT_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)
+		    | (1 << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT);
 
 	/*TODO: these should probably be configurable from platform device
 	 * stuff */
