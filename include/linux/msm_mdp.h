@@ -49,6 +49,8 @@ enum {
 	MDP_Y_CBCR_H2V1,   /* Y and CrCb, pseduo planer w/ Cr is in MSB */
 	MDP_RGBA_8888,    /* ARGB 888 */
 	MDP_BGRA_8888,	  /* ABGR 888 */
+	MDP_Y_CRCB_H2V2_TILE,  /* Y and CrCb, pseudo planer tile */
+	MDP_Y_CBCR_H2V2_TILE,  /* Y and CbCr, pseudo planer tile */
 	MDP_IMGTYPE_LIMIT,
 	MDP_BGR_565 = MDP_IMGTYPE2_START,      /* BGR 565 planer */
 	MDP_FB_FORMAT,    /* framebuffer format */
