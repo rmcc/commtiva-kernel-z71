@@ -145,6 +145,7 @@ struct platform_device *msm_fb_device_alloc(struct msm_fb_panel_data *pdata,
 		snprintf(dev_name, sizeof(dev_name), "tvenc");
 		break;
 
+	case HDMI_PANEL:
 	case LCDC_PANEL:
 		snprintf(dev_name, sizeof(dev_name), "lcdc");
 		break;

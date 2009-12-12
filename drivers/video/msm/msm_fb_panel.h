@@ -48,6 +48,7 @@ typedef struct panel_id_s {
 #define LCDC_PANEL     3	/* internal LCDC type */
 #define EXT_MDDI_PANEL 4	/* Ext.MDDI */
 #define TV_PANEL       5	/* TV */
+#define HDMI_PANEL     6	/* HDMI TV */
 
 /* panel class */
 typedef enum {
