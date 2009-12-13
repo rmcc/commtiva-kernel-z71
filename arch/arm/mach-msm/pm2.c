@@ -358,6 +358,7 @@ enum {
 #if defined(CONFIG_ARCH_MSM7X30)
 #define APPS_CLK_SLEEP_EN (MSM_GCC_BASE + 0x020)
 #define APPS_PWRDOWN      (MSM_ACC_BASE + 0x01c)
+#define APPS_SECOP        (MSM_TCSR_BASE + 0x038)
 #else /* defined(CONFIG_ARCH_MSM7X30) */
 #define APPS_CLK_SLEEP_EN (MSM_CSR_BASE + 0x11c)
 #define APPS_PWRDOWN      (MSM_CSR_BASE + 0x440)
@@ -371,6 +372,7 @@ static void msm_pm_config_hw_before_power_down(void)
 {
 #if defined(CONFIG_ARCH_MSM7X30)
 	writel(1, APPS_PWRDOWN);
+	writel(4, APPS_SECOP);
 #else
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 	writel(1, APPS_PWRDOWN);
@@ -384,6 +386,7 @@ static void msm_pm_config_hw_before_power_down(void)
 static void msm_pm_config_hw_after_power_up(void)
 {
 #if defined(CONFIG_ARCH_MSM7X30)
+	writel(0, APPS_SECOP);
 	writel(0, APPS_PWRDOWN);
 #else
 	writel(0, APPS_PWRDOWN);
