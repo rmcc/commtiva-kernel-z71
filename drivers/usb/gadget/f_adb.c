@@ -295,7 +295,7 @@ static ssize_t adb_read(struct file *fp, char __user *buf,
 
 	DBG(cdev, "adb_read(%d)\n", count);
 
-	if (!dev || !dev->online)
+	if (!dev)
 		return -EIO;
 
 	if (_lock(&dev->read_excl))
