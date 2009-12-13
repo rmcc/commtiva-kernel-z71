@@ -861,6 +861,15 @@ static int mdp_irq_clk_setup(void)
 	if (IS_ERR(mdp_pclk))
 		mdp_pclk = NULL;
 
+#ifdef CONFIG_FB_MSM_MDP40
+	/*
+	 * mdp_clk should greater than mdp_pclk always
+	 */
+	clk_set_rate(mdp_clk, 122880000); /* 122.88 Mhz */
+	printk(KERN_INFO "mdp_clk: mdp_clk=%d mdp_pclk=%d\n",
+		(int)clk_get_rate(mdp_clk), (int)clk_get_rate(mdp_pclk));
+#endif
+
 	return 0;
 }
 
