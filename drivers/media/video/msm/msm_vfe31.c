@@ -1008,7 +1008,8 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		}
 		break;
 
-	case V31_LA_CFG: {
+	case V31_LA_CFG:
+	case V31_LA_UPDATE: {
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
 		if (!cmdp) {
 			rc = -ENOMEM;
@@ -1040,7 +1041,7 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		cmdp -= 1;
 		}
 		break;
-	case V31_RGB_G_UPDATE:
+
 	case V31_RGB_G_CFG: {
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
 		if (!cmdp) {
@@ -1062,8 +1063,39 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		cmdp -= 1;
 		}
 		break;
+
+	case V31_RGB_G_UPDATE: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp, (void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+
+		msm_io_memcpy(vfe31_ctrl->vfebase + V31_RGB_G_OFF, cmdp, 4);
+		old_val = *cmdp;
+		cmdp += 1;
+
+		if (old_val) {
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH0_BANK1 , cmdp);
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH1_BANK1 , cmdp);
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH2_BANK1 , cmdp);
+		} else {
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH0_BANK0 , cmdp);
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH1_BANK0 , cmdp);
+			vfe31_write_gamma_cfg(RGBLUT_RAM_CH2_BANK0 , cmdp);
+		}
+		cmdp -= 1;
+		}
+		break;
+
 	case V31_STATS_AWB_ENQ:
 		break;
+
 	case V31_STATS_AWB_STOP: {
 		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
 		old_val &= ~AWB_ENABLE_MASK;
