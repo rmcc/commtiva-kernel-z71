@@ -812,6 +812,7 @@ static int vdec_release(struct inode *inode, struct file *file)
 {
 	int ret;
 	struct vdec_msg_list *l, *n;
+	struct vdec_mem_list *m, *k;
 	struct vdec_data *vd = file->private_data;
 
 	vd->running = 0;
@@ -831,9 +832,9 @@ static int vdec_release(struct inode *inode, struct file *file)
 		kfree(l);
 	}
 
-	list_for_each_entry_safe(l, n, &vd->vdec_mem_list_head, list) {
-		list_del(&l->list);
-		kfree(l);
+	list_for_each_entry_safe(m, k, &vd->vdec_mem_list_head, list) {
+		list_del(&m->list);
+		kfree(m);
 	}
 	mutex_lock(&vdec_ref_lock);
 	BUG_ON(ref_cnt <= 0);
