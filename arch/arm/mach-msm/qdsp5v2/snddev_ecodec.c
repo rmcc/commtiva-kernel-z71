@@ -323,6 +323,20 @@ error:
 	return rc;
 }
 
+static int snddev_ecodec_set_freq(struct msm_snddev_info *dev_info, u32 rate)
+{
+	int rc = 0;
+
+	if (!dev_info) {
+		rc = -EINVAL;
+		goto error;
+	}
+	return 8000;
+
+error:
+	return rc;
+}
+
 static int snddev_ecodec_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -356,6 +370,7 @@ static int snddev_ecodec_probe(struct platform_device *pdev)
 	dev_info->private_data = (void *) ecodec;
 	dev_info->dev_ops.open = snddev_ecodec_open;
 	dev_info->dev_ops.close = snddev_ecodec_close;
+	dev_info->dev_ops.set_freq = snddev_ecodec_set_freq;
 	dev_info->capability = pdata->capability;
 	dev_info->opened = 0;
 
