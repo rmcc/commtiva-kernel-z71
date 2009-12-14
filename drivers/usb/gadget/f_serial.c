@@ -328,6 +328,19 @@ static int gser_set_alt(struct usb_function *f, unsigned intf, unsigned alt)
 
 	/* we know alt == 0, so this is an activation or a reset */
 
+#ifdef CONFIG_MODEM_SUPPORT
+	if (gser->notify->driver_data) {
+		DBG(cdev, "reset generic ttyGS%d\n", gser->port_num);
+		usb_ep_disable(gser->notify);
+	} else {
+		gser->notify_desc = ep_choose(cdev->gadget,
+				gser->hs.notify,
+				gser->fs.notify);
+	}
+	usb_ep_enable(gser->notify, gser->notify_desc);
+	gser->notify->driver_data = gser;
+#endif
+
 	if (gser->port.in->driver_data) {
 		DBG(cdev, "reset generic ttyGS%d\n", gser->port_num);
 		gserial_disconnect(&gser->port);
@@ -352,6 +365,8 @@ static void gser_disable(struct usb_function *f)
 	gserial_disconnect(&gser->port);
 #ifdef CONFIG_MODEM_SUPPORT
 	usb_ep_fifo_flush(gser->notify);
+	usb_ep_disable(gser->notify);
+	gser->notify->driver_data = NULL;
 #endif
 	gser->online = 0;
 }
