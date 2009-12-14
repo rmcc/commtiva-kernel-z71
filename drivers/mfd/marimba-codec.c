@@ -187,6 +187,24 @@ error:
 }
 EXPORT_SYMBOL(adie_codec_setpath);
 
+u32 adie_codec_getfreq(struct adie_codec_dev_profile *profile,
+	u32 requested_freq)
+{
+	u32 i = 0, ret_freq = 0;
+
+	for (i = 0; i < profile->setting_sz; i++) {
+		if (profile->settings[i].freq_plan >= requested_freq) {
+			if (ret_freq == 0)
+				ret_freq = profile->settings[i].freq_plan;
+			else if (profile->settings[i].freq_plan < ret_freq)
+				ret_freq = profile->settings[i].freq_plan;
+		}
+	}
+
+	return ret_freq;
+}
+EXPORT_SYMBOL(adie_codec_getfreq);
+
 static void adie_codec_reach_stage_action(struct adie_codec_path *path_ptr,
 	u32 stage)
 {
