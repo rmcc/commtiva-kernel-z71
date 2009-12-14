@@ -132,6 +132,8 @@ struct vdec_data {
 static struct class *driver_class;
 static dev_t vdec_device_no;
 static struct cdev vdec_cdev;
+static int ref_cnt;
+static DEFINE_MUTEX(vdec_ref_lock);
 
 static inline int vdec_check_version(u32 client, u32 server)
 {
@@ -741,6 +743,15 @@ static int vdec_open(struct inode *inode, struct file *file)
 	struct vdec_data *vd;
 
 	pr_info("q6vdec_open()\n");
+	mutex_lock(&vdec_ref_lock);
+	if (ref_cnt > 0) {
+		pr_err("%s: Instance alredy running\n", __func__);
+		mutex_unlock(&vdec_ref_lock);
+		return -EBUSY;
+	}
+	ref_cnt++;
+	mutex_unlock(&vdec_ref_lock);
+
 	vd = kmalloc(sizeof(struct vdec_data), GFP_KERNEL);
 	if (!vd) {
 		pr_err("%s: kmalloc failed\n", __func__);
@@ -790,6 +801,9 @@ vdec_open_err_handle_list:
 		}
 	}
 vdec_open_err_handle_vd:
+	mutex_lock(&vdec_ref_lock);
+	ref_cnt--;
+	mutex_unlock(&vdec_ref_lock);
 	kfree(vd);
 	return ret;
 }
@@ -821,6 +835,10 @@ static int vdec_release(struct inode *inode, struct file *file)
 		list_del(&l->list);
 		kfree(l);
 	}
+	mutex_lock(&vdec_ref_lock);
+	BUG_ON(ref_cnt <= 0);
+	ref_cnt--;
+	mutex_unlock(&vdec_ref_lock);
 
 	kfree(vd);
 	return 0;
