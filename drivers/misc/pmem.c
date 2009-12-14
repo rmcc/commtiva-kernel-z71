@@ -233,6 +233,12 @@ static struct {
 	const int fallback_memtype;
 	int info_id;
 } kapi_memtypes[] = {
+#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
+	{ PMEM_KERNEL_SMI_DATA_NAME,
+		PMEM_MEMTYPE_SMI,
+		PMEM_MEMTYPE_EBI1,  /* Fall back to EBI1 automatically */
+		-1 },
+#endif
 	{ PMEM_KERNEL_EBI1_DATA_NAME,
 		PMEM_MEMTYPE_EBI1,
 		PMEM_INVALID_MEMTYPE, /* MUST be set invalid if no fallback */
