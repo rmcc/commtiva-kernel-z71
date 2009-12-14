@@ -67,7 +67,9 @@
 #include <mach/qdsp5v2/qdsp5audppmsg.h>
 #include <mach/qdsp5v2/audpp.h>
 
-#define AUDIO_DEV_CTL_MAX_DEV 16
+#ifndef MAX
+#define  MAX(x, y) (((x) > (y)) ? (x) : (y))
+#endif
 
 struct audio_dev_ctrl_state {
 	struct mutex lock;
@@ -80,11 +82,14 @@ struct audio_dev_ctrl_state {
 };
 
 static struct audio_dev_ctrl_state audio_dev_ctrl;
+struct event_listner event;
 
 struct audio_routing_info {
 	int running;
 	unsigned short mixer_mask[6];
 	unsigned short audrec_mixer_mask[2];
+	int voice_tx_dev_id;
+	int voice_rx_dev_id;
 };
 
 static struct audio_routing_info routing_info;
@@ -94,9 +99,10 @@ void msm_snddev_register(struct msm_snddev_info *dev_info)
 	mutex_lock(&audio_dev_ctrl.lock);
 	if (audio_dev_ctrl.num_dev < AUDIO_DEV_CTL_MAX_DEV) {
 		audio_dev_ctrl.devs[audio_dev_ctrl.num_dev] = dev_info;
+		dev_info->dev_volume = 0; /* 0 db */
 		audio_dev_ctrl.num_dev++;
 	} else
-		pr_err("%s: device registry max out\n", __func__);
+		MM_ERR("%s: device registry max out\n", __func__);
 	mutex_unlock(&audio_dev_ctrl.lock);
 }
 EXPORT_SYMBOL(msm_snddev_register);
@@ -156,7 +162,8 @@ int msm_snddev_set_enc(int popp_id, int copp_id, int set)
 }
 EXPORT_SYMBOL(msm_snddev_set_enc);
 
-int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type)
+int msm_set_voc_route(struct msm_snddev_info *dev_info,
+			int stream_type, int dev_id)
 {
 	int rc = 0;
 
@@ -169,6 +176,7 @@ int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type)
 			break;
 		}
 		audio_dev_ctrl.voice_rx_dev = dev_info;
+		routing_info.voice_rx_dev_id = dev_id;
 		break;
 	case AUDIO_ROUTE_STREAM_VOICE_TX:
 		if (!(dev_info->capability & SNDDEV_CAP_TX) |
@@ -177,6 +185,7 @@ int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type)
 			break;
 		}
 		audio_dev_ctrl.voice_tx_dev = dev_info;
+		routing_info.voice_tx_dev_id = dev_id;
 		break;
 	}
 	mutex_unlock(&audio_dev_ctrl.lock);
@@ -209,17 +218,6 @@ int msm_get_voc_route(u32 *rx_id, u32 *tx_id)
 
 	mutex_unlock(&audio_dev_ctrl.lock);
 
-	/* wait for both tx and rx are opened */
-	rc = wait_event_timeout(audio_dev_ctrl.wait,
-		((audio_dev_ctrl.voice_rx_dev->opened == 1)
-		&& (audio_dev_ctrl.voice_tx_dev->opened == 1)),
-		30 * HZ);
-	if (!rc) {
-		pr_err("failed to get voice tx and rx opened  within 30s\n");
-		rc = -ENODEV;
-	} else
-		rc = 0;
-
 	return rc;
 }
 EXPORT_SYMBOL(msm_get_voc_route);
@@ -239,6 +237,20 @@ error:
 
 }
 EXPORT_SYMBOL(audio_dev_ctrl_find_dev);
+
+int snddev_voice_set_volume(int vol, int path)
+{
+	if (audio_dev_ctrl.voice_rx_dev
+		&& audio_dev_ctrl.voice_tx_dev) {
+		if (path)
+			audio_dev_ctrl.voice_tx_dev->dev_volume = vol;
+		else
+			audio_dev_ctrl.voice_rx_dev->dev_volume = vol;
+	} else
+		return -ENODEV;
+	return 0;
+}
+EXPORT_SYMBOL(snddev_voice_set_volume);
 
 static int audio_dev_ctrl_get_devices(struct audio_dev_ctrl_state *dev_ctrl,
 				      void __user *arg)
@@ -279,6 +291,123 @@ static int audio_dev_ctrl_get_devices(struct audio_dev_ctrl_state *dev_ctrl,
 error:
 	return rc;
 }
+
+
+int auddev_register_evt_listner(u32 evt_id, u32 clnt_type, u32 clnt_id,
+		void (*listner)(u32 evt_id,
+			union auddev_evt_data *evt_payload,
+			void *private_data),
+		void *private_data)
+{
+	int rc;
+	struct msm_snd_evt_listner *callback = NULL;
+	struct msm_snd_evt_listner *new_cb;
+
+	new_cb = kzalloc(sizeof(struct msm_snd_evt_listner), GFP_KERNEL);
+	if (!new_cb) {
+		MM_ERR("%s: listner registry max out\n", __func__);
+		return -ENOMEM;
+	}
+
+	mutex_lock(&event.listner_lock);
+	new_cb->cb_next = NULL;
+	new_cb->auddev_evt_listener = listner;
+	new_cb->evt_id = evt_id;
+	new_cb->clnt_type = clnt_type;
+	new_cb->clnt_id = clnt_id;
+	new_cb->private_data = private_data;
+	if (event.cb == NULL) {
+		event.cb = new_cb;
+		new_cb->cb_prev = NULL;
+	} else {
+		callback = event.cb;
+		for (; ;) {
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+		callback->cb_next = new_cb;
+		new_cb->cb_prev = callback;
+	}
+	event.num_listner++;
+	mutex_unlock(&event.listner_lock);
+	MM_ERR("added one listner handle\n");
+	rc = 0;
+	return rc;
+}
+EXPORT_SYMBOL(auddev_register_evt_listner);
+
+int auddev_unregister_evt_listner(u32 clnt_type, u32 clnt_id)
+{
+	struct msm_snd_evt_listner *callback = event.cb;
+
+	for (; ((callback->clnt_type != clnt_type)
+		&& (callback->clnt_id != clnt_id));
+		) {
+			if (callback->cb_next == NULL)
+				break;
+			else
+				callback = callback->cb_next;
+	}
+
+	if (!(callback->clnt_type == clnt_type)
+		|| !(callback->clnt_id == clnt_id))
+		return -EINVAL;
+	else if ((callback->cb_next == NULL) || (callback->cb_prev == NULL))
+		event.cb = NULL;
+	else if (callback->cb_next == NULL)
+		callback->cb_prev->cb_next = NULL;
+	else if (callback->cb_prev == NULL) {
+		callback->cb_next->cb_prev = NULL;
+		event.cb = callback->cb_next;
+	} else {
+		callback->cb_prev->cb_next = callback->cb_next;
+		callback->cb_next->cb_prev = callback->cb_prev;
+	}
+	kfree(callback);
+	return 0;
+}
+EXPORT_SYMBOL(auddev_unregister_evt_listner);
+
+int msm_snddev_request_freq(int *freq, u32 session_id, u32 clnt_type)
+{
+	int i = 0;
+	int rc = 0;
+	u32 capability = 0;
+	struct msm_snddev_info *info;
+	u32 set_freq;
+	int tmp_freq_index = 0;
+
+	if (clnt_type == AUDDEV_CLNT_VOC)
+		capability = SNDDEV_CAP_VOICE;
+	else if (clnt_type == AUDDEV_CLNT_DEC)
+		capability = SNDDEV_CAP_RX;
+	else if (clnt_type == AUDDEV_CLNT_ENC)
+		capability = SNDDEV_CAP_TX;
+
+	for (i = 0; i < audio_dev_ctrl.num_dev; i++) {
+		info = audio_dev_ctrl.devs[i];
+		if ((info->sessions & session_id)
+			&& (info->capability & capability)) {
+			if (*freq % 8000) {
+				tmp_freq_index = *freq/8000;
+				*freq = (tmp_freq_index * 8000) + 8000;
+			}
+			set_freq = MAX(*freq, info->sample_rate);
+			rc = info->dev_ops.set_freq(info, set_freq);
+			if (rc >= 0) {
+				info->sample_rate = rc;
+				*freq = info->sample_rate;
+				return rc;
+			}
+		}
+	}
+	return rc;
+}
+EXPORT_SYMBOL(msm_snddev_request_freq);
 
 static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 	unsigned int cmd, unsigned long arg)
@@ -346,7 +475,7 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 		route_cfg.dev_id, route_cfg.stream_type);
 		dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 		if (IS_ERR(dev_info)) {
-			pr_err("%s: pass invalid dev_id\n", __func__);
+			MM_ERR("%s: pass invalid dev_id\n", __func__);
 			rc = PTR_ERR(dev_info);
 			break;
 		}
@@ -382,12 +511,10 @@ static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 
 static int audio_dev_ctrl_open(struct inode *inode, struct file *file)
 {
-	int rc = 0;
-
 	MM_DBG("open audio_dev_ctrl\n");
 	atomic_inc(&audio_dev_ctrl.opened);
 	file->private_data = &audio_dev_ctrl;
-	return rc;
+	return 0;
 }
 
 static int audio_dev_ctrl_release(struct inode *inode, struct file *file)
@@ -411,15 +538,227 @@ struct miscdevice audio_dev_ctrl_misc = {
 	.fops	= &audio_dev_ctrl_fops,
 };
 
+static void broadcast_event(u32 evt_id, u32 dev_id)
+{
+	int clnt_id = 0;
+	union auddev_evt_data *evt_payload;
+	struct msm_snd_evt_listner *callback;
+
+	if (event.cb != NULL)
+		callback = event.cb;
+	else {
+		MM_ERR("returning as event.cb is NULL\n");
+		return;
+	}
+	evt_payload = kzalloc(sizeof(union auddev_evt_data),
+			GFP_KERNEL);
+
+	for (; ;) {
+		if (!(evt_id & callback->evt_id)) {
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+
+		memset(evt_payload, 0, sizeof(union auddev_evt_data));
+		clnt_id = callback->clnt_id;
+		if (callback->clnt_type == AUDDEV_CLNT_DEC) {
+			evt_payload->routing_id =
+				routing_info.mixer_mask[clnt_id];
+			callback->auddev_evt_listener(
+				evt_id,
+				evt_payload,
+				&callback->private_data);
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+		if (callback->clnt_type == AUDDEV_CLNT_ENC) {
+			evt_payload->routing_id =
+				routing_info.audrec_mixer_mask[clnt_id];
+			callback->auddev_evt_listener(
+				evt_id,
+				evt_payload,
+				callback->private_data);
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+		if (callback->clnt_type == AUDDEV_CLNT_VOC) {
+			if ((!audio_dev_ctrl.voice_tx_dev)
+				|| (!audio_dev_ctrl.voice_rx_dev))
+				goto sent_voc;
+
+
+			evt_payload->voc_devinfo.rxdev_id =
+				audio_dev_ctrl.voice_rx_dev->acdb_id;
+			evt_payload->voc_devinfo.txdev_id =
+				audio_dev_ctrl.voice_tx_dev->acdb_id;
+			evt_payload->voc_devinfo.rxdev_vol =
+				audio_dev_ctrl.voice_rx_dev->dev_volume;
+			evt_payload->voc_devinfo.txdev_vol =
+				audio_dev_ctrl.voice_tx_dev->dev_volume;
+			evt_payload->voc_devinfo.rxdev_sample =
+				audio_dev_ctrl.voice_rx_dev->sample_rate;
+			evt_payload->voc_devinfo.txdev_sample =
+				audio_dev_ctrl.voice_tx_dev->sample_rate;
+			evt_payload->voc_devinfo.rx_mute = 0;
+			evt_payload->voc_devinfo.tx_mute = 0;
+
+			if (evt_id == AUDDEV_EVT_REL_PENDING) {
+				if (audio_dev_ctrl.voice_tx_dev->opened &&
+				    audio_dev_ctrl.voice_rx_dev->opened) {
+					callback->auddev_evt_listener(
+					evt_id,	evt_payload,
+					callback->private_data);
+				}
+				goto sent_voc;
+			}
+			if (evt_id == AUDDEV_EVT_DEV_RLS) {
+				if ((!audio_dev_ctrl.voice_tx_dev->opened) &&
+					(!audio_dev_ctrl.voice_rx_dev->opened)
+					) {
+					callback->auddev_evt_listener(
+					evt_id,	evt_payload,
+					callback->private_data);
+				}
+				goto sent_voc;
+			}
+
+			if (evt_id == AUDDEV_EVT_DEV_RDY) {
+				if (!audio_dev_ctrl.voice_rx_dev->opened)
+					goto sent_voc;
+				if (!audio_dev_ctrl.voice_tx_dev->opened)
+					goto sent_voc;
+			}
+			callback->auddev_evt_listener(
+				evt_id,
+				evt_payload,
+				callback->private_data);
+sent_voc:
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+		if (callback->clnt_type == AUDDEV_CLNT_AUDIOCAL) {
+			struct msm_snddev_info *dev_info;
+
+			dev_info = audio_dev_ctrl_find_dev(dev_id);
+			evt_payload->audcal_info.dev_id = dev_id;
+			evt_payload->audcal_info.acdb_id =
+				audio_dev_ctrl.voice_rx_dev->acdb_id;
+			evt_payload->audcal_info.sample_rate = 8000;
+			evt_payload->audcal_info.dev_type =
+				audio_dev_ctrl.voice_rx_dev->capability;
+
+			callback->auddev_evt_listener(
+				evt_id,
+				evt_payload,
+				callback->private_data);
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+	}
+}
+
+
+void mixer_post_event(u32 evt_id, u32 dev_id)
+{
+	u32 voc_tx_id, voc_rx_id, mixer_mask;
+	static int concurrent;
+	int current_dec_concurrency = 0;
+	int current_enc_concurrency = 0;
+	int i = 0;
+
+	MM_ERR("%s: evt_id = %d\n", __func__, evt_id);
+	mutex_lock(&event.listner_lock);
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_CHG_AUDIO:
+		broadcast_event(AUDDEV_EVT_DEV_CHG_AUDIO, dev_id);
+		break;
+	case AUDDEV_EVT_DEV_CHG_VOICE: /* Called from Voice_route */
+		if ((!audio_dev_ctrl.voice_tx_dev)
+			|| (!audio_dev_ctrl.voice_rx_dev)) {
+			break;
+		}
+		voc_tx_id = audio_dev_ctrl.voice_tx_dev->copp_id;
+		/* TODO: check the default value */
+		voc_rx_id = audio_dev_ctrl.voice_rx_dev->copp_id;
+		for (i = 0; i < 6; i++)	{
+			mixer_mask = routing_info.mixer_mask[i];
+			if (((0x1 << voc_tx_id) & mixer_mask) ||
+				((0x1 << voc_rx_id) & mixer_mask)) {
+				evt_id = AUDDEV_EVT_DEV_CONCURRENT;
+				current_dec_concurrency = 1;
+			} else if (!current_dec_concurrency)
+				current_dec_concurrency = 0;
+		}
+		for (i = 0; i < 2; i++)	{
+			mixer_mask = routing_info.audrec_mixer_mask[i];
+			if (((0x1 << voc_tx_id) & mixer_mask) ||
+				((0x1 << voc_rx_id) & mixer_mask)) {
+				evt_id = AUDDEV_EVT_DEV_CONCURRENT;
+				current_enc_concurrency = 1;
+			} else if (!current_enc_concurrency)
+				current_enc_concurrency = 0;
+		}
+		broadcast_event(AUDDEV_EVT_DEV_CHG_VOICE, dev_id);
+
+		if (current_dec_concurrency || current_enc_concurrency) {
+			broadcast_event(AUDDEV_EVT_DEV_CONCURRENT, dev_id);
+			concurrent = 1;
+		} else if (concurrent) {
+			broadcast_event(AUDDEV_EVT_DEV_NON_CONCURRENT, dev_id);
+			concurrent = 0;
+		}
+		break;
+	case AUDDEV_EVT_DEV_RDY:
+		broadcast_event(AUDDEV_EVT_DEV_RDY, dev_id);
+		break;
+	case AUDDEV_EVT_DEV_RLS:
+		broadcast_event(AUDDEV_EVT_DEV_RLS, dev_id);
+		break;
+	case AUDDEV_EVT_REL_PENDING:
+		broadcast_event(AUDDEV_EVT_REL_PENDING, dev_id);
+		break;
+	case AUDDEV_EVT_DEVICE_VOL_MUTE_CHG:
+		broadcast_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG, dev_id);
+		break;
+	default:
+		break;
+	}
+	mutex_unlock(&event.listner_lock);
+}
+EXPORT_SYMBOL(mixer_post_event);
+
 static int __init audio_dev_ctrl_init(void)
 {
 	mutex_init(&audio_dev_ctrl.lock);
+	mutex_init(&event.listner_lock);
 	init_waitqueue_head(&audio_dev_ctrl.wait);
+
+	event.cb = NULL;
 
 	atomic_set(&audio_dev_ctrl.opened, 0);
 	audio_dev_ctrl.num_dev = 0;
-	audio_dev_ctrl.voice_rx_dev = NULL;
 	audio_dev_ctrl.voice_tx_dev = NULL;
+	audio_dev_ctrl.voice_rx_dev = NULL;
 	return misc_register(&audio_dev_ctrl_misc);
 }
 

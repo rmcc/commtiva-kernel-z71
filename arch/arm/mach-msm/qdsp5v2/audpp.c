@@ -237,7 +237,6 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 {
 	struct audpp_state *audpp = data;
 	uint16_t msg[8];
-	uint16_t mixer_mask = 0x0;
 
 	if (id == AUDPP_MSG_AVSYNC_MSG) {
 		getevent(audpp->avsync, sizeof(audpp->avsync));
@@ -261,8 +260,6 @@ static void audpp_dsp_event(void *data, unsigned id, size_t len,
 			unsigned cid = msg[0];
 			pr_info("audpp: status %d %d %d\n", cid, msg[1],
 				msg[2]);
-			audpp_route_stream(cid,
-					msm_snddev_route_dec(mixer_mask));
 
 			if ((cid < 5) && audpp->func[cid])
 				audpp->func[cid] (audpp->private[cid], id, msg);
