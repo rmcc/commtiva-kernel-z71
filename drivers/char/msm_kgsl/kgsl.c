@@ -95,28 +95,55 @@ struct kgsl_file_private {
 };
 
 #ifdef CONFIG_MSM_KGSL_MMU
-static long kgsl_clean_cache_range(unsigned long addr, int size)
+static long kgsl_cache_range_op(unsigned long addr, int size,
+					unsigned int flags)
 {
-	struct page *page;
-	pte_t *pte_ptr;
+#ifdef CONFIG_OUTER_CACHE
 	unsigned long end;
+#endif
+	BUG_ON(addr & (KGSL_PAGESIZE - 1));
+	BUG_ON(size & (KGSL_PAGESIZE - 1));
 
+	if (flags & KGSL_CACHE_FLUSH)
+		dmac_flush_range((const void *)addr,
+				(const void *)(addr + size));
+	else
+		if (flags & KGSL_CACHE_CLEAN)
+			dmac_clean_range((const void *)addr,
+					(const void *)(addr + size));
+		else
+			dmac_inv_range((const void *)addr,
+					(const void *)(addr + size));
+
+#ifdef CONFIG_OUTER_CACHE
 	for (end = addr; end < (addr + size); end += KGSL_PAGESIZE) {
-		pte_ptr = get_pte_from_virtaddr(end);
-		if (!pte_ptr)
-			return -EINVAL;
+		pte_t *pte_ptr, pte;
+		unsigned long physaddr;
+		if (flags & KGSL_CACHE_VMALLOC_ADDR)
+			physaddr = vmalloc_to_pfn((void *)end);
+		else
+			if (flags & KGSL_CACHE_USER_ADDR) {
+				pte_ptr = kgsl_get_pte_from_vaddr(end);
+				if (!pte_ptr)
+					return -EINVAL;
+				pte = *pte_ptr;
+				physaddr = pte_pfn(pte);
+				pte_unmap(pte_ptr);
+			} else
+				return -EINVAL;
 
-		page = pte_page(pte_val(*pte_ptr));
-		if (!page) {
-			KGSL_DRV_ERR("could not find page for pte\n");
-			pte_unmap(pte_ptr);
-			return -EINVAL;
-		}
-
-		pte_unmap(pte_ptr);
-		flush_dcache_page(page);
+		physaddr <<= PAGE_SHIFT;
+		if (flags & KGSL_CACHE_FLUSH)
+			outer_flush_range(physaddr, physaddr + KGSL_PAGESIZE);
+		else
+			if (flags & KGSL_CACHE_CLEAN)
+				outer_clean_range(physaddr,
+					physaddr + KGSL_PAGESIZE);
+			else
+				outer_inv_range(physaddr,
+					physaddr + KGSL_PAGESIZE);
 	}
-
+#endif
 	return 0;
 }
 
@@ -129,9 +156,10 @@ static long kgsl_clean_cache_all(struct kgsl_file_private *private)
 	list_for_each_entry(entry, &private->mem_list, list) {
 		if (KGSL_MEMFLAGS_MEM_REQUIRES_FLUSH & entry->memdesc.priv) {
 			result =
-			    kgsl_clean_cache_range((unsigned long)entry->
+			    kgsl_cache_range_op((unsigned long)entry->
 						   memdesc.hostptr,
-						   entry->memdesc.size);
+						   entry->memdesc.size,
+				KGSL_CACHE_CLEAN | KGSL_CACHE_USER_ADDR);
 			if (result)
 				goto done;
 		}
@@ -785,6 +813,9 @@ static long kgsl_ioctl_sharedmem_from_vmalloc(struct kgsl_file_private *private,
 		result = -ENOMEM;
 		goto error_free_entry;
 	}
+	kgsl_cache_range_op((unsigned int)vmalloc_area, len,
+			KGSL_CACHE_INV | KGSL_CACHE_VMALLOC_ADDR);
+
 	if (!kgsl_cache_enable) {
 		KGSL_MEM_INFO("Caching for memory allocation turned off\n");
 		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
@@ -918,8 +949,9 @@ static long kgsl_ioctl_sharedmem_flush_cache(struct kgsl_file_private *private,
 		result = -EINVAL;
 		goto done;
 	}
-	result = kgsl_clean_cache_range((unsigned long)entry->memdesc.hostptr,
-					entry->memdesc.size);
+	result = kgsl_cache_range_op((unsigned long)entry->memdesc.hostptr,
+					entry->memdesc.size,
+				KGSL_CACHE_CLEAN | KGSL_CACHE_USER_ADDR);
 	/* Mark memory as being flushed so we don't flush it again */
 	entry->memdesc.priv &= ~KGSL_MEMFLAGS_MEM_REQUIRES_FLUSH;
 done:

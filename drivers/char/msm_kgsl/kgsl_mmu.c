@@ -432,7 +432,7 @@ int kgsl_mmu_init(struct kgsl_device *device)
 
 #ifdef CONFIG_MSM_KGSL_MMU
 
-pte_t *get_pte_from_virtaddr(unsigned int virtaddr)
+pte_t *kgsl_get_pte_from_vaddr(unsigned int virtaddr)
 {
 	pgd_t *pgd_ptr = NULL;
 	pmd_t *pmd_ptr = NULL;
