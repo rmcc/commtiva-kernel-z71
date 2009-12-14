@@ -65,6 +65,7 @@
 #include <mach/remote_spinlock.h>
 #include <mach/dal.h>
 #include "smd_private.h"
+#include <linux/module.h>
 
 #define SMEM_SPINLOCK_COUNT 8
 #define SMEM_SPINLOCK_ARRAY_SIZE (SMEM_SPINLOCK_COUNT * sizeof(uint32_t))
@@ -138,7 +139,6 @@ int _remote_spin_lock_init(remote_spinlock_id_t id, _remote_spinlock_t *lock)
 		return -EINVAL;
 }
 
-
 int _remote_mutex_init(struct remote_mutex_id *id, _remote_mutex_t *lock)
 {
 	BUG_ON(id == NULL);
@@ -146,6 +146,7 @@ int _remote_mutex_init(struct remote_mutex_id *id, _remote_mutex_t *lock)
 	lock->delay_us = id->delay_us;
 	return _remote_spin_lock_init(id->r_spinlock_id, &(lock->r_spinlock));
 }
+EXPORT_SYMBOL(_remote_mutex_init);
 
 void _remote_mutex_lock(_remote_mutex_t *lock)
 {
@@ -156,13 +157,16 @@ void _remote_mutex_lock(_remote_mutex_t *lock)
 			udelay(lock->delay_us);
 	}
 }
+EXPORT_SYMBOL(_remote_mutex_lock);
 
 void _remote_mutex_unlock(_remote_mutex_t *lock)
 {
 	_remote_spin_unlock(&(lock->r_spinlock));
 }
+EXPORT_SYMBOL(_remote_mutex_unlock);
 
 int _remote_mutex_trylock(_remote_mutex_t *lock)
 {
 	return _remote_spin_trylock(&(lock->r_spinlock));
 }
+EXPORT_SYMBOL(_remote_mutex_trylock);
