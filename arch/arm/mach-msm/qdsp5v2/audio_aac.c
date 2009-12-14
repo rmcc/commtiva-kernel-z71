@@ -39,6 +39,7 @@
 #include <mach/qdsp5v2/qdsp5audplaymsg.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <mach/qdsp5v2/audpp.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 #define BUFSZ 32768
 #define DMASZ (BUFSZ * 2)
@@ -160,6 +161,7 @@ struct audio {
 	spinlock_t event_queue_lock;
 	struct mutex get_event_lock;
 	int event_abort;
+	uint32_t device_events;
 
 	struct msm_audio_bitstream_info stream_info;
 
@@ -204,6 +206,22 @@ static int audio_enable(struct audio *audio)
 	return 0;
 }
 
+static void aac_listner(u32 evt_id, union auddev_evt_data *evt_payload,
+			void *private_data)
+{
+	struct audio *audio = (struct audio *) private_data;
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_CHG_AUDIO:
+		MM_ERR("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS)
+			audpp_route_stream(audio->dec_id,
+				msm_snddev_route_dec(audio->dec_id));
+		break;
+	default:
+		MM_ERR("%s:ERROR:wrong event\n", __func__);
+		break;
+	}
+}
 /* must be called with audio->lock held */
 static int audio_disable(struct audio *audio)
 {
@@ -1390,6 +1408,7 @@ static int audio_release(struct inode *inode, struct file *file)
 
 	MM_INFO("audio instance 0x%08x freeing\n", (int)audio);
 	mutex_lock(&audio->lock);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->dec_id);
 	audio_disable(audio);
 	audio_flush(audio);
 	audio_flush_pcm_buf(audio);
@@ -1713,6 +1732,19 @@ static int audio_open(struct inode *inode, struct file *file)
 
 	file->private_data = audio;
 	audio->opened = 1;
+
+	audio->device_events = AUDDEV_EVT_DEV_CHG_AUDIO;
+
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_DEC,
+					audio->dec_id,
+					aac_listner,
+					(void *)audio);
+	if (rc) {
+		MM_ERR("%s: failed to register listnet\n", __func__);
+		goto event_err;
+	}
+
 #ifdef CONFIG_DEBUG_FS
 	snprintf(name, sizeof name, "msm_aac_%04x", audio->dec_id);
 	audio->dentry = debugfs_create_file(name, S_IFREG | S_IRUGO,
@@ -1741,6 +1773,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
 done:
 	return rc;
+event_err:
+	msm_adsp_put(audio->audplay);
 err:
 	iounmap(audio->data);
 	pmem_kfree(audio->phys);

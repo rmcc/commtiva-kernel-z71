@@ -33,6 +33,7 @@
 #include <mach/msm_adsp.h>
 
 #include <linux/msm_audio.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 #include <mach/qdsp5v2/qdsp5audppcmdi.h>
 #include <mach/qdsp5v2/qdsp5audppmsg.h>
@@ -175,6 +176,7 @@ struct audio {
 
 	const char *module_name;
 	unsigned queue_id;
+	uint32_t device_events;
 
 	unsigned volume;
 
@@ -208,6 +210,22 @@ static void audpcm_post_event(struct audio *audio, int type,
 static unsigned long audpcm_pmem_fixup(struct audio *audio, void *addr,
 	unsigned long len, int ref_up);
 
+static void pcm_listner(u32 evt_id, union auddev_evt_data *evt_payload,
+			void *private_data)
+{
+	struct audio *audio = (struct audio *) private_data;
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_CHG_AUDIO:
+		pr_err("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS)
+			audpp_route_stream(audio->dec_id,
+				msm_snddev_route_dec(audio->dec_id));
+		break;
+	default:
+		pr_err("%s:ERROR:wrong event\n", __func__);
+		break;
+	}
+}
 /* must be called with audio->lock held */
 static int audio_enable(struct audio *audio)
 {
@@ -302,6 +320,8 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 				break;
 			case AUDPP_DEC_STATUS_PLAY:
 				pr_info("decoder status: play \n");
+				audpp_route_stream(audio->dec_id,
+					msm_snddev_route_dec(audio->dec_id));
 				audio->dec_state =
 					MSM_AUD_DECODER_STATE_SUCCESS;
 				wake_up(&audio->wait);
@@ -1251,7 +1271,9 @@ static int audio_release(struct inode *inode, struct file *file)
 	pr_info("audio_release()\n");
 
 	pr_info("PCM: audio instance 0x%08x freeing\n", (int)audio);
+
 	mutex_lock(&audio->lock);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->dec_id);
 	audio_disable(audio);
 	audio->drv_ops.out_flush(audio);
 	audpcm_reset_pmem_region(audio);
@@ -1516,6 +1538,18 @@ static int audio_open(struct inode *inode, struct file *file)
 	file->private_data = audio;
 	audio->opened = 1;
 
+	audio->device_events = AUDDEV_EVT_DEV_CHG_AUDIO;
+
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_DEC,
+					audio->dec_id,
+					pcm_listner,
+					(void *)audio);
+	if (rc) {
+		pr_err("%s: failed to register listnet\n", __func__);
+		goto event_err;
+	}
+
 #ifdef CONFIG_DEBUG_FS
 	snprintf(name, sizeof name, "msm_pcm_dec_%04x", audio->dec_id);
 	audio->dentry = debugfs_create_file(name, S_IFREG | S_IRUGO,
@@ -1542,6 +1576,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	}
 done:
 	return rc;
+event_err:
+	msm_adsp_put(audio->audplay);
 err:
 	iounmap(audio->data);
 	pmem_kfree(audio->phys);
