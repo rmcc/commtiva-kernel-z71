@@ -1,6 +1,4 @@
-/* linux/sound/soc/msm/msm7x30.c
- *
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
  *
  * All source code in this file is licensed under the following license except
  * where indicated.
@@ -443,6 +441,7 @@ static int __init msm_audio_init(void)
 	spin_lock_init(&the_locks.read_dsp_lock);
 	spin_lock_init(&the_locks.write_dsp_lock);
 	spin_lock_init(&the_locks.mixer_lock);
+	init_waitqueue_head(&the_locks.enable_wait);
 	init_waitqueue_head(&the_locks.eos_wait);
 	init_waitqueue_head(&the_locks.write_wait);
 	init_waitqueue_head(&the_locks.read_wait);

@@ -1,5 +1,4 @@
-/* sound/soc/msm/msm-pcm.h
- *
+/*
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
  * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
@@ -27,6 +26,9 @@
 #include <mach/qdsp5v2/qdsp5audplaymsg.h>
 #include <mach/qdsp5v2/audpp.h>
 #include <mach/msm_adsp.h>
+#include <mach/qdsp5v2/qdsp5audreccmdi.h>
+#include <mach/qdsp5v2/qdsp5audrecmsg.h>
+#include <mach/qdsp5v2/audpreproc.h>
 
 
 #define FRAME_NUM               (8)
@@ -108,6 +110,7 @@ struct audio_locks {
 	wait_queue_head_t write_wait;
 	wait_queue_head_t wait;
 	wait_queue_head_t eos_wait;
+	wait_queue_head_t enable_wait;
 };
 
 extern struct audio_locks the_locks;
@@ -146,13 +149,14 @@ struct msm_audio {
 	unsigned int pcm_count;
 	unsigned int pcm_irq_pos;       /* IRQ position */
 	unsigned int pcm_buf_pos;       /* position in buffer */
+	uint16_t source; /* Encoding source bit mask */
 
 	struct msm_adsp_module *audpre;
 	struct msm_adsp_module *audrec;
 	struct msm_adsp_module *audplay;
 	enum msm_aud_decoder_state dec_state; /* Represents decoder state */
 
-	uint16_t dec_id;
+	uint16_t session_id;
 	uint32_t out_bits; /* bits per sample */
 	const char *module_name;
 	unsigned queue_id;
@@ -181,6 +185,8 @@ struct msm_audio {
 	int running;
 	int stopped; /* set when stopped, cleared on flush */
 	int eos_ack;
+	int mmap_flag;
+	struct audpp_cmd_cfg_object_params_volume vol_pan;
 };
 
 
@@ -191,17 +197,14 @@ extern struct snd_soc_platform msm_soc_platform;
 extern struct snd_soc_dai msm_dais[2];
 extern struct snd_soc_codec_device soc_codec_dev_msm;
 
-int audrec_encoder_config(struct msm_audio *prtd);
-extern void alsa_get_dsp_frames(struct msm_audio *prtd);
-extern int alsa_rec_dsp_enable(struct msm_audio *prtd, int enable);
+extern int audrec_encoder_config(struct msm_audio *prtd);
 extern int alsa_audrec_disable(struct msm_audio *prtd);
 extern int alsa_audio_configure(struct msm_audio *prtd);
 extern int alsa_audio_disable(struct msm_audio *prtd);
-extern int alsa_adsp_configure(struct msm_audio *prtd);
 extern int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
-					size_t count, loff_t *pos);
+		size_t count, loff_t *pos);
 ssize_t alsa_send_buffer(struct msm_audio *prtd, const char __user *buf,
-					size_t count, loff_t *pos);
-extern struct audio_locks the_locks;
+		size_t count, loff_t *pos);
+extern struct msm_adsp_ops alsa_audrec_adsp_ops;
 
 #endif /*_MSM_PCM_H*/
