@@ -676,6 +676,7 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
+#ifdef CONFIG_PMEM_GPU0
 static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
 	.name = "pmem_gpu0",
 	.start = MSM_PMEM_GPU0_BASE,
@@ -683,6 +684,7 @@ static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
+#endif
 
 static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
 	.name = "pmem_gpu1",
@@ -702,11 +704,13 @@ static struct platform_device android_pmem_adsp_device = {
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
+#ifdef CONFIG_PMEM_GPU0
 static struct platform_device android_pmem_gpu0_device = {
 	.name = "android_pmem",
 	.id = 2,
 	.dev = { .platform_data = &android_pmem_gpu0_pdata },
 };
+#endif
 
 static struct platform_device android_pmem_gpu1_device = {
 	.name = "android_pmem",
@@ -2017,7 +2021,9 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
+#ifdef CONFIG_PMEM_GPU0
 	&android_pmem_gpu0_device,
+#endif
 	&android_pmem_gpu1_device,
 	&msm_device_nand,
 	&msm_device_i2c,
