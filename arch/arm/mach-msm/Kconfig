@@ -587,8 +587,8 @@ config MSM_RPCSERVER_HANDSET
 	  headset switch and clamshell state.
 
 config MSM_RMT_STORAGE_SERVER
-	depends on (ARCH_MSM7X30 && MSM_ONCRPCROUTER)
-	default y
+	depends on (ARCH_MSM && MSM_ONCRPCROUTER)
+	default n
 	bool "Remote Storage RPC server"
 	help
 	  Provide RPC mechanism for remote processors to access storage
