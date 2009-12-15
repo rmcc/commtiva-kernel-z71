@@ -34,15 +34,6 @@
 
 #define MATRIX_MAX_SIZE		(MATRIX_MAX_ROWS * MATRIX_MAX_COLS)
 
-#define MAX_SCAN_DELAY		128
-#define MIN_SCAN_DELAY		1
-
-#define MAX_DEBOUNCE_B0_TIME	20
-#define MIN_DEBOUNCE_B0_TIME	5
-
-#define MAX_DEBOUNCE_A0_TIME	8
-#define MIN_DEBOUNCE_A0_TIME	1
-
 #define KEY_COL(val)	(((val) >> 16) & 0xff)
 #define KEY_ROW(val)	(((val) >> 24) & 0xff)
 #define KEY_VAL(val)	((val) & 0xffff)
