@@ -568,7 +568,7 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 			callback->auddev_evt_listener(
 				evt_id,
 				evt_payload,
-				&callback->private_data);
+				callback->private_data);
 			if (callback->cb_next == NULL)
 				break;
 			else {
