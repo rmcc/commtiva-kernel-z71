@@ -667,7 +667,7 @@ config MSM_HW3D
 	  library.
 
 config MSM_ADSP
-	depends on (ARCH_MSM7X01A || ARCH_MSM7X25 || ARCH_MSM7X27 || ARCH_MSM7X30)
+	depends on (ARCH_MSM7X01A || ARCH_MSM7X25 || ARCH_MSM7X27)
 	tristate "MSM ADSP driver"
 	depends on ANDROID_PMEM
 	default y
@@ -677,14 +677,14 @@ config MSM_ADSP
 config MSM_ADSP_REPORT_EVENTS
 	bool "Report modem events from the DSP"
 	default y
-	depends on MSM_ADSP
+	depends on (MSM_ADSP || MSM7KV2_AUDIO)
 	help
 	  Normally, only messages from the aDSP are reported to userspace.
 	  With this option, we report events from the aDSP as well.
 
 config MSM7KV2_AUDIO
 	bool "MSM7K v2 audio"
-	depends on (ARCH_MSM7X30 && MSM_ADSP)
+	depends on (ARCH_MSM7X30 && ANDROID_PMEM)
 	default y
 	help
 	  Enables QDSP5V2-based audio drivers for audio playbacks and
