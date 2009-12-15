@@ -198,9 +198,11 @@ static void voice_auddev_cb_function(u32 evt_id,
 		if (v->dev_state == DEV_CHANGE)
 			break;
 		else if (v->dev_state != DEV_REL_DONE) {
-			if ((atomic_read(&v->rel_start_flag)) ||
-				(v->voc_state == VOICE_RELEASE) ||
-				(v->voc_state == VOICE_INIT))
+			if (atomic_read(&v->rel_start_flag)) {
+				atomic_dec(&v->rel_start_flag);
+				break;
+			} else if ((v->voc_state == VOICE_RELEASE) ||
+					(v->voc_state == VOICE_INIT))
 				break;
 			else {
 				rc = wait_event_interruptible(
@@ -427,20 +429,10 @@ static int voice_thread(void *data)
 				MM_ERR("Get this event at the wrong state\n");
 			break;
 		case VOICE_RELEASE_START:
-			/* release device */
-			/* if dev_state == RELEASE or
-			dev_state == CONCURRENT, send
-			release_done, otherwise, wait for the dev_state */
-			if (v->dev_state == DEV_REL_DONE) {
-				voice_cmd_release_done(v);
-				v->voc_state = VOICE_RELEASE;
-			} else {
-				/* wait for the dev_state = RELEASE */
-				rc = wait_event_interruptible(v->dev_wait,
-					v->dev_state == DEV_REL_DONE);
-				voice_cmd_release_done(v);
-				v->voc_state = VOICE_RELEASE;
-			}
+			voice_cmd_release_done(v);
+			v->voc_state = VOICE_RELEASE;
+			if (atomic_read(&v->rel_start_flag))
+				atomic_dec(&v->rel_start_flag);
 			break;
 		case VOICE_CHANGE_START:
 			if ((v->voc_state == VOICE_ACQUIRE)
