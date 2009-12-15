@@ -15,6 +15,31 @@
 #define PM_QOS_NUM_CLASSES 5
 #define PM_QOS_DEFAULT_VALUE -1
 
+struct requirement_list {
+	struct list_head list;
+	union {
+		s32 value;
+		s32 usec;
+		s32 kbps;
+	};
+	char *name;
+	void *data;
+};
+
+struct pm_qos_object {
+	struct requirement_list requirements;
+	struct blocking_notifier_head *notifiers;
+	struct miscdevice pm_qos_power_miscdev;
+	char *name;
+	s32 default_value;
+	atomic_t target_value;
+	s32 (*comparitor)(s32, s32);
+	void *data;
+	int (*add_fn)(struct pm_qos_object *, char *, s32, void **);
+	int (*update_fn)(struct pm_qos_object *, char *, s32, void **);
+	int (*remove_fn)(struct pm_qos_object *, char *, s32, void **);
+};
+
 int pm_qos_add_requirement(int qos, char *name, s32 value);
 int pm_qos_update_requirement(int qos, char *name, s32 new_value);
 void pm_qos_remove_requirement(int qos, char *name);
