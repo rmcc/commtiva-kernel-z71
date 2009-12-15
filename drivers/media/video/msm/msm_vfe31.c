@@ -1392,6 +1392,7 @@ static void vfe31_send_msg_no_payload(enum VFE31_MESSAGE_ID id)
 
 static void vfe31_process_reg_update_irq(void)
 {
+	uint32_t  temp;
 	if (vfe31_ctrl->start_ack_pending == TRUE) {
 		vfe31_send_msg_no_payload(MSG_ID_START_ACK);
 		vfe31_ctrl->start_ack_pending = FALSE;
@@ -1401,6 +1402,38 @@ static void vfe31_process_reg_update_irq(void)
 	} else {
 		CDBG("vfe driver triggered reg update itself.\n");
 	}
+	if (vfe31_ctrl->operation_mode & 1) {  /* in snapshot mode */
+		/* later we need to add check for live snapshot mode. */
+		vfe31_ctrl->vfe_capture_count--;
+		/* if last frame to be captured: */
+		if (vfe31_ctrl->vfe_capture_count == 0) {
+			/* stop the bus output:  write master enable = 0*/
+			if (vfe31_ctrl->outpath.output_mode &
+					VFE31_OUTPUT_MODE_PT) {
+				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out0.ch0));
+				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out0.ch1));
+			}
+			if (vfe31_ctrl->outpath.output_mode &
+					VFE31_OUTPUT_MODE_S) {
+				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out1.ch0));
+				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out1.ch1));
+			}
+			msm_io_w(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
+				vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
+			temp = msm_io_r(vfe31_ctrl->vfebase +
+				VFE_CAMIF_COMMAND);
+			/* then do reg_update. */
+			msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+		}
+	} /* if snapshot mode. */
 }
 
 static void vfe31_set_default_reg_values(void)
@@ -1454,7 +1487,6 @@ static void vfe31_process_reset_irq(void)
 
 static void vfe31_process_camif_sof_irq(void)
 {
-	uint32_t  temp;
 
 	if ((vfe31_ctrl->operation_mode == 3) &&
 		(vfe31_ctrl->vfeFrameId == 0)) {
@@ -1467,40 +1499,6 @@ static void vfe31_process_camif_sof_irq(void)
 	vfe31_ctrl->vfeFrameId++;
 	CDBG("camif_sof_irq, frameId = %d\n",
 		vfe31_ctrl->vfeFrameId);
-	if (vfe31_ctrl->operation_mode & 1)  /* in snapshot mode */
-		/* later we need to add check for live snapshot mode. */
-	{
-		vfe31_ctrl->vfe_capture_count--;
-		/* if last frame to be captured: */
-		if (vfe31_ctrl->vfe_capture_count == 0) {
-			/* stop the bus output:  write master enable = 0*/
-			if (vfe31_ctrl->outpath.output_mode &
-				VFE31_OUTPUT_MODE_PT) {
-				msm_io_w(0, vfe31_ctrl->vfebase +
-						V31_AXI_OUT_OFF + 20 +
-					24 * (vfe31_ctrl->outpath.out0.ch0));
-				msm_io_w(0, vfe31_ctrl->vfebase +
-						V31_AXI_OUT_OFF + 20 +
-					24 * (vfe31_ctrl->outpath.out0.ch1));
-			}
-			if (vfe31_ctrl->outpath.output_mode &
-				VFE31_OUTPUT_MODE_S) {
-				msm_io_w(0, vfe31_ctrl->vfebase +
-						V31_AXI_OUT_OFF + 20 +
-					24 * (vfe31_ctrl->outpath.out1.ch0));
-				msm_io_w(0, vfe31_ctrl->vfebase +
-						V31_AXI_OUT_OFF + 20 +
-					24 * (vfe31_ctrl->outpath.out1.ch1));
-			}
-			msm_io_w(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
-					vfe31_ctrl->vfebase +
-					VFE_CAMIF_COMMAND);
-			temp = msm_io_r(vfe31_ctrl->vfebase +
-							VFE_CAMIF_COMMAND);
-			/* then do reg_update. */
-			msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
-		}
-	} /* if snapshot mode. */
 }
 
 #define VFE31_AXI_OFFSET 0x0050
