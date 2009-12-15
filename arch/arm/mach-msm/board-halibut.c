@@ -1444,7 +1444,7 @@ MACHINE_START(HALIBUT, "Halibut Board (QCT SURF7200A)")
 	.phys_io        = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params	= 0x10000100,
+	.boot_params	= PHYS_OFFSET + 0x100,
 	.map_io		= halibut_map_io,
 	.init_irq	= halibut_init_irq,
 	.init_machine	= halibut_init,
@@ -1456,7 +1456,7 @@ MACHINE_START(MSM7201A_FFA, "QCT FFA7201A Board")
 	.phys_io        = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params	= 0x10000100,
+	.boot_params	= PHYS_OFFSET + 0x100,
 	.map_io		= halibut_map_io,
 	.init_irq	= halibut_init_irq,
 	.init_machine	= halibut_init,
@@ -1468,7 +1468,7 @@ MACHINE_START(MSM7201A_SURF, "QCT SURF7201A Board")
 	.phys_io        = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params	= 0x10000100,
+	.boot_params	= PHYS_OFFSET + 0x100,
 	.map_io		= halibut_map_io,
 	.init_irq	= halibut_init_irq,
 	.init_machine	= halibut_init,

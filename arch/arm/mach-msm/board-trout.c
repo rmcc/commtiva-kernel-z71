@@ -874,7 +874,7 @@ MACHINE_START(TROUT, "trout")
 	.phys_io        = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst    = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
-	.boot_params    = 0x10000100,
+	.boot_params    = PHYS_OFFSET + 0x100,
 	.fixup          = trout_fixup,
 	.map_io         = trout_map_io,
 	.init_irq       = trout_init_irq,
