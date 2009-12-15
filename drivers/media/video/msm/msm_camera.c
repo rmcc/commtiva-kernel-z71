@@ -1219,7 +1219,7 @@ static int msm_get_sensor_info(struct msm_sync *sync, void __user *arg)
 	memcpy(&info.name[0],
 		sdata->sensor_name,
 		MAX_SENSOR_NAME);
-	info.flash_enabled = !!sdata->camera_flash;
+	info.flash_enabled = sdata->flash_type != MSM_CAMERA_FLASH_NONE;
 
 	/* copy back to user space */
 	if (copy_to_user((void *)arg,
@@ -1656,38 +1656,6 @@ static long msm_ioctl_common(struct msm_device *pmsm,
 	}
 }
 
-int msm_camera_flash(struct msm_sync *sync, int level)
-{
-	int flash_level;
-
-	if (!sync->sdata->camera_flash) {
-		pr_err("%s: camera flash is not supported.\n", __func__);
-		return -EINVAL;
-	}
-
-	if (!sync->sdata->num_flash_levels) {
-		pr_err("%s: no flash levels.\n", __func__);
-		return -EINVAL;
-	}
-
-	switch (level) {
-	case MSM_CAMERA_LED_HIGH:
-		flash_level = sync->sdata->num_flash_levels - 1;
-		break;
-	case MSM_CAMERA_LED_LOW:
-		flash_level = sync->sdata->num_flash_levels / 2;
-		break;
-	case MSM_CAMERA_LED_OFF:
-		flash_level = 0;
-		break;
-	default:
-		pr_err("%s: invalid flash level %d.\n", __func__, level);
-		return -EINVAL;
-	}
-
-	return sync->sdata->camera_flash(level);
-}
-
 static long msm_ioctl_config(struct file *filep, unsigned int cmd,
 	unsigned long arg)
 {
@@ -1766,7 +1734,7 @@ static long msm_ioctl_config(struct file *filep, unsigned int cmd,
 			ERR_COPY_FROM_USER();
 			rc = -EFAULT;
 		} else
-			rc = msm_camera_flash(pmsm->sync, led_state);
+			rc = msm_camera_flash_set_led_state(led_state);
 		break;
 	}
 
