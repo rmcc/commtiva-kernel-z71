@@ -22,7 +22,7 @@
 #if defined(CONFIG_ARCH_MSM7X30)
 #include "irqs-7x30.h"
 #elif defined(CONFIG_ARCH_QSD8X50)
-#include "irqs-8xxx.h"
+#include "irqs-8x50.h"
 #include "sirc.h"
 #elif defined(CONFIG_ARCH_MSM_ARM11)
 #include "irqs-7xxx.h"
