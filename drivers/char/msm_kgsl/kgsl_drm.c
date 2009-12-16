@@ -76,8 +76,11 @@
 
 struct drm_kgsl_gem_object {
 	struct drm_gem_object *obj;
-	uint32_t pmem_phys;
+	uint32_t phys;
+	void *kmem;
+	uint32_t type;
 	uint64_t mmap_offset;
+	int flags;
 };
 
 /* TODO:
@@ -137,6 +140,89 @@ kgsl_gem_free_mmap_offset(struct drm_gem_object *obj)
 	priv->mmap_offset = 0;
 }
 
+static int
+kgsl_gem_memory_allocated(struct drm_gem_object *obj)
+{
+	struct drm_kgsl_gem_object *priv = obj->driver_private;
+
+	switch (priv->type) {
+	case DRM_KGSL_GEM_TYPE_EBI:
+	case DRM_KGSL_GEM_TYPE_SMI:
+		return priv->phys ? 1 : 0;
+	case DRM_KGSL_GEM_TYPE_KMEM:
+	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+		return priv->kmem ? 1 : 0;
+	}
+
+	return 0;
+}
+
+static int
+kgsl_gem_alloc_memory(struct drm_gem_object *obj)
+{
+	struct drm_kgsl_gem_object *priv = obj->driver_private;
+
+	/* Return if the memory is already allocated */
+
+	if (kgsl_gem_memory_allocated(obj))
+		return 0;
+
+	switch (priv->type) {
+	case DRM_KGSL_GEM_TYPE_EBI:
+	case DRM_KGSL_GEM_TYPE_SMI:
+	{
+		int type = priv->type == DRM_KGSL_GEM_TYPE_EBI ?
+			PMEM_MEMTYPE_EBI1 : PMEM_MEMTYPE_SMI;
+
+		priv->phys = pmem_kalloc(obj->size,
+					 type | PMEM_ALIGNMENT_4K);
+
+		if (IS_ERR((void *) priv->phys)) {
+			DRM_ERROR("Error allocating PMEM memory\n");
+			priv->phys = 0;
+			return -ENOMEM;
+		}
+	}
+	break;
+	case DRM_KGSL_GEM_TYPE_KMEM:
+	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+	{
+		priv->kmem = (void *) vmalloc_user(obj->size);
+
+		if (priv->kmem == NULL)
+			return -ENOMEM;
+	}
+	break;
+	}
+
+	return 0;
+}
+
+static void
+kgsl_gem_free_memory(struct drm_gem_object *obj)
+{
+	struct drm_kgsl_gem_object *priv = obj->driver_private;
+
+	if (!kgsl_gem_memory_allocated(obj))
+		return;
+
+	switch (priv->type) {
+	case DRM_KGSL_GEM_TYPE_EBI:
+	case DRM_KGSL_GEM_TYPE_SMI:
+		pmem_kfree(priv->phys);
+		break;
+
+	case DRM_KGSL_GEM_TYPE_KMEM:
+	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+		vfree(priv->kmem);
+		break;
+	}
+
+	priv->phys = 0;
+	priv->kmem = NULL;
+}
+
+
 int
 kgsl_gem_init_object(struct drm_gem_object *obj)
 {
@@ -154,11 +240,7 @@ kgsl_gem_init_object(struct drm_gem_object *obj)
 void
 kgsl_gem_free_object(struct drm_gem_object *obj)
 {
-	struct drm_kgsl_gem_object *priv = obj->driver_private;
-
-	if (priv->pmem_phys)
-		pmem_kfree(priv->pmem_phys);
-
+	kgsl_gem_free_memory(obj);
 	kgsl_gem_free_mmap_offset(obj);
 	drm_free(obj->driver_private, 1, DRM_MEM_DRIVER);
 }
@@ -219,47 +301,78 @@ kgsl_gem_create_ioctl(struct drm_device *dev, void *data,
 	struct drm_kgsl_gem_create *create = data;
 	struct drm_gem_object *obj;
 	int ret, handle;
-	unsigned long phys;
 	struct drm_kgsl_gem_object *priv;
-
-	phys = pmem_kalloc(create->size,
-		      PMEM_MEMTYPE_EBI1 |
-		      PMEM_ALIGNMENT_4K);
-	if (IS_ERR_VALUE(phys)) {
-		DRM_ERROR("Unable to allocate memory\n");
-		return -ENOMEM;
-	}
 
 	obj = drm_gem_object_alloc(dev, create->size);
 
-	if (obj == NULL) {
-		pmem_kfree(phys);
+	if (obj == NULL)
 		return -ENOMEM;
-	}
 
 	mutex_lock(&dev->struct_mutex);
 	priv = obj->driver_private;
-	priv->pmem_phys = phys;
+
+	priv->phys = 0;
+	priv->kmem = NULL;
+
+	/* To preserve backwards compatability, the default memory source
+	   is EBI */
+
+	priv->type = DRM_KGSL_GEM_TYPE_EBI;
+
 	ret = drm_gem_handle_create(file_priv, obj, &handle);
 
 	drm_gem_object_handle_unreference(obj);
 	mutex_unlock(&dev->struct_mutex);
 
-	if (ret) {
-		pmem_kfree(phys);
-		priv->pmem_phys = 0;
+	if (ret)
 		return ret;
-	}
 
 	create->handle = handle;
 	return 0;
 }
 
 int
-kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
+kgsl_gem_setmemtype_ioctl(struct drm_device *dev, void *data,
 			struct drm_file *file_priv)
 {
-	struct drm_kgsl_gem_prep *args = data;
+	struct drm_kgsl_gem_memtype *args = data;
+	struct drm_gem_object *obj;
+	struct drm_kgsl_gem_object *priv;
+	int ret = 0;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	mutex_lock(&dev->struct_mutex);
+	priv = obj->driver_private;
+
+	switch (args->type) {
+	case DRM_KGSL_GEM_TYPE_EBI:
+	case DRM_KGSL_GEM_TYPE_KMEM:
+	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+#ifdef CONFIG_PMEM_SMI_REGION
+	case DRM_KGSL_GEM_TYPE_SMI:
+#endif
+		priv->type = args->type;
+		break;
+
+	default:
+		ret = -EINVAL;
+	}
+
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+
+	return ret;
+}
+
+int
+kgsl_gem_getmemtype_ioctl(struct drm_device *dev, void *data,
+			  struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_memtype *args = data;
 	struct drm_gem_object *obj;
 	struct drm_kgsl_gem_object *priv;
 
@@ -269,11 +382,114 @@ kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
 		return -EINVAL;
 
 	mutex_lock(&dev->struct_mutex);
-
 	priv = obj->driver_private;
 
-	if (!priv->mmap_offset) {
-		int ret = kgsl_gem_create_mmap_offset(obj);
+	args->type = priv->type;
+
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+
+	return 0;
+}
+
+/* Allocate the memory and prepare it for CPU mapping */
+
+int
+kgsl_gem_alloc_ioctl(struct drm_device *dev, void *data,
+		    struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_alloc *args = data;
+	struct drm_gem_object *obj;
+	struct drm_kgsl_gem_object *priv;
+	int ret;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	mutex_lock(&dev->struct_mutex);
+	priv = obj->driver_private;
+
+	ret = kgsl_gem_alloc_memory(obj);
+
+	if (ret) {
+		DRM_ERROR("Unable to allocate memory\n");
+	} else if (!priv->mmap_offset) {
+		ret = kgsl_gem_create_mmap_offset(obj);
+		if (ret)
+			DRM_ERROR("Unable to create a mmap offset\n");
+	}
+
+	args->offset = priv->mmap_offset;
+
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+
+	return ret;
+}
+
+int
+kgsl_gem_mmap_ioctl(struct drm_device *dev, void *data,
+			struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_mmap *args = data;
+	struct drm_gem_object *obj;
+	unsigned long addr;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	down_write(&current->mm->mmap_sem);
+
+	addr = do_mmap(obj->filp, 0, args->size,
+		       PROT_READ | PROT_WRITE, MAP_SHARED,
+		       args->offset);
+
+	up_write(&current->mm->mmap_sem);
+
+	mutex_lock(&dev->struct_mutex);
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+
+	if (IS_ERR((void *) addr))
+		return addr;
+
+	args->hostptr = (uint32_t) addr;
+	return 0;
+}
+
+/* This function is deprecated */
+
+int
+kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
+			struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_prep *args = data;
+	struct drm_gem_object *obj;
+	struct drm_kgsl_gem_object *priv;
+	int ret;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	mutex_lock(&dev->struct_mutex);
+	priv = obj->driver_private;
+
+	ret = kgsl_gem_alloc_memory(obj);
+	if (ret) {
+		DRM_ERROR("Unable to allocate memory\n");
+		drm_gem_object_unreference(obj);
+		mutex_unlock(&dev->struct_mutex);
+		return ret;
+	}
+
+	if (priv->mmap_offset == 0) {
+		ret = kgsl_gem_create_mmap_offset(obj);
 		if (ret) {
 			drm_gem_object_unreference(obj);
 			mutex_unlock(&dev->struct_mutex);
@@ -282,7 +498,7 @@ kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
 	}
 
 	args->offset = priv->mmap_offset;
-	args->phys = priv->pmem_phys;
+	args->phys = priv->phys;
 
 	drm_gem_object_unreference(obj);
 	mutex_unlock(&dev->struct_mutex);
@@ -290,13 +506,41 @@ kgsl_gem_prep_ioctl(struct drm_device *dev, void *data,
 	return 0;
 }
 
-int kgsl_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+int kgsl_gem_kmem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+{
+	struct drm_gem_object *obj = vma->vm_private_data;
+	struct drm_device *dev = obj->dev;
+	struct drm_kgsl_gem_object *priv;
+	unsigned long offset, pg;
+	struct page *page;
+
+	mutex_lock(&dev->struct_mutex);
+
+	priv = obj->driver_private;
+
+	offset = (unsigned long) vmf->virtual_address - vma->vm_start;
+	pg = (unsigned long) priv->kmem + offset;
+
+	page = vmalloc_to_page((void *) pg);
+	if (!page) {
+		mutex_unlock(&dev->struct_mutex);
+		return VM_FAULT_SIGBUS;
+	}
+
+	get_page(page);
+	vmf->page = page;
+
+	mutex_unlock(&dev->struct_mutex);
+	return 0;
+}
+
+int kgsl_gem_phys_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct drm_gem_object *obj = vma->vm_private_data;
 	struct drm_device *dev = obj->dev;
 	struct drm_kgsl_gem_object *priv;
 	unsigned long offset, pfn;
-	int ret;
+	int ret = 0;
 
 	offset = ((unsigned long) vmf->virtual_address - vma->vm_start) >>
 		PAGE_SHIFT;
@@ -305,9 +549,9 @@ int kgsl_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 
 	priv = obj->driver_private;
 
-	pfn = (priv->pmem_phys >> PAGE_SHIFT) + offset;
-
-	ret = vm_insert_pfn(vma, (unsigned long) vmf->virtual_address, pfn);
+	pfn = (priv->phys >> PAGE_SHIFT) + offset;
+	ret = vm_insert_pfn(vma,
+			    (unsigned long) vmf->virtual_address, pfn);
 	mutex_unlock(&dev->struct_mutex);
 
 	switch (ret) {
@@ -321,15 +565,106 @@ int kgsl_gem_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	}
 }
 
-static struct vm_operations_struct kgsl_gem_vm_ops = {
-	.fault = kgsl_gem_fault,
+static struct vm_operations_struct kgsl_gem_kmem_vm_ops = {
+	.fault = kgsl_gem_kmem_fault,
 	.open = drm_gem_vm_open,
 	.close = drm_gem_vm_close,
 };
 
+static struct vm_operations_struct kgsl_gem_phys_vm_ops = {
+	.fault = kgsl_gem_phys_fault,
+	.open = drm_gem_vm_open,
+	.close = drm_gem_vm_close,
+};
+
+/* This is a clone of the standard drm_gem_mmap function modified to allow
+   us to properly map KMEM regions as well as the PMEM regions */
+
+int msm_drm_gem_mmap(struct file *filp, struct vm_area_struct *vma)
+{
+	struct drm_file *priv = filp->private_data;
+	struct drm_device *dev = priv->minor->dev;
+	struct drm_gem_mm *mm = dev->mm_private;
+	struct drm_map *map = NULL;
+	struct drm_gem_object *obj;
+	struct drm_hash_item *hash;
+	struct drm_kgsl_gem_object *gpriv;
+	int ret = 0;
+
+	mutex_lock(&dev->struct_mutex);
+
+	if (drm_ht_find_item(&mm->offset_hash, vma->vm_pgoff, &hash)) {
+		mutex_unlock(&dev->struct_mutex);
+		return drm_mmap(filp, vma);
+	}
+
+	map = drm_hash_entry(hash, struct drm_map_list, hash)->map;
+	if (!map ||
+	    ((map->flags & _DRM_RESTRICTED) && !capable(CAP_SYS_ADMIN))) {
+		ret =  -EPERM;
+		goto out_unlock;
+	}
+
+	/* Check for valid size. */
+	if (map->size < vma->vm_end - vma->vm_start) {
+		ret = -EINVAL;
+		goto out_unlock;
+	}
+
+	obj = map->handle;
+
+	gpriv = obj->driver_private;
+
+	/* VM_PFNMAP is only for memory that doesn't use struct page
+	 * in other words, not "normal" memory.  If you try to use it
+	 * with "normal" memory then the mappings don't get flushed. */
+
+	if (gpriv->type == DRM_KGSL_GEM_TYPE_KMEM ||
+		gpriv->type == DRM_KGSL_GEM_TYPE_KMEM_NOCACHE) {
+		vma->vm_flags |= VM_RESERVED | VM_DONTEXPAND;
+		vma->vm_ops = &kgsl_gem_kmem_vm_ops;
+	} else {
+		vma->vm_flags |= VM_RESERVED | VM_IO | VM_PFNMAP |
+			VM_DONTEXPAND;
+		vma->vm_ops = &kgsl_gem_phys_vm_ops;
+	}
+
+	vma->vm_private_data = map->handle;
+
+	switch (gpriv->type) {
+	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+	case DRM_KGSL_GEM_TYPE_EBI:
+	case DRM_KGSL_GEM_TYPE_SMI:
+		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
+		break;
+	case DRM_KGSL_GEM_TYPE_KMEM:
+		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
+	}
+
+	/* Take a ref for this mapping of the object, so that the fault
+	 * handler can dereference the mmap offset's pointer to the object.
+	 * This reference is cleaned up by the corresponding vm_close
+	 * (which should happen whether the vma was created by this call, or
+	 * by a vm_open due to mremap or partial unmap or whatever).
+	 */
+	drm_gem_object_reference(obj);
+
+	vma->vm_file = filp;	/* Needed for drm_vm_open() */
+	drm_vm_open_locked(vma);
+
+out_unlock:
+	mutex_unlock(&dev->struct_mutex);
+
+	return ret;
+}
+
 struct drm_ioctl_desc kgsl_drm_ioctls[] = {
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_CREATE, kgsl_gem_create_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_PREP, kgsl_gem_prep_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_SETMEMTYPE, kgsl_gem_setmemtype_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_GETMEMTYPE, kgsl_gem_getmemtype_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_ALLOC, kgsl_gem_alloc_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_MMAP, kgsl_gem_mmap_ioctl, 0),
 };
 
 static struct drm_driver driver = {
@@ -346,7 +681,6 @@ static struct drm_driver driver = {
 	.dri_library_name = kgsl_library_name,
 	.gem_init_object = kgsl_gem_init_object,
 	.gem_free_object = kgsl_gem_free_object,
-	.gem_vm_ops = &kgsl_gem_vm_ops,
 	.ioctls = kgsl_drm_ioctls,
 
 	.fops = {
@@ -354,7 +688,7 @@ static struct drm_driver driver = {
 		 .open = drm_open,
 		 .release = drm_release,
 		 .ioctl = drm_ioctl,
-		 .mmap = drm_gem_mmap,
+		 .mmap = msm_drm_gem_mmap,
 		 .poll = drm_poll,
 		 .fasync = drm_fasync,
 		 },
