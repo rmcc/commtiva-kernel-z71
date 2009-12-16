@@ -32,6 +32,12 @@
 #include "kgsl_log.h"
 #include "kgsl_sharedmem.h"
 
+/* Identifier for the global page table */
+/* Per process page tables will probably pass in the thread group
+   as an identifier */
+
+#define KGSL_MMU_GLOBAL_PT 0
+
 #define GSL_PT_SUPER_PTE 8
 #define GSL_PT_PAGE_WV		0x00000001
 #define GSL_PT_PAGE_RV		0x00000002
@@ -74,6 +80,8 @@ struct kgsl_pagetable {
 	unsigned int   last_superpte;
 	unsigned int   max_entries;
 	struct gen_pool *pool;
+	struct list_head list;
+	unsigned int name;
 };
 
 struct kgsl_mmu {
@@ -88,6 +96,12 @@ struct kgsl_mmu {
 	struct kgsl_memdesc    dummyspace;
 	/* current page table object being used by device mmu */
 	struct kgsl_pagetable  *hwpagetable;
+
+	/* List of pagetables atatched to this mmu */
+	struct list_head pagetable_list;
+
+	/* Mutex for accessing the pagetable list */
+	struct mutex pt_mutex;
 };
 
 
@@ -102,9 +116,10 @@ int kgsl_mmu_init(struct kgsl_device *device);
 
 int kgsl_mmu_close(struct kgsl_device *device);
 
-struct kgsl_pagetable *kgsl_mmu_createpagetableobject(struct kgsl_mmu *mmu);
+struct kgsl_pagetable *kgsl_mmu_getpagetable(struct kgsl_mmu *mmu,
+					     unsigned long name);
 
-int kgsl_mmu_destroypagetableobject(struct kgsl_pagetable *pagetable);
+void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable);
 
 int kgsl_mmu_setpagetable(struct kgsl_device *device,
 				struct kgsl_pagetable *pagetable);

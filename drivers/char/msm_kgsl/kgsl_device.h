@@ -118,6 +118,12 @@ struct kgsl_devconfig {
 	struct kgsl_memregion gmemspace;
 };
 
+static inline struct kgsl_mmu *
+kgsl_yamato_get_mmu(struct kgsl_device *device)
+{
+	return (struct kgsl_mmu *) (device ? &device->mmu : NULL);
+}
+
 int kgsl_yamato_start(struct kgsl_device *device, uint32_t flags);
 
 int kgsl_yamato_stop(struct kgsl_device *device);
