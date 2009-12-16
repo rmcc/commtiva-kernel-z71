@@ -1118,13 +1118,6 @@ config DCC_TTY
 	tristate "DCC tty driver"
 	depends on ARM
 
-config Q6_VENC
-	tristate "q6 video encoder driver"
-	depends on ARCH_MSM_SCORPION && MSM_DALRPC
-	default m
-	help
-	  Kernel driver for MSM QDSP6 video encoding.
-
 config MSM_KGSL
 	tristate "MSM 3D Graphics driver"
 	default n
