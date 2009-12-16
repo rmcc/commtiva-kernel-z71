@@ -129,7 +129,7 @@ static inline void dma_free_noncoherent(struct device *dev, size_t size,
  */
 static inline void dma_coherent_pre_ops(void)
 {
-#if (__LINUX_ARM_ARCH__ >= 7) && !defined(CONFIG_ARCH_QSD8X50)
+#if (__LINUX_ARM_ARCH__ >= 7)
 	dmb();
 #else
 	if (arch_is_coherent())
@@ -144,10 +144,14 @@ static inline void dma_coherent_pre_ops(void)
  */
 static inline void dma_coherent_post_ops(void)
 {
+#if (__LINUX_ARM_ARCH__ >= 7)
+	dmb();
+#else
 	if (arch_is_coherent())
 		dmb();
 	else
 		barrier();
+#endif
 }
 
 /**
