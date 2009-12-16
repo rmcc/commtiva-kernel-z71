@@ -650,7 +650,7 @@ static int snddev_icodec_remove(struct platform_device *pdev)
 static struct platform_driver snddev_icodec_driver = {
   .probe = snddev_icodec_probe,
   .remove = snddev_icodec_remove,
-  .driver = { .name = "msm_snddev_icodec" }
+  .driver = { .name = "snddev_icodec" }
 };
 
 #ifdef CONFIG_DEBUG_FS
