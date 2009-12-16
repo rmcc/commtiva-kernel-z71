@@ -344,19 +344,16 @@ int auddev_unregister_evt_listner(u32 clnt_type, u32 clnt_id)
 {
 	struct msm_snd_evt_listner *callback = event.cb;
 
-	for (; ((callback->clnt_type != clnt_type)
-		&& (callback->clnt_id != clnt_id));
-		) {
-			if (callback->cb_next == NULL)
-				break;
-			else
-				callback = callback->cb_next;
+	while (callback != NULL) {
+		if ((callback->clnt_type == clnt_type)
+			&& (callback->clnt_id == clnt_id))
+			break;
+		 callback = callback->cb_next;
 	}
-
-	if (!(callback->clnt_type == clnt_type)
-		|| !(callback->clnt_id == clnt_id))
+	if (callback == NULL)
 		return -EINVAL;
-	else if ((callback->cb_next == NULL) || (callback->cb_prev == NULL))
+
+	if ((callback->cb_next == NULL) && (callback->cb_prev == NULL))
 		event.cb = NULL;
 	else if (callback->cb_next == NULL)
 		callback->cb_prev->cb_next = NULL;
