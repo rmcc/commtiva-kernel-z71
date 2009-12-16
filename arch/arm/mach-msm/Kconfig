@@ -9,28 +9,28 @@ config ARCH_MSM7X01A
 	select ARCH_MSM_ARM11
 	select MSM_VIC
 	select CPU_V6
-	select REMOTE_SPINLOCK_SWP
+	select MSM_REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X25
 	bool "MSM7x25"
 	select ARCH_MSM_ARM11
 	select MSM_VIC
 	select CPU_V6
-	select REMOTE_SPINLOCK_SWP
+	select MSM_REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X27
 	bool "MSM7x27"
 	select ARCH_MSM_ARM11
 	select MSM_VIC
 	select CPU_V6
-	select REMOTE_SPINLOCK_SWP
+	select MSM_REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X30
 	bool "MSM7x30"
 	select ARCH_MSM_SCORPION
 	select MSM_VIC
 	select CPU_V7
-	select REMOTE_SPINLOCK_DEKKERS
+	select MSM_REMOTE_SPINLOCK_DEKKERS
 
 config ARCH_QSD8X50
 	bool "QSD8X50"
@@ -39,7 +39,7 @@ config ARCH_QSD8X50
 	select CPU_V7
 	select EMULATE_DOMAIN_MANAGER_V7
 	select VERIFY_PERMISSION_FAULT
-	select REMOTE_SPINLOCK_LDREX
+	select MSM_REMOTE_SPINLOCK_LDREX
 
 endchoice
 
@@ -51,11 +51,11 @@ config  ARCH_MSM_SCORPION
 config  MSM_VIC
 	bool
 
-config REMOTE_SPINLOCK_DEKKERS
+config MSM_REMOTE_SPINLOCK_DEKKERS
 	bool
-config REMOTE_SPINLOCK_SWP
+config MSM_REMOTE_SPINLOCK_SWP
 	bool
-config REMOTE_SPINLOCK_LDREX
+config MSM_REMOTE_SPINLOCK_LDREX
 	bool
 
 menu "MSM Board Selection"

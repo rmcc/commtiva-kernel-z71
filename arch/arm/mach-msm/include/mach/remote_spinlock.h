@@ -190,13 +190,13 @@ static inline void __raw_remote_dek_spin_unlock(raw_remote_spinlock_t *lock)
 
 int _remote_spin_lock_init(remote_spinlock_id_t, _remote_spinlock_t *lock);
 
-#if defined(CONFIG_REMOTE_SPINLOCK_DEKKERS)
+#if defined(CONFIG_MSM_REMOTE_SPINLOCK_DEKKERS)
 /* Use Dekker's algorithm when LDREX/STREX and SWP are unavailable for
  * shared memory */
 #define _remote_spin_lock(lock)		__raw_remote_dek_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_dek_spin_unlock(*lock)
 #define _remote_spin_trylock(lock)	__raw_remote_dek_spin_trylock(*lock)
-#elif defined(CONFIG_REMOTE_SPINLOCK_SWP)
+#elif defined(CONFIG_MSM_REMOTE_SPINLOCK_SWP)
 /* Use SWP-based locks when LDREX/STREX are unavailable for shared memory. */
 #define _remote_spin_lock(lock)		__raw_remote_swp_spin_lock(*lock)
 #define _remote_spin_unlock(lock)	__raw_remote_swp_spin_unlock(*lock)
