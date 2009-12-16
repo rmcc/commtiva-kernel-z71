@@ -375,10 +375,14 @@ error_invalid_freq:
 static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 {
 	int trc;
+	int i;
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;;
 
-	pmic_hsed_enable(icodec->data->pmctl_id, PM_HSED_ENABLE_PWM_TCXO);
+	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
+		pmic_hsed_enable(icodec->data->pmctl_id[i],
+			 PM_HSED_ENABLE_PWM_TCXO);
+	}
 	/* Voltage regulator voting
 	 * Vote GP16, MSME, RF2
 	 */
@@ -468,7 +472,7 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 {
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
-
+	int i;
 	afe_disable(AFE_HW_PATH_CODEC_TX);
 
 	/* Disable ADIE */
@@ -482,7 +486,10 @@ static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 	clk_disable(drv->tx_mclk);
 
 	/* Disable mic bias */
-	pmic_hsed_enable(PM_HSED_CONTROLLER_0, PM_HSED_ENABLE_OFF);
+	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
+		pmic_hsed_enable(icodec->data->pmctl_id[i],
+			 PM_HSED_ENABLE_OFF);
+	}
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
