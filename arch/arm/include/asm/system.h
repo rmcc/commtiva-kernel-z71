@@ -139,7 +139,7 @@ extern unsigned int user_debug;
 #define dmb() __asm__ __volatile__ ("" : : : "memory")
 #endif
 
-#if __LINUX_ARM_ARCH__ >= 7 || defined(CONFIG_SMP)
+#if __LINUX_ARM_ARCH__ >= 7 || defined(CONFIG_SMP) || defined(CONFIG_ARCH_MSM)
 #define mb()		dmb()
 #define rmb()		dmb()
 #define wmb()		dmb()
