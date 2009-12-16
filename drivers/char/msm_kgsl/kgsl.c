@@ -982,6 +982,9 @@ static long kgsl_ioctl(struct file *filep, unsigned int cmd, unsigned long arg)
 		if (kgsl_cache_enable)
 			kgsl_clean_cache_all(private);
 #endif
+#ifdef CONFIG_MSM_KGSL_DRM
+		kgsl_gpu_mem_flush();
+#endif
 		result = kgsl_ioctl_rb_issueibcmds(private, (void __user *)arg);
 		break;
 

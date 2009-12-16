@@ -125,6 +125,7 @@ int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
 #ifdef CONFIG_MSM_KGSL_DRM
 extern int kgsl_drm_init(struct platform_device *dev);
 extern void kgsl_drm_exit(void);
+extern void kgsl_gpu_mem_flush(void);
 #else
 static inline int kgsl_drm_init(struct platform_device *dev)
 {
