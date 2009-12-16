@@ -74,6 +74,12 @@
 #define DRIVER_MINOR            0
 #define DRIVER_PATCHLEVEL       0
 
+struct drm_kgsl_gem_object {
+	struct drm_gem_object *obj;
+	uint32_t pmem_phys;
+	uint64_t mmap_offset;
+};
+
 /* TODO:
  * Add vsync wait */
 

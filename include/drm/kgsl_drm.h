@@ -1,3 +1,4 @@
+
 /* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -29,12 +30,7 @@
 #ifndef _KGSL_DRM_H_
 #define _KGSL_DRM_H_
 
-#include <linux/platform_device.h>
-
 #include "drm.h"
-#include "drmP.h"
-
-#ifdef CONFIG_MSM_KGSL_DRM
 
 #define DRM_KGSL_GEM_CREATE 0x00
 #define DRM_KGSL_GEM_PREP   0x01
@@ -45,11 +41,6 @@ DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_CREATE, struct drm_kgsl_gem_create)
 #define DRM_IOCTL_KGSL_GEM_PREP \
 DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_PREP, struct drm_kgsl_gem_prep)
 
-struct drm_kgsl_gem_object {
-	struct drm_gem_object *obj;
-	uint32_t pmem_phys;
-	uint64_t mmap_offset;
-};
 
 struct drm_kgsl_gem_create {
 	uint32_t size;
@@ -61,18 +52,5 @@ struct drm_kgsl_gem_prep {
 	uint32_t phys;
 	uint64_t offset;
 };
-
-extern int kgsl_drm_init(struct platform_device *dev);
-extern void kgsl_drm_exit(void);
-#else
-static inline int kgsl_drm_init(struct platform_device *dev)
-{
-	return 0;
-}
-
-static inline void kgsl_drm_exit(void)
-{
-}
-#endif
 
 #endif
