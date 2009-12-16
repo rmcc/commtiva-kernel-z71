@@ -377,12 +377,12 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 #endif
 		}
 	} else {
-		writel((val << 16) | (last_entry | msg->buf[dev->pos]),
+		writel(val | ((last_entry | msg->buf[dev->pos]) << 16),
 		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
 #if DEBUG
-		qup_verify_fifo(dev, (val << 16) | last_entry |
-			msg->buf[dev->pos], (uint32_t)dev->base +
-			QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
+		qup_verify_fifo(dev, val | (last_entry << 16) |
+		(msg->buf[dev->pos] << 16), (uint32_t)dev->base +
+		QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
 #endif
 	}
 
