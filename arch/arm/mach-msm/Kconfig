@@ -7,30 +7,35 @@ choice
 config ARCH_MSM7X01A
 	bool "MSM7x00A / MSM7x01A"
 	select ARCH_MSM_ARM11
+	select MSM_VIC
 	select CPU_V6
 	select REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X25
 	bool "MSM7x25"
 	select ARCH_MSM_ARM11
+	select MSM_VIC
 	select CPU_V6
 	select REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X27
 	bool "MSM7x27"
 	select ARCH_MSM_ARM11
+	select MSM_VIC
 	select CPU_V6
 	select REMOTE_SPINLOCK_SWP
 
 config ARCH_MSM7X30
 	bool "MSM7x30"
 	select ARCH_MSM_SCORPION
+	select MSM_VIC
 	select CPU_V7
 	select REMOTE_SPINLOCK_DEKKERS
 
 config ARCH_QSD8X50
 	bool "QSD8X50"
 	select ARCH_MSM_SCORPION
+	select MSM_VIC
 	select CPU_V7
 	select EMULATE_DOMAIN_MANAGER_V7
 	select VERIFY_PERMISSION_FAULT
@@ -41,6 +46,9 @@ endchoice
 config  ARCH_MSM_ARM11
 	bool
 config  ARCH_MSM_SCORPION
+	bool
+
+config  MSM_VIC
 	bool
 
 config REMOTE_SPINLOCK_DEKKERS

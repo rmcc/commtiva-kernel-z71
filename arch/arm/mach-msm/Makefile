@@ -14,8 +14,10 @@ obj-y += nohlt.o
 obj-y += pmic.o
 obj-y += internal_power_rail.o
 
-obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o timer.o irq.o gpio.o
-obj-$(CONFIG_ARCH_MSM_SCORPION) += timer.o irq.o gpio.o
+obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o timer.o gpio.o
+obj-$(CONFIG_ARCH_MSM_SCORPION) += timer.o gpio.o
+
+obj-$(CONFIG_MSM_VIC) += irq-vic.o
 
 obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-8x50.o
 obj-$(CONFIG_ARCH_MSM7X30) += acpuclock-7x30.o
