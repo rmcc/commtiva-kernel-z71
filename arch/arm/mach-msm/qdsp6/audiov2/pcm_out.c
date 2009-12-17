@@ -29,7 +29,6 @@
 #include <mach/msm_qdsp6_audiov2.h>
 #include "dal_audio.h"
 #include "dal_audio_format.h"
-#include "dal_acdb.h"
 
 #define BUFSZ (8192)
 #define DMASZ (BUFSZ * 2)
@@ -74,7 +73,7 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
 		rpc.format_block = (void *) audio_phys;
 		rpc.format_block_len = sizeof(*fmt);
-		rpc.buf_max_size = BUFSZ; /* XXX ??? */
+		rpc.buf_max_size = BUFSZ;
 		rpc.mode = ADSP_AUDIO_OPEN_STREAM_MODE_SR_CM_NOTIFY;
 		q6audio_start(pcm->ac, (void *) &rpc, sizeof(rpc));
 		break;
@@ -125,6 +124,7 @@ static int pcm_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 	pcm->cfg.channel_count = 2;
+	pcm->cfg.buffer_count = 2;
 	pcm->cfg.buffer_size = BUFSZ;
 	pcm->cfg.unused[0] = 0;
 	pcm->cfg.unused[1] = 0;
