@@ -202,7 +202,7 @@ __v7_setup:
 #ifdef CONFIG_ARCH_QSD8X50
 	mov     r0, #0x77
 #else
-	mov     r0, #0xFF
+	mov     r0, #0x33
 #endif
 	mcr     p15, 3, r0, c15, c0, 3          @ set L2CR1
 	mrc     p15, 0, r0, c1, c0, 1           @ read ACTLR
