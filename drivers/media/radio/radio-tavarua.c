@@ -1014,6 +1014,18 @@ static int tavarua_fops_open(struct file *file)
 	}
 	/* call top level marimba interface here to enable FM core */
 	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+	retval = marimba_read_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
+							&value, 1, FM_ENABLE);
+	if (retval < 0) {
+		printk(KERN_ERR "%s:XO_BUFF_CNTRL read failed \n", __func__);
+		goto open_err;
+	}
+	if (value == FM_ENABLE) {
+		FMDBG("SoC is already initialized\n");
+		return 0;
+	}
+
+	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
 	value = FM_ENABLE;
 	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
 							&value, 1, value);
@@ -1038,6 +1050,9 @@ static int tavarua_fops_open(struct file *file)
 	return 0;
 
 open_err:
+	value = 0x00;
+	marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
+							&value, 1, value);
 	atomic_dec(&radio->users);
 	return retval;
 }
