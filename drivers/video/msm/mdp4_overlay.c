@@ -891,22 +891,6 @@ void mdp4_overlay_pipe_free(struct mdp4_overlay_pipe *pipe)
 	memset(pipe, 0, sizeof(*pipe));
 }
 
-void mdp4_overlay_done(int mixer)
-{
-	struct mdp4_overlay_pipe *pipe;
-	int i;
-
-	pipe = &ctrl->plist[0];
-	for (i = 0; i < MDP4_MAX_OVERLAY_PIPE; i++) {
-		if (pipe->pipe_ndx != 0) {
-			if (pipe->mixer_num == mixer)
-				complete(&pipe->comp);
-		}
-		pipe++;
-	}
-}
-
-
 static int get_pipe_num(int ptype, int stage)
 {
 	if (ptype == OVERLAY_TYPE_RGB) {

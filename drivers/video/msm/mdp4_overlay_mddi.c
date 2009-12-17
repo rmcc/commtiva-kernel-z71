@@ -78,6 +78,7 @@
 #include "mdp4.h"
 
 static struct mdp4_overlay_pipe *mddi_pipe;
+static struct mdp4_overlay_pipe *pending_pipe;
 static struct msm_fb_data_type *mddi_mfd;
 
 #define WHOLESCREEN
@@ -215,6 +216,15 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 }
 
+/*
+ * mdp4_overlay0_done_mddi: called from isr
+ */
+void mdp4_overlay0_done_mddi()
+{
+	if (pending_pipe)
+		complete(&pending_pipe->comp);
+}
+
 void mdp4_mddi_overlay_restore(void)
 {
 	/* mutex holded by caller */
@@ -226,14 +236,23 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
 #ifdef MDP4_NONBLOCKING
+	unsigned long flag;
+
+	spin_lock_irqsave(&mdp_spin_lock, flag);
 	if (mfd->dma->busy == TRUE) {
+		INIT_COMPLETION(pipe->comp);
+		pending_pipe = pipe;
+	}
+	spin_unlock_irqrestore(&mdp_spin_lock, flag);
+
+	if (pending_pipe != NULL) {
 		/* wait until DMA finishes the current job */
 		wait_for_completion_killable(&pipe->comp);
+		pending_pipe = NULL;
 	}
 	down(&mfd->sem);
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
-	INIT_COMPLETION(pipe->comp);
 	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
 	up(&mfd->sem);
@@ -242,6 +261,7 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
 	INIT_COMPLETION(pipe->comp);
+	pending_pipe = pipe;
 
 	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
