@@ -7,3 +7,5 @@ obj-y += mp3.o
 obj-y += audio_ctl.o
 obj-y += analog_audio.o
 obj-y += routing.o
+obj-y += evrc_in.o
+obj-y += qcelp_in.o
