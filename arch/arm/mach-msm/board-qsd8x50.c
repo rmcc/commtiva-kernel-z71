@@ -571,7 +571,7 @@ static int msm_hsusb_native_phy_reset(void __iomem *addr)
 	u32 temp;
 	unsigned long timeout;
 
-	if (machine_is_qsd8x50_ffa())
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		return msm_hsusb_phy_reset();
 
 	msm_hsusb_apps_reset_link(1);
@@ -759,12 +759,13 @@ static int msm_fb_detect_panel(const char *name)
 {
 	int ret = -EPERM;
 
-	if (machine_is_qsd8x50_ffa()) {
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		if (!strncmp(name, "mddi_toshiba_wvga_pt", 20))
 			ret = 0;
 		else
 			ret = -ENODEV;
-	} else if (machine_is_qsd8x50_surf() && !strcmp(name, "lcdc_external"))
+	} else if ((machine_is_qsd8x50_surf() || machine_is_qsd8x50a_surf())
+			&& !strcmp(name, "lcdc_external"))
 		ret = 0;
 
 	return ret;
@@ -950,7 +951,7 @@ static int mddi_toshiba_pmic_bl(int level)
 {
 	int ret = -EPERM;
 
-	if (machine_is_qsd8x50_ffa()) {
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		ret = pmic_set_led_intensity(LED_LCD, level);
 
 		if (ret)
@@ -1005,7 +1006,8 @@ static void msm_fb_mddi_power_save(int on)
 
 	mddi_power_save_on = flag_on;
 
-	if (!flag_on && machine_is_qsd8x50_ffa()) {
+	if (!flag_on && (machine_is_qsd8x50_ffa()
+				|| machine_is_qsd8x50a_ffa())) {
 		gpio_set_value(MDDI_RST_OUT_GPIO, 0);
 		mdelay(1);
 	}
@@ -1018,7 +1020,8 @@ static void msm_fb_mddi_power_save(int on)
 	msm_fb_vreg_config("gp5", flag_on);
 	msm_fb_vreg_config("boost", flag_on);
 
-	if (flag_on && machine_is_qsd8x50_ffa()) {
+	if (flag_on && (machine_is_qsd8x50_ffa()
+			|| machine_is_qsd8x50a_ffa())) {
 		gpio_set_value(MDDI_RST_OUT_GPIO, 0);
 		mdelay(1);
 		gpio_set_value(MDDI_RST_OUT_GPIO, 1);
@@ -1311,7 +1314,7 @@ static int bluetooth_power(int on)
 			return rc;
 		}
 
-		if (machine_is_qsd8x50_ffa()) {
+		if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 			rc = msm_gpios_enable
 					(wlan_config_power_on,
 					 ARRAY_SIZE(wlan_config_power_on));
@@ -1327,12 +1330,12 @@ static int bluetooth_power(int on)
 		gpio_set_value(22, on); /* VDD_IO */
 		gpio_set_value(18, on); /* SYSRST */
 
-		if (machine_is_qsd8x50_ffa()) {
+		if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 			gpio_set_value(138, 0); /* WLAN: CHIP_PWD */
 			gpio_set_value(113, on); /* WLAN */
 		}
 	} else {
-		if (machine_is_qsd8x50_ffa()) {
+		if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 			gpio_set_value(138, on); /* WLAN: CHIP_PWD */
 			gpio_set_value(113, on); /* WLAN */
 		}
@@ -1356,7 +1359,7 @@ static int bluetooth_power(int on)
 			return rc;
 		}
 
-		if (machine_is_qsd8x50_ffa()) {
+		if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 			rc = msm_gpios_enable
 					(wlan_config_power_off,
 					 ARRAY_SIZE(wlan_config_power_off));
@@ -1380,7 +1383,7 @@ static void __init bt_power_init(void)
 	struct vreg *vreg_bt;
 	int rc;
 
-	if (machine_is_qsd8x50_ffa()) {
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		gpio_set_value(138, 0); /* WLAN: CHIP_PWD */
 		gpio_set_value(113, 0); /* WLAN */
 	}
@@ -1805,7 +1808,7 @@ static void msm_camera_vreg_config(void)
 
 static void config_camera_on_gpios(void)
 {
-	if (machine_is_qsd8x50_ffa()) {
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		config_gpio_table(camera_on_gpio_ffa_table,
 		ARRAY_SIZE(camera_on_gpio_ffa_table));
 
@@ -1818,7 +1821,7 @@ static void config_camera_on_gpios(void)
 
 static void config_camera_off_gpios(void)
 {
-	if (machine_is_qsd8x50_ffa()) {
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		config_gpio_table(camera_off_gpio_ffa_table,
 		ARRAY_SIZE(camera_off_gpio_ffa_table));
 	}
@@ -2066,7 +2069,7 @@ static void kgsl_phys_memory_init(void)
 
 static void __init qsd8x50_init_host(void)
 {
-	if (machine_is_qsd8x50_ffa())
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		return;
 
 	vreg_usb = vreg_get(NULL, "boost");
@@ -2226,7 +2229,7 @@ static int msm_sdcc_get_wpswitch(struct device *dv)
 	uint32_t ret = 0;
 	struct platform_device *pdev;
 
-	if (machine_is_qsd8x50_ffa())
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		return -1;
 
 	pdev = container_of(dv, struct platform_device, dev);
@@ -2286,7 +2289,7 @@ static struct mmc_platform_data qsd8x50_sdc4_data = {
 
 static void __init qsd8x50_init_mmc(void)
 {
-	if (machine_is_qsd8x50_ffa())
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		vreg_mmc = vreg_get(NULL, "gp6");
 	else
 		vreg_mmc = vreg_get(NULL, "gp5");
@@ -2301,7 +2304,7 @@ static void __init qsd8x50_init_mmc(void)
 	msm_add_sdcc(1, &qsd8x50_sdc1_data);
 #endif
 
-	if (machine_is_qsd8x50_surf()) {
+	if (machine_is_qsd8x50_surf() || machine_is_qsd8x50a_surf()) {
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
 		msm_add_sdcc(2, &qsd8x50_sdc2_data);
 #endif
@@ -2319,12 +2322,12 @@ static void __init qsd8x50_cfg_smc91x(void)
 {
 	int rc = 0;
 
-	if (machine_is_qsd8x50_surf()) {
+	if (machine_is_qsd8x50_surf() || machine_is_qsd8x50a_surf()) {
 		smc91x_resources[0].start = 0x70000300;
 		smc91x_resources[0].end = 0x700003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(156);
 		smc91x_resources[1].end = MSM_GPIO_TO_INT(156);
-	} else if (machine_is_qsd8x50_ffa()) {
+	} else if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa()) {
 		smc91x_resources[0].start = 0x84000300;
 		smc91x_resources[0].end = 0x840003ff;
 		smc91x_resources[1].start = MSM_GPIO_TO_INT(87);
@@ -2509,7 +2512,7 @@ static void __init qsd8x50_init(void)
 	kgsl_phys_memory_init();
 
 #ifdef CONFIG_SURF_FFA_GPIO_KEYPAD
-	if (machine_is_qsd8x50_ffa())
+	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		platform_device_register(&keypad_device_8k_ffa);
 	else
 		platform_device_register(&keypad_device_surf);
@@ -2615,6 +2618,30 @@ MACHINE_START(QSD8X50_FFA, "QCT QSD8X50 FFA")
 	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
 	.boot_params = 0x20000100,
+	.map_io = qsd8x50_map_io,
+	.init_irq = qsd8x50_init_irq,
+	.init_machine = qsd8x50_init,
+	.timer = &msm_timer,
+MACHINE_END
+
+MACHINE_START(QSD8X50A_SURF, "QCT QSD8X50A SURF")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io  = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params = 0x00000100,
+	.map_io = qsd8x50_map_io,
+	.init_irq = qsd8x50_init_irq,
+	.init_machine = qsd8x50_init,
+	.timer = &msm_timer,
+MACHINE_END
+
+MACHINE_START(QSD8X50A_FFA, "QCT QSD8X50A FFA")
+#ifdef CONFIG_MSM_DEBUG_UART
+	.phys_io  = MSM_DEBUG_UART_PHYS,
+	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
+#endif
+	.boot_params = 0x00000100,
 	.map_io = qsd8x50_map_io,
 	.init_irq = qsd8x50_init_irq,
 	.init_machine = qsd8x50_init,

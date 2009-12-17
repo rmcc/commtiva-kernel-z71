@@ -158,7 +158,8 @@ int msm_chg_rpc_connect(void)
 	uint32_t chg_vers;
 
 	if (machine_is_msm7201a_surf() || machine_is_msm7x27_surf() ||
-	    machine_is_qsd8x50_surf() || machine_is_msm7x25_surf())
+	    machine_is_qsd8x50_surf() || machine_is_msm7x25_surf() ||
+	    machine_is_qsd8x50a_surf())
 		return -ENOTSUPP;
 
 	if (chg_ep && !IS_ERR(chg_ep)) {
