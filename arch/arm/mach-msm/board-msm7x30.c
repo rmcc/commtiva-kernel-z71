@@ -2093,31 +2093,83 @@ static int marimba_bt(int on)
 		u8 reg;
 		u8 value;
 		u8 mask;
-	} *p;
+	};
 
-	size_t config_size;
+	struct marimba_variant_register {
+		const size_t size;
+		const struct marimba_config_register *set;
+	};
 
-	struct marimba_config_register bt_on[] = {
+	const struct marimba_config_register *p;
+
+	u8 version;
+
+	const struct marimba_config_register v10_bt_on[] = {
 		{ 0xE5, 0x0B, 0x0F },
 		{ 0x05, 0x02, 0x07 },
 		{ 0x06, 0x88, 0xFF },
 		{ 0xE7, 0x21, 0x21 },
 	};
 
-	struct marimba_config_register bt_off[] = {
+	const struct marimba_config_register v10_bt_off[] = {
 		{ 0xE5, 0x0B, 0x0F },
-		{ 0x05, 0x02, 0x07 },
+		{ 0x05, 0x08, 0x0F },
 		{ 0x06, 0x88, 0xFF },
 		{ 0xE7, 0x00, 0x21 },
 	};
 
-	p = on ? bt_on : bt_off;
-	config_size = on ? ARRAY_SIZE(bt_on) : ARRAY_SIZE(bt_off);
+	const struct marimba_config_register v201_bt_on[] = {
+		{ 0x05, 0x08, 0x07 },
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x21, 0x21 },
+	};
 
-	for (i = 0; i < config_size; i++) {
+	const struct marimba_config_register v201_bt_off[] = {
+		{ 0x05, 0x08, 0x07 },
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x00, 0x21 },
+	};
+
+	const struct marimba_variant_register bt_marimba[2][3] = {
+		{
+			{ ARRAY_SIZE(v10_bt_off), v10_bt_off },
+			{ 0, NULL },
+			{ ARRAY_SIZE(v201_bt_off), v201_bt_off },
+		},
+		{
+			{ ARRAY_SIZE(v10_bt_on), v10_bt_on },
+			{ 0, NULL },
+			{ ARRAY_SIZE(v201_bt_on), v201_bt_on }
+		}
+	};
+
+	on = on ? 1 : 0;
+
+	rc = marimba_read_bit_mask(&config, 0x11,  &version, 1, 0x1F);
+	if (rc < 0) {
+		printk(KERN_ERR
+			"%s: version read failed: %d\n",
+			__func__, rc);
+		return rc;
+	}
+
+	if ((version >= ARRAY_SIZE(bt_marimba[on])) ||
+	    (bt_marimba[on][version].size == 0)) {
+		printk(KERN_ERR
+			"%s: unsupported version\n",
+			__func__);
+		return -EIO;
+	}
+
+	p = bt_marimba[on][version].set;
+
+	printk(KERN_INFO "%s: found version %d\n", __func__, version);
+
+	for (i = 0; i < bt_marimba[on][version].size; i++) {
+		u8 value = (p+i)->value;
 		rc = marimba_write_bit_mask(&config,
 			(p+i)->reg,
-			&((p+i)->value),
+			&value,
 			sizeof((p+i)->value),
 			(p+i)->mask);
 		if (rc < 0) {
@@ -2126,6 +2178,9 @@ static int marimba_bt(int on)
 				__func__, (p+i)->reg, rc);
 			return rc;
 		}
+		printk(KERN_INFO "%s: reg 0x%02x value 0x%02x mask 0x%02x\n",
+				__func__, (p+i)->reg,
+				value, (p+i)->mask);
 	}
 	return 0;
 }
