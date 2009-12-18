@@ -1446,12 +1446,6 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		ac->buf[1].used = 1;
 		q6audio_read(ac, &ac->buf[0]);
 		q6audio_read(ac, &ac->buf[1]);
-	} else {
-		mutex_lock(&audio_path_lock);
-		audio_rx_mute(ac_control, audio_rx_device_id, 0);
-		audio_rx_volume(ac_control, audio_rx_device_id,
-			q6_device_volume(audio_rx_device_id, rx_vol_level));
-		mutex_unlock(&audio_path_lock);
 	}
 
 	audio_prevent_sleep();
