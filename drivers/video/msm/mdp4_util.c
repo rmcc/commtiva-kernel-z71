@@ -367,7 +367,8 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 			complete(&dma->comp);
 #endif
 #ifdef MDP4_NONBLOCKING
-			mdp_disable_irq_nolock(MDP_OVERLAY0_TERM);
+			if ((lcdc & 0x01) == 0) /* MDDI */
+				mdp_disable_irq_nolock(MDP_OVERLAY0_TERM);
 #endif
 		}
 		if (isr & INTR_OVERLAY1_DONE) {
