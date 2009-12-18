@@ -106,9 +106,11 @@ static void
 msmsdcc_start_command(struct msmsdcc_host *host, struct mmc_command *cmd,
 		      u32 c);
 
-static void
+static int
 msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
 {
+	int retval = 0;
+
 	BUG_ON(host->curr.data);
 
 	host->curr.mrq = NULL;
@@ -126,6 +128,7 @@ msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
 		host->prog_scan = 1;
 		/* Send STOP to let the SDCC know to stop. */
 		writel(MCI_CSPM_MCIABORT, host->base + MMCICOMMAND);
+		retval = 1;
 	}
 	if (mrq->cmd->opcode == SD_IO_RW_DIRECT) {
 		/* Ok the cmd52 following a cmd53 is received */
@@ -141,6 +144,8 @@ msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
 	spin_unlock(&host->lock);
 	mmc_request_done(host->mmc, mrq);
 	spin_lock(&host->lock);
+
+	return retval;
 }
 
 static void
@@ -155,10 +160,18 @@ static inline uint32_t msmsdcc_fifo_addr(struct msmsdcc_host *host)
 	return host->memres->start + MMCIFIFO;
 }
 
+static inline void msmsdcc_delay(struct msmsdcc_host *host)
+{
+	udelay(1 + ((3 * USEC_PER_SEC) /
+		(host->clk_rate ? host->clk_rate : msmsdcc_fmin)));
+}
+
 static inline void
-msmsdcc_start_command_exec(void __iomem *base, u32 arg, u32 c) {
-	writel(arg, base + MMCIARGUMENT);
-	writel(c, base + MMCICOMMAND);
+msmsdcc_start_command_exec(struct msmsdcc_host *host, u32 arg, u32 c)
+{
+	writel(arg, host->base + MMCIARGUMENT);
+	msmsdcc_delay(host);
+	writel(c, host->base + MMCICOMMAND);
 }
 
 static void
@@ -169,10 +182,12 @@ msmsdcc_dma_exec_func(struct msm_dmov_cmd *cmd)
 	writel(host->cmd_timeout, host->base + MMCIDATATIMER);
 	writel((unsigned int)host->curr.xfer_size, host->base + MMCIDATALENGTH);
 	writel(host->cmd_pio_irqmask, host->base + MMCIMASK1);
+	msmsdcc_delay(host);	/* Allow data parms to be applied */
 	writel(host->cmd_datactrl, host->base + MMCIDATACTRL);
+	msmsdcc_delay(host);	/* Force delay prior to ADM or command */
 
 	if (host->cmd_cmd) {
-		msmsdcc_start_command_exec(host->base,
+		msmsdcc_start_command_exec(host,
 			(u32)host->cmd_cmd->arg, (u32)host->cmd_c);
 	}
 }
@@ -516,9 +531,11 @@ msmsdcc_start_data(struct msmsdcc_host *host, struct mmc_data *data,
 		writel(host->curr.xfer_size, base + MMCIDATALENGTH);
 
 		writel(pio_irqmask, base + MMCIMASK1);
+		msmsdcc_delay(host);	/* Allow parms to be applied */
 		writel(datactrl, base + MMCIDATACTRL);
 
 		if (cmd) {
+			msmsdcc_delay(host); /* Delay between data/command */
 			/* Daisy-chain the command if requested */
 			msmsdcc_start_command(host, cmd, c);
 		}
@@ -528,9 +545,8 @@ msmsdcc_start_data(struct msmsdcc_host *host, struct mmc_data *data,
 static void
 msmsdcc_start_command(struct msmsdcc_host *host, struct mmc_command *cmd, u32 c)
 {
-	void __iomem *base = host->base;
 	msmsdcc_start_command_deferred(host, cmd, &c);
-	msmsdcc_start_command_exec(base, cmd->arg, c);
+	msmsdcc_start_command_exec(host, cmd->arg, c);
 }
 
 static void
@@ -669,10 +685,14 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 		status = readl(base + MMCISTATUS);
 	} while (1);
 
-	if (status & MCI_RXACTIVE && host->curr.xfer_remain < MCI_FIFOSIZE)
+	if (status & MCI_RXACTIVE && host->curr.xfer_remain < MCI_FIFOSIZE) {
 		writel(MCI_RXDATAAVLBLMASK, base + MMCIMASK1);
-
-	if (!host->curr.xfer_remain)
+		if (!host->curr.xfer_remain) {
+			/* Delay needed (same port was just written) */
+			msmsdcc_delay(host);
+			writel(0, base + MMCIMASK1);
+		}
+	} else if (!host->curr.xfer_remain)
 		writel(0, base + MMCIMASK1);
 
 	return IRQ_HANDLED;
@@ -685,12 +705,19 @@ msmsdcc_irq(int irq, void *dev_id)
 	void __iomem		*base = host->base;
 	u32			status;
 	int			ret = 0;
+	int			timer = 0;
 
 	spin_lock(&host->lock);
 
 	do {
 		struct mmc_command *cmd;
 		struct mmc_data *data;
+
+		if (timer) {
+			timer = 0;
+			msmsdcc_delay(host);
+		}
+
 		status = readl(host->base + MMCISTATUS);
 
 #if IRQ_DEBUG
@@ -741,13 +768,15 @@ msmsdcc_irq(int irq, void *dev_id)
 							  &host->dma.hdr, 0);
 				else if (host->curr.data) { /* Non DMA */
 					msmsdcc_stop_data(host);
-					msmsdcc_request_end(host, cmd->mrq);
+					timer |= msmsdcc_request_end(host,
+							cmd->mrq);
 				} else { /* host->data == NULL */
 					if (!cmd->error && host->prog_enable) {
 						if (status & MCI_PROGDONE) {
 							host->prog_scan = 0;
 							host->prog_enable = 0;
-							msmsdcc_request_end(
+							timer |=
+							 msmsdcc_request_end(
 								host, cmd->mrq);
 						} else
 							host->curr.cmd = cmd;
@@ -756,8 +785,9 @@ msmsdcc_irq(int irq, void *dev_id)
 							host->prog_scan = 0;
 							host->prog_enable = 0;
 						}
-						msmsdcc_request_end(host,
-								cmd->mrq);
+						timer |=
+							msmsdcc_request_end(
+							 host, cmd->mrq);
 					}
 				}
 			} else if (cmd->data) {
@@ -780,12 +810,15 @@ msmsdcc_irq(int irq, void *dev_id)
 					if (host->curr.data)
 						msmsdcc_stop_data(host);
 					if (!data->stop)
-						msmsdcc_request_end(host,
+						timer |=
+						 msmsdcc_request_end(host,
 								    data->mrq);
-					else
+					else {
 						msmsdcc_start_command(host,
 								     data->stop,
 								     0);
+						timer = 1;
+					}
 				}
 			}
 
@@ -825,11 +858,13 @@ msmsdcc_irq(int irq, void *dev_id)
 							host->curr.xfer_size;
 
 					if (!data->stop)
-						msmsdcc_request_end(host,
-								    data->mrq);
-					else
+						timer |= msmsdcc_request_end(
+							  host, data->mrq);
+					else {
 						msmsdcc_start_command(host,
 							      data->stop, 0);
+						timer = 1;
+					}
 				}
 			}
 		}
@@ -1311,6 +1346,8 @@ msmsdcc_probe(struct platform_device *pdev)
 	writel(0, host->base + MMCIMASK0);
 	writel(MCI_CLEAR_STATIC_MASK, host->base + MMCICLEAR);
 
+	/* Delay needed (MMCIMASK0 was just written above) */
+	msmsdcc_delay(host);
 	writel(MCI_IRQENABLE, host->base + MMCIMASK0);
 
 	/*
