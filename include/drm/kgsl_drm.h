@@ -38,6 +38,8 @@
 #define DRM_KGSL_GEM_GETMEMTYPE 0x03
 #define DRM_KGSL_GEM_MMAP 0x04
 #define DRM_KGSL_GEM_ALLOC 0x05
+#define DRM_KGSL_GEM_BIND_GPU 0x06
+#define DRM_KGSL_GEM_UNBIND_GPU 0x07
 
 #define DRM_IOCTL_KGSL_GEM_CREATE \
 DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_CREATE, struct drm_kgsl_gem_create)
@@ -58,6 +60,13 @@ DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_MMAP, struct drm_kgsl_gem_mmap)
 
 #define DRM_IOCTL_KGSL_GEM_ALLOC \
 DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_ALLOC, struct drm_kgsl_gem_alloc)
+
+#define DRM_IOCTL_KGSL_GEM_BIND_GPU \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_BIND_GPU, struct drm_kgsl_gem_bind_gpu)
+
+#define DRM_IOCTL_KGSL_GEM_UNBIND_GPU \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_UNBIND_GPU, \
+struct drm_kgsl_gem_bind_gpu)
 
 #define DRM_KGSL_GEM_TYPE_EBI          0
 #define DRM_KGSL_GEM_TYPE_SMI          1
@@ -90,6 +99,11 @@ struct drm_kgsl_gem_mmap {
 struct drm_kgsl_gem_alloc {
 	uint32_t handle;
 	uint64_t offset;
+};
+
+struct drm_kgsl_gem_bind_gpu {
+	uint32_t handle;
+	uint32_t gpuptr;
 };
 
 #endif

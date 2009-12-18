@@ -63,7 +63,10 @@
 #include "drm.h"
 #include <linux/android_pmem.h>
 
+#include "kgsl.h"
+#include "kgsl_device.h"
 #include "kgsl_drm.h"
+#include "kgsl_mmu.h"
 
 #define DRIVER_AUTHOR           "Qualcomm"
 #define DRIVER_NAME             "kgsl"
@@ -74,11 +77,15 @@
 #define DRIVER_MINOR            0
 #define DRIVER_PATCHLEVEL       0
 
+#define DRM_KGSL_GEM_FLAG_MAPPED (1 << 0)
+
 struct drm_kgsl_gem_object {
 	struct drm_gem_object *obj;
 	uint32_t phys;
 	void *kmem;
 	uint32_t type;
+	uint32_t gpuaddr;
+	struct kgsl_pagetable *pagetable;
 	uint64_t mmap_offset;
 	int flags;
 };
@@ -214,10 +221,23 @@ kgsl_gem_free_memory(struct drm_gem_object *obj)
 
 	case DRM_KGSL_GEM_TYPE_KMEM:
 	case DRM_KGSL_GEM_TYPE_KMEM_NOCACHE:
+#ifdef CONFIG_MSM_KGSL_MMU
+		if (priv->flags & DRM_KGSL_GEM_FLAG_MAPPED) {
+			kgsl_mmu_unmap(priv->pagetable,
+				       priv->gpuaddr,
+				       obj->size);
+
+			kgsl_mmu_putpagetable(priv->pagetable);
+			priv->pagetable = NULL;
+			priv->gpuaddr = 0;
+		}
+#endif
+
 		vfree(priv->kmem);
 		break;
 	}
 
+	priv->flags &= ~DRM_KGSL_GEM_FLAG_MAPPED;
 	priv->phys = 0;
 	priv->kmem = NULL;
 }
@@ -390,6 +410,112 @@ kgsl_gem_getmemtype_ioctl(struct drm_device *dev, void *data,
 	mutex_unlock(&dev->struct_mutex);
 
 	return 0;
+}
+
+int
+kgsl_gem_unbind_gpu_ioctl(struct drm_device *dev, void *data,
+			struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_bind_gpu *args = data;
+	struct drm_gem_object *obj;
+	struct drm_kgsl_gem_object *priv;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	mutex_lock(&dev->struct_mutex);
+	priv = obj->driver_private;
+
+#ifdef CONFIG_MSM_KGSL_MMU
+	if (priv->flags & DRM_KGSL_GEM_FLAG_MAPPED) {
+		kgsl_mmu_unmap(priv->pagetable,
+			       priv->gpuaddr,
+			       obj->size);
+		kgsl_mmu_putpagetable(priv->pagetable);
+		priv->pagetable = NULL;
+		priv->flags &= ~DRM_KGSL_GEM_FLAG_MAPPED;
+	}
+#endif
+
+	priv->gpuaddr = 0;
+
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+	return 0;
+}
+
+int
+kgsl_gem_bind_gpu_ioctl(struct drm_device *dev, void *data,
+			struct drm_file *file_priv)
+{
+	struct drm_kgsl_gem_bind_gpu *args = data;
+	struct drm_gem_object *obj;
+	struct drm_kgsl_gem_object *priv;
+	int ret = -EINVAL;
+
+	obj = drm_gem_object_lookup(dev, file_priv, args->handle);
+
+	if (obj == NULL)
+		return -EINVAL;
+
+	mutex_lock(&dev->struct_mutex);
+	priv = obj->driver_private;
+
+	if (priv->gpuaddr) {
+		args->gpuptr = priv->gpuaddr;
+
+		ret = 0;
+		goto out;
+	}
+
+	if (!kgsl_gem_memory_allocated(obj)) {
+		DRM_ERROR("Memory not allocated for this object\n");
+		goto out;
+	}
+
+	/* Only KMEM needs to be mapped in the MMU */
+
+	if (priv->type == DRM_KGSL_GEM_TYPE_KMEM ||
+	    priv->type == DRM_KGSL_GEM_TYPE_KMEM_NOCACHE) {
+#ifdef CONFIG_MSM_KGSL_MMU
+		/* Get the global page table */
+
+		if (priv->pagetable == NULL) {
+			struct kgsl_mmu *mmu =
+				kgsl_yamato_get_mmu(&kgsl_driver.yamato_device);
+
+			if (mmu == NULL || !kgsl_mmu_isenabled(mmu))
+				goto out;
+
+			priv->pagetable =
+				kgsl_mmu_getpagetable(mmu, KGSL_MMU_GLOBAL_PT);
+
+			if (priv->pagetable == NULL)
+				goto out;
+		}
+
+		ret = kgsl_mmu_map(priv->pagetable,
+				   (unsigned long) priv->kmem,
+				   obj->size,
+				   GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
+				   &priv->gpuaddr);
+
+		if (!ret)
+			priv->flags |= DRM_KGSL_GEM_FLAG_MAPPED;
+#endif
+	} else {
+		priv->gpuaddr = priv->phys;
+		ret = 0;
+	}
+
+	args->gpuptr = priv->gpuaddr;
+
+out:
+	drm_gem_object_unreference(obj);
+	mutex_unlock(&dev->struct_mutex);
+	return ret;
 }
 
 /* Allocate the memory and prepare it for CPU mapping */
@@ -663,6 +789,8 @@ struct drm_ioctl_desc kgsl_drm_ioctls[] = {
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_PREP, kgsl_gem_prep_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_SETMEMTYPE, kgsl_gem_setmemtype_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_GETMEMTYPE, kgsl_gem_getmemtype_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_BIND_GPU, kgsl_gem_bind_gpu_ioctl, 0),
+	DRM_IOCTL_DEF(DRM_KGSL_GEM_UNBIND_GPU, kgsl_gem_unbind_gpu_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_ALLOC, kgsl_gem_alloc_ioctl, 0),
 	DRM_IOCTL_DEF(DRM_KGSL_GEM_MMAP, kgsl_gem_mmap_ioctl, 0),
 };
