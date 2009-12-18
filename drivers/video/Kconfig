@@ -2355,6 +2355,14 @@ config FB_MSM_LCDC_EXTERNAL_WXGA
 	---help---
 	  Support for external WXGA display (1280x720)
 
+config FB_MSM_HDMI_SII_EXTERNAL_720P
+	depends on FB_MSM_MDP31
+	bool "External SiI9022 HDMI 720P"
+	select FB_MSM_LCDC_PANEL
+	---help---
+	  Support for external HDMI 720p display (1280x720p)
+	  Using SiI9022 chipset
+
 config FB_MSM_SECONDARY_PANEL_NONE
 	bool "NONE"
 	---help---
