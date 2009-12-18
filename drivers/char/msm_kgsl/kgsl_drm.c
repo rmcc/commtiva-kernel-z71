@@ -84,11 +84,37 @@ struct drm_kgsl_gem_object {
 	uint32_t phys;
 	void *kmem;
 	uint32_t type;
+	uint32_t size;
 	uint32_t gpuaddr;
 	struct kgsl_pagetable *pagetable;
 	uint64_t mmap_offset;
 	int flags;
+	struct list_head list;
 };
+
+/* This is a global list of all the memory currently mapped in the MMU */
+static struct list_head kgsl_mem_list;
+
+void kgsl_gem_kmem_flush(void *kmem, int size)
+{
+	int i;
+
+	for (i = 0; i < size / PAGE_SIZE; i++) {
+		struct page *page = vmalloc_to_page(kmem);
+		flush_dcache_page(page);
+		kmem += PAGE_SIZE;
+	}
+}
+
+/* Flush all the memory mapped in the MMU */
+
+void kgsl_gpu_mem_flush(void)
+{
+	struct drm_kgsl_gem_object *entry;
+
+	list_for_each_entry(entry, &kgsl_mem_list, list)
+		kgsl_gem_kmem_flush(entry->kmem, entry->size);
+}
 
 /* TODO:
  * Add vsync wait */
@@ -230,6 +256,9 @@ kgsl_gem_free_memory(struct drm_gem_object *obj)
 			kgsl_mmu_putpagetable(priv->pagetable);
 			priv->pagetable = NULL;
 			priv->gpuaddr = 0;
+			if (priv->type == DRM_KGSL_GEM_TYPE_KMEM)
+				list_del(&priv->list);
+			priv->flags &= ~DRM_KGSL_GEM_FLAG_MAPPED;
 		}
 #endif
 
@@ -237,7 +266,6 @@ kgsl_gem_free_memory(struct drm_gem_object *obj)
 		break;
 	}
 
-	priv->flags &= ~DRM_KGSL_GEM_FLAG_MAPPED;
 	priv->phys = 0;
 	priv->kmem = NULL;
 }
@@ -333,6 +361,7 @@ kgsl_gem_create_ioctl(struct drm_device *dev, void *data,
 
 	priv->phys = 0;
 	priv->kmem = NULL;
+	priv->size = create->size;
 
 	/* To preserve backwards compatability, the default memory source
 	   is EBI */
@@ -436,6 +465,8 @@ kgsl_gem_unbind_gpu_ioctl(struct drm_device *dev, void *data,
 		kgsl_mmu_putpagetable(priv->pagetable);
 		priv->pagetable = NULL;
 		priv->flags &= ~DRM_KGSL_GEM_FLAG_MAPPED;
+		if (priv->type == DRM_KGSL_GEM_TYPE_KMEM)
+			list_del(&priv->list);
 	}
 #endif
 
@@ -483,6 +514,7 @@ kgsl_gem_bind_gpu_ioctl(struct drm_device *dev, void *data,
 		/* Get the global page table */
 
 		if (priv->pagetable == NULL) {
+
 			struct kgsl_mmu *mmu =
 				kgsl_yamato_get_mmu(&kgsl_driver.yamato_device);
 
@@ -502,8 +534,14 @@ kgsl_gem_bind_gpu_ioctl(struct drm_device *dev, void *data,
 				   GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
 				   &priv->gpuaddr);
 
-		if (!ret)
+		if (!ret) {
 			priv->flags |= DRM_KGSL_GEM_FLAG_MAPPED;
+
+			/* Add cached memory to the list to be cached */
+
+			if (priv->type == DRM_KGSL_GEM_TYPE_KMEM)
+				list_add(&priv->list, &kgsl_mem_list);
+		}
 #endif
 	} else {
 		priv->gpuaddr = priv->phys;
@@ -833,6 +871,8 @@ int kgsl_drm_init(struct platform_device *dev)
 {
 	driver.num_ioctls = DRM_ARRAY_SIZE(kgsl_drm_ioctls);
 	driver.platform_device = dev;
+
+	INIT_LIST_HEAD(&kgsl_mem_list);
 	return drm_init(&driver);
 }
 
