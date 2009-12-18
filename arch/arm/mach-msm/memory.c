@@ -17,6 +17,7 @@
 #include <linux/mm.h>
 #include <linux/mm_types.h>
 #include <linux/bootmem.h>
+#include <linux/module.h>
 #include <asm/pgtable.h>
 #include <asm/io.h>
 #include <asm/mach/map.h>
@@ -50,6 +51,7 @@ void write_to_strongly_ordered_memory(void)
 	map_zero_page_strongly_ordered();
 	*(int *)zero_page_strongly_ordered = 0;
 }
+EXPORT_SYMBOL(write_to_strongly_ordered_memory);
 
 void flush_axi_bus_buffer(void)
 {
