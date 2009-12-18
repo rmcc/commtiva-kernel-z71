@@ -43,6 +43,13 @@ config ARCH_QSD8X50
 
 endchoice
 
+choice
+	prompt "MSM SoC Revision"
+	default MSM_SOC_REV_NONE
+config MSM_SOC_REV_NONE
+	bool "N/A"
+endchoice
+
 config  ARCH_MSM_ARM11
 	bool
 config  ARCH_MSM_SCORPION
