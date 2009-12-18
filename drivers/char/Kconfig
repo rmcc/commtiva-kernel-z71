@@ -1144,13 +1144,6 @@ config KGSL_PER_PROCESS_PAGE_TABLE
 
 source "drivers/s390/char/Kconfig"
 
-config MSM_Q6VDEC
-	tristate "MSM QDSP6 Video Decoder Driver"
-	depends on ARCH_MSM_SCORPION && MSM_DALRPC
-	default m
-	---help---
-	  This driver provides access to MSM QDSP6 for video frame decoding.
-
 config MSM_ROTATOR
 	tristate "MSM Offline Image Rotator Driver"
 	depends on ARCH_MSM7X30
