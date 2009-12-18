@@ -122,4 +122,18 @@ void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry);
 int kgsl_pwrctrl(unsigned int pwrflag);
 int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
 
+#ifdef CONFIG_MSM_KGSL_DRM
+extern int kgsl_drm_init(struct platform_device *dev);
+extern void kgsl_drm_exit(void);
+#else
+static inline int kgsl_drm_init(struct platform_device *dev)
+{
+	return 0;
+}
+
+static inline void kgsl_drm_exit(void)
+{
+}
+#endif
+
 #endif /* _GSL_DRIVER_H */
