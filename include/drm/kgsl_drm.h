@@ -34,6 +34,10 @@
 
 #define DRM_KGSL_GEM_CREATE 0x00
 #define DRM_KGSL_GEM_PREP   0x01
+#define DRM_KGSL_GEM_SETMEMTYPE 0x02
+#define DRM_KGSL_GEM_GETMEMTYPE 0x03
+#define DRM_KGSL_GEM_MMAP 0x04
+#define DRM_KGSL_GEM_ALLOC 0x05
 
 #define DRM_IOCTL_KGSL_GEM_CREATE \
 DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_CREATE, struct drm_kgsl_gem_create)
@@ -41,6 +45,24 @@ DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_CREATE, struct drm_kgsl_gem_create)
 #define DRM_IOCTL_KGSL_GEM_PREP \
 DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_PREP, struct drm_kgsl_gem_prep)
 
+#define DRM_IOCTL_KGSL_GEM_SETMEMTYPE \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_SETMEMTYPE, \
+struct drm_kgsl_gem_memtype)
+
+#define DRM_IOCTL_KGSL_GEM_GETMEMTYPE \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_GETMEMTYPE, \
+struct drm_kgsl_gem_memtype)
+
+#define DRM_IOCTL_KGSL_GEM_MMAP \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_MMAP, struct drm_kgsl_gem_mmap)
+
+#define DRM_IOCTL_KGSL_GEM_ALLOC \
+DRM_IOWR(DRM_COMMAND_BASE + DRM_KGSL_GEM_ALLOC, struct drm_kgsl_gem_alloc)
+
+#define DRM_KGSL_GEM_TYPE_EBI          0
+#define DRM_KGSL_GEM_TYPE_SMI          1
+#define DRM_KGSL_GEM_TYPE_KMEM         2
+#define DRM_KGSL_GEM_TYPE_KMEM_NOCACHE 3
 
 struct drm_kgsl_gem_create {
 	uint32_t size;
@@ -50,6 +72,23 @@ struct drm_kgsl_gem_create {
 struct drm_kgsl_gem_prep {
 	uint32_t handle;
 	uint32_t phys;
+	uint64_t offset;
+};
+
+struct drm_kgsl_gem_memtype {
+	uint32_t handle;
+	uint32_t type;
+};
+
+struct drm_kgsl_gem_mmap {
+	uint32_t handle;
+	uint32_t size;
+	uint32_t hostptr;
+	uint64_t offset;
+};
+
+struct drm_kgsl_gem_alloc {
+	uint32_t handle;
 	uint64_t offset;
 };
 
