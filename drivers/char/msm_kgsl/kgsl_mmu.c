@@ -55,6 +55,7 @@
  *
  */
 #include <linux/types.h>
+#include <linux/mutex.h>
 #include <linux/spinlock.h>
 #include <linux/genalloc.h>
 #ifdef CONFIG_MSM_KGSL_MMU
@@ -217,7 +218,8 @@ void kgsl_mmu_debug(struct kgsl_mmu *mmu, struct kgsl_mmu_debug *regs)
 }
 #endif
 
-struct kgsl_pagetable *kgsl_mmu_createpagetableobject(struct kgsl_mmu *mmu)
+static struct kgsl_pagetable *kgsl_mmu_createpagetable(struct kgsl_mmu *mmu,
+						       unsigned int name)
 {
 	int status = 0;
 	struct kgsl_pagetable *pagetable = NULL;
@@ -231,6 +233,9 @@ struct kgsl_pagetable *kgsl_mmu_createpagetableobject(struct kgsl_mmu *mmu)
 		return NULL;
 	}
 
+	pagetable->refcnt = 1;
+
+	pagetable->name = name;
 	pagetable->mmu = mmu;
 	pagetable->va_base = mmu->va_base;
 	pagetable->va_range = mmu->va_range;
@@ -241,14 +246,14 @@ struct kgsl_pagetable *kgsl_mmu_createpagetableobject(struct kgsl_mmu *mmu)
 	pagetable->pool = gen_pool_create(KGSL_PAGESIZE_SHIFT, -1);
 	if (pagetable->pool == NULL) {
 		KGSL_MEM_ERR("Unable to allocate virtualaddr pool.\n");
-		return NULL;
+		goto err_alloc;
 	}
 
 	if (gen_pool_add(pagetable->pool, pagetable->va_base,
 				pagetable->va_range, -1)) {
 		KGSL_MEM_ERR("gen_pool_create failed for pagetable %p\n",
 				pagetable);
-		goto done;
+		goto err_pool;
 	}
 
 	/* allocate page table memory */
@@ -266,16 +271,24 @@ struct kgsl_pagetable *kgsl_mmu_createpagetableobject(struct kgsl_mmu *mmu)
 				   pagetable->base.size);
 	}
 
-	KGSL_MEM_VDBG("return %p\n", pagetable);
+	list_add(&pagetable->list, &mmu->pagetable_list);
 
+	KGSL_MEM_VDBG("return %p\n", pagetable);
 	return pagetable;
-done:
+
+err_pool:
+	gen_pool_destroy(pagetable->pool);
+err_alloc:
+	kfree(pagetable);
+
 	return NULL;
 }
 
-int kgsl_mmu_destroypagetableobject(struct kgsl_pagetable *pagetable)
+static void kgsl_mmu_destroypagetable(struct kgsl_pagetable *pagetable)
 {
 	KGSL_MEM_VDBG("enter (pagetable=%p)\n", pagetable);
+
+	list_del(&pagetable->list);
 
 	if (pagetable) {
 		if (pagetable->base.gpuaddr)
@@ -290,8 +303,47 @@ int kgsl_mmu_destroypagetableobject(struct kgsl_pagetable *pagetable)
 
 	}
 	KGSL_MEM_VDBG("return 0x%08x\n", 0);
+}
 
-	return 0;
+struct kgsl_pagetable *kgsl_mmu_getpagetable(struct kgsl_mmu *mmu,
+					     unsigned long name)
+{
+	struct kgsl_pagetable *pt;
+
+	if (mmu == NULL)
+		return NULL;
+
+	mutex_lock(&mmu->pt_mutex);
+
+	list_for_each_entry(pt, &mmu->pagetable_list, list) {
+		if (pt->name == name) {
+			pt->refcnt++;
+			mutex_unlock(&mmu->pt_mutex);
+			return pt;
+		}
+	}
+
+	pt = kgsl_mmu_createpagetable(mmu, name);
+	mutex_unlock(&mmu->pt_mutex);
+
+	return pt;
+}
+
+void kgsl_mmu_putpagetable(struct kgsl_pagetable *pagetable)
+{
+	struct kgsl_mmu *mmu;
+
+	if (pagetable == NULL)
+		return;
+
+	mmu = pagetable->mmu;
+
+	mutex_lock(&mmu->pt_mutex);
+
+	if (!--pagetable->refcnt)
+		kgsl_mmu_destroypagetable(pagetable);
+
+	mutex_unlock(&mmu->pt_mutex);
 }
 
 int kgsl_mmu_setpagetable(struct kgsl_device *device,
@@ -346,6 +398,9 @@ int kgsl_mmu_init(struct kgsl_device *device)
 #ifndef CONFIG_MSM_KGSL_MMU
 	mmu->config = 0x00000000;
 #endif
+
+	mutex_init(&mmu->pt_mutex);
+	INIT_LIST_HEAD(&mmu->pagetable_list);
 
 	/* setup MMU and sub-client behavior */
 	kgsl_yamato_regwrite(device, REG_MH_MMU_CONFIG, mmu->config);
@@ -408,7 +463,9 @@ int kgsl_mmu_init(struct kgsl_device *device)
 				     mmu->dummyspace.gpuaddr);
 
 #ifndef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
-		mmu->hwpagetable = kgsl_mmu_createpagetableobject(mmu);
+		mmu->hwpagetable = kgsl_mmu_getpagetable(mmu,
+							 KGSL_MMU_GLOBAL_PT);
+
 		if (!mmu->hwpagetable) {
 			KGSL_MEM_ERR("Failed to create global page table\n");
 			kgsl_mmu_close(device);
@@ -632,7 +689,7 @@ int kgsl_mmu_close(struct kgsl_device *device)
 		mmu->flags &= ~KGSL_FLAGS_INITIALIZED;
 		mmu->flags &= ~KGSL_FLAGS_INITIALIZED0;
 #ifndef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
-		kgsl_mmu_destroypagetableobject(mmu->hwpagetable);
+		kgsl_mmu_putpagetable(mmu->hwpagetable);
 #endif
 		mmu->hwpagetable = NULL;
 	}
