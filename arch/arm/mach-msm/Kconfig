@@ -48,6 +48,10 @@ choice
 	default MSM_SOC_REV_NONE
 config MSM_SOC_REV_NONE
 	bool "N/A"
+if ARCH_QSD8X50
+config MSM_SOC_REV_A
+	bool "Rev. A"
+endif
 endchoice
 
 config  ARCH_MSM_ARM11
@@ -144,6 +148,7 @@ config MACH_SAPPHIRE
 
 config MACH_QSD8X50_SURF
 	depends on ARCH_QSD8X50
+	depends on MSM_SOC_REV_NONE
 	depends on MSM_STACKED_MEMORY
 	default y
 	bool "QSD8x50 SURF"
@@ -152,6 +157,7 @@ config MACH_QSD8X50_SURF
 
 config MACH_QSD8X50_FFA
 	depends on ARCH_QSD8X50
+	depends on MSM_SOC_REV_NONE
 	depends on MSM_STACKED_MEMORY
 	default y
 	bool "QSD8x50 FFA"
@@ -160,11 +166,30 @@ config MACH_QSD8X50_FFA
 
 config MACH_QSD8X50_COMET
 	depends on ARCH_QSD8X50
+	depends on MSM_SOC_REV_NONE
 	depends on MSM_STACKED_MEMORY
 	default n
 	bool "QSD8x50 Comet"
 	help
 	  Support for the Qualcomm Comet eval board.
+
+config MACH_QSD8X50A_SURF
+	depends on ARCH_QSD8X50
+	depends on MSM_SOC_REV_A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "QSD8x50A SURF"
+	help
+	  Support for the Qualcomm QSD8x50A SURF eval board.
+
+config MACH_QSD8X50A_FFA
+	depends on ARCH_QSD8X50
+	depends on MSM_SOC_REV_A
+	depends on MSM_STACKED_MEMORY
+	default y
+	bool "QSD8x50A FFA"
+	help
+	  Support for the Qualcomm QSD8x50A FFA eval board.
 
 config MACH_MSM7X25_SURF
 	depends on ARCH_MSM7X25
@@ -413,7 +438,7 @@ config HTC_PWRSINK
 
 config QSD_SVS
 	bool "QSD Static Voltage Scaling"
-	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET)
+	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET || MACH_QSD8X50A_SURF || MACH_QSD8X50A_FFA)
 	default y
 	select TPS65023
 	help
@@ -421,7 +446,7 @@ config QSD_SVS
 
 config QSD_PMIC_DEFAULT_DCDC1
 	int "PMIC default output voltage"
-	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET)
+	depends on (MACH_QSD8X50_SURF || MACH_QSD8X50_FFA || MACH_QSD8X50_COMET || MACH_QSD8X50A_SURF || MACH_QSD8X50A_FFA)
 	default 1250
 	help
 	  This is the PMIC voltage at Linux kernel boot.
