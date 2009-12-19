@@ -78,11 +78,22 @@ void msm_sirc_exit_sleep(void);
 #define INT_SMI_ERR                   (FIRST_SIRC_IRQ + 18)
 #define INT_EBI1_ERR                  (FIRST_SIRC_IRQ + 19)
 #define INT_IMEM_ERR                  (FIRST_SIRC_IRQ + 20)
-#define INT_SC_TEMP_SENSOR            (FIRST_SIRC_IRQ + 21)
+#define INT_TEMP_SENSOR               (FIRST_SIRC_IRQ + 21)
 #define INT_TV_ENC                    (FIRST_SIRC_IRQ + 22)
+#define INT_GRP2D                     (FIRST_SIRC_IRQ + 23)
+#define INT_GSBI_QUP                  (FIRST_SIRC_IRQ + 24)
+#define INT_SC_ACG                    (FIRST_SIRC_IRQ + 25)
+#define INT_WDT0                      (FIRST_SIRC_IRQ + 26)
+#define INT_WDT1                      (FIRST_SIRC_IRQ + 27)
 
+#if defined(CONFIG_MSM_SOC_REV_A)
+#define NR_SIRC_IRQS                  28
+#define SIRC_MASK                     0x0FFFFFFF
+#else
 #define NR_SIRC_IRQS                  23
 #define SIRC_MASK                     0x007FFFFF
+#endif
+
 #define LAST_SIRC_IRQ                 (FIRST_SIRC_IRQ + NR_SIRC_IRQS - 1)
 
 #define SPSS_SIRC_INT_SELECT          (MSM_SIRC_BASE + 0x00)
