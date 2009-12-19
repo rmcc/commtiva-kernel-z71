@@ -34,6 +34,10 @@
 #define MSMFB_OVERLAY_UNSET     _IOW(MSMFB_IOCTL_MAGIC, 136, unsigned int)
 #define MSMFB_OVERLAY_PLAY      _IOW(MSMFB_IOCTL_MAGIC, 137, \
 						struct msmfb_overlay_data)
+#define MSMFB_GET_PAGE_PROTECTION _IOR(MSMFB_IOCTL_MAGIC, 138, \
+					struct mdp_page_protection)
+#define MSMFB_SET_PAGE_PROTECTION _IOW(MSMFB_IOCTL_MAGIC, 139, \
+					struct mdp_page_protection)
 
 #define MDP_IMGTYPE2_START 0x10000
 
@@ -62,7 +66,7 @@ enum {
 	FB_IMG,
 };
 
-/* flag values */
+/* mdp_blit_req flag values */
 #define MDP_ROT_NOP 0
 #define MDP_FLIP_LR 0x1
 #define MDP_FLIP_UD 0x2
@@ -72,12 +76,26 @@ enum {
 #define MDP_DITHER 0x8
 #define MDP_BLUR 0x10
 #define MDP_BLEND_FG_PREMULT 0x20000
-
 #define MDP_DEINTERLACE 0x80000000
 #define MDP_SHARPENING  0x40000000
-
+#define MDP_NO_DMA_BARRIER_START	0x20000000
+#define MDP_NO_DMA_BARRIER_END		0x10000000
+#define MDP_NO_BLIT			0x08000000
+#define MDP_BLIT_WITH_DMA_BARRIERS	0x000
+#define MDP_BLIT_WITH_NO_DMA_BARRIERS    \
+	(MDP_NO_DMA_BARRIER_START | MDP_NO_DMA_BARRIER_END)
 #define MDP_TRANSP_NOP 0xffffffff
 #define MDP_ALPHA_NOP 0xff
+
+#define MDP_FB_PAGE_PROTECTION_NONCACHED         (0)
+#define MDP_FB_PAGE_PROTECTION_WRITECOMBINE      (1)
+#define MDP_FB_PAGE_PROTECTION_WRITETHROUGHCACHE (2)
+#define MDP_FB_PAGE_PROTECTION_WRITEBACKCACHE    (3)
+#define MDP_FB_PAGE_PROTECTION_WRITEBACKWACACHE  (4)
+/* Sentinel: Don't use! */
+#define MDP_FB_PAGE_PROTECTION_INVALID           (5)
+/* Count of the number of MDP_FB_PAGE_PROTECTION_... values. */
+#define MDP_NUM_FB_PAGE_PROTECTION_VALUES        (5)
 
 struct mdp_rect {
 	uint32_t x;
@@ -163,6 +181,10 @@ struct mdp_histogram {
 	uint32_t *r;
 	uint32_t *g;
 	uint32_t *b;
+};
+
+struct mdp_page_protection {
+	uint32_t page_protection;
 };
 
 #endif /*_MSM_MDP_H_*/
