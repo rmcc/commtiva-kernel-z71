@@ -49,7 +49,7 @@
 #include <mach/qdsp5v2/audpp.h>
 
 /* Size must be power of 2 */
-#define BUFSZ_MAX 	2062	/* Includes meta in size */
+#define BUFSZ_MAX 	4110	/* Includes meta in size */
 #define BUFSZ_MIN 	1038	/* Includes meta in size */
 #define DMASZ_MAX 	(BUFSZ_MAX * 2)
 #define DMASZ_MIN 	(BUFSZ_MIN * 2)
