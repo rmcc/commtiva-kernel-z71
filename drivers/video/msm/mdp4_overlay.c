@@ -778,24 +778,29 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 
 	blend_op = 0;
 	if (pipe->alpha_enable) 	/* ARGB */
-		blend_op = MDP4_BLEND_FG_ALPHA_FG_PIXEL;
+		blend_op = MDP4_BLEND_FG_ALPHA_FG_PIXEL |
+				MDP4_BLEND_BG_ALPHA_FG_PIXEL;
 	else
 		blend_op = (MDP4_BLEND_BG_ALPHA_BG_CONST |
 				MDP4_BLEND_FG_ALPHA_FG_CONST);
 
-	if (pipe->is_fg)
-		blend_op |= MDP4_BLEND_FG_TRANSP_EN; /* Fg blocked */
-	else
-		blend_op |= MDP4_BLEND_BG_TRANSP_EN; /* bg blocked */
+	if (pipe->transp != MDP_TRANSP_NOP) {
+		if (pipe->is_fg)
+			blend_op |= MDP4_BLEND_FG_TRANSP_EN; /* Fg blocked */
+		else
+			blend_op |= MDP4_BLEND_BG_TRANSP_EN; /* bg blocked */
+	}
 
 	outpdw(overlay_base + off + 0x104, blend_op);
 
-	if (pipe->is_fg) {
-		outpdw(overlay_base + off + 0x108, pipe->alpha);
-		outpdw(overlay_base + off + 0x10c, 0xff - pipe->alpha);
-	} else {
-		outpdw(overlay_base + off + 0x108, 0xff - pipe->alpha);
-		outpdw(overlay_base + off + 0x10c, pipe->alpha);
+	if (pipe->alpha_enable == 0) { 	/* not ARGB */
+		if (pipe->is_fg) {
+			outpdw(overlay_base + off + 0x108, pipe->alpha);
+			outpdw(overlay_base + off + 0x10c, 0xff - pipe->alpha);
+		} else {
+			outpdw(overlay_base + off + 0x108, 0xff - pipe->alpha);
+			outpdw(overlay_base + off + 0x10c, pipe->alpha);
+		}
 	}
 
 	transp_color_key(pipe->src_format, pipe->transp, &c0, &c1, &c2);
@@ -1017,8 +1022,7 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 
 	pipe->alpha = req->alpha & 0x0ff;
 
-	if (req->transp_mask != MDP_TRANSP_NOP)
-		pipe->transp = req->transp_mask;
+	pipe->transp = req->transp_mask;
 
 	*ppipe = pipe;
 
