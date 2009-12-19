@@ -306,7 +306,7 @@ invalid:
 
 	/* respond with data transfer or status phase? */
 	if (value >= 0) {
-		printk(KERN_ERR "gser ttyGS%d req%02x.%02x v%04x i%04x l%d\n",
+		printk(KERN_DEBUG "gser ttyGS%d req%02x.%02x v%04x i%04x l%d\n",
 			gser->port_num, ctrl->bRequestType, ctrl->bRequest,
 			w_value, w_index, w_length);
 		req->zero = 0;
@@ -414,7 +414,7 @@ static int gser_notify_serial_state(struct f_gser *gser)
 
 	spin_lock_irqsave(&gser->lock, flags);
 	if (gser->notify_req) {
-		printk(KERN_ERR "gser ttyGS%d serial state %04x\n",
+		printk(KERN_DEBUG "gser ttyGS%d serial state %04x\n",
 				gser->port_num, gser->serial_state);
 		status = gser_notify(gser, USB_CDC_NOTIFY_SERIAL_STATE,
 				0, &gser->serial_state,
