@@ -331,7 +331,8 @@ void mdp4_overlay_pipe_free(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe);
 int mdp4_overlay_active(int mixer);
-void mdp4_overlay_done(int mixer);
+void mdp4_overlay0_done_lcdc(void);
+void mdp4_overlay0_done_mddi(void);
 void mdp4_mddi_overlay_restore(void);
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);

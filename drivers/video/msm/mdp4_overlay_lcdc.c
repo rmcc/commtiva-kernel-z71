@@ -305,6 +305,14 @@ int mdp_lcdc_off(struct platform_device *pdev)
 	return ret;
 }
 
+/*
+ * mdp4_overlay0_done_lcdc: called from isr
+ */
+void mdp4_overlay0_done_lcdc()
+{
+	complete(&lcdc_pipe->comp);
+}
+
 void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 {
 	struct fb_info *fbi = mfd->fbi;
