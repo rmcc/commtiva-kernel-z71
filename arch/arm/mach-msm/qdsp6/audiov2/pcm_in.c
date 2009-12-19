@@ -1,4 +1,4 @@
-/* arch/arm/mach-msm/qdsp6/pcm_in.c
+/* arch/arm/mach-msm/qdsp6/audiov2/pcm_in.c
  *
  * Copyright (C) 2009 Google, Inc.
  * Copyright (C) 2009 HTC Corporation
@@ -28,7 +28,6 @@
 #include <mach/msm_qdsp6_audiov2.h>
 #include "dal_audio.h"
 #include "dal_audio_format.h"
-#include "dal_acdb.h"
 
 #define BUFSZ (4096)
 #define DMASZ (BUFSZ * 2)
@@ -75,7 +74,7 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
 		rpc.format_block = (void *) audio_phys;
 		rpc.format_block_len = sizeof(*fmt);
-		rpc.buf_max_size = BUFSZ; /* XXX ??? */
+		rpc.buf_max_size = BUFSZ;
 		q6audio_start(pcm->audio_client, &rpc, sizeof(rpc));
 		break;
 	case AUDIO_STOP:
@@ -122,6 +121,7 @@ static int q6_in_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 	}
 	pcm->cfg.channel_count = 1;
+	pcm->cfg.buffer_count = 2;
 	pcm->cfg.buffer_size = BUFSZ;
 	pcm->cfg.unused[0] = 0;
 	pcm->cfg.unused[1] = 0;

@@ -1185,6 +1185,7 @@ struct audio_client *q6audio_open(uint32_t flags, uint32_t bufsz)
 		return 0;
 
 	ac->flags = flags;
+	ac->running = 0;
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1);
 	else
@@ -1208,13 +1209,18 @@ int q6audio_start(struct audio_client *ac, void *rpc,
 		q6audio_read(ac, &ac->buf[1]);
 	}
 
+	ac->running = 1;
 	audio_prevent_sleep();
 	return 0;
 }
 
 int q6audio_close(struct audio_client *ac)
 {
-	audio_close(ac);
+	if (ac->running) {
+		audio_close(ac);
+		ac->running = 0;
+	}
+
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(0);
 	else
