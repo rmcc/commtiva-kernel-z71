@@ -69,6 +69,7 @@
 #include <linux/mfd/marimba.h>
 #include <linux/i2c.h>
 #include <linux/input.h>
+#include <linux/smsc911x.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -1165,6 +1166,57 @@ static struct platform_device smc91x_device = {
 	.num_resources  = ARRAY_SIZE(smc91x_resources),
 	.resource       = smc91x_resources,
 };
+
+static struct smsc911x_platform_config smsc911x_config = {
+	.phy_interface	= PHY_INTERFACE_MODE_MII,
+	.irq_polarity	= SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
+	.irq_type	= SMSC911X_IRQ_TYPE_PUSH_PULL,
+	.flags		= SMSC911X_USE_32BIT,
+};
+
+static struct resource smsc911x_resources[] = {
+	[0] = {
+		.start		= 0x8D000000,
+		.end		= 0x8D000100,
+		.flags		= IORESOURCE_MEM,
+	},
+	[1] = {
+		.start		= MSM_GPIO_TO_INT(88),
+		.end		= MSM_GPIO_TO_INT(88),
+		.flags		= IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device smsc911x_device = {
+	.name		= "smsc911x",
+	.id		= -1,
+	.num_resources	= ARRAY_SIZE(smsc911x_resources),
+	.resource	= smsc911x_resources,
+	.dev		= {
+		.platform_data = &smsc911x_config,
+	},
+};
+
+static struct msm_gpio smsc911x_gpios[] = {
+    { GPIO_CFG(72, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr6" },
+    { GPIO_CFG(73, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr5" },
+    { GPIO_CFG(74, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr4" },
+    { GPIO_CFG(75, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr3" },
+    { GPIO_CFG(76, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr2" },
+    { GPIO_CFG(77, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr1" },
+    { GPIO_CFG(78, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr0" },
+    { GPIO_CFG(88, 2, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), "smsc911x_irq"  },
+};
+
+static void msm7x30_cfg_smsc911x(void)
+{
+	int rc;
+
+	rc = msm_gpios_request_enable(smsc911x_gpios,
+			ARRAY_SIZE(smsc911x_gpios));
+	if (rc)
+		pr_err("%s: unable to enable gpios\n", __func__);
+}
 
 #ifdef CONFIG_USB_FUNCTION
 static struct usb_mass_storage_platform_data usb_mass_storage_pdata = {
@@ -2277,6 +2329,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
 	&smc91x_device,
+	&smsc911x_device,
 	&msm_device_nand,
 #ifdef CONFIG_USB_FUNCTION
 	&msm_device_hsusb_peripheral,
@@ -2823,6 +2876,8 @@ static void __init msm7x30_init(void)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
 	msm_acpu_clock_init(&msm7x30_clock_data);
+	if (machine_is_msm7x30_surf() || machine_is_msm7x30_fluid())
+		msm7x30_cfg_smsc911x();
 #ifdef CONFIG_USB_FUNCTION
 	msm_hsusb_pdata.swfi_latency =
 		msm_pm_data
