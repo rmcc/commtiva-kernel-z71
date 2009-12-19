@@ -1,21 +1,24 @@
-ifeq ($(CONFIG_ARCH_MSM_SCORPION),y)
-ifeq ($(CONFIG_MSM_STACKED_MEMORY), y)
-  zreladdr-y		:= 0x20008000
-params_phys-y		:= 0x20000100
-initrd_phys-y		:= 0x24000000
-else  # !CONFIG_MSM_STACKED_MEMORY
-  zreladdr-y		:= 0x00208000
-params_phys-y		:= 0x00200100
-initrd_phys-y		:= 0x01200000
-endif # CONFIG_MSM_STACKED_MEMORY
-else  # !CONFIG_ARCH_MSM_SCORPION
-ifeq ($(CONFIG_MSM_STACKED_MEMORY), y)
-  zreladdr-y		:= 0x10008000
-params_phys-y		:= 0x10000100
-initrd_phys-y		:= 0x10800000
-else  # !CONFIG_MSM_STACKED_MEMORY
-  zreladdr-y		:= 0x00208000
-params_phys-y		:= 0x00200100
-initrd_phys-y		:= 0x0A000000
-endif # CONFIG_MSM_STACKED_MEMORY
-endif # CONFIG_ARCH_MSM_SCORPION
+# MSM7x01A
+   zreladdr-$(CONFIG_ARCH_MSM7X01A)	:= 0x10008000
+params_phys-$(CONFIG_ARCH_MSM7X01A)	:= 0x10000100
+initrd_phys-$(CONFIG_ARCH_MSM7X01A)	:= 0x10800000
+
+# MSM7x25
+   zreladdr-$(CONFIG_ARCH_MSM7X25)	:= 0x00208000
+params_phys-$(CONFIG_ARCH_MSM7X25)	:= 0x00200100
+initrd_phys-$(CONFIG_ARCH_MSM7X25)	:= 0x0A000000
+
+# MSM7x27
+   zreladdr-$(CONFIG_ARCH_MSM7X27)	:= 0x00208000
+params_phys-$(CONFIG_ARCH_MSM7X27)	:= 0x00200100
+initrd_phys-$(CONFIG_ARCH_MSM7X27)	:= 0x0A000000
+
+# MSM7x30
+   zreladdr-$(CONFIG_ARCH_MSM7X30)	:= 0x00208000
+params_phys-$(CONFIG_ARCH_MSM7X30)	:= 0x00200100
+initrd_phys-$(CONFIG_ARCH_MSM7X30)	:= 0x0A000000
+
+# QSD8x50
+   zreladdr-$(CONFIG_ARCH_QSD8X50)	:= 0x20008000
+params_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x20000100
+initrd_phys-$(CONFIG_ARCH_QSD8X50)	:= 0x24000000
