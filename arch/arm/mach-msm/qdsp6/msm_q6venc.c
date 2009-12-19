@@ -480,9 +480,13 @@ static int venc_fill_output(struct q6venc_dev *dvenc, void *argp)
 	plist =	venc_get_pmem_from_list(dvenc, buf.fd, buf.offset,
 			VENC_BUFFER_TYPE_OUTPUT);
 	if (NULL == plist) {
-		pr_err("%s: not able to find output buffer from list\n",
-			__func__);
-		return -EPERM;
+		plist = venc_add_pmem_to_list(dvenc, &buf,
+				VENC_BUFFER_TYPE_OUTPUT);
+		if (NULL == plist) {
+			pr_err("%s: add_to_pmem_list failed for"
+				" output buffer\n", __func__);
+			return -EPERM;
+		}
 	}
 	q6_output.bit_stream_buf.region = 0;
 	q6_output.bit_stream_buf.phys = (unsigned int)plist->buf.paddr;
