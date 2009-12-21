@@ -532,7 +532,8 @@ kgsl_gem_bind_gpu_ioctl(struct drm_device *dev, void *data,
 				   (unsigned long) priv->kmem,
 				   obj->size,
 				   GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
-				   &priv->gpuaddr);
+				   &priv->gpuaddr,
+				KGSL_MEMFLAGS_ALIGN4K);
 
 		if (!ret) {
 			priv->flags |= DRM_KGSL_GEM_FLAG_MAPPED;

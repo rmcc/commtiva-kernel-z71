@@ -64,7 +64,10 @@
 #define KGSL_CHIPID_YAMATODX_REV21  0x20100
 #define KGSL_CHIPID_YAMATODX_REV211 0x20101
 
-#ifdef CONFIG_MSM_KGSL_MMU
+int kgsl_yamato_setup_pt(struct kgsl_device *device,
+			 struct kgsl_pagetable *pagetable);
+int kgsl_yamato_cleanup_pt(struct kgsl_device *device,
+			   struct kgsl_pagetable *pagetable);
 /* Private memory flags for use with memdesc->priv feild */
 #define KGSL_MEMFLAGS_MEM_REQUIRES_FLUSH    0x00000001
 #define KGSL_MEMFLAGS_VMALLOC_MEM           0x00000002
@@ -72,7 +75,6 @@
 #define KGSL_GRAPHICS_MEMORY_LOW_WATERMARK  0x1000000
 
 #define KGSL_IS_PAGE_ALIGNED(addr) (!((addr) & (~PAGE_MASK)))
-#endif
 
 struct kgsl_device;
 struct platform_device;
