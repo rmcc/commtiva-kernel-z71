@@ -84,6 +84,7 @@
 #include <mach/rpc_hsusb.h>
 #include <mach/msm_spi.h>
 #include <mach/qdsp5v2/msm_lpa.h>
+#include <mach/dma.h>
 #include <linux/android_pmem.h>
 #include <mach/pmic8058-keypad.h>
 #include <mach/msm_ts.h>
@@ -1446,7 +1447,56 @@ static struct resource qsd_spi_resources[] = {
 		.end	= 0xA8000000 + SZ_4K - 1,
 		.flags	= IORESOURCE_MEM,
 	},
+	{
+		.name   = "spidm_channels",
+		.flags  = IORESOURCE_DMA,
+	},
+	{
+		.name   = "spidm_crci",
+		.flags  = IORESOURCE_DMA,
+	},
 };
+
+#define AMDH0_BASE_PHYS		0xAC200000
+#define ADMH0_GP_CTL		(ct_adm_base + 0x3D8)
+static int msm_qsd_spi_dma_config(void)
+{
+	void __iomem *ct_adm_base = 0;
+	u32 spi_mux = 0;
+	int ret = 0;
+
+	ct_adm_base = ioremap(AMDH0_BASE_PHYS, PAGE_SIZE);
+	if (!ct_adm_base) {
+		pr_err("%s: Could not remap %x\n", __func__, AMDH0_BASE_PHYS);
+		return -ENOMEM;
+	}
+
+	spi_mux = (ioread32(ADMH0_GP_CTL) & (0x3 << 12)) >> 12;
+
+	qsd_spi_resources[4].start  = DMOV_USB_CHAN;
+	qsd_spi_resources[4].end    = DMOV_TSIF_CHAN;
+
+	switch (spi_mux) {
+	case (1):
+		qsd_spi_resources[5].start  = DMOV_HSUART1_RX_CRCI;
+		qsd_spi_resources[5].end    = DMOV_HSUART1_TX_CRCI;
+		break;
+	case (2):
+		qsd_spi_resources[5].start  = DMOV_HSUART2_RX_CRCI;
+		qsd_spi_resources[5].end    = DMOV_HSUART2_TX_CRCI;
+		break;
+	case (3):
+		qsd_spi_resources[5].start  = DMOV_CE_OUT_CRCI;
+		qsd_spi_resources[5].end    = DMOV_CE_IN_CRCI;
+		break;
+	default:
+		ret = -ENOENT;
+	}
+
+	iounmap(ct_adm_base);
+
+	return ret;
+}
 
 static struct platform_device qsd_device_spi = {
 	.name		= "spi_qsd",
@@ -1489,7 +1539,8 @@ static void msm_qsd_spi_gpio_release(void)
 static struct msm_spi_platform_data qsd_spi_pdata = {
 	.max_clock_speed = 26000000,
 	.gpio_config  = msm_qsd_spi_gpio_config,
-	.gpio_release = msm_qsd_spi_gpio_release
+	.gpio_release = msm_qsd_spi_gpio_release,
+	.dma_config = msm_qsd_spi_dma_config,
 };
 
 static void __init msm_qsd_spi_init(void)
