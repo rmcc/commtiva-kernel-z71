@@ -245,7 +245,6 @@ msmsdcc_dma_complete_tlet(unsigned long data)
 		if (!mrq->data->error)
 			host->curr.data_xfered = host->curr.xfer_size;
 		if (!mrq->data->stop || mrq->cmd->error) {
-			writel(0, host->base + MMCICOMMAND);
 			host->curr.mrq = NULL;
 			host->curr.cmd = NULL;
 			mrq->data->bytes_xfered = host->curr.data_xfered;
