@@ -171,6 +171,7 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 static int tavarua_start(struct tavarua_device *radio,
 			enum radio_state_t state);
 static int tavarua_request_irq(struct tavarua_device *radio);
+static int start_pending_xfr(struct tavarua_device *radio);
 /* work function */
 static void read_int_stat(struct work_struct *work);
 
@@ -320,8 +321,11 @@ static int sync_read_xfr(struct tavarua_device *radio,
 	if (retval < 0)
 		return retval;
 	if (!wait_for_completion_timeout(&radio->sync_req_done,
-		msecs_to_jiffies(WAIT_TIMEOUT)))
+		msecs_to_jiffies(WAIT_TIMEOUT))) {
+		radio->xfr_in_progress = 0;
+		start_pending_xfr(radio);
 		return -1;
+	}
 
 	return retval;
 }
@@ -341,8 +345,11 @@ static int sync_write_xfr(struct tavarua_device *radio,
 	if (retval < 0)
 		return retval;
 	if (!wait_for_completion_timeout(&radio->sync_req_done,
-		msecs_to_jiffies(WAIT_TIMEOUT)))
+		msecs_to_jiffies(WAIT_TIMEOUT))) {
+		radio->xfr_in_progress = 0;
+		start_pending_xfr(radio);
 		return -1;
+	}
 
 	return retval;
 }
@@ -383,6 +390,7 @@ static int start_pending_xfr(struct tavarua_device *radio)
 				FMDBG("%s: Unsupported XFR\n", __func__);
 			}
 			radio->pending_xfrs[i] = 0;
+			FMDBG("resurrect xfr %d\n", i);
 			return i;
 			}
 
