@@ -1525,7 +1525,7 @@ msmsdcc_resume(struct platform_device *dev)
 
 		spin_unlock_irqrestore(&host->lock, flags);
 
-		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO)
+		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO) {
 #ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 			schedule_work(&host->resume_task);
 #else
@@ -1533,7 +1533,7 @@ msmsdcc_resume(struct platform_device *dev)
 			if (host->plat->status_irq)
 				enable_irq(host->plat->status_irq);
 #endif
-		else if (host->plat->status_irq)
+		} else if (host->plat->status_irq)
 			enable_irq(host->plat->status_irq);
 	}
 	return 0;
