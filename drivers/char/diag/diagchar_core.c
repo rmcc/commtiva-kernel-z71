@@ -578,6 +578,7 @@ static int __init diagchar_init(void)
 	if (driver) {
 		driver->used = 0;
 		timer_in_progress = 0;
+		driver->debug_flag = 1;
 		setup_timer(&drain_timer, drain_timer_func, 1234);
 		driver->itemsize = itemsize;
 		driver->poolsize = poolsize;
