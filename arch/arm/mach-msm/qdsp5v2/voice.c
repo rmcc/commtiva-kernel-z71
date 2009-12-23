@@ -371,7 +371,8 @@ void voice_change_sample_rate(struct voice_data *v)
 		freq = 16000;
 	MM_INFO(" network =%d, vote freq=%d\n", v->network, freq);
 	if (freq != v->dev_info.txdev_sample) {
-		rc = msm_snddev_request_freq(&freq, 0, AUDDEV_CLNT_VOC);
+		rc = msm_snddev_request_freq(&freq, 0,
+				SNDDEV_CAP_TX, AUDDEV_CLNT_VOC);
 		if (rc >= 0) {
 			v->dev_info.txdev_sample = freq;
 			MM_INFO(" vote for freq=%d successfully \n", freq);
