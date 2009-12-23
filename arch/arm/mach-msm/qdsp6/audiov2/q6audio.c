@@ -396,11 +396,16 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_TX;
 	rpc.buffer.addr = ab->phys;
 	rpc.buffer.max_size = ab->size;
-	rpc.buffer.actual_size = ab->used;
+	rpc.buffer.actual_size = ab->actual_size;
 
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
 		     &res, sizeof(res));
-	return 0;
+
+	if ((r == sizeof(res)))
+		return 0;
+
+	return -EIO;
+
 }
 
 int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
@@ -417,7 +422,7 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
 	rpc.buffer.addr = ab->phys;
 	rpc.buffer.max_size = ab->size;
-	rpc.buffer.actual_size = ab->used;
+	rpc.buffer.actual_size = ab->size;
 
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
 		     &res, sizeof(res));
@@ -486,6 +491,7 @@ static void callback(void *data, int len, void *cookie)
 {
 	struct adsp_event_hdr *e = data;
 	struct audio_client *ac;
+	struct adsp_buffer_event *abe = data;
 
 	if (e->context >= SESSION_MAX) {
 		pr_err("audio callback: bogus session %d\n",
@@ -513,6 +519,8 @@ static void callback(void *data, int len, void *cookie)
 	if (e->event_id == ADSP_AUDIO_EVT_STATUS_BUF_DONE) {
 		if (e->status)
 			pr_err("buffer status %d\n", e->status);
+
+		ac->buf[ac->dsp_buf].actual_size = abe->buffer.actual_size;
 		ac->buf[ac->dsp_buf].used = 0;
 		ac->dsp_buf ^= 1;
 		wake_up(&ac->wait);
@@ -1233,7 +1241,6 @@ struct audio_client *q6audio_open(uint32_t flags, uint32_t bufsz)
 		return 0;
 
 	ac->flags = flags;
-	ac->running = 0;
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1);
 	else
@@ -1257,17 +1264,13 @@ int q6audio_start(struct audio_client *ac, void *rpc,
 		q6audio_read(ac, &ac->buf[1]);
 	}
 
-	ac->running = 1;
 	audio_prevent_sleep();
 	return 0;
 }
 
 int q6audio_close(struct audio_client *ac)
 {
-	if (ac->running) {
-		audio_close(ac);
-		ac->running = 0;
-	}
+	audio_close(ac);
 
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(0);

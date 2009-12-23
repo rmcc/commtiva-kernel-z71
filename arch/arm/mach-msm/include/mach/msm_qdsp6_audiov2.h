@@ -31,6 +31,7 @@ struct audio_buffer {
 	void *data;
 	uint32_t size;
 	uint32_t used;	/* 1 = CPU is waiting for DSP to consume this buf */
+	uint32_t actual_size; /* actual number of bytes read by DSP */
 };
 
 struct audio_client {
