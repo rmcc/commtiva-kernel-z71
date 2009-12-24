@@ -307,6 +307,7 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
 
+	dev->cdev = cdev;
 	/* register our configuration */
 	ret = usb_add_config(cdev, &android_config_driver);
 	if (ret) {
@@ -331,7 +332,6 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	}
 
 	usb_gadget_set_selfpowered(gadget);
-	dev->cdev = cdev;
 	device_desc.idProduct = dev->product_id;
 	num_ports = acm_func_cnt + gser_func_cnt;
 	if (acm_func_cnt || gser_func_cnt) {
@@ -580,6 +580,9 @@ static int __init init(void)
 	dev->adb_product_id = ADB_PRODUCT_ID;
 	_android_dev = dev;
 
+	ret = adb_function_init();
+	if (ret)
+		return ret;
 	ret = platform_driver_register(&android_platform_driver);
 	if (ret)
 		return ret;
@@ -602,6 +605,7 @@ static void __exit cleanup(void)
 	usb_composite_unregister(&android_usb_driver);
 	misc_deregister(&adb_enable_device);
 	platform_driver_unregister(&android_platform_driver);
+	adb_function_exit();
 	kfree(_android_dev);
 	_android_dev = NULL;
 }

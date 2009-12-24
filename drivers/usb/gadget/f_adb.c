@@ -536,12 +536,18 @@ adb_function_bind(struct usb_configuration *c, struct usb_function *f)
 	return 0;
 }
 
+void adb_function_exit(void)
+{
+	misc_deregister(&adb_device);
+	kfree(_adb_dev);
+	_adb_dev = NULL;
+}
+
 static void
 adb_function_unbind(struct usb_configuration *c, struct usb_function *f)
 {
 	struct adb_dev	*dev = func_to_dev(f);
 	struct usb_request *req;
-
 
 	while ((req = req_get(dev, &dev->rx_idle)))
 		adb_request_free(req, dev->ep_out);
@@ -553,9 +559,6 @@ adb_function_unbind(struct usb_configuration *c, struct usb_function *f)
 	dev->error = 1;
 	spin_unlock_irq(&dev->lock);
 
-	misc_deregister(&adb_device);
-	kfree(_adb_dev);
-	_adb_dev = NULL;
 }
 
 static int adb_function_set_alt(struct usb_function *f,
@@ -609,10 +612,17 @@ static void adb_function_disable(struct usb_function *f)
 int adb_function_add(struct usb_composite_dev *cdev,
 	struct usb_configuration *c)
 {
+	INFO(cdev, "adb_function_add\n");
+
+	return usb_add_function(c, &_adb_dev->function);
+}
+
+int adb_function_init(void)
+{
 	struct adb_dev *dev;
 	int ret;
 
-	printk(KERN_INFO "adb_function_add\n");
+	printk(KERN_INFO "adb_function_init\n");
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
@@ -631,7 +641,6 @@ int adb_function_add(struct usb_composite_dev *cdev,
 	INIT_LIST_HEAD(&dev->rx_done);
 	INIT_LIST_HEAD(&dev->tx_idle);
 
-	dev->cdev = cdev;
 	dev->function.name = "adb";
 	dev->function.descriptors = fs_adb_descs;
 	dev->function.hs_descriptors = hs_adb_descs;
@@ -644,19 +653,11 @@ int adb_function_add(struct usb_composite_dev *cdev,
 	_adb_dev = dev;
 
 	ret = misc_register(&adb_device);
-	if (ret)
-		goto err1;
-	ret = usb_add_function(c, &dev->function);
-	if (ret)
-		goto err2;
+	if (ret) {
+		kfree(dev);
+		printk(KERN_ERR "adb gadget driver failed to initialize\n");
+	}
 
-	return 0;
-
-err2:
-	misc_deregister(&adb_device);
-err1:
-	kfree(dev);
-	printk(KERN_ERR "adb gadget driver failed to initialize\n");
 	return ret;
 }
 
@@ -677,4 +678,3 @@ void adb_function_enable(int enable)
 		}
 	}
 }
-
