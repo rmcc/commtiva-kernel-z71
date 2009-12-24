@@ -145,6 +145,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 	src = (uint8 *) iBuf->buf;
 
 #ifdef WHOLESCREEN
+
 	{
 		struct fb_info *fbi;
 
@@ -160,7 +161,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 		pipe->dst_y = 0;
 		pipe->dst_x = 0;
 		pipe->srcp0_addr = (uint32)src;
-		pipe->srcp0_ystride = fbi->var.xres_virtual * bpp;
+		pipe->srcp0_ystride = fbi->fix.line_length;
 	}
 
 #else
@@ -179,7 +180,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 		pipe->dst_y = 0;
 		pipe->dst_x = 0;
 		pipe->srcp0_addr = (uint32) src;
-		pipe->srcp0_ystride = fbi->var.xres_virtual * bpp;
+		pipe->srcp0_ystride = fbi->fix.line_length;
 	} else {
 		/* starting input address */
 		src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width) * bpp;
@@ -278,7 +279,11 @@ void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 {
 	mutex_lock(&mfd->dma->ov_mutex);
 
+#ifdef MDP4_NONBLOCKING
+	if (mfd && mfd->panel_power_on) {
+#else
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
+#endif
 		mdp4_overlay_update_lcd(mfd);
 
 		mdp4_mddi_overlay_kickoff(mfd, mddi_pipe);
