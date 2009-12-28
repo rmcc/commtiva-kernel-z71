@@ -87,8 +87,6 @@ obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o clock-7x30.o
 obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o
 
-obj-$(CONFIG_QSD_AUDIO) += qdsp6/
-
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-mmc.o board-sapphire-wifi.o
