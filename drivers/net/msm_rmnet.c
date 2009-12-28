@@ -244,6 +244,7 @@ static int _rmnet_xmit(struct sk_buff *skb, struct net_device *dev)
 	smd_channel_t *ch = p->ch;
 	int smd_ret;
 
+	dev->trans_start = jiffies;
 	smd_ret = smd_write(ch, skb->data, skb->len);
 	if (smd_ret != skb->len) {
 		pr_err("%s: smd_write returned error %d", __func__, smd_ret);
