@@ -46,7 +46,7 @@
 static struct class *msm_class;
 static dev_t msm_devno;
 static LIST_HEAD(msm_sensors);
-struct  msm_device_queue *g_v4l2_control_device;
+struct  msm_control_device *g_v4l2_control_device;
 int g_v4l2_opencnt;
 
 #define __CONTAINS(r, v, l, field) ({				\
@@ -2164,6 +2164,9 @@ static int msm_open_control(struct inode *inode, struct file *filep)
 
 	msm_queue_init(&ctrl_pmsm->ctrl_q, "control");
 
+	if (!g_v4l2_opencnt)
+		g_v4l2_control_device = ctrl_pmsm;
+
 	g_v4l2_opencnt++;
 
 	CDBG("%s: rc %d\n", __func__, rc);
@@ -2177,7 +2180,7 @@ static int __msm_v4l2_control(struct msm_sync *sync,
 
 	struct msm_queue_cmd *qcmd = NULL, *rcmd = NULL;
 	struct msm_ctrl_cmd *ctrl;
-	struct msm_device_queue v4l2_ctrl_q;
+	struct msm_device_queue *v4l2_ctrl_q = &g_v4l2_control_device->ctrl_q;
 
 	/* wake up config thread, 4 is for V4L2 application */
 	qcmd = kmalloc(sizeof(struct msm_queue_cmd), GFP_KERNEL);
@@ -2190,7 +2193,15 @@ static int __msm_v4l2_control(struct msm_sync *sync,
 	qcmd->command = out;
 	qcmd->on_heap = 1;
 
-	rcmd = __msm_control(sync, &v4l2_ctrl_q, qcmd, out->timeout_ms);
+	if (out->type == V4L2_CAMERA_EXIT) {
+		rcmd = __msm_control(sync, NULL, qcmd, out->timeout_ms);
+		if (rcmd == NULL) {
+			rc = PTR_ERR(rcmd);
+			goto end;
+		}
+	}
+
+	rcmd = __msm_control(sync, v4l2_ctrl_q, qcmd, out->timeout_ms);
 
 	if (IS_ERR(rcmd)) {
 		rc = PTR_ERR(rcmd);
