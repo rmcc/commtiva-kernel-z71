@@ -1487,15 +1487,23 @@ static void vfe31_process_reset_irq(void)
 
 static void vfe31_process_camif_sof_irq(void)
 {
-
-	if ((vfe31_ctrl->operation_mode == 3) &&
-		(vfe31_ctrl->vfeFrameId == 0)) {
-		/* no reg update irq when raw snapshot. */
-		vfe31_send_msg_no_payload(MSG_ID_START_ACK);
-		vfe31_ctrl->start_ack_pending = FALSE;
+	uint32_t  temp;
+	if (vfe31_ctrl->operation_mode == 3) {  /* in raw snapshot mode */
+		if (vfe31_ctrl->start_ack_pending) {
+			vfe31_send_msg_no_payload(MSG_ID_START_ACK);
+			vfe31_ctrl->start_ack_pending = FALSE;
 	}
-	msm_io_r(vfe31_ctrl->vfebase + 0x190);
-	msm_io_r(vfe31_ctrl->vfebase + 0x194);
+		vfe31_ctrl->vfe_capture_count--;
+		/* if last frame to be captured: */
+		if (vfe31_ctrl->vfe_capture_count == 0) {
+			msm_io_w(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
+				vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
+
+			/* read the register back */
+			temp = msm_io_r(vfe31_ctrl->vfebase +
+				VFE_CAMIF_COMMAND);
+		}
+	} /* if raw snapshot mode. */
 	vfe31_ctrl->vfeFrameId++;
 	CDBG("camif_sof_irq, frameId = %d\n",
 		vfe31_ctrl->vfeFrameId);
