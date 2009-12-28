@@ -501,15 +501,11 @@ static int audplay_dsp_send_data_avail(struct audio *audio,
 	struct audplay_cmd_bitstream_data_avail_nt2 cmd;
 
 	cmd.cmd_id		= AUDPLAY_CMD_BITSTREAM_DATA_AVAIL_NT2;
-	if (audio->pcm_feedback)
-		cmd.decoder_id = 0;
-	else {
-		if (audio->mfield)
-			cmd.decoder_id = AUDADPCM_METAFIELD_MASK |
-			(audio->out[idx].mfield_sz >> 1);
-		else
-			cmd.decoder_id		= audio->dec_id;
-	}
+	if (audio->mfield)
+		cmd.decoder_id = AUDADPCM_METAFIELD_MASK |
+		(audio->out[idx].mfield_sz >> 1);
+	else
+		cmd.decoder_id		= audio->dec_id;
 	cmd.buf_ptr		= audio->out[idx].addr;
 	cmd.buf_size		= len/2;
 	cmd.partition_number	= 0;
