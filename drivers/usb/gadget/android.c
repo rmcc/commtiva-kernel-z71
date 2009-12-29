@@ -43,6 +43,9 @@
 #ifdef CONFIG_USB_ANDROID_DIAG
 #include "f_diag.h"
 #endif
+#ifdef CONFIG_USB_ANDROID_RMNET
+#include "f_rmnet.h"
+#endif
 
 #include "gadget_chips.h"
 
@@ -158,6 +161,7 @@ android_func_attr(diag, ANDROID_DIAG);
 android_func_attr(modem, ANDROID_GENERIC_MODEM);
 android_func_attr(nmea, ANDROID_GENERIC_NMEA);
 android_func_attr(cdc_ecm, ANDROID_CDC_ECM);
+android_func_attr(rmnet, ANDROID_RMNET);
 
 static struct attribute *android_func_attrs[] = {
 	&dev_attr_adb.attr,
@@ -168,6 +172,7 @@ static struct attribute *android_func_attrs[] = {
 	&dev_attr_modem.attr,
 	&dev_attr_nmea.attr,
 	&dev_attr_cdc_ecm.attr,
+	&dev_attr_rmnet.attr,
 	NULL,
 };
 
@@ -237,6 +242,15 @@ static int  android_bind_config(struct usb_configuration *c)
 			ret = ecm_bind_config(c, hostaddr);
 			if (ret)
 				return ret;
+			break;
+#endif
+#ifdef CONFIG_USB_ANDROID_RMNET
+		case ANDROID_RMNET:
+			ret = rmnet_function_add(c);
+			if (ret) {
+				printk(KERN_ERR "failed to add rmnet function\n");
+				return ret;
+			}
 			break;
 #endif
 		default:

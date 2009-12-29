@@ -224,7 +224,19 @@ static struct usb_composition usb_func_composition[] = {
 		.product_id         = 0xF009,
 		/* CDC-ECM*/
 		.functions	    = 0x08,
-	}
+	},
+#ifdef CONFIG_USB_ANDROID_RMNET
+	{
+		.product_id         = 0x9021,
+		/* DIAG + RMNET */
+		.functions	    = 0x94,
+	},
+	{
+		.product_id         = 0x9022,
+		/* DIAG + ADB + RMNET */
+		.functions	    = 0x914,
+	},
+#endif
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,
