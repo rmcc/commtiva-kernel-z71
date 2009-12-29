@@ -243,9 +243,6 @@ void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe)
 	outpdw(rgb_base + 0x0058, pipe->op_mode);/* MDP_RGB_OP_MODE */
 	outpdw(rgb_base + 0x005c, pipe->phasex_step);
 	outpdw(rgb_base + 0x0060, pipe->phasey_step);
-
-	/* 16 bytes-burst x 3 req <= 48 bytes */
-	outpdw(rgb_base + 0x1004, 0xc2);	/* MDP_RGB_FETCH_CFG */
 }
 
 void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
@@ -296,9 +293,6 @@ void mdp4_overlay_vg_setup(struct mdp4_overlay_pipe *pipe)
 		outpdw(vg_base + 0x0068,
 			pipe->r_bit << 4 | pipe->b_bit << 2 | pipe->g_bit);
 	}
-
-	/* 16 bytes-burst x 3 req <= 48 bytes */
-	outpdw(vg_base + 0x1004, 0xc2);	/* MDP_VG_FETCH_CFG */
 }
 
 int mdp4_overlay_format2type(uint32 format)
