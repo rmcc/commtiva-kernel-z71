@@ -88,9 +88,6 @@ static int msm_voice_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 3; /* Device */
 
-	/*
-	 * The number of devices supported is (0 to 5)
-	 */
 	uinfo->value.integer.min = 1;
 	uinfo->value.integer.max = msm_snddev_devcount();
 	return 0;
@@ -103,7 +100,9 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 	struct msm_audio_route_config route_cfg;
 	struct msm_snddev_info *dev_info;
 	int set = ucontrol->value.integer.value[2];
+	u32 session_mask = 0;
 
+	/* Rx Device Routing */
 	route_cfg.dev_id = ucontrol->value.integer.value[0];
 	dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 
@@ -123,10 +122,14 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 		return rc;
 	}
 
-	if (set)
-		rc = msm_set_voc_route(dev_info, route_cfg.stream_type,
-					route_cfg.dev_id);
+	if (set) {
+		msm_set_voc_route(dev_info, route_cfg.stream_type,
+				route_cfg.dev_id);
+		session_mask = (0x1 << (8 * (int)AUDDEV_CLNT_VOC));
+		dev_info->sessions = dev_info->sessions | session_mask;
+	}
 
+	/* Tx Device Routing */
 	route_cfg.dev_id = ucontrol->value.integer.value[1];
 	dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 
@@ -145,10 +148,15 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 		rc = PTR_ERR(dev_info);
 		return rc;
 	}
-	if (set)
-		rc = msm_set_voc_route(dev_info, route_cfg.stream_type,
-					route_cfg.dev_id);
-	else
+
+	if (set) {
+		msm_set_voc_route(dev_info, route_cfg.stream_type,
+				route_cfg.dev_id);
+		session_mask = (0x1 << (8 * (int)AUDDEV_CLNT_VOC));
+		dev_info->sessions = dev_info->sessions | session_mask;
+	}
+
+	if (!set)
 		mixer_post_event(AUDDEV_EVT_DEV_CHG_VOICE, route_cfg.dev_id);
 
 	return rc;
@@ -168,10 +176,7 @@ static int msm_device_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 1; /* Device */
 
-	/*
-	 * The number of devices supported is (0 to 5)
-	 */
-	uinfo->value.integer.min = 1;
+	uinfo->value.integer.min = 0;
 	uinfo->value.integer.max = msm_snddev_devcount();
 	return 0;
 }
@@ -183,6 +188,9 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 	int set = 0;
 	struct msm_audio_route_config route_cfg;
 	struct msm_snddev_info *dev_info;
+	int tx_freq = 0;
+	int rx_freq = 0;
+	u32 set_freq = 0;
 
 	set = ucontrol->value.integer.value[0];
 	route_cfg.dev_id = ucontrol->id.numid - 5;
@@ -195,25 +203,36 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 
 	if (set) {
 		if (!dev_info->opened) {
-			rc = dev_info->dev_ops.set_freq(dev_info,
-					dev_info->sample_rate);
+			set_freq = dev_info->sample_rate;
+			if (!msm_device_is_voice(route_cfg.dev_id)) {
+				msm_get_voc_freq(&tx_freq, &rx_freq);
+				if (dev_info->capability == SNDDEV_CAP_RX)
+					set_freq = rx_freq;
+				else
+					set_freq = tx_freq;
+
+				if (set_freq == 0)
+					set_freq = dev_info->sample_rate;
+			} else
+				set_freq = dev_info->sample_rate;
+
+
+			MM_ERR("device freq =%d\n", set_freq);
+			rc = dev_info->dev_ops.set_freq(dev_info, set_freq);
 			if (rc < 0) {
 				MM_ERR("device freq failed!\n");
 				return rc;
 			}
-			dev_info->sample_rate = rc;
+			dev_info->set_sample_rate = rc;
 			rc = 0;
 			rc = dev_info->dev_ops.open(dev_info);
-
 			if (rc < 0) {
-				MM_ERR("Enabling %s\n", dev_info->name);
-				MM_ERR("device open failed!\n");
+				MM_ERR("Enabling %s failed", dev_info->name);
 				return rc;
 			}
 		}
 		dev_info->opened = 1;
 		mixer_post_event(AUDDEV_EVT_DEV_RDY, route_cfg.dev_id);
-
 	} else {
 		if (dev_info->opened) {
 			mixer_post_event(AUDDEV_EVT_REL_PENDING,
@@ -229,6 +248,7 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 						route_cfg.dev_id);
 			}
 		}
+		dev_info->sessions = 0;
 	}
 	return rc;
 }
@@ -261,9 +281,6 @@ static int msm_route_info(struct snd_kcontrol *kcontrol,
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 3; /* Device */
 
-	/*
-	 * The number of devices supported is (0 to 5)
-	 */
 	uinfo->value.integer.min = 0;
 	uinfo->value.integer.max = msm_snddev_devcount();
 	return 0;
@@ -285,6 +302,7 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 	struct msm_snddev_info *dev_info;
 	int popp_id = ucontrol->value.integer.value[0];
 	int set = ucontrol->value.integer.value[2];
+	u32 session_mask = 0;
 	route_cfg.dev_id = ucontrol->value.integer.value[1];
 
 	if (ucontrol->id.numid == 1)
@@ -301,10 +319,17 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 		rc = PTR_ERR(dev_info);
 		return rc;
 	}
-	if (route_cfg.stream_type == AUDIO_ROUTE_STREAM_PLAYBACK)
+	if (route_cfg.stream_type == AUDIO_ROUTE_STREAM_PLAYBACK) {
 		rc = msm_snddev_set_dec(popp_id, dev_info->copp_id, set);
-	else
+		session_mask =
+			(0x1 << (popp_id + 1) << (8 * (int)AUDDEV_CLNT_DEC));
+		dev_info->sessions = dev_info->sessions | session_mask;
+	} else {
 		rc = msm_snddev_set_enc(popp_id, dev_info->copp_id, set);
+		session_mask =
+			(0x1 << (popp_id + 1)) << (8 * (int)AUDDEV_CLNT_ENC);
+		dev_info->sessions = dev_info->sessions | session_mask;
+	}
 
 	if (rc < 0)
 		printk(KERN_ERR "device could not be assigned!\n");
