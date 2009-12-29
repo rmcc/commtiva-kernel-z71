@@ -41,6 +41,9 @@ int dal_call_f5(struct dal_client *client, uint32_t ddi,
 int dal_call_f13(struct dal_client *client, uint32_t ddi, void *ibuf1,
 		 uint32_t ilen1, void *ibuf2, uint32_t ilen2, void *obuf,
 		 uint32_t olen);
+int dal_call_f14(struct dal_client *client, uint32_t ddi, void *ibuf,
+		 uint32_t ilen, void *obuf1, uint32_t olen1, void *obuf2,
+		 uint32_t olen2, uint32_t *oalen2);
 
 /* common DAL operations */
 enum {
