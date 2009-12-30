@@ -911,6 +911,7 @@ static int mdp_probe(struct platform_device *pdev)
 		/* initializing mdp hw */
 #ifdef CONFIG_FB_MSM_MDP40
 		mdp4_hw_init();
+		mdp4_fetch_cfg(clk_get_rate(mdp_clk), clk_get_rate(mdp_pclk));
 #else
 		mdp_hw_init();
 #endif

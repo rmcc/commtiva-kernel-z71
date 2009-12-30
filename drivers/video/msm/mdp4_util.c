@@ -183,6 +183,41 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	return -1;
 }
 
+void mdp4_fetch_cfg(uint32 clk, uint32 pclk)
+{
+
+	uint32 dmap_data, vg_data;
+	char *base;
+	int i;
+
+	if (clk <= pclk)
+		printk(KERN_INFO "mdp4_fetch_cfg: ERROR!! mdp_clk=%d \
+				<= mdp_pclk=%d\n", (int)clk, (int)pclk);
+
+	if (clk >= 90000000) { /* 90 Mhz */
+		dmap_data = 0x47; /* 16 bytes-burst x 8 req */
+		vg_data = 0xc7; /* 16 bytes-burs x 8 req */
+	} else {
+		dmap_data = 0x27; /* 8 bytes-burst x 8 req */
+		vg_data = 0xc3; /* 16 bytes-burst x 4 req */
+	}
+
+	printk(KERN_INFO "mdp4_fetch_cfg: dmap=%x vg=%x\n",
+			dmap_data, vg_data);
+
+	/* dma_p fetch config */
+	outpdw(MDP_BASE + 0x91004, dmap_data);
+
+	/*
+	 * set up two vg pipes and two rgb pipes
+	 */
+	base = MDP_BASE + MDP4_VIDEO_BASE;
+	for (i = 0; i < 4; i++) {
+		outpdw(base + 0x1004, vg_data);
+		base += MDP4_VIDEO_OFF;
+	}
+}
+
 void mdp4_hw_init(void)
 {
 	ulong bits;
@@ -245,9 +280,6 @@ void mdp4_hw_init(void)
 
 	/* max read pending cmd config */
 	outpdw(MDP_BASE + 0x004c, 0x02222);	/* 3 pending requests */
-
-	/* dma_p fetch config */
-	outpdw(MDP_BASE + 0x91004, 0x27);	/* burst size of 8 */
 
 #ifndef CONFIG_FB_MSM_OVERLAY
 	/* both REFRESH_MODE and DIRECT_OUT are ignored at BLT mode */
