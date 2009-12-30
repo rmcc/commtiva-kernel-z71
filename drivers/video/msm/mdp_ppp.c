@@ -1112,7 +1112,8 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 	 * 0x0154: PPP packing pattern
 	 */
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0138, ppp_operation_reg);
-	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x014c, alpha << 24 | tpVal);
+	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x014c, alpha << 24 | (tpVal &
+								0xffffff));
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0150, ppp_dst_cfg_reg);
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0154, dst_packPattern);
 
@@ -1303,12 +1304,16 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		iBuf.mdpImg.mdpOp |= MDPOP_TRANSP;
 		iBuf.mdpImg.tpVal = req->transp_mask;
 		iBuf.mdpImg.tpVal = mdp_calc_tpval(&iBuf.mdpImg);
+	} else {
+		iBuf.mdpImg.tpVal = 0;
 	}
 
 	req->alpha &= 0xff;
 	if (req->alpha < MDP_ALPHA_NOP) {
 		iBuf.mdpImg.mdpOp |= MDPOP_ALPHAB;
 		iBuf.mdpImg.alpha = req->alpha;
+	} else {
+		iBuf.mdpImg.alpha = 0xff;
 	}
 
 	/* rotation check */
