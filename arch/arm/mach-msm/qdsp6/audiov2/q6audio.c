@@ -100,6 +100,22 @@ static struct q6audio_analog_ops *analog_ops = &default_analog_ops;
 uint32_t tx_clk_freq = 8000;
 static int tx_mute_status;
 
+static inline int check_version(struct dal_client *client, uint32_t version)
+{
+	struct dal_info info;
+	int res;
+
+	res = dal_call_f9(client, DAL_OP_INFO, &info, sizeof(struct dal_info));
+	if (!res) {
+		if (((info.version & 0xFFFF0000) != (version & 0xFFFF0000)) ||
+			((info.version & 0x0000FFFF) <
+				(version & 0x0000FFFF))) {
+			res = -EINVAL;
+		}
+	}
+	return res;
+}
+
 void q6audio_register_analog_ops(struct q6audio_analog_ops *ops)
 {
 	analog_ops = ops;
@@ -547,6 +563,12 @@ static int q6audio_init(void)
 		res = -ENODEV;
 		goto done;
 	}
+	if (check_version(adsp, AUDIO_DAL_VERSION) != 0) {
+		pr_err("Incompatible adsp version\n");
+		res = -ENODEV;
+		goto done;
+	}
+
 	audio_init(adsp);
 
 	ac = audio_client_alloc(0);
@@ -568,10 +590,21 @@ static int q6audio_init(void)
 		res = -ENODEV;
 		goto done;
 	}
+	if (check_version(acdb, ACDB_DAL_VERSION) != 0) {
+		pr_err("Incompatablie acdb version\n");
+		res = -ENODEV;
+		goto done;
+	}
+
 
 	adie = dal_attach(ADIE_DAL_DEVICE, ADIE_DAL_PORT, 0, 0, 0);
 	if (!adie) {
 		pr_err("audio_init: cannot attach to adie\n");
+		res = -ENODEV;
+		goto done;
+	}
+	if (check_version(adie, ADIE_DAL_VERSION) != 0) {
+		pr_err("Incompatablie adie version\n");
 		res = -ENODEV;
 		goto done;
 	}
