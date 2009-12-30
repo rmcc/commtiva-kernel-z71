@@ -1683,6 +1683,29 @@ static int msmfb_blit(struct fb_info *info, void __user *p)
 }
 
 #ifdef CONFIG_FB_MSM_OVERLAY
+static int msmfb_overlay_get(struct fb_info *info, void __user *p)
+{
+	struct mdp_overlay req;
+	int ret;
+
+	if (copy_from_user(&req, p, sizeof(req)))
+		return -EFAULT;
+
+	ret = mdp4_overlay_get(info, &req);
+	if (ret) {
+		printk(KERN_ERR "%s: ioctl failed \n",
+			__func__);
+		return ret;
+	}
+	if (copy_to_user(p, &req, sizeof(req))) {
+		printk(KERN_ERR "%s: copy2user failed \n",
+			__func__);
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
 static int msmfb_overlay_set(struct fb_info *info, void __user *p)
 {
 	struct mdp_overlay req;
@@ -1693,13 +1716,13 @@ static int msmfb_overlay_set(struct fb_info *info, void __user *p)
 
 	ret = mdp4_overlay_set(info, &req);
 	if (ret) {
-		printk(KERN_ERR "%s:msmfb_overlay_set ioctl failed \n",
+		printk(KERN_ERR "%s:ioctl failed \n",
 			__func__);
 		return ret;
 	}
 
 	if (copy_to_user(p, &req, sizeof(req))) {
-		printk(KERN_ERR "%s:msmfb_overlay_set copy2user failed \n",
+		printk(KERN_ERR "%s: copy2user failed \n",
 			__func__);
 		return -EFAULT;
 	}
@@ -1806,6 +1829,11 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 
 	switch (cmd) {
 #ifdef CONFIG_FB_MSM_OVERLAY
+	case MSMFB_OVERLAY_GET:
+		down(&msm_fb_ioctl_ppp_sem);
+		ret = msmfb_overlay_get(info, argp);
+		up(&msm_fb_ioctl_ppp_sem);
+		break;
 	case MSMFB_OVERLAY_SET:
 		down(&msm_fb_ioctl_ppp_sem);
 		ret = msmfb_overlay_set(info, argp);
