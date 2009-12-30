@@ -333,6 +333,7 @@ static int __init qsd_audio_init(void)
 	}
 	mutex_init(&the_locks.mixer_lock);
 	init_waitqueue_head(&the_locks.eos_wait);
+	spin_lock_init(&the_locks.alsa_lock);
 
 	qsd_glb_ctl.tx_volume = 100;
 	qsd_glb_ctl.rx_volume = 100;

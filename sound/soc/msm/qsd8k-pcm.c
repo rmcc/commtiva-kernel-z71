@@ -35,9 +35,21 @@
 #include <linux/dma-mapping.h>
 
 #include "qsd-pcm.h"
+static void snd_qsd_timer(unsigned long data);
+
+static void snd_qsd_timer(unsigned long data)
+{
+	struct qsd_audio *prtd = (struct qsd_audio *)data;
+
+	if (!prtd->enabled)
+		return;
+	prtd->timerintcnt++;
+	snd_pcm_period_elapsed(prtd->substream);
+	if (prtd->enabled)
+		add_timer(&prtd->timer);
+}
 
 static int rc = 1;
-atomic_t copy_count;
 
 struct snd_qsd {
 	struct snd_card *card;
@@ -142,12 +154,13 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	struct cad_stream_info_struct_type cad_stream_info;
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	u32 stream_device[1];
+	unsigned long expiry = 0;
 
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 	prtd->pcm_buf_pos = 0;
-	atomic_set(&copy_count, 0);
+	atomic_set(&prtd->copy_count, 0);
 
 	if (prtd->enabled)
 		return 0;
@@ -190,8 +203,14 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 		NULL, 0);
 	if (rc)
 		printk(KERN_ERR "cad ioctl failed\n");
-	else
+	else {
 		prtd->enabled = 1;
+		expiry = ((unsigned long)((prtd->pcm_count * 1000)
+			/(runtime->rate * runtime->channels * 2)));
+		prtd->timer.expires = jiffies + msecs_to_jiffies(expiry);
+		setup_timer(&prtd->timer, snd_qsd_timer, (unsigned long)prtd);
+		add_timer(&prtd->timer);
+	}
 	return rc;
 }
 
@@ -201,6 +220,7 @@ static int qsd_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
+		break;
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		break;
@@ -237,16 +257,16 @@ void alsa_event_cb_playback(u32 event, void *evt_packet,
 		wake_up(&the_locks.eos_wait);
 		return ;
 	}
-
+	prtd->intcnt++;
 	prtd->pcm_irq_pos += prtd->pcm_count;
-	snd_pcm_period_elapsed(prtd->playback_substream);
+	return ;
 }
 void alsa_event_cb_capture(u32 event, void *evt_packet,
 			u32 evt_packet_len, void *client_data)
 {
 	struct qsd_audio *prtd = client_data;
+	prtd->intcnt++;
 	prtd->pcm_irq_pos += prtd->pcm_count;
-	snd_pcm_period_elapsed(prtd->capture_substream);
 }
 
 
@@ -266,15 +286,14 @@ static int qsd_pcm_open(struct snd_pcm_substream *substream)
 		printk(KERN_INFO "Stream = SNDRV_PCM_STREAM_PLAYBACK\n");
 		runtime->hw = qsd_pcm_playback_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_PLAYBACK;
-		prtd->playback_substream = substream;
 		prtd->cos.op_code = CAD_OPEN_OP_WRITE;
 	} else {
 		printk(KERN_INFO "Stream = SNDRV_PCM_STREAM_CAPTURE\n");
 		runtime->hw = qsd_pcm_capture_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_CAPTURE;
-		prtd->capture_substream = substream;
 		prtd->cos.op_code = CAD_OPEN_OP_READ;
 	}
+	prtd->substream = substream;
 
 	/* Ensure that buffer size is a multiple of period size */
 	ret = snd_pcm_hw_constraint_integer(runtime,
@@ -322,9 +341,6 @@ static int qsd_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
 
-	if (!atomic_add_unless(&copy_count, 1, 2))
-		runtime->status->state = SNDRV_PCM_STATE_RUNNING;
-
 	fbytes = frames_to_bytes(runtime, frames);
 	prtd->cbs.buffer = (void *)buf;
 	prtd->cbs.phys_addr = 0;
@@ -333,6 +349,11 @@ static int qsd_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 
 	prtd->pcm_buf_pos += fbytes;
 	xfer = cad_write(prtd->cad_w_handle, &prtd->cbs);
+
+	if (xfer < 0)
+		return xfer;
+
+	prtd->buffer_cnt++;
 
 	if (qsd_glb_ctl.update) {
 		rc = qsd_audio_volume_update(prtd);
@@ -361,9 +382,10 @@ static int qsd_pcm_playback_close(struct snd_pcm_substream *substream)
 
 	}
 
+	prtd->enabled = 0;
+	del_timer_sync(&prtd->timer);
 	prtd->eos_ack = 0;
 	cad_close(prtd->cad_w_handle);
-	prtd->enabled = 0;
 
 	/*
 	 * TODO: Deregister the async callback handler.
@@ -416,6 +438,8 @@ static int qsd_pcm_capture_close(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
 
+	prtd->enabled = 0;
+	del_timer_sync(&prtd->timer);
 	cad_close(prtd->cad_w_handle);
 
 	/*
@@ -437,6 +461,7 @@ static int qsd_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	struct cad_stream_info_struct_type cad_stream_info;
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	u32 stream_device[1];
+	unsigned long expiry = 0;
 
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
@@ -485,8 +510,14 @@ static int qsd_pcm_capture_prepare(struct snd_pcm_substream *substream)
 
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
 			NULL, 0);
-	if (!rc)
+	if (!rc) {
 		prtd->enabled = 1;
+		expiry = ((unsigned long)((prtd->pcm_count * 1000)
+			/(runtime->rate * runtime->channels * 2)));
+		prtd->timer.expires = jiffies + msecs_to_jiffies(expiry);
+		setup_timer(&prtd->timer, snd_qsd_timer, (unsigned long)prtd);
+		add_timer(&prtd->timer);
+	}
 	return rc;
 }
 

@@ -48,6 +48,7 @@ extern void register_cb(void *);
 #define CAPTURE_STREAMS		1
 
 struct audio_locks {
+	spinlock_t alsa_lock;
 	struct mutex mixer_lock;
 	wait_queue_head_t eos_wait;
 };
@@ -67,8 +68,7 @@ extern struct audio_locks the_locks;
 extern struct snd_pcm_ops qsd_pcm_ops;
 
 struct qsd_audio {
-	struct snd_pcm_substream *playback_substream;
-	struct snd_pcm_substream *capture_substream;
+	struct snd_pcm_substream *substream;
 
 	/* data allocated for various buffers */
 	char *data;
@@ -85,10 +85,15 @@ struct qsd_audio {
 	int running;
 	int stopped;		/* set when stopped, cleared on flush */
 	int eos_ack;
+	int intcnt;
+	int timerintcnt;
+	int buffer_cnt;
 
 	struct cad_open_struct_type cos;
 	uint32_t cad_w_handle;
 	struct cad_buf_struct_type cbs;
+	atomic_t copy_count;
+	struct timer_list timer;	/* statistic timer */
 };
 
 extern struct qsd_ctl qsd_glb_ctl;
