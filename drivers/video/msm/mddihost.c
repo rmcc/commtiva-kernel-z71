@@ -193,7 +193,7 @@ int mddi_host_register_read(uint32 reg_addr,
 }				/* mddi_host_register_read */
 
 int mddi_host_register_write(uint32 reg_addr,
-     uint32 reg_val,
+     uint32 reg_val, enum mddi_data_packet_size_type packet_size,
      boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host) {
 	mddi_linked_list_type *curr_llist_ptr;
 	mddi_linked_list_type *curr_llist_dma_ptr;
@@ -224,7 +224,8 @@ int mddi_host_register_write(uint32 reg_addr,
 
 	regacc_pkt_ptr = &curr_llist_ptr->packet_header.register_pkt;
 
-	regacc_pkt_ptr->packet_length = curr_llist_ptr->packet_header_count + 4;
+	regacc_pkt_ptr->packet_length = curr_llist_ptr->packet_header_count +
+					(uint16)packet_size;
 	regacc_pkt_ptr->packet_type = 146;	/* register access packet */
 	regacc_pkt_ptr->bClient_ID = 0;
 	regacc_pkt_ptr->read_write_info = 0x0001;
