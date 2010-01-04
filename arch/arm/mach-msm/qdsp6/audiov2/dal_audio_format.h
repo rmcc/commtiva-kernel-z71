@@ -31,6 +31,9 @@
 
 /* Supported audio media formats */
 
+/* format block in shmem */
+#define ADSP_AUDIO_FORMAT_SHAREDMEMORY	0x01091a78
+
 /* adsp_audio_format_raw_pcm type */
 #define ADSP_AUDIO_FORMAT_PCM		0x0103d2fd
 
@@ -71,11 +74,16 @@
 #define ADSP_AUDIO_FORMAT_SBC		0x0108c4d8
 
 /* Version 10 Professional */
-#define ADSP_AUDIO_FORMAT_WMA_V10PRO	0x0108ef4f
+#define ADSP_AUDIO_FORMAT_WMA_V10PRO	0x0108aa92
 
 /* Version 9 Starndard */
-#define ADSP_AUDIO_FORMAT_WMA_V9	0x0108ef50
+#define ADSP_AUDIO_FORMAT_WMA_V9	0x0108d430
 
+/* AMR WideBand Plus */
+#define ADSP_AUDIO_FORMAT_AMR_WB_PLUS   0x0108f3da
+
+/* AC3 Decoder */
+#define ADSP_AUDIO_FORMAT_AC3_DECODER   0x0108d5f9
 
 /* Not yet supported audio media formats */
 
@@ -225,6 +233,19 @@ struct adsp_audio_wma_pro_format {
 	u32 drc_average_target;
 } __attribute__ ((packed));
 
+struct adsp_audio_amrwb_plus_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* payload */
+	u32		size;
+	u32		version;
+	u32		channels;
+	u32		amr_band_mode;
+	u32		amr_dtx_mode;
+	u32		amr_frame_format;
+	u32		amr_isf_index;
+} __attribute__ ((packed));
 
 /* Binary Byte Stream Format */
 /* Binary format type that defines a byte stream, */
@@ -239,6 +260,39 @@ struct adsp_audio_binary_format {
 	/* Byte stream binary data */
 	u8 data[ADSP_AUDIO_FORMAT_DATA_MAX];
 } __attribute__ ((packed));
+
+struct adsp_audio_shared_memory_format {
+	/* Media Format Code (must always be first element) */
+	u32		format;
+
+	/* Number of bytes in shared memory */
+	u32		len;
+	/* Phyisical address to data in shared memory */
+	u32		address;
+} __attribute__ ((packed));
+
+
+/* Union of all format types */
+union adsp_audio_format {
+	/* Basic format block with no payload */
+	struct adsp_audio_no_payload_format	no_payload;
+	/* Generic format block PCM, DTMF */
+	struct adsp_audio_standard_format	standard;
+	/* ADPCM format block */
+	struct adsp_audio_adpcm_format		adpcm;
+	/* MIDI format block */
+	struct adsp_audio_midi_format		midi;
+	/* G711 format block */
+	struct adsp_audio_g711_format		g711;
+	/* WmaPro format block */
+	struct adsp_audio_wma_pro_format	wma_pro;
+	/* WmaPro format block */
+	struct adsp_audio_amrwb_plus_format	amrwb_plus;
+	/* binary (byte stream) format block, used for AAC */
+	struct adsp_audio_binary_format		binary;
+	/* format block in shared memory */
+	struct adsp_audio_shared_memory_format	shared_mem;
+};
 
 #endif
 

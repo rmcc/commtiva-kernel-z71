@@ -42,8 +42,6 @@ struct pcm {
 static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct pcm *pcm = file->private_data;
-	struct adsp_audio_standard_format *fmt =
-				(struct adsp_audio_standard_format *)audio_data;
 	struct adsp_open_command rpc;
 	int rc = 0;
 
@@ -59,21 +57,20 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	switch (cmd) {
 
 	case AUDIO_START:
-		fmt->format = ADSP_AUDIO_FORMAT_PCM;
-		fmt->channels = pcm->cfg.channel_count;
-		fmt->bits_per_sample = 16;
-		fmt->sampling_rate = pcm->cfg.sample_rate;
-		fmt->is_signed = 1;
-		fmt->is_interleaved = 1;
-		tx_clk_freq = fmt->sampling_rate;
+		tx_clk_freq = pcm->cfg.sample_rate;
 
 		memset(&rpc, 0, sizeof(rpc));
+
+		rpc.format_block.standard.format = ADSP_AUDIO_FORMAT_PCM;
+		rpc.format_block.standard.channels = pcm->cfg.channel_count;
+		rpc.format_block.standard.bits_per_sample = 16;
+		rpc.format_block.standard.sampling_rate = pcm->cfg.sample_rate;
+		rpc.format_block.standard.is_signed = 1;
+		rpc.format_block.standard.is_interleaved = 1;
+
 		rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
-		rpc.num_devices = 1;
-		rpc.device[0] = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+		rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
-		rpc.format_block = (void *) audio_phys;
-		rpc.format_block_len = sizeof(*fmt);
 		rpc.buf_max_size = BUFSZ;
 		q6audio_start(pcm->audio_client, &rpc, sizeof(rpc));
 		break;
