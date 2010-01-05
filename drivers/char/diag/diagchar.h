@@ -87,7 +87,7 @@ struct diagchar_dev {
 	unsigned int poolsize_hdlc;
 	unsigned int itemsize_usb_struct;
 	unsigned int poolsize_usb_struct;
-
+	unsigned int debug_flag;
 	/* State for the mempool for the char driver */
 	mempool_t *diagpool;
 	mempool_t *diag_hdlc_pool;

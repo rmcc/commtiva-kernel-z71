@@ -408,7 +408,15 @@ static void diag_process_hdlc(void *data, unsigned len)
 
 	if (ret)
 		type = diag_process_apps_pkt(driver->hdlc_buf,
-					      hdlc.dest_idx - 3);
+							  hdlc.dest_idx - 3);
+	else if (driver->debug_flag) {
+		printk(KERN_ERR "Packet dropped due to bad HDLC coding/CRC"
+				" errors or partial packet received, packet"
+				" length = %d \n", len);
+		print_hex_dump(KERN_DEBUG, "Dropped Packet Data: ", 16, 1,
+					   DUMP_PREFIX_ADDRESS, data, len, 1);
+		driver->debug_flag = 0;
+	}
 
 	/* ignore 2 bytes for CRC, one for 7E and send */
 	if ((driver->ch) && (ret) && (type) && (hdlc.dest_idx > 3))
@@ -434,7 +442,7 @@ int diagfwd_disconnect(void)
 	driver->usb_connected = 0;
 	driver->in_busy = 1;
 	driver->in_busy_qdsp = 1;
-
+	driver->debug_flag = 1;
 	diag_close();
 	/* TBD - notify and flow control SMD */
 	return 0;
