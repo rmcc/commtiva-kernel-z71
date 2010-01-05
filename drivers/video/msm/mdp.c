@@ -238,6 +238,17 @@ static int mdp_lut_update_lcdc(struct fb_info *info, struct fb_cmap *cmap)
 	return 0;
 }
 
+static void mdp_lut_enable(void)
+{
+	if (mdp_lut_push) {
+		mutex_lock(&mdp_lut_push_sem);
+		mdp_lut_push = 0;
+		MDP_OUTP(MDP_BASE + 0x90070,
+				(mdp_lut_push_i << 10) | 0x17);
+		mutex_unlock(&mdp_lut_push_sem);
+	}
+}
+
 #define MDP_HIST_MAX_BIN 32
 static __u32 mdp_hist_r[MDP_HIST_MAX_BIN];
 static __u32 mdp_hist_g[MDP_HIST_MAX_BIN];
@@ -415,13 +426,8 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 #ifdef CONFIG_FB_MSM_MDP22
 		outpdw(MDP_CMD_DEBUG_ACCESS_BASE + 0x0044, 0x0);/* start DMA */
 #else
-		if (mdp_lut_push) {
-			mutex_lock(&mdp_lut_push_sem);
-			mdp_lut_push = 0;
-			MDP_OUTP(MDP_BASE + 0x90070,
-					(mdp_lut_push_i << 10) | 0x17);
-			mutex_unlock(&mdp_lut_push_sem);
-		}
+		mdp_lut_enable();
+
 #ifdef CONFIG_FB_MSM_MDP40
 		outpdw(MDP_BASE + 0x000c, 0x0);	/* start DMA */
 #else
@@ -437,9 +443,11 @@ void mdp_pipe_kickoff(uint32 term, struct msm_fb_data_type *mfd)
 		outpdw(MDP_BASE + 0x0014, 0x0);	/* start DMA */
 	} else if (term == MDP_OVERLAY0_TERM) {
 		mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mdp_lut_enable();
 		outpdw(MDP_BASE + 0x0004, 0);
 	} else if (term == MDP_OVERLAY1_TERM) {
 		mdp_pipe_ctrl(MDP_OVERLAY1_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mdp_lut_enable();
 		outpdw(MDP_BASE + 0x0008, 0);
 	}
 #else
