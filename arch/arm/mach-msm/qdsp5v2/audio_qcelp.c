@@ -202,7 +202,8 @@ static void qcelp_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 	switch (evt_id) {
 	case AUDDEV_EVT_DEV_CHG_AUDIO:
 		MM_ERR("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
-		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS)
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
+							audio->enabled == 1)
 			audpp_route_stream(audio->dec_id,
 				msm_snddev_route_dec(audio->dec_id));
 		break;
