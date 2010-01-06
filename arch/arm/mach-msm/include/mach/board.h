@@ -197,6 +197,6 @@ void msm_snddev_poweramp_off(void);
 void msm_snddev_hsed_pamp_on(void);
 void msm_snddev_hsed_pamp_off(void);
 
-extern int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
+extern unsigned int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 
 #endif
