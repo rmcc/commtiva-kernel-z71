@@ -530,6 +530,7 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 static void otg_reset(struct msm_otg *dev)
 {
 	unsigned long timeout;
+	unsigned temp;
 
 	clk_enable(dev->clk);
 	if (dev->phy_reset)
@@ -552,7 +553,10 @@ static void otg_reset(struct msm_otg *dev)
 	/* select ULPI phy */
 	writel(0x80000000, USB_PORTSC);
 
-	ulpi_write(dev, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
+	temp = ulpi_read(dev, ULPI_CONFIG_REG);
+	temp |= ULPI_AMPLITUDE_MAX;
+	ulpi_write(dev, temp, ULPI_CONFIG_REG);
+
 	writel(0x0, USB_AHB_BURST);
 	writel(0x00, USB_AHB_MODE);
 	clk_disable(dev->clk);

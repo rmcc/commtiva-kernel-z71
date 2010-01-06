@@ -643,6 +643,7 @@ static int msm_xusb_init_phy(struct msmusb_hcd *mhcd)
 	int ret = -ENODEV;
 	struct usb_hcd *hcd = mhcd_to_hcd(mhcd);
 	struct msm_usb_host_platform_data *pdata = mhcd->pdata;
+	unsigned temp;
 
 	switch (PHY_TYPE(pdata->phy_info)) {
 	case USB_PHY_INTEGRATED:
@@ -665,8 +666,14 @@ static int msm_xusb_init_phy(struct msmusb_hcd *mhcd)
 				| ULPI_SESS_END, ULPI_INT_RISE_CLR);
 		ulpi_write(hcd, ULPI_VBUS_VALID
 				| ULPI_SESS_END, ULPI_INT_FALL_CLR);
-		/* Software Workaround #3 */
-		ulpi_write(hcd, ULPI_AMPLITUDE, ULPI_CONFIG_REG);
+
+		/* set hs driver amplitude to max
+		 * to avoid eye diagram failures
+		 */
+		temp = ulpi_read(hcd, ULPI_CONFIG_REG);
+		temp |= ULPI_AMPLITUDE_MAX;
+		ulpi_write(hcd, temp, ULPI_CONFIG_REG);
+
 		/* Disable all interrupts */
 		writel(0, USB_USBINTR);
 		writel(readl(USB_OTGSC) & ~OTGSC_INTR_MASK, USB_OTGSC);
