@@ -431,6 +431,10 @@ int diagfwd_connect(void)
 	driver->in_busy = 0;
 	driver->in_busy_qdsp = 0;
 
+	/* Poll SMD channels to check for data*/
+	diag_smd_send_req();
+	diag_smd_qdsp_send_req();
+
 	driver->usb_read_ptr->buf = driver->usb_buf_out;
 	driver->usb_read_ptr->length = USB_MAX_OUT_BUF;
 	diag_read(driver->usb_read_ptr);
