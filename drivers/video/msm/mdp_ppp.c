@@ -48,6 +48,7 @@ static uint32_t bytes_per_pixel[] = {
 	[MDP_ARGB_8888] = 4,
 	[MDP_RGBA_8888] = 4,
 	[MDP_BGRA_8888] = 4,
+	[MDP_RGBX_8888] = 4,
 	[MDP_Y_CBCR_H2V1] = 1,
 	[MDP_Y_CBCR_H2V2] = 1,
 	[MDP_Y_CRCB_H2V1] = 1,
@@ -413,6 +414,7 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 	case MDP_RGBA_8888:
 	case MDP_ARGB_8888:
 	case MDP_XRGB_8888:
+	case MDP_RGBX_8888:
 		/*
 		 * 8888 = 4bytes
 		 * ARGB = 4Components
@@ -428,9 +430,14 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 			unpack_pattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
-		else if (iBuf->ibuf_type == MDP_RGBA_8888)
+		else if (iBuf->ibuf_type == MDP_RGBA_8888 ||
+				 iBuf->ibuf_type == MDP_RGBX_8888)
 			unpack_pattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B, CLR_G, CLR_R,
+						 8);
+		else if (iBuf->ibuf_type == MDP_XRGB_8888)
+			unpack_pattern =
+			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
 						 8);
 		else
 			unpack_pattern =
@@ -626,13 +633,19 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 	case MDP_XRGB_8888:
 	case MDP_ARGB_8888:
 	case MDP_RGBA_8888:
+	case MDP_RGBX_8888:
 		if (iBuf->ibuf_type == MDP_BGRA_8888)
 			dst_packPattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
-		else if (iBuf->ibuf_type == MDP_RGBA_8888)
+		else if (iBuf->ibuf_type == MDP_RGBA_8888 ||
+				 iBuf->ibuf_type == MDP_RGBX_8888)
 			dst_packPattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B, CLR_G, CLR_R,
+						 8);
+		else if (iBuf->ibuf_type == MDP_XRGB_8888)
+			dst_packPattern =
+			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
 						 8);
 		else
 			dst_packPattern =
@@ -816,6 +829,7 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 	case MDP_ARGB_8888:
 		perPixelAlpha = TRUE;
 	case MDP_XRGB_8888:
+	case MDP_RGBX_8888:
 		inpBpp = 4;
 		/*
 		 * 8888 = 4bytes
@@ -833,9 +847,14 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 			packPattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
-		else if (iBuf->mdpImg.imgType == MDP_RGBA_8888)
+		else if (iBuf->mdpImg.imgType == MDP_RGBA_8888 ||
+				 iBuf->mdpImg.imgType == MDP_RGBX_8888)
 			packPattern =
 			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_B, CLR_G, CLR_R,
+						 8);
+		else if (iBuf->ibuf_type == MDP_XRGB_8888)
+			packPattern =
+			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
 						 8);
 		else
 			packPattern =
