@@ -30,10 +30,11 @@
 #define __DAL_AUDIO_H__
 
 #include "../dal.h"
+#include "dal_audio_format.h"
 
 #define AUDIO_DAL_DEVICE 0x02000028
 #define AUDIO_DAL_PORT "DAL_AQ_AUD"
-#define AUDIO_DAL_VERSION	0x00020000
+#define AUDIO_DAL_VERSION	0x00030001
 
 enum {
 	AUDIO_OP_CONTROL = DAL_OP_FIRST_DEVICE_API,
@@ -92,21 +93,26 @@ struct adsp_audio_buffer {
 struct adsp_command_hdr {
 	u32 size;		/* sizeof(cmd) - sizeof(u32) */
 
-	u32 addr;
-
+	u32 dest;
+	u32 src;
 	u32 opcode;
 	u32 response_type;
 	u32 seq_number;
 
 	u32 context;		/* opaque to DSP */
 	u32 data;
+	u32 padding;
 } __attribute__ ((packed));
 
 
-/* adsp audio addresses are (byte order) domain, service, major, minor */
-#define AUDIO_ADDR(maj, min) ((((maj) & 0xff) << 16) \
-				 | (((min) & 0xff) << 24) | (1))
+#define DOMAIN_APP	0
+#define DOMAIN_MODEM	1
+#define DOMAIN_DSP	2
 
+
+/* adsp audio addresses are (byte order) major, minor, domain */
+#define AUDIO_ADDR(dmn, maj, min) (((maj & 0xff) << 16) \
+		| ((min & 0xff) << 24) | (dmn & 0xff))
 
 /* AAC Encoder modes */
 #define ADSP_AUDIO_ENC_AAC_LC_ONLY_MODE		0
@@ -186,24 +192,20 @@ union adsp_audio_codec_config {
 /* Change Notification mode is activated. */
 #define ADSP_AUDIO_OPEN_STREAM_MODE_SR_CM_NOTIFY	0x0002
 
+#define  ADSP_AUDIO_OPEN_STREAM_MODE_ENABLE_SYNC_CLOCK	0x0004
 
-#define ADSP_AUDIO_MAX_DEVICES 4
+#define ADSP_AUDIO_MAX_DEVICES 1
 
 struct adsp_open_command {
 	struct adsp_command_hdr hdr;
-	u32 num_devices;
-	u32 device[ADSP_AUDIO_MAX_DEVICES];
+	u32 device;
+	u32 end_point;
 	u32 stream_context;
-	void *format_block;
-	u32 format_block_len;
-	u32 buf_max_size;
-	u32 priority;
-	union adsp_audio_codec_config config;
 	u32 mode;
+	u32 buf_max_size;
+	union adsp_audio_format format_block;
+	union adsp_audio_codec_config config;
 
-	/* temp hack for DLS */
-	u32 len;
-	u32 addr;
 } __attribute__ ((packed));
 
 
@@ -480,7 +482,8 @@ struct adsp_event_hdr {
 	u32 evt_cookie;
 	u32 evt_length;
 
-	u32 addr;		/* "source" audio address */
+	u32 dest;
+	u32 src;
 
 	u32 event_id;
 	u32 response_type;
@@ -504,13 +507,15 @@ struct adsp_buffer_event {
 #define ADSP_AUDIO_RX_DEVICE		0x00
 #define ADSP_AUDIO_TX_DEVICE		0x01
 
-/* Default RX or TX device */
 #define ADSP_AUDIO_DEVICE_ID_DEFAULT		0x1081679
 
-/* Source (TX) devices */
+/* Default RX or TX device */
+
 #define ADSP_AUDIO_DEVICE_ID_HANDSET_MIC	0x107ac8d
+#define ADSP_AUDIO_DEVICE_ID_HANDSET_DUAL_MIC		0x108f9c3
 #define ADSP_AUDIO_DEVICE_ID_HEADSET_MIC	0x1081510
 #define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_MIC	0x1081512
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_DUAL_MIC	0x108f9c5
 #define ADSP_AUDIO_DEVICE_ID_BT_SCO_MIC		0x1081518
 #define ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_MIC	0x108151b
 #define ADSP_AUDIO_DEVICE_ID_I2S_MIC		0x1089bf3

@@ -41,8 +41,6 @@ struct mp3 {
 static long mp3_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct mp3 *mp3 = file->private_data;
-	struct adsp_audio_standard_format *fmt =
-				(struct adsp_audio_standard_format *)audio_data;
 	struct adsp_open_command rpc;
 	int rc = 0;
 
@@ -59,23 +57,18 @@ static long mp3_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case AUDIO_SET_VOLUME:
 		break;
 	case AUDIO_START:
-
-		fmt->format = ADSP_AUDIO_FORMAT_MP3;
-		fmt->channels = 2;
-		fmt->bits_per_sample = 16;
-		fmt->sampling_rate = 48000;
-		fmt->is_signed = 1;
-		fmt->is_interleaved = 0;
-
 		memset(&rpc, 0, sizeof(rpc));
 		rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE;
-		rpc.num_devices = 1;
-		rpc.device[0] = ADSP_AUDIO_DEVICE_ID_DEFAULT;
 		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
-		rpc.format_block = (void *) audio_phys;
-		rpc.format_block_len = sizeof(*fmt);
+		rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+		rpc.format_block.standard.format = ADSP_AUDIO_FORMAT_MP3;
+		rpc.format_block.standard.channels = mp3->cfg.channel_count;
+		rpc.format_block.standard.bits_per_sample = 16;
+		rpc.format_block.standard.sampling_rate = mp3->cfg.sample_rate;
+		rpc.format_block.standard.is_signed = 1;
+		rpc.format_block.standard.is_interleaved = 0;
 		rpc.buf_max_size = BUFSZ;
-		q6audio_start(mp3->ac, &rpc, sizeof(rpc));
+		q6audio_start(mp3->ac, (void *) &rpc, sizeof(rpc));
 		break;
 	case AUDIO_STOP:
 		break;
