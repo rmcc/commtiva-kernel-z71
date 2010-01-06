@@ -1135,7 +1135,7 @@ config MSM_KGSL_DRM
 config MSM_KGSL_MMU
     bool "Enable the GPU MMU in the MSM_KGSL driver"
     depends on MSM_KGSL && MMU
-    default n
+    default y
 
 config KGSL_PER_PROCESS_PAGE_TABLE
 	bool "Enable Per Process page tables for the KGSL driver"
