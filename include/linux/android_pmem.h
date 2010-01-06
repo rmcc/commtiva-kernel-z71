@@ -80,6 +80,8 @@ void put_pmem_file(struct file* file);
 void put_pmem_fd(int fd);
 void flush_pmem_fd(int fd, unsigned long start, unsigned long len);
 void flush_pmem_file(struct file *file, unsigned long start, unsigned long len);
+int pmem_cache_maint(struct file *file, unsigned int cmd,
+		struct pmem_addr *pmem_addr);
 
 enum pmem_allocator_type {
 	/* Zero is a default in platform PMEM structures in the board files,
