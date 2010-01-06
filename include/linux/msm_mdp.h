@@ -38,6 +38,8 @@
 					struct mdp_page_protection)
 #define MSMFB_SET_PAGE_PROTECTION _IOW(MSMFB_IOCTL_MAGIC, 139, \
 					struct mdp_page_protection)
+#define MSMFB_OVERLAY_GET      _IOR(MSMFB_IOCTL_MAGIC, 140, \
+						struct mdp_overlay)
 
 #define MDP_IMGTYPE2_START 0x10000
 
@@ -173,6 +175,7 @@ struct mdp_overlay {
 	uint32_t transp_mask;
 	uint32_t flags;
 	uint32_t id;
+	uint32_t user_data[8];
 };
 
 struct mdp_histogram {

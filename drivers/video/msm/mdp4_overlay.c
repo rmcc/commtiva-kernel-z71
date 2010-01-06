@@ -1034,6 +1034,18 @@ static int get_img(struct msmfb_data *img, struct fb_info *info,
 	}
 	return ret;
 }
+int mdp4_overlay_get(struct fb_info *info, struct mdp_overlay *req)
+{
+	struct mdp4_overlay_pipe *pipe;
+
+	pipe = mdp4_overlay_ndx2pipe(req->id);
+	if (pipe == NULL)
+		return -ENODEV;
+
+	*req = pipe->req_data;
+
+	return 0;
+}
 
 int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 {
@@ -1068,6 +1080,7 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 
 	/* return id back to user */
 	req->id = pipe->pipe_ndx;	/* pipe_ndx start from 1 */
+	pipe->req_data = *req;		/* keep original req */
 
 	mutex_unlock(&mfd->dma->ov_mutex);
 
