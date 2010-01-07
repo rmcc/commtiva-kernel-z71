@@ -70,6 +70,7 @@
 #include <linux/i2c.h>
 #include <linux/input.h>
 #include <linux/smsc911x.h>
+#include <linux/ofn_atlab.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -114,6 +115,11 @@
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
 #define PMIC_GPIO_SD_DET	35  /* PMIC GPIO Number 36 */
+
+#define FPGA_OPTNAV_GPIO_ADDR	0x8E000026
+#define OPTNAV_I2C_SLAVE_ADDR	(0xB0 >> 1)
+#define OPTNAV_IRQ		20
+#define OPTNAV_CHIP_SELECT	19
 
 /* Macros assume PMIC GPIOs start at 0 */
 #define PM8058_GPIO_PM_TO_SYS(pm_gpio)     (pm_gpio + NR_GPIO_IRQS)
@@ -1312,6 +1318,160 @@ static struct platform_device android_usb_device = {
 	},
 };
 #endif
+
+static struct msm_gpio optnav_config_data[] = {
+	{ GPIO_CFG(OPTNAV_CHIP_SELECT, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),
+	"optnav_chip_select" },
+};
+
+static void __iomem *virtual_optnav;
+
+static int optnav_gpio_setup(void)
+{
+	int rc = -ENODEV;
+	rc = msm_gpios_request_enable(optnav_config_data,
+			ARRAY_SIZE(optnav_config_data));
+
+	/* Configure the FPGA for GPIOs */
+	virtual_optnav = ioremap(FPGA_OPTNAV_GPIO_ADDR, 0x4);
+	if (!virtual_optnav) {
+		pr_err("%s:Could not ioremap region\n", __func__);
+		return -ENOMEM;
+	}
+	/*
+	 * Configure the FPGA to set GPIO 19 as
+	 * normal, active(enabled), output(MSM to SURF)
+	 */
+	writew(0x311E, virtual_optnav);
+	return rc;
+}
+
+static void optnav_gpio_release(void)
+{
+	msm_gpios_disable_free(optnav_config_data,
+		ARRAY_SIZE(optnav_config_data));
+	iounmap(virtual_optnav);
+}
+
+static struct vreg *vreg_gp7;
+static struct vreg *vreg_gp4;
+static struct vreg *vreg_gp9;
+static struct vreg *vreg_usb3_3;
+
+static int optnav_enable(void)
+{
+	int rc;
+	/*
+	 * Enable the VREGs L8(gp7), L10(gp4), L12(gp9), L6(usb)
+	 * for I2C communication with keyboard.
+	 */
+	vreg_gp7 = vreg_get(NULL, "gp7");
+	rc = vreg_set_level(vreg_gp7, 1800);
+	if (rc) {
+		pr_err("%s: vreg_set_level failed \n", __func__);
+		goto fail_vreg_gp7;
+	}
+
+	rc = vreg_enable(vreg_gp7);
+	if (rc) {
+		pr_err("%s: vreg_enable failed \n", __func__);
+		goto fail_vreg_gp7;
+	}
+
+	vreg_gp4 = vreg_get(NULL, "gp4");
+	rc = vreg_set_level(vreg_gp4, 2600);
+	if (rc) {
+		pr_err("%s: vreg_set_level failed \n", __func__);
+		goto fail_vreg_gp4;
+	}
+
+	rc = vreg_enable(vreg_gp4);
+	if (rc) {
+		pr_err("%s: vreg_enable failed \n", __func__);
+		goto fail_vreg_gp4;
+	}
+
+	vreg_gp9 = vreg_get(NULL, "gp9");
+	rc = vreg_set_level(vreg_gp9, 1800);
+	if (rc) {
+		pr_err("%s: vreg_set_level failed \n", __func__);
+		goto fail_vreg_gp9;
+	}
+
+	rc = vreg_enable(vreg_gp9);
+	if (rc) {
+		pr_err("%s: vreg_enable failed \n", __func__);
+		goto fail_vreg_gp9;
+	}
+
+	vreg_usb3_3 = vreg_get(NULL, "usb");
+	rc = vreg_set_level(vreg_usb3_3, 3300);
+	if (rc) {
+		pr_err("%s: vreg_set_level failed \n", __func__);
+		goto fail_vreg_3_3;
+	}
+
+	rc = vreg_enable(vreg_usb3_3);
+	if (rc) {
+		pr_err("%s: vreg_enable failed \n", __func__);
+		goto fail_vreg_3_3;
+	}
+
+	/* Enable the chip select GPIO */
+	gpio_set_value(OPTNAV_CHIP_SELECT, 1);
+	gpio_set_value(OPTNAV_CHIP_SELECT, 0);
+
+	return 0;
+
+fail_vreg_3_3:
+	vreg_disable(vreg_gp9);
+fail_vreg_gp9:
+	vreg_disable(vreg_gp4);
+fail_vreg_gp4:
+	vreg_disable(vreg_gp7);
+fail_vreg_gp7:
+	return rc;
+}
+
+static void optnav_disable(void)
+{
+	vreg_disable(vreg_usb3_3);
+	vreg_disable(vreg_gp9);
+	vreg_disable(vreg_gp4);
+	vreg_disable(vreg_gp7);
+
+	gpio_set_value(OPTNAV_CHIP_SELECT, 1);
+}
+
+static struct ofn_atlab_platform_data optnav_data = {
+	.gpio_setup    = optnav_gpio_setup,
+	.gpio_release  = optnav_gpio_release,
+	.optnav_on     = optnav_enable,
+	.optnav_off    = optnav_disable,
+	.rotate_xy     = 0,
+	.function1 = {
+		.no_motion1_en		= true,
+		.touch_sensor_en	= true,
+		.ofn_en			= true,
+		.clock_select_khz	= 1500,
+		.cpi_selection		= 1200,
+	},
+	.function2 =  {
+		.invert_y		= false,
+		.invert_x		= true,
+		.swap_x_y		= false,
+		.hold_a_b_en		= true,
+		.motion_filter_en       = true,
+	},
+};
+
+static struct i2c_board_info msm_i2c_board_info[] = {
+	{
+		I2C_BOARD_INFO("m33c01", OPTNAV_I2C_SLAVE_ADDR),
+		.irq		= MSM_GPIO_TO_INT(OPTNAV_IRQ),
+		.platform_data = &optnav_data,
+	}
+};
 
 static struct i2c_board_info msm_marimba_board_info[] = {
 	{
@@ -2965,6 +3125,11 @@ static void __init msm7x30_init(void)
 	msm7x30_init_marimba();
 	snddev_poweramp_gpio_init();
 	msm_snddev_init();
+
+	if (machine_is_msm7x30_surf())
+		i2c_register_board_info(0, msm_i2c_board_info,
+			ARRAY_SIZE(msm_i2c_board_info));
+
 	i2c_register_board_info(2, msm_marimba_board_info,
 			ARRAY_SIZE(msm_marimba_board_info));
 

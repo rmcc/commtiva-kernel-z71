@@ -281,6 +281,16 @@ config MOUSE_OFN_ATLAB
 	  To compile this driver as a module, choose M here: the
 	  module will be called ofn_atlab.
 
+config MOUSE_OFN_ATLAB_M33C01
+	tristate "Atlab Optical finger navigation driver for M33C01Q001"
+	depends on I2C
+	default n
+	help
+	  Say Y here if you have an Atlab OFN device M33C01Q001 attached.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ofn_m33c01_atlab.
+
 config MOUSE_HIL
 	tristate "HIL pointers (mice etc)."
 	depends on GSC || HP300
