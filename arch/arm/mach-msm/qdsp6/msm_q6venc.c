@@ -108,7 +108,6 @@ struct venc_input_payload {
 struct venc_output_payload {
 	unsigned int size;
 	long long time_stamp;
-	unsigned int frame;
 	unsigned int flags;
 	unsigned int data;
 };
@@ -331,7 +330,7 @@ static int venc_set_buffer(struct q6venc_dev *dvenc, void *argp,
 
 static int venc_assign_q6_buffers(struct q6venc_dev *dvenc,
 				    struct venc_buffers *pbufs,
-				    struct venc_common_config *pcfg)
+				    struct venc_nonio_buf_config *pcfg)
 {
 	int ret = 0;
 	struct venc_pmem_list *plist;
@@ -371,6 +370,31 @@ static int venc_assign_q6_buffers(struct q6venc_dev *dvenc,
 	pcfg->wb_buf.phys = plist->buf.paddr;
 	pcfg->wb_buf.size = plist->buf.size;
 	pcfg->wb_buf.offset = 0;
+
+	plist = venc_add_pmem_to_list(dvenc, &(pbufs->cmd_buf),
+				  VENC_BUFFER_TYPE_QDSP6);
+	if (plist == NULL) {
+		printk(KERN_ERR "%s: cmd_buf add_to_pmem_list"
+			" failed\n", __func__);
+		return -EPERM;
+	}
+	pcfg->cmd_buf.region = 0;
+	pcfg->cmd_buf.phys = plist->buf.paddr;
+	pcfg->cmd_buf.size = plist->buf.size;
+	pcfg->cmd_buf.offset = 0;
+
+	plist = venc_add_pmem_to_list(dvenc, &(pbufs->vlc_buf),
+				  VENC_BUFFER_TYPE_QDSP6);
+	if (plist == NULL) {
+		printk(KERN_ERR "%s: vlc_buf add_to_pmem_list"
+			" failed\n", __func__);
+		return -EPERM;
+	}
+	pcfg->vlc_buf.region = 0;
+	pcfg->vlc_buf.phys = plist->buf.paddr;
+	pcfg->vlc_buf.size = plist->buf.size;
+	pcfg->vlc_buf.offset = 0;
+
 	return ret;
 }
 
@@ -388,13 +412,23 @@ static int venc_start(struct q6venc_dev *dvenc, void *argp)
 	}
 	memcpy(&q6_config, &(vconfig.q6_config), sizeof(q6_config));
 	ret = venc_assign_q6_buffers(dvenc, &(vconfig.q6_bufs),
-		&(q6_config.config_params));
+		&(q6_config.buf_params));
 	if (ret != 0) {
 		pr_err("%s: assign_q6_buffers failed\n", __func__);
 		return -EPERM;
 	}
 
-	q6_config.config_params.callback_event = dvenc->q6_handle;
+	q6_config.callback_event = dvenc->q6_handle;
+	TRACE("%s: parameters: handle:%p, config:%p, callback:%p \n", __func__,
+		 dvenc->q6_handle, &q6_config, q6_config.callback_event);
+	TRACE("%s: parameters:recon1:0x%x, recon2:0x%x,"
+		" wb_buf:0x%x, cmd:0x%x, vlc:0x%x\n", __func__,
+		q6_config.buf_params.recon_buf1.phys,
+		 q6_config.buf_params.recon_buf2.phys,
+		 q6_config.buf_params.wb_buf.phys,
+		q6_config.buf_params.cmd_buf.phys,
+		 q6_config.buf_params.vlc_buf.phys);
+	TRACE("%s: size of param:%d \n", __func__, sizeof(q6_config));
 	ret = dal_call_f5(dvenc->q6_handle, VENC_DALRPC_START, &q6_config,
 		sizeof(q6_config));
 	if (ret != 0) {
@@ -449,11 +483,16 @@ static int venc_encode_frame(struct q6venc_dev *dvenc, void *argp)
 	q6_input.time_stamp = input.time_stamp;
 	q6_input.dvs_offsetx = 0;
 	q6_input.dvs_offsety = 0;
+
+	TRACE("Pushing down input phys=0x%x fd= %d, client_data: 0x%x,"
+		" time_stamp:%lld \n", q6_input.yuv_buf.phys, plist->buf.fd,
+		input.client_data, input.time_stamp);
 	ret = dal_call_f5(dvenc->q6_handle, VENC_DALRPC_QUEUE_INPUT,
 		&q6_input, sizeof(q6_input));
 
 	if (ret != 0)
-		pr_err("%s: Q6 queue_input failed with %d", __func__, (int)ret);
+		pr_err("%s: Q6 queue_input failed with %d", __func__,
+		(int)ret);
 	return ret;
 }
 
@@ -576,7 +615,8 @@ static int venc_flush(struct q6venc_dev *dvenc, void *argp)
 			msg.msg_data_size = sizeof(union venc_msg_data);
 			venc_put_msg(dvenc, &msg);
 		}
-		if (flush.flush_mode == VENC_FLUSH_OUTPUT) {
+		if (flush.flush_mode == VENC_FLUSH_OUTPUT ||
+		     (flush.flush_mode == VENC_FLUSH_ALL)) {
 			smsg.flush_ret.flush_mode = VENC_FLUSH_OUTPUT;
 			msg.msg_data = smsg;
 			msg.status_code = status;
@@ -586,6 +626,13 @@ static int venc_flush(struct q6venc_dev *dvenc, void *argp)
 		}
 		return -EIO;
 	}
+	return ret;
+}
+
+static int venc_get_sequence_hdr(struct q6venc_dev *dvenc, void *argp)
+{
+	int ret = 0;
+
 	return ret;
 }
 
@@ -599,7 +646,9 @@ static int venc_set_qp_range(struct q6venc_dev *dvenc, void *argp)
 		pr_err("%s: copy_from_user failed \n", __func__);
 		return ret;
 	}
-	if (dvenc->state == VENC_STATE_START) {
+
+	if (dvenc->state == VENC_STATE_START ||
+		dvenc->state == VENC_STATE_PAUSE) {
 		ret =
 		    dal_call_f5(dvenc->q6_handle, VENC_DALRPC_UPDATE_QP_RANGE,
 				&qp, sizeof(struct venc_qp_range));
@@ -622,7 +671,8 @@ static int venc_set_intra_period(struct q6venc_dev *dvenc, void *argp)
 		pr_err("%s: copy_from_user failed \n", __func__);
 		return ret;
 	}
-	if (dvenc->state == VENC_STATE_START) {
+	if (dvenc->state == VENC_STATE_START ||
+		dvenc->state == VENC_STATE_PAUSE) {
 		ret = dal_call_f0(dvenc->q6_handle,
 			VENC_DALRPC_UPDATE_INTRA_PERIOD, pnum);
 		if (ret)
@@ -642,7 +692,8 @@ static int venc_set_intra_refresh(struct q6venc_dev *dvenc, void *argp)
 		pr_err("%s: copy_from_user failed \n", __func__);
 		return ret;
 	}
-	if (dvenc->state == VENC_STATE_START) {
+	if (dvenc->state == VENC_STATE_START ||
+		dvenc->state == VENC_STATE_PAUSE) {
 		ret = dal_call_f0(dvenc->q6_handle,
 			VENC_DALRPC_UPDATE_INTRA_REFRESH, mb_num);
 		if (ret)
@@ -661,7 +712,8 @@ static int venc_set_frame_rate(struct q6venc_dev *dvenc, void *argp)
 		pr_err("%s: copy_from_user failed \n", __func__);
 		return ret;
 	}
-	if (dvenc->state == VENC_STATE_START) {
+	if (dvenc->state == VENC_STATE_START ||
+		dvenc->state == VENC_STATE_PAUSE) {
 		ret = dal_call_f5(dvenc->q6_handle,
 				VENC_DALRPC_UPDATE_FRAME_RATE,
 				(void *)&(pdata),
@@ -683,7 +735,8 @@ static int venc_set_target_bitrate(struct q6venc_dev *dvenc, void *argp)
 		pr_err("%s: copy_from_user failed \n", __func__);
 		return ret;
 	}
-	if (dvenc->state == VENC_STATE_START) {
+	if (dvenc->state == VENC_STATE_START ||
+		dvenc->state == VENC_STATE_PAUSE) {
 		ret = dal_call_f0(dvenc->q6_handle,
 			VENC_DALRPC_UPDATE_BITRATE, pdata);
 		if (ret)
@@ -791,7 +844,8 @@ static void venc_q6_callback(void *data, int len, void *cookie)
 	if (tmp[2] == sizeof(struct venc_msg_type)) {
 		q6_msg = (struct venc_msg_type *)&tmp[3];
 	} else {
-		pr_err("%s: callback with empty message\n", __func__);
+		pr_err("%s: callback with empty message = %d,%d\n",
+			__func__, tmp[2], sizeof(struct venc_msg_type));
 		return;
 	}
 	msg.msg_data_size = 0;
@@ -827,6 +881,7 @@ static void venc_q6_callback(void *data, int len, void *cookie)
 		break;
 	case VENC_EVENT_RELEASE_INPUT:
 		pload1 = &((q6_msg->payload).input_payload);
+		TRACE("Release_input: data: 0x%x \n", pload1->data);
 		if (pload1 != NULL) {
 			msg.msg_data.buf.client_data = pload1->data;
 			msg_code = VENC_MSG_INPUT_BUFFER_DONE;
@@ -880,6 +935,9 @@ static long q6venc_ioctl(struct file *filp, unsigned int cmd,
 	case VENC_IOCTL_SET_OUTPUT_BUFFER:
 		ret = venc_set_buffer(dvenc, argp, VENC_BUFFER_TYPE_OUTPUT);
 		break;
+	case VENC_IOCTL_GET_SEQUENCE_HDR:
+		ret = venc_get_sequence_hdr(dvenc, argp);
+		break;
 	case VENC_IOCTL_SET_QP_RANGE:
 		ret = venc_set_qp_range(dvenc, argp);
 		break;
@@ -896,7 +954,8 @@ static long q6venc_ioctl(struct file *filp, unsigned int cmd,
 		ret = venc_set_target_bitrate(dvenc, argp);
 		break;
 	case VENC_IOCTL_CMD_REQUEST_IFRAME:
-		ret = venc_request_iframe(dvenc);
+		if (dvenc->state == VENC_STATE_START)
+			ret = venc_request_iframe(dvenc);
 		break;
 	case VENC_IOCTL_CMD_START:
 		ret = venc_start(dvenc, argp);
