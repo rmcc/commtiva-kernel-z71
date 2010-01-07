@@ -67,6 +67,7 @@
 #include <linux/io.h>
 #include <linux/mfd/tps65023.h>
 #include <linux/bma150.h>
+#include <linux/ofn_atlab.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -82,7 +83,6 @@
 #include <mach/msm_serial_hs.h>
 #include <mach/msm_spi.h>
 #include <linux/spi/spi.h>
-#include <mach/ofn_atlab.h>
 #include <mach/s1r72v05.h>
 #include <mach/rpc_hsusb.h>
 

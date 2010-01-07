@@ -70,6 +70,7 @@
 #include <linux/delay.h>
 #include <linux/i2c.h>
 #include <linux/platform_device.h>
+#include <linux/ofn_atlab.h>
 
 #include <asm/irq.h>
 
@@ -77,7 +78,6 @@
 #include <mach/io.h>
 #include <mach/system.h>
 #include <mach/gpio.h>
-#include <mach/ofn_atlab.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
 MODULE_VERSION("0.1");
