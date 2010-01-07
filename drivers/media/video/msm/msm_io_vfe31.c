@@ -156,11 +156,28 @@ static void msm_camera_vreg_enable(void)
 {
 	struct vreg *sensor_vreg;
 	int rc;
-
 	sensor_vreg = vreg_get(NULL, "gp2");
 	if (IS_ERR(sensor_vreg)) {
 		printk(KERN_INFO "%s: vreg_get(%s) failed (%ld)\n",
 			__func__, "gp2", PTR_ERR(sensor_vreg));
+		return;
+	}
+	if (sensor_vreg) {
+		rc = vreg_set_level(sensor_vreg, 2600);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg_set level failed (%d)\n",
+				__func__, rc);
+		}
+		rc = vreg_enable(sensor_vreg);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg_enable() = %d \n",
+				__func__, rc);
+		}
+	}
+	sensor_vreg = vreg_get(NULL, "lvsw1");
+	if (IS_ERR(sensor_vreg)) {
+		printk(KERN_INFO "%s: vreg_get(%s) failed (%ld)\n",
+			__func__, "lvsw1", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
@@ -181,11 +198,23 @@ static void msm_camera_vreg_disable(void)
 {
 	struct vreg *sensor_vreg;
 	int rc;
-
 	sensor_vreg = vreg_get(NULL, "gp2");
 	if (IS_ERR(sensor_vreg)) {
 		printk(KERN_INFO "%s: sensor_vreg(%s) failed (%ld)\n",
 			__func__, "gp2", PTR_ERR(sensor_vreg));
+		return;
+	}
+	if (sensor_vreg) {
+		rc = vreg_disable(sensor_vreg);
+		if (rc) {
+			printk(KERN_INFO "%s: vreg disable failed (%d)\n",
+				__func__, rc);
+		}
+	}
+	sensor_vreg = vreg_get(NULL, "lvsw1");
+	if (IS_ERR(sensor_vreg)) {
+		printk(KERN_INFO "%s: sensor_vreg(%s) failed (%ld)\n",
+			__func__, "lvsw1", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
@@ -300,7 +329,6 @@ int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
 void msm_camio_clk_rate_set(int rate)
 {
 	struct clk *clk = camio_cam_m_clk;
-
 	clk_set_rate(clk, rate);
 }
 
