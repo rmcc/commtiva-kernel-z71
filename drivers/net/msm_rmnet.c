@@ -329,7 +329,7 @@ static int rmnet_stop(struct net_device *dev)
 	pr_info("rmnet_stop()\n");
 
 	netif_stop_queue(dev);
-	tasklet_disable(&p->tsklt);
+	tasklet_kill(&p->tsklt);
 
 	return 0;
 }
