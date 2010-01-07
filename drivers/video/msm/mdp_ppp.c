@@ -1237,6 +1237,16 @@ int get_img(struct mdp_img *img, struct fb_info *info, unsigned long *start,
 	return ret;
 }
 
+
+void put_img(struct file *p_src_file)
+{
+#ifdef CONFIG_ANDROID_PMEM
+	if (p_src_file)
+		put_pmem_file(p_src_file);
+#endif
+}
+
+
 int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	struct file **pp_src_file, struct file **pp_dst_file)
 {
@@ -1260,6 +1270,7 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	}
 	get_img(&req->dst, info, &dst_start, &dst_len, &p_dst_file);
 	if (dst_len == 0) {
+		put_img(p_src_file);
 		printk(KERN_ERR "mdp_ppp: could not retrieve image from "
 		       "memory\n");
 		return -1;
@@ -1268,6 +1279,8 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	*pp_dst_file = p_dst_file;
 	if (mdp_ppp_verify_req(req)) {
 		printk(KERN_ERR "mdp_ppp: invalid image!\n");
+		put_img(p_src_file);
+		put_img(p_dst_file);
 		return -1;
 	}
 
@@ -1330,6 +1343,8 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 #ifdef CONFIG_FB_MSM_MDP31
 		iBuf.mdpImg.mdpOp |= MDPOP_FG_PM_ALPHA;
 #else
+		put_img(p_src_file);
+		put_img(p_dst_file);
 		return -EINVAL;
 #endif
 	}
@@ -1339,7 +1354,9 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		if ((req->src.format != MDP_Y_CBCR_H2V2) &&
 			(req->src.format != MDP_Y_CRCB_H2V2))
 #endif
-		return -EINVAL;
+			put_img(p_src_file);
+			put_img(p_dst_file);
+			return -EINVAL;
 	}
 
 	/* scale check */
@@ -1374,12 +1391,16 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 			printk(KERN_ERR
 				"%s: sharpening strength out of range\n",
 				__func__);
+			put_img(p_src_file);
+			put_img(p_dst_file);
 			return -EINVAL;
 		}
 
 		iBuf.mdpImg.mdpOp |= MDPOP_ASCALE | MDPOP_SHARPENING;
 		iBuf.mdpImg.sp_value = req->sharpening_strength & 0xff;
 #else
+		put_img(p_src_file);
+		put_img(p_dst_file);
 		return -EINVAL;
 #endif
 	}
@@ -1481,5 +1502,7 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	up(&mdp_ppp_mutex);
 
+	put_img(p_src_file);
+	put_img(p_dst_file);
 	return 0;
 }
