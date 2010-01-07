@@ -274,7 +274,7 @@ config APM_EMULATION
 
 config NPA
 	bool "Node Power Architecture(NPA) support"
-	default y
+	default n
 	help
 	  Enable support for Node Power Architecture for aggressive
 	  resource power management. NPA provides an interface for resources
