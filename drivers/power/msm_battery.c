@@ -92,6 +92,7 @@
 #define BATTERY_DISABLE_TABLE_SERVICING_PROC           	9
 #define BATTERY_READ_PROC                              	10
 #define BATTERY_MIMIC_LEGACY_VBATT_READ_PROC           	11
+#define BATTERY_READ_MV_PROC 				12
 #define BATTERY_ENABLE_DISABLE_FILTER_PROC 		14
 
 #define VBATT_FILTER			2
@@ -322,14 +323,14 @@ struct msm_battery_info {
 	u32 batt_health;
 	u32 charger_valid;
 	u32 batt_valid;
-	u32 batt_capacity;
+	u32 batt_capacity; /* in percentage */
 
 	s32 charger_status;
 	s32 charger_type;
 	s32 battery_status;
 	s32 battery_level;
-	s32 battery_voltage;
-	s32 battery_temp;
+	s32 battery_voltage; /* in millie volts */
+	s32 battery_temp;  /* in celsius */
 
 	u32(*calculate_capacity) (u32 voltage);
 
@@ -356,7 +357,8 @@ struct msm_battery_info {
 	atomic_t event_handled;
 
 	u32 type_of_event;
-	uint32_t vbatt_rpc_req_xid;
+	uint32_t vbatt_modify_rpc_req_xid;
+	uint32_t vbatt_volt_rpc_req_xid;
 };
 
 static void msm_batt_wait_for_batt_chg_event(struct work_struct *work);
@@ -367,12 +369,16 @@ static int msm_batt_cleanup(void);
 
 static struct msm_battery_info msm_batt_info = {
 	.batt_handle = INVALID_BATT_HANDLE,
-	.charger_status = -1,
-	.charger_type = -1,
-	.battery_status = -1,
-	.battery_level = -1,
-	.battery_voltage = -1,
-	.battery_temp = -1,
+	.charger_status = CHARGER_STATUS_INVALID,
+	.charger_type = CHARGER_TYPE_INVALID,
+	.battery_status = BATTERY_STATUS_GOOD,
+	.battery_level = BATTERY_LEVEL_FULL,
+	.battery_voltage = BATTERY_HIGH,
+	.batt_capacity = 100,
+	.batt_status = POWER_SUPPLY_STATUS_DISCHARGING,
+	.batt_health = POWER_SUPPLY_HEALTH_GOOD,
+	.batt_valid  = 1,
+	.battery_temp = 23,
 };
 
 static enum power_supply_property msm_power_props[] = {
@@ -394,7 +400,7 @@ static int msm_power_get_property(struct power_supply *psy,
 
 			val->intval = msm_batt_info.current_chg_source & AC_CHG
 			    ? 1 : 0;
-			printk(KERN_INFO "%s(): power supply = %s online = %d\n"
+			DBG("%s(): power supply = %s online = %d\n"
 					, __func__, psy->name, val->intval);
 
 		}
@@ -404,7 +410,7 @@ static int msm_power_get_property(struct power_supply *psy,
 			val->intval = msm_batt_info.current_chg_source & USB_CHG
 			    ? 1 : 0;
 
-			printk(KERN_INFO "%s(): power supply = %s online = %d\n"
+			DBG("%s(): power supply = %s online = %d\n"
 					, __func__, psy->name, val->intval);
 		}
 
@@ -452,7 +458,7 @@ static void msm_batt_update_psy_status_v1(void);
 
 static void msm_batt_external_power_changed(struct power_supply *psy)
 {
-	printk(KERN_INFO "%s() : external power supply changed for %s\n",
+	printk(KERN_NOTICE "%s() : external power supply changed for %s\n",
 			__func__, psy->name);
 	power_supply_changed(psy);
 }
@@ -502,6 +508,28 @@ static struct power_supply msm_psy_batt = {
 	.external_power_changed = msm_batt_external_power_changed,
 };
 
+static u32 msm_batt_get_vbatt_voltage(void)
+{
+	int rc;
+
+	struct rpc_request_hdr req;
+
+	msm_rpc_setup_req(&req, BATTERY_RPC_PROG, BATTERY_RPC_VERS,
+			 BATTERY_READ_MV_PROC);
+
+	msm_batt_info.vbatt_volt_rpc_req_xid = req.xid;
+
+	rc = msm_rpc_write(msm_batt_info.batt_ep, &req, sizeof(req));
+
+	if (rc < 0) {
+		printk(KERN_ERR
+		       "%s(): msm_rpc_write failed.  proc = 0x%08x rc = %d\n",
+		       __func__, BATTERY_READ_MV_PROC, rc);
+		return rc;
+	}
+
+	return 0;
+}
 
 static int msm_batt_get_batt_chg_status_v1(void)
 {
@@ -545,16 +573,6 @@ static int msm_batt_get_batt_chg_status_v1(void)
 		rep_batt_chg.battery_temp =
 			be32_to_cpu(rep_batt_chg.battery_temp);
 
-		printk(KERN_INFO "charger_status = %s, charger_type = %s,"
-				" batt_status = %s, batt_level = %s,"
-				" batt_volt = %u, batt_temp = %u,\n",
-				charger_status[rep_batt_chg.charger_status],
-				charger_type[rep_batt_chg.charger_type],
-				battery_status[rep_batt_chg.battery_status],
-				battery_level[rep_batt_chg.battery_level],
-				rep_batt_chg.battery_voltage,
-				rep_batt_chg.battery_temp);
-
 	} else {
 		printk(KERN_INFO "%s():No more data in batt_chg rpc reply\n",
 				__func__);
@@ -566,7 +584,29 @@ static int msm_batt_get_batt_chg_status_v1(void)
 
 static void msm_batt_update_psy_status_v1(void)
 {
+	static u32 unnecessary_event_count;
+
 	msm_batt_get_batt_chg_status_v1();
+
+	if (rep_batt_chg.charger_type == CHARGER_TYPE_INVALID  ||
+		rep_batt_chg.charger_type == CHARGER_TYPE_NONE ||
+		rep_batt_chg.charger_status == CHARGER_STATUS_INVALID ||
+		rep_batt_chg.battery_status == BATTERY_STATUS_INVALID ||
+		rep_batt_chg.battery_level == BATTERY_LEVEL_INVALID) {
+
+		printk(KERN_INFO "charger_type = %s, get Vbatt voltage \n",
+				charger_type[rep_batt_chg.charger_type]);
+
+		if (rep_batt_chg.charger_type == CHARGER_TYPE_INVALID  ||
+			rep_batt_chg.charger_type == CHARGER_TYPE_NONE) {
+
+			msm_batt_info.charger_type = rep_batt_chg.charger_type;
+			msm_batt_info.current_chg_source &= ~(AC_CHG | USB_CHG);
+		}
+
+		msm_batt_get_vbatt_voltage();
+		return;
+	}
 
 	if (msm_batt_info.charger_status == rep_batt_chg.charger_status &&
 		msm_batt_info.charger_type == rep_batt_chg.charger_type &&
@@ -575,11 +615,30 @@ static void msm_batt_update_psy_status_v1(void)
 		msm_batt_info.battery_voltage  == rep_batt_chg.battery_voltage
 		&& msm_batt_info.battery_temp ==  rep_batt_chg.battery_temp) {
 
-		printk(KERN_NOTICE "%s() : Got unnecessary event from Modem "
-			"PMIC VBATT driver. Nothing changed in Battery or "
-			"charger status\n", __func__);
+		/* Got unnecessary event from Modem PMIC VBATT driver.
+		 * Nothing changed in Battery or charger status.
+		 */
+
+		unnecessary_event_count++;
+
+		printk(KERN_NOTICE "%s() : unnecessary_event_count = %u\n",
+				__func__, unnecessary_event_count);
+
 		return;
 	}
+
+	unnecessary_event_count = 0;
+
+	printk(KERN_INFO "charger_status = %s, charger_type = %s,"
+				" batt_status = %s, batt_level = %s,"
+				" batt_volt = %u, batt_temp = %u,\n",
+				charger_status[rep_batt_chg.charger_status],
+				charger_type[rep_batt_chg.charger_type],
+				battery_status[rep_batt_chg.battery_status],
+				battery_level[rep_batt_chg.battery_level],
+				rep_batt_chg.battery_voltage,
+				rep_batt_chg.battery_temp);
+
 
 	msm_batt_info.battery_voltage  	= 	rep_batt_chg.battery_voltage;
 	msm_batt_info.battery_temp 	=	rep_batt_chg.battery_temp;
@@ -948,7 +1007,7 @@ static int msm_batt_modify_client(u32 client_handle, u32 desired_batt_voltage,
 	msm_rpc_setup_req(&req.hdr, BATTERY_RPC_PROG, BATTERY_RPC_VERS,
 			 BATTERY_MODIFY_CLIENT_PROC);
 
-	msm_batt_info.vbatt_rpc_req_xid = req.hdr.xid;
+	msm_batt_info.vbatt_modify_rpc_req_xid = req.hdr.xid;
 
 	rc = msm_rpc_write(msm_batt_info.batt_ep, &req, sizeof(req));
 
@@ -1105,6 +1164,11 @@ static void msm_batt_handle_vbatt_rpc_reply(struct rpc_reply_hdr *reply)
 		u32 modify_client_result;
 	} *rep_vbatt_modify_client;
 
+	struct rpc_reply_vbatt_volt {
+		struct rpc_reply_hdr hdr;
+		u32 volt;;
+	} *rep_vbatt_volt;
+
 	u32 modify_client_result;
 
 	if (msm_batt_info.type_of_event & SUSPEND_EVENT) {
@@ -1118,11 +1182,11 @@ static void msm_batt_handle_vbatt_rpc_reply(struct rpc_reply_hdr *reply)
 	/* If an earlier call timed out, we could get the (no longer wanted)
 	 * reply for it. Ignore replies that  we don't expect.
 	 */
-	if (reply->xid != msm_batt_info.vbatt_rpc_req_xid) {
+	if (reply->xid != msm_batt_info.vbatt_modify_rpc_req_xid &&
+		reply->xid != msm_batt_info.vbatt_volt_rpc_req_xid) {
 
 		printk(KERN_ERR "%s(): returned RPC REPLY XID is not"
 				" equall to VBATT RPC REQ XID \n", __func__);
-		kfree(reply);
 
 		return;
 	}
@@ -1130,7 +1194,6 @@ static void msm_batt_handle_vbatt_rpc_reply(struct rpc_reply_hdr *reply)
 
 		printk(KERN_ERR "%s(): reply_stat != "
 			" RPCMSG_REPLYSTAT_ACCEPTED \n", __func__);
-		kfree(reply);
 
 		return;
 	}
@@ -1139,28 +1202,62 @@ static void msm_batt_handle_vbatt_rpc_reply(struct rpc_reply_hdr *reply)
 
 		printk(KERN_ERR "%s(): reply->data.acc_hdr.accept_stat "
 				" != RPCMSG_REPLYSTAT_ACCEPTED \n", __func__);
-		kfree(reply);
 
 		return;
 	}
 
-	rep_vbatt_modify_client =
-		(struct rpc_reply_vbatt_modify_client *) reply;
+	if (reply->xid == msm_batt_info.vbatt_modify_rpc_req_xid) {
 
-	modify_client_result =
+		rep_vbatt_modify_client =
+			(struct rpc_reply_vbatt_modify_client *) reply;
+
+		modify_client_result =
 		be32_to_cpu(rep_vbatt_modify_client->modify_client_result);
 
-	if (modify_client_result != BATTERY_MODIFICATION_SUCCESSFUL) {
+		if (modify_client_result != BATTERY_MODIFICATION_SUCCESSFUL) {
 
-		printk(KERN_ERR "%s() :  modify client failed."
-			"modify_client_result  = %u\n", __func__,
-			modify_client_result);
-	} else {
-		printk(KERN_INFO "%s() : modify client successful.\n",
+			printk(KERN_ERR "%s() :  modify client failed."
+				"modify_client_result  = %u\n", __func__,
+				modify_client_result);
+		} else {
+			printk(KERN_INFO "%s() : modify client successful.\n",
 				__func__);
-	}
+		}
 
-	kfree(reply);
+	} else if (reply->xid == msm_batt_info.vbatt_volt_rpc_req_xid) {
+
+		rep_vbatt_volt = (struct rpc_reply_vbatt_volt *) reply;
+
+		rep_vbatt_volt->volt =
+			be32_to_cpu(rep_vbatt_volt->volt);
+
+		if (msm_batt_info.battery_voltage == rep_vbatt_volt->volt) {
+
+			printk(KERN_NOTICE" No charger. Batt Volt = %u."
+					" No change in voltage.\n",
+					msm_batt_info.battery_voltage);
+
+			return;
+		}
+
+		msm_batt_info.battery_voltage = rep_vbatt_volt->volt;
+
+		msm_batt_info.batt_capacity = msm_batt_info.calculate_capacity(
+					msm_batt_info.battery_voltage);
+
+		msm_batt_info.batt_status = POWER_SUPPLY_STATUS_DISCHARGING;
+		msm_batt_info.batt_health = POWER_SUPPLY_HEALTH_GOOD;
+		msm_batt_info.batt_valid  = 1 ;
+		msm_batt_info.battery_temp = 23;
+
+		printk(KERN_INFO "%s() : No charger. Batt Volt = %u.\n",
+				 __func__, msm_batt_info.battery_voltage);
+
+		power_supply_changed(&msm_psy_batt);
+
+	} else
+		printk(KERN_ERR "%s(): returned RPC REPLY XID is not"
+				" equall to VBATT RPC REQ XID \n", __func__);
 }
 
 static void msm_batt_wake_up_waiting_thread(u32 event)
@@ -1245,8 +1342,7 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 		if (len < RPC_REQ_REPLY_COMMON_HEADER_SIZE) {
 			printk(KERN_ERR "%s: The pkt is neither req nor reply."
 			       " len of pkt = %d\n", __func__, len);
-			if (!rpc_packet)
-				kfree(rpc_packet);
+			kfree(rpc_packet);
 			continue;
 		}
 
@@ -1256,19 +1352,14 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 
 		if (rpc_packet_type == RPC_TYPE_REPLY) {
 
+			msm_batt_handle_vbatt_rpc_reply(rpc_packet);
+			kfree(rpc_packet);
+
 			if (msm_batt_info.type_of_event &
 				(SUSPEND_EVENT | RESUME_EVENT)) {
 
-				msm_batt_handle_vbatt_rpc_reply(rpc_packet);
-
 				msm_batt_wake_up_waiting_thread(
 						SUSPEND_EVENT | RESUME_EVENT);
-
-			} else {
-				printk(KERN_ERR "%s: Should not get rpc reply"
-					" Type_of_packet = %d\n", __func__,
-					rpc_packet_type);
-				kfree(rpc_packet);
 			}
 			continue;
 		}
@@ -1326,8 +1417,6 @@ static void msm_batt_wait_for_batt_chg_event(struct work_struct *work)
 			       " reply  write response %d\n", __func__, len);
 
 		kfree(rpc_packet);
-
-		printk(KERN_INFO "%s: Update Batt status.\n", __func__);
 
 		if (msm_batt_info.chg_api_version >= CHARGER_API_VERSION)
 			msm_batt_update_psy_status_v1();
