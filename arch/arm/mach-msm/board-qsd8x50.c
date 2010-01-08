@@ -119,13 +119,22 @@
 #define MSM_AUDIO_SIZE		0x80000
 #define MSM_GPU_PHYS_SIZE 	SZ_2M
 
-#define MSM_SMI_BASE		0x2b00000
-#define MSM_SMI_SIZE		0x1500000
+#ifdef CONFIG_MSM_SOC_REV_A
+#define MSM_SMI_BASE		0xE0000000
+#else
+#define MSM_SMI_BASE		0x00000000
+#endif
 
-#define MSM_FB_BASE		MSM_SMI_BASE
+#define MSM_SHARED_RAM_PHYS	(MSM_SMI_BASE + 0x00100000)
+
+#define MSM_PMEM_SMI_BASE	(MSM_SMI_BASE + 0x02B00000)
+#define MSM_PMEM_SMI_SIZE	0x01500000
+
+#define MSM_FB_BASE		MSM_PMEM_SMI_BASE
 #define MSM_GPU_PHYS_BASE 	(MSM_FB_BASE + MSM_FB_SIZE)
 #define MSM_PMEM_GPU0_BASE	(MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
-#define MSM_PMEM_GPU0_SIZE	(MSM_SMI_SIZE - MSM_FB_SIZE - MSM_GPU_PHYS_SIZE)
+#define MSM_PMEM_GPU0_SIZE	(MSM_PMEM_SMI_SIZE - MSM_FB_SIZE \
+					- MSM_GPU_PHYS_SIZE)
 
 #define PMEM_KERNEL_EBI1_SIZE	0
 
@@ -2595,6 +2604,7 @@ static void __init qsd8x50_allocate_memory_regions(void)
 
 static void __init qsd8x50_map_io(void)
 {
+	msm_shared_ram_phys = MSM_SHARED_RAM_PHYS;
 	msm_map_qsd8x50_io();
 	qsd8x50_allocate_memory_regions();
 	msm_clock_init(msm_clocks_8x50, msm_num_clocks_8x50);
