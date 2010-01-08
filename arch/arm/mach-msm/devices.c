@@ -369,7 +369,7 @@ static struct resource resources_hsusb_peripheral[] = {
 		.end	= INT_USB_HS,
 		.flags	= IORESOURCE_IRQ,
 	},
-#ifdef CONFIG_PMIC8058
+#ifdef CONFIG_ARCH_MSM7X01A
 	{
 		.name	= "vbus_interrupt",
 		.start	= MSM_GPIO_TO_INT(112),

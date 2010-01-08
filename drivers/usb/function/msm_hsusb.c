@@ -3160,19 +3160,6 @@ static int __init usb_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-#ifdef CONFIG_ARCH_MSM7201A
-	ulpi_irq1 = platform_get_irq_byname(pdev, "vbus_interrupt");
-	if (ulpi_irq1 < 0) {
-		pr_err("%s: failed to get vbus gpio interrupt\n", __func__);
-		return -ENODEV;
-	}
-
-	ulpi_irq2 = platform_get_irq_byname(pdev, "id_interrupt");
-	if (ulpi_irq2 < 0) {
-		pr_err("%s: failed to get id gpio interrupt\n", __func__);
-		return -ENODEV;
-	}
-#endif
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res) {
@@ -3317,6 +3304,20 @@ static int __init usb_probe(struct platform_device *pdev)
 
 	if (ui->pdata->config_gpio) {
 		usb_lpm_config_gpio = ui->pdata->config_gpio;
+
+		ulpi_irq1 = platform_get_irq_byname(pdev, "vbus_interrupt");
+		if (ulpi_irq1 < 0) {
+			pr_err("%s: failed to get vbus gpio interrupt\n",
+					__func__);
+			return -ENODEV;
+		}
+
+		ulpi_irq2 = platform_get_irq_byname(pdev, "id_interrupt");
+		if (ulpi_irq2 < 0) {
+			pr_err("%s: failed to get id gpio interrupt\n",
+					__func__);
+			return -ENODEV;
+		}
 
 		ret = request_irq(ulpi_irq1,
 				&usb_lpm_gpio_isr,
