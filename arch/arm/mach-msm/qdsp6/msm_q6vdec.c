@@ -310,7 +310,7 @@ static int vdec_initialize_v3(struct vdec_data *vd, void *argp,
 {
 	struct vdec_config_sps_v3 vdec_cfg_sps;
 	unsigned long vstart, phys_addr, len;
-	struct file *fp;
+	struct file *fp = 0;
 	struct {
 		uint32_t size;
 		struct vdec_init_cfg_v3 vi_cfg;;
@@ -332,26 +332,31 @@ static int vdec_initialize_v3(struct vdec_data *vd, void *argp,
 		return ret;
 	}
 
+
+	if (vdec_cfg_sps.seq_fd < 0) {
+		phys_addr = 0;
+		vdec_cfg_sps.cfg.seq_hdr.offset = 0;
+		vdec_cfg_sps.cfg.seq_hdr.size = 0;
+	} else {
+		ret = get_pmem_file(vdec_cfg_sps.seq_fd, &phys_addr, &vstart,
+			    &len, &fp);
+		if (ret) {
+			pr_err("%s: get_pmem_fd failed\n", __func__);
+			return ret;
+		}
+		if ((vdec_cfg_sps.cfg.seq_hdr.offset +
+			    vdec_cfg_sps.cfg.seq_hdr.size) > len) {
+			pr_err("%s: invalid sequence header offset!\n",
+					 __func__);
+			ret = -EINVAL;
+			goto err_bad_offset_initialize;
+		}
+	}
+
 	rpc.vi_cfg.decode_done_evt = VDEC_ASYNCMSG_DECODE_DONE;
 	rpc.vi_cfg.reuse_frame_evt = VDEC_ASYNCMSG_REUSE_FRAME;
 	memcpy(&rpc.vi_cfg.cfg, &vdec_cfg_sps.cfg,
 		sizeof(struct vdec_config_v3));
-
-	ret = get_pmem_file(vdec_cfg_sps.seq_fd, &phys_addr, &vstart,
-			    &len, &fp);
-	if (ret) {
-		pr_err("%s: get_pmem_fd failed\n", __func__);
-		return ret;
-	}
-
-	/* input buffers */
-	if ((rpc.vi_cfg.cfg.seq_hdr.offset +
-	     rpc.vi_cfg.cfg.seq_hdr.size) > len) {
-		pr_err("%s: invalid sequence header offset!\n", __func__);
-		ret = -EINVAL;
-		goto err_bad_offset_initialize;
-
-	}
 	rpc.vi_cfg.cfg.seq_hdr.offset += phys_addr;
 	rpc.size = sizeof(struct vdec_init_cfg_v3);
 	rpc.osize = sizeof(struct vdec_buf_req_v3);
@@ -377,7 +382,8 @@ static int vdec_initialize_v3(struct vdec_data *vd, void *argp,
 
 	vd->close_decode = 0;
 err_bad_offset_initialize:
-	put_pmem_file(fp);
+	if (fp)
+		put_pmem_file(fp);
 	return ret;
 }
 
