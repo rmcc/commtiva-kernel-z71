@@ -937,7 +937,7 @@ bitmap_allocate_contiguous(uint32_t *bitp, int num_bits_to_alloc,
 			& ~(spacing - 1)) {
 		int bit_end = bit_start + num_bits_to_alloc, total_words;
 
-		if (bit_end >= total_bits)
+		if (bit_end > total_bits)
 			return -1; /* out of contiguous memory */
 
 		word_index = bit_start >> PMEM_32BIT_WORD_ORDER;
