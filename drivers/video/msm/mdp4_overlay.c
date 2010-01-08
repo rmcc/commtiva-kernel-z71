@@ -310,6 +310,8 @@ int mdp4_overlay_format2type(uint32 format)
 	case MDP_Y_CBCR_H2V1:
 	case MDP_Y_CRCB_H2V2:
 	case MDP_Y_CBCR_H2V2:
+	case MDP_Y_CBCR_H2V2_TILE:
+	case MDP_Y_CRCB_H2V2_TILE:
 		return OVERLAY_TYPE_VG;
 	default:
 		return -ERANGE;
@@ -1138,10 +1140,17 @@ struct tile_desc {
 
 void tile_samsung(struct tile_desc *tp)
 {
+	/*
+	 * each row of samsung tile consists of two tiles in height
+	 * and two tiles in width which means width should align to
+	 * 64 x 2 bytes and height should align to 32 x 2 bytes.
+	 * video decoder generate two tiles in width and one tile
+	 * in height which ends up height align to 32 X 1 bytes.
+	 */
 	tp->width = 64;		/* 64 bytes */
 	tp->row_tile_w = 2;	/* 2 tiles per row's width */
 	tp->height = 32;	/* 32 bytes */
-	tp->row_tile_h = 2;	/* 2 tiles per row's height */
+	tp->row_tile_h = 1;	/* 1 tiles per row's height */
 }
 
 uint32 tile_mem_size(struct mdp4_overlay_pipe *pipe, struct tile_desc *tp)
