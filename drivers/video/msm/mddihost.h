@@ -113,6 +113,14 @@ typedef enum {
 	MDDI_GPIO_NUM_INTS
 } mddi_gpio_int_type;
 
+enum mddi_data_packet_size_type {
+	MDDI_DATA_PACKET_4_BYTES  = 4,
+	MDDI_DATA_PACKET_8_BYTES  = 8,
+	MDDI_DATA_PACKET_12_BYTES = 12,
+	MDDI_DATA_PACKET_16_BYTES = 16,
+	MDDI_DATA_PACKET_24_BYTES = 24
+};
+
 typedef struct {
 	uint32 addr;
 	uint32 value;
@@ -176,8 +184,8 @@ int mddi_host_register_read
     (uint32 reg_addr,
      uint32 *reg_value_ptr, boolean wait, mddi_host_type host_idx);
 int mddi_host_register_write
-    (uint32 reg_addr,
-     uint32 reg_val,
+    (uint32 reg_addr, uint32 reg_val,
+     enum mddi_data_packet_size_type packet_size,
      boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host);
 boolean mddi_host_register_write_int
     (uint32 reg_addr,
@@ -194,7 +202,11 @@ void mddi_queue_static_window_adjust
 #define mddi_queue_register_read(reg, val_ptr, wait, sig) \
 	mddi_host_register_read(reg, val_ptr, wait, MDDI_HOST_PRIM)
 #define mddi_queue_register_write(reg, val, wait, sig) \
-	mddi_host_register_write(reg, val, wait, NULL, MDDI_HOST_PRIM)
+	mddi_host_register_write(reg, val, MDDI_DATA_PACKET_4_BYTES,\
+	wait, NULL, MDDI_HOST_PRIM)
+#define mddi_queue_register_write_extn(reg, val, pkt_size, wait, sig) \
+	mddi_host_register_write(reg, val, pkt_size, \
+	wait, NULL, MDDI_HOST_PRIM)
 #define mddi_queue_register_write_int(reg, val) \
 	mddi_host_register_write_int(reg, val, NULL, MDDI_HOST_PRIM)
 #define mddi_queue_register_read_int(reg, val_ptr) \
