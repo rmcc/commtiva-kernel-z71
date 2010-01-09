@@ -1195,8 +1195,7 @@ static void sdcc_gpio_init(void)
 	if (gpio_request(56, "sdc1_clk"))
 		pr_err("failed to request gpio sdc1_clk\n");
 #endif
-
-	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
+	if (machine_is_msm7x25_ffa())
 		return;
 
 	/* SDC2 GPIOs */
@@ -1214,6 +1213,8 @@ static void sdcc_gpio_init(void)
 	if (gpio_request(67, "sdc2_data_0"))
 		pr_err("failed to request gpio sdc2_data_0\n");
 #endif
+	if (machine_is_msm7x27_ffa())
+		return;
 
 	/* SDC3 GPIOs */
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
@@ -1381,10 +1382,14 @@ static void __init msm7x2x_init_mmc(void)
 	msm_add_sdcc(1, &msm7x2x_sdcc_data);
 #endif
 
-	if (machine_is_msm7x25_surf() || machine_is_msm7x27_surf()) {
+	if (machine_is_msm7x25_surf() || machine_is_msm7x27_surf() ||
+		machine_is_msm7x27_ffa()) {
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
 		msm_add_sdcc(2, &msm7x2x_sdcc_data);
 #endif
+	}
+
+	if (machine_is_msm7x25_surf() || machine_is_msm7x27_surf()) {
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 		msm_add_sdcc(3, &msm7x2x_sdcc_data);
 #endif
