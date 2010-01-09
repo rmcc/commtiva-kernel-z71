@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -78,12 +78,6 @@
 
 extern int copy_count;
 extern int intcnt;
-
-struct msm_volume {
-	bool update;
-	int volume; /* Volume parameter, in dB Scale */
-	int pan;
-};
 
 struct buffer {
 	void *data;

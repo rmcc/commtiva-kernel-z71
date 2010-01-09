@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -215,15 +215,22 @@ static void pcm_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 {
 	struct audio *audio = (struct audio *) private_data;
 	switch (evt_id) {
-	case AUDDEV_EVT_DEV_CHG_AUDIO:
-		pr_err("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
+	case AUDDEV_EVT_DEV_RDY:
+		pr_debug(":AUDDEV_EVT_DEV_RDY\n");
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
+							audio->enabled == 1)
+			audpp_route_stream(audio->dec_id,
+				msm_snddev_route_dec(audio->dec_id));
+		break;
+	case AUDDEV_EVT_DEV_RLS:
+		pr_debug(":AUDDEV_EVT_DEV_RLS\n");
 		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
 							audio->enabled == 1)
 			audpp_route_stream(audio->dec_id,
 				msm_snddev_route_dec(audio->dec_id));
 		break;
 	default:
-		pr_err("%s:ERROR:wrong event\n", __func__);
+		pr_err(":ERROR:wrong event\n");
 		break;
 	}
 }
@@ -1543,7 +1550,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	file->private_data = audio;
 	audio->opened = 1;
 
-	audio->device_events = AUDDEV_EVT_DEV_CHG_AUDIO;
+	audio->device_events = AUDDEV_EVT_DEV_RDY
+				|AUDDEV_EVT_DEV_RLS;
 
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_DEC,

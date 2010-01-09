@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -71,6 +71,8 @@
 #define  MAX(x, y) (((x) > (y)) ? (x) : (y))
 #endif
 
+#define DEVICE_IGNORE	0xff
+
 struct audio_dev_ctrl_state {
 	struct mutex lock;
 	struct msm_snddev_info *devs[AUDIO_DEV_CTL_MAX_DEV];
@@ -102,20 +104,30 @@ struct audio_routing_info {
 
 static struct audio_routing_info routing_info;
 
-int msm_set_tx_voice_mute(int mute)
+int msm_set_voice_mute(int dir, int mute)
 {
-	routing_info.tx_mute = mute;
+	MM_DBG("dir %x mute %x\n", dir, mute);
+	if (dir == DIR_TX) {
+		routing_info.tx_mute = mute;
+		mixer_post_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG,
+			routing_info.voice_tx_dev_id);
+	} else
+		return -EPERM;
 	return 0;
 }
-EXPORT_SYMBOL(msm_set_tx_voice_mute);
+EXPORT_SYMBOL(msm_set_voice_mute);
 
 int msm_set_voice_vol(int dir, s32 volume)
 {
-	if (dir == DIR_TX)
+	if (dir == DIR_TX) {
 		routing_info.voice_tx_vol = volume;
-	else if (dir == DIR_RX)
+		mixer_post_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG,
+					routing_info.voice_tx_dev_id);
+	} else if (dir == DIR_RX) {
 		routing_info.voice_rx_vol = volume;
-	else
+		mixer_post_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG,
+					routing_info.voice_rx_dev_id);
+	} else
 		return -EINVAL;
 	return 0;
 }
@@ -127,6 +139,7 @@ void msm_snddev_register(struct msm_snddev_info *dev_info)
 	if (audio_dev_ctrl.num_dev < AUDIO_DEV_CTL_MAX_DEV) {
 		audio_dev_ctrl.devs[audio_dev_ctrl.num_dev] = dev_info;
 		dev_info->dev_volume = 0; /* 0 db */
+		dev_info->sessions = 0x0;
 		audio_dev_ctrl.num_dev++;
 	} else
 		MM_ERR("%s: device registry max out\n", __func__);
@@ -212,6 +225,9 @@ int msm_set_voc_route(struct msm_snddev_info *dev_info,
 	mutex_lock(&audio_dev_ctrl.lock);
 	switch (stream_type) {
 	case AUDIO_ROUTE_STREAM_VOICE_RX:
+		if (audio_dev_ctrl.voice_rx_dev)
+			audio_dev_ctrl.voice_rx_dev->sessions &= ~0xFF;
+
 		if (!(dev_info->capability & SNDDEV_CAP_RX) |
 		    !(dev_info->capability & SNDDEV_CAP_VOICE)) {
 			rc = -EINVAL;
@@ -220,24 +236,28 @@ int msm_set_voc_route(struct msm_snddev_info *dev_info,
 		audio_dev_ctrl.voice_rx_dev = dev_info;
 		if (audio_dev_ctrl.voice_rx_dev) {
 			session_mask =
-				(0x1 << (8 * (int)AUDDEV_CLNT_VOC));
-			audio_dev_ctrl.voice_rx_dev->sessions &=
-				~session_mask;
+				0x1 << (8 * ((int)AUDDEV_CLNT_VOC-1));
+			audio_dev_ctrl.voice_rx_dev->sessions |=
+				session_mask;
 		}
 		routing_info.voice_rx_dev_id = dev_id;
 		break;
 	case AUDIO_ROUTE_STREAM_VOICE_TX:
+		if (audio_dev_ctrl.voice_tx_dev)
+			audio_dev_ctrl.voice_tx_dev->sessions &= ~0xFF;
+
 		if (!(dev_info->capability & SNDDEV_CAP_TX) |
 		    !(dev_info->capability & SNDDEV_CAP_VOICE)) {
 			rc = -EINVAL;
 			break;
 		}
+
 		audio_dev_ctrl.voice_tx_dev = dev_info;
 		if (audio_dev_ctrl.voice_rx_dev) {
 			session_mask =
-				(0x1 << (8 * (int)AUDDEV_CLNT_VOC));
-			audio_dev_ctrl.voice_tx_dev->sessions &=
-				~session_mask;
+				0x1 << (8 * ((int)AUDDEV_CLNT_VOC-1));
+			audio_dev_ctrl.voice_tx_dev->sessions |=
+				session_mask;
 		}
 		routing_info.voice_tx_dev_id = dev_id;
 		break;
@@ -448,7 +468,7 @@ int msm_snddev_withdraw_freq(u32 session_id, u32 capability, u32 clnt_type)
 			&& (session_id >= MAX_ENC_SESSIONS))
 		return -EINVAL;
 
-	session_mask = (0x1 << (session_id + 1)) << (8 * (int)clnt_type);
+	session_mask = (0x1 << (session_id)) << (8 * ((int)clnt_type-1));
 
 	for (i = 0; i < audio_dev_ctrl.num_dev; i++) {
 		rc = 0;
@@ -485,7 +505,7 @@ int msm_snddev_request_freq(int *freq, u32 session_id,
 	if ((clnt_type == AUDDEV_CLNT_ENC)
 			&& (session_id >= MAX_ENC_SESSIONS))
 		return -EINVAL;
-	session_mask = (((0x1 << (session_id + 1)) << clnt_type));
+	session_mask = ((0x1 << session_id)) << (8 * (clnt_type-1));
 
 	for (i = 0; i < audio_dev_ctrl.num_dev; i++) {
 		info = audio_dev_ctrl.devs[i];
@@ -651,6 +671,14 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 	int clnt_id = 0;
 	union auddev_evt_data *evt_payload;
 	struct msm_snd_evt_listner *callback;
+	struct msm_snddev_info *dev_info = NULL;
+	u32 session_mask = 0;
+	static int pending_sent;
+
+	if ((evt_id != AUDDEV_EVT_START_VOICE)
+		&& (evt_id != AUDDEV_EVT_END_VOICE)
+		&& (evt_id != AUDDEV_EVT_STREAM_VOL_CHG))
+		dev_info = audio_dev_ctrl_find_dev(dev_id);
 
 	if (event.cb != NULL)
 		callback = event.cb;
@@ -668,16 +696,44 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 				continue;
 			}
 		}
-
-		memset(evt_payload, 0, sizeof(union auddev_evt_data));
 		clnt_id = callback->clnt_id;
+		memset(evt_payload, 0, sizeof(union auddev_evt_data));
+
+		if ((evt_id == AUDDEV_EVT_START_VOICE)
+			|| (evt_id == AUDDEV_EVT_END_VOICE))
+			goto skip_check;
+		session_mask = (0x1 << (clnt_id))
+				<< (8 * ((int)callback->clnt_type-1));
+		MM_DBG("dev_info->sessions = %08x\n", dev_info->sessions);
+
+		if (!(dev_info->sessions & session_mask)) {
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+		if ((evt_id == AUDDEV_EVT_REL_PENDING)
+			|| (evt_id == AUDDEV_EVT_DEV_CHG_VOICE))
+			goto voc_events;
+
 		if (callback->clnt_type == AUDDEV_CLNT_DEC) {
-			evt_payload->routing_id =
-				routing_info.mixer_mask[clnt_id];
+			MM_DBG("AUDDEV_CLNT_DEC\n");
+			if (evt_id == AUDDEV_EVT_STREAM_VOL_CHG) {
+				if (clnt_id != dev_id)
+					goto sent_dec;
+				else
+					evt_payload->session_vol =
+						msm_vol_ctl.volume;
+			} else
+				evt_payload->routing_id =
+					routing_info.mixer_mask[clnt_id];
 			callback->auddev_evt_listener(
-				evt_id,
-				evt_payload,
-				callback->private_data);
+					evt_id,
+					evt_payload,
+					callback->private_data);
+sent_dec:
 			if (callback->cb_next == NULL)
 				break;
 			else {
@@ -686,101 +742,87 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 			}
 		}
 		if (callback->clnt_type == AUDDEV_CLNT_ENC) {
+			MM_DBG("AUDDEV_CLNT_ENC\n");
 			evt_payload->routing_id =
 				routing_info.audrec_mixer_mask[clnt_id];
 			callback->auddev_evt_listener(
-				evt_id,
-				evt_payload,
-				callback->private_data);
-			if (callback->cb_next == NULL)
-				break;
-			else {
-				callback = callback->cb_next;
-				continue;
-			}
-		}
-		if (callback->clnt_type == AUDDEV_CLNT_VOC) {
-			if ((!audio_dev_ctrl.voice_tx_dev)
-				|| (!audio_dev_ctrl.voice_rx_dev))
-				goto sent_voc;
-
-
-			evt_payload->voc_devinfo.rxdev_id =
-				audio_dev_ctrl.voice_rx_dev->acdb_id;
-			evt_payload->voc_devinfo.txdev_id =
-				audio_dev_ctrl.voice_tx_dev->acdb_id;
-			evt_payload->voc_devinfo.rxdev_vol =
-				routing_info.voice_rx_vol;
-			evt_payload->voc_devinfo.txdev_vol =
-				routing_info.voice_tx_vol;
-			evt_payload->voc_devinfo.rxdev_sample =
-				audio_dev_ctrl.voice_rx_dev->sample_rate;
-			evt_payload->voc_devinfo.txdev_sample =
-				audio_dev_ctrl.voice_tx_dev->sample_rate;
-			evt_payload->voc_devinfo.rx_mute =
-				routing_info.rx_mute;
-			evt_payload->voc_devinfo.tx_mute =
-				routing_info.tx_mute;
-
-			if (evt_id == AUDDEV_EVT_REL_PENDING) {
-				if (audio_dev_ctrl.voice_tx_dev->opened &&
-				    audio_dev_ctrl.voice_rx_dev->opened) {
-					callback->auddev_evt_listener(
-					evt_id,	evt_payload,
+					evt_id,
+					evt_payload,
 					callback->private_data);
-				}
-				goto sent_voc;
-			}
-			if (evt_id == AUDDEV_EVT_DEV_RLS) {
-				if ((!audio_dev_ctrl.voice_tx_dev->opened) &&
-					(!audio_dev_ctrl.voice_rx_dev->opened)
-					) {
-					callback->auddev_evt_listener(
-					evt_id,	evt_payload,
-					callback->private_data);
-				}
-				goto sent_voc;
-			}
-
-			if (evt_id == AUDDEV_EVT_DEV_RDY) {
-				if (!audio_dev_ctrl.voice_rx_dev->opened)
-					goto sent_voc;
-				if (!audio_dev_ctrl.voice_tx_dev->opened)
-					goto sent_voc;
-			}
-			callback->auddev_evt_listener(
-				evt_id,
-				evt_payload,
-				callback->private_data);
-sent_voc:
 			if (callback->cb_next == NULL)
-				break;
+					break;
 			else {
 				callback = callback->cb_next;
 				continue;
 			}
 		}
 		if (callback->clnt_type == AUDDEV_CLNT_AUDIOCAL) {
-			struct msm_snddev_info *dev_info;
-
-			dev_info = audio_dev_ctrl_find_dev(dev_id);
-			evt_payload->audcal_info.dev_id = dev_id;
-			evt_payload->audcal_info.acdb_id =
-						dev_info->acdb_id;
-			if (dev_info->set_sample_rate)
-				evt_payload->audcal_info.sample_rate =
-					dev_info->set_sample_rate;
-			else
-				evt_payload->audcal_info.sample_rate =
-					dev_info->sample_rate;
-
-			evt_payload->audcal_info.dev_type =
-					dev_info->capability;
+			MM_DBG("AUDDEV_CLNT_AUDIOCAL\n");
 
 			callback->auddev_evt_listener(
 				evt_id,
 				evt_payload,
 				callback->private_data);
+			if (callback->cb_next == NULL)
+				break;
+			else {
+				callback = callback->cb_next;
+				continue;
+			}
+		}
+skip_check:
+voc_events:
+		if (callback->clnt_type == AUDDEV_CLNT_VOC) {
+			MM_DBG("AUDDEV_CLNT_VOC\n");
+			if (evt_id == AUDDEV_EVT_DEV_RLS) {
+				if (!pending_sent)
+					goto sent_voc;
+				else
+					pending_sent = 0;
+			}
+			if (evt_id == AUDDEV_EVT_REL_PENDING)
+				pending_sent = 1;
+
+			if (evt_id == AUDDEV_EVT_DEVICE_VOL_MUTE_CHG) {
+				if (dev_info->capability & SNDDEV_CAP_TX) {
+					evt_payload->voc_vm_info.dev_type =
+						SNDDEV_CAP_TX;
+					evt_payload->voc_vm_info.acdb_dev_id =
+						dev_info->acdb_id;
+					evt_payload->
+					voc_vm_info.dev_vm_val.mute =
+						routing_info.tx_mute;
+				} else {
+					evt_payload->voc_vm_info.dev_type =
+						SNDDEV_CAP_RX;
+					evt_payload->voc_vm_info.acdb_dev_id =
+						dev_info->acdb_id;
+					evt_payload->
+					voc_vm_info.dev_vm_val.vol =
+						routing_info.voice_rx_vol;
+				}
+			} else if ((evt_id == AUDDEV_EVT_START_VOICE)
+					|| (evt_id == AUDDEV_EVT_END_VOICE))
+				memset(evt_payload, 0,
+					sizeof(union auddev_evt_data));
+			else {
+				evt_payload->voc_devinfo.dev_type =
+					(dev_info->capability & SNDDEV_CAP_TX) ?
+					SNDDEV_CAP_TX : SNDDEV_CAP_RX;
+				evt_payload->voc_devinfo.acdb_dev_id =
+					dev_info->acdb_id;
+				evt_payload->voc_devinfo.dev_sample =
+					dev_info->set_sample_rate ?
+					dev_info->set_sample_rate :
+					dev_info->sample_rate;
+			}
+			callback->auddev_evt_listener(
+				evt_id,
+				evt_payload,
+				callback->private_data);
+			if (evt_id == AUDDEV_EVT_DEV_RLS)
+				dev_info->sessions &= ~(0xFF);
+sent_voc:
 			if (callback->cb_next == NULL)
 				break;
 			else {
@@ -793,67 +835,37 @@ sent_voc:
 }
 
 
-void mixer_post_event(u32 evt_id, u32 dev_id)
+void mixer_post_event(u32 evt_id, u32 id)
 {
-	u32 voc_tx_id, voc_rx_id, mixer_mask;
-	static int concurrent;
-	int current_dec_concurrency = 0;
-	int current_enc_concurrency = 0;
-	int i = 0;
 
 	MM_ERR("%s: evt_id = %d\n", __func__, evt_id);
 	mutex_lock(&event.listner_lock);
 	switch (evt_id) {
-	case AUDDEV_EVT_DEV_CHG_AUDIO:
-		broadcast_event(AUDDEV_EVT_DEV_CHG_AUDIO, dev_id);
-		break;
 	case AUDDEV_EVT_DEV_CHG_VOICE: /* Called from Voice_route */
-		if ((!audio_dev_ctrl.voice_tx_dev)
-			|| (!audio_dev_ctrl.voice_rx_dev)) {
-			break;
-		}
-		voc_tx_id = audio_dev_ctrl.voice_tx_dev->copp_id;
-		/* TODO: check the default value */
-		voc_rx_id = audio_dev_ctrl.voice_rx_dev->copp_id;
-		for (i = 0; i < MAX_DEC_SESSIONS; i++)	{
-			mixer_mask = routing_info.mixer_mask[i];
-			if (((0x1 << voc_tx_id) & mixer_mask) ||
-				((0x1 << voc_rx_id) & mixer_mask)) {
-				evt_id = AUDDEV_EVT_DEV_CONCURRENT;
-				current_dec_concurrency = 1;
-			} else if (!current_dec_concurrency)
-				current_dec_concurrency = 0;
-		}
-		for (i = 0; i < MAX_ENC_SESSIONS; i++)	{
-			mixer_mask = routing_info.audrec_mixer_mask[i];
-			if (((0x1 << voc_tx_id) & mixer_mask) ||
-				((0x1 << voc_rx_id) & mixer_mask)) {
-				evt_id = AUDDEV_EVT_DEV_CONCURRENT;
-				current_enc_concurrency = 1;
-			} else if (!current_enc_concurrency)
-				current_enc_concurrency = 0;
-		}
-		broadcast_event(AUDDEV_EVT_DEV_CHG_VOICE, dev_id);
-
-		if (current_dec_concurrency || current_enc_concurrency) {
-			broadcast_event(AUDDEV_EVT_DEV_CONCURRENT, dev_id);
-			concurrent = 1;
-		} else if (concurrent) {
-			broadcast_event(AUDDEV_EVT_DEV_NON_CONCURRENT, dev_id);
-			concurrent = 0;
-		}
+		broadcast_event(AUDDEV_EVT_DEV_CHG_VOICE, id);
 		break;
 	case AUDDEV_EVT_DEV_RDY:
-		broadcast_event(AUDDEV_EVT_DEV_RDY, dev_id);
+		broadcast_event(AUDDEV_EVT_DEV_RDY, id);
 		break;
 	case AUDDEV_EVT_DEV_RLS:
-		broadcast_event(AUDDEV_EVT_DEV_RLS, dev_id);
+		broadcast_event(AUDDEV_EVT_DEV_RLS, id);
 		break;
 	case AUDDEV_EVT_REL_PENDING:
-		broadcast_event(AUDDEV_EVT_REL_PENDING, dev_id);
+		broadcast_event(AUDDEV_EVT_REL_PENDING, id);
 		break;
 	case AUDDEV_EVT_DEVICE_VOL_MUTE_CHG:
-		broadcast_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG, dev_id);
+		broadcast_event(AUDDEV_EVT_DEVICE_VOL_MUTE_CHG, id);
+		break;
+	case AUDDEV_EVT_STREAM_VOL_CHG:
+		broadcast_event(AUDDEV_EVT_STREAM_VOL_CHG, id);
+		break;
+	case AUDDEV_EVT_START_VOICE:
+		broadcast_event(AUDDEV_EVT_START_VOICE,
+				DEVICE_IGNORE);
+		break;
+	case AUDDEV_EVT_END_VOICE:
+		broadcast_event(AUDDEV_EVT_END_VOICE,
+				DEVICE_IGNORE);
 		break;
 	default:
 		break;
