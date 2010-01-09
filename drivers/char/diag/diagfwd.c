@@ -81,7 +81,7 @@ MODULE_VERSION("1.0");
 #define CHK_OVERFLOW(bufStart, start, end, length) \
 ((bufStart <= start) && (end - start >= length)) ? 1 : 0
 
-static void diag_smd_send_req(void)
+static void diag_smd_send_req(int context)
 {
 	void *buf;
 
@@ -98,7 +98,10 @@ static void diag_smd_send_req(void)
 			if (!buf) {
 				printk(KERN_INFO "Out of diagmem for a9\n");
 			} else {
-				smd_read_from_cb(driver->ch, buf, r);
+				if (context == SMD_CONTEXT)
+					smd_read_from_cb(driver->ch, buf, r);
+				else
+					smd_read(driver->ch, buf, r);
 				driver->in_busy = 1;
 				driver->usb_write_ptr->buf = buf;
 				driver->usb_write_ptr->length = r;
@@ -108,7 +111,7 @@ static void diag_smd_send_req(void)
 	}
 }
 
-static void diag_smd_qdsp_send_req(void)
+static void diag_smd_qdsp_send_req(int context)
 {
 	void *buf;
 
@@ -125,7 +128,11 @@ static void diag_smd_qdsp_send_req(void)
 			if (!buf) {
 				printk(KERN_INFO "Out of diagmem for q6\n");
 			} else {
-				smd_read_from_cb(driver->chqdsp, buf, r);
+				if (context == SMD_CONTEXT)
+					smd_read_from_cb(
+						driver->chqdsp, buf, r);
+				else
+					smd_read(driver->chqdsp, buf, r);
 				driver->in_busy_qdsp = 1;
 				driver->usb_write_ptr_qdsp->buf = buf;
 				driver->usb_write_ptr_qdsp->length = r;
@@ -432,8 +439,8 @@ int diagfwd_connect(void)
 	driver->in_busy_qdsp = 0;
 
 	/* Poll SMD channels to check for data*/
-	diag_smd_send_req();
-	diag_smd_qdsp_send_req();
+	diag_smd_send_req(NON_SMD_CONTEXT);
+	diag_smd_qdsp_send_req(NON_SMD_CONTEXT);
 
 	driver->usb_read_ptr->buf = driver->usb_buf_out;
 	driver->usb_read_ptr->length = USB_MAX_OUT_BUF;
@@ -459,10 +466,10 @@ int diagfwd_write_complete(struct diag_request *diag_write_ptr)
 	/* Need a context variable here instead */
 	if (buf == (void *)driver->usb_buf_in) {
 		driver->in_busy = 0;
-		diag_smd_send_req();
+		diag_smd_send_req(NON_SMD_CONTEXT);
 	} else if (buf == (void *)driver->usb_buf_in_qdsp) {
 		driver->in_busy_qdsp = 0;
-		diag_smd_qdsp_send_req();
+		diag_smd_qdsp_send_req(NON_SMD_CONTEXT);
 	} else {
 		diagmem_free(driver, (unsigned char *)buf, POOL_TYPE_HDLC);
 		diagmem_free(driver, (unsigned char *)diag_write_ptr,
@@ -488,13 +495,13 @@ static struct diag_operations diagfwdops = {
 
 static void diag_smd_notify(void *ctxt, unsigned event)
 {
-	diag_smd_send_req();
+	diag_smd_send_req(SMD_CONTEXT);
 }
 
 #if defined(CONFIG_MSM_N_WAY_SMD)
 static void diag_smd_qdsp_notify(void *ctxt, unsigned event)
 {
-	diag_smd_qdsp_send_req();
+	diag_smd_qdsp_send_req(SMD_CONTEXT);
 }
 #endif
 

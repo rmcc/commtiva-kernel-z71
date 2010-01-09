@@ -43,6 +43,8 @@
 #define DIAG_IOCTL_COMMAND_REG  0
 #define DIAG_IOCTL_GET_DELAYED_RSP_ID 8
 #define DIAG_IOCTL_LSM_DEINIT	9
+#define NON_SMD_CONTEXT 	0
+#define SMD_CONTEXT 		1
 
 struct bindpkt_params {
 	uint16_t cmd_code;
