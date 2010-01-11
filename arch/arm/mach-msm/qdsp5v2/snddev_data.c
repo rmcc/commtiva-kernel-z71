@@ -595,6 +595,12 @@ static struct adie_codec_hwsetting_entry idual_mic_endfire_settings[] = {
 		.osr = 256,
 		.actions = idual_mic_endfire_8KHz_osr256_actions,
 		.action_sz = ARRAY_SIZE(idual_mic_endfire_8KHz_osr256_actions),
+	}, /* 8KHz profile can be used for 16KHz */
+	{
+		.freq_plan = 16000,
+		.osr = 256,
+		.actions = idual_mic_endfire_8KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(idual_mic_endfire_8KHz_osr256_actions),
 	}
 };
 
@@ -633,6 +639,12 @@ static struct adie_codec_action_unit idual_mic_bs_8KHz_osr256_actions[] =
 static struct adie_codec_hwsetting_entry idual_mic_broadside_settings[] = {
 	{
 		.freq_plan = 8000,
+		.osr = 256,
+		.actions = idual_mic_bs_8KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(idual_mic_bs_8KHz_osr256_actions),
+	}, /* 8KHz profile can be used for 16KHz */
+	{
+		.freq_plan = 16000,
 		.osr = 256,
 		.actions = idual_mic_bs_8KHz_osr256_actions,
 		.action_sz = ARRAY_SIZE(idual_mic_bs_8KHz_osr256_actions),
