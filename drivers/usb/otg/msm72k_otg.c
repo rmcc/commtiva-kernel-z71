@@ -395,7 +395,7 @@ static int msm_otg_set_suspend(struct otg_transceiver *xceiv, int suspend)
 		if (!is_phy_clk_disabled())
 			goto out;
 
-		timeout = jiffies + msecs_to_jiffies(500);
+		timeout = jiffies + usecs_to_jiffies(100);
 		enable_phy_clk();
 		while (is_phy_clk_disabled()) {
 			if (time_after(jiffies, timeout)) {
@@ -403,10 +403,11 @@ static int msm_otg_set_suspend(struct otg_transceiver *xceiv, int suspend)
 				otg_reset(dev);
 				break;
 			}
-			msleep(1);
+			udelay(10);
 		}
 out:
 		enable_irq(dev->irq);
+
 	}
 
 	return 0;
