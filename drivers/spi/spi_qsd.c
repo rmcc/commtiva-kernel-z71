@@ -456,7 +456,7 @@ static void msm_spi_setup_dm_transfer(struct msm_spi *dd)
 
 static void msm_spi_enqueue_dm_commands(struct msm_spi *dd)
 {
-	dsb();
+	dma_coherent_pre_ops();
 	if (dd->write_buf)
 		msm_dmov_enqueue_cmd(dd->tx_dma_chan, &dd->tx_hdr);
 	if (dd->read_buf)
@@ -470,8 +470,14 @@ static void msm_spi_enqueue_dm_commands(struct msm_spi *dd)
    Upon completion we send the next chunk, or complete the transfer if
    everything is finished.
 */
-static void msm_spi_send_or_complete(struct msm_spi *dd)
+static int msm_spi_dm_send_next(struct msm_spi *dd)
 {
+	/* By now we should have sent all the bytes in FIFO mode,
+	 * However to make things right, we'll check anyway.
+	 */
+	if (dd->mode != SPI_DMOV_MODE)
+		return 0;
+
 	/* We need to send more chunks, if we sent max last time */
 	if (dd->tx_bytes_remaining > SPI_MAX_LEN) {
 		dd->tx_bytes_remaining -= SPI_MAX_LEN;
@@ -484,8 +490,10 @@ static void msm_spi_send_or_complete(struct msm_spi *dd)
 		writel((readl(dd->base + SPI_OPERATIONAL)
 			& ~SPI_OP_STATE) | SPI_OP_STATE_RUN,
 			dd->base + SPI_OPERATIONAL);
-	} else
-		complete(&dd->transfer_complete);
+		return 1;
+	}
+
+	return 0;
 }
 
 static inline void msm_spi_ack_transfer(struct msm_spi *dd)
@@ -513,7 +521,7 @@ static irqreturn_t msm_spi_input_irq(int irq, void *dev_id)
 				if (atomic_inc_return(&dd->rx_irq_called) == 1)
 					return IRQ_HANDLED;
 			}
-			msm_spi_send_or_complete(dd);
+			complete(&dd->transfer_complete);
 			return IRQ_HANDLED;
 		}
 		return IRQ_NONE;
@@ -568,7 +576,7 @@ static irqreturn_t msm_spi_output_irq(int irq, void *dev_id)
 		if (dd->read_buf == NULL && readl(dd->base + SPI_OPERATIONAL) &
 					    SPI_OP_MAX_OUTPUT_DONE_FLAG) {
 			msm_spi_ack_transfer(dd);
-			msm_spi_send_or_complete(dd);
+			complete(&dd->transfer_complete);
 			return IRQ_HANDLED;
 		}
 		return IRQ_NONE;
@@ -633,7 +641,7 @@ static void msm_spi_unmap_dma_buffers(struct msm_spi *dd)
 	/* If we padded the transfer, we copy it from the padding buf */
 	if (dd->unaligned_len && dd->read_buf) {
 		u32 offset = dd->cur_transfer->len - dd->unaligned_len;
-		dsb();
+		dma_coherent_post_ops();
 		memcpy(dd->read_buf + offset, dd->rx_padding,
 		       dd->unaligned_len);
 	}
@@ -682,6 +690,7 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 	u32 max_speed;
 	u32 chip_select;
 	u32 read_count;
+	u32 timeout;
 
 	if (!dd->cur_transfer->len)
 		return;
@@ -787,21 +796,26 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 		& ~SPI_OP_STATE) | SPI_OP_STATE_RUN,
 	       dd->base + SPI_OPERATIONAL);
 
-	if (dd->mode == SPI_FIFO_MODE)
-		wait_for_completion(&dd->transfer_complete);
-	else if (dd->mode == SPI_DMOV_MODE) {
-		u32 div = max_speed / MSEC_PER_SEC;
-		u32 timeout = 100 * msecs_to_jiffies(
-			DIV_ROUND_UP(dd->tx_bytes_remaining * 8, div));
-
+	timeout = 100 * msecs_to_jiffies(
+	      DIV_ROUND_UP(dd->cur_transfer->len * 8,
+		 max_speed / MSEC_PER_SEC));
+	do {
 		if (!wait_for_completion_timeout(&dd->transfer_complete,
 						 timeout)) {
-			writel(0, dd->base + SPI_TIME_OUT);
-			msm_dmov_flush(dd->tx_dma_chan);
-			msm_dmov_flush(dd->rx_dma_chan);
+				dev_err(dd->dev, "%s: SPI transaction "
+						 "timeout\n", __func__);
+				dd->cur_msg->status = -EIO;
+				if (dd->mode == SPI_DMOV_MODE) {
+					writel(0, dd->base + SPI_TIME_OUT);
+					msm_dmov_flush(dd->tx_dma_chan);
+					msm_dmov_flush(dd->rx_dma_chan);
+				}
+				break;
 		}
+	} while (msm_spi_dm_send_next(dd));
+
+	if (dd->mode == SPI_DMOV_MODE)
 		msm_spi_unmap_dma_buffers(dd);
-	}
 	dd->mode = SPI_MODE_NONE;
 
 	writel(spi_ioc & ~SPI_IO_C_MX_CS_MODE, dd->base + SPI_IO_CONTROL);
@@ -1132,9 +1146,9 @@ static void spi_dmov_tx_complete_func(struct msm_dmov_cmd *cmd,
 				"Flush data(%08x %08x %08x %08x %08x %08x)\n",
 				err->flush[0], err->flush[1], err->flush[2],
 				err->flush[3], err->flush[4], err->flush[5]);
+		dd->cur_msg->status = -EIO;
 		writel(0, dd->base + SPI_TIME_OUT);
-		if (!completion_done(&dd->transfer_complete))
-			complete(&dd->transfer_complete);
+		complete(&dd->transfer_complete);
 	}
 }
 
@@ -1161,7 +1175,7 @@ static void spi_dmov_rx_complete_func(struct msm_dmov_cmd *cmd,
 		dd->stat_rx++;
 		if (atomic_inc_return(&dd->rx_irq_called) == 1)
 			return;
-		msm_spi_send_or_complete(dd);
+		complete(&dd->transfer_complete);
 	} else {
 		/** Error or flush  */
 		if (result & DMOV_RSLT_ERROR) {
@@ -1177,9 +1191,9 @@ static void spi_dmov_rx_complete_func(struct msm_dmov_cmd *cmd,
 				"Flush data(%08x %08x %08x %08x %08x %08x)\n",
 				err->flush[0], err->flush[1], err->flush[2],
 				err->flush[3], err->flush[4], err->flush[5]);
+		dd->cur_msg->status = -EIO;
 		writel(0, dd->base + SPI_TIME_OUT);
-		if (!completion_done(&dd->transfer_complete))
-			complete(&dd->transfer_complete);
+		complete(&dd->transfer_complete);
 	}
 }
 
@@ -1194,6 +1208,9 @@ static inline u32 get_chunk_size(struct msm_spi *dd)
 static void msm_spi_teardown_dma(struct msm_spi *dd)
 {
 	int limit = 0;
+
+	if (!dd->use_dma)
+		return;
 
 	while (dd->mode == SPI_DMOV_MODE && limit++ < 50) {
 		msm_dmov_flush(dd->tx_dma_chan);
@@ -1404,6 +1421,7 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 
 	dd->suspended = 0;
 	dd->transfer_in_progress = 0;
+	dd->mode = SPI_MODE_NONE;
 
 	rc = request_irq(dd->irq_in, msm_spi_input_irq, IRQF_TRIGGER_RISING,
 			  pdev->name, dd);
@@ -1543,8 +1561,7 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 	free_irq(dd->irq_out, dd);
 	free_irq(dd->irq_err, master);
 
-	if (dd->use_dma)
-		msm_spi_teardown_dma(dd);
+	msm_spi_teardown_dma(dd);
 
 	if (pdata && pdata->gpio_release)
 		pdata->gpio_release();
