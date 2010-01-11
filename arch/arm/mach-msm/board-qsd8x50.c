@@ -2238,7 +2238,7 @@ static int msm_sdcc_get_wpswitch(struct device *dv)
 	uint32_t ret = 0;
 	struct platform_device *pdev;
 
-	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
+	if (!(machine_is_qsd8x50_surf() || machine_is_qsd8x50a_surf()))
 		return -1;
 
 	pdev = container_of(dv, struct platform_device, dev);
