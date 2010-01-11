@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -46,6 +46,10 @@
 #define EVENT_CHANGE_START              0x54
 #define EVENT_NETWORK_RECONFIG          0x53
 
+/* VOLUME RANGE */
+#define MIN_VOLUME	-5000
+#define MAX_VOLUME	1300
+
 /* voice state */
 enum {
 	VOICE_INIT = 0,
@@ -85,6 +89,12 @@ enum{
 /* Device Event */
 #define DEV_CHANGE_READY                0x1
 
+#define VOICE_CALL_START	0x1
+#define VOICE_CALL_END		0
+
+#define VOICE_DEV_ENABLED	0x1
+#define VOICE_DEV_DISABLED	0
+
 struct voice_header {
 	uint32_t id;
 	uint32_t data_len;
@@ -112,6 +122,14 @@ struct voice_device {
 struct voice_network {
 	struct voice_header hdr;
 	uint32_t network_info;
+};
+
+struct device_data {
+	uint32_t dev_acdb_id;
+	uint32_t volume;
+	uint32_t mute;
+	uint32_t sample;
+	uint32_t enabled;
 };
 
 #endif

@@ -1,7 +1,7 @@
 /*
  * amrnb audio decoder device
  *
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Based on the mp3 native driver in arch/arm/mach-msm/qdsp5/audio_mp3.c
  *
@@ -212,15 +212,22 @@ static void amrnb_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 {
 	struct audio *audio = (struct audio *) private_data;
 	switch (evt_id) {
-	case AUDDEV_EVT_DEV_CHG_AUDIO:
-		MM_ERR("%s:AUDDEV_EVT_DEV_CHG_AUDIO\n", __func__);
+	case AUDDEV_EVT_DEV_RDY:
+		MM_DBG(":AUDDEV_EVT_DEV_RDY\n");
+		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
+							audio->enabled == 1)
+			audpp_route_stream(audio->dec_id,
+				msm_snddev_route_dec(audio->dec_id));
+		break;
+	case AUDDEV_EVT_DEV_RLS:
+		MM_DBG(":AUDDEV_EVT_DEV_RLS\n");
 		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
 							audio->enabled == 1)
 			audpp_route_stream(audio->dec_id,
 				msm_snddev_route_dec(audio->dec_id));
 		break;
 	default:
-		MM_ERR("%s:ERROR:wrong event\n", __func__);
+		MM_ERR(":ERROR:wrong event\n");
 		break;
 	}
 }
@@ -1462,7 +1469,8 @@ static int audamrnb_open(struct inode *inode, struct file *file)
 	file->private_data = audio;
 	audio->opened = 1;
 
-	audio->device_events = AUDDEV_EVT_DEV_CHG_AUDIO;
+	audio->device_events = AUDDEV_EVT_DEV_RDY
+				|AUDDEV_EVT_DEV_RLS;
 
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_DEC,
