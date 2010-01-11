@@ -884,11 +884,14 @@ static void msm_hs_enable_ms_locked(struct uart_port *uport)
  */
 static void msm_hs_break_ctl(struct uart_port *uport, int ctl)
 {
+	unsigned long flags;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
 
+	spin_lock_irqsave(&uport->lock, flags);
 	clk_enable(msm_uport->clk);
 	msm_hs_write(uport, UARTDM_CR_ADDR, ctl ? START_BREAK : STOP_BREAK);
 	clk_disable(msm_uport->clk);
+	spin_unlock_irqrestore(&uport->lock, flags);
 }
 
 static void msm_hs_config_port(struct uart_port *uport, int cfg_flags)
