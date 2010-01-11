@@ -938,6 +938,7 @@ static int __devinit msm_rotator_probe(struct platform_device *pdev)
 	enable_rot_clks();
 	ver = ioread32(MSM_ROTATOR_HW_VERSION);
 	disable_rot_clks();
+	clk_disable(msm_rotator_dev->imem_clk);
 	if (ver != MSM_ROTATOR_HW_VERSION_VALUE) {
 		printk(KERN_ALERT "%s: invalid HW version\n", DRIVER_NAME);
 		rc = -ENODEV;
