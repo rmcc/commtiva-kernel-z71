@@ -679,7 +679,9 @@ static int vfe_init(struct msm_vfe_callback *presp, struct platform_device *dev)
 		return rc;
 
 	/* Bring up all the required GPIOs and Clocks */
-	return msm_camio_enable(dev);
+	rc = msm_camio_enable(dev);
+	if (rc < 0)
+		return rc;
 
 	/* Set required axi bus frequency */
 	rc = request_axi_qos(MSM_AXI_QOS_PREVIEW);
