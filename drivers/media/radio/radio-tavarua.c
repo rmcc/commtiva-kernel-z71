@@ -1859,9 +1859,11 @@ static int tavarua_suspend(struct platform_device *pdev, pm_message_t state)
 	FMDBG("%s: radio suspend\n", __func__);
 	retval = tavarua_write_registers(radio, STATUS_REG1, lp_buf,
 					ARRAY_SIZE(lp_buf));
-	if (retval < 0)
-		return 0;
-	return -1;
+	if (retval < 0) {
+		FMDBG("Error in tavarua_suspend %d \n", retval);
+		return -1;
+	}
+	return 0;
 }
 
 static int tavarua_resume(struct platform_device *pdev)
@@ -1872,9 +1874,11 @@ static int tavarua_resume(struct platform_device *pdev)
 	FMDBG("%s: radio resume\n", __func__);
 	retval = tavarua_setup_interrupts(radio,
 			(radio->registers[RDCTRL] & 0x03));
-	if (retval < 0)
-		return 0;
-	return -1;
+	if (retval < 0) {
+		FMDBG("Error in tavarua_resume %d \n", retval);
+		return -1;
+	}
+	return 0;
 }
 
 static int  __init tavarua_probe(struct platform_device *pdev)
