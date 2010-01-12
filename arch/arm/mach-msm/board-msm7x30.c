@@ -1069,14 +1069,24 @@ struct platform_device msm_lpa_device = {
 	(1<<MSM_ADSP_CODEC_AMRNB)|(1<<MSM_ADSP_CODEC_WAV)| \
 	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
 	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
-#define DEC1_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
-#define DEC2_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
-#define DEC3_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP))
+#define DEC1_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
+	(1<<MSM_ADSP_CODEC_AAC)|(1<<MSM_ADSP_CODEC_WMA)| \
+	(1<<MSM_ADSP_CODEC_WMAPRO)|(1<<MSM_ADSP_CODEC_AMRWB)| \
+	(1<<MSM_ADSP_CODEC_AMRNB)|(1<<MSM_ADSP_CODEC_WAV)| \
+	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
+	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
+ #define DEC2_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
+	(1<<MSM_ADSP_CODEC_AAC)|(1<<MSM_ADSP_CODEC_WMA)| \
+	(1<<MSM_ADSP_CODEC_WMAPRO)|(1<<MSM_ADSP_CODEC_AMRWB)| \
+	(1<<MSM_ADSP_CODEC_AMRNB)|(1<<MSM_ADSP_CODEC_WAV)| \
+	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
+	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
+ #define DEC3_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
+	(1<<MSM_ADSP_CODEC_AAC)|(1<<MSM_ADSP_CODEC_WMA)| \
+	(1<<MSM_ADSP_CODEC_WMAPRO)|(1<<MSM_ADSP_CODEC_AMRWB)| \
+	(1<<MSM_ADSP_CODEC_AMRNB)|(1<<MSM_ADSP_CODEC_WAV)| \
+	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
+	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
 #define DEC4_FORMAT (1<<MSM_ADSP_CODEC_MIDI)
 
 static unsigned int dec_concurrency_table[] = {
@@ -1131,12 +1141,53 @@ static unsigned int dec_concurrency_table[] = {
 	.module_queueid = queueid, .module_decid = decid, \
 	.nr_codec_support = nr_codec}
 
+#define DEC_INSTANCE(max_instance_same, max_instance_diff) { \
+	.max_instances_same_dec = max_instance_same, \
+	.max_instances_diff_dec = max_instance_diff}
+
 static struct msm_adspdec_info dec_info_list[] = {
 	DEC_INFO("AUDPLAY0TASK", 13, 0, 11), /* AudPlay0BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY1TASK", 14, 1, 5),  /* AudPlay1BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY2TASK", 15, 2, 5),  /* AudPlay2BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY3TASK", 16, 3, 4),  /* AudPlay3BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY1TASK", 14, 1, 11),  /* AudPlay1BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY2TASK", 15, 2, 11),  /* AudPlay2BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY3TASK", 16, 3, 11),  /* AudPlay3BitStreamCtrlQueue */
 	DEC_INFO("AUDPLAY4TASK", 17, 4, 1),  /* AudPlay4BitStreamCtrlQueue */
+};
+
+static struct dec_instance_table dec_instance_list[][MSM_MAX_DEC_CNT] = {
+	/* Non Turbo Mode */
+	{
+		DEC_INSTANCE(4, 3), /* WAV */
+		DEC_INSTANCE(4, 3), /* ADPCM */
+		DEC_INSTANCE(4, 2), /* MP3 */
+		DEC_INSTANCE(0, 0), /* Real Audio */
+		DEC_INSTANCE(4, 2), /* WMA */
+		DEC_INSTANCE(3, 2), /* AAC */
+		DEC_INSTANCE(0, 0), /* Reserved */
+		DEC_INSTANCE(0, 0), /* MIDI */
+		DEC_INSTANCE(4, 3), /* YADPCM */
+		DEC_INSTANCE(4, 3), /* QCELP */
+		DEC_INSTANCE(4, 3), /* AMRNB */
+		DEC_INSTANCE(1, 1), /* AMRWB/WB+ */
+		DEC_INSTANCE(4, 3), /* EVRC */
+		DEC_INSTANCE(1, 1), /* WMAPRO */
+	},
+	/* Turbo Mode */
+	{
+		DEC_INSTANCE(4, 3), /* WAV */
+		DEC_INSTANCE(4, 3), /* ADPCM */
+		DEC_INSTANCE(4, 3), /* MP3 */
+		DEC_INSTANCE(0, 0), /* Real Audio */
+		DEC_INSTANCE(4, 3), /* WMA */
+		DEC_INSTANCE(4, 3), /* AAC */
+		DEC_INSTANCE(0, 0), /* Reserved */
+		DEC_INSTANCE(0, 0), /* MIDI */
+		DEC_INSTANCE(4, 3), /* YADPCM */
+		DEC_INSTANCE(4, 3), /* QCELP */
+		DEC_INSTANCE(4, 3), /* AMRNB */
+		DEC_INSTANCE(2, 3), /* AMRWB/WB+ */
+		DEC_INSTANCE(4, 3), /* EVRC */
+		DEC_INSTANCE(1, 2), /* WMAPRO */
+	},
 };
 
 static struct msm_adspdec_database msm_device_adspdec_database = {
@@ -1145,6 +1196,7 @@ static struct msm_adspdec_database msm_device_adspdec_database = {
 					ARRAY_SIZE(dec_info_list)),
 	.dec_concurrency_table = dec_concurrency_table,
 	.dec_info_list = dec_info_list,
+	.dec_instance_list = &dec_instance_list[0][0],
 };
 
 static struct platform_device msm_device_adspdec = {

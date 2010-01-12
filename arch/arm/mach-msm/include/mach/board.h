@@ -86,6 +86,7 @@ struct msm_snd_endpoints {
 	unsigned num;
 };
 
+#define MSM_MAX_DEC_CNT 14
 /* 7k target ADSP information */
 /* Bit 23:0, for codec identification like mp3, wav etc *
  * Bit 27:24, for mode identification like tunnel, non tunnel*
@@ -118,12 +119,21 @@ struct msm_adspdec_info {
 	unsigned nr_codec_support;
 };
 
+/* Carries information about number codec
+ * supported if same codec or different codecs
+ */
+struct dec_instance_table {
+	uint8_t max_instances_same_dec;
+	uint8_t max_instances_diff_dec;
+};
+
 struct msm_adspdec_database {
 	unsigned num_dec;
 	unsigned num_concurrency_support;
 	unsigned int *dec_concurrency_table; /* Bit masked entry to *
 					      *	represents codec, mode etc */
 	struct msm_adspdec_info  *dec_info_list;
+	struct dec_instance_table *dec_instance_list;
 };
 
 struct msm_panel_common_pdata {
