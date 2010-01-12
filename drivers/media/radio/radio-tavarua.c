@@ -301,6 +301,7 @@ static int xfr_intf_own(struct tavarua_device *radio)
 			msecs_to_jiffies(WAIT_TIMEOUT)))
 			return -1;
 	} else {
+		FMDBG("gained ownership of xfr\n");
 		radio->xfr_in_progress = 1;
 		mutex_unlock(&radio->lock);
 	}
@@ -318,15 +319,13 @@ static int sync_read_xfr(struct tavarua_device *radio,
 	if (retval < 0)
 		return retval;
 	retval = tavarua_write_register(radio, XFRCTRL, xfr_type);
-	if (retval < 0)
-		return retval;
 	if (!wait_for_completion_timeout(&radio->sync_req_done,
-		msecs_to_jiffies(WAIT_TIMEOUT))) {
+		msecs_to_jiffies(WAIT_TIMEOUT)) || (retval < 0)) {
 		radio->xfr_in_progress = 0;
 		start_pending_xfr(radio);
-		return -1;
+		return retval;
 	}
-
+	FMDBG("read xfr regs\n");
 	return retval;
 }
 
@@ -342,15 +341,14 @@ static int sync_write_xfr(struct tavarua_device *radio,
 		return retval;
 	retval = write_to_xfr(radio, xfr_type, radio->sync_xfr_regs,
 							XFR_REG_NUM);
-	if (retval < 0)
-		return retval;
 	if (!wait_for_completion_timeout(&radio->sync_req_done,
-		msecs_to_jiffies(WAIT_TIMEOUT))) {
+		msecs_to_jiffies(WAIT_TIMEOUT)) || (retval < 0)) {
 		radio->xfr_in_progress = 0;
 		start_pending_xfr(radio);
-		return -1;
+		return retval;
 	}
 
+	FMDBG("write xfr regs\n");
 	return retval;
 }
 
@@ -673,11 +671,15 @@ static void read_int_stat(struct work_struct *work)
 			tavarua_q_event(radio, TAVARUA_EVT_NEW_SRCH_LIST);
 			radio->xfr_in_progress = 0;
 			break;
-		default:
+		case (0x80 | RX_CONFIG):
+		case (0x80 | RADIO_CONFIG):
+		case (0x80 | RDS_CONFIG):
 			radio->xfr_in_progress = 0;
 			complete(&radio->sync_req_done);
 			FMDBG("XFR write complete\n");
-
+			break;
+		default:
+			FMDBG("UNKNOWN XFR\n");
 		}
 		if (!radio->xfr_in_progress) {
 			if (start_pending_xfr(radio) != -1)
@@ -1495,7 +1497,12 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 		/* check if already on */
 		if ((ctrl->value == 1) && !(radio->registers[RDCTRL] &
 							FM_RECV)) {
-			FMDBG("turning on...\n");
+			FMDBG("clearing flags\n");
+			init_completion(&radio->sync_xfr_start);
+			init_completion(&radio->sync_req_done);
+			radio->xfr_in_progress = 0;
+			radio->xfr_bytes_left = 0;
+			FMDBG("turning on ..\n");
 			retval = tavarua_start(radio, FM_RECV);
 		}
 		/* check if off */
