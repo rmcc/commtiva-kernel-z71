@@ -154,8 +154,8 @@
 #define SPI_ERR_CLK_UNDER_RUN_ERR     0x00000001
 #define SPI_ERR_MASK                  0x0000007F
 
-/* We don't allow more than 3K transactions */
-#define SPI_MAX_TRANSFERS             0x00000C00
+/* We don't allow transactions larger than 4K-64 */
+#define SPI_MAX_TRANSFERS             0x000FC0
 #define SPI_MAX_LEN                   (SPI_MAX_TRANSFERS * dd->bytes_per_word)
 #define SPI_MAX_TIMEOUT               0x00010000
 #define SPI_MIN_TRANS_TIME            50
