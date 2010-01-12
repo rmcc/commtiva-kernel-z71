@@ -918,6 +918,20 @@ static int msm_marimba_tsadc_power(int vreg_on)
 
 static struct marimba_tsadc_platform_data marimba_tsadc_pdata = {
 	.marimba_tsadc_power = msm_marimba_tsadc_power,
+	.tsadc_prechg_en = true,
+	.setup = {
+		.pen_irq_en	=	true,
+		.tsadc_en	=	true,
+	},
+	.params2 = {
+		.input_clk_khz		=	2400,
+		.sample_prd		=	TSADC_CLK_3,
+	},
+	.params3 = {
+		.prechg_time_nsecs	=	6400,
+		.stable_time_nsecs	=	6400,
+		.tsadc_test_mode	=	0,
+	},
 };
 
 

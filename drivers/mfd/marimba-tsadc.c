@@ -87,10 +87,16 @@
 	#define TSHK_RSV1_PRECHARGE_EN	BIT(0)
 #define TSHK_COMMAND		0x57
 #define TSHK_PARAM2		0x58
+	#define TSHK_INPUT_CLK_MASK	0x3F
+	#define TSHK_SAMPLE_PRD_MASK	0xC7
+	#define TSHK_INPUT_CLK_SHIFT	0x6
+	#define TSHK_SAMPLE_PRD_SHIFT	0x3
 #define TSHK_PARAM3		0x59
-	#define TSHK_PARAM3_NORMAL_MODE	(0)
+	#define TSHK_PARAM3_MODE_MASK	0xFC
 	#define TSHK_PARAM3_PRE_CHG_SHIFT (5)
 	#define TSHK_PARAM3_STABIZ_SHIFT (2)
+	#define TSHK_STABLE_TIME_MASK	0xE3
+	#define TSHK_PRECHG_TIME_MASK	0x1F
 #define TSHK_PARAM4		0x5A
 #define TSHK_RSV2		0x5B
 #define TSHK_RSV3		0x5C
@@ -177,27 +183,99 @@ static int marimba_tsadc_startup(struct marimba_tsadc *tsadc)
 
 static int marimba_tsadc_configure(struct marimba_tsadc *tsadc)
 {
-	u8 val;
+	u8 rsv1 = 0,  setup = 0, i, count = 0;
+	u8 param2 = 0,  param3 = 0;
+	unsigned long val;
 
 	marimba_tsadc_write(tsadc, SSBI_PRESET, 0x00);
-	/* Enable pre-charge */
-	marimba_tsadc_write(tsadc, TSHK_RSV1, TSHK_RSV1_PRECHARGE_EN);
 
-	/* Input clock 2.4 MHz and sample period being 1.15ms */
-	marimba_tsadc_write(tsadc, TSHK_PARAM2, 0x00);
+	if (!tsadc->pdata)
+		return -EINVAL;
 
-	/* TSADC normal-mode */
-	val = TSHK_PARAM3_NORMAL_MODE;
-	/* 6.4us pre-charge time */
-	val |=  0x0 << TSHK_PARAM3_PRE_CHG_SHIFT;
-	/* 6.4us stabilization time */
-	val |=  0x0 << TSHK_PARAM3_STABIZ_SHIFT;
+	/* Configure RSV1 register*/
+	if (tsadc->pdata->tsadc_prechg_en == true)
+		rsv1 |= TSHK_RSV1_PRECHARGE_EN;
+	else
+		rsv1 &= ~TSHK_RSV1_PRECHARGE_EN;
 
-	marimba_tsadc_write(tsadc, TSHK_PARAM3, val);
+	/*  Set RSV1 register*/
+	marimba_tsadc_write(tsadc, TSHK_RSV1, rsv1);
+
+	/* Configure PARAM2 register */
+	/* Input clk */
+	val = tsadc->pdata->params2.input_clk_khz;
+	param2 &= TSHK_INPUT_CLK_MASK;
+	val /= 600;
+	if (val >= 1 && val <= 8 && !(val & (val - 1))) {
+		/* Input clk can be .6, 1.2, 2.4, 4.8Mhz */
+		if (val % 4 != 0)
+			param2 = (4 - (val % 4)) << TSHK_INPUT_CLK_SHIFT;
+		else
+			param2 = ((val / 4) - 1) << TSHK_INPUT_CLK_SHIFT;
+	} else /* Configure the default clk 2.4Mhz */
+		param2 = 0x00 << TSHK_INPUT_CLK_SHIFT;
+
+	/* Sample period */
+	param2 &= TSHK_SAMPLE_PRD_MASK;
+	param2 |=  tsadc->pdata->params2.sample_prd << TSHK_SAMPLE_PRD_SHIFT;
+
+	/* Write PARAM2 register */
+	marimba_tsadc_write(tsadc, TSHK_PARAM2, param2);
+
+	/* REVISIT: If Precharge time, stabilization time  > 409.6us */
+	/* Configure PARAM3 register */
+	val = tsadc->pdata->params3.prechg_time_nsecs;
+	param3 &= TSHK_PRECHG_TIME_MASK;
+	val /= 6400;
+	if (val >= 1 && val <= 64  && !(val & (val - 1))) {
+		count = 0;
+		while ((val = val >> 1) != 0)
+			count++;
+		param3 |= count << TSHK_PARAM3_PRE_CHG_SHIFT;
+	} else	/* Set default value if the input is wrong */
+		param3 |= 0x00 << TSHK_PARAM3_PRE_CHG_SHIFT;
+
+	val = tsadc->pdata->params3.stable_time_nsecs;
+	param3 &= TSHK_STABLE_TIME_MASK;
+	val /= 6400;
+	if (val >= 1 && val <= 64 && !(val & (val - 1))) {
+		count = 0;
+		while ((val = val >> 1) != 0)
+			count++;
+		param3 |= count << TSHK_PARAM3_STABIZ_SHIFT;
+	} else /* Set default value if the input is wrong */
+		param3 |=  0x00 << TSHK_PARAM3_STABIZ_SHIFT;
+
+	/* Get TSADC mode */
+	val = tsadc->pdata->params3.tsadc_test_mode;
+	param3 &= TSHK_PARAM3_MODE_MASK;
+	if (val == 0)
+		param3 |= 0x00;
+	else
+		for (i = 0; i < 3 ; i++) {
+			if (((val + i) % 39322) == 0) {
+				param3 |= (i + 1);
+				break;
+			}
+		}
+	if (i == 3) /* Set to normal mode if input is wrong */
+		param3 |= 0x00;
+
+	marimba_tsadc_write(tsadc, TSHK_PARAM3, param3);
+
+	/* Configure TSHK SETUP Register */
+	if (tsadc->pdata->setup.pen_irq_en == true)
+		setup |= TSHK_SETUP_EN_PIRQ;
+	else
+		setup &= ~TSHK_SETUP_EN_PIRQ;
+
+	if (tsadc->pdata->setup.tsadc_en == true)
+		setup |= TSHK_SETUP_EN_ADC;
+	else
+		setup &= ~TSHK_SETUP_EN_ADC;
 
 	/* Enable signals to ADC, pen irq assertion */
-	val = TSHK_SETUP_EN_ADC | TSHK_SETUP_EN_PIRQ;
-	marimba_tsadc_write(tsadc, TSHK_SETUP, val);
+	marimba_tsadc_write(tsadc, TSHK_SETUP, setup);
 
 	return 0;
 }

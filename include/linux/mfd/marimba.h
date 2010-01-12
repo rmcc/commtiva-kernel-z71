@@ -72,8 +72,40 @@ struct marimba_codec_platform_data{
 	int codec_tx;	/*  Member added for eg. */
 };
 
-struct marimba_tsadc_platform_data{
+struct marimba_tsadc_setup_params {
+	bool pen_irq_en;
+	bool tsadc_en;
+};
+
+enum sample_period {
+	TSADC_CLK_3 = 0,
+	TSADC_CLK_24,
+	TSADC_CLK_36,
+	TSADC_CLK_48,
+	TSADC_CLK_1,
+	TSADC_CLK_2,
+	TSADC_CLK_6,
+	TSADC_CLK_12,
+	TSADC_CLOCK_MAX
+};
+
+struct marimba_tsadc_config_params2 {
+	unsigned long input_clk_khz;
+	enum sample_period sample_prd;
+};
+
+struct marimba_tsadc_config_params3 {
+	unsigned long prechg_time_nsecs;
+	unsigned long stable_time_nsecs;
+	unsigned long tsadc_test_mode;
+};
+
+struct marimba_tsadc_platform_data {
 	int (*marimba_tsadc_power)(int vreg_on);
+	bool tsadc_prechg_en;
+	struct marimba_tsadc_setup_params setup;
+	struct marimba_tsadc_config_params2 params2;
+	struct marimba_tsadc_config_params3 params3;
 };
 
 /*
