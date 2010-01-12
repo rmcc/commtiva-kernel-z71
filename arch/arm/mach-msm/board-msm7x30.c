@@ -1206,13 +1206,13 @@ static struct platform_device smsc911x_device = {
 };
 
 static struct msm_gpio smsc911x_gpios[] = {
-    { GPIO_CFG(72, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr6" },
-    { GPIO_CFG(73, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr5" },
-    { GPIO_CFG(74, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr4" },
-    { GPIO_CFG(75, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr3" },
-    { GPIO_CFG(76, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr2" },
-    { GPIO_CFG(77, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr1" },
-    { GPIO_CFG(78, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr0" },
+    { GPIO_CFG(172, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr6" },
+    { GPIO_CFG(173, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr5" },
+    { GPIO_CFG(174, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr4" },
+    { GPIO_CFG(175, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr3" },
+    { GPIO_CFG(176, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr2" },
+    { GPIO_CFG(177, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr1" },
+    { GPIO_CFG(178, 2, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "ebi2_addr0" },
     { GPIO_CFG(88, 2, GPIO_INPUT, GPIO_PULL_UP, GPIO_2MA), "smsc911x_irq"  },
 };
 
