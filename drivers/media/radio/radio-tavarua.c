@@ -426,9 +426,9 @@ static void read_int_stat(struct work_struct *work)
 	mutex_lock(&radio->lock);
 	tavarua_read_registers(radio, STATUS_REG1, STATUS_REG_NUM);
 
-	FMDBG("INTSTAT1 <%x> \n", radio->registers[STATUS_REG1]);
-	FMDBG("INTSTAT2 <%x> \n", radio->registers[STATUS_REG2]);
-	FMDBG("INTSTAT3 <%x> \n", radio->registers[STATUS_REG3]);
+	FMDBG("INTSTAT1 <%x>\n", radio->registers[STATUS_REG1]);
+	FMDBG("INTSTAT2 <%x>\n", radio->registers[STATUS_REG2]);
+	FMDBG("INTSTAT3 <%x>\n", radio->registers[STATUS_REG3]);
 
 	if (radio->registers[STATUS_REG1] & READY) {
 		complete(&radio->sync_req_done);
@@ -718,7 +718,7 @@ static int tavarua_request_irq(struct tavarua_device *radio)
 		FMDBG("Couldn't acquire FM gpio %d\n", irq);
 		return retval;
 	} else {
-		FMDBG("FM GPIO %d registered \n", irq);
+		FMDBG("FM GPIO %d registered\n", irq);
 	}
 	retval = enable_irq_wake(irq);
 	if (retval < 0) {
@@ -788,7 +788,7 @@ static int tavarua_search(struct tavarua_device *radio, int on, int dir)
 	radio->registers[SRCHCTRL] = (dir << 3) |
 				(radio->registers[SRCHCTRL] & 0xF7);
 
-	FMDBG("registers <%x> \n", radio->registers[SRCHCTRL]);
+	FMDBG("registers <%x>\n", radio->registers[SRCHCTRL]);
 	return tavarua_write_registers(radio, SRCHRDS1,
 				&radio->registers[SRCHRDS1], 3);
 }
@@ -1025,7 +1025,7 @@ static int tavarua_fops_open(struct file *file)
 	retval = marimba_read_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
 							&value, 1, FM_ENABLE);
 	if (retval < 0) {
-		printk(KERN_ERR "%s:XO_BUFF_CNTRL read failed \n", __func__);
+		printk(KERN_ERR "%s:XO_BUFF_CNTRL read failed\n", __func__);
 		goto open_err;
 	}
 	if (value == FM_ENABLE) {
@@ -1038,7 +1038,7 @@ static int tavarua_fops_open(struct file *file)
 	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
 							&value, 1, value);
 	if (retval < 0) {
-		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed \n", __func__);
+		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed\n", __func__);
 		goto open_err;
 	}
 
@@ -1046,7 +1046,7 @@ static int tavarua_fops_open(struct file *file)
 	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
 	retval = tavarua_write_registers(radio, LEAKAGE_CNTRL, buffer, 6);
 	if (retval < 0) {
-		printk(KERN_ERR "%s: failed to bring up FM Core \n", __func__);
+		printk(KERN_ERR "%s: failed to bring up FM Core\n", __func__);
 		goto open_err;
 	}
 	if (!wait_for_completion_timeout(&radio->sync_req_done,
@@ -1093,7 +1093,7 @@ static int tavarua_fops_release(struct file *file)
 	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
 							&value, 1, FM_ENABLE);
 	if (retval < 0) {
-		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed \n", __func__);
+		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed\n", __func__);
 		return retval;
 	}
 	/* teardown gpio and pmic */
@@ -1860,7 +1860,7 @@ static int tavarua_suspend(struct platform_device *pdev, pm_message_t state)
 	retval = tavarua_write_registers(radio, STATUS_REG1, lp_buf,
 					ARRAY_SIZE(lp_buf));
 	if (retval < 0) {
-		FMDBG("Error in tavarua_suspend %d \n", retval);
+		FMDBG("Error in tavarua_suspend %d\n", retval);
 		return -1;
 	}
 	return 0;
@@ -1875,7 +1875,7 @@ static int tavarua_resume(struct platform_device *pdev)
 	retval = tavarua_setup_interrupts(radio,
 			(radio->registers[RDCTRL] & 0x03));
 	if (retval < 0) {
-		FMDBG("Error in tavarua_resume %d \n", retval);
+		FMDBG("Error in tavarua_resume %d\n", retval);
 		return -1;
 	}
 	return 0;
