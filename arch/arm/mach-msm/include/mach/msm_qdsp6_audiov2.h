@@ -51,14 +51,17 @@ struct audio_client {
 /* Obtain a 16bit signed, interleaved audio channel of the specified
  * rate (Hz) and channels (1 or 2), with two buffers of bufsz bytes.
  */
-struct audio_client *q6audio_open(uint32_t bufsz, uint32_t flags);
-int q6audio_start(struct audio_client *ac, void *rpc,
-						uint32_t len);
-struct audio_client *q6voice_open(uint32_t flags);
 
-int q6audio_close(struct audio_client *ac);
+struct audio_client *q6voice_open(void);
+int q6voice_setup(void);
+int q6voice_teardown(void);
 int q6voice_close(struct audio_client *ac);
 
+
+struct audio_client *q6audio_open(uint32_t bufsz, uint32_t flags);
+int q6audio_start(struct audio_client *ac, void *rpc, uint32_t len);
+
+int q6audio_close(struct audio_client *ac);
 int q6audio_read(struct audio_client *ac, struct audio_buffer *ab);
 int q6audio_write(struct audio_client *ac, struct audio_buffer *ab);
 int q6audio_async(struct audio_client *ac);

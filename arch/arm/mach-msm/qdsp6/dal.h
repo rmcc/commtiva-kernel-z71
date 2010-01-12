@@ -67,4 +67,20 @@ enum {
 	DAL_OP_FIRST_DEVICE_API,
 };
 
+static inline int check_version(struct dal_client *client, uint32_t version)
+{
+	struct dal_info info;
+	int res;
+
+	res = dal_call_f9(client, DAL_OP_INFO, &info, sizeof(struct dal_info));
+	if (!res) {
+		if (((info.version & 0xFFFF0000) != (version & 0xFFFF0000)) ||
+		((info.version & 0x0000FFFF) <
+		(version & 0x0000FFFF))) {
+			res = -EINVAL;
+		}
+	}
+	return res;
+}
+
 #endif
