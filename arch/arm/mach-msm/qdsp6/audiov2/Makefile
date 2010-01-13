@@ -1,4 +1,5 @@
 obj-y += q6audio.o
+obj-y += aac_in.o
 obj-y += pcm_out.o
 obj-y += pcm_in.o
 obj-y += mp3.o
