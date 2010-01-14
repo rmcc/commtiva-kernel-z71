@@ -101,9 +101,16 @@ struct auddev_evt_voc_mute_info {
 	union msm_vol_mute dev_vm_val;
 };
 
+struct auddev_evt_freq_info {
+	u32 dev_type;
+	u32 acdb_dev_id;
+	u32 sample_rate;
+};
+
 union auddev_evt_data {
 	struct auddev_evt_voc_devinfo voc_devinfo;
 	struct auddev_evt_voc_mute_info voc_vm_info;
+	struct auddev_evt_freq_info freq_info;
 	u32 routing_id;
 	s32 session_vol;
 	struct auddev_evt_audcal_info audcal_info;
@@ -122,6 +129,7 @@ struct message_header {
 #define AUDDEV_EVT_START_VOICE		0x20	/* voice call start */
 #define AUDDEV_EVT_END_VOICE		0x40	/* voice call end */
 #define AUDDEV_EVT_STREAM_VOL_CHG	0x80 	/* device volume changed */
+#define AUDDEV_EVT_FREQ_CHG		0x100	/* Change in freq */
 
 #define AUDDEV_CLNT_VOC 		0x1	/* Vocoder clients */
 #define AUDDEV_CLNT_DEC 		0x2	/* Decoder clients */
@@ -159,8 +167,11 @@ int auddev_unregister_evt_listner(u32 clnt_type, u32 clnt_id);
 void mixer_post_event(u32 evt_id, u32 dev_id);
 int msm_snddev_request_freq(int *freq, u32 session_id,
 			u32 capability, u32 clnt_type);
+int msm_snddev_withdraw_freq(u32 session_id,
+			u32 capability, u32 clnt_type);
 int msm_device_is_voice(int dev_id);
 int msm_get_voc_freq(int *tx_freq, int *rx_freq);
+int msm_snddev_get_enc_freq(int session_id);
 int msm_set_voice_vol(int dir, s32 volume);
 int msm_set_voice_mute(int dir, int mute);
 #endif

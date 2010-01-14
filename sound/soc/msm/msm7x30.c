@@ -372,6 +372,8 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 			struct snd_ctl_elem_value *ucontrol)
 {
 	int rc = 0;
+	int enc_freq = 0;
+	int requested_freq = 0;
 	struct msm_audio_route_config route_cfg;
 	struct msm_snddev_info *dev_info;
 	int session_id = ucontrol->value.integer.value[0];
@@ -419,6 +421,25 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 			dev_info->sessions &= ~(session_mask);
 		} else {
 			dev_info->sessions = dev_info->sessions | session_mask;
+			enc_freq = msm_snddev_get_enc_freq(session_id);
+			requested_freq = enc_freq;
+			if (enc_freq > 0) {
+				rc = msm_snddev_request_freq(&enc_freq,
+						session_id,
+						SNDDEV_CAP_TX,
+						AUDDEV_CLNT_ENC);
+				MM_DBG("sample rate configured %d"
+					"sample rate requested %d \n",
+					enc_freq, requested_freq);
+				if ((rc <= 0) || (enc_freq != requested_freq)) {
+					MM_DBG("msm_snddev_withdraw_freq\n");
+					rc = msm_snddev_withdraw_freq
+						(session_id,
+						SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+					mixer_post_event(AUDDEV_EVT_FREQ_CHG,
+							route_cfg.dev_id);
+				}
+			}
 			if (dev_info->opened)
 				mixer_post_event(AUDDEV_EVT_DEV_RDY,
 							route_cfg.dev_id);
