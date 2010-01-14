@@ -583,6 +583,24 @@ error:
 	return rc;
 }
 
+static int snddev_icodec_check_freq(u32 req_freq)
+{
+	int rc = -EINVAL;
+
+	if ((req_freq != 0) && (req_freq >= 8000) && (req_freq <= 48000)) {
+		if ((req_freq == 8000) || (req_freq == 11025) ||
+			(req_freq == 12000) || (req_freq == 16000) ||
+			(req_freq == 22050) || (req_freq == 24000) ||
+			(req_freq == 32000) || (req_freq == 44100) ||
+			(req_freq == 48000)) {
+				rc = 0;
+		} else
+			pr_info("%s: Unsupported Frequency:%d\n", __func__,
+								req_freq);
+		}
+		return rc;
+}
+
 static int snddev_icodec_set_freq(struct msm_snddev_info *dev_info, u32 rate)
 {
 	int rc;
@@ -594,7 +612,16 @@ static int snddev_icodec_set_freq(struct msm_snddev_info *dev_info, u32 rate)
 	}
 
 	icodec = dev_info->private_data;
-	icodec->sample_rate = adie_codec_getfreq(icodec->data->profile, rate);
+	if (adie_codec_freq_supported(icodec->data->profile, rate) != 0) {
+		rc = -EINVAL;
+		goto error;
+	} else {
+		if (snddev_icodec_check_freq(rate) != 0) {
+			rc = -EINVAL;
+			goto error;
+		} else
+			icodec->sample_rate = rate;
+	}
 
 	if (icodec->enabled) {
 		snddev_icodec_close(dev_info);
