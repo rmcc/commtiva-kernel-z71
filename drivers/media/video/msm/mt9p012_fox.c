@@ -1032,10 +1032,9 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 		goto init_fail1;
 	}
 
-	/* TODO: enable AF actuator */
-#if 0
+	/*enable AF actuator */
 	CDBG("enable AF actuator, gpio = %d\n",
-	     mt9p012_ctrl->sensordata->vcm_pwd);
+		mt9p012_ctrl->sensordata->vcm_pwd);
 	rc = gpio_request(mt9p012_ctrl->sensordata->vcm_pwd, "mt9p012");
 	if (!rc)
 		gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 1);
@@ -1046,13 +1045,10 @@ static int mt9p012_sensor_open_init(const struct msm_camera_sensor_info *data)
 	mdelay(20);
 
 	rc = mt9p012_set_default_focus();
-#endif
 	if (rc >= 0)
 		goto init_done;
-
-	/* TODO:
-	 * gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 0);
-	 * gpio_free(mt9p012_ctrl->sensordata->vcm_pwd); */
+	gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 0);
+	gpio_free(mt9p012_ctrl->sensordata->vcm_pwd);
 init_fail1:
 	mt9p012_probe_init_done(data);
 	kfree(mt9p012_ctrl);
