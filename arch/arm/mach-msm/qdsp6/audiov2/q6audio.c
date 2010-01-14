@@ -422,7 +422,7 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
 	rpc.buffer.addr = ab->phys;
 	rpc.buffer.max_size = ab->size;
-	rpc.buffer.actual_size = ab->size;
+	rpc.buffer.actual_size = ab->actual_size;
 
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
 		     &res, sizeof(res));

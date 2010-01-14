@@ -156,7 +156,8 @@ static ssize_t pcm_write(struct file *file, const char __user *buf,
 		buf += xfer;
 		count -= xfer;
 
-		ab->used = xfer;
+		ab->used = 1;
+		ab->actual_size = xfer;
 		q6audio_write(ac, ab);
 		ac->cpu_buf ^= 1;
 	}
