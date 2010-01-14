@@ -328,11 +328,15 @@ static void scpll_init(void)
 	regval = readl(SCPLL_FSM_CTL_EXT_ADDR);
 	regval &= ~(0x3f << 3);
 	regval |= (L_VAL_384MHZ << 3);
-	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
 
 	regval &= ~0x7;
 	regval |= SHOT_SWITCH;
 	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	/* Trigger the freq switch by putting pll in normal mode. */
+	regval = readl(SCPLL_CTL_ADDR);
+	regval |= (0x7);
+	writel(regval, SCPLL_CTL_ADDR);
 
 	/* Wait for frequency switch to finish */
 	while (readl(SCPLL_STATUS_ADDR) & 0x1)
@@ -346,11 +350,15 @@ static void scpll_init(void)
 	regval = readl(SCPLL_FSM_CTL_EXT_ADDR);
 	regval &= ~(0x3f << 3);
 	regval |= (L_VAL_768MHZ << 3);
-	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
 
 	regval &= ~0x7;
 	regval |= HOP_SWITCH;
 	writel(regval, SCPLL_FSM_CTL_EXT_ADDR);
+
+	/* Trigger the freq switch by putting pll in normal mode. */
+	regval = readl(SCPLL_CTL_ADDR);
+	regval |= (0x7);
+	writel(regval, SCPLL_CTL_ADDR);
 
 	/* Wait for frequency switch to finish */
 	while (readl(SCPLL_STATUS_ADDR) & 0x1)
