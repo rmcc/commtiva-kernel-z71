@@ -78,9 +78,7 @@ struct snddev_ecodec_drv_state {
 	struct mutex dev_lock;
 	u32 rx_active; /* ensure one rx device at a time */
 	u32 tx_active; /* ensure one tx device at a time */
-	struct clk *lpa_codec_clk;
 	struct clk *lpa_core_clk;
-	struct clk *lpa_p_clk;
 	struct clk *ecodec_clk;
 };
 
@@ -104,10 +102,8 @@ static int snddev_ecodec_open_rx(struct snddev_ecodec_state *ecodec)
 			goto done;
 		}
 		/* config clocks */
-		/* enable LPA clk */
-		clk_enable(drv->lpa_p_clk);
-		clk_enable(drv->lpa_codec_clk);
 		clk_enable(drv->lpa_core_clk);
+
 		/* enable ecodec clk */
 		clk_enable(drv->ecodec_clk);
 
@@ -122,6 +118,8 @@ static int snddev_ecodec_open_rx(struct snddev_ecodec_state *ecodec)
 		audio_interct_tpcm_source(AUDIO_ADSP_A);
 		audio_interct_rpcm_source(AUDIO_ADSP_A);
 
+		clk_disable(drv->lpa_core_clk);
+
 		/* send AUX_CODEC_CONFIG to AFE */
 		rc = afe_config_aux_codec(ecodec->data->conf_pcm_ctl_val,
 				ecodec->data->conf_aux_codec_intf,
@@ -135,8 +133,10 @@ static int snddev_ecodec_open_rx(struct snddev_ecodec_state *ecodec)
 	afe_config.volume = AFE_VOLUME_UNITY;
 	rc = afe_enable(AFE_HW_PATH_AUXPCM_RX, &afe_config);
 	if (IS_ERR_VALUE(rc)) {
-		if (!drv->tx_active)
+		if (!drv->tx_active) {
 			aux_pcm_gpios_free();
+			clk_disable(drv->ecodec_clk);
+		}
 		goto done;
 	}
 
@@ -145,6 +145,7 @@ static int snddev_ecodec_open_rx(struct snddev_ecodec_state *ecodec)
 
 error:
 	aux_pcm_gpios_free();
+	clk_disable(drv->ecodec_clk);
 done:
 	return rc;
 }
@@ -154,8 +155,10 @@ static int snddev_ecodec_close_rx(struct snddev_ecodec_state *ecodec)
 	struct snddev_ecodec_drv_state *drv = &snddev_ecodec_drv;
 
 	/* free GPIO */
-	if (!drv->tx_active)
+	if (!drv->tx_active) {
 		aux_pcm_gpios_free();
+		clk_disable(drv->ecodec_clk);
+	}
 
 	/* disable AFE */
 	afe_disable(AFE_HW_PATH_AUXPCM_RX);
@@ -181,10 +184,8 @@ static int snddev_ecodec_open_tx(struct snddev_ecodec_state *ecodec)
 			goto done;
 		}
 		/* config clocks */
-		/* enable LPA clk */
-		clk_enable(drv->lpa_p_clk);
-		clk_enable(drv->lpa_codec_clk);
 		clk_enable(drv->lpa_core_clk);
+
 		/* enable ecodec clk */
 		clk_enable(drv->ecodec_clk);
 
@@ -199,6 +200,8 @@ static int snddev_ecodec_open_tx(struct snddev_ecodec_state *ecodec)
 		audio_interct_tpcm_source(AUDIO_ADSP_A);
 		audio_interct_rpcm_source(AUDIO_ADSP_A);
 
+		clk_disable(drv->lpa_core_clk);
+
 		/* send AUX_CODEC_CONFIG to AFE */
 		rc = afe_config_aux_codec(ecodec->data->conf_pcm_ctl_val,
 			ecodec->data->conf_aux_codec_intf,
@@ -212,8 +215,10 @@ static int snddev_ecodec_open_tx(struct snddev_ecodec_state *ecodec)
 	afe_config.volume = AFE_VOLUME_UNITY;
 	rc = afe_enable(AFE_HW_PATH_AUXPCM_TX, &afe_config);
 	if (IS_ERR_VALUE(rc)) {
-		if (!drv->rx_active)
+		if (!drv->rx_active) {
 			aux_pcm_gpios_free();
+			clk_disable(drv->ecodec_clk);
+		}
 		goto done;
 	}
 
@@ -221,6 +226,7 @@ static int snddev_ecodec_open_tx(struct snddev_ecodec_state *ecodec)
 	return 0;
 
 error:
+	clk_disable(drv->ecodec_clk);
 	aux_pcm_gpios_free();
 done:
 	return rc;
@@ -231,8 +237,10 @@ static int snddev_ecodec_close_tx(struct snddev_ecodec_state *ecodec)
 	struct snddev_ecodec_drv_state *drv = &snddev_ecodec_drv;
 
 	/* free GPIO */
-	if (!drv->rx_active)
+	if (!drv->rx_active) {
 		aux_pcm_gpios_free();
+		clk_disable(drv->ecodec_clk);
+	}
 
 	/* disable AFE */
 	afe_disable(AFE_HW_PATH_AUXPCM_TX);
@@ -405,26 +413,17 @@ static int __init snddev_ecodec_init(void)
 	ecodec_drv->ecodec_clk = clk_get(NULL, "ecodec_clk");
 	if (IS_ERR(ecodec_drv->ecodec_clk))
 		goto error_ecodec_clk;
-	ecodec_drv->lpa_codec_clk = clk_get(NULL, "lpa_codec_clk");
-	if (IS_ERR(ecodec_drv->lpa_codec_clk))
-		goto error_lpa_codec_clk;
 	ecodec_drv->lpa_core_clk = clk_get(NULL, "lpa_core_clk");
 	if (IS_ERR(ecodec_drv->lpa_core_clk))
 		goto error_lpa_core_clk;
-	ecodec_drv->lpa_p_clk = clk_get(NULL, "lpa_pclk");
-	if (IS_ERR(ecodec_drv->lpa_p_clk))
-		goto error_lpa_p_clk;
+
 
 	mutex_init(&ecodec_drv->dev_lock);
 	ecodec_drv->rx_active = 0;
 	ecodec_drv->tx_active = 0;
 	return 0;
 
-error_lpa_p_clk:
-	clk_put(ecodec_drv->lpa_core_clk);
 error_lpa_core_clk:
-	clk_put(ecodec_drv->lpa_codec_clk);
-error_lpa_codec_clk:
 	clk_put(ecodec_drv->ecodec_clk);
 error_ecodec_clk:
 	platform_driver_unregister(&snddev_ecodec_driver);

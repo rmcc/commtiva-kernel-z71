@@ -461,6 +461,11 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 	clk_disable(drv->rx_sclk);
 	clk_disable(drv->rx_mclk);
 
+	/* Disable LPA clocks */
+	clk_disable(drv->lpa_p_clk);
+	clk_disable(drv->lpa_codec_clk);
+	clk_disable(drv->lpa_core_clk);
+
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
