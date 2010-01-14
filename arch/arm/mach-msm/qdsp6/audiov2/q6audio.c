@@ -24,16 +24,15 @@
 
 #include <linux/delay.h>
 #include <linux/wakelock.h>
+#include <linux/android_pmem.h>
+#include <linux/gpio.h>
+#include <mach/msm_qdsp6_audiov2.h>
 
 #include "../dal.h"
 #include "dal_audio.h"
 #include "dal_audio_format.h"
 #include "dal_acdb.h"
 #include "dal_adie.h"
-#include <mach/msm_qdsp6_audiov2.h>
-#include <linux/android_pmem.h>
-#include <linux/gpio.h>
-
 #include "q6audio_devices.h"
 
 struct q6_hw_info {
@@ -99,22 +98,6 @@ static struct q6audio_analog_ops default_analog_ops;
 static struct q6audio_analog_ops *analog_ops = &default_analog_ops;
 uint32_t tx_clk_freq = 8000;
 static int tx_mute_status;
-
-static inline int check_version(struct dal_client *client, uint32_t version)
-{
-	struct dal_info info;
-	int res;
-
-	res = dal_call_f9(client, DAL_OP_INFO, &info, sizeof(struct dal_info));
-	if (!res) {
-		if (((info.version & 0xFFFF0000) != (version & 0xFFFF0000)) ||
-			((info.version & 0x0000FFFF) <
-				(version & 0x0000FFFF))) {
-			res = -EINVAL;
-		}
-	}
-	return res;
-}
 
 void q6audio_register_analog_ops(struct q6audio_analog_ops *ops)
 {
@@ -1282,7 +1265,7 @@ int q6audio_close(struct audio_client *ac)
 	return 0;
 }
 
-struct audio_client *q6voice_open(uint32_t flags)
+struct audio_client *q6voice_open(void)
 {
 	struct audio_client *ac;
 
@@ -1293,24 +1276,28 @@ struct audio_client *q6voice_open(uint32_t flags)
 	if (!ac)
 		return 0;
 
-	ac->flags = flags;
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(1);
-	else {
-		tx_clk_freq = 8000;
-		audio_tx_path_enable(1);
-	}
-
 	return ac;
 }
 
+int q6voice_setup(void)
+{
+	audio_rx_path_enable(1);
+	tx_clk_freq = 8000;
+	audio_tx_path_enable(1);
+
+	return 0;
+}
+
+int q6voice_teardown(void)
+{
+	audio_rx_path_enable(0);
+	audio_tx_path_enable(0);
+	return 0;
+}
+
+
 int q6voice_close(struct audio_client *ac)
 {
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(0);
-	else
-		audio_tx_path_enable(0);
-
 	audio_client_free(ac);
 	return 0;
 }

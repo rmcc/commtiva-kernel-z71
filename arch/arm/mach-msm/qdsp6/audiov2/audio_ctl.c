@@ -28,8 +28,7 @@
 static DEFINE_MUTEX(voice_lock);
 static int voice_started;
 
-static struct audio_client *voc_tx_clnt;
-static struct audio_client *voc_rx_clnt;
+static struct audio_client *voc_clnt;
 
 static int q6_voice_start(void)
 {
@@ -43,18 +42,11 @@ static int q6_voice_start(void)
 		goto done;
 	}
 
-	voc_tx_clnt = q6voice_open(AUDIO_FLAG_WRITE);
-	if (!voc_tx_clnt) {
-		pr_err("voice: open voice tx failed.\n");
+	voc_clnt = q6voice_open();
+	if (!voc_clnt) {
+		pr_err("voice: open voice failed.\n");
 		rc = -ENOMEM;
 		goto done;
-	}
-
-	voc_rx_clnt = q6voice_open(AUDIO_FLAG_READ);
-	if (!voc_rx_clnt) {
-		pr_err("voice: open voice rx failed.\n");
-		q6voice_close(voc_tx_clnt);
-		rc = -ENOMEM;
 	}
 
 	voice_started = 1;
@@ -67,8 +59,7 @@ static int q6_voice_stop(void)
 {
 	mutex_lock(&voice_lock);
 	if (voice_started) {
-		q6voice_close(voc_tx_clnt);
-		q6voice_close(voc_rx_clnt);
+		q6voice_close(voc_clnt);
 		voice_started = 0;
 	}
 	mutex_unlock(&voice_lock);
