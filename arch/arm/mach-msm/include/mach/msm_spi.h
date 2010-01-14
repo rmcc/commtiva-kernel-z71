@@ -34,4 +34,6 @@ struct msm_spi_platform_data {
 	int (*gpio_config)(void);
 	void (*gpio_release)(void);
 	int (*dma_config)(void);
+	const char *rsl_id;
+	uint32_t pm_lat;
 };
