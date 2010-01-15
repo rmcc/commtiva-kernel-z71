@@ -33,6 +33,7 @@
 #include <mach/qdsp5v2/qdsp5audreccmdi.h>
 #include <mach/qdsp5v2/qdsp5audrecmsg.h>
 #include <mach/qdsp5v2/audpreproc.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 /* FRAME_NUM must be a power of two */
 #define FRAME_NUM		(8)
@@ -79,6 +80,9 @@ struct audio_in {
 	uint16_t enc_id; /* Session Id */
 
 	uint16_t source; /* Encoding source bit mask */
+	uint32_t device_events; /* device events interested in */
+	uint32_t dev_cnt;
+	spinlock_t dev_lock;
 
 	/* data allocated for various buffers */
 	char *data;
@@ -119,6 +123,51 @@ static int audpcm_dsp_read_buffer(struct audio_in *audio, uint32_t read_cnt);
 static void audpcm_in_get_dsp_frames(struct audio_in *audio);
 
 static void audpcm_in_flush(struct audio_in *audio);
+
+static void pcm_in_listener(u32 evt_id, union auddev_evt_data *evt_payload,
+				void *private_data)
+{
+	struct audio_in *audio = (struct audio_in *) private_data;
+	unsigned long flags;
+
+	MM_DBG("evt_id = 0x%8x\n", evt_id);
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_RDY: {
+		MM_DBG("AUDDEV_EVT_DEV_RDY\n");
+		spin_lock_irqsave(&audio->dev_lock, flags);
+		audio->dev_cnt++;
+		audio->source |= (0x1 << evt_payload->routing_id);
+		spin_unlock_irqrestore(&audio->dev_lock, flags);
+
+		if ((audio->running == 1) && (audio->enabled == 1))
+			audpcm_in_record_config(audio, 1);
+
+		break;
+	}
+	case AUDDEV_EVT_DEV_RLS: {
+		MM_DBG("AUDDEV_EVT_DEV_RLS\n");
+		spin_lock_irqsave(&audio->dev_lock, flags);
+		audio->dev_cnt--;
+		audio->source &= ~(0x1 << evt_payload->routing_id);
+		spin_unlock_irqrestore(&audio->dev_lock, flags);
+
+		if (!audio->running || !audio->enabled)
+			break;
+
+		/* Turn of as per source */
+		if (audio->source)
+			audpcm_in_record_config(audio, 1);
+		else
+			/* Turn off all */
+			audpcm_in_record_config(audio, 0);
+
+		break;
+	}
+	default:
+		MM_ERR("wrong event %d\n", evt_id);
+		break;
+	}
+}
 
 /* ------------------- dsp preproc event handler--------------------- */
 static void audpreproc_dsp_event(void *data, unsigned id,  void *msg)
@@ -179,7 +228,8 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 	case AUDREC_CMD_MEM_CFG_DONE_MSG: {
 		MM_DBG("CMD_MEM_CFG_DONE MSG DONE\n");
 		audio->running = 1;
-		audpcm_in_record_config(audio, 1);
+		if (audio->dev_cnt > 0)
+			audpcm_in_record_config(audio, 1);
 		break;
 	}
 	case AUDREC_FATAL_ERR_MSG: {
@@ -505,10 +555,12 @@ static ssize_t audpcm_in_read(struct file *file,
 	while (count > 0) {
 		rc = wait_event_interruptible(
 			audio->wait, (audio->in_count > 0) || audio->stopped);
+
 		if (rc < 0)
 			break;
 
 		if (audio->stopped && !audio->in_count) {
+			MM_DBG("Driver in stop state, No more buffer to read");
 			rc = 0;/* End of File */
 			break;
 		}
@@ -559,6 +611,7 @@ static int audpcm_in_release(struct inode *inode, struct file *file)
 	struct audio_in *audio = file->private_data;
 
 	mutex_lock(&audio->lock);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_ENC, audio->enc_id);
 	audpcm_in_disable(audio);
 	audpcm_in_flush(audio);
 	msm_adsp_put(audio->audrec);
@@ -607,11 +660,26 @@ static int audpcm_in_open(struct inode *inode, struct file *file)
 	}
 
 	audio->stopped = 0;
+	audio->source = 0;
 	audpcm_in_flush(audio);
+	audio->device_events = AUDDEV_EVT_DEV_RDY | AUDDEV_EVT_DEV_RLS;
+
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_ENC, audio->enc_id,
+					pcm_in_listener, (void *) audio);
+	if (rc) {
+		MM_ERR("failed to register device event listener\n");
+		goto evt_error;
+	}
 	file->private_data = audio;
 	audio->opened = 1;
 	rc = 0;
 done:
+	mutex_unlock(&audio->lock);
+	return rc;
+evt_error:
+	msm_adsp_put(audio->audrec);
+	audpreproc_aenc_free(audio->enc_id);
 	mutex_unlock(&audio->lock);
 	return rc;
 }
@@ -645,6 +713,7 @@ static int __init audpcm_in_init(void)
 	mutex_init(&the_audio_in.lock);
 	mutex_init(&the_audio_in.read_lock);
 	spin_lock_init(&the_audio_in.dsp_lock);
+	spin_lock_init(&the_audio_in.dev_lock);
 	init_waitqueue_head(&the_audio_in.wait);
 	init_waitqueue_head(&the_audio_in.wait_enable);
 	return misc_register(&audio_in_misc);

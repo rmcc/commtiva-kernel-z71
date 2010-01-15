@@ -33,6 +33,7 @@
 #include <mach/qdsp5v2/qdsp5audreccmdi.h>
 #include <mach/qdsp5v2/qdsp5audrecmsg.h>
 #include <mach/qdsp5v2/audpreproc.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 /* FRAME_NUM must be a power of two */
 #define FRAME_NUM		(8)
@@ -66,7 +67,6 @@ struct audio_in {
 	uint32_t enc_type;
 
 	struct msm_audio_evrc_enc_config cfg;
-	uint32_t rec_mode;
 
 	uint32_t dsp_cnt;
 	uint32_t in_head; /* next buffer dsp will write */
@@ -78,6 +78,10 @@ struct audio_in {
 	uint16_t enc_id;
 
 	uint16_t source; /* Encoding source bit mask */
+	uint32_t device_events;
+	uint32_t in_call;
+	uint32_t dev_cnt;
+	spinlock_t dev_lock;
 
 	/* data allocated for various buffers */
 	char *data;
@@ -118,6 +122,52 @@ static int audevrc_dsp_read_buffer(struct audio_in *audio, uint32_t read_cnt);
 static void audevrc_in_get_dsp_frames(struct audio_in *audio);
 
 static void audevrc_in_flush(struct audio_in *audio);
+
+static void evrc_in_listener(u32 evt_id, union auddev_evt_data *evt_payload,
+				void *private_data)
+{
+	struct audio_in *audio = (struct audio_in *) private_data;
+	unsigned long flags;
+
+	MM_DBG("evt_id = 0x%8x\n", evt_id);
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_RDY:
+		MM_DBG("AUDDEV_EVT_DEV_RDY\n");
+		spin_lock_irqsave(&audio->dev_lock, flags);
+		audio->dev_cnt++;
+		if (!audio->in_call)
+			audio->source |= (0x1 << evt_payload->routing_id);
+		spin_unlock_irqrestore(&audio->dev_lock, flags);
+
+		if ((audio->running == 1) && (audio->enabled == 1))
+			audevrc_in_record_config(audio, 1);
+
+		break;
+	case AUDDEV_EVT_DEV_RLS: {
+		MM_DBG("AUDDEV_EVT_DEV_RLS\n");
+		spin_lock_irqsave(&audio->dev_lock, flags);
+		audio->dev_cnt--;
+		if (!audio->in_call)
+			audio->source &= ~(0x1 << evt_payload->routing_id);
+		spin_unlock_irqrestore(&audio->dev_lock, flags);
+
+		if ((!audio->running) || (!audio->enabled))
+			break;
+
+		/* Turn of as per source */
+		if (audio->source)
+			audevrc_in_record_config(audio, 1);
+		else
+			/* Turn off all */
+			audevrc_in_record_config(audio, 0);
+
+		break;
+	}
+	default:
+		MM_ERR("wrong event %d\n", evt_id);
+		break;
+	}
+}
 
 /* ------------------- dsp preproc event handler--------------------- */
 static void audpreproc_dsp_event(void *data, unsigned id,  void *msg)
@@ -178,7 +228,8 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 	case AUDREC_CMD_MEM_CFG_DONE_MSG: {
 		MM_DBG("CMD_MEM_CFG_DONE MSG DONE\n");
 		audio->running = 1;
-		audevrc_in_record_config(audio, 1);
+		if (audio->dev_cnt > 0)
+			audevrc_in_record_config(audio, 1);
 		break;
 	}
 	case AUDREC_FATAL_ERR_MSG: {
@@ -499,6 +550,7 @@ static long audevrc_in_ioctl(struct file *file,
 	}
 	case AUDIO_SET_INCALL: {
 		struct msm_voicerec_mode cfg;
+		unsigned long flags;
 		if (copy_from_user(&cfg, (void *) arg, sizeof(cfg))) {
 			rc = -EFAULT;
 			break;
@@ -510,6 +562,7 @@ static long audevrc_in_ioctl(struct file *file,
 			rc = -EINVAL;
 			break;
 		} else {
+			spin_lock_irqsave(&audio->dev_lock, flags);
 			if (cfg.rec_mode == VOC_REC_UPLINK)
 				audio->source = VOICE_UL_SOURCE_MIX_MASK;
 			else if (cfg.rec_mode == VOC_REC_DOWNLINK)
@@ -517,7 +570,8 @@ static long audevrc_in_ioctl(struct file *file,
 			else
 				audio->source = VOICE_DL_SOURCE_MIX_MASK |
 						VOICE_UL_SOURCE_MIX_MASK ;
-			audio->rec_mode = cfg.rec_mode;
+			audio->in_call = 1;
+			spin_unlock_irqrestore(&audio->dev_lock, flags);
 		}
 		break;
 	}
@@ -605,6 +659,8 @@ static int audevrc_in_release(struct inode *inode, struct file *file)
 	struct audio_in *audio = file->private_data;
 
 	mutex_lock(&audio->lock);
+	audio->in_call = 0;
+	auddev_unregister_evt_listner(AUDDEV_CLNT_ENC, audio->enc_id);
 	audevrc_in_disable(audio);
 	audevrc_in_flush(audio);
 	msm_adsp_put(audio->audrec);
@@ -636,8 +692,6 @@ static int audevrc_in_open(struct inode *inode, struct file *file)
 	audio->cfg.cdma_rate = CDMA_RATE_FULL;
 	audio->cfg.min_bit_rate = CDMA_RATE_FULL;
 	audio->cfg.max_bit_rate = CDMA_RATE_FULL;
-	audio->source = INTERNAL_CODEC_TX_SOURCE_MIX_MASK;
-	audio->rec_mode = VOC_REC_UPLINK;
 
 	encid = audpreproc_aenc_alloc(audio->enc_type, &audio->module_name,
 			&audio->queue_ids);
@@ -657,13 +711,27 @@ static int audevrc_in_open(struct inode *inode, struct file *file)
 	}
 
 	audio->stopped = 0;
+	audio->source = 0;
 
 	audevrc_in_flush(audio);
 
+	audio->device_events = AUDDEV_EVT_DEV_RDY | AUDDEV_EVT_DEV_RLS;
+
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_ENC, audio->enc_id,
+					evrc_in_listener, (void *) audio);
+	if (rc) {
+		MM_ERR("failed to register device event listener\n");
+		goto evt_error;
+	}
 	file->private_data = audio;
 	audio->opened = 1;
-	rc = 0;
 done:
+	mutex_unlock(&audio->lock);
+	return rc;
+evt_error:
+	msm_adsp_put(audio->audrec);
+	audpreproc_aenc_free(audio->enc_id);
 	mutex_unlock(&audio->lock);
 	return rc;
 }
@@ -697,6 +765,7 @@ static int __init audevrc_in_init(void)
 	mutex_init(&the_audio_evrc_in.lock);
 	mutex_init(&the_audio_evrc_in.read_lock);
 	spin_lock_init(&the_audio_evrc_in.dsp_lock);
+	spin_lock_init(&the_audio_evrc_in.dev_lock);
 	init_waitqueue_head(&the_audio_evrc_in.wait);
 	init_waitqueue_head(&the_audio_evrc_in.wait_enable);
 	return misc_register(&audio_evrc_in_misc);
