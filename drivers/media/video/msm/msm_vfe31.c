@@ -1248,19 +1248,12 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 
 		CDBG("CMD_FRAME_BUF_RELEASE b->path = %d\n", b->path);
 
-		if ((b->path & VFE31_OUTPUT_MODE_PT) &&
-			(vfe31_ctrl->outpath.output_mode &
-			VFE31_OUTPUT_MODE_PT) &&
-			(!vfe31_ctrl->outpath.out0.free_buf.available)) {
+		if (b->path & VFE31_OUTPUT_MODE_PT) {
 			CDBG("CMD_FRAME_BUF_RELEASE got free buffer\n");
 			fbuf = &vfe31_ctrl->outpath.out0.free_buf;
-		} else if ((b->path & VFE31_OUTPUT_MODE_S) &&
-			(vfe31_ctrl->outpath.output_mode &
-			VFE31_OUTPUT_MODE_S)) {
+		} else if (b->path & VFE31_OUTPUT_MODE_S) {
 			fbuf = &vfe31_ctrl->outpath.out1.free_buf;
-		} else if ((b->path & VFE31_OUTPUT_MODE_V) &&
-			(vfe31_ctrl->outpath.output_mode &
-			VFE31_OUTPUT_MODE_V)) {
+		} else if (b->path & VFE31_OUTPUT_MODE_V) {
 			fbuf = &vfe31_ctrl->outpath.out2.free_buf;
 		} else
 			return -EFAULT;
