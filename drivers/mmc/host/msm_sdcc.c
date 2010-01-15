@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2007 Google Inc,
  *  Copyright (C) 2003 Deep Blue Solutions, Ltd, All Rights Reserved.
- *  Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ *  Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -44,6 +44,7 @@
 
 #include <asm/mach/mmc.h>
 #include <mach/msm_iomap.h>
+#include <mach/clk.h>
 #include <mach/dma.h>
 #include <mach/htc_pwrsink.h>
 
@@ -105,6 +106,39 @@ msmsdcc_print_status(struct msmsdcc_host *host, char *hdr, uint32_t status)
 static void
 msmsdcc_start_command(struct msmsdcc_host *host, struct mmc_command *cmd,
 		      u32 c);
+
+static void msmsdcc_reset_and_restore(struct msmsdcc_host *host)
+{
+	u32	mci_clk = 0;
+	u32	mci_mask0 = 0;
+
+	/* Save the controller state */
+	mci_clk = readl(host->base + MMCICLOCK);
+	mci_mask0 = readl(host->base + MMCIMASK0);
+
+	/* Reset the controller */
+	if (clk_reset(host->clk, CLK_RESET_ASSERT)) {
+		printk(KERN_ERR "%s: Clock assert failed at %u Hz\n",
+				mmc_hostname(host->mmc), host->clk_rate);
+		return;
+	}
+
+	if (clk_reset(host->clk, CLK_RESET_DEASSERT)) {
+		printk(KERN_ERR "%s: Clock deassert failed at %u Hz\n",
+				mmc_hostname(host->mmc), host->clk_rate);
+		return;
+	}
+	printk(KERN_INFO "%s: Controller has been reset\n",
+			mmc_hostname(host->mmc));
+
+	/* Restore the contoller state */
+	writel(host->pwr, host->base + MMCIPOWER);
+	writel(mci_clk, host->base + MMCICLOCK);
+	writel(mci_mask0, host->base + MMCIMASK0);
+	if (clk_set_rate(host->clk, host->clk_rate))
+		printk(KERN_ERR "%s: Failed to set clk rate %u Hz \n",
+				mmc_hostname(host->mmc), host->clk_rate);
+}
 
 static int
 msmsdcc_request_end(struct msmsdcc_host *host, struct mmc_request *mrq)
@@ -802,6 +836,10 @@ msmsdcc_irq(int irq, void *dev_id)
 			if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|
 				      MCI_TXUNDERRUN|MCI_RXOVERRUN)) {
 				msmsdcc_data_err(host, data, status);
+
+				if (status & MCI_DATACRCFAIL)
+					msmsdcc_reset_and_restore(host);
+
 				host->curr.data_xfered = 0;
 				if (host->dma.sg)
 					msm_dmov_stop_cmd(host->dma.channel,
