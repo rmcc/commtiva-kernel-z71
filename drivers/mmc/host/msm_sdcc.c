@@ -27,9 +27,7 @@
 #include <linux/log2.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/card.h>
-#ifdef CONFIG_MMC_MSM_PROG_DONE_SCAN
 #include <linux/mmc/sdio.h>
-#endif
 #include <linux/clk.h>
 #include <linux/scatterlist.h>
 #include <linux/platform_device.h>
@@ -74,6 +72,22 @@ static unsigned int msmsdcc_fmid = 24576000;
 static unsigned int msmsdcc_temp = 25000000;
 static unsigned int msmsdcc_fmax = 49152000;
 static unsigned int msmsdcc_pwrsave = 1;
+
+#define DUMMY_52_STATE_NONE		0
+#define DUMMY_52_STATE_SENT		1
+
+static struct mmc_command dummy52cmd;
+static struct mmc_request dummy52mrq = {
+	.cmd = &dummy52cmd,
+	.data = NULL,
+	.stop = NULL,
+};
+static struct mmc_command dummy52cmd = {
+	.opcode = SD_IO_RW_DIRECT,
+	.flags = MMC_RSP_PRESENT,
+	.data = NULL,
+	.mrq = &dummy52mrq,
+};
 
 #define VERBOSE_COMMAND_TIMEOUTS	0
 
@@ -734,6 +748,9 @@ msmsdcc_pio_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static void
+msmsdcc_request_start(struct msmsdcc_host *host, struct mmc_request *mrq);
+
 static irqreturn_t
 msmsdcc_irq(int irq, void *dev_id)
 {
@@ -765,6 +782,18 @@ msmsdcc_irq(int irq, void *dev_id)
 #if IRQ_DEBUG
 		msmsdcc_print_status(host, "irq0-p", status);
 #endif
+
+		if ((host->plat->dummy52_required) &&
+		    (host->dummy_52_state == DUMMY_52_STATE_SENT)) {
+			if (status & MCI_PROGDONE) {
+				host->dummy_52_state = DUMMY_52_STATE_NONE;
+				host->curr.cmd = NULL;
+				spin_unlock(&host->lock);
+				msmsdcc_request_start(host, host->curr.mrq);
+				return IRQ_HANDLED;
+			}
+			break;
+		}
 
 		data = host->curr.data;
 #ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
@@ -915,6 +944,17 @@ msmsdcc_irq(int irq, void *dev_id)
 }
 
 static void
+msmsdcc_request_start(struct msmsdcc_host *host, struct mmc_request *mrq)
+{
+	if (mrq->data && mrq->data->flags & MMC_DATA_READ) {
+		/* Queue/read data, daisy-chain command when data starts */
+		msmsdcc_start_data(host, mrq->data, mrq->cmd, 0);
+	} else {
+		msmsdcc_start_command(host, mrq->cmd, 0);
+	}
+}
+
+static void
 msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 {
 	struct msmsdcc_host *host = mmc_priv(mmc);
@@ -941,13 +981,22 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	host->curr.mrq = mrq;
 
-	if (mrq->data && mrq->data->flags & MMC_DATA_READ) {
-		/* Queue/read data, daisy-chain command when data starts */
-		msmsdcc_start_data(host, mrq->data, mrq->cmd, 0);
-	} else {
-		msmsdcc_start_command(host, mrq->cmd, 0);
+	if (host->plat->dummy52_required) {
+		if (host->dummy_52_needed) {
+			if (mrq->data) {
+				host->dummy_52_state = DUMMY_52_STATE_SENT;
+				msmsdcc_start_command(host, &dummy52cmd,
+						      MCI_CPSM_PROGENA);
+				spin_unlock_irqrestore(&host->lock, flags);
+				return;
+			}
+			host->dummy_52_needed = 0;
+		}
+		if ((mrq->cmd->opcode == SD_IO_RW_EXTENDED) && (mrq->data))
+			host->dummy_52_needed = 1;
 	}
 
+	msmsdcc_request_start(host, mrq);
 	spin_unlock_irqrestore(&host->lock, flags);
 }
 
@@ -1048,12 +1097,15 @@ static void msmsdcc_enable_sdio_irq(struct mmc_host *mmc, int enable)
 {
 	struct msmsdcc_host *host = mmc_priv(mmc);
 
-	if (enable)
+	if (enable) {
+		host->mci_irqenable |= MCI_SDIOINTOPERMASK;
 		writel(readl(host->base + MMCIMASK0) | MCI_SDIOINTOPERMASK,
-		       host->base + MMCIMASK0);
-	else
+			       host->base + MMCIMASK0);
+	} else {
+		host->mci_irqenable &= ~MCI_SDIOINTOPERMASK;
 		writel(readl(host->base + MMCIMASK0) & ~MCI_SDIOINTOPERMASK,
 		       host->base + MMCIMASK0);
+	}
 }
 #endif /* CONFIG_MMC_MSM_SDIO_SUPPORT */
 
@@ -1386,6 +1438,7 @@ msmsdcc_probe(struct platform_device *pdev)
 	/* Delay needed (MMCIMASK0 was just written above) */
 	msmsdcc_delay(host);
 	writel(MCI_IRQENABLE, host->base + MMCIMASK0);
+	host->mci_irqenable = MCI_IRQENABLE;
 
 	/*
 	 * Setup card detect change
@@ -1594,7 +1647,7 @@ msmsdcc_resume(struct platform_device *dev)
 			host->clks_on = 1;
 		}
 
-		writel(MCI_IRQENABLE, host->base + MMCIMASK0);
+		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
 		spin_unlock_irqrestore(&host->lock, flags);
 
@@ -1608,6 +1661,7 @@ msmsdcc_resume(struct platform_device *dev)
 #endif
 		} else if (host->plat->status_irq)
 			enable_irq(host->plat->status_irq);
+
 	}
 	return 0;
 }
