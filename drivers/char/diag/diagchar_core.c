@@ -144,9 +144,11 @@ static int diagchar_open(struct inode *inode, struct file *file)
 
 		if (i < driver->num_clients)
 			driver->client_map[i] = current->tgid;
-		else
+		else {
+			mutex_unlock(&driver->diagchar_mutex);
+			printk(KERN_ALERT "Max client limit for DIAG driver reached \n");
 			return -ENOMEM;
-
+		}
 		driver->data_ready[i] |= MSG_MASKS_TYPE;
 		driver->data_ready[i] |= EVENT_MASKS_TYPE;
 		driver->data_ready[i] |= LOG_MASKS_TYPE;
