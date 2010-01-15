@@ -456,15 +456,15 @@ static int snddev_icodec_close_rx(struct snddev_icodec_state *icodec)
 	lpa_cmd_enable_codec(drv->lpa, 0);
 	lpa_put(drv->lpa);
 
-	/* Disable MI2S RX master block */
-	/* Disable MI2S RX bit clock */
-	clk_disable(drv->rx_sclk);
-	clk_disable(drv->rx_mclk);
-
 	/* Disable LPA clocks */
 	clk_disable(drv->lpa_p_clk);
 	clk_disable(drv->lpa_codec_clk);
 	clk_disable(drv->lpa_core_clk);
+
+	/* Disable MI2S RX master block */
+	/* Disable MI2S RX bit clock */
+	clk_disable(drv->rx_sclk);
+	clk_disable(drv->rx_mclk);
 
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
