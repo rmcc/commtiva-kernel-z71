@@ -199,7 +199,8 @@ static int adsp_pmem_lookup_vaddr(struct msm_adsp_module *module, void **addr,
 }
 
 int adsp_pmem_fixup_kvaddr(struct msm_adsp_module *module, void **addr,
-			   unsigned long *kvaddr, unsigned long len)
+			   unsigned long *kvaddr, unsigned long len,
+			   struct file **filp, unsigned long *offset)
 {
 	struct adsp_pmem_region *region;
 	void *vaddr = *addr;
@@ -215,6 +216,10 @@ int adsp_pmem_fixup_kvaddr(struct msm_adsp_module *module, void **addr,
 	}
 	*paddr = region->paddr + (vaddr - region->vaddr);
 	*kvaddr = region->kvaddr + (vaddr - region->vaddr);
+	if (filp)
+		*filp = region->file;
+	if (offset)
+		*offset = vaddr - region->vaddr;
 	return 0;
 }
 

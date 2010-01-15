@@ -16,9 +16,10 @@
  *
  */
 
-#include <mach/debug_adsp_mm.h>
 #include <linux/io.h>
+#include <linux/android_pmem.h>
 
+#include <mach/debug_adsp_mm.h>
 #include <mach/qdsp5/qdsp5vdeccmdi.h>
 #include "adsp.h"
 
@@ -40,7 +41,8 @@ static int pmem_fixup_high_low(unsigned short *high,
 				unsigned short size_high,
 				unsigned short size_low,
 				struct msm_adsp_module *module,
-				unsigned long *addr, unsigned long *size)
+				unsigned long *addr, unsigned long *size,
+				struct file **filp, unsigned long *offset)
 {
 	void *phys_addr;
 	unsigned long phys_size;
@@ -50,7 +52,8 @@ static int pmem_fixup_high_low(unsigned short *high,
 	phys_size = (unsigned long)high_low_short_to_ptr(size_high, size_low);
 	MM_DBG("virt %x %x\n", (unsigned int)phys_addr,
 			(unsigned int)phys_size);
-	if (adsp_pmem_fixup_kvaddr(module, &phys_addr, &kvaddr, phys_size)) {
+	if (adsp_pmem_fixup_kvaddr(module, &phys_addr, &kvaddr, phys_size,
+				filp, offset)) {
 		MM_ERR("ah%x al%x sh%x sl%x addr %x size %x\n",
 			*high, *low, size_high,
 			size_low, (unsigned int)phys_addr,
@@ -79,6 +82,9 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 	unsigned short *frame_buffer_high, *frame_buffer_low;
 	unsigned long frame_buffer_size;
 	unsigned short frame_buffer_size_high, frame_buffer_size_low;
+	struct file *filp = NULL;
+	unsigned long offset = 0;
+	struct pmem_addr pmem_addr;
 
 	MM_DBG("cmd_size %d cmd_id %d cmd_data %x\n", cmd_size, cmd_id,
 					(unsigned int)cmd_data);
@@ -97,7 +103,8 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 				pkt->subframe_packet_size_low,
 				module,
 				&subframe_pkt_addr,
-				&subframe_pkt_size))
+				&subframe_pkt_size,
+				&filp, &offset))
 		return -1;
 
 	/* deref those ptrs and check if they are a frame header packet */
@@ -144,7 +151,7 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 					frame_buffer_size_high,
 					frame_buffer_size_low,
 					module,
-					NULL, NULL))
+					NULL, NULL, NULL, NULL))
 			return -1;
 		frame_buffer_high += 2;
 		frame_buffer_low += 2;
@@ -154,8 +161,21 @@ static int verify_vdec_pkt_cmd(struct msm_adsp_module *module,
 	frame_buffer_low += 2*skip;
 	if (pmem_fixup_high_low(frame_buffer_high, frame_buffer_low,
 				frame_buffer_size_high,
-				frame_buffer_size_low, module, NULL, NULL))
+				frame_buffer_size_low, module, NULL, NULL,
+				NULL, NULL))
 		return -1;
+	if (filp) {
+		pmem_addr.vaddr = subframe_pkt_addr;
+		pmem_addr.length = subframe_pkt_size;
+		pmem_addr.offset = offset;
+		if (pmem_cache_maint (filp, PMEM_CLEAN_CACHES, &pmem_addr)) {
+			MM_ERR("Cache operation failed for phys addr high %x"
+				" addr low %x\n", pkt->subframe_packet_high,
+				pkt->subframe_packet_low);
+			return -1;
+		}
+	}
+
 	return 0;
 }
 

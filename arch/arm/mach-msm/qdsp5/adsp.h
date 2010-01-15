@@ -26,7 +26,8 @@
 int adsp_pmem_fixup(struct msm_adsp_module *module, void **addr,
 		    unsigned long len);
 int adsp_pmem_fixup_kvaddr(struct msm_adsp_module *module, void **addr,
-			   unsigned long *kvaddr, unsigned long len);
+			   unsigned long *kvaddr, unsigned long len,
+			   struct file **filp, unsigned long *offset);
 int adsp_pmem_paddr_fixup(struct msm_adsp_module *module, void **addr);
 
 int adsp_vfe_verify_cmd(struct msm_adsp_module *module,
