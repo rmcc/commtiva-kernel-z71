@@ -91,7 +91,6 @@ static unsigned int max_clients = 10;
 /* Timer variables */
 static struct timer_list drain_timer;
 static int timer_in_progress;
-static spinlock_t diagchar_write_lock;
 void *buf_hdlc;
 module_param(itemsize, uint, 0);
 module_param(poolsize, uint, 0);
@@ -110,25 +109,29 @@ static uint16_t delayed_rsp_id = 1;
 
 static void drain_timer_func(unsigned long data)
 {
+	queue_work(driver->diag_wq , &(driver->diag_drain_work));
+}
+
+void diag_drain_work_fn(struct work_struct *work)
+{
 	timer_in_progress = 0;
 
-	if (spin_trylock_bh(&diagchar_write_lock)) {
-		if (buf_hdlc) {
-			driver->usb_write_ptr_svc = (struct diag_request *)
+	mutex_lock(&driver->diagchar_mutex);
+	if (buf_hdlc) {
+		driver->usb_write_ptr_svc = (struct diag_request *)
 			(diagmem_alloc(driver, sizeof(struct diag_request),
 				 POOL_TYPE_USB_STRUCT));
-			driver->usb_write_ptr_svc->buf = buf_hdlc;
-			driver->usb_write_ptr_svc->length = driver->used;
-			diag_write(driver->usb_write_ptr_svc);
-			buf_hdlc = NULL;
+		driver->usb_write_ptr_svc->buf = buf_hdlc;
+		driver->usb_write_ptr_svc->length = driver->used;
+		diag_write(driver->usb_write_ptr_svc);
+		buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-			printk(KERN_INFO "\n Number of bytes written "
+		printk(KERN_INFO "\n Number of bytes written "
 				 "from timer is %d ", driver->used);
 #endif
-			driver->used = 0;
-		}
-		spin_unlock_bh(&diagchar_write_lock);
+		driver->used = 0;
 	}
+	mutex_unlock(&driver->diagchar_mutex);
 }
 
 static int diagchar_open(struct inode *inode, struct file *file)
@@ -404,7 +407,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 			length++;
 	}
 #endif
-	spin_lock_bh(&diagchar_write_lock);
+	mutex_lock(&driver->diagchar_mutex);
 	if (!buf_hdlc)
 		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
 						 POOL_TYPE_HDLC);
@@ -494,7 +497,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		driver->used = 0;
 	}
 
-	spin_unlock_bh(&diagchar_write_lock);
+	mutex_unlock(&driver->diagchar_mutex);
 	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
 	if (!timer_in_progress)	{
 		timer_in_progress = 1;
@@ -504,7 +507,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 
 fail_free_hdlc:
 	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
-	spin_unlock_bh(&diagchar_write_lock);
+	mutex_unlock(&driver->diagchar_mutex);
 	return ret;
 
 fail_free_copy:
@@ -590,9 +593,9 @@ static int __init diagchar_init(void)
 		driver->poolsize_usb_struct = poolsize_usb_struct;
 		driver->num_clients = max_clients;
 		mutex_init(&driver->diagchar_mutex);
-		spin_lock_init(&diagchar_write_lock);
 		init_waitqueue_head(&driver->wait_q);
 		diagfwd_init();
+		INIT_WORK(&(driver->diag_drain_work), diag_drain_work_fn);
 		printk(KERN_INFO "diagchar initializing ..\n");
 		driver->num = 1;
 		driver->name = ((void *)driver) + sizeof(struct diagchar_dev);
