@@ -482,7 +482,7 @@ int diagfwd_read_complete(struct diag_request *diag_read_ptr)
 {
 	int len = diag_read_ptr->actual;
 	driver->read_len = len;
-	schedule_work(&(driver->diag_read_work));
+	queue_work(driver->diag_wq , &(driver->diag_read_work));
 	return 0;
 }
 
