@@ -146,7 +146,7 @@ static int diagchar_open(struct inode *inode, struct file *file)
 			driver->client_map[i] = current->tgid;
 		else {
 			mutex_unlock(&driver->diagchar_mutex);
-			printk(KERN_ALERT "Max client limit for DIAG driver reached \n");
+			printk(KERN_ALERT "Max client limit for DIAG driver reached\n");
 			return -ENOMEM;
 		}
 		driver->data_ready[i] |= MSG_MASKS_TYPE;
@@ -381,12 +381,12 @@ static int diagchar_write(struct file *file, const char __user *buf,
 
 	err = copy_from_user(buf_copy, buf + 4, payload_size);
 	if (err) {
-		printk(KERN_INFO "diagchar : copy_from_user failed \n");
+		printk(KERN_INFO "diagchar : copy_from_user failed\n");
 		ret = -EFAULT;
 		goto fail_free_copy;
 	}
 #ifdef DIAG_DEBUG
-	printk(KERN_DEBUG "data is --> \n");
+	printk(KERN_DEBUG "data is -->\n");
 	for (i = 0; i < payload_size; i++)
 		printk(KERN_DEBUG "\t %x \t", *(((unsigned char *)buf_copy)+i));
 #endif
@@ -396,8 +396,8 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	send.terminate = 1;
 #ifdef DIAG_DEBUG
 	printk(KERN_INFO "\n Already used bytes in buffer %d, and"
-	" incoming payload size is %d \n", driver->used, payload_size);
-	printk(KERN_DEBUG "hdlc encoded data is --> \n");
+	" incoming payload size is %d\n", driver->used, payload_size);
+	printk(KERN_DEBUG "hdlc encoded data is -->\n");
 	for (i = 0; i < payload_size + 8; i++) {
 		printk(KERN_DEBUG "\t %x \t", *(((unsigned char *)buf_hdlc)+i));
 		if (*(((unsigned char *)buf_hdlc)+i) != 0x7e)
@@ -424,7 +424,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		}
 		buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-		printk(KERN_INFO "\n size written is %d \n", driver->used);
+		printk(KERN_INFO "\n size written is %d\n", driver->used);
 #endif
 		driver->used = 0;
 		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
@@ -458,7 +458,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		}
 		buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-		printk(KERN_INFO "\n size written is %d \n", driver->used);
+		printk(KERN_INFO "\n size written is %d\n", driver->used);
 #endif
 		driver->used = 0;
 		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
@@ -489,7 +489,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		}
 		buf_hdlc = NULL;
 #ifdef DIAG_DEBUG
-		printk(KERN_INFO "\n size written is %d \n", driver->used);
+		printk(KERN_INFO "\n size written is %d\n", driver->used);
 #endif
 		driver->used = 0;
 	}
@@ -605,7 +605,7 @@ static int __init diagchar_init(void)
 			driver->major = MAJOR(dev);
 			driver->minor_start = MINOR(dev);
 		} else {
-			printk(KERN_INFO "Major number not allocated \n");
+			printk(KERN_INFO "Major number not allocated\n");
 			goto fail;
 		}
 		driver->cdev = cdev_alloc();
