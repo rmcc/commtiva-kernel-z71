@@ -193,10 +193,10 @@ static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 				else
 					printk(KERN_CRIT "Not enough"
 							 " buffer space for"
-							 " MSG_MASK \n");
+							 " MSG_MASK\n");
 			else
 				printk(KERN_INFO "Unable to copy"
-						 " mask change \n");
+						 " mask change\n");
 
 			found = 1;
 			break;
@@ -215,7 +215,7 @@ static void diag_update_msg_mask(int start, int end , uint8_t *buf)
 			memcpy(ptr, buf , ((end - start) + 1)*4);
 		} else
 			printk(KERN_CRIT " Not enough buffer"
-					 " space for MSG_MASK \n");
+					 " space for MSG_MASK\n");
 	}
 	mutex_unlock(&driver->diagchar_mutex);
 	diag_print_mask_table();
@@ -237,7 +237,7 @@ static void diag_update_event_mask(uint8_t *buf, int toggle, int num_bits)
 			memcpy(ptr, temp , num_bits/8 + 1);
 		else
 			printk(KERN_CRIT "Not enough buffer space "
-					 "for EVENT_MASK \n");
+					 "for EVENT_MASK\n");
 	mutex_unlock(&driver->diagchar_mutex);
 }
 
@@ -251,7 +251,7 @@ static void diag_update_log_mask(uint8_t *buf, int num_items)
 				  (num_items+7)/8))
 		memcpy(ptr, temp , (num_items+7)/8);
 	else
-		printk(KERN_CRIT " Not enough buffer space for LOG_MASK \n");
+		printk(KERN_CRIT " Not enough buffer space for LOG_MASK\n");
 	mutex_unlock(&driver->diagchar_mutex);
 }
 
@@ -264,7 +264,7 @@ static void diag_update_pkt_buffer(unsigned char *buf)
 	if (CHK_OVERFLOW(ptr, ptr, ptr + PKT_SIZE, driver->pkt_length))
 		memcpy(ptr, temp , driver->pkt_length);
 	else
-		printk(KERN_CRIT " Not enough buffer space for PKT_RESP \n");
+		printk(KERN_CRIT " Not enough buffer space for PKT_RESP\n");
 	mutex_unlock(&driver->diagchar_mutex);
 }
 
@@ -419,7 +419,7 @@ static void diag_process_hdlc(void *data, unsigned len)
 	else if (driver->debug_flag) {
 		printk(KERN_ERR "Packet dropped due to bad HDLC coding/CRC"
 				" errors or partial packet received, packet"
-				" length = %d \n", len);
+				" length = %d\n", len);
 		print_hex_dump(KERN_DEBUG, "Dropped Packet Data: ", 16, 1,
 					   DUMP_PREFIX_ADDRESS, data, len, 1);
 		driver->debug_flag = 0;
@@ -619,7 +619,7 @@ void diagfwd_init(void)
 
 	return;
 err:
-		printk(KERN_INFO "\n Could not initialize diag buffers \n");
+		printk(KERN_INFO "\n Could not initialize diag buffers\n");
 		kfree(driver->usb_buf_out);
 		kfree(driver->hdlc_buf);
 		kfree(driver->msg_masks);
