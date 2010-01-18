@@ -85,11 +85,9 @@ struct kgsl_mem_entry {
 	struct list_head list;
 	struct list_head free_list;
 	uint32_t free_timestamp;
-#ifdef CONFIG_MSM_KGSL_MMU
 	/* back pointer to private structure under whose context this
 	* allocation is made */
 	struct kgsl_file_private *priv;
-#endif
 };
 
 enum kgsl_status {

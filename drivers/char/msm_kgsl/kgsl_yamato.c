@@ -234,6 +234,81 @@ irqreturn_t kgsl_yamato_isr(int irq, void *data)
 	return result;
 }
 
+int kgsl_yamato_cleanup_pt(struct kgsl_device *device,
+			struct kgsl_pagetable *pagetable)
+{
+	kgsl_mmu_unmap(pagetable, device->ringbuffer.buffer_desc.gpuaddr,
+			device->ringbuffer.buffer_desc.size);
+
+	kgsl_mmu_unmap(pagetable, device->ringbuffer.memptrs_desc.gpuaddr,
+			device->ringbuffer.memptrs_desc.size);
+
+	kgsl_mmu_unmap(pagetable, device->memstore.gpuaddr,
+			device->memstore.size);
+
+	return 0;
+}
+
+int kgsl_yamato_setup_pt(struct kgsl_device *device,
+			struct kgsl_pagetable *pagetable)
+{
+	int result = 0;
+	unsigned int gpuaddr;
+
+	BUG_ON(device->ringbuffer.buffer_desc.physaddr == 0);
+	BUG_ON(device->ringbuffer.memptrs_desc.physaddr == 0);
+	BUG_ON(device->memstore.physaddr == 0);
+
+	result = kgsl_mmu_map(pagetable,
+				device->ringbuffer.buffer_desc.physaddr,
+				device->ringbuffer.buffer_desc.size,
+				GSL_PT_PAGE_RV, &gpuaddr,
+				KGSL_MEMFLAGS_CONPHYS | KGSL_MEMFLAGS_ALIGN4K);
+
+	if (result)
+		goto error;
+
+	if (device->ringbuffer.buffer_desc.gpuaddr == 0)
+		device->ringbuffer.buffer_desc.gpuaddr = gpuaddr;
+	BUG_ON(device->ringbuffer.buffer_desc.gpuaddr != gpuaddr);
+
+	result = kgsl_mmu_map(pagetable,
+				device->ringbuffer.memptrs_desc.physaddr,
+				device->ringbuffer.memptrs_desc.size,
+				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV, &gpuaddr,
+				KGSL_MEMFLAGS_CONPHYS | KGSL_MEMFLAGS_ALIGN4K);
+	if (result)
+		goto unmap_buffer_desc;
+
+	if (device->ringbuffer.memptrs_desc.gpuaddr == 0)
+		device->ringbuffer.memptrs_desc.gpuaddr = gpuaddr;
+	BUG_ON(device->ringbuffer.memptrs_desc.gpuaddr != gpuaddr);
+
+	result = kgsl_mmu_map(pagetable, device->memstore.physaddr,
+				device->memstore.size,
+				GSL_PT_PAGE_RV | GSL_PT_PAGE_WV, &gpuaddr,
+				KGSL_MEMFLAGS_CONPHYS | KGSL_MEMFLAGS_ALIGN4K);
+	if (result)
+		goto unmap_memptrs_desc;
+
+	if (device->memstore.gpuaddr == 0)
+		device->memstore.gpuaddr = gpuaddr;
+	BUG_ON(device->memstore.gpuaddr != gpuaddr);
+
+	return result;
+
+unmap_memptrs_desc:
+	kgsl_mmu_unmap(pagetable, device->ringbuffer.memptrs_desc.gpuaddr,
+			device->ringbuffer.memptrs_desc.size);
+unmap_buffer_desc:
+	kgsl_mmu_unmap(pagetable, device->ringbuffer.buffer_desc.gpuaddr,
+			device->ringbuffer.buffer_desc.size);
+error:
+	return result;
+
+}
+
+
 int kgsl_yamato_tlbinvalidate(struct kgsl_device *device)
 {
 #ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
@@ -916,7 +991,7 @@ int __init kgsl_yamato_config(struct kgsl_devconfig *devconfig,
 
 	/*note: for all of these behavior masks:
 	 *	0 = do not translate
-	 *	1 = translate within va_range, otherwise use phyisical
+	 *	1 = translate within va_range, otherwise use physical
 	 *	2 = translate within va_range, otherwise fault
 	 */
 	devconfig->mmu_config = 1 /* mmu enable */
