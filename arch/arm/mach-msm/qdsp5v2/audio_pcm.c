@@ -181,6 +181,7 @@ struct audio {
 	unsigned volume;
 
 	uint16_t dec_id;
+	int16_t source;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct audpcm_suspend_ctl suspend_ctl;
@@ -217,17 +218,15 @@ static void pcm_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 	switch (evt_id) {
 	case AUDDEV_EVT_DEV_RDY:
 		pr_debug(":AUDDEV_EVT_DEV_RDY\n");
-		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
-							audio->enabled == 1)
-			audpp_route_stream(audio->dec_id,
-				msm_snddev_route_dec(audio->dec_id));
+		audio->source |= (0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
 		break;
 	case AUDDEV_EVT_DEV_RLS:
 		pr_debug(":AUDDEV_EVT_DEV_RLS\n");
-		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
-							audio->enabled == 1)
-			audpp_route_stream(audio->dec_id,
-				msm_snddev_route_dec(audio->dec_id));
+		audio->source &= ~(0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
 		break;
 	default:
 		pr_err(":ERROR:wrong event\n");
@@ -329,7 +328,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			case AUDPP_DEC_STATUS_PLAY:
 				pr_info("decoder status: play \n");
 				audpp_route_stream(audio->dec_id,
-					msm_snddev_route_dec(audio->dec_id));
+						audio->source);
 				audio->dec_state =
 					MSM_AUD_DECODER_STATE_SUCCESS;
 				wake_up(&audio->wait);

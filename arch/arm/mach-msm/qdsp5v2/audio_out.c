@@ -36,6 +36,7 @@
 #include <mach/qdsp5v2/qdsp5audppmsg.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
 #include <mach/qdsp5v2/audpp.h>
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 #include <mach/htc_pwrsink.h>
 
@@ -71,6 +72,8 @@ struct audio {
 	uint32_t out_channel_mode;
 	uint32_t out_weight;
 	uint32_t out_buffer_size;
+	uint32_t device_events;
+	int16_t source;
 
 	/* data allocated for various buffers */
 	char *data;
@@ -88,6 +91,29 @@ struct audio {
 
 	struct audpp_cmd_cfg_object_params_volume vol_pan;
 };
+
+static void audio_out_listener(u32 evt_id, union auddev_evt_data *evt_payload,
+				void *private_data)
+{
+	struct audio *audio = private_data;
+	switch (evt_id) {
+	case AUDDEV_EVT_DEV_RDY:
+		MM_DBG(":AUDDEV_EVT_DEV_RDY\n");
+		audio->source |= (0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
+		break;
+	case AUDDEV_EVT_DEV_RLS:
+		MM_DBG(":AUDDEV_EVT_DEV_RLS\n");
+		audio->source &= ~(0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
+		break;
+	default:
+		MM_ERR("ERROR:wrong event\n");
+		break;
+       }
+}
 
 static void audio_prevent_sleep(struct audio *audio)
 {
@@ -207,8 +233,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			audio->running = 1;
 			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan,
 					POPP);
-			audpp_route_stream(audio->dec_id,
-				msm_snddev_route_dec(audio->dec_id));
+			audpp_route_stream(audio->dec_id, audio->source);
 			audio_dsp_out_enable(audio, 1);
 		} else if (msg[0] == AUDPP_MSG_ENA_DIS) {
 			MM_INFO("CFG_MSG DISABLE\n");
@@ -525,6 +550,7 @@ static int audio_release(struct inode *inode, struct file *file)
 	struct audio *audio = file->private_data;
 
 	mutex_lock(&audio->lock);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->dec_id);
 	audio_disable(audio);
 	audio_flush(audio);
 	audio->opened = 0;
@@ -577,6 +603,19 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->vol_pan.pan = 0x0;
 
 	audio_flush(audio);
+	audio->device_events = AUDDEV_EVT_DEV_RDY
+				|AUDDEV_EVT_DEV_RLS;
+	MM_INFO("register for event callback pdata %p\n", audio);
+	rc = auddev_register_evt_listner(audio->device_events,
+					AUDDEV_CLNT_DEC,
+					audio->dec_id,
+					audio_out_listener,
+					(void *)audio);
+	if (rc) {
+		MM_ERR("%s: failed to register listener\n", __func__);
+		dma_free_coherent(NULL, DMASZ, audio->data, audio->phys);
+		goto done;
+	}
 
 	file->private_data = audio;
 	audio->opened = 1;

@@ -147,6 +147,7 @@ struct audio {
 	unsigned queue_id;
 	uint16_t dec_id;
 	uint32_t read_ptr_offset;
+	int16_t source;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	struct audamrwb_suspend_ctl suspend_ctl;
@@ -214,17 +215,15 @@ static void amrwb_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 	switch (evt_id) {
 	case AUDDEV_EVT_DEV_RDY:
 		MM_DBG(":AUDDEV_EVT_DEV_RDY\n");
-		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
-							audio->enabled == 1)
-			audpp_route_stream(audio->dec_id,
-				msm_snddev_route_dec(audio->dec_id));
+		audio->source |= (0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
 		break;
 	case AUDDEV_EVT_DEV_RLS:
 		MM_DBG(":AUDDEV_EVT_DEV_RLS\n");
-		if (audio->dec_state == MSM_AUD_DECODER_STATE_SUCCESS &&
-							audio->enabled == 1)
-			audpp_route_stream(audio->dec_id,
-				msm_snddev_route_dec(audio->dec_id));
+		audio->source &= ~(0x1 << evt_payload->routing_id);
+		if (audio->running == 1 && audio->enabled == 1)
+			audpp_route_stream(audio->dec_id, audio->source);
 		break;
 	default:
 		MM_ERR("%s:ERROR:wrong event\n", __func__);
@@ -349,7 +348,7 @@ static void audamrwb_dsp_event(void *private, unsigned id, uint16_t *msg)
 				MM_DBG("decoder status: play \n");
 				/* send  mixer command */
 				audpp_route_stream(audio->dec_id,
-					msm_snddev_route_dec(audio->dec_id));
+						audio->source);
 				if (audio->pcm_feedback) {
 					audamrwb_config_hostpcm(audio);
 					audamrwb_buffer_refresh(audio);
