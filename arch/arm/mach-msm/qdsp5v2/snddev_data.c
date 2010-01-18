@@ -814,113 +814,6 @@ static struct platform_device msm_itty_hs_mono_rx_device = {
 	.dev = { .platform_data = &snddev_itty_hs_mono_rx_data },
 };
 
-static struct snddev_icodec_data snddev_tty_vco_rx_data = {
-	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE | SNDDEV_CAP_TTY),
-	.name = "tty_vco_rx",
-	.copp_id = 0,
-	.acdb_id = 0xD,
-	.profile = &itty_hs_mono_rx_profile,
-	.channel_mode = 1,
-	.default_sample_rate = 8000,
-	.pamp_on = NULL,
-	.pamp_off = NULL,
-};
-
-static struct platform_device msm_tty_vco_rx_device = {
-	.name = "snddev_icodec",
-	.id = 18,
-	.dev = { .platform_data = &snddev_tty_vco_rx_data },
-};
-
-/* vco TX is the same as handset tx */
-static struct snddev_icodec_data snddev_tty_vco_tx_data = {
-	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE | SNDDEV_CAP_TTY),
-	.name = "tty_vco_tx",
-	.copp_id = 0,
-	.acdb_id = 2,
-	.profile = &imic_profile,
-	.channel_mode = 1,
-	.default_sample_rate = 8000,
-	.pmctl_id = imic_pmctl_id,
-	.pmctl_id_sz = ARRAY_SIZE(imic_pmctl_id),
-	.pamp_on = NULL,
-	.pamp_off = NULL,
-};
-
-static struct platform_device msm_tty_vco_tx_device = {
-	.name = "snddev_icodec",
-	.id = 19,
-	.dev = { .platform_data = &snddev_tty_vco_tx_data },
-};
-
-/* hco rx shares the same profile as handset rx */
-static struct adie_codec_action_unit tty_hco_rx_8KHz_osr256_actions[] =
-	HANDSET_RX_8000_OSR_256;
-
-static struct adie_codec_action_unit tty_hco_rx_16KHz_osr256_actions[] =
-	HANDSET_RX_16000_OSR_256;
-
-static struct adie_codec_hwsetting_entry tty_hco_rx_settings[] = {
-	{
-		.freq_plan = 8000,
-		.osr = 256,
-		.actions = tty_hco_rx_8KHz_osr256_actions,
-		.action_sz = ARRAY_SIZE(tty_hco_rx_8KHz_osr256_actions),
-	},
-	{
-		.freq_plan = 16000,
-		.osr = 256,
-		.actions = tty_hco_rx_16KHz_osr256_actions,
-		.action_sz = ARRAY_SIZE(tty_hco_rx_16KHz_osr256_actions),
-	}
-};
-
-static struct adie_codec_dev_profile tty_hco_rx_profile = {
-	.path_type = ADIE_CODEC_RX,
-	.settings = tty_hco_rx_settings,
-	.setting_sz = ARRAY_SIZE(tty_hco_rx_settings),
-};
-
-static struct snddev_icodec_data snddev_tty_hco_rx_data = {
-	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE | SNDDEV_CAP_TTY),
-	.name = "tty_hco_rx",
-	.copp_id = 0,
-	.acdb_id = 1,
-	.profile = &tty_hco_rx_profile,
-	.channel_mode = 1,
-	.pmctl_id = NULL,
-	.pmctl_id_sz = 0,
-	.default_sample_rate = 8000,
-	.pamp_on = NULL,
-	.pamp_off = NULL,
-};
-
-static struct platform_device msm_tty_hco_rx_device = {
-	.name = "snddev_icodec",
-	.id = 20,
-	.dev = { .platform_data = &snddev_tty_hco_rx_data },
-};
-
-static struct snddev_icodec_data snddev_tty_hco_tx_data = {
-	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE | SNDDEV_CAP_TTY),
-	.name = "tty_hco_tx",
-	.copp_id = 0,
-	.acdb_id = 0xC,
-	.profile = &itty_hs_mono_tx_profile,
-	.channel_mode = 1,
-	.default_sample_rate = 8000,
-	.pmctl_id = itty_hs_mono_pmctl_id,
-	.pmctl_id_sz = ARRAY_SIZE(itty_hs_mono_pmctl_id),
-	.pamp_on = NULL,
-	.pamp_off = NULL,
-};
-
-static struct platform_device msm_tty_hco_tx_device = {
-	.name = "snddev_icodec",
-	.id = 21,
-	.dev = { .platform_data = &snddev_tty_hco_tx_data },
-};
-
 static struct adie_codec_action_unit ispeaker_tx_8KHz_osr256_actions[] =
 	SPEAKER_TX_8000_OSR_256;
 
@@ -972,7 +865,7 @@ static struct snddev_icodec_data snddev_ispeaker_tx_data = {
 
 static struct platform_device msm_ispeaker_tx_device = {
 	.name = "snddev_icodec",
-	.id = 22,
+	.id = 18,
 	.dev = { .platform_data = &snddev_ispeaker_tx_data },
 };
 
@@ -994,10 +887,6 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_spk_idual_mic_broadside_device,
 	&msm_itty_hs_mono_tx_device,
 	&msm_itty_hs_mono_rx_device,
-	&msm_tty_vco_tx_device,
-	&msm_tty_vco_rx_device,
-	&msm_tty_hco_tx_device,
-	&msm_tty_hco_rx_device,
 	&msm_ispeaker_tx_device,
 };
 
@@ -1019,10 +908,6 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_spk_idual_mic_broadside_device,
 	&msm_itty_hs_mono_tx_device,
 	&msm_itty_hs_mono_rx_device,
-	&msm_tty_vco_tx_device,
-	&msm_tty_vco_rx_device,
-	&msm_tty_hco_tx_device,
-	&msm_tty_hco_rx_device,
 	&msm_ispeaker_tx_device,
 };
 
