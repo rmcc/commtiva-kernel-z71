@@ -1098,7 +1098,7 @@ static void usb_reset(struct usb_info *ui)
 	 * raise signal amplitude to 400mv
 	 */
 	cfg_val = ulpi_read(ui, ULPI_CONFIG_REG);
-	cfg_val = (cfg_val & ~0x0C) | ULPI_AMPLITUDE;
+	cfg_val |= ULPI_AMPLITUDE_MAX;
 	ulpi_write(ui, cfg_val, ULPI_CONFIG_REG);
 
 	/* fix potential usb stability issues with "integrated phy"

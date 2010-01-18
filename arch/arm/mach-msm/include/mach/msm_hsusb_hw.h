@@ -181,7 +181,7 @@ struct ept_queue_item {
 #define CTRL_RXT_EP_TYPE_SHIFT 2
 
 #define ULPI_CONFIG_REG		0x31
-#define ULPI_AMPLITUDE		0x0C
+#define ULPI_AMPLITUDE_MAX	0x0C
 #define ULPI_OTG_CTRL		0x0B
 #define ULPI_OTG_CTRL_CLR       0x0C
 #define ULPI_INT_RISE_CLR       0x0F

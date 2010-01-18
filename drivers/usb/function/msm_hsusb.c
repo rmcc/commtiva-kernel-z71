@@ -1880,7 +1880,7 @@ static int usb_hw_reset(struct usb_info *ui)
 		 * SW workaround, Issue#2
 		 */
 		cfg_val = ulpi_read(ui, ULPI_CONFIG_REG);
-		cfg_val = (cfg_val & ~0x0C) | ULPI_AMPLITUDE;
+		cfg_val |= ULPI_AMPLITUDE_MAX;
 		ulpi_write(ui, cfg_val, ULPI_CONFIG_REG);
 
 		writel(0x0, USB_AHB_BURST);
