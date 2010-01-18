@@ -921,6 +921,61 @@ static struct platform_device msm_tty_hco_tx_device = {
 	.dev = { .platform_data = &snddev_tty_hco_tx_data },
 };
 
+static struct adie_codec_action_unit ispeaker_tx_8KHz_osr256_actions[] =
+	SPEAKER_TX_8000_OSR_256;
+
+static struct adie_codec_action_unit ispeaker_tx_48KHz_osr256_actions[] =
+	SPEAKER_TX_48000_OSR_256;
+
+static struct adie_codec_hwsetting_entry ispeaker_tx_settings[] = {
+	{
+		.freq_plan = 8000,
+		.osr = 256,
+		.actions = ispeaker_tx_8KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ispeaker_tx_8KHz_osr256_actions),
+	},
+	{ /* 8KHz profile is good for 16KHz */
+		.freq_plan = 16000,
+		.osr = 256,
+		.actions = ispeaker_tx_8KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ispeaker_tx_8KHz_osr256_actions),
+	},
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ispeaker_tx_48KHz_osr256_actions,
+		.action_sz = ARRAY_SIZE(ispeaker_tx_48KHz_osr256_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ispeaker_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ispeaker_tx_settings,
+	.setting_sz = ARRAY_SIZE(ispeaker_tx_settings),
+};
+
+static enum hsed_controller ispk_pmctl_id[] = {PM_HSED_CONTROLLER_0};
+
+static struct snddev_icodec_data snddev_ispeaker_tx_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "speaker_mono_tx",
+	.copp_id = 0,
+	.acdb_id = 6,
+	.profile = &ispeaker_tx_profile,
+	.channel_mode = 1,
+	.pmctl_id = ispk_pmctl_id,
+	.pmctl_id_sz = ARRAY_SIZE(ispk_pmctl_id),
+	.default_sample_rate = 8000,
+	.pamp_on = NULL,
+	.pamp_off = NULL,
+};
+
+static struct platform_device msm_ispeaker_tx_device = {
+	.name = "snddev_icodec",
+	.id = 22,
+	.dev = { .platform_data = &snddev_ispeaker_tx_data },
+};
+
 static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_iearpiece_device,
 	&msm_imic_device,
@@ -943,6 +998,7 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_tty_vco_rx_device,
 	&msm_tty_hco_tx_device,
 	&msm_tty_hco_rx_device,
+	&msm_ispeaker_tx_device,
 };
 
 static struct platform_device *snd_devices_surf[] __initdata = {
@@ -967,6 +1023,7 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_tty_vco_rx_device,
 	&msm_tty_hco_tx_device,
 	&msm_tty_hco_rx_device,
+	&msm_ispeaker_tx_device,
 };
 
 void __init msm_snddev_init(void)
