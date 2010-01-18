@@ -101,7 +101,8 @@ static int msm_v4l2_release(struct file *f)
 	if (!g_pmsm_v4l2_dev->opencnt) {
 		ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
 		if (!ctrlcmd) {
-			CDBG("msm_v4l2_ioctl: cannot allocate buffer\n");
+			CDBG("msm_v4l2_release: cannot allocate buffer\n");
+			g_pmsm_v4l2_dev->opencnt++;
 			mutex_unlock(&msm_v4l2_opencnt_lock);
 			return -ENOMEM;
 		}
@@ -332,6 +333,9 @@ static int msm_v4l2_qbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 	struct msm_pmem_info meminfo;
 	struct msm_frame frame;
 
+	if (pb->memory != V4L2_MEMORY_USERPTR)
+		return -EINVAL;
+
 	if ((pb->flags >> 16) & 0x0001) {
 		/* this is for preview */
 #if 0
@@ -421,16 +425,21 @@ static int msm_v4l2_dqbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 {
 	struct msm_frame frame;
 	struct crop_info *vcropinfo;
+	int ret = 0;
 	D("%s\n", __func__);
 
+	if (pb->memory != V4L2_MEMORY_USERPTR)
+		return -EINVAL;
 	/* V4L2 videodev will do the copy_to_user. */
 	if (pb->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 
 		D("%s, %d\n", __func__, __LINE__);
 
-		g_pmsm_v4l2_dev->drv->get_frame(
-			g_pmsm_v4l2_dev->drv->sync,
-			&frame);
+		ret = g_pmsm_v4l2_dev->drv->get_frame(
+			g_pmsm_v4l2_dev->drv->sync, &frame);
+
+		if (ret < 0)
+			return ret;
 
 		pb->type       = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		pb->m.userptr  = (unsigned long)frame.buffer;  /* FIXME */
@@ -478,9 +487,12 @@ static int msm_v4l2_streamon(struct file *f, void *pctx, enum v4l2_buf_type i)
 {
   struct msm_ctrl_cmd *ctrlcmd;
 
+  if (i != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	return -EINVAL;
+
 	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
 	if (!ctrlcmd) {
-		CDBG("msm_v4l2_s_fmt_cap: cannot allocate buffer\n");
+		CDBG("msm_v4l2_streamon: cannot allocate buffer\n");
 		return -ENOMEM;
 	}
 
@@ -506,9 +518,12 @@ static int msm_v4l2_streamoff(struct file *f, void *pctx, enum v4l2_buf_type i)
 {
   struct msm_ctrl_cmd *ctrlcmd;
 
+  if (i != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+	return -EINVAL;
+
 	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
 	if (!ctrlcmd) {
-		CDBG("msm_v4l2_s_fmt_cap: cannot allocate buffer\n");
+		CDBG("msm_v4l2_streamoff: cannot allocate buffer\n");
 		return -ENOMEM;
 	}
 
@@ -544,7 +559,6 @@ static int msm_v4l2_enum_fmt_cap(struct file *f,
 
 	switch (pfmtdesc->index) {
 	case 0:
-		pfmtdesc->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		pfmtdesc->flags = 0;
 		strncpy(pfmtdesc->description, "YUV 4:2:0",
 			sizeof(pfmtdesc->description));
@@ -554,6 +568,9 @@ static int msm_v4l2_enum_fmt_cap(struct file *f,
 		return -EINVAL;
 	}
 
+	if (pfmtdesc->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
 	return 0;
 }
 
@@ -561,7 +578,10 @@ static int msm_v4l2_g_fmt_cap(struct file *f,
 			      void *pctx, struct v4l2_format *pfmt)
 {
 	D("%s\n", __func__);
-	pfmt->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+	if (pfmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
 	pfmt->fmt.pix.width = MSM_V4L2_WIDTH;
 	pfmt->fmt.pix.height = MSM_V4L2_HEIGHT;
 	pfmt->fmt.pix.pixelformat = V4L2_PIX_FMT_YVU420;
@@ -580,6 +600,9 @@ static int msm_v4l2_s_fmt_cap(struct file *f,
 
 	D("%s\n", __func__);
 
+	if (pfmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		return -EINVAL;
+
 	ctrlcmd = kmalloc(sizeof(struct msm_ctrl_cmd), GFP_ATOMIC);
 	if (!ctrlcmd) {
 		CDBG("msm_v4l2_s_fmt_cap: cannot allocate buffer\n");
@@ -591,8 +614,6 @@ static int msm_v4l2_s_fmt_cap(struct file *f,
   ctrlcmd->value      = (void *)pfmt->fmt.pix.priv;
   ctrlcmd->timeout_ms = 10000;
 
-	if (pfmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-		return -1;
 
 #if 0
 	/* FIXEME */
