@@ -536,7 +536,7 @@ static struct adie_codec_dev_profile ifmradio_ffa_headset_profile = {
 
 static struct snddev_icodec_data snddev_ifmradio_ffa_headset_data = {
 	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_FM),
-	.name = "fmradio_ffa_headset_rx",
+	.name = "fmradio_headset_rx",
 	.copp_id = 0,
 	.acdb_id = 1,
 	.profile = &ifmradio_ffa_headset_profile,
