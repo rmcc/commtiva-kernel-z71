@@ -2179,7 +2179,7 @@ msm_nand_write_oob_pingpong(struct mtd_info *mtd, loff_t to,
 {
 	struct msm_nand_chip *chip = mtd->priv;
 	struct {
-		dmov_s cmd[13 * 7 + 2];
+		dmov_s cmd[8 * 7 + 16];
 		unsigned cmdptr;
 		struct {
 			uint32_t cmd;
@@ -2605,7 +2605,7 @@ msm_nand_write_oob_pingpong(struct mtd_info *mtd, loff_t to,
 
 		dma_buffer->cmd[0].cmd |= CMD_OCB;
 		cmd[-1].cmd |= CMD_OCU | CMD_LC;
-		BUILD_BUG_ON(13 * 7 + 2 != ARRAY_SIZE(dma_buffer->cmd));
+		BUILD_BUG_ON(8 * 7 + 16 != ARRAY_SIZE(dma_buffer->cmd));
 		BUG_ON(cmd - dma_buffer->cmd > ARRAY_SIZE(dma_buffer->cmd));
 		dma_buffer->cmdptr =
 		((msm_virt_to_dma(chip, dma_buffer->cmd) >> 3) | CMD_PTR_LP);
