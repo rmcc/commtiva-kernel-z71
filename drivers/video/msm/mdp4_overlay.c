@@ -769,6 +769,7 @@ void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe)
 
 void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 {
+	struct mdp4_overlay_pipe *bg_pipe;
 	unsigned char *overlay_base;
 	uint32 c0, c1, c2, blend_op;
 	int off;
@@ -801,8 +802,9 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 	}
 
 	if (pipe->transp != MDP_TRANSP_NOP) {
-		transp_color_key(pipe->src_format, pipe->transp, &c0, &c1, &c2);
 		if (pipe->is_fg) {
+			transp_color_key(pipe->src_format, pipe->transp,
+						&c0, &c1, &c2);
 			blend_op |= MDP4_BLEND_FG_TRANSP_EN; /* Fg blocked */
 			/* lower limit */
 			if (c0 > 0x10)
@@ -831,6 +833,11 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 					(c1 << 16 | c0));/* high */
 			outpdw(overlay_base + off + 0x11c, c2);/* high */
 		} else {
+
+			bg_pipe = mdp4_overlay_stage_pipe(pipe->mixer_num,
+						MDP4_MIXER_STAGE_BASE);
+			transp_color_key(bg_pipe->src_format, pipe->transp,
+						&c0, &c1, &c2);
 			blend_op |= MDP4_BLEND_BG_TRANSP_EN; /* bg blocked */
 			/* lower limit */
 			if (c0 > 0x10)
@@ -890,6 +897,10 @@ void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all)
 
 	while (inpdw(MDP_BASE + 0x18000) & bits) /* self clear when complete */
 		;
+}
+struct mdp4_overlay_pipe *mdp4_overlay_stage_pipe(int mixer, int stage)
+{
+	return ctrl->stage[mixer][stage];
 }
 
 struct mdp4_overlay_pipe *mdp4_overlay_ndx2pipe(int ndx)

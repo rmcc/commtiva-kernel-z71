@@ -316,6 +316,7 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd);
 void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all);
 void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe);
+struct mdp4_overlay_pipe *mdp4_overlay_stage_pipe(int mixer, int stage);
 void mdp4_mixer_stage_up(struct mdp4_overlay_pipe *pipe);
 void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe);
 int mdp4_mixer_stage_can_run(struct mdp4_overlay_pipe *pipe);
@@ -342,6 +343,7 @@ void mdp4_rgb_igc_lut_setup(int num);
 void mdp4_vg_igc_lut_setup(int num);
 void mdp4_mixer_gc_lut_setup(int mixer_num);
 void mdp4_fetch_cfg(uint32 clk, uint32 pclk);
+uint32 mdp4_rgb_igc_lut_cvt(uint32 ndx);
 
 #ifdef CONFIG_DEBUG_FS
 int mdp4_debugfs_init(void);

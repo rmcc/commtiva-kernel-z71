@@ -1757,3 +1757,8 @@ void mdp4_rgb_igc_lut_setup(int num)
 		off += 4;
 	}
 }
+
+uint32 mdp4_rgb_igc_lut_cvt(uint32 ndx)
+{
+	return igc_rgb_lut[ndx & 0x0ff];
+}
