@@ -233,16 +233,17 @@ static void gser_complete_set_line_coding(struct usb_ep *ep,
 		struct usb_request *req)
 {
 	struct f_gser            *gser = ep->driver_data;
+	struct usb_composite_dev *cdev = gser->port.func.config->cdev;
 
 	if (req->status != 0) {
-		printk(KERN_ERR "gser ttyGS%d completion, err %d\n",
+		DBG(cdev, "gser ttyGS%d completion, err %d\n",
 				gser->port_num, req->status);
 		return;
 	}
 
 	/* normal completion */
 	if (req->actual != sizeof(gser->port_line_coding)) {
-		printk(KERN_ERR "gser ttyGS%d short resp, len %d\n",
+		DBG(cdev, "gser ttyGS%d short resp, len %d\n",
 				gser->port_num, req->actual);
 		usb_ep_set_halt(ep);
 	} else {
@@ -299,21 +300,21 @@ gser_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 
 	default:
 invalid:
-		printk(KERN_ERR "invalid control req%02x.%02x v%04x i%04x l%d\n",
+		ERROR(cdev, "invalid control req%02x.%02x v%04x i%04x l%d\n",
 			ctrl->bRequestType, ctrl->bRequest,
 			w_value, w_index, w_length);
 	}
 
 	/* respond with data transfer or status phase? */
 	if (value >= 0) {
-		printk(KERN_DEBUG "gser ttyGS%d req%02x.%02x v%04x i%04x l%d\n",
+		DBG(cdev, "gser ttyGS%d req%02x.%02x v%04x i%04x l%d\n",
 			gser->port_num, ctrl->bRequestType, ctrl->bRequest,
 			w_value, w_index, w_length);
 		req->zero = 0;
 		req->length = value;
 		value = usb_ep_queue(cdev->gadget->ep0, req, GFP_ATOMIC);
 		if (value < 0)
-			printk(KERN_ERR "gser response on ttyGS%d, err %d\n",
+			ERROR(cdev, "gser response on ttyGS%d, err %d\n",
 					gser->port_num, value);
 	}
 
@@ -380,6 +381,7 @@ static int gser_notify(struct f_gser *gser, u8 type, u16 value,
 	const unsigned			len = sizeof(*notify) + length;
 	void				*buf;
 	int				status;
+	struct usb_composite_dev *cdev = gser->port.func.config->cdev;
 
 	req = gser->notify_req;
 	gser->notify_req = NULL;
@@ -399,7 +401,7 @@ static int gser_notify(struct f_gser *gser, u8 type, u16 value,
 
 	status = usb_ep_queue(ep, req, GFP_ATOMIC);
 	if (status < 0) {
-		printk(KERN_ERR "gser ttyGS%d can't notify serial state, %d\n",
+		ERROR(cdev, "gser ttyGS%d can't notify serial state, %d\n",
 				gser->port_num, status);
 		gser->notify_req = req;
 	}
@@ -411,10 +413,11 @@ static int gser_notify_serial_state(struct f_gser *gser)
 {
 	int			 status;
 	unsigned long flags;
+	struct usb_composite_dev *cdev = gser->port.func.config->cdev;
 
 	spin_lock_irqsave(&gser->lock, flags);
 	if (gser->notify_req) {
-		printk(KERN_DEBUG "gser ttyGS%d serial state %04x\n",
+		DBG(cdev, "gser ttyGS%d serial state %04x\n",
 				gser->port_num, gser->serial_state);
 		status = gser_notify(gser, USB_CDC_NOTIFY_SERIAL_STATE,
 				0, &gser->serial_state,
