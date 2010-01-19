@@ -432,6 +432,7 @@ fail:
 }
 EXPORT_SYMBOL(msm_adsp_write);
 
+#ifdef CONFIG_MSM_ADSP_REPORT_EVENTS
 static void *event_addr;
 static void read_event(void *buf, size_t len)
 {
@@ -451,6 +452,7 @@ static void read_event(void *buf, size_t len)
 
 	memcpy(buf, dptr, len);
 }
+#endif
 
 static void adsp_rtos_mtoa_cb(void *context, uint32_t param,
 					void *evt_buf, uint32_t len)
