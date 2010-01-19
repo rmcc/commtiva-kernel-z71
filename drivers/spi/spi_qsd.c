@@ -78,6 +78,9 @@
 #include <linux/sched.h>
 #include <mach/dma.h>
 #include <asm/atomic.h>
+#include <linux/mutex.h>
+#include <linux/remote_spinlock.h>
+#include <linux/pm_qos_params.h>
 
 #define SPI_CONFIG                    0x0000
 #define SPI_IO_CONTROL                0x0004
@@ -162,6 +165,9 @@
 
 #define SPI_NUM_CHIPSELECTS           4
 #define SPI_QSD_NAME                  "spi_qsd"
+
+/* 5 milliseconds */
+#define SPI_TRYLOCK_DELAY             5000
 
 /* Data Mover burst size */
 #define DM_BURST_SIZE                 16
@@ -278,6 +284,10 @@ struct msm_spi {
 	struct dentry *dent_spi;
 	struct dentry *debugfs_spi_regs[ARRAY_SIZE(debugfs_spi_regs)];
 #endif
+	/* Remote Spinlock Data */
+	bool                     use_rlock;
+	remote_mutex_t           r_lock;
+	uint32_t                 pm_lat;
 };
 
 static int input_fifo_size;
@@ -831,7 +841,17 @@ static void msm_spi_workq(struct work_struct *work)
 		container_of(work, struct msm_spi, work_data);
 	unsigned long        flags;
 	u32                  spi_op;
-	bool                 status_error = 0;
+	u32                  status_error = 0;
+
+	if (dd->use_rlock) {
+		/* Don't allow power collapse until we release remote mutex */
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_spi",
+					  dd->pm_lat);
+		remote_mutex_lock(&dd->r_lock);
+		enable_irq(dd->irq_in);
+		enable_irq(dd->irq_out);
+		enable_irq(dd->irq_err);
+	}
 
 	spi_op = readl(dd->base + SPI_OPERATIONAL);
 	if (spi_op & SPI_OP_STATE_VALID) {
@@ -865,6 +885,15 @@ static void msm_spi_workq(struct work_struct *work)
 	}
 	spin_unlock_irqrestore(&dd->queue_lock, flags);
 	dd->transfer_in_progress = 0;
+
+	if (dd->use_rlock) {
+		disable_irq(dd->irq_in);
+		disable_irq(dd->irq_out);
+		disable_irq(dd->irq_err);
+		remote_mutex_unlock(&dd->r_lock);
+		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_spi",
+					  PM_QOS_DEFAULT_VALUE);
+	}
 }
 
 static int msm_spi_transfer(struct spi_device *spi, struct spi_message *msg)
@@ -977,6 +1006,10 @@ static int msm_spi_setup(struct spi_device *spi)
 		goto err_setup_exit;
 
 	dd = spi_master_get_devdata(spi->master);
+
+	if (dd->use_rlock)
+		remote_mutex_lock(&dd->r_lock);
+
 	spi_ioc = readl(dd->base + SPI_IO_CONTROL);
 	mask = SPI_IO_C_CS_N_POLARITY_0 << spi->chip_select;
 	if (spi->mode & SPI_CS_HIGH)
@@ -999,6 +1032,8 @@ static int msm_spi_setup(struct spi_device *spi)
 	else
 		spi_config |= SPI_CFG_INPUT_FIRST;
 	writel(spi_config, dd->base + SPI_CONFIG);
+	if (dd->use_rlock)
+		remote_mutex_unlock(&dd->r_lock);
 
 err_setup_exit:
 	return rc;
@@ -1373,6 +1408,31 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	if (!dd->base)
 		goto err_probe_ioremap;
 
+	if (pdata && pdata->rsl_id) {
+		struct remote_mutex_id rmid;
+		rmid.r_spinlock_id = pdata->rsl_id;
+		rmid.delay_us = SPI_TRYLOCK_DELAY;
+
+		rc = remote_mutex_init(&dd->r_lock, &rmid);
+		if (rc) {
+			dev_err(&pdev->dev, "%s: unable to init remote_mutex "
+				"(%s), (rc=%d)\n", rmid.r_spinlock_id,
+				__func__, rc);
+			goto err_probe_rlock_init;
+		}
+		dd->use_rlock = 1;
+		dd->pm_lat = pdata->pm_lat;
+		rc = pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_spi",
+					    PM_QOS_DEFAULT_VALUE);
+		if (rc) {
+			dev_err(&pdev->dev, "%s: Failed to request pm_qos\n",
+				__func__);
+			goto err_probe_add_pm_qos;
+		}
+	}
+	if (dd->use_rlock)
+		remote_mutex_lock(&dd->r_lock);
+
 	dd->dev = &pdev->dev;
 	dd->clk = clk_get(&pdev->dev, "spi_clk");
 	if (IS_ERR(dd->clk)) {
@@ -1436,6 +1496,13 @@ static int __init msm_spi_probe(struct platform_device *pdev)
 	if (rc)
 		goto err_probe_irq3;
 
+	if (dd->use_rlock) {
+		disable_irq(dd->irq_in);
+		disable_irq(dd->irq_out);
+		disable_irq(dd->irq_err);
+		remote_mutex_unlock(&dd->r_lock);
+	}
+
 	rc = spi_register_master(master);
 	if (rc)
 		goto err_probe_reg_master;
@@ -1470,6 +1537,10 @@ err_probe_pclk_enable:
 err_probe_clk_enable:
 	clk_put(dd->clk);
 err_probe_clk_get:
+	if (dd->use_rlock)
+		remote_mutex_unlock(&dd->r_lock);
+err_probe_add_pm_qos:
+err_probe_rlock_init:
 	iounmap(dd->base);
 err_probe_ioremap:
 	release_mem_region(dd->mem_phys_addr, dd->mem_size);
@@ -1511,6 +1582,8 @@ static int msm_spi_suspend(struct platform_device *pdev, pm_message_t state)
 	disable_irq(dd->irq_in);
 	disable_irq(dd->irq_out);
 	disable_irq(dd->irq_err);
+	if (dd->use_rlock)
+		remote_mutex_unlock(&dd->r_lock);
 	clk_disable(dd->clk);
 
 suspend_exit:
@@ -1554,6 +1627,7 @@ static int __devexit msm_spi_remove(struct platform_device *pdev)
 	struct msm_spi    *dd = spi_master_get_devdata(master);
 	struct msm_spi_platform_data *pdata = pdev->dev.platform_data;
 
+	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_spi");
 	spi_debugfs_exit(dd);
 	sysfs_remove_group(&pdev->dev.kobj, &dev_attr_grp);
 
