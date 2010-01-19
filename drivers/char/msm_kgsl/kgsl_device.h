@@ -159,9 +159,13 @@ int kgsl_yamato_runpending(struct kgsl_device *device);
 int __init kgsl_yamato_config(struct kgsl_devconfig *,
 				struct platform_device *pdev);
 
-int kgsl_yamato_setpagetable(struct kgsl_device *device);
-
-int kgsl_yamato_tlbinvalidate(struct kgsl_device *device);
+#ifdef CONFIG_MSM_KGSL_MMU
+int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags);
+#else
+static inline int kgsl_yamato_setstate(struct kgsl_device *device,
+					uint32_t flags)
+{ return 0; }
+#endif
 
 irqreturn_t kgsl_yamato_isr(int irq, void *data);
 
