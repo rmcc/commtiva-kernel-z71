@@ -2710,8 +2710,10 @@ static void /* __init_or_exit */ fsg_unbind(void *_ctxt)
 	}
 
 	/* Free the data buffers */
-	for (i = 0; i < NUM_BUFFERS; ++i)
+	for (i = 0; i < NUM_BUFFERS; ++i) {
 		kfree(fsg->buffhds[i].buf);
+		fsg->buffhds[i].buf = NULL;
+	}
 
 	if (fsg->bulk_in) {
 		usb_ept_fifo_flush(fsg->bulk_in);
