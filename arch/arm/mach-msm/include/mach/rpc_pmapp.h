@@ -37,4 +37,6 @@ int msm_pm_app_register_vbus_sn(void (*callback)(int online));
 void msm_pm_app_unregister_vbus_sn(void (*callback)(int online));
 int msm_pm_app_enable_usb_ldo(int);
 
+int pmapp_display_clock_config(uint enable);
+
 #endif
