@@ -907,7 +907,7 @@ static int __init msm_pm_init(void)
 	 * bootloader must be re-executed. Do not overwrite the reset vector
 	 * or bootloader area.
 	 */
-	msm_pm_reset_vector = PAGE_OFFSET;
+	msm_pm_reset_vector = (uint32_t *) PAGE_OFFSET;
 #else
 	msm_pm_reset_vector = ioremap(0, PAGE_SIZE);
 	if (msm_pm_reset_vector == NULL) {
