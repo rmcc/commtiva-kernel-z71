@@ -1513,12 +1513,21 @@ static void mddi_host_initialize_registers(mddi_host_type host_idx)
 	mddi_host_reg_out(PAD_CTL, 0xa850a);
 #else
 	/* Recommendation from PAD hw team */
+#ifdef CONFIG_FB_MSM_MDDI_2
+	mddi_host_reg_out(PAD_CTL, 0x402a850f);
+#else
 	mddi_host_reg_out(PAD_CTL, 0xa850f);
+#endif
+#endif
+
+	pad_reg_val = 0x00220020;
+#ifdef CONFIG_FB_MSM_MDDI_2
+	pad_reg_val |= 0x10000000;
 #endif
 
 #if defined(CONFIG_FB_MSM_MDP31) || defined(CONFIG_FB_MSM_MDP40)
 	mddi_host_reg_out(PAD_IO_CTL, 0x00320000);
-	mddi_host_reg_out(PAD_CAL, 0x00220020);
+	mddi_host_reg_out(PAD_CAL, pad_reg_val);
 #endif
 
 	mddi_host_core_version = mddi_host_reg_inm(CORE_VER, 0xffff);

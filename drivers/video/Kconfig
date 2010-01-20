@@ -2197,6 +2197,10 @@ config FB_MSM_OVERLAY
 	bool "MDP4 overlay support"
 	default n
 
+config FB_MSM_MDDI_2
+	bool "MDDI TYPE 2 support"
+	default n
+
 config FB_MSM_EXTMDDI
 	bool
 	default n
