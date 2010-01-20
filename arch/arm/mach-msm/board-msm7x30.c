@@ -90,6 +90,7 @@
 #include <mach/pmic8058-keypad.h>
 #include <mach/msm_ts.h>
 #include <mach/pmic.h>
+#include <mach/rpc_pmapp.h>
 #include <mach/qdsp5v2/aux_pcm.h>
 
 #include <asm/mach/mmc.h>
@@ -2244,6 +2245,11 @@ static void display_common_power(int on)
 		gpio_set_value(180, 1);	/* bring reset line high */
 		mdelay(10);		/* 10 msec before IO can be accessed */
 	}
+
+	if (on)
+		pmapp_display_clock_config(1);
+	else
+		pmapp_display_clock_config(0);
 }
 
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
