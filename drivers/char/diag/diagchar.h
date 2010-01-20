@@ -113,6 +113,7 @@ struct diagchar_dev {
 	int usb_connected;
 	struct workqueue_struct *diag_wq;
 	struct work_struct diag_read_work;
+	struct work_struct diag_drain_work;
 	uint8_t *msg_masks;
 	uint8_t *log_masks;
 	uint8_t *event_masks;
