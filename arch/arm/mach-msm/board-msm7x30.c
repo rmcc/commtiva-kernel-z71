@@ -2664,7 +2664,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_fb_device,
 	&mddi_toshiba_device,
 	&lcdc_toshiba_panel_device,
+#ifdef CONFIG_MSM_ROTATOR
 	&msm_rotator_device,
+#endif
 	&lcdc_sharp_panel_device,
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_adsp_device,
