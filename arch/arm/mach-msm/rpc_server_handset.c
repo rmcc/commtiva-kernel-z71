@@ -27,8 +27,6 @@
 #include <mach/board.h>
 #include <mach/rpc_server_handset.h>
 
-#include "keypad-surf-ffa.h"
-
 #define DRIVER_NAME	"msm-handset"
 
 #define HS_SERVER_PROG 0x30000062
