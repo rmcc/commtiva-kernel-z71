@@ -112,6 +112,7 @@ struct clkctl_acpu_speed {
 
 struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 0, 0, 14000, 0, 0, 1000},
+	/* Use AXI source. Row number in acpuclk_init() must match this. */
 	{ 0, 128000, ACPU_PLL_1, 1, 5, 0, 0, 14000, 2, 0, 1000},
 	{ 1, 245760, ACPU_PLL_0, 4, 0, 0, 0, 29000, 0, 0, 1000},
 	{ 1, 384000, ACPU_PLL_3, 0, 0, 0, 0, 58000, 1, 0xA, 1000},
@@ -563,7 +564,7 @@ static void __init acpuclk_init(void)
 
 	case 2: /* AXI bus clock (128Mhz) */
 	default:
-		speed = &acpu_freq_tbl[4];
+		speed = &acpu_freq_tbl[1];
 	}
 
 	/* Initialize scpll only if it wasn't already initialized by the boot
