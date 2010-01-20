@@ -92,6 +92,7 @@ struct audio_in {
 	int enabled;
 	int running;
 	int stopped; /* set when stopped, cleared on flush */
+	int abort; /* set when error, like sample rate mismatch */
 };
 
 struct audio_frame {
@@ -159,6 +160,23 @@ static void aac_in_listener(u32 evt_id, union auddev_evt_data *evt_payload,
 			/* Turn off all */
 			audaac_in_record_config(audio, 0);
 
+		break;
+	}
+	case AUDDEV_EVT_FREQ_CHG: {
+		MM_DBG("Encoder Driver got sample rate change event\n");
+		MM_DBG("sample rate %d\n", evt_payload->freq_info.sample_rate);
+		MM_DBG("dev_type %d\n", evt_payload->freq_info.dev_type);
+		MM_DBG("acdb_dev_id %d\n", evt_payload->freq_info.acdb_dev_id);
+		if ((audio->running == 1) && (audio->enabled == 1)) {
+			/* Stop Recording sample rate does not match
+			   with device sample rate */
+			if (evt_payload->freq_info.sample_rate !=
+				audio->samp_rate) {
+				audaac_in_record_config(audio, 0);
+				audio->abort = 1;
+				wake_up(&audio->wait);
+			}
+		}
 		break;
 	}
 	default:
@@ -467,6 +485,32 @@ static long audaac_in_ioctl(struct file *file,
 	mutex_lock(&audio->lock);
 	switch (cmd) {
 	case AUDIO_START: {
+		uint32_t freq;
+		freq = audio->samp_rate;
+		MM_DBG("AUDIO_START\n");
+		rc = msm_snddev_request_freq(&freq, audio->enc_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+		MM_DBG("sample rate configured %d sample rate requested %d\n",
+				freq, audio->samp_rate);
+		if (rc < 0) {
+			MM_DBG(" Sample rate can not be set, return code %d\n",
+								 rc);
+			msm_snddev_withdraw_freq(audio->enc_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+			MM_DBG("msm_snddev_withdraw_freq\n");
+			break;
+		}
+		/* Configured sample rate is not as requested,
+		   reject the request */
+		if (freq != audio->samp_rate) {
+			MM_DBG("sample rate can not be configured to %d\n", \
+				audio->samp_rate);
+			msm_snddev_withdraw_freq(audio->enc_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+			MM_DBG("msm_snddev_withdraw_freq\n");
+			rc = -EPERM;
+			break;
+		}
 		rc = audaac_in_enable(audio);
 		if (!rc) {
 			rc =
@@ -483,7 +527,11 @@ static long audaac_in_ioctl(struct file *file,
 	}
 	case AUDIO_STOP: {
 		rc = audaac_in_disable(audio);
+		rc = msm_snddev_withdraw_freq(audio->enc_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+		MM_DBG("msm_snddev_withdraw_freq\n");
 		audio->stopped = 1;
+		audio->abort = 0;
 		break;
 	}
 	case AUDIO_FLUSH: {
@@ -600,7 +648,8 @@ static ssize_t audaac_in_read(struct file *file,
 	mutex_lock(&audio->read_lock);
 	while (count > 0) {
 		rc = wait_event_interruptible(
-			audio->wait, (audio->in_count > 0) || audio->stopped);
+			audio->wait, (audio->in_count > 0) || audio->stopped ||
+			audio->abort);
 
 		if (rc < 0)
 			break;
@@ -608,6 +657,11 @@ static ssize_t audaac_in_read(struct file *file,
 		if (audio->stopped && !audio->in_count) {
 			MM_DBG("Driver in stop state, No more buffer to read");
 			rc = 0;/* End of File */
+			break;
+		}
+
+		if (audio->abort) {
+			rc = -EPERM; /* Not permitted due to abort */
 			break;
 		}
 
@@ -658,6 +712,10 @@ static int audaac_in_release(struct inode *inode, struct file *file)
 	struct audio_in *audio = file->private_data;
 
 	mutex_lock(&audio->lock);
+	/* with draw frequency for session
+	   incase not stopped the driver */
+	msm_snddev_withdraw_freq(audio->enc_id, SNDDEV_CAP_TX,
+					AUDDEV_CLNT_ENC);
 	auddev_unregister_evt_listner(AUDDEV_CLNT_ENC, audio->enc_id);
 	audaac_in_disable(audio);
 	audaac_in_flush(audio);
@@ -715,10 +773,12 @@ static int audaac_in_open(struct inode *inode, struct file *file)
 
 	audio->stopped = 0;
 	audio->source = 0;
+	audio->abort = 0;
 
 	audaac_in_flush(audio);
 
-	audio->device_events = AUDDEV_EVT_DEV_RDY | AUDDEV_EVT_DEV_RLS;
+	audio->device_events = AUDDEV_EVT_DEV_RDY | AUDDEV_EVT_DEV_RLS |
+				AUDDEV_EVT_FREQ_CHG;
 
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_ENC, audio->enc_id,

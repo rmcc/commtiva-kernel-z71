@@ -55,6 +55,7 @@
  *
  */
 
+#include <mach/debug_audio_mm.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
@@ -323,6 +324,30 @@ static void voice_auddev_cb_function(u32 evt_id,
 			}
 		} else
 			v->v_call_status = VOICE_CALL_END;
+		break;
+	case AUDDEV_EVT_FREQ_CHG:
+		MM_DBG("Voice Driver got sample rate change Event\n");
+		MM_DBG("sample rate %d\n", evt_payload->freq_info.sample_rate);
+		MM_DBG("dev_type %d\n", evt_payload->freq_info.dev_type);
+		MM_DBG("acdb_dev_id %d\n", evt_payload->freq_info.acdb_dev_id);
+		if (v->dev_state == DEV_READY) {
+			v->dev_tx.enabled = VOICE_DEV_DISABLED;
+			v->dev_state = DEV_CHANGE;
+			if (v->voc_state == VOICE_ACQUIRE) {
+				/* send device change to modem */
+				voice_cmd_change();
+				/* block to wait for CHANGE_START */
+				rc = wait_event_interruptible(
+				v->voc_wait, (v->voc_state == VOICE_CHANGE)
+				|| (atomic_read(&v->rel_start_flag) == 1));
+			} else
+				MM_ERR(" Voice is not at ACQUIRE state\n");
+		} else if ((v->dev_state == DEV_INIT) ||
+				(v->dev_state == DEV_REL_DONE)) {
+				v->dev_tx.enabled = VOICE_DEV_DISABLED;
+		} else
+			MM_ERR("Event not at the proper state =%d\n",
+				v->dev_state);
 		break;
 	default:
 		MM_ERR("UNKNOWN EVENT\n");
@@ -652,7 +677,9 @@ static int __init voice_init(void)
 			AUDDEV_EVT_REL_PENDING |
 			AUDDEV_EVT_START_VOICE |
 			AUDDEV_EVT_END_VOICE |
-			AUDDEV_EVT_DEVICE_VOL_MUTE_CHG;
+			AUDDEV_EVT_DEVICE_VOL_MUTE_CHG |
+			AUDDEV_EVT_FREQ_CHG;
+
 	MM_DBG(" to register call back \n");
 	/* register callback to auddev */
 	auddev_register_evt_listner(v->device_events, AUDDEV_CLNT_VOC,
