@@ -132,31 +132,37 @@ void dal_trace(struct dal_client *c)
 			    GFP_KERNEL);
 }
 
+void dal_trace_print(struct dal_hdr *hdr, unsigned *data, int len, unsigned when)
+{
+	int i;
+	printk("DAL %08x -> %08x L=%03x A=%d D=%04x P=%02x M=%02x T=%d",
+	       (unsigned) hdr->from, (unsigned) hdr->to,
+	       hdr->length, hdr->async,
+	       hdr->ddi, hdr->prototype, hdr->msgid,
+	       when);
+	len /= 4;
+	for (i = 0; i < len; i++) {
+		if (!(i & 7))
+			printk("\n%03x", i * 4);
+		printk(" %08x", data[i]);
+	}
+	printk("\n");
+}
+
 void dal_trace_dump(struct dal_client *c)
 {
 	struct dal_trace *dt;
-	unsigned n, i, len;
+	unsigned n, len;
 
 	if (!c->tr_log)
 		return;
 
 	for (n = c->tr_tail; n != c->tr_head; n = (n + 1) & TRACE_LOG_MASK) {
 		dt = c->tr_log + n;
-		printk("DAL %08x -> %08x L=%03x A=%d D=%04x P=%02x M=%02x T=%d",
-		       (unsigned) dt->hdr.from, (unsigned) dt->hdr.to,
-		       dt->hdr.length, dt->hdr.async,
-		       dt->hdr.ddi, dt->hdr.prototype, dt->hdr.msgid,
-			dt->timestamp);
 		len = dt->hdr.length;
 		if (len > TRACE_DATA_MAX)
 			len = TRACE_DATA_MAX;
-		len /= 4;
-		for (i = 0; i < len; i++) {
-			if (!(i & 7))
-				printk("\n%03x", i * 4);
-			printk(" %08x", dt->data[i]);
-		}
-		printk("\n");
+		dal_trace_print(&dt->hdr, dt->data, len, dt->timestamp);
 	}
 }
 
@@ -354,6 +360,7 @@ int dal_call_raw(struct dal_client *client,
 	if (!wait_event_timeout(client->wait, (client->status != -EBUSY), 5*HZ)) {
 		dal_trace_dump(client);
 		pr_err("dal: call timed out. dsp is probably dead.\n");
+		dal_trace_print(hdr, data, data_len, 0);
 		BUG();
 	}
 
