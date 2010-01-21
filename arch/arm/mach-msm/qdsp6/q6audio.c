@@ -1410,7 +1410,7 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		audio_tx_path_refcount++;
 		if (audio_tx_path_refcount == 1) {
 			_audio_tx_clk_enable();
-			audio_tx_analog_enable(1);
+			_audio_tx_path_enable(0, acdb_id);
 		}
 	}
 
@@ -1427,13 +1427,9 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		msleep(1);
 	}
 
-	if (ac->flags & AUDIO_FLAG_WRITE) {
+	if (ac->flags & AUDIO_FLAG_WRITE)
 		if (audio_rx_path_refcount == 1)
 			_audio_rx_path_enable(0, acdb_id);
-	} else {
-		if (audio_tx_path_refcount == 1)
-			_audio_tx_path_enable(0, acdb_id);
-	}
 	mutex_unlock(&audio_path_lock);
 
 	for (retry = 5;;retry--) {
