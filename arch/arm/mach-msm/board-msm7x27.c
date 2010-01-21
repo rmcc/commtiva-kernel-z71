@@ -277,10 +277,8 @@ static struct usb_composition usb_func_composition[] = {
 #endif
 
 };
-#endif
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
-#ifdef CONFIG_USB_FUNCTION
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
 	.vendor_id          = 0x5c6,
@@ -292,9 +290,10 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
-#endif
 };
+#endif
 
+#ifdef CONFIG_USB_MSM_OTG_72K
 static int hsusb_rpc_connect(int connect)
 {
 	if (connect)
@@ -302,12 +301,16 @@ static int hsusb_rpc_connect(int connect)
 	else
 		return msm_hsusb_rpc_close();
 }
+#endif
 
+#if defined(CONFIG_USB_MSM_OTG_72K) || defined(CONFIG_USB_EHCI_MSM)
 static int msm_hsusb_rpc_phy_reset(void __iomem *addr)
 {
 	return msm_hsusb_phy_reset();
 }
+#endif
 
+#ifdef CONFIG_USB_MSM_OTG_72K
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_rpc_phy_reset,
@@ -318,7 +321,10 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.pmic_enable_ldo         = msm_pm_app_enable_usb_ldo,
 };
 
+#ifdef CONFIG_USB_GADGET
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
+#endif
+#endif
 
 #define SND(desc, num) { .name = #desc, .id = num }
 static struct snd_endpoint snd_endpoints_list[] = {
@@ -1242,14 +1248,19 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
 	&msm_device_nand,
+
+#ifdef CONFIG_USB_MSM_OTG_72K
 	&msm_device_otg,
-	&msm_device_hsusb_otg,
-	&msm_device_hsusb_host,
-	&msm_device_hsusb_peripheral,
+#ifdef CONFIG_USB_GADGET
 	&msm_device_gadget_peripheral,
+#endif
+#endif
+
 #ifdef CONFIG_USB_FUNCTION
+	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 #endif
+
 #ifdef CONFIG_USB_ANDROID
 	&android_usb_device,
 #endif
@@ -1322,6 +1333,30 @@ static struct msm_acpu_clock_platform_data msm7x2x_clock_data = {
 
 void msm_serial_debug_init(unsigned int base, int irq,
 			   struct device *clk_device, int signal_irq);
+
+#ifdef CONFIG_USB_EHCI_MSM
+static void msm_hsusb_vbus_power(unsigned phy_info, int on)
+{
+	if (on)
+		msm_hsusb_vbus_powerup();
+	else
+		msm_hsusb_vbus_shutdown();
+}
+
+static struct msm_usb_host_platform_data msm_usb_host_pdata = {
+	.phy_info       = (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
+	.phy_reset = msm_hsusb_rpc_phy_reset,
+	.vbus_power = msm_hsusb_vbus_power,
+};
+static void __init msm7x2x_init_host(void)
+{
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
+		return;
+
+	msm_add_host(0, &msm_usb_host_pdata);
+}
+#endif
+
 
 #ifdef CONFIG_MMC
 static void sdcc_gpio_init(void)
@@ -1712,18 +1747,25 @@ static void __init msm7x2x_init(void)
 	kgsl_pdata.set_grp3d_async = NULL;
 #endif
 
+#ifdef CONFIG_USB_FUNCTION
 	msm_hsusb_pdata.swfi_latency =
 		msm7x27_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
+#endif
+
+#ifdef CONFIG_USB_MSM_OTG_72K
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 
+#ifdef CONFIG_USB_GADGET
 	msm_gadget_pdata.swfi_latency =
 		msm7x27_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
-	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
+#endif
+#endif
+
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
@@ -1740,6 +1782,9 @@ static void __init msm7x2x_init(void)
 	lcdc_gordon_gpio_init();
 	msm_fb_add_devices();
 	rmt_storage_add_ramfs();
+#ifdef CONFIG_USB_EHCI_MSM
+	msm7x2x_init_host();
+#endif
 	msm7x2x_init_mmc();
 	bt_power_init();
 
