@@ -1397,12 +1397,21 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		return 0;
 
 	ac->flags = flags;
-	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(1, acdb_id);
-	else {
-		/* TODO: consider concourrency with voice call */
+
+	mutex_lock(&audio_path_lock);
+
+	if (ac->flags & AUDIO_FLAG_WRITE) {
+		audio_rx_path_refcount++;
+		if (audio_rx_path_refcount == 1)
+			_audio_rx_clk_enable();
+	} else {
+		/* TODO: consider concurrency with voice call */
 		tx_clk_freq = rate;
-		audio_tx_path_enable(1, acdb_id);
+		audio_tx_path_refcount++;
+		if (audio_tx_path_refcount == 1) {
+			_audio_tx_clk_enable();
+			audio_tx_analog_enable(1);
+		}
 	}
 
 	for (retry = 5;;retry--) {
@@ -1417,6 +1426,15 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		pr_err("q6audio: open pcm error %d, retrying\n", rc);
 		msleep(1);
 	}
+
+	if (ac->flags & AUDIO_FLAG_WRITE) {
+		if (audio_rx_path_refcount == 1)
+			_audio_rx_path_enable(0, acdb_id);
+	} else {
+		if (audio_tx_path_refcount == 1)
+			_audio_tx_path_enable(0, acdb_id);
+	}
+	mutex_unlock(&audio_path_lock);
 
 	for (retry = 5;;retry--) {
 		rc = audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
