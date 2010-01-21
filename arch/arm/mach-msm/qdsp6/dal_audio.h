@@ -32,7 +32,7 @@
 #include "dal_audio_format.h"
 
 #define AUDIO_DAL_DEVICE 0x02000028
-#define AUDIO_DAL_PORT "DSP_DAL_AQ_AUD"
+#define AUDIO_DAL_PORT "DAL_AQ_AUD"
 
 enum {
 	AUDIO_OP_CONTROL = DAL_OP_FIRST_DEVICE_API,
