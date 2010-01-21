@@ -6,3 +6,4 @@ obj-y += aux_pcm.o snddev_ecodec.o audio_out.o
 obj-y += audpreproc.o audio_pcm_in.o audio_aac_in.o audio_amrnb_in.o
 obj-y += audio_evrc_in.o audio_qcelp_in.o
 obj-y += adsp.o adsp_driver.o adsp_info.o
+obj-y += audio_acdb.o
