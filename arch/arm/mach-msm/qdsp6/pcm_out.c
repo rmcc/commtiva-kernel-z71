@@ -26,6 +26,8 @@
 
 #include <mach/msm_qdsp6_audio.h>
 
+void audio_client_dump(struct audio_client *ac);
+
 #define BUFSZ (4800)
 #define DMASZ (BUFSZ * 2)
 
@@ -153,6 +155,7 @@ static ssize_t pcm_write(struct file *file, const char __user *buf,
 
 		if (ab->used)
 			if (!wait_event_timeout(ac->wait, (ab->used == 0), 5*HZ)) {
+				audio_client_dump(ac);
 				pr_err("pcm_write: timeout. dsp dead?\n");
 				BUG();
 			}

@@ -321,6 +321,11 @@ fail_session:
 	return 0;
 }
 
+void audio_client_dump(struct audio_client *ac)
+{
+	dal_trace_dump(ac->client);
+}
+
 static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 {
 	struct adsp_command_hdr *hdr = ptr;
@@ -336,6 +341,7 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 	if (r != 4)
 		return -EIO;
 	if (!wait_event_timeout(ac->wait, (ac->cb_status != -EBUSY), 5*HZ)) {
+		dal_trace_dump(ac->client);
 		pr_err("audio_ioctl: timeout. dsp dead?\n");
 		BUG();
 	}
@@ -646,6 +652,7 @@ static int q6audio_init(void)
 	}
 	pr_info("audio: init: INIT\n");
 	audio_init(adsp);
+	dal_trace(adsp);
 
 	ac = audio_client_alloc(0);
 	if (!ac) {

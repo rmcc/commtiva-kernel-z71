@@ -34,6 +34,7 @@ static uint32_t sample_rate = 8000;
 static uint32_t channel_count = 1;
 static int pcm_in_opened = 0;
 
+void audio_client_dump(struct audio_client *ac);
 
 static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
@@ -133,6 +134,7 @@ static ssize_t q6_in_read(struct file *file, char __user *buf,
 
 		if (ab->used)
 			if (!wait_event_timeout(ac->wait, (ab->used == 0), 5*HZ)) {
+				audio_client_dump(ac);
 				pr_err("pcm_read: timeout. dsp dead?\n");
 				BUG();
 			}
