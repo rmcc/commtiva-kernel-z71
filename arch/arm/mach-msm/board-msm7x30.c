@@ -382,6 +382,16 @@ static struct pm8058_platform_data pm8058_7x30_data = {
 		[PM8058_IRQ_CHGVAL - PM8058_FIRST_IRQ] = 15,
 	},
 	.init = pm8058_gpios_init,
+
+	.num_subdevs = 3,
+	.sub_devices = {
+		{	.name = "pm8058-gpio",
+		},
+		{	.name = "pm8058-mpp",
+		},
+		{	.name = "pm8058-pwm",
+		},
+	},
 };
 
 static struct i2c_board_info pm8058_boardinfo[] __initdata = {
