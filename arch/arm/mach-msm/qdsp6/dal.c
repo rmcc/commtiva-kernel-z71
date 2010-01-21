@@ -429,6 +429,7 @@ struct dal_client *dal_attach(uint32_t device_id, const char *name,
 	client->event = func;
 	client->cookie = cookie;
 	mutex_init(&client->write_lock);
+	spin_lock_init(&client->tr_lock);
 	init_waitqueue_head(&client->wait);
 
 	spin_lock_irqsave(&dch->lock, flags);
