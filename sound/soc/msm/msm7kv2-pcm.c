@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * All source code in this file is licensed under the following license except
  * where indicated.
@@ -47,7 +47,9 @@ struct snd_msm {
 int copy_count;
 
 static struct snd_pcm_hardware msm_pcm_playback_hardware = {
-	.info =                 SNDRV_PCM_INFO_INTERLEAVED,
+	.info =                 SNDRV_PCM_INFO_MMAP |
+				SNDRV_PCM_INFO_MMAP_VALID |
+				SNDRV_PCM_INFO_INTERLEAVED,
 	.formats =              USE_FORMATS,
 	.rates =                USE_RATE,
 	.rate_min =             USE_RATE_MIN,
@@ -89,11 +91,37 @@ static struct snd_pcm_hw_constraint_list constraints_sample_rates = {
 	.mask = 0,
 };
 
+static void msm_pcm_enqueue_data(struct snd_pcm_substream *substream)
+{
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct msm_audio *prtd = runtime->private_data;
+	unsigned int period_size;
+
+	MM_DBG("prtd->out_tail =%d mmap_flag=%d\n",
+			prtd->out_tail, prtd->mmap_flag);
+	period_size = snd_pcm_lib_period_bytes(substream);
+	alsa_dsp_send_buffer(prtd, prtd->out_tail, period_size);
+	prtd->out_tail ^= 1;
+	++copy_count;
+	prtd->period++;
+	if (unlikely(prtd->period >= runtime->periods))
+		prtd->period = 0;
+
+}
+
 static void event_handler(void *data)
 {
 	struct msm_audio *prtd = data;
 	MM_DBG("\n");
 	snd_pcm_period_elapsed(prtd->substream);
+	if (prtd->mmap_flag) {
+		if (prtd->dir == SNDRV_PCM_STREAM_CAPTURE)
+			return;
+		if (!prtd->stopped)
+			msm_pcm_enqueue_data(prtd->substream);
+		else
+			prtd->out_needed++;
+	}
 }
 
 static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
@@ -121,6 +149,16 @@ static int msm_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	prtd->out[1].data = prtd->data + BUFSZ;
 	prtd->out[1].addr = prtd->phys + BUFSZ;
 	prtd->out[1].size = BUFSZ;
+
+	if (prtd->enabled | !(prtd->mmap_flag))
+		return 0;
+
+	prtd->out[0].used = prtd->pcm_count;
+	prtd->out[1].used = prtd->pcm_count;
+
+	mutex_lock(&the_locks.lock);
+	alsa_audio_configure(prtd);
+	mutex_unlock(&the_locks.lock);
 
 	return 0;
 }
@@ -173,6 +211,9 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 
 static int msm_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct msm_audio *prtd = runtime->private_data;
+	unsigned long flag = 0;
 	int ret = 0;
 
 	MM_DBG("\n");
@@ -180,13 +221,46 @@ static int msm_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 	case SNDRV_PCM_TRIGGER_START:
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
+		if ((substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+			|| prtd->mmap_flag)
+			break;
+		if (!prtd->out_needed) {
+			prtd->stopped = 0;
+			break;
+		}
+		spin_lock_irqsave(&the_locks.write_dsp_lock, flag);
+		if (prtd->running == 1) {
+			if (prtd->stopped == 1) {
+				prtd->stopped = 0;
+				prtd->period = 0;
+				if (prtd->pcm_irq_pos == 0) {
+					prtd->out_tail = 0;
+					msm_pcm_enqueue_data(prtd->substream);
+					prtd->out_needed--;
+				} else {
+					prtd->out_tail = 1;
+					msm_pcm_enqueue_data(prtd->substream);
+					prtd->out_needed--;
+				}
+				if (prtd->out_needed) {
+					prtd->out_tail ^= 1;
+					msm_pcm_enqueue_data(prtd->substream);
+					prtd->out_needed--;
+				}
+			}
+		}
+		spin_unlock_irqrestore(&the_locks.write_dsp_lock, flag);
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
+		if (substream->stream == SNDRV_PCM_STREAM_CAPTURE)
+			break;
+		prtd->stopped = 1;
 		break;
 	default:
 		ret = -EINVAL;
+		break;
 	}
 
 	return ret;
@@ -343,6 +417,8 @@ static int msm_pcm_capture_copy(struct snd_pcm_substream *substream,
 		ret = rc1 + rc2;
 	}
 	prtd->pcm_buf_pos += fbytes;
+	MM_DBG("prtd->pcm_buf_pos =%d, prtd->mmap_flag =%d\n",
+				prtd->pcm_buf_pos, prtd->mmap_flag);
 	return ret;
 }
 
@@ -405,15 +481,26 @@ static snd_pcm_uframes_t msm_pcm_pointer(struct snd_pcm_substream *substream)
 	return bytes_to_frames(runtime, (prtd->pcm_irq_pos));
 }
 
+int msm_pcm_mmap(struct snd_pcm_substream *substream,
+				struct vm_area_struct *vma)
+{
+	struct snd_pcm_runtime *runtime = substream->runtime;
+	struct msm_audio *prtd = runtime->private_data;
+
+	prtd->out_head = 0; /* point to First buffer on startup */
+	prtd->mmap_flag = 1;
+	runtime->dma_bytes = snd_pcm_lib_period_bytes(substream)*2;
+	dma_mmap_coherent(substream->pcm->card->dev, vma,
+				     runtime->dma_area,
+				     runtime->dma_addr,
+				     runtime->dma_bytes);
+	return 0;
+}
+
 int msm_pcm_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
-	struct snd_pcm_runtime *runtime = substream->runtime;
-
-	if (substream->pcm->device & 1) {
-		runtime->hw.info &= ~SNDRV_PCM_INFO_INTERLEAVED;
-		runtime->hw.info |= SNDRV_PCM_INFO_NONINTERLEAVED;
-	}
+	snd_pcm_set_runtime_buffer(substream, &substream->dma_buffer);
 	return 0;
 }
 
@@ -426,6 +513,7 @@ static struct snd_pcm_ops msm_pcm_ops = {
 	.prepare        = msm_pcm_prepare,
 	.trigger        = msm_pcm_trigger,
 	.pointer        = msm_pcm_pointer,
+	.mmap           = msm_pcm_mmap,
 };
 
 

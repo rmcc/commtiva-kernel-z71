@@ -52,7 +52,7 @@
 #define USE_RATE_MIN            8000
 #define USE_RATE_MAX            48000
 #define MAX_BUFFER_PLAYBACK_SIZE \
-				(4800*4)
+				PLAYBACK_DMASZ
 /* 2048 frames (Mono), 1024 frames (Stereo) */
 #define CAPTURE_SIZE		4096
 #define MAX_BUFFER_CAPTURE_SIZE (4096*4)
@@ -180,12 +180,15 @@ struct msm_audio {
 	int stopped; /* set when stopped, cleared on flush */
 	int eos_ack;
 	int mmap_flag;
+	int period;
 	struct audpp_cmd_cfg_object_params_volume vol_pan;
 };
 
 
 
 /* platform data */
+extern int alsa_dsp_send_buffer(struct msm_audio *prtd,
+			unsigned idx, unsigned len);
 extern int audio_dsp_out_enable(struct msm_audio *prtd, int yes);
 extern struct snd_soc_platform msm_soc_platform;
 extern struct snd_soc_dai msm_dais[2];

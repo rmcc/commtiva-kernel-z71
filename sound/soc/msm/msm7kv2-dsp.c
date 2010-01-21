@@ -1,6 +1,6 @@
 /* Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -42,8 +42,6 @@
 	msm_adsp_write(audio->audrec, (audio->queue_id & 0x0000FFFF),\
 		cmd, len)
 
-static int alsa_dsp_send_buffer(struct msm_audio *prtd,
-			unsigned idx, unsigned len);
 static int alsa_dsp_read_buffer(struct msm_audio *audio,
 			uint32_t read_cnt);
 static void alsa_get_dsp_frames(struct msm_audio *prtd);
@@ -92,6 +90,9 @@ void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 
 		if (prtd->ops->playback)
 			prtd->ops->playback(prtd);
+
+		if (prtd->mmap_flag)
+			break;
 
 		spin_lock_irqsave(&the_locks.write_dsp_lock, flag);
 		if (prtd->running) {
@@ -535,7 +536,7 @@ int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
 }
 EXPORT_SYMBOL(alsa_buffer_read);
 
-static int alsa_dsp_send_buffer(struct msm_audio *prtd,
+int alsa_dsp_send_buffer(struct msm_audio *prtd,
 					unsigned idx, unsigned len)
 {
 	struct audpp_cmd_pcm_intf_send_buffer cmd;
