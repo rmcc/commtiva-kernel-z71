@@ -116,7 +116,7 @@ static int voice_cmd_change(void)
 	hdr.id = CMD_DEVICE_CHANGE;
 	hdr.data_len = 0;
 
-	MM_DBG("%s()\n", __func__);
+	MM_INFO("%s()\n", __func__);
 
 	err = dalrpc_fcn_5(VOICE_DALRPC_CMD, v->handle, &hdr,
 			sizeof(struct voice_header));
@@ -134,7 +134,7 @@ static void voice_auddev_cb_function(u32 evt_id,
 	int rc = 0;
 	int vol;
 
-	MM_DBG("auddev_cb_function, evt_id=%d, dev_state=%d\n",
+	MM_INFO("auddev_cb_function, evt_id=%d, dev_state=%d\n",
 		evt_id, v->dev_state);
 	if ((evt_id != AUDDEV_EVT_START_VOICE) ||
 			(evt_id != AUDDEV_EVT_END_VOICE)) {
@@ -209,14 +209,12 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_rx.sample =
 					evt_payload->voc_devinfo.dev_sample;
 				v->dev_rx.enabled = VOICE_DEV_ENABLED;
-				MM_DBG(" rx dev enabled\n");
 			} else {
 				v->dev_tx.dev_acdb_id =
 					evt_payload->voc_devinfo.acdb_dev_id;
 				v->dev_tx.sample =
 					evt_payload->voc_devinfo.dev_sample;
 				v->dev_tx.enabled = VOICE_DEV_ENABLED;
-				MM_DBG(" tx dev enabled \n");
 			}
 			if ((v->dev_rx.enabled == VOICE_DEV_ENABLED) &&
 				(v->dev_tx.enabled == VOICE_DEV_ENABLED) &&
@@ -261,10 +259,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 				if (evt_payload->voc_devinfo.dev_type
 							== DIR_RX) {
 					v->dev_rx.enabled = VOICE_DEV_DISABLED;
-					MM_DBG(" rx disable\n");
 				} else {
 					v->dev_tx.enabled = VOICE_DEV_DISABLED;
-					MM_DBG(" tx disable \n");
 				}
 				v->dev_state = DEV_REL_DONE;
 				wake_up(&v->dev_wait);
@@ -273,7 +269,6 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_tx.mute = v->default_mute_val;
 				v->dev_rx.volume = v->default_vol_val;
 				voice_cmd_device_info(v);
-				MM_DBG("blocking to wait for release start \n");
 				rc = wait_event_interruptible(
 				v->voc_wait,
 					atomic_read(&v->rel_start_flag) == 1);
@@ -364,7 +359,7 @@ static void remote_cb_function(void *context, u32 param,
 
 	hdr = (struct voice_header *)evt_buf;
 
-	MM_DBG("%s() len=%d id=%d\n", __func__, len, hdr->id);
+	MM_INFO("%s() len=%d id=%d\n", __func__, len, hdr->id);
 
 	if (len <= 0) {
 		MM_ERR("unexpected event with length %d \n", len);
@@ -376,7 +371,6 @@ static void remote_cb_function(void *context, u32 param,
 		mutex_lock(&voice.lock);
 		v->voc_event = VOICE_ACQUIRE_START;
 		v->network = ((struct voice_network *)evt_buf)->network_info;
-		MM_DBG(" network=%d\n", v->network);
 		mutex_unlock(&voice.lock);
 		complete(&v->complete);
 		break;
@@ -392,7 +386,6 @@ static void remote_cb_function(void *context, u32 param,
 		complete(&v->complete);
 		break;
 	case EVENT_CHANGE_START:
-		MM_DBG("receive Change Start \n");
 		mutex_lock(&voice.lock);
 		v->voc_event = VOICE_CHANGE_START;
 		mutex_unlock(&voice.lock);
@@ -441,7 +434,7 @@ static int voice_cmd_acquire_done(struct voice_data *v)
 	hdr.id = CMD_ACQUIRE_DONE;
 	hdr.data_len = 0;
 
-	MM_DBG("%s()\n", __func__);
+	MM_INFO("%s()\n", __func__);
 
 	err = dalrpc_fcn_5(VOICE_DALRPC_CMD, v->handle, &hdr,
 			 sizeof(struct voice_header));
@@ -456,7 +449,7 @@ static int voice_cmd_release_done(struct voice_data *v)
 	struct voice_header hdr;
 	int err;
 
-	MM_DBG("%s()\n", __func__);
+	MM_INFO("%s()\n", __func__);
 
 	hdr.id = CMD_RELEASE_DONE;
 	hdr.data_len = 0;
@@ -474,10 +467,10 @@ static int voice_cmd_device_info(struct voice_data *v)
 	struct voice_device cmd;
 	int err;
 
-	MM_DBG("%s(), tx_dev=%d, rx_dev=%d, tx_sample=%d, rx_sample=%d \n",
+	MM_INFO("%s(), tx_dev=%d, rx_dev=%d, tx_sample=%d, rx_sample=%d \n",
 	__func__, v->dev_tx.dev_acdb_id, v->dev_rx.dev_acdb_id,
 	v->dev_tx.sample, v->dev_rx.sample);
-	MM_DBG("rx_vol=%d, tx_mute=%d\n", v->dev_rx.volume, v->dev_tx.mute);
+	MM_INFO("rx_vol=%d, tx_mute=%d\n", v->dev_rx.volume, v->dev_tx.mute);
 
 	cmd.hdr.id = CMD_DEVICE_INFO;
 	cmd.hdr.data_len = sizeof(struct voice_device) -
@@ -506,7 +499,7 @@ void voice_change_sample_rate(struct voice_data *v)
 
 	if (v->network == NETWORK_WCDMA_WB)
 		freq = 16000;
-	MM_DBG(" network =%d, vote freq=%d\n", v->network, freq);
+	MM_INFO(" network =%d, vote freq=%d\n", v->network, freq);
 	if (freq != v->dev_tx.sample) {
 		rc = msm_snddev_request_freq(&freq, 0,
 				SNDDEV_CAP_TX, AUDDEV_CLNT_VOC);
@@ -523,13 +516,13 @@ static int voice_thread(void *data)
 	struct voice_data *v = (struct voice_data *)data;
 	int rc = 0;
 
-	MM_DBG("voice_thread() start\n");
+	MM_INFO("voice_thread() start\n");
 
 	while (!kthread_should_stop()) {
 		wait_for_completion(&v->complete);
 		init_completion(&v->complete);
 
-		MM_DBG(" voc_event=%d, voice state =%d, dev_event=%d/n",
+		MM_INFO(" voc_event=%d, voice state =%d, dev_event=%d/n",
 				v->voc_event, v->voc_state, v->dev_event);
 		switch (v->voc_event) {
 		case VOICE_ACQUIRE_START:
@@ -624,7 +617,7 @@ static int __init voice_init(void)
 {
 	int rc;
 	struct voice_data *v = &voice;
-	MM_DBG("%s\n", __func__);
+	MM_INFO("%s\n", __func__);
 
 	mutex_init(&voice.lock);
 	v->handle = NULL;
