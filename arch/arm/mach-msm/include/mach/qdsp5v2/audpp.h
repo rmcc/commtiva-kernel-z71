@@ -83,4 +83,17 @@ int audpp_dsp_set_eq(unsigned id, unsigned enable,
 int audpp_dsp_set_vol_pan(unsigned id,
 	struct audpp_cmd_cfg_object_params_volume *vol_pan,
 			enum obj_type objtype);
+
+int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_mbadrc *mbadrc,
+	enum obj_type objtype);
+
+int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_qconcert *qconcert_plus,
+	enum obj_type objtype);
+
+int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_pcm *iir,
+	enum obj_type objtype);
+
 #endif

@@ -552,7 +552,7 @@ struct audpp_cmd_cfg_object_params_volume {
 } __attribute__((packed));
 
 /*
- * Command Structure to configure post processing params (PCM Filter) --DOUBT
+ * Command Structure to configure post processing params (PCM Filter)
  */
 
 struct numerator {
@@ -613,7 +613,7 @@ struct filter_4 {
 
 struct audpp_cmd_cfg_object_params_pcm {
 	struct audpp_cmd_cfg_object_params_common 	common;
-	unsigned short				active_flag;
+	signed short				active_flag;
 	unsigned short 				num_bands;
 	union {
 		struct filter_1			filter_1_params;
@@ -726,7 +726,7 @@ struct eq_coeff_12 {
 
 struct audpp_cmd_cfg_object_params_eqalizer {
 	struct audpp_cmd_cfg_object_params_common 	common;
-	unsigned short				eq_flag;
+	signed short				eq_flag;
 	unsigned short				num_bands;
 	union {
 		struct eq_coeff_1	eq_coeffs_1;
@@ -754,6 +754,23 @@ struct audpp_cmd_cfg_object_params_eqalizer {
 
 #define AUDPP_CMD_ADRC_FLAG_DIS		0x0000
 #define AUDPP_CMD_ADRC_FLAG_ENA		-1
+
+struct audpp_cmd_cfg_object_params_adrc {
+	struct audpp_cmd_cfg_object_params_common 	common;
+	signed short		adrc_flag;
+	unsigned short	compression_th;
+	unsigned short	compression_slope;
+	unsigned short	rms_time;
+	unsigned short	attack_const_lsw;
+	unsigned short	attack_const_msw;
+	unsigned short	release_const_lsw;
+	unsigned short	release_const_msw;
+	unsigned short	adrc_delay;
+};
+
+/*
+ * Command Structure to configure post processing parameters (MB - ADRC)
+ */
 
 #define	AUDPP_MAX_MBADRC_BANDS		5
 
@@ -905,7 +922,7 @@ struct audpp_cmd_cfg_object_params_qafx {
 
 /*
  * Command Structure to enable , disable or configure the reverberation effect
- * (Common)
+ * (REVERB) (Common)
  */
 
 #define AUDPP_CMD_REVERB_CONFIG		0x0001
