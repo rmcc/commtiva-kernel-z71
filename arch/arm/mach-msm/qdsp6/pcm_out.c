@@ -64,7 +64,9 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	case AUDIO_START: {
 		uint32_t acdb_id;
-		if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
+		if (arg == 0) {
+			acdb_id = 0;
+		} else if (copy_from_user(&acdb_id, (void*) arg, sizeof(acdb_id))) {
 			pr_info("pcm_out: copy acdb_id from user failed\n");
 			rc = -EFAULT;
 			break;
