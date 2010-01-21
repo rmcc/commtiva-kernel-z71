@@ -61,7 +61,7 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab);
 int q6audio_write(struct audio_client *ac, struct audio_buffer *ab);
 int q6audio_async(struct audio_client *ac);
 
-int q6audio_do_routing(uint32_t route);
+int q6audio_do_routing(uint32_t route, uint32_t acdb_id);
 int q6audio_set_tx_mute(int mute);
 int q6audio_reinit_acdb(char* filename);
 int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst);
