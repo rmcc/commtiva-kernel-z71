@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -502,30 +502,28 @@ bail_out:
 	return rc;
 }
 
-int pm8058_mpp_get(unsigned mpp)
+int pm8058_mpp_get(struct pm8058_chip *chip, unsigned mpp)
 {
 	int     rc;
 	u8      block, bits, bit;
 	unsigned long	irqsave;
 
-	if (mpp >= PM8058_MPPS)
+	if (mpp >= PM8058_MPPS || chip == NULL)
 		return -EINVAL;
-	if (pmic_chip == NULL)
-		return -ENODEV;
 
 	block = FIRST_MPP_IRQ_BLOCK + mpp / 8;
 	bit = mpp % 8;
 
 	local_irq_save(irqsave);
 
-	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
 	if (rc) {
 		pr_err("%s: FAIL ssbi_write(): rc=%d (Select Block)\n",
 		       __func__, rc);
 		goto bail_out;
 	}
 
-	rc = ssbi_read(pmic_chip->dev, SSBI_REG_ADDR_IRQ_RT_STATUS, &bits, 1);
+	rc = ssbi_read(chip->dev, SSBI_REG_ADDR_IRQ_RT_STATUS, &bits, 1);
 	if (rc) {
 		pr_err("%s: FAIL ssbi_read(): rc=%d (Read RT Status)\n",
 		       __func__, rc);
