@@ -153,6 +153,35 @@ int msm_rpc_call(struct msm_rpc_endpoint *ept, uint32_t proc,
 		 void *request, int request_size,
 		 long timeout);
 
+struct msm_rpc_xdr {
+	void *in_buf;
+	uint32_t in_size;
+	uint32_t in_index;
+
+	void *out_buf;
+	uint32_t out_size;
+	uint32_t out_index;
+	struct mutex out_lock;
+
+	struct msm_rpc_endpoint *ept;
+};
+
+int xdr_send_int8(struct msm_rpc_xdr *xdr, const int8_t *value);
+int xdr_send_uint8(struct msm_rpc_xdr *xdr, const uint8_t *value);
+int xdr_send_int16(struct msm_rpc_xdr *xdr, const int16_t *value);
+int xdr_send_uint16(struct msm_rpc_xdr *xdr, const uint16_t *value);
+int xdr_send_int32(struct msm_rpc_xdr *xdr, const int32_t *value);
+int xdr_send_uint32(struct msm_rpc_xdr *xdr, const uint32_t *value);
+int xdr_send_bytes(struct msm_rpc_xdr *xdr, const void **data, uint32_t *size);
+
+int xdr_recv_int8(struct msm_rpc_xdr *xdr, int8_t *value);
+int xdr_recv_uint8(struct msm_rpc_xdr *xdr, uint8_t *value);
+int xdr_recv_int16(struct msm_rpc_xdr *xdr, int16_t *value);
+int xdr_recv_uint16(struct msm_rpc_xdr *xdr, uint16_t *value);
+int xdr_recv_int32(struct msm_rpc_xdr *xdr, int32_t *value);
+int xdr_recv_uint32(struct msm_rpc_xdr *xdr, uint32_t *value);
+int xdr_recv_bytes(struct msm_rpc_xdr *xdr, void **data, uint32_t *size);
+
 struct msm_rpc_server
 {
 	struct list_head list;
@@ -162,17 +191,23 @@ struct msm_rpc_server
 	uint32_t vers;
 
 	struct mutex cb_req_lock;
-	struct mutex reply_lock;
-	char *cb_req;
-	char *reply;
 
 	struct msm_rpc_endpoint *cb_ept;
 
+	struct msm_rpc_xdr cb_xdr;
+
+	uint32_t version;
+
 	int (*rpc_call)(struct msm_rpc_server *server,
 			struct rpc_request_hdr *req, unsigned len);
+
+	int (*rpc_call2)(struct msm_rpc_server *server,
+			 struct rpc_request_hdr *req,
+			 struct msm_rpc_xdr *xdr);
 };
 
 int msm_rpc_create_server(struct msm_rpc_server *server);
+int msm_rpc_create_server2(struct msm_rpc_server *server);
 
 #define MSM_RPC_MSGSIZE_MAX 8192
 
@@ -188,9 +223,15 @@ struct msm_rpc_client {
 	uint32_t prog, ver;
 
 	void *buf;
-	int read_avail;
+
+	struct msm_rpc_xdr xdr;
+	struct msm_rpc_xdr cb_xdr;
+
+	uint32_t version;
 
 	int (*cb_func)(struct msm_rpc_client *, void *, int);
+	int (*cb_func2)(struct msm_rpc_client *, struct rpc_request_hdr *req,
+			struct msm_rpc_xdr *);
 	void *cb_buf;
 	int cb_size;
 
@@ -209,9 +250,6 @@ struct msm_rpc_client {
 	struct completion cb_complete;
 
 	struct mutex req_lock;
-	struct mutex reply_lock;
-	char *req;
-	char *reply;
 };
 
 struct msm_rpc_client_info {
@@ -227,6 +265,13 @@ struct msm_rpc_client *msm_rpc_register_client(
 	uint32_t create_cb_thread,
 	int (*cb_func)(struct msm_rpc_client *, void *, int));
 
+struct msm_rpc_client *msm_rpc_register_client2(
+	const char *name,
+	uint32_t prog, uint32_t ver,
+	uint32_t create_cb_thread,
+	int (*cb_func)(struct msm_rpc_client *, struct rpc_request_hdr *req,
+		       struct msm_rpc_xdr *xdr));
+
 int msm_rpc_unregister_client(struct msm_rpc_client *client);
 
 int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
@@ -235,6 +280,15 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 		       int (*result_func)(struct msm_rpc_client *,
 					  void *, void *), void *result_data,
 		       long timeout);
+
+int msm_rpc_client_req2(struct msm_rpc_client *client, uint32_t proc,
+			int (*arg_func)(struct msm_rpc_client *,
+					struct msm_rpc_xdr *, void *),
+			void *arg_data,
+			int (*result_func)(struct msm_rpc_client *,
+					   struct msm_rpc_xdr *, void *),
+			void *result_data,
+			long timeout);
 
 void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
 				   uint32_t xid, uint32_t accept_status);
@@ -263,7 +317,36 @@ int msm_rpc_server_cb_req(struct msm_rpc_server *server,
 					  void *buf, void *data),
 			  void *ret_data, long timeout);
 
+int msm_rpc_server_cb_req2(struct msm_rpc_server *server,
+			   struct msm_rpc_client_info *clnt_info,
+			   uint32_t cb_proc,
+			   int (*arg_func)(struct msm_rpc_server *server,
+					   struct msm_rpc_xdr *xdr, void *data),
+			   void *arg_data,
+			   int (*ret_func)(struct msm_rpc_server *server,
+					   struct msm_rpc_xdr *xdr, void *data),
+			   void *ret_data, long timeout);
+
 void msm_rpc_server_get_requesting_client(
 	struct msm_rpc_client_info *clnt_info);
+
+int xdr_send_pointer(struct msm_rpc_xdr *xdr, void **obj,
+		     uint32_t obj_size, void *xdr_op);
+
+int xdr_recv_pointer(struct msm_rpc_xdr *xdr, void **obj,
+		     uint32_t obj_size, void *xdr_op);
+
+int xdr_send_array(struct msm_rpc_xdr *xdr, void **addr, uint32_t *size,
+		   uint32_t maxsize, uint32_t elm_size, void *xdr_op);
+
+int xdr_recv_array(struct msm_rpc_xdr *xdr, void **addr, uint32_t *size,
+		   uint32_t maxsize, uint32_t elm_size, void *xdr_op);
+
+int xdr_recv_req(struct msm_rpc_xdr *xdr, struct rpc_request_hdr *req);
+int xdr_recv_reply(struct msm_rpc_xdr *xdr, struct rpc_reply_hdr *reply);
+int xdr_start_request(struct msm_rpc_xdr *xdr, uint32_t prog,
+		      uint32_t ver, uint32_t proc);
+int xdr_start_accepted_reply(struct msm_rpc_xdr *xdr, uint32_t accept_status);
+int xdr_send_msg(struct msm_rpc_xdr *xdr);
 
 #endif
