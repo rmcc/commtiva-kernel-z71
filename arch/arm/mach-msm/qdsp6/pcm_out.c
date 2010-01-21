@@ -28,7 +28,7 @@
 
 void audio_client_dump(struct audio_client *ac);
 
-#define BUFSZ (4800)
+#define BUFSZ (3072)
 #define DMASZ (BUFSZ * 2)
 
 struct pcm {
