@@ -162,8 +162,7 @@ static void adie_codec_write(u8 reg, u8 mask, u8 val)
 int adie_codec_setpath(struct adie_codec_path *path_ptr, u32 freq_plan, u32 osr)
 {
 	int rc = 0;
-	u32 i;
-
+	u32 i, freq_idx = 0, freq = 0;
 
 	if (path_ptr->curr_stage != ADIE_CODEC_DIGITAL_OFF) {
 		rc = -EBUSY;
@@ -171,39 +170,49 @@ int adie_codec_setpath(struct adie_codec_path *path_ptr, u32 freq_plan, u32 osr)
 	}
 
 	for (i = 0; i < path_ptr->profile->setting_sz; i++) {
-		if (path_ptr->profile->settings[i].freq_plan == freq_plan &&
-		    path_ptr->profile->settings[i].osr == osr)
-			break;
+		if (path_ptr->profile->settings[i].osr == osr) {
+			if (path_ptr->profile->settings[i].freq_plan >=
+				freq_plan) {
+				if (freq == 0) {
+					freq = path_ptr->profile->settings[i].
+								freq_plan;
+					freq_idx = i;
+				} else if (path_ptr->profile->settings[i].
+					freq_plan < freq) {
+					freq = path_ptr->profile->settings[i].
+								freq_plan;
+					freq_idx = i;
+				}
+			}
+		}
 	}
 
-	if (i == path_ptr->profile->setting_sz)
+	if (freq_idx >= path_ptr->profile->setting_sz)
 		rc = -ENODEV;
 	else {
-		path_ptr->hwsetting_idx = i;
+		path_ptr->hwsetting_idx = freq_idx;
 		path_ptr->stage_idx = 0;
 	}
+
 error:
 	return rc;
 }
 EXPORT_SYMBOL(adie_codec_setpath);
 
-u32 adie_codec_getfreq(struct adie_codec_dev_profile *profile,
+u32 adie_codec_freq_supported(struct adie_codec_dev_profile *profile,
 	u32 requested_freq)
 {
-	u32 i = 0, ret_freq = 0;
+	u32 i, rc = -EINVAL;
 
 	for (i = 0; i < profile->setting_sz; i++) {
 		if (profile->settings[i].freq_plan >= requested_freq) {
-			if (ret_freq == 0)
-				ret_freq = profile->settings[i].freq_plan;
-			else if (profile->settings[i].freq_plan < ret_freq)
-				ret_freq = profile->settings[i].freq_plan;
+			rc = 0;
+			break;
 		}
 	}
-
-	return ret_freq;
+	return rc;
 }
-EXPORT_SYMBOL(adie_codec_getfreq);
+EXPORT_SYMBOL(adie_codec_freq_supported);
 
 static void adie_codec_reach_stage_action(struct adie_codec_path *path_ptr,
 	u32 stage)
@@ -313,6 +322,10 @@ int adie_codec_open(struct adie_codec_dev_profile *profile,
 	adie_codec.path[profile->path_type].profile = profile;
 	*path_pptr = (void *) &adie_codec.path[profile->path_type];
 	adie_codec.ref_cnt++;
+	adie_codec.path[profile->path_type].hwsetting_idx = 0;
+	adie_codec.path[profile->path_type].curr_stage = ADIE_CODEC_DIGITAL_OFF;
+	adie_codec.path[profile->path_type].stage_idx = 0;
+
 	mutex_unlock(&adie_codec.lock);
 
 error:
@@ -336,10 +349,6 @@ int adie_codec_close(struct adie_codec_path *path_ptr)
 	BUG_ON(!adie_codec.ref_cnt);
 
 	path_ptr->profile = NULL;
-	path_ptr->hwsetting_idx = 0;
-	path_ptr->stage_idx = 0;
-	path_ptr->curr_stage = 0;
-
 	adie_codec.ref_cnt--;
 
 	if (!adie_codec.ref_cnt) {
