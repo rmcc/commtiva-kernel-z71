@@ -782,8 +782,6 @@ static int acdb_get_config_table(uint32_t device_id, uint32_t sample_rate)
 			return res;
 	}
 
-	device_id = q6_device_to_cad_id(device_id);
-
 	db = acdb_data;
 	for (n = 0; n < db->entry_count; n++) {
 		if (db->entry[n].device_id != device_id)
@@ -900,18 +898,25 @@ static void audio_tx_analog_enable(int en)
 	}
 }
 
-static void _audio_rx_path_enable(int reconf)
+static int audio_update_acdb(uint32_t adev, uint32_t acdb_id)
 {
-	uint32_t adev, sample_rate;
+	uint32_t sample_rate;
 	int sz;
 
-	adev = audio_rx_device_id;
 	sample_rate = q6_device_to_rate(adev);
+	if (acdb_id == 0)
+		acdb_id = q6_device_to_cad_id(adev);
 
-	sz = acdb_get_config_table(adev, sample_rate);
+	sz = acdb_get_config_table(acdb_id, sample_rate);
 	audio_set_table(ac_control, adev, sz);
+	return 0;
+}
+
+static void _audio_rx_path_enable(int reconf)
+{
+	audio_update_acdb(audio_rx_device_id, 0);
 	if (!reconf)
-		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, adev);
+		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, audio_rx_device_id);
 	qdsp6_standby(ac_control);
 	qdsp6_start(ac_control);
 
@@ -926,18 +931,12 @@ static void _audio_rx_path_enable(int reconf)
 
 static void _audio_tx_path_enable(int reconf)
 {
-	uint32_t adev, sample_rate;
-	int sz;
-
 	audio_tx_analog_enable(1);
 
-	adev = audio_tx_device_id;
-	sample_rate = q6_device_to_rate(adev);
+	audio_update_acdb(audio_tx_device_id, 0);
 
-	sz = acdb_get_config_table(adev, sample_rate);
-	audio_set_table(ac_control, adev, sz);
 	if (!reconf)
-		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, adev);
+		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, audio_tx_device_id);
 	qdsp6_standby(ac_control);
 	qdsp6_start(ac_control);
 
@@ -951,7 +950,7 @@ static void _audio_tx_path_enable(int reconf)
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_READY);
 	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_ANALOG_READY);
 
-	audio_tx_mute(ac_control, adev, tx_mute_status);
+	audio_tx_mute(ac_control, audio_tx_device_id, tx_mute_status);
 }
 
 static void _audio_rx_path_disable(void)
@@ -1201,42 +1200,16 @@ done:
 
 int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst)
 {
-	struct audio_config_database *db;
-	int n, res, sz;
+	int res;
 
 	if (q6audio_init())
 		return 0;
 
 	mutex_lock(&audio_path_lock);
-
-	if (!acdb_data) {
-		res = acdb_init(acdb_file);
-		if (res)
-			goto done;
-	}
-
-	db = acdb_data;
-	for (n = 0; n < db->entry_count; n++) {
-		if (db->entry[n].device_id != id_src)
-			continue;
-		if (db->entry[n].sample_rate != q6_device_to_rate(id_dst))
-			continue;
-		break;
-	}
-
-	if (n == db->entry_count) {
-		pr_err("acdb: no entry for device %d, rate %d.\n",
-		       id_src, q6_device_to_rate(id_dst));
-		res = -EINVAL;
+	res = audio_update_acdb(id_dst, id_src);
+	if (res)
 		goto done;
-	}
 
-	pr_info("acdb: %d bytes for device %d, rate %d.\n",
-		db->entry[n].length, id_src, q6_device_to_rate(id_dst));
-
-	memcpy(audio_data, acdb_data + db->entry[n].offset, db->entry[n].length);
-	sz = db->entry[n].length;
-	audio_set_table(ac_control, id_dst, sz);
 	if (q6_device_to_dir(id_dst) == Q6_RX)
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, id_dst);
 	else
@@ -1306,9 +1279,6 @@ int q6audio_set_rx_volume(int level)
 
 static void do_rx_routing(uint32_t device_id)
 {
-	int sz;
-	uint32_t sample_rate;
-
 	if (device_id == audio_rx_device_id)
 		return;
 
@@ -1318,9 +1288,7 @@ static void do_rx_routing(uint32_t device_id)
 		_audio_rx_clk_reinit(device_id);
 		_audio_rx_path_enable(1);
 	} else {
-		sample_rate = q6_device_to_rate(device_id);
-		sz = acdb_get_config_table(device_id, sample_rate);
-		audio_set_table(ac_control, device_id, sz);
+		audio_update_acdb(device_id, 0);
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, device_id);
 		qdsp6_standby(ac_control);
 		qdsp6_start(ac_control);
@@ -1331,9 +1299,6 @@ static void do_rx_routing(uint32_t device_id)
 
 static void do_tx_routing(uint32_t device_id)
 {
-	int sz;
-	uint32_t sample_rate;
-
 	if (device_id == audio_tx_device_id)
 		return;
 
@@ -1343,9 +1308,7 @@ static void do_tx_routing(uint32_t device_id)
 		_audio_tx_clk_reinit(device_id);
 		_audio_tx_path_enable(1);
 	} else {
-		sample_rate = q6_device_to_rate(device_id);
-		sz = acdb_get_config_table(device_id, sample_rate);
-		audio_set_table(ac_control, device_id, sz);
+		audio_update_acdb(device_id, 0);
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, device_id);
 		qdsp6_standby(ac_control);
 		qdsp6_start(ac_control);
