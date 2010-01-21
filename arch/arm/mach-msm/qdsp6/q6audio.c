@@ -714,6 +714,7 @@ struct audio_config_database {
 };
 
 void *acdb_data;
+const struct firmware *acdb_fw;
 extern struct miscdevice q6_control_device;
 
 static int acdb_init(char *filename)
@@ -758,8 +759,9 @@ static int acdb_init(char *filename)
 		}
 	}
 	if (acdb_data)
-		release_firmware(acdb_data);
+		release_firmware(acdb_fw);
 	acdb_data = (void*) fw->data;
+	acdb_fw = fw;
 	return 0;
 fail:
 	release_firmware(fw);
