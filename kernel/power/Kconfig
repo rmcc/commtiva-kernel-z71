@@ -297,3 +297,11 @@ config NPA_DEBUG
 	help
 	  Exports functions that can debug or reset NPA internal
 	  data structures.
+
+config NPA_REMOTE
+	bool "Node Power Architecture(NPA) remoting"
+	depends on NPA
+	default n
+	help
+	  Enables Linux NPA clients to talk to NPA nodes across
+	  processor boundary.
