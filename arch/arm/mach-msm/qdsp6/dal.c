@@ -42,6 +42,16 @@ struct dal_hdr {
 	void *to;
 } __attribute__((packed));
 
+#define TRACE_DATA_MAX	128
+#define TRACE_LOG_MAX	32
+#define TRACE_LOG_MASK	(TRACE_LOG_MAX - 1)
+
+struct dal_trace {
+	unsigned timestamp;
+	struct dal_hdr hdr;
+	uint32_t data[TRACE_DATA_MAX];
+};
+
 #define DAL_HDR_SIZE		(sizeof(struct dal_hdr))
 #define DAL_DATA_MAX		512
 #define DAL_MSG_MAX		(DAL_HDR_SIZE + DAL_DATA_MAX)
@@ -100,7 +110,80 @@ struct dal_client {
 	int reply_max;
 	int status;
 	unsigned msgid; /* msgid of expected reply */
+
+	spinlock_t tr_lock;
+	unsigned tr_head;
+	unsigned tr_tail;
+	struct dal_trace *tr_log;
 };
+
+static unsigned now(void)
+{
+	struct timespec ts;
+	ktime_get_ts(&ts);
+	return (ts.tv_nsec / 1000000) + (ts.tv_sec * 1000);
+}
+
+void dal_trace(struct dal_client *c)
+{
+	if (c->tr_log)
+		return;
+	c->tr_log = kzalloc(sizeof(struct dal_trace) * TRACE_LOG_MAX,
+			    GFP_KERNEL);
+}
+
+void dal_trace_dump(struct dal_client *c)
+{
+	struct dal_trace *dt;
+	unsigned n, i, len;
+
+	if (!c->tr_log)
+		return;
+
+	for (n = c->tr_tail; n != c->tr_head; n = (n + 1) & TRACE_LOG_MASK) {
+		dt = c->tr_log + n;
+		printk("DAL %08x -> %08x L=%03x A=%d D=%04x P=%02x M=%02x T=%d",
+		       (unsigned) dt->hdr.from, (unsigned) dt->hdr.to,
+		       dt->hdr.length, dt->hdr.async,
+		       dt->hdr.ddi, dt->hdr.prototype, dt->hdr.msgid,
+			dt->timestamp);
+		len = dt->hdr.length;
+		if (len > TRACE_DATA_MAX)
+			len = TRACE_DATA_MAX;
+		len /= 4;
+		for (i = 0; i < len; i++) {
+			if (!(i & 7))
+				printk("\n%03x", i * 4);
+			printk(" %08x", dt->data[i]);
+		}
+		printk("\n");
+	}
+}
+
+static void dal_trace_log(struct dal_client *c,
+			  struct dal_hdr *hdr, void *data, unsigned len)
+{
+	unsigned long flags;
+	unsigned t, n;
+	struct dal_trace *dt;
+
+	t = now();
+	if (len > TRACE_DATA_MAX)
+		len = TRACE_DATA_MAX;
+
+	spin_lock_irqsave(&c->tr_lock, flags);
+	n = (c->tr_head + 1) & TRACE_LOG_MASK;
+	if (c->tr_tail == n)
+		c->tr_tail = (c->tr_tail + 1) & TRACE_LOG_MASK;
+	dt = c->tr_log + n;
+	dt->timestamp = t;
+	memcpy(&dt->hdr, hdr, sizeof(struct dal_hdr));
+	memcpy(dt->data, data, len);
+	c->tr_head = n;
+
+	spin_unlock_irqrestore(&c->tr_lock, flags);
+}
+
 
 static void dal_channel_notify(void *priv, unsigned event)
 {
@@ -165,6 +248,9 @@ check_data:
 			pr_err("dal: message to %p discarded\n", dch->hdr.to);
 			goto again;
 		}
+
+		if (client->tr_log)
+			dal_trace_log(client, hdr, dch->ptr, len);
 
 		if (hdr->msgid == DAL_MSGID_ASYNCH) {
 			if (client->event)
@@ -256,6 +342,9 @@ int dal_call_raw(struct dal_client *client,
 	print_hex_dump_bytes("", DUMP_PREFIX_OFFSET, data, data_len);
 #endif
 
+	if (client->tr_log)
+		dal_trace_log(client, hdr, data, data_len);
+
 	spin_lock_irqsave(&dch->lock, flags);
 	/* FIXME: ensure entire message is written or none. */
 	smd_write(dch->sch, hdr, sizeof(*hdr));
@@ -263,6 +352,7 @@ int dal_call_raw(struct dal_client *client,
 	spin_unlock_irqrestore(&dch->lock, flags);
 
 	if (!wait_event_timeout(client->wait, (client->status != -EBUSY), 5*HZ)) {
+		dal_trace_dump(client);
 		pr_err("dal: call timed out. dsp is probably dead.\n");
 		BUG();
 	}

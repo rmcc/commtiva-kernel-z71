@@ -37,6 +37,12 @@ int dal_call(struct dal_client *client,
 	     void *data, int data_len,
 	     void *reply, int reply_max);
 
+void dal_trace(struct dal_client *client);
+void dal_trace_dump(struct dal_client *client);
+
+/* function to call before panic on stalled dal calls */
+void dal_set_oops(struct dal_client *client, void (*oops)(void));
+
 /* convenience wrappers */
 int dal_call_f0(struct dal_client *client, uint32_t ddi,
 		uint32_t arg1);
