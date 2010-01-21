@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -111,19 +111,15 @@ struct ping_mdm_register_data_cb_cb_ret {
 };
 
 static int ping_mdm_register_cb(struct msm_rpc_client *client,
-				 void *buffer, int in_size)
+				struct msm_rpc_xdr *xdr)
 {
 	int rc;
 	uint32_t accept_status;
-	struct rpc_request_hdr *req;
-	struct ping_mdm_register_cb_arg arg, *buf_ptr;
+	struct ping_mdm_register_cb_arg arg;
 	void *cb_func;
 
-	req = (struct rpc_request_hdr *)buffer;
-	buf_ptr = (struct ping_mdm_register_cb_arg *)(req + 1);
-
-	arg.cb_id = be32_to_cpu(buf_ptr->cb_id);
-	arg.val = be32_to_cpu(buf_ptr->val);
+	xdr_recv_uint32(xdr, &arg.cb_id);             /* cb_id */
+	xdr_recv_int32(xdr, &arg.val);                /* val */
 
 	cb_func = msm_rpc_get_cb_func(client, arg.cb_id);
 	if (cb_func) {
@@ -136,9 +132,8 @@ static int ping_mdm_register_cb(struct msm_rpc_client *client,
 	} else
 		accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
 
-	msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid),
-				     accept_status);
-	rc = msm_rpc_send_accepted_reply(client, 0);
+	xdr_start_accepted_reply(xdr, accept_status);
+	rc = xdr_send_msg(xdr);
 	if (rc)
 		pr_err("%s: send accepted reply failed: %d\n", __func__, rc);
 
@@ -146,36 +141,22 @@ static int ping_mdm_register_cb(struct msm_rpc_client *client,
 }
 
 static int ping_mdm_data_cb(struct msm_rpc_client *client,
-			     void *buffer, int in_size)
+			    struct msm_rpc_xdr *xdr)
 {
-	struct rpc_request_hdr *req;
-	int rc, i;
-	void *buf, *cb_func, *reply;
+	int rc;
+	void *cb_func;
 	uint32_t size, accept_status;
 	struct ping_mdm_register_data_cb_cb_arg arg;
 	struct ping_mdm_register_data_cb_cb_ret ret;
 
-	req = (struct rpc_request_hdr *)buffer;
-	buf = (void *)(req + 1);
+	xdr_recv_uint32(xdr, &arg.cb_id);           /* cb_id */
 
-	arg.cb_id = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
+	/* data */
+	xdr_recv_array(xdr, (void **)(&(arg.data)), &size, 64,
+		       sizeof(uint32_t), (void *)xdr_recv_uint32);
 
-	size = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-	if (size) {
-		arg.data = kmalloc((size * sizeof(*arg.data)), GFP_KERNEL);
-		if (arg.data)
-			for (i = 0; i < size; i++)
-				arg.data[i] =
-				  be32_to_cpu(*((uint32_t *)buf + i));
-	}
-	buf += sizeof(uint32_t) * size;
-
-	arg.size = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-
-	arg.sum = be32_to_cpu(*(uint32_t *)buf);
+	xdr_recv_uint32(xdr, &arg.size);           /* size */
+	xdr_recv_uint32(xdr, &arg.sum);            /* sum */
 
 	cb_func = msm_rpc_get_cb_func(client, arg.cb_id);
 	if (cb_func) {
@@ -190,42 +171,37 @@ static int ping_mdm_data_cb(struct msm_rpc_client *client,
 	} else
 		accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
 
-	reply = msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid),
-					     accept_status);
+	xdr_start_accepted_reply(xdr, accept_status);
 
-	size = 0;
-	if (accept_status == RPC_ACCEPTSTAT_SUCCESS) {
-		*(uint32_t *)reply = cpu_to_be32(ret.result);
-		size = sizeof(uint32_t);
-	}
-	rc = msm_rpc_send_accepted_reply(client, size);
+	if (accept_status == RPC_ACCEPTSTAT_SUCCESS)
+		xdr_send_uint32(xdr, &ret.result);         /* result */
+
+	rc = xdr_send_msg(xdr);
 	if (rc)
 		pr_err("%s: send accepted reply failed: %d\n", __func__, rc);
 
+	kfree(arg.data);
 	return rc;
 }
 
 static int ping_mdm_cb_func(struct msm_rpc_client *client,
-			    void *buffer, int in_size)
+			    struct rpc_request_hdr *req,
+			    struct msm_rpc_xdr *xdr)
 {
 	int rc = 0;
-	struct rpc_request_hdr *req;
 
-	req = (struct rpc_request_hdr *)buffer;
-
-	switch (be32_to_cpu(req->procedure)) {
+	switch (req->procedure) {
 	case PING_MDM_CB_PROC:
-		rc = ping_mdm_register_cb(client, buffer, in_size);
+		rc = ping_mdm_register_cb(client, xdr);
 		break;
 	case PING_MDM_DATA_CB_PROC:
-		rc = ping_mdm_data_cb(client, buffer, in_size);
+		rc = ping_mdm_data_cb(client, xdr);
 		break;
 	default:
-		pr_err("%s: procedure not supported %d\n", __func__,
-		       be32_to_cpu(req->procedure));
-		msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid),
-					     RPC_ACCEPTSTAT_PROC_UNAVAIL);
-		rc = msm_rpc_send_accepted_reply(client, 0);
+		pr_err("%s: procedure not supported %d\n",
+		       __func__, req->procedure);
+		xdr_start_accepted_reply(xdr, RPC_ACCEPTSTAT_PROC_UNAVAIL);
+		rc = xdr_send_msg(xdr);
 		if (rc)
 			pr_err("%s: sending reply failed: %d\n", __func__, rc);
 		break;
@@ -258,65 +234,46 @@ struct ping_mdm_unregister_data_cb_ret {
 };
 
 static int ping_mdm_data_cb_register_arg(struct msm_rpc_client *client,
-					 void *buf, void *data)
+					 struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_register_data_cb_arg *arg;
-	int cb_id, size = 0;
-
-	arg = (struct ping_mdm_register_data_cb_arg *)data;
+	struct ping_mdm_register_data_cb_arg *arg = data;
+	int cb_id;
 
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
+	xdr_send_uint32(xdr, &cb_id);                /* cb_id */
+	xdr_send_uint32(xdr, &arg->num);             /* num */
+	xdr_send_uint32(xdr, &arg->size);            /* size */
+	xdr_send_uint32(xdr, &arg->interval_ms);     /* interval_ms */
+	xdr_send_uint32(xdr, &arg->num_tasks);       /* num_tasks */
 
-	*((uint32_t *)buf) = cpu_to_be32(arg->num);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-
-	*((uint32_t *)buf) = cpu_to_be32(arg->size);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-
-	*((uint32_t *)buf) = cpu_to_be32(arg->interval_ms);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-
-	*((uint32_t *)buf) = cpu_to_be32(arg->num_tasks);
-	size += sizeof(uint32_t);
-
-	return size;
+	return 0;
 }
 
 static int ping_mdm_data_cb_unregister_arg(struct msm_rpc_client *client,
-					   void *buf, void *data)
+					   struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_unregister_data_cb_arg *arg;
+	struct ping_mdm_unregister_data_cb_arg *arg = data;
 	int cb_id;
-
-	arg = (struct ping_mdm_unregister_data_cb_arg *)data;
 
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
+	xdr_send_uint32(xdr, &cb_id);                /* cb_id */
 
-	return sizeof(uint32_t);
+	return 0;
 }
 
 static int ping_mdm_data_cb_register_ret(struct msm_rpc_client *client,
-					 void *buf, void *data)
+					 struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_register_data_cb_ret *data_ptr, *buf_ptr;
+	struct ping_mdm_register_data_cb_ret *ret = data;
 
-	data_ptr = (struct ping_mdm_register_data_cb_ret *)data;
-	buf_ptr = (struct ping_mdm_register_data_cb_ret *)buf;
+	xdr_recv_uint32(xdr, &ret->result);      /* result */
 
-	data_ptr->result = be32_to_cpu(buf_ptr->result);
 	return 0;
 }
 
@@ -325,10 +282,10 @@ static int ping_mdm_register_data_cb(
 	struct ping_mdm_register_data_cb_arg *arg,
 	struct ping_mdm_register_data_cb_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  PING_MDM_REGISTER_DATA_CB_PROC,
-				  ping_mdm_data_cb_register_arg, arg,
-				  ping_mdm_data_cb_register_ret, ret, -1);
+	return msm_rpc_client_req2(client,
+				   PING_MDM_REGISTER_DATA_CB_PROC,
+				   ping_mdm_data_cb_register_arg, arg,
+				   ping_mdm_data_cb_register_ret, ret, -1);
 }
 
 static int ping_mdm_unregister_data_cb(
@@ -336,10 +293,10 @@ static int ping_mdm_unregister_data_cb(
 	struct ping_mdm_unregister_data_cb_arg *arg,
 	struct ping_mdm_unregister_data_cb_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  PING_MDM_UNREGISTER_DATA_CB_PROC,
-				  ping_mdm_data_cb_unregister_arg, arg,
-				  ping_mdm_data_cb_register_ret, ret, -1);
+	return msm_rpc_client_req2(client,
+				   PING_MDM_UNREGISTER_DATA_CB_PROC,
+				   ping_mdm_data_cb_unregister_arg, arg,
+				   ping_mdm_data_cb_register_ret, ret, -1);
 }
 
 struct ping_mdm_data_arg {
@@ -352,35 +309,26 @@ struct ping_mdm_data_ret {
 };
 
 static int ping_mdm_data_register_arg(struct msm_rpc_client *client,
-				      void *buf, void *data)
+				      struct msm_rpc_xdr *xdr, void *data)
 {
-	int i;
-	struct ping_mdm_data_arg *data_ptr;
+	struct ping_mdm_data_arg *arg = data;
 
-	data_ptr = (struct ping_mdm_data_arg *)data;
+	/* data */
+	xdr_send_array(xdr, (void **)&arg->data, &arg->size, 64,
+	       sizeof(uint32_t), (void *)xdr_send_uint32);
 
-	*((uint32_t *)buf) = cpu_to_be32(data_ptr->size);
-	buf += sizeof(data_ptr->size);
-	for (i = 0; i < data_ptr->size; i++) {
-		*((uint32_t *)buf) = cpu_to_be32(data_ptr->data[i]);
-		buf += sizeof(*data_ptr->data);
-	}
+	xdr_send_uint32(xdr, &arg->size);             /* size */
 
-	*((uint32_t *)buf) = cpu_to_be32(data_ptr->size);
-
-	return (data_ptr->size * sizeof(uint32_t)) +
-		(sizeof(data_ptr->size) * 2);
+	return 0;
 }
 
 static int ping_mdm_data_register_ret(struct msm_rpc_client *client,
-				      void *buf, void *data)
+				      struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_data_ret *data_ptr, *buf_ptr;
+	struct ping_mdm_data_ret *ret = data;
 
-	data_ptr = (struct ping_mdm_data_ret *)data;
-	buf_ptr = (struct ping_mdm_data_ret *)buf;
+	xdr_recv_uint32(xdr, &ret->result);      /* result */
 
-	data_ptr->result = be32_to_cpu(buf_ptr->result);
 	return 0;
 }
 
@@ -389,10 +337,10 @@ static int ping_mdm_data_register(
 	struct ping_mdm_data_arg *arg,
 	struct ping_mdm_data_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  PING_MDM_REGISTER_DATA_PROC,
-				  ping_mdm_data_register_arg, arg,
-				  ping_mdm_data_register_ret, ret, -1);
+	return msm_rpc_client_req2(client,
+				   PING_MDM_REGISTER_DATA_PROC,
+				   ping_mdm_data_register_arg, arg,
+				   ping_mdm_data_register_ret, ret, -1);
 }
 
 struct ping_mdm_register_arg {
@@ -413,53 +361,42 @@ struct ping_mdm_unregister_ret {
 };
 
 static int ping_mdm_register_arg(struct msm_rpc_client *client,
-				 void *buf, void *data)
+				 struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_register_arg *arg;
-	int cb_id, size = 0;
-
-	arg = (struct ping_mdm_register_arg *)data;
+	struct ping_mdm_register_arg *arg = data;
+	int cb_id;
 
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
+	xdr_send_uint32(xdr, &cb_id);             /* cb_id */
+	xdr_send_uint32(xdr, &arg->num);          /* num */
 
-	*((int32_t *)buf) = cpu_to_be32(arg->num);
-	size += sizeof(uint32_t);
-
-	return size;
+	return 0;
 }
 
 static int ping_mdm_unregister_arg(struct msm_rpc_client *client,
-				   void *buf, void *data)
+				   struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_unregister_arg *arg;
+	struct ping_mdm_unregister_arg *arg = data;
 	int cb_id;
-
-	arg = (struct ping_mdm_unregister_arg *)data;
 
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
 
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
+	xdr_send_uint32(xdr, &cb_id);             /* cb_id */
 
-	return sizeof(uint32_t);
+	return 0;
 }
 
 static int ping_mdm_register_ret(struct msm_rpc_client *client,
-				 void *buf, void *data)
+				 struct msm_rpc_xdr *xdr, void *data)
 {
-	struct ping_mdm_register_ret *data_ptr, *buf_ptr;
+	struct ping_mdm_register_ret *ret = data;
 
-	data_ptr = (struct ping_mdm_register_ret *)data;
-	buf_ptr = (struct ping_mdm_register_ret *)buf;
-
-	data_ptr->result = be32_to_cpu(buf_ptr->result);
+	xdr_recv_uint32(xdr, &ret->result);      /* result */
 
 	return 0;
 }
@@ -469,10 +406,10 @@ static int ping_mdm_register(
 	struct ping_mdm_register_arg *arg,
 	struct ping_mdm_register_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  PING_MDM_REGISTER_PROC,
-				  ping_mdm_register_arg, arg,
-				  ping_mdm_register_ret, ret, -1);
+	return msm_rpc_client_req2(client,
+				   PING_MDM_REGISTER_PROC,
+				   ping_mdm_register_arg, arg,
+				   ping_mdm_register_ret, ret, -1);
 }
 
 static int ping_mdm_unregister(
@@ -480,17 +417,17 @@ static int ping_mdm_unregister(
 	struct ping_mdm_unregister_arg *arg,
 	struct ping_mdm_unregister_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  PING_MDM_UNREGISTER_PROC,
-				  ping_mdm_unregister_arg, arg,
-				  ping_mdm_register_ret, ret, -1);
+	return msm_rpc_client_req2(client,
+				   PING_MDM_UNREGISTER_PROC,
+				   ping_mdm_unregister_arg, arg,
+				   ping_mdm_register_ret, ret, -1);
 }
 
 static int ping_mdm_null(struct msm_rpc_client *client,
 			 void *arg, void *ret)
 {
-	return msm_rpc_client_req(client, PING_MDM_NULL_PROC,
-				  NULL, NULL, NULL, NULL, -1);
+	return msm_rpc_client_req2(client, PING_MDM_NULL_PROC,
+				   NULL, NULL, NULL, NULL, -1);
 }
 
 static int ping_mdm_close(void)
@@ -509,10 +446,10 @@ static struct msm_rpc_client *ping_mdm_init(void)
 {
 	mutex_lock(&ping_mdm_lock);
 	if (open_count == 0) {
-		rpc_client = msm_rpc_register_client("pingdef",
-						     PING_MDM_PROG,
-						     PING_MDM_VERS, 1,
-						     ping_mdm_cb_func);
+		rpc_client = msm_rpc_register_client2("pingdef",
+						      PING_MDM_PROG,
+						      PING_MDM_VERS, 1,
+						      ping_mdm_cb_func);
 		if (!IS_ERR(rpc_client))
 			open_count++;
 	}
@@ -575,7 +512,7 @@ static int ping_mdm_test_register_data_cb(
 			sum ^= arg->data[i];
 
 	if (sum != arg->sum)
-		pr_err("%s: sum mismatch %d %d\n", __func__, sum, arg->sum);
+		pr_err("%s: sum mismatch %u %u\n", __func__, sum, arg->sum);
 
 	data_cb_num++;
 	if (data_cb_num == data_cb_num_req) {
