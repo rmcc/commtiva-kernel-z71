@@ -46,6 +46,8 @@ struct msm_adspenc_info {
 	.module_queueids = queueids, .module_encid = encid, \
 	.enc_formats = formats}
 
+#define MAX_EVENT_CALLBACK_CLIENTS 1
+
 struct msm_adspenc_database {
 	unsigned num_enc;
 	struct msm_adspenc_info *enc_info_list;
@@ -79,6 +81,7 @@ struct audpreproc_state {
 	struct mutex *lock;
 	unsigned open_count;
 	unsigned enc_inuse;
+	struct audpreproc_event_callback *cb_tbl[MAX_EVENT_CALLBACK_CLIENTS];
 };
 
 static struct audpreproc_state the_audpreproc_state = {
@@ -90,6 +93,7 @@ static void audpreproc_dsp_event(void *data, unsigned id, size_t len,
 			    void (*getevent)(void *ptr, size_t len))
 {
 	struct audpreproc_state *audpreproc = data;
+	int n = 0;
 
 	switch (id) {
 	case AUDPREPROC_CMD_CFG_DONE_MSG: {
@@ -130,6 +134,12 @@ static void audpreproc_dsp_event(void *data, unsigned id, size_t len,
 			audpreproc->func[enc_cfg_msg.stream_id](
 			audpreproc->private[enc_cfg_msg.stream_id], id,
 			&enc_cfg_msg);
+		for (n = 0; n < MAX_EVENT_CALLBACK_CLIENTS; ++n) {
+			if (audpreproc->cb_tbl[n] && audpreproc->cb_tbl[n]->fn)
+				audpreproc->cb_tbl[n]->fn( \
+					audpreproc->cb_tbl[n]->private, \
+					id, (void *) &enc_cfg_msg);
+		}
 		break;
 	}
 	case AUDPREPROC_CMD_ENC_PARAM_CFG_DONE_MSG: {
@@ -247,6 +257,38 @@ out:
 }
 EXPORT_SYMBOL(audpreproc_disable);
 
+
+int audpreproc_register_event_callback(struct audpreproc_event_callback *ecb)
+{
+	struct audpreproc_state *audpreproc = &the_audpreproc_state;
+	int i;
+
+	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
+		if (NULL == audpreproc->cb_tbl[i]) {
+			audpreproc->cb_tbl[i] = ecb;
+			return 0;
+		}
+	}
+	return -1;
+}
+EXPORT_SYMBOL(audpreproc_register_event_callback);
+
+int audpreproc_unregister_event_callback(struct audpreproc_event_callback *ecb)
+{
+	struct audpreproc_state *audpreproc = &the_audpreproc_state;
+	int i;
+
+	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
+		if (ecb == audpreproc->cb_tbl[i]) {
+			audpreproc->cb_tbl[i] = NULL;
+			return 0;
+		}
+	}
+	return -1;
+}
+EXPORT_SYMBOL(audpreproc_unregister_event_callback);
+
+
 /* enc_type = supported encode format *
  * like pcm, aac, sbc, evrc, qcelp, amrnb etc ... *
  */
@@ -312,3 +354,36 @@ int audpreproc_send_audreccmdqueue(void *cmd, unsigned len)
 			      QDSP_uPAudPreProcAudRecCmdQueue, cmd, len);
 }
 EXPORT_SYMBOL(audpreproc_send_audreccmdqueue);
+
+
+int audpreproc_dsp_set_agc(struct audpreproc_cmd_cfg_agc_params *agc,
+				unsigned len)
+{
+	return msm_adsp_write(the_audpreproc_state.mod,
+				QDSP_uPAudPreProcCmdQueue, agc, len);
+}
+EXPORT_SYMBOL(audpreproc_dsp_set_agc);
+
+int audpreproc_dsp_set_agc2(struct audpreproc_cmd_cfg_agc_params_2 *agc2,
+				unsigned len)
+{
+	return msm_adsp_write(the_audpreproc_state.mod,
+				QDSP_uPAudPreProcCmdQueue, agc2, len);
+}
+EXPORT_SYMBOL(audpreproc_dsp_set_agc2);
+
+int audpreproc_dsp_set_ns(struct audpreproc_cmd_cfg_ns_params *ns,
+				unsigned len)
+{
+	return msm_adsp_write(the_audpreproc_state.mod,
+				QDSP_uPAudPreProcCmdQueue, ns, len);
+}
+EXPORT_SYMBOL(audpreproc_dsp_set_ns);
+
+int audpreproc_dsp_set_iir(
+struct audpreproc_cmd_cfg_iir_tuning_filter_params *iir, unsigned len)
+{
+	return msm_adsp_write(the_audpreproc_state.mod,
+				QDSP_uPAudPreProcCmdQueue, iir, len);
+}
+EXPORT_SYMBOL(audpreproc_dsp_set_iir);

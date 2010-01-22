@@ -35,6 +35,12 @@
 /* event callback routine prototype*/
 typedef void (*audpreproc_event_func)(void *private, unsigned id, void *msg);
 
+struct audpreproc_event_callback {
+	audpreproc_event_func fn;
+	void *private;
+};
+
+
 /* Exported common api's from audpreproc layer */
 int audpreproc_aenc_alloc(unsigned enc_type, const char **module_name,
 		unsigned *queue_id);
@@ -46,5 +52,25 @@ void audpreproc_disable(int enc_id, void *private);
 int audpreproc_send_audreccmdqueue(void *cmd, unsigned len);
 
 int audpreproc_send_preproccmdqueue(void *cmd, unsigned len);
+
+int audpreproc_dsp_set_agc(struct audpreproc_cmd_cfg_agc_params *agc,
+	unsigned len);
+int audpreproc_dsp_set_agc2(struct audpreproc_cmd_cfg_agc_params_2 *agc2,
+	unsigned len);
+int audpreproc_dsp_set_ns(struct audpreproc_cmd_cfg_ns_params *ns,
+	unsigned len);
+int audpreproc_dsp_set_iir(
+struct audpreproc_cmd_cfg_iir_tuning_filter_params *iir, unsigned len);
+
+int audpreproc_dsp_set_agc(struct audpreproc_cmd_cfg_agc_params *agc,
+ unsigned int len);
+
+int audpreproc_dsp_set_iir(
+struct audpreproc_cmd_cfg_iir_tuning_filter_params *iir, unsigned int len);
+
+int audpreproc_unregister_event_callback(struct audpreproc_event_callback *ecb);
+
+int audpreproc_register_event_callback(struct audpreproc_event_callback *ecb);
+
 
 #endif /* _MACH_QDSP5_V2_AUDPREPROC_H */

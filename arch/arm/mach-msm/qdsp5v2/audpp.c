@@ -188,6 +188,22 @@ int is_audpp_enable(void)
 }
 EXPORT_SYMBOL(is_audpp_enable);
 
+int audpp_register_event_callback(struct audpp_event_callback *ecb)
+{
+	struct audpp_state *audpp = &the_audpp_state;
+	int i;
+
+	for (i = 0; i < MAX_EVENT_CALLBACK_CLIENTS; ++i) {
+		if (NULL == audpp->cb_tbl[i]) {
+			audpp->cb_tbl[i] = ecb;
+			return 0;
+		}
+	}
+	return -1;
+}
+EXPORT_SYMBOL(audpp_register_event_callback);
+
+
 int audpp_unregister_event_callback(struct audpp_event_callback *ecb)
 {
 	struct audpp_state *audpp = &the_audpp_state;
@@ -507,6 +523,116 @@ int audpp_set_volume_and_pan(unsigned id, unsigned volume, int pan,
 	return audpp_send_queue3(cmd, sizeof(cmd));
 }
 EXPORT_SYMBOL(audpp_set_volume_and_pan);
+
+/* Implementation of COPP features */
+int audpp_dsp_set_mbadrc(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_mbadrc *mbadrc,
+	enum obj_type objtype)
+{
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
+
+	mbadrc->common.cmd_id = AUDPP_CMD_CFG_OBJECT_PARAMS;
+	if (objtype)
+		mbadrc->common.stream = AUDPP_CMD_POPP_STREAM;
+	else
+		mbadrc->common.stream = AUDPP_CMD_COPP_STREAM;
+
+	mbadrc->common.stream_id = id;
+	mbadrc->common.obj_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	mbadrc->common.command_type = AUDPP_CMD_MBADRC;
+
+	if (enable)
+		mbadrc->enable = AUDPP_CMD_ADRC_FLAG_ENA;
+	else
+		mbadrc->enable = AUDPP_CMD_ADRC_FLAG_DIS;
+
+	return audpp_send_queue3(mbadrc,
+			sizeof(struct audpp_cmd_cfg_object_params_mbadrc));
+}
+EXPORT_SYMBOL(audpp_dsp_set_mbadrc);
+
+int audpp_dsp_set_qconcert_plus(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_qconcert *qconcert_plus,
+	enum obj_type objtype)
+{
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
+
+	qconcert_plus->common.cmd_id = AUDPP_CMD_CFG_OBJECT_PARAMS;
+	if (objtype)
+		qconcert_plus->common.stream = AUDPP_CMD_POPP_STREAM;
+	else
+		qconcert_plus->common.stream = AUDPP_CMD_COPP_STREAM;
+
+	qconcert_plus->common.stream_id = id;
+	qconcert_plus->common.obj_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	qconcert_plus->common.command_type = AUDPP_CMD_QCONCERT;
+
+	if (enable)
+		qconcert_plus->enable_flag = AUDPP_CMD_ADRC_FLAG_ENA;
+	else
+		qconcert_plus->enable_flag = AUDPP_CMD_ADRC_FLAG_DIS;
+
+	return audpp_send_queue3(qconcert_plus,
+		sizeof(struct audpp_cmd_cfg_object_params_qconcert));
+}
+EXPORT_SYMBOL(audpp_dsp_set_qconcert_plus);
+
+int audpp_dsp_set_rx_iir(unsigned id, unsigned enable,
+	struct audpp_cmd_cfg_object_params_pcm *iir,
+	enum obj_type objtype)
+{
+
+	if (objtype) {
+		if (id > 5) {
+			MM_ERR("Wrong POPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	} else {
+		if (id > 3) {
+			MM_ERR("Wrong COPP decoder id: %d\n", id);
+			return -EINVAL;
+		}
+	}
+
+	iir->common.cmd_id = AUDPP_CMD_CFG_OBJECT_PARAMS;
+	if (objtype)
+		iir->common.stream = AUDPP_CMD_POPP_STREAM;
+	else
+		iir->common.stream = AUDPP_CMD_COPP_STREAM;
+
+	iir->common.stream_id = id;
+	iir->common.obj_cfg = AUDPP_CMD_CFG_OBJ_UPDATE;
+	iir->common.command_type = AUDPP_CMD_IIR_TUNING_FILTER;
+
+	if (enable)
+		iir->active_flag = AUDPP_CMD_IIR_FLAG_ENA;
+	else
+		iir->active_flag = AUDPP_CMD_IIR_FLAG_DIS;
+
+	return audpp_send_queue3(iir,
+		sizeof(struct audpp_cmd_cfg_object_params_pcm));
+}
+EXPORT_SYMBOL(audpp_dsp_set_rx_iir);
 
 /* Implementation Of COPP + POPP */
 int audpp_dsp_set_eq(unsigned id, unsigned enable,
