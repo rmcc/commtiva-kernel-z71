@@ -64,6 +64,9 @@
 #include <linux/mfd/pmic8058.h>
 #include <linux/gpio.h>
 #include <asm-generic/gpio.h>
+#include <linux/uaccess.h>
+#include <linux/fs.h>
+#include <linux/debugfs.h>
 
 /* PMIC8058 Revision */
 #define SSBI_REG_REV			0x002  /* PMIC4 revision */
@@ -137,6 +140,7 @@
 
 /* Bank 5 */
 #define	PM8058_GPIO_NON_INT_POL_INV	0x08
+#define PM8058_GPIO_BANKS		6
 
 #define	MAX_PM_IRQ		256
 #define	MAX_PM_BLOCKS		(MAX_PM_IRQ / 8 + 1)
@@ -442,7 +446,7 @@ int pm8058_gpio_set(unsigned gpio, int value)
 	if (rc)
 		pr_err("%s: FAIL ssbi_write(): rc=%d. "
 		       "(gpio=%d, value=%d)\n",
-			__func__, rc, gpio, value);
+		       __func__, rc, gpio, value);
 
 	return rc;
 }
@@ -1150,16 +1154,178 @@ static struct i2c_driver pm8058_driver = {
 	.resume		= pm8058_resume,
 };
 
+#if defined(CONFIG_DEBUG_FS)
+
+#define DEBUG_MAX_RW_BUF   128
+#define DEBUG_MAX_FNAME    8
+
+static struct dentry *debug_dent;
+
+static char debug_read_buf[DEBUG_MAX_RW_BUF];
+static char debug_write_buf[DEBUG_MAX_RW_BUF];
+
+static int debug_gpios[PM8058_GPIOS];
+
+static int debug_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+static int debug_read_gpio_bank(int gpio, int bank, u8 *data)
+{
+	int rc;
+	unsigned long irqsave;
+
+	local_irq_save(irqsave);
+
+	*data = bank << PM8058_GPIO_BANK_SHIFT;
+	rc = pm8058_write(SSBI_REG_ADDR_GPIO(gpio), data, 1);
+	if (rc)
+		goto bail_out;
+
+	*data = bank << PM8058_GPIO_BANK_SHIFT;
+	rc = pm8058_read(SSBI_REG_ADDR_GPIO(gpio), data, 1);
+
+bail_out:
+	local_irq_restore(irqsave);
+
+	return rc;
+}
+
+static ssize_t debug_read(struct file *file, char __user *buf,
+			  size_t count, loff_t *ppos)
+{
+	int gpio = *((int *) file->private_data);
+	int len = 0;
+	int rc = -EINVAL;
+	u8 bank[PM8058_GPIO_BANKS];
+	int val = -1;
+	int mode;
+	int i;
+
+	for (i = 0; i < PM8058_GPIO_BANKS; i++) {
+		rc = debug_read_gpio_bank(gpio, i, &bank[i]);
+		if (rc)
+			pr_err("pmic failed to read bank %d\n", i);
+	}
+
+	if (rc) {
+		len = snprintf(debug_read_buf, DEBUG_MAX_RW_BUF - 1, "-1\n");
+		goto bail_out;
+	}
+
+	val = pm8058_gpio_get(gpio);
+
+	/* print the mode and the value */
+	mode = (bank[1] & PM8058_GPIO_MODE_MASK) >>  PM8058_GPIO_MODE_SHIFT;
+	if (mode == PM8058_GPIO_MODE_BOTH)
+		len = snprintf(debug_read_buf, DEBUG_MAX_RW_BUF - 1,
+			       "BOTH %d ", val);
+	else if (mode == PM8058_GPIO_MODE_INPUT)
+		len = snprintf(debug_read_buf, DEBUG_MAX_RW_BUF - 1,
+			       "IN   %d ", val);
+	else if (mode == PM8058_GPIO_MODE_OUTPUT)
+		len = snprintf(debug_read_buf, DEBUG_MAX_RW_BUF - 1,
+			       "OUT  %d ", val);
+	else
+		len = snprintf(debug_read_buf, DEBUG_MAX_RW_BUF - 1,
+			       "OFF  %d ", val);
+
+	/* print the control register values */
+	len += snprintf(debug_read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
+			"[0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x]\n",
+			bank[0], bank[1], bank[2], bank[3], bank[4], bank[5]);
+
+bail_out:
+	rc = simple_read_from_buffer((void __user *) buf, len,
+				     ppos, (void *) debug_read_buf, len);
+
+	return rc;
+}
+
+static ssize_t debug_write(struct file *file, const char __user *buf,
+			   size_t count, loff_t *ppos)
+{
+	int gpio = *((int *) file->private_data);
+	unsigned long val;
+	int mode;
+
+	mode = (pmic_chip->gpio_bank1[gpio] & PM8058_GPIO_MODE_MASK) >>
+		PM8058_GPIO_MODE_SHIFT;
+	if (mode == PM8058_GPIO_MODE_OFF || mode == PM8058_GPIO_MODE_INPUT)
+		return count;
+
+	if (copy_from_user(debug_write_buf, (void __user *) buf, count)) {
+		pr_err("failed to copy from user\n");
+		return -EFAULT;
+	}
+	debug_write_buf[count] = '\0';
+
+	(void) strict_strtoul(debug_write_buf, 10, &val);
+
+	if (pm8058_gpio_set(gpio, val)) {
+		pr_err("gpio write failed\n");
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static const struct file_operations debug_ops = {
+	.open =         debug_open,
+	.read =         debug_read,
+	.write =        debug_write,
+};
+
+static void debug_init(void)
+{
+	int i;
+	char name[DEBUG_MAX_FNAME];
+
+	debug_dent = debugfs_create_dir("pm_gpio", NULL);
+	if (IS_ERR(debug_dent)) {
+		pr_err("pmic8058 debugfs_create_dir fail, error %ld\n",
+		       PTR_ERR(debug_dent));
+		return;
+	}
+
+	for (i = 0; i < PM8058_GPIOS; i++) {
+		snprintf(name, DEBUG_MAX_FNAME-1, "%d", i+1);
+		debug_gpios[i] = i;
+		if (debugfs_create_file(name, 0644, debug_dent,
+					&debug_gpios[i], &debug_ops) == NULL) {
+			pr_err("pmic8058 debugfs_create_file %s failed\n",
+			       name);
+		}
+	}
+}
+
+static void debug_exit(void)
+{
+	debugfs_remove_recursive(debug_dent);
+}
+
+#else
+static void debug_init(void) { }
+static void debug_exit(void) { }
+#endif
+
 static int __init pm8058_init(void)
 {
 	int rc = i2c_add_driver(&pm8058_driver);
 	pr_notice("%s: i2c_add_driver: rc = %d\n", __func__, rc);
+
+	if (!rc)
+		debug_init();
+
 	return rc;
 }
 
 static void __exit pm8058_exit(void)
 {
 	i2c_del_driver(&pm8058_driver);
+	debug_exit();
 }
 
 subsys_initcall(pm8058_init);
