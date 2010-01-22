@@ -59,7 +59,7 @@ struct pm8058_chip;
 struct pm8058_platform_data {
 	/* This table is only needed for misc interrupts. */
 	unsigned int	pm_irqs[PM8058_IRQS];	/* block*8 + bit-pos */
-	int 		(*init)(void);
+	int 		(*init)(struct pm8058_chip *pm_chip);
 
 	int		num_subdevs;
 	struct mfd_cell sub_devices[PM8058_MAX_SUBDEVICES];
@@ -125,7 +125,8 @@ int pm8058_write(u16 addr, u8 *values, unsigned int len);
 
 int pm8058_gpio_config(int gpio, struct pm8058_gpio *param);
 
-int pm8058_gpio_config_h(void *pm_handle, int gpio, struct pm8058_gpio *param);
+int pm8058_gpio_config_h(struct pm8058_chip *pm_chip, int gpio,
+			 struct pm8058_gpio *param);
 int pm8058_gpio_set_direction(struct pm8058_chip *pm_chip,
 			      unsigned gpio, int direction);
 int pm8058_gpio_set(struct pm8058_chip *pm_chip, unsigned gpio, int value);

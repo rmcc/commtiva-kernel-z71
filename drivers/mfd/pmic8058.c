@@ -260,6 +260,13 @@ EXPORT_SYMBOL(pm8058_write);
 
 int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 {
+	return pm8058_gpio_config_h(pmic_chip, gpio, param);
+}
+EXPORT_SYMBOL(pm8058_gpio_config);
+
+int pm8058_gpio_config_h(struct pm8058_chip *chip, int gpio,
+			 struct pm8058_gpio *param)
+{
 	int	rc;
 	u8	bank[8];
 	static int	dir_map[] = {
@@ -270,10 +277,8 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 	};
 	unsigned long	irqsave;
 
-	if (param == NULL)
+	if (param == NULL || chip == NULL)
 		return -EINVAL;
-	if (pmic_chip == NULL)
-		return -ENODEV;
 
 	/* Select banks and configure the gpio */
 	bank[0] = PM8058_GPIO_WRITE |
@@ -313,8 +318,8 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 
 	local_irq_save(irqsave);
 	/* Remember bank1 for later use */
-	pmic_chip->gpio_bank1[gpio] = bank[1];
-	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 6);
+	chip->gpio_bank1[gpio] = bank[1];
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 6);
 	local_irq_restore(irqsave);
 
 	if (rc)
@@ -323,7 +328,7 @@ int pm8058_gpio_config(int gpio, struct pm8058_gpio *param)
 
 	return rc;
 }
-EXPORT_SYMBOL(pm8058_gpio_config);
+EXPORT_SYMBOL(pm8058_gpio_config_h);
 
 int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios)
 {
@@ -341,9 +346,11 @@ int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios)
 
 	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
 		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
 
 	while (num_gpios--) {
-		rc = pm8058_gpio_config(gpio_start++, &kypd_drv);
+		rc = pm8058_gpio_config_h(pmic_chip, gpio_start++, &kypd_drv);
 		if (rc) {
 			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
 				__func__, rc);
@@ -369,9 +376,11 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 
 	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
 		return -EINVAL;
+	if (pmic_chip == NULL)
+		return -ENODEV;
 
 	while (num_gpios--) {
-		rc = pm8058_gpio_config(gpio_start++, &kypd_sns);
+		rc = pm8058_gpio_config_h(pmic_chip, gpio_start++, &kypd_sns);
 		if (rc) {
 			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
 				__func__, rc);
@@ -1052,7 +1061,7 @@ static int pm8058_probe(struct i2c_client *client,
 			     pdata->num_subdevs, NULL, 0);
 
 	if (pdata->init) {
-		rc = pdata->init();
+		rc = pdata->init(chip);
 		if (rc != 0) {
 			pr_err("%s: board init failed\n", __func__);
 			free_irq(chip->dev->irq, &chip->irq_completion);
