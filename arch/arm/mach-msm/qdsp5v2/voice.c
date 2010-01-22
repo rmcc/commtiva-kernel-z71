@@ -240,8 +240,7 @@ static void voice_auddev_cb_function(u32 evt_id,
 			v->dev_rx.volume = (u32)vol;
 		}
 		/* send device info */
-		if (v->voc_state == VOICE_ACQUIRE)
-			voice_cmd_device_info(v);
+		voice_cmd_device_info(v);
 		break;
 	case AUDDEV_EVT_REL_PENDING:
 		/* recover the tx mute and rx volume to the default values */
