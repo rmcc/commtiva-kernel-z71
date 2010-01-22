@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -59,6 +59,7 @@
  *
  */
 
+#include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/mfd/pmic8058.h>
 #include "gpio_chip.h"
@@ -70,6 +71,7 @@ static int pm8058_gpio_configure(struct gpio_chip *chip,
 				 unsigned long flags)
 {
 	int	rc = 0, direction;
+	struct pm8058_chip	*pm_chip;
 
 	gpio -= chip->start;
 
@@ -80,11 +82,13 @@ static int pm8058_gpio_configure(struct gpio_chip *chip,
 		if (flags & GPIOF_DRIVE_OUTPUT)
 			direction |= PM_GPIO_DIR_OUT;
 
+		pm_chip = dev_get_drvdata(chip->dev);
+
 		if (flags & (GPIOF_OUTPUT_LOW | GPIOF_OUTPUT_HIGH)) {
 			if (flags & GPIOF_OUTPUT_HIGH)
-				rc = pm8058_gpio_set(gpio, 1);
+				rc = pm8058_gpio_set(pm_chip, gpio, 1);
 			else
-				rc = pm8058_gpio_set(gpio, 0);
+				rc = pm8058_gpio_set(pm_chip, gpio, 0);
 
 			if (rc) {
 				pr_err("%s: FAIL pm8058_gpio_set(): rc=%d.\n",
@@ -93,7 +97,7 @@ static int pm8058_gpio_configure(struct gpio_chip *chip,
 			}
 		}
 
-		rc = pm8058_gpio_set_direction(gpio, direction);
+		rc = pm8058_gpio_set_direction(pm_chip, gpio, direction);
 		if (rc)
 			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
 				__func__, rc);
@@ -117,14 +121,20 @@ static int pm8058_gpio_get_irq_num(struct gpio_chip *chip,
 
 static int pm8058_gpio_read(struct gpio_chip *chip, unsigned n)
 {
+	struct pm8058_chip	*pm_chip;
+
 	n -= chip->start;
-	return pm8058_gpio_get(n);
+	pm_chip = dev_get_drvdata(chip->dev);
+	return pm8058_gpio_get(pm_chip, n);
 }
 
 static int pm8058_gpio_write(struct gpio_chip *chip, unsigned n, unsigned on)
 {
+	struct pm8058_chip	*pm_chip;
+
 	n -= chip->start;
-	return pm8058_gpio_set(n, on);
+	pm_chip = dev_get_drvdata(chip->dev);
+	return pm8058_gpio_set(pm_chip, n, on);
 }
 
 struct msm_gpio_chip pm8058_gpio_chip = {
@@ -138,13 +148,45 @@ struct msm_gpio_chip pm8058_gpio_chip = {
 	}
 };
 
-static int __init pm8058_gpio_init(void)
+static int __devinit pm8058_gpio_probe(struct platform_device *pdev)
 {
 	int	rc;
 
+	pm8058_gpio_chip.chip.dev = &pdev->dev;
 	rc = register_gpio_chip(&pm8058_gpio_chip.chip);
 	pr_info("%s: register_gpio_chip(): rc=%d\n", __func__, rc);
 
 	return rc;
 }
-device_initcall(pm8058_gpio_init);
+
+static int __devexit pm8058_gpio_remove(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static struct platform_driver pm8058_gpio_driver = {
+	.probe		= pm8058_gpio_probe,
+	.remove		= __devexit_p(pm8058_gpio_remove),
+	.driver		= {
+		.name = "pm8058-gpio",
+		.owner = THIS_MODULE,
+	},
+};
+
+static int __init pm8058_gpio_init(void)
+{
+	return platform_driver_register(&pm8058_gpio_driver);
+}
+
+static void __exit pm8058_gpio_exit(void)
+{
+	platform_driver_unregister(&pm8058_gpio_driver);
+}
+
+module_init(pm8058_gpio_init);
+module_exit(pm8058_gpio_exit);
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("PMIC8058 GPIO driver");
+MODULE_VERSION("1.0");
+MODULE_ALIAS("platform:pm8058-gpio");

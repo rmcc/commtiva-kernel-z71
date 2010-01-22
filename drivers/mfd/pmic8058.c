@@ -383,7 +383,8 @@ int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios)
 }
 EXPORT_SYMBOL(pm8058_gpio_config_kypd_sns);
 
-int pm8058_gpio_set_direction(unsigned gpio, int direction)
+int pm8058_gpio_set_direction(struct pm8058_chip *chip,
+			      unsigned gpio, int direction)
 {
 	int	rc;
 	u8	bank1;
@@ -395,10 +396,8 @@ int pm8058_gpio_set_direction(unsigned gpio, int direction)
 	};
 	unsigned long	irqsave;
 
-	if (!direction)
+	if (!direction || chip == NULL)
 		return -EINVAL;
-	if (pmic_chip == NULL)
-		return -ENODEV;
 
 	bank1 = PM8058_GPIO_WRITE |
 		((1 << PM8058_GPIO_BANK_SHIFT) &
@@ -410,11 +409,11 @@ int pm8058_gpio_set_direction(unsigned gpio, int direction)
 
 	if (direction & PM_GPIO_DIR_OUT)
 		/* Carry over the old value */
-		bank1 |= pmic_chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
+		bank1 |= chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
 
 	local_irq_save(irqsave);
-	pmic_chip->gpio_bank1[gpio] = bank1;
-	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
+	chip->gpio_bank1[gpio] = bank1;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
 	local_irq_restore(irqsave);
 
 	if (rc)
@@ -424,25 +423,23 @@ int pm8058_gpio_set_direction(unsigned gpio, int direction)
 	return rc;
 }
 
-int pm8058_gpio_set(unsigned gpio, int value)
+int pm8058_gpio_set(struct pm8058_chip *chip, unsigned gpio, int value)
 {
 	int	rc;
 	u8	bank1;
 	unsigned long	irqsave;
 
-	if (gpio >= PM8058_GPIOS)
+	if (gpio >= PM8058_GPIOS || chip == NULL)
 		return -EINVAL;
-	if (pmic_chip == NULL)
-		return -ENODEV;
 
-	bank1 = pmic_chip->gpio_bank1[gpio] & ~PM8058_GPIO_OUT_INVERT;
+	bank1 = chip->gpio_bank1[gpio] & ~PM8058_GPIO_OUT_INVERT;
 
 	if (value)
 		bank1 |= PM8058_GPIO_OUT_INVERT;
 
 	local_irq_save(irqsave);
-	pmic_chip->gpio_bank1[gpio] = bank1;
-	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
+	chip->gpio_bank1[gpio] = bank1;
+	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
 	local_irq_restore(irqsave);
 
 	if (rc)
@@ -453,32 +450,30 @@ int pm8058_gpio_set(unsigned gpio, int value)
 	return rc;
 }
 
-int pm8058_gpio_get(unsigned gpio)
+int pm8058_gpio_get(struct pm8058_chip *chip, unsigned gpio)
 {
 	int	mode, rc;
 	unsigned long	irqsave;
 
-	if (gpio >= PM8058_GPIOS)
+	if (gpio >= PM8058_GPIOS || chip == NULL)
 		return -EINVAL;
-	if (pmic_chip == NULL)
-		return -ENODEV;
 
 	local_irq_save(irqsave);
 
 	/* Get gpio value from config bank 1 if output gpio.
 	   Get gpio value from IRQ RT status register for all other gpio modes.
 	 */
-	mode = (pmic_chip->gpio_bank1[gpio] & PM8058_GPIO_MODE_MASK) >>
+	mode = (chip->gpio_bank1[gpio] & PM8058_GPIO_MODE_MASK) >>
 		PM8058_GPIO_MODE_SHIFT;
 	if (mode == PM8058_GPIO_MODE_OUTPUT) {
-		rc = pmic_chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
+		rc = chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
 	} else {
 		u8	block, bits, bit;
 
 		block = FIRST_GPIO_IRQ_BLOCK + gpio / 8;
 		bit = gpio % 8;
 
-		rc = ssbi_write(pmic_chip->dev,
+		rc = ssbi_write(chip->dev,
 				SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
 		if (rc) {
 			pr_err("%s: FAIL ssbi_write(): rc=%d (Select Block)\n",
@@ -486,7 +481,7 @@ int pm8058_gpio_get(unsigned gpio)
 			goto bail_out;
 		}
 
-		rc = ssbi_read(pmic_chip->dev,
+		rc = ssbi_read(chip->dev,
 			       SSBI_REG_ADDR_IRQ_RT_STATUS, &bits, 1);
 		if (rc) {
 			pr_err("%s: FAIL ssbi_read(): rc=%d (Read RT Status)\n",
@@ -1222,7 +1217,7 @@ static ssize_t debug_read(struct file *file, char __user *buf,
 		goto bail_out;
 	}
 
-	val = pm8058_gpio_get(gpio);
+	val = pm8058_gpio_get(pmic_chip, gpio);
 
 	/* print the mode and the value */
 	mode = (bank[1] & PM8058_GPIO_MODE_MASK) >>  PM8058_GPIO_MODE_SHIFT;
@@ -1271,7 +1266,7 @@ static ssize_t debug_write(struct file *file, const char __user *buf,
 
 	(void) strict_strtoul(debug_write_buf, 10, &val);
 
-	if (pm8058_gpio_set(gpio, val)) {
+	if (pm8058_gpio_set(pmic_chip, gpio, val)) {
 		pr_err("gpio write failed\n");
 		return -EINVAL;
 	}
