@@ -1,6 +1,6 @@
-/* arch/arm/mach-msm/qdsp6/q6audio.c
- *
+/*
  * Copyright (C) 2009 Google, Inc.
+ * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -110,7 +110,6 @@ static struct q6audio_analog_ops *analog_ops = &default_analog_ops;
 static uint32_t tx_clk_freq = 8000;
 static int tx_mute_status = 0;
 static int rx_vol_level = 100;
-static char acdb_file[64] = "default.acdb";
 static uint32_t tx_acdb = 0;
 static uint32_t rx_acdb = 0;
 
@@ -719,91 +718,33 @@ void *acdb_data;
 const struct firmware *acdb_fw;
 extern struct miscdevice q6_control_device;
 
-static int acdb_init(char *filename)
-{
-	const struct audio_config_database *db;
-	const struct firmware *fw;
-	int n;
-
-	pr_info("acdb: load '%s'\n", filename);
-	if (request_firmware(&fw, filename, q6_control_device.this_device) < 0) {
-		pr_err("acdb: load 'default.acdb' failed...\n");
-		return -ENODEV;
-	}
-	db = (void*) fw->data;
-
-	if (fw->size < sizeof(struct audio_config_database)) {
-		pr_err("acdb: undersized database\n");
-		goto fail;
-	}
-	if (strcmp(db->magic, "ACDB1.0")) {
-		pr_err("acdb: invalid magic\n");
-		goto fail;
-	}
-	if (db->entry_count > 1024) {
-		pr_err("acdb: too many entries\n");
-		goto fail;
-	}
-	if (fw->size < (sizeof(struct audio_config_database) +
-			db->entry_count * sizeof(struct audio_config_data))) {
-		pr_err("acdb: undersized TOC\n");
-		goto fail;
-	}
-	for (n = 0; n < db->entry_count; n++) {
-		if (db->entry[n].length > 4096) {
-			pr_err("acdb: entry %d too large (%d)\n",
-			       n, db->entry[n].length);
-			goto fail;
-		}
-		if ((db->entry[n].offset + db->entry[n].length) > fw->size) {
-			pr_err("acdb: entry %d outside of data\n", n);
-			goto fail;
-		}
-	}
-	if (acdb_data)
-		release_firmware(acdb_fw);
-	acdb_data = (void*) fw->data;
-	acdb_fw = fw;
-	return 0;
-fail:
-	release_firmware(fw);
-	return -ENODEV;
-}
-
 static int acdb_get_config_table(uint32_t device_id, uint32_t sample_rate)
 {
-	struct audio_config_database *db;
-	int n, res;
+	struct acdb_cmd_device_table rpc;
+	struct acdb_result res;
+	int r;
 
 	if (q6audio_init())
 		return 0;
 
-	if (!acdb_data) {
-		res = acdb_init(acdb_file);
-		if (res)
-			return res;
-	}
+	memset(audio_data, 0, 4096);
+	memset(&rpc, 0, sizeof(rpc));
 
-	db = acdb_data;
-	for (n = 0; n < db->entry_count; n++) {
-		if (db->entry[n].device_id != device_id)
-			continue;
-		if (db->entry[n].sample_rate != sample_rate)
-			continue;
-		break;
-	}
+	rpc.size = sizeof(rpc) - (2 * sizeof(uint32_t));
+	rpc.command_id = ACDB_GET_DEVICE_TABLE;
+	rpc.device_id = device_id;
+	rpc.sample_rate_id = sample_rate;
+	rpc.total_bytes = 4096;
+	rpc.unmapped_buf = audio_phys;
+	rpc.res_size = sizeof(res) - (2 * sizeof(uint32_t));
 
-	if (n == db->entry_count) {
-		pr_err("acdb: no entry for device %d, rate %d.\n",
-		       device_id, sample_rate);
-		return 0;
-	}
+	r = dal_call(acdb, ACDB_OP_IOCTL, 8, &rpc, sizeof(rpc),
+		&res, sizeof(res));
 
-	pr_info("acdb: %d bytes for device %d, rate %d.\n",
-		db->entry[n].length, device_id, sample_rate);
+	if ((r == sizeof(res)) && (res.dal_status == 0))
+		return res.used_bytes;
 
-	memcpy(audio_data, acdb_data + db->entry[n].offset, db->entry[n].length);
-	return db->entry[n].length;
+	return -EIO;
 }
 
 static uint32_t audio_rx_path_id = ADIE_PATH_HANDSET_RX;
@@ -1184,26 +1125,6 @@ static int audio_tx_path_enable(int en, uint32_t acdb_id)
 	}
 	mutex_unlock(&audio_path_lock);
 	return 0;
-}
-
-int q6audio_reinit_acdb(char* filename) {
-	int res;
-
-	if (q6audio_init())
-		return 0;
-
-	mutex_lock(&audio_path_lock);
-	if (strlen(filename) < 0 || !strcmp(filename, acdb_file)) {
-		res = -EINVAL;
-		goto done;
-	}
-	res = acdb_init(filename);
-	if (!res)
-		strcpy(acdb_file, filename);
-done:
-	mutex_unlock(&audio_path_lock);
-	return res;
-
 }
 
 int q6audio_update_acdb(uint32_t id_src, uint32_t id_dst)

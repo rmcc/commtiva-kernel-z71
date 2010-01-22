@@ -1,5 +1,4 @@
-/* arch/arm/mach-msm/qdsp6/audio_ctrl.c
- *
+/*
  * Copyright (C) 2009 Google, Inc.
  * Copyright (C) 2009 HTC Corporation
  *
@@ -85,13 +84,12 @@ static int q6_ioctl(struct inode *inode, struct file *file,
 	int rc;
 	uint32_t n;
 	uint32_t id[2];
-	char filename[64];
 
 	switch (cmd) {
 	case AUDIO_SWITCH_DEVICE:
 		rc = copy_from_user(&id, (void *)arg, sizeof(id));
 		if (!rc)
-			rc = q6audio_do_routing(id[0], id[1]);
+			rc = q6audio_do_routing(id[0], 0);
 		break;
 	case AUDIO_SET_VOLUME:
 		rc = copy_from_user(&n, (void *)arg, sizeof(n));
@@ -106,7 +104,7 @@ static int q6_ioctl(struct inode *inode, struct file *file,
 	case AUDIO_UPDATE_ACDB:
 		rc = copy_from_user(&id, (void *)arg, sizeof(id));
 		if (!rc)
-			rc = q6audio_update_acdb(id[0], id[1]);
+			rc = q6audio_update_acdb(id[0], 0);
 		break;
 	case AUDIO_START_VOICE:
 		rc = q6_voice_start();
@@ -115,9 +113,7 @@ static int q6_ioctl(struct inode *inode, struct file *file,
 		rc = q6_voice_stop();
 		break;
 	case AUDIO_REINIT_ACDB:
-		rc = copy_from_user(&filename, (void *)arg, sizeof(filename));
-		if (!rc)
-			rc = q6audio_reinit_acdb(filename);
+		rc = 0;
 		break;
 	default:
 		rc = -EINVAL;
