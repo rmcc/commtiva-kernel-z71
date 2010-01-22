@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2009 Google, Inc.
+ * Copyright (C) 2009 HTC Corporation
  * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
  *
  * Author: Brian Swetland <swetland@google.com>
