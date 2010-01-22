@@ -640,8 +640,10 @@ kgsl_mmu_map(struct kgsl_pagetable *pagetable,
 		      pagetable, address, *gpuaddr, ptefirst, ptelast,
 		      numpages, flushtlb);
 
+	mb();
+
 	/* Invalidate tlb only if current page table used by GPU is the
-	* pagetable that we used to allocate */
+	 * pagetable that we used to allocate */
 	if (pagetable == mmu->hwpagetable)
 		kgsl_yamato_tlbinvalidate(mmu->device);
 
@@ -682,6 +684,13 @@ kgsl_mmu_unmap(struct kgsl_pagetable *pagetable, unsigned int gpuaddr,
 #endif
 		kgsl_pt_map_set(pagetable, pte, GSL_PT_PAGE_DIRTY);
 	}
+
+	mb();
+
+	/* Invalidate tlb only if current page table used by GPU is the
+	 * pagetable that we used to allocate */
+	if (pagetable == pagetable->mmu->hwpagetable)
+		kgsl_yamato_tlbinvalidate(pagetable->mmu->device);
 
 	KGSL_MEM_VDBG("return %d\n", 0);
 
