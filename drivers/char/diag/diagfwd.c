@@ -105,6 +105,13 @@ static void diag_smd_send_req(int context)
 				driver->in_busy = 1;
 				driver->usb_write_ptr->buf = buf;
 				driver->usb_write_ptr->length = r;
+#ifdef DIAG_DEBUG
+				printk(KERN_INFO "writing data to USB,"
+						 " pkt length %d \n", r);
+				print_hex_dump(KERN_DEBUG, "Written Packet Data"
+					       " to USB: ", 16, 1,
+					       DUMP_PREFIX_ADDRESS, buf, r, 1);
+#endif
 				diag_write(driver->usb_write_ptr);
 			}
 		}
@@ -426,8 +433,15 @@ static void diag_process_hdlc(void *data, unsigned len)
 	}
 
 	/* ignore 2 bytes for CRC, one for 7E and send */
-	if ((driver->ch) && (ret) && (type) && (hdlc.dest_idx > 3))
+	if ((driver->ch) && (ret) && (type) && (hdlc.dest_idx > 3)) {
 		smd_write(driver->ch, driver->hdlc_buf, hdlc.dest_idx - 3);
+#ifdef DIAG_DEBUG
+		printk(KERN_INFO "writing data to SMD, pkt length %d \n", len);
+		print_hex_dump(KERN_DEBUG, "Written Packet Data to SMD: ", 16,
+			       1, DUMP_PREFIX_ADDRESS, data, len, 1);
+#endif
+	}
+
 }
 
 int diagfwd_connect(void)
@@ -554,6 +568,13 @@ void diag_read_work_fn(struct work_struct *work)
 	driver->usb_read_ptr->buf = driver->usb_buf_out;
 	driver->usb_read_ptr->length = USB_MAX_OUT_BUF;
 	diag_read(driver->usb_read_ptr);
+#ifdef DIAG_DEBUG
+	printk(KERN_INFO "read data from USB, pkt length %d \n",
+		    driver->usb_read_ptr->actual);
+	print_hex_dump(KERN_DEBUG, "Read Packet Data from USB: ", 16, 1,
+		       DUMP_PREFIX_ADDRESS, driver->usb_read_ptr->buf,
+		       driver->usb_read_ptr->actual, 1);
+#endif
 }
 
 void diagfwd_init(void)
