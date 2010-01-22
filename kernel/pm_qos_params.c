@@ -26,7 +26,7 @@
  *
  * Mark Gross <mgross@linux.intel.com>
  *
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  */
 
 #include <linux/pm_qos_params.h>
@@ -49,28 +49,9 @@
  * or pm_qos_object list and pm_qos_objects need to happen with pm_qos_lock
  * held, taken with _irqsave.  One lock to rule them all
  */
-struct requirement_list {
-	struct list_head list;
-	union {
-		s32 value;
-		s32 usec;
-		s32 kbps;
-	};
-	char *name;
-};
 
 static s32 max_compare(s32 v1, s32 v2);
 static s32 min_compare(s32 v1, s32 v2);
-
-struct pm_qos_object {
-	struct requirement_list requirements;
-	struct blocking_notifier_head *notifiers;
-	struct miscdevice pm_qos_power_miscdev;
-	char *name;
-	s32 default_value;
-	atomic_t target_value;
-	s32 (*comparitor)(s32, s32);
-};
 
 struct pm_qos_power_user {
 	int pm_qos_class;
@@ -154,8 +135,8 @@ static s32 min_compare(s32 v1, s32 v2)
 	return min(v1, v2);
 }
 
-
-static void update_target(int pm_qos_class)
+static int pm_qos_update_target(struct pm_qos_object *class, char *name,
+				s32 value, void **data)
 {
 	s32 extreme_value;
 	struct requirement_list *node;
@@ -163,27 +144,23 @@ static void update_target(int pm_qos_class)
 	int call_notifier = 0;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
-	extreme_value = pm_qos_array[pm_qos_class]->default_value;
-	list_for_each_entry(node,
-			&pm_qos_array[pm_qos_class]->requirements.list, list) {
-		extreme_value = pm_qos_array[pm_qos_class]->comparitor(
-				extreme_value, node->value);
-	}
-	if (atomic_read(&pm_qos_array[pm_qos_class]->target_value) !=
-		extreme_value) {
+	extreme_value = class->default_value;
+	list_for_each_entry(node, &class->requirements.list, list)
+		extreme_value = class->comparitor(extreme_value, node->value);
+
+	if (atomic_read(&class->target_value) != extreme_value) {
 		call_notifier = 1;
-		atomic_set(&pm_qos_array[pm_qos_class]->target_value,
-			extreme_value);
-		pr_debug(KERN_ERR "new target for qos %d is %d\n",
-			pm_qos_class, atomic_read(
-				&pm_qos_array[pm_qos_class]->target_value));
+		atomic_set(&class->target_value, extreme_value);
+		pr_debug(KERN_ERR "new target for qos %s is %d\n",
+			class->name, atomic_read(&class->target_value));
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
 	if (call_notifier)
-		blocking_notifier_call_chain(
-			pm_qos_array[pm_qos_class]->notifiers,
+		blocking_notifier_call_chain(class->notifiers,
 			(unsigned long) extreme_value, NULL);
+
+	return 0;
 }
 
 static int register_pm_qos_misc(struct pm_qos_object *qos)
@@ -235,30 +212,50 @@ EXPORT_SYMBOL_GPL(pm_qos_requirement);
 int pm_qos_add_requirement(int pm_qos_class, char *name, s32 value)
 {
 	struct requirement_list *dep;
+	struct pm_qos_object *class = pm_qos_array[pm_qos_class];
 	unsigned long flags;
+	int rc = 0;
 
 	dep = kzalloc(sizeof(struct requirement_list), GFP_KERNEL);
-	if (dep) {
-		if (value == PM_QOS_DEFAULT_VALUE)
-			dep->value = pm_qos_array[pm_qos_class]->default_value;
-		else
-			dep->value = value;
-		dep->name = kstrdup(name, GFP_KERNEL);
-		if (!dep->name)
-			goto cleanup;
-
-		spin_lock_irqsave(&pm_qos_lock, flags);
-		list_add(&dep->list,
-			&pm_qos_array[pm_qos_class]->requirements.list);
-		spin_unlock_irqrestore(&pm_qos_lock, flags);
-		update_target(pm_qos_class);
-
-		return 0;
+	if (!dep) {
+		rc = -ENOMEM;
+		goto err_dep_alloc_failed;
 	}
 
-cleanup:
+	if (value == PM_QOS_DEFAULT_VALUE)
+		dep->value = class->default_value;
+	else
+		dep->value = value;
+	dep->name = kstrdup(name, GFP_KERNEL);
+	if (!dep->name) {
+		rc = -ENOMEM;
+		goto err_name_alloc_failed;
+	}
+
+	/* Use default update function if none specified. */
+	if (!class->add_fn)
+		class->add_fn = pm_qos_update_target;
+	if (!class->update_fn)
+		class->update_fn = pm_qos_update_target;
+	if (!class->remove_fn)
+		class->remove_fn = pm_qos_update_target;
+
+	spin_lock_irqsave(&pm_qos_lock, flags);
+	list_add(&dep->list, &class->requirements.list);
+	spin_unlock_irqrestore(&pm_qos_lock, flags);
+
+	rc = class->add_fn(class, name, dep->value, &dep->data);
+	if (rc)
+		goto err_add_fn_failed;
+
+	return rc;
+
+err_add_fn_failed:
+	kfree(dep->name);
+err_name_alloc_failed:
 	kfree(dep);
-	return -ENOMEM;
+err_dep_alloc_failed:
+	return rc;
 }
 EXPORT_SYMBOL_GPL(pm_qos_add_requirement);
 
@@ -275,17 +272,18 @@ EXPORT_SYMBOL_GPL(pm_qos_add_requirement);
  */
 int pm_qos_update_requirement(int pm_qos_class, char *name, s32 new_value)
 {
+	struct pm_qos_object *class = pm_qos_array[pm_qos_class];
 	unsigned long flags;
 	struct requirement_list *node;
 	int pending_update = 0;
+	int rc = 0;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
 	list_for_each_entry(node,
-		&pm_qos_array[pm_qos_class]->requirements.list, list) {
+		&class->requirements.list, list) {
 		if (strcmp(node->name, name) == 0) {
 			if (new_value == PM_QOS_DEFAULT_VALUE)
-				node->value =
-				pm_qos_array[pm_qos_class]->default_value;
+				node->value = class->default_value;
 			else
 				node->value = new_value;
 			pending_update = 1;
@@ -293,10 +291,12 @@ int pm_qos_update_requirement(int pm_qos_class, char *name, s32 new_value)
 		}
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
-	if (pending_update)
-		update_target(pm_qos_class);
 
-	return 0;
+	if (pending_update && class->update_fn)
+		rc = class->update_fn(class, name, node->value,
+			&node->data);
+
+	return rc;
 }
 EXPORT_SYMBOL_GPL(pm_qos_update_requirement);
 
@@ -311,13 +311,21 @@ EXPORT_SYMBOL_GPL(pm_qos_update_requirement);
 void pm_qos_remove_requirement(int pm_qos_class, char *name)
 {
 	unsigned long flags;
+	struct pm_qos_object *class = pm_qos_array[pm_qos_class];
 	struct requirement_list *node;
 	int pending_update = 0;
+	int (*remove_fn)(struct pm_qos_object *, char *, s32, void **) = NULL;
+	s32 value = 0;
+	void **node_data = NULL;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
 	list_for_each_entry(node,
-		&pm_qos_array[pm_qos_class]->requirements.list, list) {
+		&class->requirements.list, list) {
 		if (strcmp(node->name, name) == 0) {
+			remove_fn = class->remove_fn;
+			value = class->default_value;
+			node_data = &node->data;
+
 			kfree(node->name);
 			list_del(&node->list);
 			kfree(node);
@@ -326,8 +334,9 @@ void pm_qos_remove_requirement(int pm_qos_class, char *name)
 		}
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
-	if (pending_update)
-		update_target(pm_qos_class);
+
+	if (pending_update && remove_fn)
+		remove_fn(class, name, value, node_data);
 }
 EXPORT_SYMBOL_GPL(pm_qos_remove_requirement);
 
