@@ -604,8 +604,8 @@ vfe_irq_composite_pack(struct vfe_irq_composite_mask_config data)
 }
 
 static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
-			     enum vfe_resp_msg type, void *data, void **ext,
-			     int *elen)
+				enum vfe_resp_msg type, void *data, void **ext,
+				int *elen)
 {
 	switch (type) {
 	case VFE_MSG_OUTPUT_P: {
@@ -614,27 +614,18 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 		pinfo->cbcr_phy =
 			((struct vfe_message *)data)->_u.msgOutput2.
 			cbcrBuffer;
-
-			CDBG("vfe_addr_convert, pinfo->y_phy = 0x%x\n",
-				pinfo->y_phy);
-		CDBG("vfe_addr_convert, pinfo->cbcr_phy = 0x%x\n",
-			pinfo->cbcr_phy);
-
-			ctrl->extdata.bpcInfo =
-		((struct vfe_message *)data)->_u.msgOutput2.bpcInfo;
-
-			ctrl->extdata.asfInfo =
-		((struct vfe_message *)data)->_u.msgOutput2.asfInfo;
-
-			ctrl->extdata.frameCounter =
-				((struct vfe_message *)data)->_u.msgOutput2.
-				frameCounter;
-
-			ctrl->extdata.pmData =
+		pinfo->output_id = OUTPUT_TYPE_P;
+		ctrl->extdata.bpcInfo =
+			((struct vfe_message *)data)->_u.msgOutput2.bpcInfo;
+		ctrl->extdata.asfInfo =
+			((struct vfe_message *)data)->_u.msgOutput2.asfInfo;
+		ctrl->extdata.frameCounter =
+			((struct vfe_message *)data)->_u.msgOutput2.
+			frameCounter;
+		ctrl->extdata.pmData =
 		((struct vfe_message *)data)->_u.msgOutput2.pmData;
-
-			*ext = &ctrl->extdata;
-			*elen = sizeof(ctrl->extdata);
+		*ext = &ctrl->extdata;
+		*elen = sizeof(ctrl->extdata);
 	}
 		break;
 

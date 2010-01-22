@@ -612,23 +612,7 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	}
 		break;
 
-	case CMD_AXI_CFG_OUT1: {
-
-			BUG_ON(!axid);
-
-			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
-				sizeof(axio))) {
-				pr_err("%s %d: copy_from_user failed\n",
-					__func__, __LINE__);
-			return -EFAULT;
-		}
-
-			vfe_config_axi(OUTPUT_1, axid, &axio);
-			vfe_axi_output_config(&axio);
-	}
-		break;
-
-	case CMD_AXI_CFG_OUT2:
+	case CMD_AXI_CFG_PREVIEW:
 	case CMD_RAW_PICT_AXI_CFG: {
 
 			BUG_ON(!axid);
@@ -647,7 +631,7 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	}
 		break;
 
-	case CMD_AXI_CFG_SNAP_O1_AND_O2: {
+	case CMD_AXI_CFG_SNAP: {
 
 			BUG_ON(!axid);
 
