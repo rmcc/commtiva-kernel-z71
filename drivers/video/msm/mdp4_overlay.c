@@ -858,10 +858,8 @@ void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all)
 	}
 
 	outpdw(MDP_BASE + 0x18000, bits);	/* MDP_OVERLAY_REG_FLUSH */
-
-	while (inpdw(MDP_BASE + 0x18000) & bits) /* self clear when complete */
-		;
 }
+
 struct mdp4_overlay_pipe *mdp4_overlay_stage_pipe(int mixer, int stage)
 {
 	return ctrl->stage[mixer][stage];
