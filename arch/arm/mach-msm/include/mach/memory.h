@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/memory.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -30,6 +30,8 @@ void clean_and_invalidate_caches(unsigned long, unsigned long, unsigned long);
 void clean_caches(unsigned long, unsigned long, unsigned long);
 void invalidate_caches(unsigned long, unsigned long, unsigned long);
 int platform_physical_remove_pages(unsigned long, unsigned long);
+int platform_physical_add_pages(unsigned long, unsigned long);
+int platform_physical_low_power_pages(unsigned long, unsigned long);
 
 #ifdef CONFIG_ARCH_MSM_ARM11
 void write_to_strongly_ordered_memory(void);
@@ -54,3 +56,8 @@ extern void l2x0_cache_sync(void);
 #endif
 
 #endif
+
+/* these correspond to values known by the modem */
+#define MEMORY_DEEP_POWERDOWN	0
+#define MEMORY_SELF_REFRESH	1
+#define MEMORY_ACTIVE		2

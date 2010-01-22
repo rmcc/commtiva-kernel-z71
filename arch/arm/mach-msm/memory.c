@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/memory.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -142,14 +142,39 @@ void *alloc_bootmem_aligned(unsigned long size, unsigned long alignment)
 	return (void *)addr;
 }
 
+static int change_memory_power_state(unsigned long start_pfn,
+	unsigned long nr_pages, int state)
+{
+	unsigned long start;
+	unsigned long size;
+	unsigned long virtual;
+
+	if (state == MEMORY_DEEP_POWERDOWN) {
+		/* simulate turning off memory by writing bit pattern into it */
+		start = start_pfn << PAGE_SHIFT;
+		size = nr_pages << PAGE_SHIFT;
+		virtual = __phys_to_virt(start);
+		memset((void *)virtual, 0x27, size);
+	}
+	return 0;
+}
+
 int platform_physical_remove_pages(unsigned long start_pfn,
 	unsigned long nr_pages)
 {
-	unsigned long start = start_pfn << PAGE_SHIFT;
-	unsigned long size = nr_pages << PAGE_SHIFT;
-	unsigned long virtual = __phys_to_virt(start);
+	return change_memory_power_state(start_pfn, nr_pages,
+		MEMORY_DEEP_POWERDOWN);
+}
 
-	/* simulate turning off memory by writing bit pattern into it for now */
-	memset((void *)virtual, 0x27, size);
-	return 0;
+int platform_physical_add_pages(unsigned long start_pfn,
+	unsigned long nr_pages)
+{
+	return change_memory_power_state(start_pfn, nr_pages, MEMORY_ACTIVE);
+}
+
+int platform_physical_low_power_pages(unsigned long start_pfn,
+	unsigned long nr_pages)
+{
+	return change_memory_power_state(start_pfn, nr_pages,
+		MEMORY_SELF_REFRESH);
 }
