@@ -28,6 +28,7 @@
 #include <linux/init.h>
 #include <mach/board.h>
 
+#include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/list.h>
 #include <linux/uaccess.h>
@@ -35,6 +36,7 @@
 #include <linux/poll.h>
 #include <media/msm_camera.h>
 #include <mach/camera.h>
+DEFINE_MUTEX(hlist_mut);
 
 #define MSM_MAX_CAMERA_SENSORS 5
 
@@ -250,7 +252,7 @@ static uint8_t msm_pmem_region_lookup(struct hlist_head *ptype,
 	uint8_t rc = 0;
 
 	regptr = reg;
-
+	mutex_lock(&hlist_mut);
 	hlist_for_each_entry_safe(region, node, n, ptype, list) {
 		if (region->info.type == pmem_type && region->info.active) {
 			*regptr = *region;
@@ -260,7 +262,7 @@ static uint8_t msm_pmem_region_lookup(struct hlist_head *ptype,
 			regptr++;
 		}
 	}
-
+	mutex_unlock(&hlist_mut);
 	return rc;
 }
 
