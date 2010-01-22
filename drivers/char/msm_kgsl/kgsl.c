@@ -414,10 +414,11 @@ static int kgsl_open(struct inode *inodep, struct file *filep)
 		result = -ENOMEM;
 		goto done;
 	}
-	result = kgsl_yamato_setup_pt(device, private->pagetable);
+	result = kgsl_yamato_setup_pt(&kgsl_driver.yamato_device,
+					private->pagetable);
 	if (result) {
-		kgsl_mmu_destroypagetableobject(private->pagetable);
-		private->pagetable == NULL;
+		kgsl_mmu_putpagetable(private->pagetable);
+		private->pagetable = NULL;
 		goto done;
 	}
 #else
