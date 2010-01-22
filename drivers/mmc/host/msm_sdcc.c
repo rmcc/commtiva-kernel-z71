@@ -252,13 +252,15 @@ msmsdcc_dma_complete_tlet(unsigned long data)
 		if (host->dma.result & DMOV_RSLT_FLUSH)
 			printk(KERN_ERR "%s: DMA channel flushed (0x%.8x)\n",
 			       mmc_hostname(host->mmc), host->dma.result);
-		if (host->dma.err)
+		if (host->dma.err) {
 			printk(KERN_ERR
 			       "Flush data: %.8x %.8x %.8x %.8x %.8x %.8x\n",
 			       host->dma.err->flush[0], host->dma.err->flush[1],
 			       host->dma.err->flush[2], host->dma.err->flush[3],
 			       host->dma.err->flush[4],
 			       host->dma.err->flush[5]);
+			msmsdcc_reset_and_restore(host);
+		}
 		if (!mrq->data->error)
 			mrq->data->error = -EIO;
 	}
@@ -836,15 +838,12 @@ msmsdcc_irq(int irq, void *dev_id)
 			if (status & (MCI_DATACRCFAIL|MCI_DATATIMEOUT|
 				      MCI_TXUNDERRUN|MCI_RXOVERRUN)) {
 				msmsdcc_data_err(host, data, status);
-
-				if (status & MCI_DATACRCFAIL)
-					msmsdcc_reset_and_restore(host);
-
 				host->curr.data_xfered = 0;
 				if (host->dma.sg)
 					msm_dmov_stop_cmd(host->dma.channel,
 							  &host->dma.hdr, 0);
 				else {
+					msmsdcc_reset_and_restore(host);
 					if (host->curr.data)
 						msmsdcc_stop_data(host);
 					if (!data->stop)
