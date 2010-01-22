@@ -807,28 +807,10 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 						&c0, &c1, &c2);
 			blend_op |= MDP4_BLEND_FG_TRANSP_EN; /* Fg blocked */
 			/* lower limit */
-			if (c0 > 0x10)
-				c0 -= 0x10;
-			if (c1 > 0x10)
-				c1 -= 0x10;
-			if (c2 > 0x10)
-				c2 -= 0x10;
 			outpdw(overlay_base + off + 0x110,
 						(c1 << 16 | c0));/* low */
 			outpdw(overlay_base + off + 0x114, c2);/* low */
 			/* upper limit */
-			if ((c0 + 0x20) < 0x0fff)
-				c0 += 0x20;
-			else
-				c0 = 0x0fff;
-			if ((c1 + 0x20) < 0x0fff)
-				c1 += 0x20;
-			else
-				c1 = 0x0fff;
-			if ((c2 + 0x20) < 0x0fff)
-				c2 += 0x20;
-			else
-				c2 = 0x0fff;
 			outpdw(overlay_base + off + 0x118,
 					(c1 << 16 | c0));/* high */
 			outpdw(overlay_base + off + 0x11c, c2);/* high */
@@ -840,28 +822,10 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 						&c0, &c1, &c2);
 			blend_op |= MDP4_BLEND_BG_TRANSP_EN; /* bg blocked */
 			/* lower limit */
-			if (c0 > 0x10)
-				c0 -= 0x10;
-			if (c1 > 0x10)
-				c1 -= 0x10;
-			if (c2 > 0x10)
-				c2 -= 0x10;
 			outpdw(overlay_base + 0x180,
 						(c1 << 16 | c0));/* low */
 			outpdw(overlay_base + 0x184, c2);/* low */
 			/* upper limit */
-			if ((c0 + 0x20) < 0x0fff)
-				c0 += 0x20;
-			else
-				c0 = 0x0fff;
-			if ((c1 + 0x20) < 0x0fff)
-				c1 += 0x20;
-			else
-				c1 = 0x0fff;
-			if ((c2 + 0x20) < 0x0fff)
-				c2 += 0x20;
-			else
-				c2 = 0x0fff;
 			outpdw(overlay_base + 0x188,
 						(c1 << 16 | c0));/* high */
 			outpdw(overlay_base + 0x18c, c2);/* high */
