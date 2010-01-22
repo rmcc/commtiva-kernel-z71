@@ -92,6 +92,12 @@ DECLARE_RESOURCE_REMOTE_AGGREGATION(
 	SYSTEM_BUS_NPA_RESOURCE_NAME,
 	"flow", UINT_MAX);
 
+DECLARE_RESOURCE_REMOTE_AGGREGATION(
+	npa_memory_node,
+	npa_memory_resource,
+	NPA_MEMORY_NODE_NAME,
+	"", 2);
+
 static int __init npa_pm_qos_plugin_init(void)
 {
 	return pm_qos_register_plugin(PM_QOS_SYSTEM_BUS_FREQ,
@@ -101,9 +107,11 @@ core_initcall(npa_pm_qos_plugin_init);
 
 static int __init npa_resource_init(void)
 {
-	return npa_remote_define_node(&npa_system_bus_node, 0, NULL, NULL);
+	npa_remote_define_node(&npa_system_bus_node, 0, NULL, NULL);
+	npa_remote_define_node(&npa_memory_node, 0, NULL, NULL);
+
+	return 0;
 }
 arch_initcall(npa_resource_init);
 
 #endif /* CONFIG_NPA_REMOTE */
-

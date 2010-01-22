@@ -61,3 +61,5 @@ extern void l2x0_cache_sync(void);
 #define MEMORY_DEEP_POWERDOWN	0
 #define MEMORY_SELF_REFRESH	1
 #define MEMORY_ACTIVE		2
+
+#define NPA_MEMORY_NODE_NAME	"/mem/ebi1/cs1"
