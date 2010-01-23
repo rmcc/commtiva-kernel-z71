@@ -455,7 +455,8 @@ void msm_camio_camif_pad_reg_reset(void)
 	msleep(10);
 
 	reg = (msm_io_r(camifpadbase)) & CAMIF_CFG_RMSK;
-	reg &= 0x0F;
+	/* Need to be uninverted*/
+	reg &= 0x03;
 	msm_io_w(reg, camifpadbase);
 	msleep(10);
 }

@@ -213,6 +213,10 @@ struct msm_camera_cfg_cmd {
 #define CMD_STATS_SKIN_BUF_RELEASE	32
 
 #define UPDATE_STATS_INVALID		33
+#define CMD_AXI_CFG_SNAP_GEMINI		34
+#define CMD_AXI_CFG_SNAP		35
+#define CMD_AXI_CFG_PREVIEW		36
+#define CMD_AXI_CFG_VIDEO		37
 
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
@@ -240,7 +244,10 @@ struct camera_enable_cmd {
 #define MSM_PMEM_CS	    		11
 #define MSM_PMEM_IHIST			12
 #define MSM_PMEM_SKIN			13
-#define MSM_PMEM_MAX			14
+#define MSM_PMEM_VIDEO			14
+#define MSM_PMEM_PREVIEW		15
+#define MSM_PMEM_MAX			16
+
 
 #define STAT_AEAW			0
 #define STAT_AEC			1
@@ -290,6 +297,11 @@ struct outputCfg {
 #define MSM_FRAME_PREV_1	0
 #define MSM_FRAME_PREV_2	1
 #define MSM_FRAME_ENC		2
+
+#define OUTPUT_TYPE_P		1
+#define OUTPUT_TYPE_T		2
+#define OUTPUT_TYPE_S		3
+#define OUTPUT_TYPE_V		4
 
 struct msm_frame {
 	int path;

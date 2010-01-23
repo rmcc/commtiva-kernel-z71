@@ -314,7 +314,7 @@ static int msm_v4l2_querybuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 	/* V4L2 videodev will do the copy_from_user. */
 
 	memset(&pmem_buf, 0, sizeof(struct msm_pmem_info));
-	pmem_buf.type = MSM_PMEM_OUTPUT2;
+	pmem_buf.type = MSM_PMEM_PREVIEW;
 	pmem_buf.vaddr = (void *)pb->m.userptr;
 	pmem_buf.y_off = 0;
 	pmem_buf.fd = (int)pb->reserved;
@@ -372,7 +372,7 @@ static int msm_v4l2_qbuf(struct file *f, void *pctx, struct v4l2_buffer *pb)
 		D("V4L2_BUF_TYPE_VIDEO_CAPTURE: pb->bytesused = %d \n",
 		pb->bytesused);
 
-		meminfo.type             = MSM_PMEM_OUTPUT2;
+		meminfo.type             = MSM_PMEM_PREVIEW;
 		meminfo.fd               = (int)pb->reserved;
 		meminfo.vaddr            = (void *)pb->m.userptr;
 		meminfo.y_off            = 0;

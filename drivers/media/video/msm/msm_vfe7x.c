@@ -67,6 +67,8 @@ static void vfe_7x_convert(struct msm_vfe_phy_info *pinfo,
 		pinfo->cbcr_phy =
 			((struct vfe_endframe *)data)->cbcr_address;
 
+		pinfo->output_id = OUTPUT_TYPE_P;
+
 		CDBG("vfe_7x_convert, y_phy = 0x%x, cbcr_phy = 0x%x\n",
 				 pinfo->y_phy, pinfo->cbcr_phy);
 
@@ -626,33 +628,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		} /* QDSP_CMDQUEUE */
 	}
 		break;
-
-	case CMD_AXI_CFG_OUT1: {
-		axid = data;
-		if (!axid) {
-			rc = -EFAULT;
-			goto config_failure;
-		}
-
-		axio = kmalloc(sizeof(struct axiout), GFP_ATOMIC);
-		if (!axio) {
-			rc = -ENOMEM;
-			goto config_failure;
-		}
-
-		if (copy_from_user(axio, (void *)(vfecmd->value),
-					sizeof(struct axiout))) {
-			rc = -EFAULT;
-			goto config_done;
-		}
-
-		vfe_7x_config_axi(OUTPUT_1, axid, axio);
-
-		cmd_data = axio;
-	}
-		break;
-
-	case CMD_AXI_CFG_OUT2:
+	case CMD_AXI_CFG_PREVIEW:
 	case CMD_RAW_PICT_AXI_CFG: {
 		axid = data;
 		if (!axid) {
@@ -677,7 +653,7 @@ static int vfe_7x_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	}
 		break;
 
-	case CMD_AXI_CFG_SNAP_O1_AND_O2: {
+	case CMD_AXI_CFG_SNAP: {
 		axid = data;
 		if (!axid) {
 			rc = -EFAULT;
