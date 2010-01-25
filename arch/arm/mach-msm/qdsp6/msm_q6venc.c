@@ -1001,6 +1001,7 @@ static int q6venc_open(struct inode *inode, struct file *filp)
 	int ret = 0;
 	struct q6venc_dev *dvenc;
 	struct venc_msg_list *plist;
+	struct dal_info version_info;
 
 	dvenc = kzalloc(sizeof(struct q6venc_dev), GFP_KERNEL);
 	if (!dvenc) {
@@ -1032,12 +1033,21 @@ static int q6venc_open(struct inode *inode, struct file *filp)
 		pr_err("%s: daldevice_attach failed (%d)\n", __func__, ret);
 		goto err_q6venc_dal_attach;
 	}
+	ret = dal_call_f9(dvenc->q6_handle, DAL_OP_INFO, &version_info,
+		sizeof(struct dal_info));
+	if (ret) {
+		pr_err("%s: failed to get version \n", __func__);
+		goto err_q6venc_dal_open;
+	}
+	if (venc_check_version(VENC_INTERFACE_VERSION, version_info.version)) {
+		pr_err("%s: driver version mismatch \n", __func__);
+		goto err_q6venc_dal_open;
+	}
 	ret = dal_call_f0(dvenc->q6_handle, DAL_OP_OPEN, 0);
 	if (ret) {
 		pr_err("%s: dal_call_open failed (%d)\n", __func__, ret);
 		goto err_q6venc_dal_open;
 	}
-
 	dvenc->state = VENC_STATE_STOP;
 	dvenc->is_active = 1;
 	return ret;
