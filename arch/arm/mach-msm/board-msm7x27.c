@@ -928,14 +928,90 @@ static void config_gpio_table(uint32_t *table, int len)
 	}
 }
 
+static struct vreg *vreg_gp2;
+static struct vreg *vreg_gp3;
+
+static void msm_camera_vreg_config(int vreg_en)
+{
+	int rc;
+
+	if (vreg_gp2 == NULL) {
+		vreg_gp2 = vreg_get(NULL, "gp2");
+		if (IS_ERR(vreg_gp2)) {
+			printk(KERN_ERR "%s: vreg_get(%s) failed (%ld)\n",
+				__func__, "gp2", PTR_ERR(vreg_gp2));
+			return;
+		}
+
+		rc = vreg_set_level(vreg_gp2, 1800);
+		if (rc) {
+			printk(KERN_ERR "%s: GP2 set_level failed (%d)\n",
+				__func__, rc);
+		}
+	}
+
+	if (vreg_gp3 == NULL) {
+		vreg_gp3 = vreg_get(NULL, "gp3");
+		if (IS_ERR(vreg_gp3)) {
+			printk(KERN_ERR "%s: vreg_get(%s) failed (%ld)\n",
+				__func__, "gp3", PTR_ERR(vreg_gp3));
+			return;
+		}
+
+		rc = vreg_set_level(vreg_gp3, 2850);
+		if (rc) {
+			printk(KERN_ERR "%s: GP3 set level failed (%d)\n",
+				__func__, rc);
+		}
+	}
+
+	if (vreg_en) {
+		rc = vreg_enable(vreg_gp2);
+		if (rc) {
+			printk(KERN_ERR "%s: GP2 enable failed (%d)\n",
+				 __func__, rc);
+		}
+
+		rc = vreg_enable(vreg_gp3);
+		if (rc) {
+			printk(KERN_ERR "%s: GP3 enable failed (%d)\n",
+				__func__, rc);
+		}
+	} else {
+		rc = vreg_disable(vreg_gp2);
+		if (rc) {
+			printk(KERN_ERR "%s: GP2 disable failed (%d)\n",
+				 __func__, rc);
+		}
+
+		rc = vreg_disable(vreg_gp3);
+		if (rc) {
+			printk(KERN_ERR "%s: GP3 disable failed (%d)\n",
+				__func__, rc);
+		}
+	}
+}
+
 static void config_camera_on_gpios(void)
 {
+	int vreg_en = 1;
+
+	if (machine_is_msm7x25_ffa() ||
+	    machine_is_msm7x27_ffa())
+		msm_camera_vreg_config(vreg_en);
+
 	config_gpio_table(camera_on_gpio_table,
 		ARRAY_SIZE(camera_on_gpio_table));
 }
 
 static void config_camera_off_gpios(void)
 {
+	int vreg_en = 0;
+
+	if (machine_is_msm7x25_ffa() ||
+	    machine_is_msm7x27_ffa())
+		msm_camera_vreg_config(vreg_en);
+
 	config_gpio_table(camera_off_gpio_table,
 		ARRAY_SIZE(camera_off_gpio_table));
 }
