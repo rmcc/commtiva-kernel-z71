@@ -1146,7 +1146,7 @@ source "drivers/s390/char/Kconfig"
 
 config MSM_ROTATOR
 	tristate "MSM Offline Image Rotator Driver"
-	depends on ARCH_MSM7X30
+	depends on ARCH_MSM7X30 && ANDROID_PMEM
 	default y
 	help
 	  This driver provides support for the image rotator HW block in the
