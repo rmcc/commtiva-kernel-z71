@@ -19,7 +19,11 @@ obj-$(CONFIG_ARCH_MSM_SCORPION) += timer.o gpio.o
 
 obj-$(CONFIG_MSM_VIC) += irq-vic.o
 
-obj-$(CONFIG_ARCH_QSD8X50) += acpuclock-8x50.o
+ifdef CONFIG_ARCH_QSD8X50
+	obj-$(CONFIG_MSM_SOC_REV_NONE) += acpuclock-8x50.o
+	obj-$(CONFIG_MSM_SOC_REV_A) += acpuclock-8x50a.o
+endif
+
 obj-$(CONFIG_ARCH_MSM7X30) += acpuclock-7x30.o
 obj-$(CONFIG_MSM_CPU_AVS) += avs.o avs_hw.o
 obj-$(CONFIG_CPU_V6) += idle-v6.o
