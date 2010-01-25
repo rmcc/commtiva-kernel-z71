@@ -478,7 +478,7 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_TX;
 	rpc.buffer.addr = ab->phys;
 	rpc.buffer.max_size = ab->size;
-	rpc.buffer.actual_size = ab->used;
+	rpc.buffer.actual_size = ab->actual_size;
 
 	TRACE("%p: read\n", ac);
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
@@ -500,7 +500,7 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
 	rpc.buffer.addr = ab->phys;
 	rpc.buffer.max_size = ab->size;
-	rpc.buffer.actual_size = ab->used;
+	rpc.buffer.actual_size = ab->actual_size;
 
 	TRACE("%p: write\n", ac);
 	r = dal_call(ac->client, AUDIO_OP_DATA, 5, &rpc, sizeof(rpc),
@@ -572,7 +572,7 @@ static void callback(void *data, int len, void *cookie)
 {
 	struct adsp_event_hdr *e = data;
 	struct audio_client *ac;
-
+	struct adsp_buffer_event *abe = data;
 
 	if (e->context >= SESSION_MAX) {
 		pr_err("audio callback: bogus session %d\n",
@@ -601,6 +601,7 @@ static void callback(void *data, int len, void *cookie)
 		TRACE("%p: CB done (%d)\n", ac, e->status);
 		if (e->status)
 			pr_err("buffer status %d\n", e->status);
+		ac->buf[ac->dsp_buf].actual_size = abe->buffer.actual_size;
 		ac->buf[ac->dsp_buf].used = 0;
 		ac->dsp_buf ^= 1;
 		wake_up(&ac->wait);
