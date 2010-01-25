@@ -487,67 +487,6 @@ static void config_gpio_table(uint32_t *table, int len)
 	}
 }
 
-static uint32_t audio_pamp_gpio_config =
-   GPIO_CFG(82, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
-
-static int __init snddev_poweramp_gpio_init(void)
-{
-	int rc;
-
-	pr_info("snddev_poweramp_gpio_init \n");
-	rc = gpio_tlmm_config(audio_pamp_gpio_config, GPIO_ENABLE);
-	if (rc) {
-		printk(KERN_ERR
-			"%s: gpio_tlmm_config(%#x)=%d\n",
-			__func__, audio_pamp_gpio_config, rc);
-	}
-	return rc;
-}
-
-void msm_snddev_poweramp_on(void)
-{
-	gpio_set_value(82, 1);	/* enable spkr poweramp */
-	pr_info("%s: power on amplifier\n", __func__);
-}
-
-void msm_snddev_poweramp_off(void)
-{
-	gpio_set_value(82, 0);	/* disable spkr poweramp */
-	pr_info("%s: power off amplifier\n", __func__);
-}
-
-void msm_snddev_hsed_pamp_on(void)
-{
-	struct vreg *vreg_ncp;
-	int rc;
-
-	vreg_ncp = vreg_get(NULL, "ncp");
-	if (IS_ERR(vreg_ncp)) {
-		pr_err("%s: vreg_get(%s) failed (%ld)\n",
-		__func__, "ncp", PTR_ERR(vreg_ncp));
-		return;
-	}
-	rc = vreg_enable(vreg_ncp);
-	if (rc)
-		pr_err("%s: vreg_enable failed (%d)\n", __func__, rc);
-}
-
-void msm_snddev_hsed_pamp_off(void)
-{
-	struct vreg *vreg_ncp;
-	int rc;
-
-	vreg_ncp = vreg_get(NULL, "ncp");
-	if (IS_ERR(vreg_ncp)) {
-		pr_err("%s: vreg_get(%s) failed (%ld)\n",
-		__func__, "ncp", PTR_ERR(vreg_ncp));
-		return;
-	}
-	rc = vreg_disable(vreg_ncp);
-	if (rc)
-		pr_err("%s: vreg_disable failed (%d)\n", __func__, rc);
-}
-
 static void msm_camera_vreg_config_on(void)
 {
 	struct vreg *vreg_gp2, *vreg_gp3;
@@ -765,6 +704,68 @@ static struct platform_device msm_camera_sensor_mt9t013 = {
 #endif
 #endif /*CONFIG_MSM_CAMERA*/
 
+#ifdef CONFIG_MSM7KV2_AUDIO
+static uint32_t audio_pamp_gpio_config =
+   GPIO_CFG(82, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+
+static int __init snddev_poweramp_gpio_init(void)
+{
+	int rc;
+
+	pr_info("snddev_poweramp_gpio_init \n");
+	rc = gpio_tlmm_config(audio_pamp_gpio_config, GPIO_ENABLE);
+	if (rc) {
+		printk(KERN_ERR
+			"%s: gpio_tlmm_config(%#x)=%d\n",
+			__func__, audio_pamp_gpio_config, rc);
+	}
+	return rc;
+}
+
+void msm_snddev_poweramp_on(void)
+{
+	gpio_set_value(82, 1);	/* enable spkr poweramp */
+	pr_info("%s: power on amplifier\n", __func__);
+}
+
+void msm_snddev_poweramp_off(void)
+{
+	gpio_set_value(82, 0);	/* disable spkr poweramp */
+	pr_info("%s: power off amplifier\n", __func__);
+}
+
+void msm_snddev_hsed_pamp_on(void)
+{
+	struct vreg *vreg_ncp;
+	int rc;
+
+	vreg_ncp = vreg_get(NULL, "ncp");
+	if (IS_ERR(vreg_ncp)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "ncp", PTR_ERR(vreg_ncp));
+		return;
+	}
+	rc = vreg_enable(vreg_ncp);
+	if (rc)
+		pr_err("%s: vreg_enable failed (%d)\n", __func__, rc);
+}
+
+void msm_snddev_hsed_pamp_off(void)
+{
+	struct vreg *vreg_ncp;
+	int rc;
+
+	vreg_ncp = vreg_get(NULL, "ncp");
+	if (IS_ERR(vreg_ncp)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "ncp", PTR_ERR(vreg_ncp));
+		return;
+	}
+	rc = vreg_disable(vreg_ncp);
+	if (rc)
+		pr_err("%s: vreg_disable failed (%d)\n", __func__, rc);
+}
+
 static unsigned aux_pcm_gpio_on[] = {
 	GPIO_CFG(138, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA),   /* PCM_DOUT */
 	GPIO_CFG(139, 1, GPIO_INPUT,  GPIO_NO_PULL, GPIO_2MA),   /* PCM_DIN  */
@@ -788,6 +789,7 @@ static int __init aux_pcm_gpio_init(void)
 	}
 	return rc;
 }
+#endif /* CONFIG_MSM7KV2_AUDIO */
 
 static int __init buses_init(void)
 {
@@ -961,6 +963,7 @@ static void __init msm7x30_init_marimba(void)
 	}
 }
 
+#ifdef CONFIG_MSM7KV2_AUDIO
 static struct resource msm_aictl_resources[] = {
 	{
 		.name = "aictl",
@@ -1083,6 +1086,7 @@ struct platform_device msm_lpa_device = {
 		.platform_data = &lpa_pdata,
 	},
 };
+#endif /* CONFIG_MSM7KV2_AUDIO */
 
 #define DEC0_FORMAT ((1<<MSM_ADSP_CODEC_MP3)| \
 	(1<<MSM_ADSP_CODEC_AAC)|(1<<MSM_ADSP_CODEC_WMA)| \
@@ -2688,9 +2692,12 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_i2c_2,
 	&msm_device_uart_dm1,
 	&hs_device,
+#ifdef CONFIG_MSM7KV2_AUDIO
 	&msm_aictl_device,
 	&msm_mi2s_device,
 	&msm_lpa_device,
+	&msm_aux_pcm_device,
+#endif
 	&msm_device_adspdec,
 	&qup_device_i2c,
 #if defined(CONFIG_MARIMBA_CORE) && \
@@ -2717,7 +2724,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_camera_sensor_mt9p012,
 #endif
 	&msm_device_ss_mfc_720p,
-	&msm_aux_pcm_device,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -3247,8 +3253,11 @@ static void __init msm7x30_init(void)
 	qup_device_i2c_init();
 	buses_init();
 	msm7x30_init_marimba();
+#ifdef CONFIG_MSM7KV2_AUDIO
 	snddev_poweramp_gpio_init();
 	msm_snddev_init();
+	aux_pcm_gpio_init();
+#endif
 
 	if (machine_is_msm7x30_surf())
 		i2c_register_board_info(0, msm_i2c_board_info,
@@ -3274,7 +3283,6 @@ static void __init msm7x30_init(void)
 	msm_device_ssbi6.dev.platform_data = &msm_i2c_ssbi6_pdata;
 	msm_device_ssbi7.dev.platform_data = &msm_i2c_ssbi7_pdata;
 #endif
-	aux_pcm_gpio_init();
 }
 
 static unsigned pmem_sf_size = MSM_PMEM_SF_SIZE;
