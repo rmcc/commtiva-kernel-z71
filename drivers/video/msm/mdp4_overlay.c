@@ -523,20 +523,20 @@ int mdp4_overlay_format2pipe(struct mdp4_overlay_pipe *pipe)
  */
 static uint32 color_key_convert(int start, int num, uint32 color)
 {
-
 	uint32 data;
 
 	data = (color >> start) & ((1 << num) - 1);
 
+	/* convert to 8 bits */
 	if (num == 5)
-		data = (data << 7) + (data << 2) + (data >> 3);
+		data = ((data << 3) | (data >> 2));
 	else if (num == 6)
-		data = (data << 6) + data;
-	else	/* 8 bits */
-		data = (data << 4) + (data >> 4);
+		data = ((data << 2) | (data >> 4));
+
+	/* convert 8 bits to 12 bits */
+	data = (data << 4) | (data >> 4);
 
 	return data;
-
 }
 
 void transp_color_key(int format, uint32 transp,
