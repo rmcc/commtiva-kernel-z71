@@ -390,7 +390,7 @@ static int audio_out_open(struct audio_client *ac, uint32_t bufsz,
 }
 
 static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
-			 uint32_t rate, uint32_t channels)
+			 uint32_t flags, uint32_t rate, uint32_t channels)
 {
 	struct adsp_open_command rpc;
 
@@ -405,7 +405,11 @@ static int audio_in_open(struct audio_client *ac, uint32_t bufsz,
 
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
 	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	if (flags == AUDIO_FLAG_READ)
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	else
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
+
 	rpc.buf_max_size = bufsz;
 
 	TRACE("%p: open in\n", ac);
@@ -1339,7 +1343,7 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		if (ac->flags & AUDIO_FLAG_WRITE)
 			rc = audio_out_open(ac, bufsz, rate, channels);
 		else
-			rc = audio_in_open(ac, bufsz, rate, channels);
+			rc = audio_in_open(ac, bufsz, flags, rate, channels);
 		if (rc == 0)
 			break;
 		if (retry == 0)

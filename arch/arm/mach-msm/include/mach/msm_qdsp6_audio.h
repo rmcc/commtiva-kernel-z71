@@ -19,6 +19,7 @@
 
 #define AUDIO_FLAG_READ		0
 #define AUDIO_FLAG_WRITE	1
+#define AUDIO_FLAG_INCALL_MIXED	2
 
 struct audio_buffer {
 	dma_addr_t phys;
