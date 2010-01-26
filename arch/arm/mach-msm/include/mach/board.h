@@ -196,7 +196,8 @@ int __init rmt_storage_add_ramfs(void);
 struct msm_usb_host_platform_data;
 int __init msm_add_host(unsigned int host,
 		struct msm_usb_host_platform_data *plat);
-#if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) || defined(CONFIG_USB_MSM_72K)
+#if defined(CONFIG_USB_FUNCTION_MSM_HSUSB) \
+	|| defined(CONFIG_USB_MSM_72K) || defined(CONFIG_USB_MSM_72K_MODULE)
 void msm_hsusb_set_vbus_state(int online);
 #else
 static inline void msm_hsusb_set_vbus_state(int online) {}
