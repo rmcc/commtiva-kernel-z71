@@ -388,7 +388,9 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 				mdp_intr_mask &= ~INTR_OVERLAY0_DONE;
 				outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 				dma->waiting = FALSE;
+#ifdef CONFIG_FB_MSM_OVERLAY
 				mdp4_overlay0_done_lcdc();
+#endif
 			} else {	/* MDDI */
 				dma->busy = FALSE;
 #ifdef MDP4_NONBLOCKING
@@ -396,7 +398,9 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 #endif
 				mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK,
 					MDP_BLOCK_POWER_OFF, TRUE);
+#ifdef CONFIG_FB_MSM_OVERLAY
 				mdp4_overlay0_done_mddi();
+#endif
 			}
 		}
 		if (isr & INTR_OVERLAY1_DONE) {
