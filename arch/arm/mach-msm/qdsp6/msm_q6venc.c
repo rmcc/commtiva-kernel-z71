@@ -74,7 +74,7 @@
 #define VENC_NAME   			"q6venc"
 #define VENC_MSG_MAX                   100
 
-#define VENC_INTERFACE_VERSION		0x00010000
+#define VENC_INTERFACE_VERSION		0x00020000
 #define MAJOR_MASK			0xFFFF0000
 #define MINOR_MASK			0x0000FFFF
 #define VENC_GET_MAJOR_VERSION(version) ((version & MAJOR_MASK)>>16)
@@ -110,6 +110,7 @@ struct venc_output_payload {
 	long long time_stamp;
 	unsigned int flags;
 	unsigned int data;
+	unsigned int client_data_from_input;
 };
 union venc_payload {
 	struct venc_input_payload input_payload;
@@ -128,6 +129,7 @@ struct venc_input_buf {
 	unsigned int dvs_offsetx;
 	unsigned int dvs_offsety;
 	unsigned int client_data;
+	unsigned int op_client_data;
 };
 struct venc_output_buf {
 	struct venc_buf_type bit_stream_buf;
@@ -1035,6 +1037,7 @@ static int q6venc_open(struct inode *inode, struct file *filp)
 		pr_err("%s: dal_call_open failed (%d)\n", __func__, ret);
 		goto err_q6venc_dal_open;
 	}
+
 	dvenc->state = VENC_STATE_STOP;
 	dvenc->is_active = 1;
 	return ret;
