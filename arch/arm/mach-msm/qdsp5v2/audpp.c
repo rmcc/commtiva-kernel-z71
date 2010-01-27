@@ -248,9 +248,10 @@ static void audpp_handle_pcmdmamiss(struct audpp_state *audpp,
 
 	for (b_index = 0; b_index < AUDPP_CLNT_MAX_COUNT; b_index++) {
 		if (bit_mask & (0x1 << b_index))
-			audpp->func[b_index] (audpp->private[b_index],
-					      AUDPP_MSG_PCMDMAMISSED,
-					      &bit_mask);
+			if (audpp->func[b_index])
+				audpp->func[b_index] (audpp->private[b_index],
+						      AUDPP_MSG_PCMDMAMISSED,
+						      &bit_mask);
 	}
 }
 
