@@ -412,7 +412,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		buf_hdlc = diagmem_alloc(driver, HDLC_OUT_BUF_SIZE,
 						 POOL_TYPE_HDLC);
 
-	if (HDLC_OUT_BUF_SIZE - driver->used <= payload_size + 7) {
+	if (HDLC_OUT_BUF_SIZE - driver->used <= (2*payload_size) + 3) {
 		driver->usb_write_ptr_svc = (struct diag_request *)
 			(diagmem_alloc(driver, sizeof(struct diag_request),
 				POOL_TYPE_USB_STRUCT));
@@ -439,7 +439,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	}
 
 	enc.dest = buf_hdlc + driver->used;
-	enc.dest_last = (void *)(buf_hdlc + driver->used + payload_size + 7);
+	enc.dest_last = (void *)(buf_hdlc + driver->used + 2*payload_size + 3);
 	diag_hdlc_encode(&send, &enc);
 
 	/* This is to check if after HDLC encoding, we are still within the
@@ -472,7 +472,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		}
 		enc.dest = buf_hdlc + driver->used;
 		enc.dest_last = (void *)(buf_hdlc + driver->used +
-							 payload_size + 7);
+							 (2*payload_size) + 3);
 		diag_hdlc_encode(&send, &enc);
 	}
 
