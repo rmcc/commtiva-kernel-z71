@@ -44,7 +44,7 @@
 #define INT_AVS_REQ_DOWN	10
 #define INT_AVS_REQ_UP		11
 #define INT_SC_ACG		12
-/* SCSS_VICFIQSTS1[13:15] are RESERVED */
+/* SCSS_VICFIQSTS0[13:15] are RESERVED */
 #define INT_L2_SVICCPUIRPTREQ	16
 #define INT_L2_SVICDMANSIRPTREQ 17
 #define INT_L2_SVICDMASIRPTREQ  18
@@ -93,7 +93,7 @@
 #define INT_USB_OTG_HS		(32 + 28)
 #define INT_USB_OTG_HS2		(32 + 29)
 #define INT_USB_OTG_HS3		(32 + 30)
-#define INT_RESERVED_BIT31	(32 + 31)
+#define INT_CSI			(32 + 31)
 
 #define INT_SPI_OUTPUT		(64 + 0)
 #define INT_SPI_INPUT		(64 + 1)
@@ -137,7 +137,8 @@
 #define INT_PWB_QUP_IN		(96 + 6)
 #define INT_PWB_QUP_OUT		(96 + 7)
 #define INT_PWB_QUP_ERR		(96 + 8)
-/* SCSS_VICFIQSTS3[6:31] are RESERVED */
+#define INT_SCSS_WDT0_BITE	(96 + 9)
+/* SCSS_VICFIQSTS3[10:31] are RESERVED */
 
 /* Retrofit universal macro names */
 #define INT_ADM_AARM		INT_ADM_SC2
