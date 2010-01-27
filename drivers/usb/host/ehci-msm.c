@@ -395,7 +395,8 @@ static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 		return ret;
 	}
 #ifdef CONFIG_USB_MSM_OTG_72K
-	return otg_set_suspend(mhcd->xceiv, 1);
+	if (PHY_TYPE(mhcd->pdata->phy_info) == USB_PHY_INTEGRATED)
+		return otg_set_suspend(mhcd->xceiv, 1);
 #endif
 
 	return usb_lpm_enter(hcd);
@@ -406,7 +407,8 @@ static int ehci_msm_bus_resume(struct usb_hcd *hcd)
 	struct msmusb_hcd *mhcd = hcd_to_mhcd(hcd);
 
 #ifdef CONFIG_USB_MSM_OTG_72K
-	otg_set_suspend(mhcd->xceiv, 0);
+	if (PHY_TYPE(mhcd->pdata->phy_info) == USB_PHY_INTEGRATED)
+		otg_set_suspend(mhcd->xceiv, 0);
 #endif
 	usb_lpm_exit(hcd);
 	if (cancel_work_sync(&(mhcd->lpm_exit_work)))
@@ -576,12 +578,12 @@ static void msm_hsusb_request_host(void *handle, int request)
 		wake_lock(&mhcd->wlock);
 		msm_xusb_pm_qos_update(mhcd, 1);
 		msm_xusb_enable_clks(mhcd);
-#ifndef CONFIG_USB_MSM_OTG_72K
 		if (PHY_TYPE(pdata->phy_info) == USB_PHY_INTEGRATED)
+#ifndef CONFIG_USB_MSM_OTG_72K
 			clk_enable(mhcd->clk);
 #else
-		if (otg->set_clk)
-			otg->set_clk(mhcd->xceiv, 1);
+			if (otg->set_clk)
+				otg->set_clk(mhcd->xceiv, 1);
 #endif
 		if (pdata->vbus_power)
 			pdata->vbus_power(pdata->phy_info, 1);
@@ -589,12 +591,12 @@ static void msm_hsusb_request_host(void *handle, int request)
 			pdata->config_gpio(1);
 		usb_add_hcd(hcd, hcd->irq, IRQF_SHARED);
 		mhcd->running = 1;
-#ifndef CONFIG_USB_MSM_OTG_72K
 		if (PHY_TYPE(pdata->phy_info) == USB_PHY_INTEGRATED)
+#ifndef CONFIG_USB_MSM_OTG_72K
 			clk_disable(mhcd->clk);
 #else
-		if (otg->set_clk)
-			otg->set_clk(mhcd->xceiv, 0);
+			if (otg->set_clk)
+				otg->set_clk(mhcd->xceiv, 0);
 #endif
 		break;
 	case REQUEST_STOP:
@@ -614,7 +616,8 @@ static void msm_hsusb_request_host(void *handle, int request)
 		wake_lock_timeout(&mhcd->wlock, HZ/2);
 		msm_xusb_pm_qos_update(mhcd, 0);
 #ifdef CONFIG_USB_MSM_OTG_72K
-		otg_set_suspend(mhcd->xceiv, 1);
+		if (PHY_TYPE(pdata->phy_info) == USB_PHY_INTEGRATED)
+			otg_set_suspend(mhcd->xceiv, 1);
 #endif
 		break;
 	}
