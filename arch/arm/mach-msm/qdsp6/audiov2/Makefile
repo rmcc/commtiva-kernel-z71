@@ -9,3 +9,4 @@ obj-y += analog_audio.o
 obj-y += routing.o
 obj-y += evrc_in.o
 obj-y += qcelp_in.o
+obj-y += amrnb_in.o
