@@ -786,9 +786,6 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 
 	if (!(masters & chip->masters_allowed) ||
 	    (masters & ~chip->masters_allowed)) {
-		pr_err("%s: Spurious root: 0x%x (masters=0x%x, "
-		       "Allowed masters=0x%x)\n",
-		       __func__, root, masters, chip->masters_allowed);
 		spurious = 1000000;
 	}
 
@@ -872,10 +869,13 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 
 bail_out:
 	if (spurious) {
-		pr_err("%s: handled = %d, spurious = %d\n",
-		       __func__, handled, spurious);
-		pr_err("   root=0x%x, masters_allowed=0x%x\n",
-		       root, chip->masters_allowed);
+		if (!printk_ratelimit())
+			return;
+
+		pr_err("%s: spurious = %d (handled = %d)\n",
+		       __func__, spurious, handled);
+		pr_err("   root = 0x%x (masters_allowed<<1 = 0x%x)\n",
+		       root, chip->masters_allowed << 1);
 		for (i = 0; i < chip->pm_max_masters; i++) {
 			if (masters & (1 << i))
 				pr_err("   blocks[%d]=0x%x, "
