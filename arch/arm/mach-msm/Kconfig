@@ -800,14 +800,6 @@ config CLOCK_BASED_SLEEP_LIMIT
 	  decides accordingly the sleep limitation which it informs
 	  the modem to use.
 
-config MSM_ADM_OFF_AT_POWER_COLLAPSE
-	bool "Turn off ADM clock during power collapse"
-	default n
-	help
-	  The application processor turns off the ADM clock before
-	  entering power collapse and turns it back on after exiting
-	  power collapse.
-
 config MSM_SLEEP_TIME_OVERRIDE
 	bool "Allow overriding suspend/sleep time with PM module parameter"
 	default y

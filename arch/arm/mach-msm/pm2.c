@@ -905,9 +905,6 @@ static int msm_pm_power_collapse
 	uint32_t saved_vector[2];
 	int collapsed = 0;
 	int ret;
-#ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-	unsigned id;
-#endif
 
 	MSM_PM_DPRINTK(MSM_PM_DEBUG_SUSPEND|MSM_PM_DEBUG_POWER_COLLAPSE,
 		KERN_INFO, "%s(): idle %d, delay %u, limit %u\n", __func__,
@@ -978,15 +975,6 @@ static int msm_pm_power_collapse
 		goto power_collapse_early_exit;
 	}
 
-#ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-	/* XXX: Temp workaround that needs to be removed soon. The
-	 * right fix will probably involve the DMA driver taking
-	 * ownership of the ADM clock. */
-	/* id is set to denote ADM clock. */
-	id = 1;
-	msm_proc_comm(PCOM_CLKCTL_RPC_DISABLE, &id, NULL);
-#endif
-
 	msm_pm_config_hw_before_power_down();
 	MSM_PM_DEBUG_PRINT_STATE("msm_pm_power_collapse(): pre power down");
 
@@ -1047,14 +1035,6 @@ static int msm_pm_power_collapse
 	if (acpuclk_set_rate(saved_acpuclk_rate, SETRATE_PC) < 0)
 		printk(KERN_ERR "%s(): failed to restore clock rate(%lu)\n",
 			__func__, saved_acpuclk_rate);
-
-#ifdef CONFIG_MSM_ADM_OFF_AT_POWER_COLLAPSE
-	/* id is set to denote ADM clock. */
-	id = 1;
-	if (msm_proc_comm(PCOM_CLKCTL_RPC_ENABLE, &id, NULL) < 0 || id < 0)
-		printk(KERN_ERR
-			"%s(): failed to turn on ADM clock\n", __func__);
-#endif
 
 	msm_irq_exit_sleep1(msm_pm_smem_data->irq_mask,
 		msm_pm_smem_data->wakeup_reason,
