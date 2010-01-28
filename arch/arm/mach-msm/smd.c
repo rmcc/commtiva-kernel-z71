@@ -260,7 +260,7 @@ static LIST_HEAD(smd_ch_list_dsp);
 static unsigned char smd_ch_allocated[64];
 static struct work_struct probe_work;
 
-static void smd_alloc_channel(struct smd_alloc_elm *alloc_elm);
+static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm);
 
 static void smd_channel_probe_worker(struct work_struct *work)
 {
@@ -284,8 +284,10 @@ static void smd_channel_probe_worker(struct work_struct *work)
 		if (!shared[n].name[0])
 			continue;
 
-		smd_alloc_channel(&shared[n]);
-		smd_ch_allocated[n] = 1;
+		if (!smd_alloc_channel(&shared[n]))
+			smd_ch_allocated[n] = 1;
+		else
+			SMD_INFO("Probe skipping ch %d, not allocated \n", n);
 	}
 }
 
@@ -741,9 +743,15 @@ static int smd_alloc_v2(struct smd_channel *ch)
 	unsigned buffer_sz;
 
 	shared2 = smem_alloc(SMEM_SMD_BASE_ID + ch->n, sizeof(*shared2));
-	buffer = smem_get_entry(SMEM_SMD_FIFO_BASE_ID + ch->n, &buffer_sz);
-	if (!buffer)
+	if (!shared2) {
+		SMD_INFO("smem_alloc failed ch=%d\n", ch->n);
 		return -1;
+	}
+	buffer = smem_get_entry(SMEM_SMD_FIFO_BASE_ID + ch->n, &buffer_sz);
+	if (!buffer) {
+		SMD_INFO("smem_get_entry failed \n");
+		return -1;
+	}
 
 	/* buffer must be a power-of-two size */
 	if (buffer_sz & (buffer_sz - 1))
@@ -774,20 +782,20 @@ static int smd_alloc_v1(struct smd_channel *ch)
 	return 0;
 }
 
-static void smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
+static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
 {
 	struct smd_channel *ch;
 
 	ch = kzalloc(sizeof(struct smd_channel), GFP_KERNEL);
 	if (ch == 0) {
 		pr_err("smd_alloc_channel() out of memory\n");
-		return;
+		return -1;
 	}
 	ch->n = alloc_elm->cid;
 
 	if (smd_alloc_v2(ch) && smd_alloc_v1(ch)) {
 		kfree(ch);
-		return;
+		return -1;
 	}
 
 	ch->fifo_mask = ch->fifo_size - 1;
@@ -828,6 +836,7 @@ static void smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
 	mutex_unlock(&smd_creation_mutex);
 
 	platform_device_register(&ch->pdev);
+	return 0;
 }
 
 static void do_nothing_notify(void *priv, unsigned flags)
