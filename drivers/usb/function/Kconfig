@@ -134,4 +134,29 @@ config USB_FUNCTION_SERIAL
 
 	default USB_FUNCTION_MSM_HSUSB
 
+config USB_FUNCTION_RMNET
+	bool "RmNet function driver"
+	depends on USB_FUNCTION
+	depends on USB_FUNCTION_MSM_HSUSB
+	default n
+	help
+	  Implements Rmnet function.
+	  Rmnet is an alternative to CDC-ECM and Windows RNDIS. It uses
+	  QUALCOMM MSM Interface for control transfers. It acts like a
+	  bridge between Host and modem found in MSM chipsets.
+
+config RMNET_SMD_CTL_CHANNEL
+	string "control SMD channel name"
+	depends on USB_FUNCTION_RMNET
+	default ""
+	help
+	  Control SMD channel for transferring QMI messages
+
+config RMNET_SMD_DATA_CHANNEL
+	string "Data SMD channel name"
+	depends on USB_FUNCTION_RMNET
+	default ""
+	help
+	  Data SMD channel for transferring network data
+
 endmenu

@@ -218,6 +218,7 @@ static struct usb_function_map usb_functions_map[] = {
 	{"nmea", 3},
 	{"mass_storage", 4},
 	{"ethernet", 5},
+	{"rmnet", 6},
 };
 
 /* dynamic composition */
@@ -261,6 +262,18 @@ static struct usb_composition usb_func_composition[] = {
 		.product_id         = 0x9018,
 		.functions	    = 0x1F, /* 011111 */
 	},
+#ifdef CONFIG_USB_FUNCTION_RMNET
+	{
+		.product_id         = 0x9021,
+		/* DIAG + RMNET */
+		.functions	    = 0x41,
+	},
+	{
+		.product_id         = 0x9022,
+		/* DIAG + ADB + RMNET */
+		.functions	    = 0x43,
+	},
+#endif
 
 };
 #endif
