@@ -53,7 +53,8 @@ static int pmem_fixup_high_low(unsigned short *high,
 	phys_size = (unsigned long)high_low_short_to_ptr(size_high, size_low);
 	MM_DBG("virt %x %x\n", (unsigned int)phys_addr,
 			(unsigned int)phys_size);
-	if (adsp_pmem_fixup_kvaddr(module, &phys_addr, &kvaddr, phys_size)) {
+	if (adsp_pmem_fixup_kvaddr(module, &phys_addr, &kvaddr, phys_size,
+				NULL, NULL)) {
 		MM_ERR("ah%x al%x sh%x sl%x addr %x size %x\n",
 			*high, *low, size_high,
 			size_low, (unsigned int)phys_addr,
