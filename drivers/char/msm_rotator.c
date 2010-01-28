@@ -267,6 +267,7 @@ static int get_bpp(int format)
 	case MDP_ARGB_8888:
 	case MDP_RGBA_8888:
 	case MDP_BGRA_8888:
+	case MDP_RGBX_8888:
 		return 4;
 
 	case MDP_Y_CBCR_H2V2:
@@ -540,6 +541,7 @@ static int msm_rotator_rgb_types(struct msm_rotator_img_info *info,
 		case MDP_ARGB_8888:
 		case MDP_RGBA_8888:
 		case MDP_XRGB_8888:
+		case MDP_RGBX_8888:
 			iowrite32(GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G,
 						   CLR_B, 8),
 				  MSM_ROTATOR_SRC_UNPACK_PATTERN1);
@@ -664,6 +666,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	case MDP_RGBA_8888:
 	case MDP_XRGB_8888:
 	case MDP_BGRA_8888:
+	case MDP_RGBX_8888:
 		rc = msm_rotator_rgb_types(msm_rotator_dev->img_info[s],
 					   in_paddr, out_paddr,
 					   use_imem,
@@ -755,6 +758,7 @@ static int msm_rotator_start(unsigned long arg)
 	case MDP_ARGB_8888:
 	case MDP_RGBA_8888:
 	case MDP_XRGB_8888:
+	case MDP_RGBX_8888:
 	case MDP_BGRA_8888:
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
