@@ -310,6 +310,7 @@ int mdp4_overlay_format2type(uint32 format)
 	case MDP_ARGB_8888:
 	case MDP_RGBA_8888:
 	case MDP_BGRA_8888:
+	case MDP_RGBX_8888:
 		return OVERLAY_TYPE_RGB;
 	case MDP_YCRYCB_H2V1:
 	case MDP_Y_CRCB_H2V1:
@@ -413,6 +414,23 @@ int mdp4_overlay_format2pipe(struct mdp4_overlay_pipe *pipe)
 		pipe->element2 = C0_G_Y;	/* G */
 		pipe->element1 = C1_B_Cb;	/* B */
 		pipe->element0 = C3_ALPHA;	/* alpha */
+		pipe->bpp = 4;		/* 4 bpp */
+		break;
+	case MDP_RGBX_8888:
+		pipe->frame_format = MDP4_FRAME_FORMAT_LINEAR;
+		pipe->fetch_plane = OVERLAY_PLANE_INTERLEAVED;
+		pipe->a_bit = 0;
+		pipe->r_bit = 3;	/* R, 8 bits */
+		pipe->b_bit = 3;	/* B, 8 bits */
+		pipe->g_bit = 3;	/* G, 8 bits */
+		pipe->alpha_enable = 0;
+		pipe->unpack_tight = 1;
+		pipe->unpack_align_msb = 0;
+		pipe->unpack_count = 3;
+		pipe->element3 = C3_ALPHA;	/* alpha */
+		pipe->element2 = C1_B_Cb;	/* B */
+		pipe->element1 = C0_G_Y;	/* G */
+		pipe->element0 = C2_R_Cr;	/* R */
 		pipe->bpp = 4;		/* 4 bpp */
 		break;
 	case MDP_BGRA_8888:
@@ -560,6 +578,14 @@ void transp_color_key(int format, uint32 transp,
 		b_start = 0;
 		g_start = 8;
 		r_start = 16;
+		r_num = 8;
+		g_num = 8;
+		b_num = 8;
+		break;
+	case MDP_RGBX_8888:
+		b_start = 16;
+		g_start = 8;
+		r_start = 0;
 		r_num = 8;
 		g_num = 8;
 		b_num = 8;
