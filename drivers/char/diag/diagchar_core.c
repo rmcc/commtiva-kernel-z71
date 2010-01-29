@@ -78,8 +78,8 @@ MODULE_VERSION("1.0");
 struct diagchar_dev *driver;
 /* The following variables can be specified by module options */
  /* for copy buffer */
-static unsigned int itemsize = 512; /*Size of item in the mempool */
-static unsigned int poolsize = 20; /*Number of items in the mempool */
+static unsigned int itemsize = 2048; /*Size of item in the mempool */
+static unsigned int poolsize = 10; /*Number of items in the mempool */
 /* for hdlc buffer */
 static unsigned int itemsize_hdlc = 8192; /*Size of item in the mempool */
 static unsigned int poolsize_hdlc = 8;  /*Number of items in the mempool */
