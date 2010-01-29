@@ -16,7 +16,6 @@
  *
  */
 
-#include <mach/debug_audio_mm.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
@@ -27,6 +26,7 @@
 
 #include <linux/msm_audio_qcp.h>
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/debug_audio_mm.h>
 #include "dal_audio_format.h"
 
 struct qcelp {
@@ -34,6 +34,7 @@ struct qcelp {
 	struct msm_audio_qcelp_enc_config cfg;
 	struct msm_audio_stream_config str_cfg;
 	struct audio_client *audio_client;
+	struct msm_voicerec_mode voicerec_mode;
 };
 
 
@@ -77,7 +78,7 @@ static long q6_qcelp_in_ioctl(struct file *file, unsigned int cmd,
 				qcelp->str_cfg.buffer_size,
 				qcelp->cfg.min_bit_rate,
 				qcelp->cfg.max_bit_rate,
-				AUDIO_FLAG_READ,
+				qcelp->voicerec_mode.rec_mode,
 				ADSP_AUDIO_FORMAT_V13K_FS,
 				acdb_id);
 
@@ -93,6 +94,20 @@ static long q6_qcelp_in_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case AUDIO_FLUSH:
 		break;
+	case AUDIO_SET_INCALL: {
+		if (copy_from_user(&qcelp->voicerec_mode,
+			(void *)arg, sizeof(struct msm_voicerec_mode)))
+			rc = -EFAULT;
+
+		if (qcelp->voicerec_mode.rec_mode != AUDIO_FLAG_READ
+			&& qcelp->voicerec_mode.rec_mode !=
+			AUDIO_FLAG_INCALL_MIXED) {
+			qcelp->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
+			MM_ERR("Invalid rec_mode\n");
+			rc = -EINVAL;
+		}
+		break;
+	}
 	case AUDIO_GET_STREAM_CONFIG:
 		if (copy_to_user((void *)arg, &qcelp->str_cfg,
 				sizeof(struct msm_audio_stream_config)))
@@ -163,6 +178,7 @@ static int q6_qcelp_in_open(struct inode *inode, struct file *file)
 	qcelp->cfg.cdma_rate = CDMA_RATE_FULL;
 	qcelp->cfg.min_bit_rate = 1;
 	qcelp->cfg.max_bit_rate = 4;
+	qcelp->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
 	return 0;
 }
 

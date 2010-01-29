@@ -442,7 +442,8 @@ static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 
 static int audio_aac_open(struct audio_client *ac, uint32_t bufsz,
 			  uint32_t sample_rate, uint32_t channels,
-			  uint32_t bit_rate, uint32_t stream_format)
+			  uint32_t bit_rate, uint32_t flags,
+					uint32_t stream_format)
 {
 	struct adsp_open_command rpc;
 	int audio_object_type;
@@ -478,7 +479,12 @@ static int audio_aac_open(struct audio_client *ac, uint32_t bufsz,
 	rpc.format.binary.num_bytes = index + 1;
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
 	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+
+	if (flags == AUDIO_FLAG_READ)
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	else
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
+
 	rpc.buf_max_size = bufsz;
 	rpc.config.aac.bit_rate = bit_rate;
 	rpc.config.aac.encoder_mode = ADSP_AUDIO_ENC_AAC_LC_ONLY_MODE;
@@ -486,7 +492,8 @@ static int audio_aac_open(struct audio_client *ac, uint32_t bufsz,
 }
 
 static int audio_qcp_open(struct audio_client *ac, uint32_t bufsz,
-			  uint32_t min_rate, uint32_t max_rate, uint32_t format)
+				uint32_t min_rate, uint32_t max_rate,
+				uint32_t flags, uint32_t format)
 {
 	struct adsp_open_command rpc;
 
@@ -501,7 +508,11 @@ static int audio_qcp_open(struct audio_client *ac, uint32_t bufsz,
 
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
 	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+
+	if (flags == AUDIO_FLAG_READ)
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	else
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
 	rpc.buf_max_size = bufsz;
 	rpc.config.evrc.min_rate = min_rate;
 	rpc.config.evrc.max_rate = max_rate;
@@ -510,7 +521,8 @@ static int audio_qcp_open(struct audio_client *ac, uint32_t bufsz,
 }
 
 static int audio_amrnb_open(struct audio_client *ac, uint32_t bufsz,
-			  uint32_t enc_mode, uint32_t dtx_enable)
+					uint32_t enc_mode, uint32_t flags,
+					uint32_t dtx_enable)
 {
 	struct adsp_open_command rpc;
 
@@ -525,7 +537,12 @@ static int audio_amrnb_open(struct audio_client *ac, uint32_t bufsz,
 
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_READ;
 	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
-	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+
+	if (flags == AUDIO_FLAG_READ)
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_RECORD;
+	else
+		rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD;
+
 	rpc.buf_max_size = bufsz;
 	rpc.config.amr.mode = enc_mode;
 	rpc.config.amr.dtx_mode = dtx_enable;
@@ -1583,7 +1600,8 @@ struct audio_client *q6audio_open_aac(uint32_t bufsz, uint32_t samplerate,
 		audio_tx_path_enable(1, acdb_id);
 	}
 
-	audio_aac_open(ac, bufsz, samplerate, channels, bitrate, stream_format);
+	audio_aac_open(ac, bufsz, samplerate, channels, bitrate, flags,
+							stream_format);
 	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
 
 	if (!(ac->flags & AUDIO_FLAG_WRITE)) {
@@ -1621,7 +1639,7 @@ struct audio_client *q6audio_open_qcp(uint32_t bufsz, uint32_t min_rate,
 		audio_tx_path_enable(1, acdb_id);
 	}
 
-	audio_qcp_open(ac, bufsz, min_rate, max_rate, format);
+	audio_qcp_open(ac, bufsz, min_rate, max_rate, flags, format);
 	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
 
 	if (!(ac->flags & AUDIO_FLAG_WRITE)) {
@@ -1657,7 +1675,7 @@ struct audio_client *q6audio_open_amrnb(uint32_t bufsz, uint32_t enc_mode,
 		audio_tx_path_enable(1, acdb_id);
 	}
 
-	audio_amrnb_open(ac, bufsz, enc_mode, dtx_mode_enable);
+	audio_amrnb_open(ac, bufsz, enc_mode, flags, dtx_mode_enable);
 	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
 
 	if (!(ac->flags & AUDIO_FLAG_WRITE)) {

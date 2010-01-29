@@ -14,7 +14,6 @@
  *
  */
 
-#include <mach/debug_audio_mm.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
@@ -25,6 +24,7 @@
 
 #include <linux/msm_audio_qcp.h>
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/debug_audio_mm.h>
 #include "dal_audio_format.h"
 
 struct evrc {
@@ -32,6 +32,7 @@ struct evrc {
 	struct msm_audio_evrc_enc_config cfg;
 	struct msm_audio_stream_config str_cfg;
 	struct audio_client *audio_client;
+	struct msm_voicerec_mode voicerec_mode;
 };
 
 
@@ -73,7 +74,7 @@ static long q6_evrc_in_ioctl(struct file *file, unsigned int cmd,
 					evrc->str_cfg.buffer_size,
 					evrc->cfg.min_bit_rate,
 					evrc->cfg.max_bit_rate,
-					AUDIO_FLAG_READ,
+					evrc->voicerec_mode.rec_mode,
 					ADSP_AUDIO_FORMAT_EVRC_FS,
 					acdb_id);
 
@@ -89,6 +90,20 @@ static long q6_evrc_in_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case AUDIO_FLUSH:
 		break;
+	case AUDIO_SET_INCALL: {
+		if (copy_from_user(&evrc->voicerec_mode,
+			(void *)arg, sizeof(struct msm_voicerec_mode)))
+			rc = -EFAULT;
+
+		if (evrc->voicerec_mode.rec_mode != AUDIO_FLAG_READ
+				&& evrc->voicerec_mode.rec_mode !=
+				AUDIO_FLAG_INCALL_MIXED) {
+			evrc->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
+			MM_ERR("Invalid rec_mode\n");
+			rc = -EINVAL;
+		}
+		break;
+	}
 	case AUDIO_GET_STREAM_CONFIG:
 		if (copy_to_user((void *)arg, &evrc->str_cfg,
 				sizeof(struct msm_audio_stream_config)))
@@ -155,6 +170,7 @@ static int q6_evrc_in_open(struct inode *inode, struct file *file)
 	evrc->cfg.cdma_rate = CDMA_RATE_FULL;
 	evrc->cfg.min_bit_rate = 1;
 	evrc->cfg.max_bit_rate = 4;
+	evrc->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
 
 	return 0;
 }
