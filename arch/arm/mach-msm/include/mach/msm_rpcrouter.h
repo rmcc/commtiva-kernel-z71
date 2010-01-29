@@ -1,7 +1,7 @@
 /** include/asm-arm/arch-msm/msm_rpcrouter.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -121,8 +121,6 @@ struct msm_rpc_endpoint *msm_rpc_connect(uint32_t prog, uint32_t vers, unsigned 
 /* Connect with a compatible server version */
 struct msm_rpc_endpoint *msm_rpc_connect_compatible(uint32_t prog,
 	uint32_t vers, unsigned flags);
-int msm_rpc_get_compatible_server(uint32_t prog, uint32_t vers,
-	uint32_t *found_vers);
 /* check if server version can handle client requested version */
 int msm_rpc_is_compatible_version(uint32_t server_version,
 				  uint32_t client_version);
