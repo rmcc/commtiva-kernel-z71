@@ -26,13 +26,11 @@
 
 #include <mach/msm_qdsp6_audio.h>
 
-#define BUFSZ (4096)
-#define DMASZ (BUFSZ * 2)
-
 struct pcm {
 	struct audio_client *ac;
 	uint32_t sample_rate;
 	uint32_t channel_count;
+	uint32_t buffer_size;
 	uint32_t rec_mode;
 };
 
@@ -67,8 +65,9 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (pcm->ac) {
 			rc = -EBUSY;
 		} else {
-			pcm->ac = q6audio_open_pcm(BUFSZ, pcm->sample_rate,
-				pcm->channel_count, pcm->rec_mode, acdb_id);
+			pcm->ac = q6audio_open_pcm(pcm->buffer_size,
+					pcm->sample_rate, pcm->channel_count,
+					pcm->rec_mode, acdb_id);
 			if (!pcm->ac)
 				rc = -ENOMEM;
 		}
@@ -86,6 +85,7 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 		pcm->sample_rate = config.sample_rate;
 		pcm->channel_count = config.channel_count;
+		pcm->buffer_size = config.buffer_size;
 		break;
 	}
 	case AUDIO_SET_INCALL: {
@@ -104,7 +104,7 @@ static long q6_in_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	case AUDIO_GET_CONFIG: {
 		struct msm_audio_config config;
-		config.buffer_size = BUFSZ;
+		config.buffer_size = pcm->buffer_size;
 		config.buffer_count = 2;
 		config.sample_rate = pcm->sample_rate;
 		config.channel_count = pcm->channel_count;
@@ -134,6 +134,7 @@ static int q6_in_open(struct inode *inode, struct file *file)
 
 	pcm->channel_count = 1;
 	pcm->sample_rate = 8000;
+	pcm->buffer_size = 4096;
 	pcm->rec_mode = AUDIO_FLAG_READ;
 	file->private_data = pcm;
 	return 0;
