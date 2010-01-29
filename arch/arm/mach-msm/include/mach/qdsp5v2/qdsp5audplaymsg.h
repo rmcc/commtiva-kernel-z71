@@ -68,5 +68,8 @@ struct audplay_msg_buffer_update {
 	unsigned int buf1_address;
 	unsigned int buf1_length;
 } __attribute__((packed));
+
+#define AUDPLAY_UP_OUTPORT_FLUSH_ACK 0x0005
+
 #define ADSP_MESSAGE_ID 0xFFFF
 #endif /* QDSP5AUDPLAYMSG_H */

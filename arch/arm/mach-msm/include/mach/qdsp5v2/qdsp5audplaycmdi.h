@@ -115,4 +115,10 @@ struct audplay_cmd_bitstream_data_avail_nt2 {
 
 } __attribute__((packed));
 
+#define AUDPLAY_CMD_OUTPORT_FLUSH 0x0006
+
+struct audplay_cmd_outport_flush {
+	unsigned int cmd_id;
+} __attribute__((packed));
+
 #endif /* QDSP5AUDPLAYCMD_H */

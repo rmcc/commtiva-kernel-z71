@@ -346,6 +346,14 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 		audaac_update_stream_info(audio, msg);
 		break;
 
+	case AUDPLAY_UP_OUTPORT_FLUSH_ACK:
+		MM_DBG("OUTPORT_FLUSH_ACK\n");
+		audio->rflush = 0;
+		wake_up(&audio->read_wait);
+		if (audio->pcm_feedback)
+			audplay_buffer_refresh(audio);
+		break;
+
 	case ADSP_MESSAGE_ID:
 		MM_DBG("Received ADSP event: module enable(audplaytask)\n");
 		break;
@@ -555,6 +563,15 @@ static void audplay_buffer_refresh(struct audio *audio)
 	MM_DBG("buf0_addr=%x buf0_len=%d\n", refresh_cmd.buf0_address,
 			refresh_cmd.buf0_length);
 	(void)audplay_send_queue0(audio, &refresh_cmd, sizeof(refresh_cmd));
+}
+
+static void audplay_outport_flush(struct audio *audio)
+{
+	struct audplay_cmd_outport_flush op_flush_cmd;
+
+	MM_DBG("\n"); /* Macro prints the file name and function */
+	op_flush_cmd.cmd_id = AUDPLAY_CMD_OUTPORT_FLUSH;
+	(void)audplay_send_queue0(audio, &op_flush_cmd, sizeof(op_flush_cmd));
 }
 
 static void audplay_config_hostpcm(struct audio *audio)
@@ -965,6 +982,22 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		} else {
 			audio->rflush = 0;
 			audio->wflush = 0;
+		}
+		break;
+
+	case AUDIO_OUTPORT_FLUSH:
+		MM_DBG("AUDIO_OUTPORT_FLUSH\n");
+		audio->rflush = 1;
+		wake_up(&audio->read_wait);
+		mutex_lock(&audio->read_lock);
+		audio_flush_pcm_buf(audio);
+		mutex_unlock(&audio->read_lock);
+		audplay_outport_flush(audio);
+		rc = wait_event_interruptible(audio->read_wait,
+				!audio->rflush);
+		if (rc < 0) {
+			MM_ERR("AUDPLAY_OUTPORT_FLUSH interrupted\n");
+			rc = -EINTR;
 		}
 		break;
 

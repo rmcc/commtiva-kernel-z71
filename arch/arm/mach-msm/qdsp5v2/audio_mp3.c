@@ -232,6 +232,8 @@ struct audio {
 	struct list_head pmem_region_queue; /* protected by lock */
 	struct audmp3_drv_operations drv_ops;
 
+	struct msm_audio_bitstream_info stream_info;
+
 	int eq_enable;
 	int eq_needs_commit;
 	struct audpp_cmd_cfg_object_params_eqalizer eq;
@@ -409,6 +411,31 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 
 }
 
+static void audmp3_update_stream_info(struct audio *audio, uint32_t *payload)
+{
+	unsigned long flags;
+	union msm_audio_event_payload e_payload;
+
+	/* get stream info from DSP msg */
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+
+	audio->stream_info.codec_type = AUDIO_CODEC_TYPE_MP3;
+	audio->stream_info.chan_info = (0x0000FFFF & payload[1]);
+	audio->stream_info.sample_rate = (0x0000FFFF & payload[2]);
+	audio->stream_info.bit_stream_info = (0x0000FFFF & payload[3]);
+	audio->stream_info.bit_rate = payload[4];
+
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+	MM_DBG("chan_info=%d, sample_rate=%d, bit_stream_info=%d\n",
+			audio->stream_info.chan_info,
+			audio->stream_info.sample_rate,
+			audio->stream_info.bit_stream_info);
+
+	/* send event to ARM to notify steam info coming */
+	e_payload.stream_info = audio->stream_info;
+	audmp3_post_event(audio, AUDIO_EVENT_STREAM_INFO, e_payload);
+}
+
 static void audplay_dsp_event(void *data, unsigned id, size_t len,
 			      void (*getevent) (void *ptr, size_t len))
 {
@@ -425,6 +452,18 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 
 	case AUDPLAY_MSG_BUFFER_UPDATE:
 		audio->drv_ops.pcm_buf_update(audio, msg);
+		break;
+
+	case AUDPLAY_UP_STREAM_INFO:
+		audmp3_update_stream_info(audio, msg);
+		break;
+
+	case AUDPLAY_UP_OUTPORT_FLUSH_ACK:
+		MM_DBG("OUTPORT_FLUSH_ACK\n");
+		audio->rflush = 0;
+		wake_up(&audio->read_wait);
+		if (audio->pcm_feedback)
+			audio->drv_ops.buffer_refresh(audio);
 		break;
 
 	case ADSP_MESSAGE_ID:
@@ -671,6 +710,15 @@ static void audplay_config_hostpcm(struct audio *audio)
 	cfg_cmd.partition_number = 0;
 	(void)audplay_send_queue0(audio, &cfg_cmd, sizeof(cfg_cmd));
 
+}
+
+static void audplay_outport_flush(struct audio *audio)
+{
+	struct audplay_cmd_outport_flush op_flush_cmd;
+
+	MM_DBG("\n"); /* Macro prints the file name and function */
+	op_flush_cmd.cmd_id = AUDPLAY_CMD_OUTPORT_FLUSH;
+	(void)audplay_send_queue0(audio, &op_flush_cmd, sizeof(op_flush_cmd));
 }
 
 static void audmp3_async_send_data(struct audio *audio, unsigned needed)
@@ -1339,7 +1387,25 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			audio->wflush = 0;
 		}
 		break;
-
+	case AUDIO_OUTPORT_FLUSH:
+		MM_DBG("AUDIO_OUTPORT_FLUSH\n");
+		audio->rflush = 1;
+		if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
+			audio->drv_ops.in_flush(audio);
+		} else {
+			wake_up(&audio->read_wait);
+			mutex_lock(&audio->read_lock);
+			audio->drv_ops.in_flush(audio);
+			mutex_unlock(&audio->read_lock);
+		}
+		audplay_outport_flush(audio);
+		rc = wait_event_interruptible(audio->read_wait,
+				!audio->rflush);
+		if (rc < 0) {
+			MM_ERR("AUDPLAY_OUTPORT_FLUSH interrupted\n");
+			rc = -EINTR;
+		}
+		break;
 	case AUDIO_SET_CONFIG: {
 		struct msm_audio_config config;
 		if (copy_from_user(&config, (void *) arg, sizeof(config))) {
@@ -1474,6 +1540,21 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		MM_DBG("AUDIO_PAUSE %ld\n", arg);
 		rc = audpp_pause(audio->dec_id, (int) arg);
 		break;
+
+	case AUDIO_GET_STREAM_INFO:{
+		if (audio->stream_info.sample_rate == 0) {
+			/* haven't received DSP stream event,
+			the stream info is not updated */
+			rc = -EPERM;
+			break;
+		}
+		if (copy_to_user((void *)arg, &audio->stream_info,
+			sizeof(struct msm_audio_bitstream_info)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
 
 	case AUDIO_REGISTER_PMEM: {
 			struct msm_audio_pmem_info info;
@@ -2243,6 +2324,7 @@ static int audio_open(struct inode *inode, struct file *file)
 			break;
 		}
 	}
+	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
 done:
 	return rc;
 event_err:
