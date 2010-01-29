@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/board.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -207,6 +207,8 @@ void msm_snddev_poweramp_on(void);
 void msm_snddev_poweramp_off(void);
 void msm_snddev_hsed_pamp_on(void);
 void msm_snddev_hsed_pamp_off(void);
+void msm_snddev_tx_route_config(void);
+void msm_snddev_tx_route_deconfig(void);
 
 extern unsigned int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 
