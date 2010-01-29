@@ -28,6 +28,13 @@ typedef void (*audpp_event_func)(void *private, unsigned id, uint16_t *msg);
 #define MSM_AUD_DECODER_MASK  0x0000FFFF
 #define MSM_AUD_OP_MASK  0xFFFF0000
 
+/* read call timeout for error cases */
+#define MSM_AUD_BUFFER_UPDATE_WAIT_MS 2000
+
+/* stream info error message mask */
+#define AUDPLAY_STREAM_INFO_MSG_MASK 0xFFFF0000
+#define AUDPLAY_ERROR_THRESHOLD_ENABLE 0xFFFFFFFF
+
 #define NON_TUNNEL_MODE_PLAYBACK 1
 #define TUNNEL_MODE_PLAYBACK 0
 
