@@ -56,9 +56,12 @@
  */
 
 #include <linux/libra_sdioif.h>
+#include <linux/delay.h>
 
 /* Libra SDIO function device */
 static struct sdio_func *libra_sdio_func;
+static struct mmc_host *libra_mmc_host;
+static int libra_mmc_host_index;
 
 /**
  * libra_sdio_configure() - Function to configure the SDIO device param
@@ -235,7 +238,7 @@ EXPORT_SYMBOL(libra_sdio_memcpy_fromio);
 int libra_sdio_writesb(struct sdio_func *func,
 		unsigned int addr, void *src, int count)
 {
-   return sdio_writesb(func, addr, src, count);
+	return sdio_writesb(func, addr, src, count);
 }
 EXPORT_SYMBOL(libra_sdio_writesb);
 
@@ -246,18 +249,37 @@ int libra_sdio_memcpy_toio(struct sdio_func *func,
 }
 EXPORT_SYMBOL(libra_sdio_memcpy_toio);
 
+int libra_sdio_enable_polling(void)
+{
+	if (libra_mmc_host) {
+		if (!strcmp(libra_mmc_host->class_dev.class->name, "mmc_host")
+			&& (libra_mmc_host_index == libra_mmc_host->index)) {
+			libra_mmc_host->caps |= MMC_CAP_NEEDS_POLL;
+			mmc_detect_change(libra_mmc_host, 0);
+			return 0;
+		}
+	}
+
+	printk(KERN_ERR "%s: Could not trigger SDIO scan\n", __func__);
+	return -1;
+}
+EXPORT_SYMBOL(libra_sdio_enable_polling);
+
 /*
  * SDIO Probe
  */
 static int libra_sdio_probe(struct sdio_func *func,
 		const struct sdio_device_id *sdio_dev_id)
 {
-
+	libra_mmc_host = func->card->host;
+	libra_mmc_host_index = libra_mmc_host->index;
 	libra_sdio_func = func;
 
 	printk(KERN_INFO "%s: success with block size of %d\n",
 		__func__, func->cur_blksize);
 
+	/* Turn off SDIO polling from now on */
+	libra_mmc_host->caps &= ~MMC_CAP_NEEDS_POLL;
 	return 0;
 }
 
@@ -282,6 +304,8 @@ static struct sdio_driver libra_sdiofn_driver = {
 static int __init libra_sdioif_init(void)
 {
 	libra_sdio_func = NULL;
+	libra_mmc_host = NULL;
+	libra_mmc_host_index = -1;
 
 	sdio_register_driver(&libra_sdiofn_driver);
 
@@ -295,7 +319,14 @@ static void __exit libra_sdioif_exit(void)
 
 	sdio_unregister_driver(&libra_sdiofn_driver);
 
+	if (libra_mmc_host) {
+		mmc_detect_change(libra_mmc_host, 0);
+		msleep(500);
+	}
+
 	libra_sdio_func = NULL;
+	libra_mmc_host = NULL;
+	libra_mmc_host_index = -1;
 
 	printk(KERN_INFO "%s: Unloaded Successfully\n", __func__);
 }

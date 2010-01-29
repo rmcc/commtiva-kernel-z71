@@ -64,6 +64,6 @@ int    libra_sdio_writesb(struct sdio_func *func,
 		unsigned int addr, void *src, int count);
 int    libra_sdio_memcpy_toio(struct sdio_func *func,
 		unsigned int addr, void *src, int count);
-
+int    libra_sdio_enable_polling(void);
 
 #endif /* __LIBRA_SDIOIF_H__ */
