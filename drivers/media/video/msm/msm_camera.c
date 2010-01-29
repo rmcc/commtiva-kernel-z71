@@ -909,8 +909,7 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 			}
 		} else {
 			if ((sync->pp_mask & PP_PREV) &&
-				(data->type == VFE_MSG_OUTPUT_P ||
-				 data->type == VFE_MSG_OUTPUT_V))
+				(data->type == VFE_MSG_OUTPUT_P))
 					rc = msm_divert_frame(sync, data, &se);
 			else if ((sync->pp_mask & (PP_SNAP|PP_RAW_SNAP)) &&
 				  (data->type == VFE_MSG_SNAPSHOT ||
@@ -2020,7 +2019,6 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 	CDBG("%s: vdata->type %d\n", __func__, vdata->type);
 		switch (vdata->type) {
 		case VFE_MSG_OUTPUT_P:
-		case VFE_MSG_OUTPUT_V:
 		if (sync->pp_mask & PP_PREV) {
 			CDBG("%s: PP_PREV in progress: phy_y %x phy_cbcr %x\n",
 				__func__,
@@ -2035,7 +2033,11 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 			}
 		CDBG("%s: msm_enqueue frame_q\n", __func__);
 		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
+		break;
 
+		case VFE_MSG_OUTPUT_V:
+		CDBG("%s: msm_enqueue video frame_q\n", __func__);
+		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
 		break;
 
 		case VFE_MSG_SNAPSHOT:
