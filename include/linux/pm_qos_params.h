@@ -2,6 +2,9 @@
  *
  * Mark Gross <mgross@linux.intel.com>
  */
+#ifndef __PM_QOS_PARAMS_H__
+#define __PM_QOS_PARAMS_H__
+
 #include <linux/list.h>
 #include <linux/notifier.h>
 #include <linux/miscdevice.h>
@@ -48,4 +51,6 @@ int pm_qos_requirement(int qos);
 
 int pm_qos_add_notifier(int qos, struct notifier_block *notifier);
 int pm_qos_remove_notifier(int qos, struct notifier_block *notifier);
+
+#endif /* __PM_QOS_PARAMS_H__ */
 
