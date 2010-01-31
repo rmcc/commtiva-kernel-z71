@@ -345,8 +345,6 @@ static struct adie_codec_dev_profile ihs_mono_tx_profile = {
 	.setting_sz = ARRAY_SIZE(ihs_mono_tx_settings),
 };
 
-static enum hsed_controller ihs_mono_tx_pmctl_id[] = {PM_HSED_CONTROLLER_1};
-
 static struct snddev_icodec_data snddev_ihs_mono_tx_data = {
 	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
 	.name = "headset_mono_tx",
@@ -354,8 +352,8 @@ static struct snddev_icodec_data snddev_ihs_mono_tx_data = {
 	.acdb_id = 3,
 	.profile = &ihs_mono_tx_profile,
 	.channel_mode = 1,
-	.pmctl_id = ihs_mono_tx_pmctl_id,
-	.pmctl_id_sz = ARRAY_SIZE(ihs_mono_tx_pmctl_id),
+	.pmctl_id = NULL,
+	.pmctl_id_sz = 0,
 	.default_sample_rate = 8000,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
@@ -747,8 +745,6 @@ static struct adie_codec_dev_profile itty_hs_mono_tx_profile = {
 	.setting_sz = ARRAY_SIZE(itty_hs_mono_tx_settings),
 };
 
-static enum hsed_controller itty_hs_mono_pmctl_id[] = {PM_HSED_CONTROLLER_1};
-
 static struct snddev_icodec_data snddev_itty_hs_mono_tx_data = {
 	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE | SNDDEV_CAP_TTY),
 	.name = "tty_headset_mono_tx",
@@ -757,8 +753,8 @@ static struct snddev_icodec_data snddev_itty_hs_mono_tx_data = {
 	.profile = &itty_hs_mono_tx_profile,
 	.channel_mode = 1,
 	.default_sample_rate = 8000,
-	.pmctl_id = itty_hs_mono_pmctl_id,
-	.pmctl_id_sz = ARRAY_SIZE(itty_hs_mono_pmctl_id),
+	.pmctl_id = NULL,
+	.pmctl_id_sz = 0,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
 };
