@@ -262,6 +262,11 @@ struct msmsdcc_host {
 	unsigned int		cmd_datactrl;
 	struct mmc_command	*cmd_cmd;
 	u32					cmd_c;
+
+	unsigned int	mci_irqenable;
+	unsigned int	dummy_52_needed;
+	unsigned int	dummy_52_state;
+
 };
 
 #endif

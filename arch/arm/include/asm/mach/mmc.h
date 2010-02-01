@@ -25,6 +25,7 @@ struct mmc_platform_data {
 	unsigned long irq_flags;
 	unsigned long mmc_bus_width;
 	int (*wpswitch) (struct device *);
+	int dummy52_required;
 };
 
 #endif
