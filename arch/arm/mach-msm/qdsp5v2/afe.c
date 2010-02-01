@@ -64,7 +64,7 @@
 #include <mach/qdsp5v2/afe.h>
 #include <mach/msm_adsp.h>
 
-#define AFE_MAX_TIMEOUT 30 /* 30 ms */
+#define AFE_MAX_TIMEOUT 500 /* 500 ms */
 #define AFE_MAX_CLNT 6 /* 6 HW path defined so far */
 
 struct msm_afe_state {
@@ -157,7 +157,7 @@ int afe_enable(u8 path_id, struct msm_afe_config *config)
 		afe->codec_config[path_id],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		MM_ERR("AFE failed to respond within 30ms\n");
+		MM_ERR("AFE failed to respond within 500 ms\n");
 		rc = -ENODEV;
 		goto error;
 	} else
@@ -220,7 +220,7 @@ int afe_disable(u8 path_id)
 		!afe->codec_config[path_id],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		MM_ERR("AFE failed to respond within 30ms\n");
+		MM_ERR("AFE failed to respond within 500 ms\n");
 		rc = -1;
 		goto error;
 	} else
