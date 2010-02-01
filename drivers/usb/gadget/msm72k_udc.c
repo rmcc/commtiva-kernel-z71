@@ -121,6 +121,7 @@ struct msm_endpoint {
 };
 
 static void usb_do_work(struct work_struct *w);
+static void usb_do_remote_wakeup(struct work_struct *w);
 
 
 #define USB_STATE_IDLE    0
@@ -135,6 +136,7 @@ static void usb_do_work(struct work_struct *w);
 #define USB_FLAG_CONFIGURED     0x0020
 
 #define USB_CHG_DET_DELAY	msecs_to_jiffies(1000)
+#define REMOTE_WAKEUP_DELAY	msecs_to_jiffies(1000)
 
 struct usb_info {
 	/* lock for register/queue/device state changes */
@@ -195,6 +197,8 @@ struct usb_info {
 	u16 test_mode;
 
 	u8 remote_wakeup;
+	struct delayed_work rw_work;
+
 	struct otg_transceiver *xceiv;
 	enum usb_device_state usb_state;
 };
@@ -528,6 +532,23 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 		spin_unlock_irqrestore(&ui->lock, flags);
 		INFO("usb_ept_queue_xfer() called while offline\n");
 		return -ESHUTDOWN;
+	}
+
+	if (ui->usb_state == USB_STATE_SUSPENDED) {
+		if (!ui->remote_wakeup) {
+			req->req.status = -EAGAIN;
+			spin_unlock_irqrestore(&ui->lock, flags);
+			pr_err("%s: cannot queue as bus is suspended "
+				"ept #%d %s max:%d head:%p bit:%d\n",
+				__func__, ept->num,
+				(ept->flags & EPT_FLAG_IN) ? "in" : "out",
+				ept->ep.maxpacket, ept->head, ept->bit);
+
+			return -EAGAIN;
+		}
+
+		otg_set_suspend(ui->xceiv, 0);
+		schedule_delayed_work(&ui->rw_work, REMOTE_WAKEUP_DELAY);
 	}
 
 	req->busy = 1;
@@ -976,6 +997,8 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		}
 		if (ui->online) {
 			ui->usb_state = USB_STATE_CONFIGURED;
+			ui->driver->resume(&ui->gadget);
+
 			ui->flags = USB_FLAG_CONFIGURED;
 			schedule_work(&ui->work);
 		} else
@@ -986,6 +1009,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		INFO("msm72k_udc: reset\n");
 
 		ui->usb_state = USB_STATE_DEFAULT;
+		ui->remote_wakeup = 0;
 		schedule_delayed_work(&ui->chg_stop, 0);
 
 		writel(readl(USB_ENDPTSETUPSTAT), USB_ENDPTSETUPSTAT);
@@ -1014,6 +1038,8 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	if (n & STS_SLI) {
 		INFO("msm72k_udc: suspend\n");
 		ui->usb_state = USB_STATE_SUSPENDED;
+		ui->driver->suspend(&ui->gadget);
+
 		ui->flags = USB_FLAG_SUSPEND;
 		schedule_work(&ui->work);
 	}
@@ -1057,6 +1083,7 @@ static void usb_prepare(struct usb_info *ui)
 	INIT_WORK(&ui->work, usb_do_work);
 	INIT_DELAYED_WORK(&ui->chg_det, usb_chg_detect);
 	INIT_DELAYED_WORK(&ui->chg_stop, usb_chg_stop);
+	INIT_DELAYED_WORK(&ui->rw_work, usb_do_remote_wakeup);
 }
 
 static void usb_reset(struct usb_info *ui)
@@ -1265,6 +1292,7 @@ static void usb_do_work(struct work_struct *w)
 				spin_lock_irqsave(&ui->lock, iflags);
 				ui->running = 0;
 				ui->online = 0;
+				ui->remote_wakeup = 0;
 				msm72k_pullup(&ui->gadget, 0);
 				spin_unlock_irqrestore(&ui->lock, iflags);
 
@@ -1315,7 +1343,6 @@ static void usb_do_work(struct work_struct *w)
 				hsusb_chg_vbus_draw(0);
 
 				/* TBD: Initiate LPM at usb bus suspend */
-
 				break;
 			}
 			if (flags & USB_FLAG_CONFIGURED) {
@@ -1586,7 +1613,6 @@ msm72k_queue(struct usb_ep *_ep, struct usb_request *req, gfp_t gfp_flags)
 {
 	struct msm_endpoint *ep = to_msm_endpoint(_ep);
 	struct usb_info *ui = ep->ui;
-	int ret;
 
 	if (ep == &ui->ep0in) {
 		struct msm_request *r = to_msm_request(req);
@@ -1600,12 +1626,6 @@ msm72k_queue(struct usb_ep *_ep, struct usb_request *req, gfp_t gfp_flags)
 		if (ui->ep0_dir == USB_DIR_OUT)
 			ep = &ui->ep0out;
 		goto ep_queue_done;
-	}
-
-	if (ui->usb_state == USB_STATE_SUSPENDED) {
-		ret = msm72k_wakeup(&ui->gadget);
-		if (ret)
-			return ret;
 	}
 
 ep_queue_done:
@@ -1841,6 +1861,13 @@ static ssize_t usb_remote_wakeup(struct device *dev,
 	msm72k_wakeup(&ui->gadget);
 
 	return count;
+}
+
+static void usb_do_remote_wakeup(struct work_struct *w)
+{
+	struct usb_info *ui = the_usb_info;
+
+	msm72k_wakeup(&ui->gadget);
 }
 
 static ssize_t show_usb_state(struct device *dev, struct device_attribute *attr,
