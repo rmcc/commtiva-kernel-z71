@@ -630,6 +630,11 @@ static void __init acpuclk_init(void)
 		div = readl(A11S_CLK_CNTL_ADDR) & 0x0f;
 	}
 
+	/* Accomodate bootloaders that might not be implementing the
+	 * workaround for the h/w bug in 7x25. */
+	if (cpu_is_msm7x25() && sel == 2)
+		sel = 3;
+
 	for (speed = acpu_freq_tbl; speed->a11clk_khz != 0; speed++) {
 		if (speed->a11clk_src_sel == sel
 		 && (speed->a11clk_src_div == div))
@@ -891,11 +896,11 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	drv_state.max_axi_khz = clkdata->max_axi_khz;
 	acpu_freq_tbl_fixup();
 	precompute_stepping();
+	if (cpu_is_msm7x25())
+		msm7x25_acpu_pll_hw_bug_fix();
 	acpuclk_init();
 	lpj_init();
 	print_acpu_freq_tbl();
-	if (cpu_is_msm7x25())
-		msm7x25_acpu_pll_hw_bug_fix();
 	if (cpu_is_msm7x27())
 		shared_pll_control_init();
 #ifdef CONFIG_CPU_FREQ_MSM
