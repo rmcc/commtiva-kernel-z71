@@ -396,16 +396,23 @@ static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 	}
 #ifdef CONFIG_USB_MSM_OTG_72K
 	if (PHY_TYPE(mhcd->pdata->phy_info) == USB_PHY_INTEGRATED)
-		return otg_set_suspend(mhcd->xceiv, 1);
+		ret = otg_set_suspend(mhcd->xceiv, 1);
+	else
+		ret = usb_lpm_enter(hcd);
+#else
+	ret = usb_lpm_enter(hcd);
 #endif
-
-	return usb_lpm_enter(hcd);
+	msm_xusb_pm_qos_update(mhcd, 0);
+	wake_unlock(&mhcd->wlock);
+	return ret;
 }
 
 static int ehci_msm_bus_resume(struct usb_hcd *hcd)
 {
 	struct msmusb_hcd *mhcd = hcd_to_mhcd(hcd);
 
+	wake_lock(&mhcd->wlock);
+	msm_xusb_pm_qos_update(mhcd, 1);
 #ifdef CONFIG_USB_MSM_OTG_72K
 	if (PHY_TYPE(mhcd->pdata->phy_info) == USB_PHY_INTEGRATED)
 		otg_set_suspend(mhcd->xceiv, 0);
