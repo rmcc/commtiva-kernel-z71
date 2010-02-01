@@ -2266,7 +2266,7 @@ static void usb_switch_composition(unsigned short pid)
 
 	for (i = 0; i < ui->num_funcs; i++) {
 		struct usb_function_info *fi = ui->func[i];
-		if (!fi || !fi->func)
+		if (!fi || !fi->func || !fi->enabled)
 			continue;
 		if (fi->func->configure)
 			fi->func->configure(0, fi->func->context);
