@@ -179,7 +179,8 @@ static ssize_t pcm_write(struct file *file, const char __user *buf,
 		buf += xfer;
 		count -= xfer;
 
-		ab->used = xfer;
+		ab->used = 1;
+		ab->actual_size = xfer;
 		q6audio_write(ac, ab);
 		ac->cpu_buf ^= 1;
 	}
@@ -193,7 +194,6 @@ static int pcm_release(struct inode *inode, struct file *file)
 	if (pcm->ac)
 		q6audio_close(pcm->ac);
 	kfree(pcm);
-	pr_info("pcm_out: release\n");
 	return 0;
 }
 
