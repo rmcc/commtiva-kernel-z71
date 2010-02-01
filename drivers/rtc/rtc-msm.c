@@ -39,7 +39,8 @@ extern void msm_pm_set_max_sleep_time(int64_t sleep_time_ns);
 #define TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN	16
 #endif
 #define TIMEREMOTE_PROG_NUMBER 0x30000048
-#define TIMEREMOTE_PROG_VER 0x00010001
+#define TIMEREMOTE_PROG_VER_1 0x00010001
+#define TIMEREMOTE_PROG_VER_2 0x00040001
 
 struct rpc_time_julian {
 	uint32_t year;
@@ -315,11 +316,21 @@ msmrtc_probe(struct platform_device *pdev)
 	struct rpcsvr_platform_device *rdev =
 		container_of(pdev, struct rpcsvr_platform_device, base);
 
-	ep = msm_rpc_connect_compatible(rdev->prog, TIMEREMOTE_PROG_VER, 0);
+	ep = msm_rpc_connect_compatible(rdev->prog, TIMEREMOTE_PROG_VER_1, 0);
 	if (IS_ERR(ep)) {
-		printk(KERN_ERR "%s: init rpc failed! rc = %ld\n",
-		       __func__, PTR_ERR(ep));
-		return PTR_ERR(ep);
+		printk(KERN_ERR "%s: init rpc failed! VERS = %x"
+			"Now trying with version VERS = %x \n", __func__,
+			TIMEREMOTE_PROG_VER_1, TIMEREMOTE_PROG_VER_2);
+
+		/* Try with the next version */
+		ep = msm_rpc_connect_compatible(rdev->prog,
+						TIMEREMOTE_PROG_VER_2, 0);
+		if (IS_ERR(ep)) {
+			printk(KERN_ERR "%s: init rpc failed! VERS = %x"
+				"rc = %ld\n",  __func__,
+				TIMEREMOTE_PROG_VER_2, PTR_ERR(ep));
+			return PTR_ERR(ep);
+		}
 	}
 
 	rtc = rtc_device_register("msm_rtc",
@@ -387,7 +398,17 @@ msmrtc_resume(struct platform_device *dev)
 	return 0;
 }
 
-static struct platform_driver msmrtc_driver = {
+static struct platform_driver msmrtc_driver_1 = {
+	.probe		= msmrtc_probe,
+	.suspend	= msmrtc_suspend,
+	.resume		= msmrtc_resume,
+	.driver	= {
+		.name	= APP_TIMEREMOTE_PDEV_NAME,
+		.owner	= THIS_MODULE,
+	},
+};
+
+static struct platform_driver msmrtc_driver_2 = {
 	.probe		= msmrtc_probe,
 	.suspend	= msmrtc_suspend,
 	.resume		= msmrtc_resume,
@@ -399,19 +420,43 @@ static struct platform_driver msmrtc_driver = {
 
 static int __init msmrtc_init(void)
 {
+	int rc;
 	rtcalarm_time = 0;
 
-	/* Explicit cast away of 'constness' for driver.name in order to
+	/*
+	 * For backward compatibility, register multiple platform
+	 * drivers with the RPC PROG_VERS to be supported.
+	 *
+	 * Explicit cast away of 'constness' for driver.name in order to
 	 * initialize it here.
 	 */
-	snprintf((char *)msmrtc_driver.driver.name,
-		 strlen(msmrtc_driver.driver.name)+1,
+	snprintf((char *)msmrtc_driver_1.driver.name,
+		 strlen(msmrtc_driver_1.driver.name)+1,
 		 "rs%08x:%08x", TIMEREMOTE_PROG_NUMBER,
-		 TIMEREMOTE_PROG_VER & RPC_VERSION_MAJOR_MASK);
+		 TIMEREMOTE_PROG_VER_1 & RPC_VERSION_MAJOR_MASK);
 	printk(KERN_DEBUG "RTC Registering with %s\n",
-		msmrtc_driver.driver.name);
+		msmrtc_driver_1.driver.name);
 
-	return platform_driver_register(&msmrtc_driver);
+	rc = platform_driver_register(&msmrtc_driver_1);
+	if (rc) {
+		printk(KERN_ERR "%s: platfrom_driver_register failed\n",
+								__func__);
+		return rc;
+	}
+
+	snprintf((char *)msmrtc_driver_2.driver.name,
+		 strlen(msmrtc_driver_2.driver.name)+1,
+		 "rs%08x:%08x", TIMEREMOTE_PROG_NUMBER,
+		 TIMEREMOTE_PROG_VER_2 & RPC_VERSION_MAJOR_MASK);
+	printk(KERN_DEBUG "RTC Registering with %s\n",
+		msmrtc_driver_2.driver.name);
+
+	rc = platform_driver_register(&msmrtc_driver_2);
+	if (rc)
+		printk(KERN_ERR "%s: platfrom_driver_register failed\n",
+								__func__);
+
+	return rc;
 }
 
 module_init(msmrtc_init);
