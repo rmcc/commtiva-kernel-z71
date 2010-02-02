@@ -2257,7 +2257,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 			MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x0148,
 				 phasey_step);
 
-			use_pr = (inputRGB) && (outputRGB);
+			/* disable the pixel repeat option for scaling */
+			use_pr = false;
 
 			if ((dst_roi_width_scale > iBuf->roi.width) ||
 			    (dst_roi_height_scale > iBuf->roi.height)) {
