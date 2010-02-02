@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -115,17 +115,6 @@
 	while (0)
 #endif
 
-#define NPA_LOG_MASK_NO_LOG	0
-#define NPA_LOG_MASK_RESOURCE	(1<<0)
-#define NPA_LOG_MASK_CLIENT	(1<<1)
-#define NPA_LOG_MASK_EVENT	(1<<2)
-#define NPA_LOG_MASK_LIST	(1<<3)
-#define NPA_LOG_MASK_PLUGIN	(1<<4)
-#define NPA_LOG_MASK_LOCKS	(1<<5)
-
-#define npa_log(lm, res, f, ...) _npa_log(lm, res, \
-		KERN_INFO f, ##__VA_ARGS__)
-
 #ifdef CONFIG_NPA_LOG
 int npa_log_mask;
 EXPORT_SYMBOL(npa_log_mask);
@@ -168,8 +157,7 @@ static void resource_creation_handler(void *data, unsigned int state,
 static void send_single_event(struct work_struct *work);
 static void send_update_events(struct work_struct *work);
 
-static void _npa_log(int log_mask, struct npa_resource *res,
-		const char *fmt, ...)
+void _npa_log(int log_mask, struct npa_resource *res, const char *fmt, ...)
 {
 #ifdef CONFIG_NPA_LOG
 	if (npa_log_reset) {
