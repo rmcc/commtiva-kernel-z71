@@ -1570,6 +1570,7 @@ static void vfe_process_output_path_irq(struct vfe_interrupt_status *irqstatus)
 			/* spin_unlock_irqrestore(&ctrl->state_lock, flags); */
 
 			vfe_proc_ops(VFE_MSG_ID_SNAPSHOT_DONE, NULL);
+			vfe_camif_stop_immediately();
 			vfe_prog_hw_testgen_cmd(VFE_TEST_GEN_STOP);
 			vfe_pm_stop();
 		}
