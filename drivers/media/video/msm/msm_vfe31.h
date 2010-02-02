@@ -973,6 +973,8 @@ struct vfe31_ctrl_type {
 	int8_t stop_ack_pending;
 	int8_t reset_ack_pending;
 	int8_t update_ack_pending;
+	int8_t req_start_video_rec;
+	int8_t req_stop_video_rec;
 
 	spinlock_t  tasklet_lock;
 	struct list_head tasklet_q;

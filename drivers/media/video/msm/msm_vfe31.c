@@ -617,6 +617,8 @@ static void vfe31_reset_internal_variables(void)
 	vfe31_ctrl->stop_ack_pending  = FALSE;
 	vfe31_ctrl->reset_ack_pending  = FALSE;
 	vfe31_ctrl->update_ack_pending = FALSE;
+	vfe31_ctrl->req_stop_video_rec = FALSE;
+	vfe31_ctrl->req_start_video_rec = FALSE;
 
 	spin_lock_irqsave(&vfe31_ctrl->state_lock, flags);
 	vfe31_ctrl->vstate = VFE_STATE_IDLE;
@@ -755,28 +757,12 @@ static void vfe31_start_common(void){
 }
 
 static int vfe31_start_recording(void){
-
-	if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
-		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
-			24 * (vfe31_ctrl->outpath.out2.ch0));
-
-		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
-			24 * (vfe31_ctrl->outpath.out2.ch1));
-	}
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+	vfe31_ctrl->req_start_video_rec = TRUE;
 	return 0;
 }
 
 static int vfe31_stop_recording(void){
-
-	if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
-		msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
-			24 * (vfe31_ctrl->outpath.out2.ch0));
-
-		msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
-			24 * (vfe31_ctrl->outpath.out2.ch1));
-	}
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+	vfe31_ctrl->req_stop_video_rec = TRUE;
 	return 0;
 }
 
@@ -1525,14 +1511,33 @@ static void vfe31_send_msg_no_payload(enum VFE31_MESSAGE_ID id)
 static void vfe31_process_reg_update_irq(void)
 {
 	uint32_t  temp;
+	if (vfe31_ctrl->req_start_video_rec) {
+		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
+			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
+				24 * (vfe31_ctrl->outpath.out2.ch0));
+			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
+				24 * (vfe31_ctrl->outpath.out2.ch1));
+		}
+		vfe31_ctrl->req_start_video_rec =  FALSE;
+		CDBG("start video triggered .\n");
+	} else if (vfe31_ctrl->req_stop_video_rec) {
+		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
+			msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
+				24 * (vfe31_ctrl->outpath.out2.ch0));
+			msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
+				24 * (vfe31_ctrl->outpath.out2.ch1));
+		}
+		vfe31_ctrl->req_stop_video_rec =  FALSE;
+		CDBG("stop video triggered .\n");
+	}
 	if (vfe31_ctrl->start_ack_pending == TRUE) {
 		vfe31_send_msg_no_payload(MSG_ID_START_ACK);
 		vfe31_ctrl->start_ack_pending = FALSE;
-	} else if (vfe31_ctrl->update_ack_pending == TRUE) {
-		vfe31_send_msg_no_payload(MSG_ID_UPDATE_ACK);
-		vfe31_ctrl->update_ack_pending = FALSE;
 	} else {
-		CDBG("vfe driver triggered reg update itself.\n");
+		if (vfe31_ctrl->update_ack_pending == TRUE) {
+			vfe31_send_msg_no_payload(MSG_ID_UPDATE_ACK);
+			vfe31_ctrl->update_ack_pending = FALSE;
+		}
 	}
 	if (vfe31_ctrl->operation_mode & 1) {  /* in snapshot mode */
 		/* later we need to add check for live snapshot mode. */
