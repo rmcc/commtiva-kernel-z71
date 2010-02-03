@@ -25,12 +25,14 @@
 #include <linux/msm_audio.h>
 #include <linux/msm_audio_aac.h>
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/debug_audio_mm.h>
 
 struct aac {
 	struct mutex lock;
 	struct msm_audio_aac_enc_config cfg;
 	struct msm_audio_stream_config str_cfg;
 	struct audio_client *audio_client;
+	struct msm_voicerec_mode voicerec_mode;
 };
 
 static long q6_aac_in_ioctl(struct file *file,
@@ -73,7 +75,7 @@ static long q6_aac_in_ioctl(struct file *file,
 					aac->cfg.channels,
 					aac->cfg.bit_rate,
 					aac->cfg.stream_format,
-					AUDIO_FLAG_READ, acdb_id);
+					aac->voicerec_mode.rec_mode, acdb_id);
 
 			if (aac->audio_client < 0) {
 				rc = -ENOMEM;
@@ -86,6 +88,20 @@ static long q6_aac_in_ioctl(struct file *file,
 		break;
 	case AUDIO_FLUSH:
 		break;
+	case AUDIO_SET_INCALL: {
+		if (copy_from_user(&aac->voicerec_mode,
+			(void *)arg, sizeof(struct msm_voicerec_mode)))
+			rc = -EFAULT;
+
+		if (aac->voicerec_mode.rec_mode != AUDIO_FLAG_READ
+			&& aac->voicerec_mode.rec_mode !=
+			AUDIO_FLAG_INCALL_MIXED) {
+			aac->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
+			MM_ERR("Invalid rec_mode\n");
+			rc = -EINVAL;
+		}
+		break;
+	}
 	case AUDIO_GET_STREAM_CONFIG:
 		if (copy_to_user((void *)arg, &aac->str_cfg,
 			sizeof(struct msm_audio_stream_config)))
@@ -98,12 +114,12 @@ static long q6_aac_in_ioctl(struct file *file,
 			break;
 		}
 		if (aac->str_cfg.buffer_size < 519) {
-			pr_err("Buffer size too small\n");
+			MM_ERR("Buffer size too small\n");
 			rc = -EINVAL;
 			break;
 		}
 		if (aac->str_cfg.buffer_count != 2)
-			pr_info("Buffer count set to 2\n");
+			MM_INFO("Buffer count set to 2\n");
 
 		break;
 	case AUDIO_SET_AAC_ENC_CONFIG:
@@ -112,16 +128,16 @@ static long q6_aac_in_ioctl(struct file *file,
 			rc = -EFAULT;
 		}
 		if (aac->cfg.channels != 1) {
-			pr_err("only mono is supported\n");
+			MM_ERR("only mono is supported\n");
 			rc = -EINVAL;
 		}
 		if (aac->cfg.sample_rate != 48000) {
-			pr_err("only 48KHz is supported\n");
+			MM_ERR("only 48KHz is supported\n");
 			rc = -EINVAL;
 		}
 		if (aac->cfg.stream_format != AUDIO_AAC_FORMAT_RAW &&
 			aac->cfg.stream_format != AUDIO_AAC_FORMAT_ADTS) {
-			pr_err("unsupported AAC format\n");
+			MM_ERR("unsupported AAC format\n");
 			rc = -EINVAL;
 		}
 		break;
@@ -145,7 +161,7 @@ static int q6_aac_in_open(struct inode *inode, struct file *file)
 	struct aac *aac;
 	aac = kmalloc(sizeof(struct aac), GFP_KERNEL);
 	if (aac == NULL) {
-		pr_err("Could not allocate memory for aac driver\n");
+		MM_ERR("Could not allocate memory for aac driver\n");
 		return -ENOMEM;
 	}
 
@@ -158,6 +174,7 @@ static int q6_aac_in_open(struct inode *inode, struct file *file)
 	aac->cfg.bit_rate = 192000;
 	aac->cfg.stream_format = AUDIO_AAC_FORMAT_ADTS;
 	aac->cfg.sample_rate = 48000;
+	aac->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
 
 	return 0;
 }
