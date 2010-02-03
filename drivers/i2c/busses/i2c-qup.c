@@ -144,26 +144,27 @@ enum {
 };
 
 struct qup_i2c_dev {
-	struct device      *dev;
-	void __iomem       *base;		/* virtual */
-	void __iomem       *gsbi;		/* virtual */
-	int                 in_irq;
-	int                 out_irq;
-	int                 err_irq;
-	struct clk         *clk;
-	struct i2c_adapter  adapter;
+	struct device                *dev;
+	void __iomem                 *base;		/* virtual */
+	void __iomem                 *gsbi;		/* virtual */
+	int                          in_irq;
+	int                          out_irq;
+	int                          err_irq;
+	struct clk                   *clk;
+	struct i2c_adapter           adapter;
 
-	struct i2c_msg      *msg;
-	int                 pos;
-	int                 cnt;
-	int                 err;
-	int                 mode;
-	int                 clk_ctl;
-	int                 out_fifo_sz;
-	int                 in_fifo_sz;
-	int                 out_blk_sz;
-	int                 in_blk_sz;
-	void                *complete;
+	struct i2c_msg               *msg;
+	int                          pos;
+	int                          cnt;
+	int                          err;
+	int                          mode;
+	int                          clk_ctl;
+	int                          out_fifo_sz;
+	int                          in_fifo_sz;
+	int                          out_blk_sz;
+	int                          in_blk_sz;
+	struct msm_i2c_platform_data *pdata;
+	void                         *complete;
 };
 
 #if DEBUG
@@ -412,6 +413,42 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	long timeout;
 	int err;
 
+	/* Initialize QUP registers during first transfer */
+	if (dev->clk_ctl == 0) {
+		int fs_div;
+		int hs_div;
+		int i2c_clk;
+		uint32_t fifo_reg;
+		writel(0x2 << 4, dev->gsbi);
+
+		i2c_clk = 19200000; /* input clock */
+		fs_div = ((i2c_clk / dev->pdata->clk_freq) / 2) - 3;
+		hs_div = 3;
+		dev->clk_ctl = ((hs_div & 0x7) << 8) | (fs_div & 0xff);
+		fifo_reg = readl(dev->base + QUP_IO_MODE);
+		if (fifo_reg & 0x3)
+			dev->out_blk_sz = (fifo_reg & 0x3) * 16;
+		else
+			dev->out_blk_sz = 16;
+		if (fifo_reg & 0x60)
+			dev->in_blk_sz = ((fifo_reg & 0x60) >> 5) * 16;
+		else
+			dev->in_blk_sz = 16;
+		/*
+		 * The block/fifo size w.r.t. 'actual data' is 1/2 due to 'tag'
+		 * associated with each byte written/received
+		 */
+		dev->out_blk_sz /= 2;
+		dev->in_blk_sz /= 2;
+		dev->out_fifo_sz = dev->out_blk_sz *
+					(2 << ((fifo_reg & 0x1C) >> 2));
+		dev->in_fifo_sz = dev->in_blk_sz *
+					(2 << ((fifo_reg & 0x380) >> 7));
+		dev_dbg(dev->dev, "QUP IN:bl:%d, ff:%d, OUT:bl:%d, ff:%d\n",
+				dev->in_blk_sz, dev->in_fifo_sz,
+				dev->out_blk_sz, dev->out_fifo_sz);
+	}
+
 	enable_irq(dev->in_irq);
 	enable_irq(dev->out_irq);
 	enable_irq(dev->err_irq);
@@ -641,10 +678,6 @@ qup_i2c_probe(struct platform_device *pdev)
 	struct resource		*in_irq, *out_irq, *err_irq;
 	struct clk         *clk;
 	int ret = 0;
-	int fs_div;
-	int hs_div;
-	int i2c_clk;
-	uint32_t fifo_reg;
 	struct msm_i2c_platform_data *pdata;
 
 	dev_dbg(&pdev->dev, "qup_i2c_probe\n");
@@ -743,36 +776,12 @@ qup_i2c_probe(struct platform_device *pdev)
 		ret = -ENOMEM;
 		goto err_gsbi_failed;
 	}
-	writel(0x2 << 4, dev->gsbi);
 
 	platform_set_drvdata(pdev, dev);
 
 	clk_enable(clk);
-
-	i2c_clk = 19200000; /* input clock */
-	fs_div = ((i2c_clk / pdata->clk_freq) / 2) - 3;
-	hs_div = 3;
-	dev->clk_ctl = ((hs_div & 0x7) << 8) | (fs_div & 0xff);
-	fifo_reg = readl(dev->base + QUP_IO_MODE);
-	if (fifo_reg & 0x3)
-		dev->out_blk_sz = (fifo_reg & 0x3) * 16;
-	else
-		dev->out_blk_sz = 16;
-	if (fifo_reg & 0x60)
-		dev->in_blk_sz = ((fifo_reg & 0x60) >> 5) * 16;
-	else
-		dev->in_blk_sz = 16;
-	/*
-	 * The block/fifo size w.r.t. 'actual data' is 1/2 due to 'tag'
-	 * associated with each byte written/received
-	 */
-	dev->out_blk_sz /= 2;
-	dev->in_blk_sz /= 2;
-	dev->out_fifo_sz = dev->out_blk_sz * (2 << ((fifo_reg & 0x1C) >> 2));
-	dev->in_fifo_sz = dev->in_blk_sz * (2 << ((fifo_reg & 0x380) >> 7));
-	dev_dbg(dev->dev, "QUP IN:blk:%d, fifo:%d, OUT:blk:%d, fifo:%d\n",
-			dev->in_blk_sz, dev->in_fifo_sz, dev->out_blk_sz,
-			dev->out_fifo_sz);
+	dev->pdata = pdata;
+	dev->clk_ctl = 0;
 
 	i2c_set_adapdata(&dev->adapter, dev);
 	dev->adapter.algo = &qup_i2c_algo;
