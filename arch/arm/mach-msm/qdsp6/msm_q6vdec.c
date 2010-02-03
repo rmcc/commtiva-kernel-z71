@@ -52,8 +52,11 @@
 #define DALDEVICEID_VDEC_DEVICE		0x02000026
 #define DALDEVICEID_VDEC_PORTNAME	"DAL_AQ_VID"
 
-#define VDEC_INTERFACE_VERSION_2	0x00020000
-#define VDEC_INTERFACE_VERSION_3	0x00030000
+#define VDEC_INTERFACE_MAJOR_MINOR_VERSION_2	0x00020000
+#define VDEC_INTERFACE_MAJOR_MINOR_VERSION_3	0x00030000
+
+#define VDEC_INTERFACE_VERSION_2	0x00000002
+#define VDEC_INTERFACE_VERSION_3	0x00000003
 
 #define MAJOR_MASK			0xFFFF0000
 #define MINOR_MASK			0x0000FFFF
@@ -147,7 +150,8 @@ struct vdec_data {
 	int			mem_initialized;
 	int			running;
 	int			close_decode;
-	int                     version;
+	int                     major_version;
+	int                     minor_version;
 };
 
 static struct class *driver_class;
@@ -901,7 +905,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	switch (cmd) {
 	case VDEC_IOCTL_INITIALIZE:
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_initialize(vd, argp, VDEC_DALRPC_INITIALIZE);
 		else {
 			pr_err("%s: not supported \n", __func__);
@@ -910,7 +914,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case VDEC_IOCTL_SETBUFFERS:
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_setbuffers(vd, argp, VDEC_DALRPC_SETBUFFERS);
 		else {
 			pr_err("%s: not supported \n", __func__);
@@ -921,9 +925,9 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_QUEUE:
 		TRACE("VDEC_IOCTL_QUEUE (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_queue(vd, argp, VDEC_DALRPC_QUEUE);
-		else if (vd->version == VDEC_INTERFACE_VERSION_3)
+		else if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_queue(vd, argp, VDEC_DALRPC_QUEUE_V3);
 		else {
 			pr_err("%s: not supported \n", __func__);
@@ -935,10 +939,10 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_REUSEFRAMEBUFFER:
 		TRACE("VDEC_IOCTL_REUSEFRAMEBUFFER (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_reuse_framebuffer(vd, argp,
 					 VDEC_DALRPC_REUSEFRAMEBUFFER);
-		else if (vd->version == VDEC_INTERFACE_VERSION_3)
+		else if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_reuse_framebuffer(vd, argp,
 					 VDEC_DALRPC_REUSEFRAMEBUFFER_V3);
 		else {
@@ -948,9 +952,9 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case VDEC_IOCTL_FLUSH:
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_flush(vd, argp, VDEC_DALRPC_FLUSH);
-		else if (vd->version == VDEC_INTERFACE_VERSION_3)
+		else if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_flush(vd, argp, VDEC_DALRPC_FLUSH_V3);
 		else {
 			pr_err("%s: not supported \n", __func__);
@@ -961,10 +965,10 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_EOS:
 		TRACE("VDEC_IOCTL_EOS (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = dal_call_f0(vd->vdec_handle,
 					 VDEC_DALRPC_SIGEOFSTREAM, 0);
-		else if (vd->version == VDEC_INTERFACE_VERSION_3)
+		else if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = dal_call_f0(vd->vdec_handle,
 					 VDEC_DALRPC_SIGEOFSTREAM_V3, 0);
 		else {
@@ -996,7 +1000,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_GETDECATTRIBUTES:
 		TRACE("VDEC_IOCTL_GETDECATTRIBUTES (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_getdecattributes(vd, argp,
 					 VDEC_DALRPC_GETDECATTRIBUTES);
 		else {
@@ -1008,7 +1012,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_FREEBUFFERS:
 		TRACE("VDEC_IOCTL_FREEBUFFERS (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_2)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_2)
 			ret = vdec_freebuffers(vd, argp,
 					 VDEC_DALRPC_FREEBUFFERS);
 		else {
@@ -1020,7 +1024,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_GETINTERNALBUFREQ:
 		TRACE("VDEC_IOCTL_GETINTERNALBUFREQ (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_getinternalbufreq(vd, argp,
 					 VDEC_DALRPC_GETINTERNALBUFREQ_V3);
 		else {
@@ -1033,7 +1037,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_GETPROPERTY:
 		TRACE("VDEC_IOCTL_GETPROPERTY (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_getproperty(vd, argp,
 					 VDEC_DALRPC_GETPROPERTY_V3);
 		else {
@@ -1045,7 +1049,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_SETPROPERTY:
 		TRACE("VDEC_IOCTL_SETPROPERTY (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_setproperty(vd, argp,
 					 VDEC_DALRPC_SETPROPERTY_V3);
 		else {
@@ -1058,7 +1062,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_INITIALIZE_V3:
 		TRACE("VDEC_IOCTL_INITIALIZE_V3 (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_initialize_v3(vd, argp,
 					 VDEC_DALRPC_INITIALIZE_V3);
 		else {
@@ -1069,7 +1073,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_SETBUFFERS_V3:
 		TRACE("VDEC_IOCTL_SETBUFFERS_V3 (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_setbuffers_v3(vd, argp,
 					 VDEC_DALRPC_SETBUFFERS_V3);
 		else {
@@ -1080,7 +1084,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_FREEBUFFERS_V3:
 		TRACE("VDEC_IOCTL_FREEBUFFERS_V3 (pid=%d tid=%d)\n",
 			current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_freebuffers_v3(vd, argp,
 					VDEC_DALRPC_FREEBUFFERS_V3);
 		else {
@@ -1091,7 +1095,7 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case VDEC_IOCTL_GETDECATTRIBUTES_V3:
 		TRACE("VDEC_IOCTL_GETDECATTRIBUTES_V3 (pid=%d tid=%d)\n",
 		      current->group_leader->pid, current->pid);
-		if (vd->version == VDEC_INTERFACE_VERSION_3)
+		if (vd->major_version == VDEC_INTERFACE_VERSION_3)
 			ret = vdec_getdecattributes_v3(vd, argp,
 					 VDEC_DALRPC_GETDECATTRIBUTES_V3);
 		else {
@@ -1117,16 +1121,23 @@ static void vdec_dcdone_handler(struct vdec_data *vd, void *frame,
 	struct vdec_msg msg;
 	struct vdec_mem_list *l;
 	unsigned long flags;
-	int found = 0;
+	int found = 0, copy_size = 0;
 
-	if (frame_size != sizeof(struct vdec_frame_info)) {
+	if (vd->major_version == VDEC_INTERFACE_VERSION_3 &&
+	   vd->minor_version >= 0x00000001)
+		copy_size = sizeof(struct vdec_frame_info);
+	else
+		copy_size = sizeof(struct vdec_frame_info) - (2 * sizeof(u32))
+			     - (sizeof(struct vdec_stridetype));
+
+	if (frame_size < copy_size) {
 		pr_warning("%s: msg size mismatch %d != %d\n", __func__,
-			   frame_size, sizeof(struct vdec_frame_info));
+			   frame_size, copy_size);
 		return;
 	}
 
 	memcpy(&msg.vfr_info, (struct vdec_frame_info *)frame,
-	       sizeof(struct vdec_frame_info));
+	       copy_size);
 
 	if (msg.vfr_info.status == VDEC_FRAME_DECODE_OK) {
 		spin_lock_irqsave(&vd->vdec_mem_list_lock, flags);
@@ -1257,14 +1268,14 @@ static int vdec_open(struct inode *inode, struct file *file)
 		pr_err("%s: failed to get version \n", __func__);
 		goto vdec_open_err_handle_version;
 	}
-
+	vd->minor_version = VDEC_GET_MINOR_VERSION(version_info.version);
 	TRACE("q6vdec_open() interface version 0x%x\n", version_info.version);
-	if (!vdec_check_version(VDEC_INTERFACE_VERSION_2,
+	if (!vdec_check_version(VDEC_INTERFACE_MAJOR_MINOR_VERSION_2,
 			version_info.version))
-		vd->version = VDEC_INTERFACE_VERSION_2;
-	else if (!vdec_check_version(VDEC_INTERFACE_VERSION_3,
+		vd->major_version = VDEC_INTERFACE_VERSION_2;
+	else if (!vdec_check_version(VDEC_INTERFACE_MAJOR_MINOR_VERSION_3,
 			version_info.version))
-		vd->version = VDEC_INTERFACE_VERSION_3;
+		vd->major_version = VDEC_INTERFACE_VERSION_3;
 	else {
 		pr_err("%s: driver version mismatch !\n", __func__);
 		goto vdec_open_err_handle_version;
