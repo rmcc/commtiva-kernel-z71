@@ -78,10 +78,8 @@
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/workqueue.h>
-#include <linux/completion.h>
 #include <linux/npa_remote.h>
 
-#define NPA_MAX_TIMEOUT  (20 * HZ)
 
 enum npa_data_type {
 	NPA_CLIENT_TYPE = 10,
@@ -98,7 +96,6 @@ struct npa_node_info {
 	void *user_data;
 };
 
-static DECLARE_COMPLETION(npa_remote_initialized);
 static struct workqueue_struct *npa_remote_wq;
 
 /* Sync up the local enum defines with that of the remote processor */
@@ -180,19 +177,27 @@ static int npa_remote_resource_available_cb(void *context, unsigned int type,
 	return 0;
 }
 
+static void npa_define_deferred_nodes(void *context, unsigned int event_type,
+		void *data, unsigned int data_size)
+{
+	struct npa_node_info *node_info = context;
+
+	npa_log(NPA_LOG_MASK_RESOURCE, NULL,
+			"NPA Remote: Protocol [%s] for resource [%s] is "
+			"available. Checking resource availability\n",
+			"/protocols/modem/oncrpc/1.0.0",
+			node_info->resource_name);
+
+	npa_remote_resource_available(node_info->resource_name,
+				npa_remote_resource_available_cb,
+				(void *)node_info);
+}
+
 int npa_remote_define_node(struct npa_node_definition *node,
 		unsigned int init_state, npa_cb_fn callback, void *data)
 {
 	int ret = 0;
 	struct npa_node_info *node_info = NULL;
-
-	/* Wait until the remote server is initalized */
-	ret = wait_for_completion_timeout(&npa_remote_initialized,
-			NPA_MAX_TIMEOUT);
-	if (!ret) {
-		pr_err("NPA Remote not initalized, error %d\n", ret);
-		return -ENODEV;
-	}
 
 	node_info = kzalloc(sizeof(struct npa_node_info), GFP_KERNEL);
 
@@ -212,11 +217,12 @@ int npa_remote_define_node(struct npa_node_definition *node,
 	 */
 
 	npa_log(NPA_LOG_MASK_RESOURCE, NULL,
-			"NPA Remote: Checking if remote resource [%s] "
-			"is available\n", node_info->resource_name);
+			"NPA Remote: Checking if protocol [%s] for resource"
+			"[%s] is available\n", "/protocols/modem/oncrpc/1.0.0",
+			node_info->resource_name);
 
-	ret = npa_remote_resource_available(node_info->resource_name,
-			npa_remote_resource_available_cb, (void *)node_info);
+	npa_resource_available("/protocols/modem/oncrpc/1.0.0",
+			npa_define_deferred_nodes, node_info);
 
 	return ret;
 
@@ -369,38 +375,13 @@ const struct npa_resource_plugin_ops npa_remote_agg_plugin = {
 };
 EXPORT_SYMBOL(npa_remote_agg_plugin);
 
-static int npa_remote_init_cb(void *context, unsigned int event_type,
-		int *data, unsigned int data_size)
-{
-	complete_all(&npa_remote_initialized);
-	pr_info("NPA Remote is initalized.\n");
-
-	kfree(context);
-
-	return 0;
-}
-
-static void npa_verify_remote(struct work_struct *work)
-{
-	int err = npa_remote_init(NPA_REMOTE_VERSION_MAJOR,
-				NPA_REMOTE_VERSION_MINOR,
-				NPA_REMOTE_VERSION_BUILD,
-				npa_remote_init_cb, work);
-	BUG_ON(err);
-}
-
 static int npa_remote_cmd_init(void)
 {
-	struct work_struct *npa_remote_init_work = NULL;
-
 	npa_remote_wq = create_workqueue("npa-remote");
 	BUG_ON(!npa_remote_wq);
 
-	npa_remote_init_work = kzalloc(sizeof(struct work_struct), GFP_KERNEL);
-	INIT_WORK(npa_remote_init_work, npa_verify_remote);
-	queue_work(npa_remote_wq, npa_remote_init_work);
+	pr_info("NPA Remote: Init done.\n");
 
 	return 0;
 }
-
-device_initcall(npa_remote_cmd_init);
+postcore_initcall(npa_remote_cmd_init);

@@ -76,7 +76,6 @@
 
 #include <linux/kernel.h>
 #include <linux/err.h>
-#include <linux/completion.h>
 #include <linux/platform_device.h>
 #include <linux/npa_remote.h>
 #include <mach/msm_rpcrouter.h>
@@ -209,8 +208,8 @@ struct npa_remote_issue_required_request_ret {
 	uint32_t new_state;
 };
 
-static struct msm_rpc_client *npa_rpc_client;/* TODO: Use a pool or array? */
-DECLARE_COMPLETION(npa_rpc_init_complete);
+static struct msm_rpc_client *npa_rpc_client;
+static struct workqueue_struct *npa_rpc_wq;
 
 static int npa_remote_cb(struct msm_rpc_client *client,
 		void *buffer, int in_size)
@@ -233,6 +232,8 @@ static int npa_remote_cb(struct msm_rpc_client *client,
 		int i;
 		arg.buffer = kzalloc(array_length * sizeof(int32_t),
 				GFP_KERNEL);
+		if (!arg.buffer)
+			return -ENOMEM;
 		for (i = 0; i < array_length; i++)
 			RECV_INT32(buf, arg.buffer[i]);
 	}
@@ -276,7 +277,6 @@ static int npa_remote_cb_fn(struct msm_rpc_client *client,
 
 int npa_remote_null(void)
 {
-	wait_for_completion(&npa_rpc_init_complete);
 	return msm_rpc_client_req(npa_rpc_client, NPA_REMOTE_NULL_PROC,
 			NULL, NULL, NULL, NULL, -1);
 }
@@ -312,8 +312,6 @@ int npa_remote_init(unsigned int major, unsigned int minor, unsigned int build,
 	int err = 0;
 	struct npa_remote_init_arg arg;
 	struct npa_remote_init_ret ret;
-
-	wait_for_completion(&npa_rpc_init_complete);
 
 	arg.major = major;
 	arg.minor = minor;
@@ -543,12 +541,75 @@ int npa_remote_issue_required_request(void *handle, unsigned int state,
 }
 EXPORT_SYMBOL(npa_remote_issue_required_request);
 
+#define NPA_PROTOCOL_ONCRPC "/protocols/modem/oncrpc/1.0.0"
+
+unsigned int npa_oncrpc_driver_fn(struct npa_resource *resource,
+		struct npa_client *client, unsigned int state)
+{
+	/* Do nothing */
+	return 0;
+}
+
+static struct npa_resource_definition npa_oncrpc_resource = {
+	.name	= NPA_PROTOCOL_ONCRPC,
+	.plugin	= &npa_always_on_plugin,
+};
+
+static struct npa_node_definition npa_oncrpc_node = {
+	.name			= NPA_PROTOCOL_ONCRPC,
+	.driver_fn		= npa_oncrpc_driver_fn,
+	.dependencies		= NULL,
+	.dependency_count	= 0,
+	.resources		= &npa_oncrpc_resource,
+	.resource_count		= 1,
+};
+
+static void npa_create_rpc_resource(struct work_struct *work)
+{
+	unsigned int init_state[] = {0};
+
+	/* Define the resource as available */
+	/* This will end up defining all the resources that were waiting
+	 * on this protocol to be ready.
+	 */
+	npa_define_node(&npa_oncrpc_node, init_state, NULL, NULL);
+
+	kfree(work);
+}
+
+static int npa_remote_verify_cb(void *context, unsigned int size,
+		int *data, unsigned int data_size)
+{
+	/* Schedule a work and release the RPC callback thread */
+	struct work_struct *work =
+		kzalloc(sizeof(struct work_struct), GFP_KERNEL);
+	if (!work)
+		return -ENOMEM;
+
+	INIT_WORK(work, npa_create_rpc_resource);
+	queue_work(npa_rpc_wq, work);
+
+	return 0;
+}
+
+static void npa_remote_verify(struct work_struct *work)
+{
+	int err = npa_remote_init(NPA_REMOTE_VERSION_MAJOR,
+				NPA_REMOTE_VERSION_MINOR,
+				NPA_REMOTE_VERSION_BUILD,
+				npa_remote_verify_cb, NULL);
+	BUG_ON(err);
+	kfree(work);
+}
+
 /* Registration with the platform driver for notification on the availability
  * of the NPA remote server
  */
 
 static int __devinit npa_rpc_init_probe(struct platform_device *pdev)
 {
+	struct work_struct *work = NULL;
+
 	npa_rpc_client = msm_rpc_register_client(
 					"npa-remote-client",
 					NPA_REMOTEPROG,
@@ -559,7 +620,15 @@ static int __devinit npa_rpc_init_probe(struct platform_device *pdev)
 		pr_err("NPA REMOTE: RPC client creation failed\n");
 		return -ENODEV;
 	}
-	complete(&npa_rpc_init_complete);
+
+	/* Schedule a work to initialize NPA remoting.
+	 */
+	work = kzalloc(sizeof(struct work_struct), GFP_KERNEL);
+	if (!work)
+		return -ENOMEM;
+
+	INIT_WORK(work, npa_remote_verify);
+	queue_work(npa_rpc_wq, work);
 
 	return 0;
 }
@@ -581,6 +650,9 @@ static int __init npa_rpc_init(void)
 		"rs%08x:%08x", NPA_REMOTEPROG,
 		NPA_REMOTEVERS & RPC_VERSION_MAJOR_MASK);
 	npa_rpc_init_driver.driver.name = npa_rpc_driver_name;
+
+	npa_rpc_wq = create_workqueue("npa-rpc");
+	BUG_ON(!npa_rpc_wq);
 
 	err = platform_driver_register(&npa_rpc_init_driver);
 
