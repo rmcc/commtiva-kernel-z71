@@ -78,6 +78,7 @@ static struct q6audio_analog_ops ops = {
 	.speaker_enable = analog_speaker_enable,
 	.headset_enable = analog_headset_enable,
 	.int_mic_enable = analog_mic_enable,
+	.ext_mic_enable = analog_mic_enable,
 };
 
 static int __init init(void)
