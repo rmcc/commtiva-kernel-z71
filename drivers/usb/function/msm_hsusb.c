@@ -1853,16 +1853,9 @@ static int usb_hw_reset(struct usb_info *ui)
 	/* select ULPI phy */
 	i = (readl(USB_PORTSC) & ~PORTSC_PTS);
 	writel(i | PORTSC_PTS_ULPI, USB_PORTSC);
-
-	/* If composition contains mass storage only function, decrease USB
-	 * interrupt latency to zero to increase usb mass storage performance
-	 */
-	if (ui->composition->functions == USB_MSC_ONLY_FUNC_MAP)
-		writel((readl(USB_USBCMD) & ~USBCMD_ITC_MASK) | USBCMD_ITC(0),
-								USB_USBCMD);
-	else
-		writel((readl(USB_USBCMD) & ~USBCMD_ITC_MASK) | USBCMD_ITC(8),
-								USB_USBCMD);
+	/* set usb controller interrupt latency to zero*/
+	writel((readl(USB_USBCMD) & ~USBCMD_ITC_MASK) | USBCMD_ITC(0),
+							USB_USBCMD);
 
 	/* If the target is 7x01 and roc version is > 1.2, set
 	 * the AHB mode to 2 for maximum performance, else set
