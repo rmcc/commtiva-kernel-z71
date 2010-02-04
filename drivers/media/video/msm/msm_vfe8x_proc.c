@@ -1675,6 +1675,9 @@ static void vfe_do_work(struct work_struct *work)
 	int cnt = 0;
 	struct isr_queue_cmd *qcmd = NULL;
 
+	if (!ctrl)
+		return;
+
 	CDBG("%s\n", __func__);
 
 	while ((qcmd = next_irq_cmd())) {
