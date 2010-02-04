@@ -986,6 +986,32 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 		return -EINVAL;
 	}
 
+
+	if (req->dst_rect.h > (req->src_rect.h * 8))	/* too much */
+		return -ERANGE;
+
+	if (req->src_rect.h > (req->dst_rect.h * 8))	/* too little */
+		return -ERANGE;
+
+	if (req->dst_rect.w > (req->src_rect.w * 8))	/* too much */
+		return -ERANGE;
+
+	if (req->src_rect.w > (req->dst_rect.w * 8))	/* too little */
+		return -ERANGE;
+
+	/*  non integer down saceling ratio  smaller than 1/4
+	 *  is not supportted
+	 */
+	if (req->src_rect.h > (req->dst_rect.h * 4)) {
+		if (req->src_rect.h % req->dst_rect.h)	/* need integer */
+			return -ERANGE;
+	}
+
+	if (req->src_rect.w > (req->dst_rect.w * 4)) {
+		if (req->src_rect.w % req->dst_rect.w)	/* need integer */
+			return -ERANGE;
+	}
+
 	ret = mdp4_overlay_req_check(req->id, req->z_order, mixer);
 	if (ret < 0)
 		return ret;
@@ -993,6 +1019,14 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 	ptype = mdp4_overlay_format2type(req->src.format);
 	if (ptype < 0)
 		return ptype;
+
+	/* no down scale on rgb pipe */
+	if (ptype == OVERLAY_TYPE_RGB) {
+		if (req->src_rect.h > req->dst_rect.h)
+			return -ERANGE;
+		if (req->src_rect.w > req->dst_rect.w)
+			return -ERANGE;
+	}
 
 	if (req->id == MSMFB_NEW_REQUEST)  /* new request */
 		pipe = mdp4_overlay_pipe_alloc();
