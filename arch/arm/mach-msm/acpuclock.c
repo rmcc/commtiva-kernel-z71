@@ -64,8 +64,6 @@ struct clock_state
 	uint32_t			acpu_switch_time_us;
 	uint32_t			max_speed_delta_khz;
 	uint32_t			vdd_switch_time_us;
-	unsigned long			power_collapse_khz;
-	unsigned long			wait_for_irq_khz;
 	unsigned long			max_axi_khz;
 };
 
@@ -353,15 +351,17 @@ static int pc_pll_request(unsigned id, unsigned on)
  * ARM11 'owned' clock control
  *---------------------------------------------------------------------------*/
 
+#define POWER_COLLAPSE_KHZ 19200
 unsigned long acpuclk_power_collapse(void) {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(drv_state.power_collapse_khz, SETRATE_PC);
+	acpuclk_set_rate(POWER_COLLAPSE_KHZ, SETRATE_PC);
 	return ret;
 }
 
+#define WAIT_FOR_IRQ_KHZ 128000
 unsigned long acpuclk_wait_for_irq(void) {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(drv_state.wait_for_irq_khz, SETRATE_SWFI);
+	acpuclk_set_rate(WAIT_FOR_IRQ_KHZ, SETRATE_SWFI);
 	return ret;
 }
 
@@ -891,8 +891,6 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	drv_state.acpu_switch_time_us = clkdata->acpu_switch_time_us;
 	drv_state.max_speed_delta_khz = clkdata->max_speed_delta_khz;
 	drv_state.vdd_switch_time_us = clkdata->vdd_switch_time_us;
-	drv_state.power_collapse_khz = clkdata->power_collapse_khz;
-	drv_state.wait_for_irq_khz = clkdata->wait_for_irq_khz;
 	drv_state.max_axi_khz = clkdata->max_axi_khz;
 	acpu_freq_tbl_fixup();
 	precompute_stepping();

@@ -986,8 +986,6 @@ static struct msm_acpu_clock_platform_data halibut_clock_data = {
 	.acpu_switch_time_us = 50,
 	.max_speed_delta_khz = 256000,
 	.vdd_switch_time_us = 62,
-	.power_collapse_khz = 19200,
-	.wait_for_irq_khz = 128000,
 	.max_axi_khz = 128000,
 };
 
