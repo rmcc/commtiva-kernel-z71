@@ -474,6 +474,8 @@ static void usb_ept_enable(struct msm_endpoint *ept, int yes,
 		} else
 			n &= ~(CTRL_RXE);
 	}
+	/* complete all the updates to ept->head before enabling endpoint*/
+	dma_coherent_pre_ops();
 	writel(n, USB_ENDPTCTRL(ept->num));
 
 	dev_dbg(&ui->pdev->dev, "ept %d %s %s\n",
@@ -492,7 +494,7 @@ static void usb_ept_start(struct msm_endpoint *ept)
 	ept->head->info = 0;
 
 	/* flush buffers before priming ept */
-	dmb();
+	dma_coherent_pre_ops();
 
 	/* start the endpoint */
 	writel(1 << ept->bit, USB_ENDPTPRIME);
@@ -850,6 +852,8 @@ static void handle_endpoint(struct usb_info *ui, unsigned bit)
 	/* expire all requests that are no longer active */
 	spin_lock_irqsave(&ui->lock, flags);
 	while ((req = ept->req)) {
+		/* clean speculative fetches on req->item->info */
+		dma_coherent_post_ops();
 		info = req->item->info;
 
 		/* if we've processed all live requests, time to
@@ -1682,8 +1686,6 @@ static int msm72k_dequeue(struct usb_ep *_ep, struct usb_request *_req)
 	req->item->next = TERMINATE;
 	req->item->info = 0;
 	req->live = 0;
-	/* memory barrier to flush the data */
-	dmb();
 	dma_unmap_single(NULL, req->dma, req->req.length,
 		(ep->flags & EPT_FLAG_IN) ?
 		DMA_TO_DEVICE : DMA_FROM_DEVICE);
@@ -1979,13 +1981,6 @@ static int msm72k_probe(struct platform_device *pdev)
 	ui->pool = dma_pool_create("msm72k_udc", NULL, 32, 32, 0);
 	if (!ui->pool)
 		return usb_free(ui, -ENOMEM);
-
-
-	/* FIXME: dmb cannot be called from interrupt context
-	 * for the first time; Need to verify on how it needs
-	 * to be fixed
-	 */
-	dmb();
 
 	ui->xceiv = otg_get_transceiver();
 	if (!ui->xceiv)
