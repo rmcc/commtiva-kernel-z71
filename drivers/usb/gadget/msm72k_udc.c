@@ -1120,6 +1120,10 @@ static void usb_reset(struct usb_info *ui)
 	/* select ULPI phy */
 	writel(0x80000000, USB_PORTSC);
 
+	/* set usb controller interrupt threshold to zero*/
+	writel((readl(USB_USBCMD) & ~USBCMD_ITC_MASK) | USBCMD_ITC(0),
+							USB_USBCMD);
+
 	/* electrical compliance failure in eye-diagram tests
 	 * were observed w/ integrated phy. To avoid failure
 	 * raise signal amplitude to 400mv
@@ -1439,12 +1443,12 @@ void usb_function_reenumerate(void)
 
 	/* disable and re-enable the D+ pullup */
 	INFO("msm72k_udc: disable pullup\n");
-	writel(0x00080000, USB_USBCMD);
+	writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
 
 	msleep(10);
 
 	INFO("msm72k_udc: enable pullup\n");
-	writel(0x00080001, USB_USBCMD);
+	writel(readl(USB_USBCMD) | USBCMD_RS, USB_USBCMD);
 }
 
 static char debug_buffer[PAGE_SIZE];
@@ -1789,9 +1793,9 @@ static int msm72k_pullup(struct usb_gadget *_gadget, int is_active)
 
 	if (is_active) {
 		if (vbus && ui->driver)
-			writel(0x00080001, USB_USBCMD);
+			writel(readl(USB_USBCMD) | USBCMD_RS, USB_USBCMD);
 	} else {
-		writel(0x00080000, USB_USBCMD);
+		writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
 		/* S/W workaround, Issue#1 */
 		ulpi_write(ui, 0x48, 0x04);
 	}
