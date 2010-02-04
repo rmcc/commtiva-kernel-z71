@@ -2668,8 +2668,8 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 	if (!is_kernel_memtype) {
 		pmem[id].dev.minor = id;
 		pmem[id].dev.fops = &pmem_fops;
-		printk(KERN_INFO "%s: %d init\n",
-			pdata->name, pdata->cached);
+		printk(KERN_INFO "pmem: Initializing %s (user-space) as %s\n",
+			pdata->name, pdata->cached ? "cached" : "non-cached");
 
 		if (misc_register(&pmem[id].dev)) {
 			printk(KERN_ALERT "Unable to register pmem driver!\n");
@@ -2677,16 +2677,22 @@ int pmem_setup(struct android_pmem_platform_data *pdata,
 		}
 	} else { /* kernel region, no user accessible device */
 		pmem[id].dev.minor = -1;
+		printk(KERN_INFO "pmem: Initializing %s (in-kernel)\n",
+				pdata->name);
 	}
 
 	/* do not set up unstable pmem now, wait until first memory hotplug */
 	if (pmem[id].memory_state == MEMORY_UNSTABLE_NO_MEMORY_ALLOCATED)
 		return 0;
 
-	ioremap_pmem(id);
-
-	if (pmem[id].vbase == 0)
-		goto error_cant_remap;
+	if (!is_kernel_memtype) {
+		ioremap_pmem(id);
+		if (pmem[id].vbase == 0) {
+			printk(KERN_ERR "pmem: ioremap failed for device %s\n",
+				pmem[id].name);
+			goto error_cant_remap;
+		}
+	}
 
 	pmem[id].garbage_pfn = page_to_pfn(alloc_page(GFP_KERNEL));
 
