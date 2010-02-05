@@ -61,12 +61,14 @@
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
 #include <linux/kthread.h>
+#include <linux/mfd/core.h>
 #include <linux/mfd/pmic8058.h>
 #include <linux/gpio.h>
-#include <asm-generic/gpio.h>
+#include <linux/platform_device.h>
 #include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/debugfs.h>
+#include <asm-generic/gpio.h>
 
 /* PMIC8058 Revision */
 #define SSBI_REG_REV			0x002  /* PMIC4 revision */
@@ -961,8 +963,12 @@ static int pm8058_probe(struct i2c_client *client,
 	struct	pm8058_chip *chip;
 
 	if (pdata == NULL || !client->irq) {
-		pr_err("%s: No platform_data or IRQ.\n",
-			__func__);
+		pr_err("%s: No platform_data or IRQ.\n", __func__);
+		return -ENODEV;
+	}
+
+	if (pdata->num_subdevs == 0) {
+		pr_err("%s: No sub devices to support.\n", __func__);
 		return -ENODEV;
 	}
 
@@ -1048,6 +1054,9 @@ static int pm8058_probe(struct i2c_client *client,
 		set_irq_data(chip->dev->irq, (void *)chip);
 		set_irq_wake(chip->dev->irq, 1);
 	}
+
+	rc = mfd_add_devices(&chip->dev->dev, -1, pdata->sub_devices,
+			     pdata->num_subdevs, NULL, 0);
 
 	if (pdata->init) {
 		rc = pdata->init();
