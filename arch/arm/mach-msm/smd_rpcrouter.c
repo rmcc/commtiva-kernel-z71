@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_rpcrouter.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -59,6 +59,10 @@ enum {
 	RAW_PMW = 1U << 7,
 	R2R_RAW_HDR = 1U << 8,
 };
+static int msm_rpc_connect_timeout_ms;
+module_param_named(connect_timeout, msm_rpc_connect_timeout_ms,
+		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+
 static int smd_rpcrouter_debug_mask;
 module_param_named(debug_mask, smd_rpcrouter_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
@@ -1647,55 +1651,93 @@ int msm_rpc_is_compatible_version(uint32_t server_version,
 }
 EXPORT_SYMBOL(msm_rpc_is_compatible_version);
 
-int msm_rpc_get_compatible_server(uint32_t prog,
-					uint32_t ver,
-					uint32_t *found_vers)
+static struct rr_server *msm_rpc_get_server(uint32_t prog, uint32_t vers,
+					    uint32_t accept_compatible,
+					    uint32_t *found_prog)
 {
 	struct rr_server *server;
 	unsigned long     flags;
-	uint32_t          found = -1;
-	if (found_vers == NULL)
-		return 0;
 
+	if (found_prog == NULL)
+		return NULL;
+
+	*found_prog = 0;
 	spin_lock_irqsave(&server_list_lock, flags);
 	list_for_each_entry(server, &server_list, list) {
-		if ((server->prog == prog) &&
-		    msm_rpc_is_compatible_version(server->vers, ver)) {
-			*found_vers = server->vers;
+		if (server->prog == prog) {
+			*found_prog = 1;
 			spin_unlock_irqrestore(&server_list_lock, flags);
-			return 0;
+			if (accept_compatible) {
+				if (msm_rpc_is_compatible_version(server->vers,
+								  vers)) {
+					return server;
+				} else {
+					return NULL;
+				}
+			} else if (server->vers == vers) {
+				return server;
+			} else
+				return NULL;
 		}
 	}
 	spin_unlock_irqrestore(&server_list_lock, flags);
-	return found;
+	return NULL;
 }
-EXPORT_SYMBOL(msm_rpc_get_compatible_server);
 
-struct msm_rpc_endpoint *msm_rpc_connect_compatible(uint32_t prog,
-			uint32_t vers, unsigned flags)
-{
-	uint32_t found_vers;
-	int      ret;
-	 ret = msm_rpc_get_compatible_server(prog, vers, &found_vers);
-	 if (ret < 0)
-		return ERR_PTR(-EHOSTUNREACH);
-	if (found_vers != vers) {
-		D("RPC Using new version 0x%08x(0x%08x) prog 0x%08x",
-			vers, found_vers, prog);
-		D(" ... Continuing\n");
-	}
-	return msm_rpc_connect(prog, found_vers, flags);
-}
-EXPORT_SYMBOL(msm_rpc_connect_compatible);
-
-struct msm_rpc_endpoint *msm_rpc_connect(uint32_t prog, uint32_t vers, unsigned flags)
+static struct msm_rpc_endpoint *__msm_rpc_connect(uint32_t prog, uint32_t vers,
+						  uint32_t accept_compatible,
+						  unsigned flags)
 {
 	struct msm_rpc_endpoint *ept;
 	struct rr_server *server;
+	uint32_t found_prog;
+	int rc = 0;
 
-	server = rpcrouter_lookup_server(prog, vers);
+	DEFINE_WAIT(__wait);
+
+	for (;;) {
+		prepare_to_wait(&newserver_wait, &__wait,
+				TASK_INTERRUPTIBLE);
+
+		server = msm_rpc_get_server(prog, vers, accept_compatible,
+					    &found_prog);
+		if (server)
+			break;
+
+		if (found_prog) {
+			pr_info("%s: server not found %x:%x\n",
+				__func__, prog, vers);
+			rc = -EHOSTUNREACH;
+			break;
+		}
+
+		if (msm_rpc_connect_timeout_ms == 0) {
+			rc = -EHOSTUNREACH;
+			break;
+		}
+
+		if (signal_pending(current)) {
+			rc = -ERESTARTSYS;
+			break;
+		}
+
+		rc = schedule_timeout(
+			msecs_to_jiffies(msm_rpc_connect_timeout_ms));
+		if (!rc) {
+			rc = -ETIMEDOUT;
+			break;
+		}
+	}
+	finish_wait(&newserver_wait, &__wait);
+
 	if (!server)
-		return ERR_PTR(-EHOSTUNREACH);
+		return ERR_PTR(rc);
+
+	if (accept_compatible && (server->vers != vers)) {
+		D("RPC Using new version 0x%08x(0x%08x) prog 0x%08x",
+			vers, server->vers, prog);
+		D(" ... Continuing\n");
+	}
 
 	ept = msm_rpc_open();
 	if (IS_ERR(ept))
@@ -1705,9 +1747,22 @@ struct msm_rpc_endpoint *msm_rpc_connect(uint32_t prog, uint32_t vers, unsigned 
 	ept->dst_pid = server->pid;
 	ept->dst_cid = server->cid;
 	ept->dst_prog = cpu_to_be32(prog);
-	ept->dst_vers = cpu_to_be32(vers);
+	ept->dst_vers = cpu_to_be32(server->vers);
 
 	return ept;
+}
+
+struct msm_rpc_endpoint *msm_rpc_connect_compatible(uint32_t prog,
+			uint32_t vers, unsigned flags)
+{
+	return __msm_rpc_connect(prog, vers, 1, flags);
+}
+EXPORT_SYMBOL(msm_rpc_connect_compatible);
+
+struct msm_rpc_endpoint *msm_rpc_connect(uint32_t prog,
+			 uint32_t vers, unsigned flags)
+{
+	return __msm_rpc_connect(prog, vers, 0, flags);
 }
 EXPORT_SYMBOL(msm_rpc_connect);
 
@@ -2003,6 +2058,7 @@ static int __init rpcrouter_init(void)
 {
 	int ret;
 
+	msm_rpc_connect_timeout_ms = 0;
 	ret = platform_driver_register(&msm_smd_channel2_driver);
 	if (ret)
 		return ret;
