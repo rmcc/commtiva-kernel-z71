@@ -22,6 +22,8 @@ struct gpio_chip {
 	struct list_head list;
 	struct gpio_state *state;
 
+	struct device	*dev;
+
 	unsigned int start;
 	unsigned int end;
 
