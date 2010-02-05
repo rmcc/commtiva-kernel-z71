@@ -82,6 +82,7 @@
 #include <mach/sirc.h>
 #include <mach/dma.h>
 #include <mach/rpc_hsusb.h>
+#include <mach/rpc_pmapp.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/msm_serial_hs.h>
@@ -2028,6 +2029,11 @@ static int hsusb_rpc_connect(int connect)
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_native_phy_reset,
+	.pmic_notif_init         = msm_pm_app_rpc_init,
+	.pmic_notif_deinit       = msm_pm_app_rpc_deinit,
+	.pmic_register_vbus_sn   = msm_pm_app_register_vbus_sn,
+	.pmic_unregister_vbus_sn = msm_pm_app_unregister_vbus_sn,
+	.pmic_enable_ldo         = msm_pm_app_enable_usb_ldo,
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
