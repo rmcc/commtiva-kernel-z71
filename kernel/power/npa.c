@@ -1547,6 +1547,7 @@ EXPORT_SYMBOL(npa_always_on_plugin);
 static int npa_init(void)
 {
 	npa_wq = create_workqueue("npa");
+	BUG_ON(!npa_wq);
 
 	pr_info("NPA: Init done.\n");
 
@@ -1618,4 +1619,4 @@ EXPORT_SYMBOL(npa_reset);
 /* NPA needs to be made available before the resources. Should be way up in the
  * initialization list of the kernel.
  */
-arch_initcall(npa_init);
+postcore_initcall(npa_init);
