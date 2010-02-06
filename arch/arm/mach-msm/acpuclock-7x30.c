@@ -99,20 +99,20 @@ static struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	{ 0 }
 };
 
-#define POWER_COLLAPSE_HZ (MAX_AXI_KHZ * 1000)
+#define POWER_COLLAPSE_KHZ MAX_AXI_KHZ
 unsigned long acpuclk_power_collapse(void)
 {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(POWER_COLLAPSE_HZ, SETRATE_PC);
-	return ret * 1000;
+	acpuclk_set_rate(POWER_COLLAPSE_KHZ, SETRATE_PC);
+	return ret;
 }
 
-#define WAIT_FOR_IRQ_HZ (MAX_AXI_KHZ * 1000)
+#define WAIT_FOR_IRQ_KHZ MAX_AXI_KHZ
 unsigned long acpuclk_wait_for_irq(void)
 {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(WAIT_FOR_IRQ_HZ, SETRATE_SWFI);
-	return ret * 1000;
+	acpuclk_set_rate(WAIT_FOR_IRQ_KHZ, SETRATE_SWFI);
+	return ret;
 }
 
 #define STS_PMIC_DATA_SHIFT	10
@@ -184,11 +184,11 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	strt_s = drv_state.current_speed;
 
-	if (rate == (strt_s->acpu_clk_khz * 1000))
+	if (rate == strt_s->acpu_clk_khz)
 		goto out;
 
 	for (tgt_s = acpu_freq_tbl; tgt_s->acpu_clk_khz != 0; tgt_s++) {
-		if (tgt_s->acpu_clk_khz == (rate / 1000))
+		if (tgt_s->acpu_clk_khz == rate)
 			break;
 	}
 	if (tgt_s->acpu_clk_khz == 0) {

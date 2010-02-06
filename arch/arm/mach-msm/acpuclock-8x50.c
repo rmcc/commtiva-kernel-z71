@@ -461,11 +461,11 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 
 	strt_s = drv_state.current_speed;
 
-	if (rate == (strt_s->acpuclk_khz * 1000))
+	if (rate == strt_s->acpuclk_khz)
 		goto out;
 
 	for (tgt_s = acpu_freq_tbl; tgt_s->acpuclk_khz != 0; tgt_s++) {
-		if (tgt_s->acpuclk_khz == (rate / 1000))
+		if (tgt_s->acpuclk_khz == rate)
 			break;
 		freq_index++;
 	}
@@ -629,14 +629,14 @@ unsigned long acpuclk_power_collapse(void)
 {
 	int ret = acpuclk_get_rate();
 	acpuclk_set_rate(drv_state.power_collapse_khz, SETRATE_PC);
-	return ret * 1000;
+	return ret;
 }
 
 unsigned long acpuclk_wait_for_irq(void)
 {
 	int ret = acpuclk_get_rate();
 	acpuclk_set_rate(drv_state.wait_for_irq_khz, SETRATE_SWFI);
-	return ret * 1000;
+	return ret;
 }
 
 /* Spare register populated with efuse data on max ACPU freq. */
