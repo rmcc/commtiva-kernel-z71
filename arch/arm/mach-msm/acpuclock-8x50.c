@@ -112,9 +112,9 @@ struct clkctl_acpu_speed {
 
 struct clkctl_acpu_speed acpu_freq_tbl_998[] = {
 	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 0, 0, 14000, 0, 0, 1000},
-	/* Use AXI source. Row number in acpuclk_init() must match this. */
 	{ 0, 128000, ACPU_PLL_1, 1, 5, 0, 0, 14000, 2, 0, 1000},
 	{ 1, 245760, ACPU_PLL_0, 4, 0, 0, 0, 29000, 0, 0, 1000},
+	/* Update AXI_S and PLL0_S macros if above row numbers change. */
 	{ 1, 384000, ACPU_PLL_3, 0, 0, 0, 0, 58000, 1, 0xA, 1000},
 	{ 0, 422400, ACPU_PLL_3, 0, 0, 0, 0, 117000, 1, 0xB, 1000},
 	{ 0, 460800, ACPU_PLL_3, 0, 0, 0, 0, 117000, 1, 0xC, 1000},
@@ -137,9 +137,9 @@ struct clkctl_acpu_speed acpu_freq_tbl_998[] = {
 
 struct clkctl_acpu_speed acpu_freq_tbl_768[] = {
 	{ 0, 19200, ACPU_PLL_TCXO, 0, 0, 0, 0, 14000, 0, 0, 1000},
-	/* Use AXI source. Row number in acpuclk_init() must match this. */
 	{ 0, 128000, ACPU_PLL_1, 1, 5, 0, 0, 14000, 2, 0, 1000},
 	{ 1, 245760, ACPU_PLL_0, 4, 0, 0, 0, 29000, 0, 0, 1000},
+	/* Update AXI_S and PLL0_S macros if above row numbers change. */
 	{ 1, 384000, ACPU_PLL_3, 0, 0, 0, 0, 58000, 1, 0xA, 1075},
 	{ 0, 422400, ACPU_PLL_3, 0, 0, 0, 0, 117000, 1, 0xB, 1100},
 	{ 0, 460800, ACPU_PLL_3, 0, 0, 0, 0, 117000, 1, 0xC, 1125},
@@ -155,6 +155,17 @@ struct clkctl_acpu_speed acpu_freq_tbl_768[] = {
 };
 
 static struct clkctl_acpu_speed *acpu_freq_tbl = acpu_freq_tbl_998;
+#define AXI_S	(&acpu_freq_tbl[1])
+#define PLL0_S	(&acpu_freq_tbl[2])
+
+/* Use 128MHz for PC since ACPU will auto-switch to AXI (128MHz) before
+ * coming back up. This allows detection of return-from-PC, since 128MHz
+ * is only used for power collapse. */
+#define POWER_COLLAPSE_KHZ (AXI_S->acpuclk_khz)
+/* Use 245MHz (not 128MHz) for SWFI to avoid unnecessary steps between
+ * 128MHz<->245MHz. Jumping to high frequencies from 128MHz directly
+ * is not allowed. */
+#define WAIT_FOR_IRQ_KHZ (PLL0_S->acpuclk_khz)
 
 #ifdef CONFIG_CPU_FREQ_MSM
 static struct cpufreq_frequency_table freq_table[20];
@@ -419,22 +430,6 @@ static void config_pll(struct clkctl_acpu_speed *s)
 	writel(regval, SPSS_CLK_SEL_ADDR);
 }
 
-void config_switching_pll(void)
-{
-	uint32_t regval;
-
-	/* Use AXI clock temporarily when we're changing
-	 * scpll. PLL0 is faster, but it may not be available during
-	 * early modem initialization, and we will only be using this
-	 * a very short time (while scpll is reconfigured).
-	 */
-
-	regval = readl(SPSS_CLK_SEL_ADDR);
-	regval &= ~(0x3 << 1);
-	regval |= (0x2 << 1);
-	writel(regval, SPSS_CLK_SEL_ADDR);
-}
-
 static int acpuclk_set_vdd_level(int vdd)
 {
 	if (drv_state.acpu_set_vdd) {
@@ -491,6 +486,11 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 				goto out;
 			}
 		}
+	} else if (reason == SETRATE_PC
+		&& rate != POWER_COLLAPSE_KHZ) {
+		/* Returning from PC. ACPU is running on AXI source.
+		 * Step up to PLL0 before ramping up higher. */
+		config_pll(PLL0_S);
 	}
 
 	dprintk("Switching from ACPU rate %u KHz -> %u KHz\n",
@@ -505,7 +505,8 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 		config_pll(tgt_s);
 		scpll_apps_enable(0);
 	} else {
-		config_switching_pll();
+		/* Temporarily switch to PLL0 while reconfiguring PLL3. */
+		config_pll(PLL0_S);
 		config_pll(tgt_s);
 	}
 
@@ -590,8 +591,10 @@ static void __init acpuclk_init(void)
 		break;
 
 	case 2: /* AXI bus clock (128Mhz) */
+		speed = AXI_S;
+		break;
 	default:
-		speed = &acpu_freq_tbl[1];
+		BUG();
 	}
 
 	/* Initialize scpll only if it wasn't already initialized by the boot
@@ -623,7 +626,6 @@ uint32_t acpuclk_get_switch_time(void)
 	return drv_state.acpu_switch_time_us;
 }
 
-#define POWER_COLLAPSE_KHZ 128000
 unsigned long acpuclk_power_collapse(void)
 {
 	int ret = acpuclk_get_rate();
@@ -631,7 +633,6 @@ unsigned long acpuclk_power_collapse(void)
 	return ret;
 }
 
-#define WAIT_FOR_IRQ_KHZ 128000
 unsigned long acpuclk_wait_for_irq(void)
 {
 	int ret = acpuclk_get_rate();
@@ -649,7 +650,7 @@ static void __init acpu_freq_tbl_fixup(void)
 {
 	void __iomem *ct_csr_base;
 	uint32_t tcsr_spare2, pll0_m_val;
-	unsigned int max_acpu_khz, pll0_fixup;
+	unsigned int max_acpu_khz;
 	unsigned int i;
 
 	ct_csr_base = ioremap(CT_CSR_PHYS, PAGE_SIZE);
@@ -697,14 +698,10 @@ skip_efuse_fixup:
 	/* pll0_m_val will be 36 when PLL0 is run at 235MHz
 	 * instead of the usual 245MHz. */
 	pll0_m_val = readl(PLL0_M_VAL_ADDR) & 0x7FFFF;
-	pll0_fixup = (pll0_m_val == 36);
+	if (pll0_m_val == 36)
+		PLL0_S->acpuclk_khz = 235930;
 
 	for (i = 0; acpu_freq_tbl[i].acpuclk_khz != 0; i++) {
-		if (acpu_freq_tbl[i].pll == ACPU_PLL_0
-				&& acpu_freq_tbl[i].acpuclk_khz == 245760
-				&& pll0_fixup) {
-			acpu_freq_tbl[i].acpuclk_khz = 235930;
-		}
 		if (acpu_freq_tbl[i].vdd > drv_state.max_vdd) {
 			acpu_freq_tbl[i].acpuclk_khz = 0;
 			break;
@@ -753,6 +750,11 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	acpu_freq_tbl_fixup();
 	acpuclk_init();
 	lpj_init();
+	/* Set a lower bound for ACPU rate for boot. This limits the
+	 * maximum frequency hop caused by the first CPUFREQ switch. */
+	if (drv_state.current_speed->acpuclk_khz < PLL0_S->acpuclk_khz)
+		acpuclk_set_rate(PLL0_S->acpuclk_khz, SETRATE_CPUFREQ);
+
 #ifdef CONFIG_CPU_FREQ_MSM
 	cpufreq_table_init();
 	cpufreq_frequency_table_get_attr(freq_table, smp_processor_id());
