@@ -608,13 +608,13 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 				int *elen)
 {
 	switch (type) {
-	case VFE_MSG_OUTPUT_P: {
+	case VFE_MSG_OUTPUT_P:
+	case VFE_MSG_OUTPUT_V:{
 		pinfo->y_phy =
 			((struct vfe_message *)data)->_u.msgOutput2.yBuffer;
 		pinfo->cbcr_phy =
 			((struct vfe_message *)data)->_u.msgOutput2.
 			cbcrBuffer;
-		pinfo->output_id = OUTPUT_TYPE_P;
 		ctrl->extdata.bpcInfo =
 			((struct vfe_message *)data)->_u.msgOutput2.bpcInfo;
 		ctrl->extdata.asfInfo =
@@ -644,9 +644,13 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 	} /* switch */
 }
 
-static boolean vfe_send_output1_msg(struct msm_vfe_resp *rp,
+static boolean vfe_send_preview_msg(struct msm_vfe_resp *rp,
 			struct vfe_message *msg, void *data);
-static boolean vfe_send_output2_msg(struct msm_vfe_resp *rp,
+static boolean vfe_send_video_msg(struct msm_vfe_resp *rp,
+			struct vfe_message *msg, void *data);
+static boolean vfe_send_mainimage_msg(struct msm_vfe_resp *rp,
+			struct vfe_message *msg, void *data);
+static boolean vfe_send_thumbnail_msg(struct msm_vfe_resp *rp,
 			struct vfe_message *msg, void *data);
 static boolean vfe_send_af_stats_msg(struct msm_vfe_resp *rp,
 			struct vfe_message *msg, void *data);
@@ -673,8 +677,10 @@ static struct {
 	[VFE_MSG_ID_START_ACK] = { NULL, VFE_MSG_GENERAL },
 	[VFE_MSG_ID_STOP_ACK] = { NULL, VFE_MSG_GENERAL },
 	[VFE_MSG_ID_UPDATE_ACK] = { NULL, VFE_MSG_GENERAL },
-	[VFE_MSG_ID_OUTPUT1] = { vfe_send_output1_msg, VFE_MSG_OUTPUT_P },
-	[VFE_MSG_ID_OUTPUT2] = { vfe_send_output2_msg, VFE_MSG_OUTPUT_P },
+	[VFE_MSG_ID_OUTPUT_P] = { vfe_send_preview_msg, VFE_MSG_OUTPUT_P },
+	[VFE_MSG_ID_OUTPUT_V] = { vfe_send_video_msg, VFE_MSG_OUTPUT_V },
+	[VFE_MSG_ID_OUTPUT_S] = { vfe_send_mainimage_msg, VFE_MSG_OUTPUT_S },
+	[VFE_MSG_ID_OUTPUT_T] = { vfe_send_thumbnail_msg, VFE_MSG_OUTPUT_T },
 	[VFE_MSG_ID_SNAPSHOT_DONE] = { NULL, VFE_MSG_SNAPSHOT },
 	[VFE_MSG_ID_STATS_AUTOFOCUS] = { vfe_send_af_stats_msg,
 		VFE_MSG_STATS_AF },
@@ -717,8 +723,8 @@ static void vfe_proc_ops(enum VFE_MESSAGE_ID id, void *data)
 	 * which is wasteful.
 	 */
 	if ((ctrl->vfeOperationMode == VFE_START_OPERATION_MODE_SNAPSHOT) &&
-			(id == VFE_MSG_ID_OUTPUT1 ||
-			 id == VFE_MSG_ID_OUTPUT2))
+			(id == VFE_MSG_ID_OUTPUT_T ||
+			 id == VFE_MSG_ID_OUTPUT_S))
 		return;
 
 	rp = ctrl->resp->vfe_alloc(sizeof(*rp) +
@@ -1285,22 +1291,18 @@ static void vfe_process_pingpong_irq(struct vfe_output_path *in,
 	}
 }
 
-static boolean vfe_send_output2_msg(struct msm_vfe_resp *rp,
+static boolean vfe_send_video_msg(struct msm_vfe_resp *rp,
 		struct vfe_message *msg, void *data)
 {
 	struct vfe_msg_output *pPayload = data;
 
 	if (ctrl->vstate != VFE_STATE_ACTIVE)
 		return FALSE;
-
-	memcpy(&(msg->_u.msgOutput2),
+	memcpy(&(msg->_u),
 		(void *)pPayload, sizeof(struct vfe_msg_output));
 
-	ctrl->encPath.ackPending = TRUE;
-
-	if (!(ctrl->vfeRequestedSnapShotCount <= 3) &&
-	    (ctrl->vfeOperationMode == VFE_START_OPERATION_MODE_SNAPSHOT))
-		ctrl->encPath.ackPending = TRUE;
+	rp->phy.output_id = OUTPUT_TYPE_V;
+	CDBG("vfe_send_video_msg rp->type= %d\n", rp->type);
 
 	vfe_addr_convert(&(rp->phy),
 			rp->type, msg,
@@ -1308,7 +1310,7 @@ static boolean vfe_send_output2_msg(struct msm_vfe_resp *rp,
 	return TRUE;
 }
 
-static boolean vfe_send_output1_msg(struct msm_vfe_resp *rp,
+static boolean vfe_send_preview_msg(struct msm_vfe_resp *rp,
 		struct vfe_message *msg, void *data)
 {
 	struct vfe_msg_output *pPayload = data;
@@ -1318,11 +1320,55 @@ static boolean vfe_send_output1_msg(struct msm_vfe_resp *rp,
 
 	memcpy(&(msg->_u), (void *)pPayload, sizeof(struct vfe_msg_output));
 
-	ctrl->viewPath.ackPending = TRUE;
+	rp->phy.output_id = OUTPUT_TYPE_P;
+	CDBG("vfe_send_preview_msg rp->type= %d\n", rp->type);
 
-	if (!(ctrl->vfeRequestedSnapShotCount <= 3) &&
-	    (ctrl->vfeOperationMode == VFE_START_OPERATION_MODE_SNAPSHOT))
-		ctrl->viewPath.ackPending = TRUE;
+	vfe_addr_convert(&(rp->phy),
+			rp->type, msg,
+			&(rp->extdata), &(rp->extlen));
+
+	return TRUE;
+}
+
+
+static boolean vfe_send_thumbnail_msg(struct msm_vfe_resp *rp,
+		struct vfe_message *msg, void *data)
+{
+	struct vfe_msg_output *pPayload = data;
+
+	if (ctrl->vstate != VFE_STATE_ACTIVE)
+		return FALSE;
+
+	memcpy(&(msg->_u), (void *)pPayload, sizeof(struct vfe_msg_output));
+
+	rp->phy.output_id = OUTPUT_TYPE_T;
+	CDBG("vfe_send_thumbnail_msg rp->type= %d\n", rp->type);
+
+	if (ctrl->viewPath.snapshotPendingCount <= 1)
+		ctrl->viewPath.ackPending = FALSE;
+
+	vfe_addr_convert(&(rp->phy),
+			rp->type, msg,
+			&(rp->extdata), &(rp->extlen));
+	return TRUE;
+}
+
+static boolean vfe_send_mainimage_msg(struct msm_vfe_resp *rp,
+		struct vfe_message *msg, void *data)
+{
+	struct vfe_msg_output *pPayload = data;
+
+	if (ctrl->vstate != VFE_STATE_ACTIVE)
+		return FALSE;
+
+	memcpy(&(msg->_u), (void *)pPayload, sizeof(struct vfe_msg_output));
+
+	rp->phy.output_id = OUTPUT_TYPE_S;
+	CDBG("vfe_send_mainimage_msg rp->type= %d\n", rp->type);
+
+	if (ctrl->encPath.snapshotPendingCount <= 1) {
+		ctrl->encPath.ackPending = FALSE;
+	}
 
 	vfe_addr_convert(&(rp->phy),
 			rp->type, msg,
@@ -1356,10 +1402,33 @@ static void vfe_send_output_msg(boolean whichOutputPath,
 
 	if (whichOutputPath) {
 		/* msgPayload.pmData = ctrl->vfePmData.encPathPmInfo; */
-		vfe_proc_ops(VFE_MSG_ID_OUTPUT2, &msgPayload);
+		ctrl->encPath.ackPending = TRUE;
+
+		if (ctrl->vfeOperationMode == 0) {
+			if (ctrl->axiOutputMode ==
+				VFE_AXI_OUTPUT_MODE_Output1AndOutput2) {
+				/* video mode */
+				vfe_proc_ops(VFE_MSG_ID_OUTPUT_V, &msgPayload);
+			} else{
+				/* preview mode */
+				vfe_proc_ops(VFE_MSG_ID_OUTPUT_P, &msgPayload);
+			}
+		} else {
+			vfe_proc_ops(VFE_MSG_ID_OUTPUT_S, &msgPayload);
+		}
+
 	} else {
-		/* msgPayload.pmData = ctrl->vfePmData.viewPathPmInfo; */
-		vfe_proc_ops(VFE_MSG_ID_OUTPUT1, &msgPayload);
+		/* physical output1 path from vfe */
+		ctrl->viewPath.ackPending = TRUE;
+
+		if (ctrl->vfeOperationMode == 0) {
+			vfe_proc_ops(VFE_MSG_ID_OUTPUT_P, &msgPayload);
+			CDBG(" video mode display output.\n");
+
+		} else{
+			vfe_proc_ops(VFE_MSG_ID_OUTPUT_T, &msgPayload);
+			CDBG(" snapshot mode thumbnail output.\n");
+		}
 	}
 }
 
@@ -1570,7 +1639,6 @@ static void vfe_process_output_path_irq(struct vfe_interrupt_status *irqstatus)
 			/* spin_unlock_irqrestore(&ctrl->state_lock, flags); */
 
 			vfe_proc_ops(VFE_MSG_ID_SNAPSHOT_DONE, NULL);
-			vfe_camif_stop_immediately();
 			vfe_prog_hw_testgen_cmd(VFE_TEST_GEN_STOP);
 			vfe_pm_stop();
 		}
@@ -2041,7 +2109,8 @@ void vfe_stats_wb_exp_ack(struct vfe_cmd_stats_wb_exp_ack *in)
 	ctrl->awbStatsControl.ackPending = FALSE;
 }
 
-void vfe_output2_ack(struct vfe_cmd_output_ack *in)
+
+void vfe_output_v_ack(struct vfe_cmd_output_ack *in)
 {
 	const uint32_t *psrc;
 	uint32_t *pdest;
@@ -2049,7 +2118,7 @@ void vfe_output2_ack(struct vfe_cmd_output_ack *in)
 
 	pdest = ctrl->encPath.nextFrameAddrBuf;
 
-	CDBG("output2_ack: ack addr = 0x%x\n", in->ybufaddr[0]);
+	CDBG("video_frame_ack: ack addr = 0x%x\n", in->ybufaddr[0]);
 
 	psrc = in->ybufaddr;
 	for (i = 0; i < ctrl->encPath.fragCount; i++)
@@ -2062,11 +2131,14 @@ void vfe_output2_ack(struct vfe_cmd_output_ack *in)
 	ctrl->encPath.ackPending = FALSE;
 }
 
-void vfe_output1_ack(struct vfe_cmd_output_ack *in)
+void vfe_output_p_ack(struct vfe_cmd_output_ack *in)
 {
 	const uint32_t *psrc;
 	uint32_t *pdest;
 	uint8_t i;
+
+	if (ctrl->axiOutputMode == VFE_AXI_OUTPUT_MODE_Output1AndOutput2) {
+		/* video mode, preview comes from output1 path */
 
 	pdest = ctrl->viewPath.nextFrameAddrBuf;
 
@@ -2079,6 +2151,21 @@ void vfe_output1_ack(struct vfe_cmd_output_ack *in)
 		*pdest++ = *psrc++;
 
 	ctrl->viewPath.ackPending = FALSE;
+
+	} else { /* preview mode, preview comes from output2 path. */
+		pdest = ctrl->encPath.nextFrameAddrBuf;
+
+		psrc = in->ybufaddr;
+		for (i = 0; i < ctrl->encPath.fragCount; i++)
+			*pdest++ = *psrc++;
+
+		psrc = in->chromabufaddr;
+		for (i = 0; i < ctrl->encPath.fragCount; i++)
+			*pdest++ = *psrc++;
+
+		ctrl->encPath.ackPending = FALSE;
+
+	}
 }
 
 void vfe_start(struct vfe_cmd_start *in)
