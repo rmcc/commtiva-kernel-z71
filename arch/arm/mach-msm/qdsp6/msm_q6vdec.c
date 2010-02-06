@@ -746,6 +746,7 @@ static int vdec_open(struct inode *inode, struct file *file)
 	int i;
 	struct vdec_msg_list *l;
 	struct vdec_data *vd;
+	struct dal_info version_info;
 
 	pr_info("q6vdec_open()\n");
 	mutex_lock(&vdec_ref_lock);
@@ -792,11 +793,26 @@ static int vdec_open(struct inode *inode, struct file *file)
 		ret = -EIO;
 		goto vdec_open_err_handle_list;
 	}
+	ret = dal_call_f9(vd->vdec_handle, DAL_OP_INFO,
+				&version_info, sizeof(struct dal_info));
+
+	if (ret) {
+		pr_err("%s: failed to get version \n", __func__);
+		goto vdec_open_err_handle_version;
+	}
+
+	TRACE("q6vdec_open() interface version 0x%x\n", version_info.version);
+	if (vdec_check_version(VDEC_INTERFACE_VERSION,
+			version_info.version)) {
+		pr_err("%s: driver version mismatch !\n", __func__);
+		goto vdec_open_err_handle_version;
+	}
 
 	vd->running = 1;
 
 	return 0;
-
+vdec_open_err_handle_version:
+	dal_detach(vd->vdec_handle);
 vdec_open_err_handle_list:
 	{
 		struct vdec_msg_list *l, *n;
