@@ -221,9 +221,20 @@ static int audevrc_enable(struct audio *audio)
 /* must be called with audio->lock held */
 static int audevrc_disable(struct audio *audio)
 {
+	int rc = 0;
 	if (audio->enabled) {
 		audio->enabled = 0;
+		audio->dec_state = MSM_AUD_DECODER_STATE_NONE;
 		auddec_dsp_config(audio, 0);
+		rc = wait_event_interruptible_timeout(audio->wait,
+				audio->dec_state != MSM_AUD_DECODER_STATE_NONE,
+				msecs_to_jiffies(MSM_AUD_DECODER_WAIT_MS));
+		if (rc == 0)
+			rc = -ETIMEDOUT;
+		else if (audio->dec_state != MSM_AUD_DECODER_STATE_CLOSE)
+			rc = -EFAULT;
+		else
+			rc = 0;
 		wake_up(&audio->write_wait);
 		wake_up(&audio->read_wait);
 		msm_adsp_disable(audio->audplay);
@@ -232,7 +243,7 @@ static int audevrc_disable(struct audio *audio)
 			audmgr_disable(&audio->audmgr);
 		audio->out_needed = 0;
 	}
-	return 0;
+	return rc;
 }
 
 /* ------------------- dsp --------------------- */
@@ -315,6 +326,11 @@ static void audevrc_dsp_event(void *private, unsigned id, uint16_t *msg)
 					AUDPP_MSG_REASON_NODECODER)) {
 					audio->dec_state =
 						MSM_AUD_DECODER_STATE_FAILURE;
+					wake_up(&audio->wait);
+				} else if (reason == AUDPP_MSG_REASON_NONE) {
+					/* decoder is in disable state */
+					audio->dec_state =
+						MSM_AUD_DECODER_STATE_CLOSE;
 					wake_up(&audio->wait);
 				}
 				break;
@@ -772,6 +788,8 @@ static long audevrc_ioctl(struct file *file, unsigned int cmd,
 	mutex_lock(&audio->lock);
 	switch (cmd) {
 	case AUDIO_START:
+		MM_DBG("AUDIO_START\n");
+		audio->dec_state = MSM_AUD_DECODER_STATE_NONE;
 		rc = audevrc_enable(audio);
 		if (!rc) {
 			rc = wait_event_interruptible_timeout(audio->wait,
@@ -786,6 +804,7 @@ static long audevrc_ioctl(struct file *file, unsigned int cmd,
 		}
 		break;
 	case AUDIO_STOP:
+		MM_DBG("AUDIO_STOP\n");
 		rc = audevrc_disable(audio);
 		audio->stopped = 1;
 		audevrc_ioport_reset(audio);

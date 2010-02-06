@@ -218,6 +218,7 @@ enum msm_aud_decoder_state {
 	MSM_AUD_DECODER_STATE_NONE = 0,
 	MSM_AUD_DECODER_STATE_FAILURE = 1,
 	MSM_AUD_DECODER_STATE_SUCCESS = 2,
+	MSM_AUD_DECODER_STATE_CLOSE = 3,
 };
 
 int audpp_adec_alloc(unsigned dec_attrb, const char **module_name,
