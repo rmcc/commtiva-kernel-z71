@@ -50,7 +50,7 @@ static void vfe_config_axi(int mode,
 			   struct axidata *ad,
 			   struct vfe_cmd_axi_output_config *ao)
 {
-	struct msm_pmem_region *regptr, *regptr1;
+	struct msm_pmem_region *regptr;
 	int i, j;
 	uint32_t *p1, *p2;
 
@@ -100,57 +100,6 @@ static void vfe_config_axi(int mode,
 			regptr++;
 		}
 	}
-	/* For video configuration */
-	if (mode == OUTPUT_1_AND_3) {
-		/* this is preview buffer. */
-		regptr =  &(ad->region[0]);
-		/* this is video buffer. */
-		regptr1 = &(ad->region[ad->bufnum1]);
-		CDBG("bufnum1 = %d\n", ad->bufnum1);
-		CDBG("bufnum2 = %d\n", ad->bufnum2);
-
-	for (i = 0; i < ad->bufnum1; i++) {
-		p1 = &(ao->output1.outputY.outFragments[i][0]);
-		p2 = &(ao->output1.outputCbcr.outFragments[i][0]);
-
-		CDBG("config_axi: O1, phy = 0x%lx, y_off = %d, "\
-			 "cbcr_off = %d\n", regptr->paddr,
-			 regptr->info.y_off, regptr->info.cbcr_off);
-
-			for (j = 0; j < ao->output1.fragmentCount; j++) {
-
-				*p1 = regptr->paddr + regptr->info.y_off;
-				CDBG("vfe_config_axi: p1 = 0x%x\n", *p1);
-				p1++;
-
-				*p2 = regptr->paddr + regptr->info.cbcr_off;
-				CDBG("vfe_config_axi: p2 = 0x%x\n", *p2);
-				p2++;
-			}
-			regptr++;
-		}
-	for (i = 0; i < ad->bufnum2; i++) {
-		p1 = &(ao->output2.outputY.outFragments[i][0]);
-		p2 = &(ao->output2.outputCbcr.outFragments[i][0]);
-
-		CDBG("config_axi: O2, phy = 0x%lx, y_off = %d, "\
-			 "cbcr_off = %d\n", regptr1->paddr,
-			 regptr1->info.y_off, regptr1->info.cbcr_off);
-
-			for (j = 0; j < ao->output2.fragmentCount; j++) {
-
-				*p1 = regptr1->paddr + regptr1->info.y_off;
-				CDBG("vfe_config_axi: p1 = 0x%x\n", *p1);
-				p1++;
-
-				*p2 = regptr1->paddr + regptr1->info.cbcr_off;
-				CDBG("vfe_config_axi: p2 = 0x%x\n", *p2);
-				p2++;
-			}
-			regptr1++;
-		}
-	}
-
 }
 
 #define CHECKED_COPY_FROM_USER(in) {					\
@@ -625,16 +574,18 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		b = (struct msm_frame *)(cmd->value);
 		p = *(unsigned long *)data;
 
+		b->path = MSM_FRAME_ENC;
+
 			fack.ybufaddr[0] = (uint32_t) (p + b->y_off);
 
 			fack.chromabufaddr[0] = (uint32_t) (p + b->cbcr_off);
 
-		if (b->path == OUTPUT_TYPE_P)
-			vfe_output_p_ack(&fack);
+		if (b->path == MSM_FRAME_PREV_1)
+			vfe_output1_ack(&fack);
 
-		if ((b->path == OUTPUT_TYPE_V)
-			 || (b->path == OUTPUT_TYPE_S))
-			vfe_output_v_ack(&fack);
+		if (b->path == MSM_FRAME_ENC ||
+		    b->path == MSM_FRAME_PREV_2)
+			vfe_output2_ack(&fack);
 	}
 		break;
 
@@ -692,21 +643,6 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		}
 
 			vfe_config_axi(OUTPUT_1_AND_2, axid, &axio);
-			vfe_axi_output_config(&axio);
-	}
-		break;
-
-	case CMD_AXI_CFG_VIDEO: {
-			BUG_ON(!axid);
-
-			if (copy_from_user(&axio, (void __user *)(vfecmd.value),
-				sizeof(axio))) {
-				pr_err("%s %d: copy_from_user failed\n",
-					__func__, __LINE__);
-			return -EFAULT;
-		}
-			vfe_config_axi(OUTPUT_1_AND_3, axid, &axio);
-			axio.outputDataSize = 0;
 			vfe_axi_output_config(&axio);
 	}
 		break;
