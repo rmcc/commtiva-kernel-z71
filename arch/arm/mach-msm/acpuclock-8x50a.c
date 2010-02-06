@@ -154,8 +154,6 @@ struct clock_state {
 	struct mutex			lock;
 	uint32_t			acpu_switch_time_us;
 	uint32_t			max_speed_delta_khz;
-	unsigned long			power_collapse_khz;
-	unsigned long			wait_for_irq_khz;
 	unsigned int			max_vdd;
 	int (*acpu_set_vdd) (int mvolts);
 };
@@ -178,17 +176,19 @@ uint32_t acpuclk_get_switch_time(void)
 	return drv_state.acpu_switch_time_us;
 }
 
+#define POWER_COLLAPSE_KHZ 128000
 unsigned long acpuclk_power_collapse(void)
 {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(drv_state.power_collapse_khz, SETRATE_PC);
+	acpuclk_set_rate(POWER_COLLAPSE_KHZ, SETRATE_PC);
 	return ret;
 }
 
+#define WAIT_FOR_IRQ_KHZ 128000
 unsigned long acpuclk_wait_for_irq(void)
 {
 	int ret = acpuclk_get_rate();
-	acpuclk_set_rate(drv_state.wait_for_irq_khz, SETRATE_SWFI);
+	acpuclk_set_rate(WAIT_FOR_IRQ_KHZ, SETRATE_SWFI);
 	return ret;
 }
 
@@ -514,8 +514,6 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	mutex_init(&drv_state.lock);
 	drv_state.acpu_switch_time_us = clkdata->acpu_switch_time_us;
 	drv_state.max_speed_delta_khz = clkdata->max_speed_delta_khz;
-	drv_state.power_collapse_khz = clkdata->power_collapse_khz;
-	drv_state.wait_for_irq_khz = clkdata->wait_for_irq_khz;
 	drv_state.max_vdd = clkdata->max_vdd;
 	drv_state.acpu_set_vdd = clkdata->acpu_set_vdd;
 

@@ -1535,8 +1535,6 @@ static struct msm_acpu_clock_platform_data qsd8x50_clock_data = {
 	.acpu_switch_time_us = 20,
 	.max_speed_delta_khz = 256000,
 	.vdd_switch_time_us = 62,
-	.power_collapse_khz = 128000,
-	.wait_for_irq_khz = 128000,
 	.max_vdd = TPS65023_MAX_DCDC1,
 	.acpu_set_vdd = qsd8x50_tps65023_set_dcdc1,
 };
