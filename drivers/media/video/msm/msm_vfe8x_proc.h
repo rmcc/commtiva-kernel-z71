@@ -1557,6 +1557,6 @@ void vfe_fov_crop_config(struct vfe_cmd_fov_crop_config *);
 void vfe_get_hw_version(struct vfe_cmd_hw_version *);
 void vfe_reset(void);
 void vfe_cmd_release(struct platform_device *);
-void vfe_output_p_ack(struct vfe_cmd_output_ack *);
-void vfe_output_v_ack(struct vfe_cmd_output_ack *);
+void vfe_output1_ack(struct vfe_cmd_output_ack *);
+void vfe_output2_ack(struct vfe_cmd_output_ack *);
 #endif /* __MSM_VFE8X_REG_H__ */
