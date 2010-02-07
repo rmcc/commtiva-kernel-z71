@@ -102,7 +102,7 @@ struct msm_vfe8x_ctrl {
 };
 
 static struct msm_vfe8x_ctrl *ctrl;
-
+static spinlock_t msm_vfe_ctrl_lock;
 
 static void vfe_prog_hw(uint8_t *hwreg, uint32_t *inptr, uint32_t regcnt)
 {
@@ -1742,10 +1742,14 @@ static void put_irq_cmd(void)
 static void vfe_do_work(struct work_struct *work)
 {
 	int cnt = 0;
+	unsigned long flags;
 	struct isr_queue_cmd *qcmd = NULL;
 
-	if (!ctrl)
+	spin_lock_irqsave(&msm_vfe_ctrl_lock, flags);
+	if (!ctrl) {
+		spin_unlock_irqrestore(&msm_vfe_ctrl_lock, flags);
 		return;
+	}
 
 	CDBG("%s\n", __func__);
 
@@ -1757,6 +1761,8 @@ static void vfe_do_work(struct work_struct *work)
 
 	if (cnt > ARRAY_SIZE(ctrl->irqs)/2)
 		pr_info("%s: serviced %d vfe interrupts\n", __func__, cnt);
+
+	spin_unlock_irqrestore(&msm_vfe_ctrl_lock, flags);
 }
 
 DECLARE_WORK(vfe_work, vfe_do_work);
@@ -1886,6 +1892,7 @@ cmd_init_failed1:
 void vfe_cmd_release(struct platform_device *dev)
 {
 	struct resource	*mem;
+	unsigned long flags;
 
 	disable_irq(ctrl->vfeirq);
 	free_irq(ctrl->vfeirq, 0);
@@ -1894,8 +1901,10 @@ void vfe_cmd_release(struct platform_device *dev)
 	mem = platform_get_resource(dev, IORESOURCE_MEM, 0);
 	release_mem_region(mem->start, (mem->end - mem->start) + 1);
 
+	spin_lock_irqsave(&msm_vfe_ctrl_lock, flags);
 	kfree(ctrl);
 	ctrl = 0;
+	spin_unlock_irqrestore(&msm_vfe_ctrl_lock, flags);
 }
 
 void vfe_stats_af_stop(void)
@@ -3842,6 +3851,7 @@ static void vfe_reset_internal_variables(void)
 
 void vfe_reset(void)
 {
+	spin_lock_init(&msm_vfe_ctrl_lock);
 	vfe_reset_internal_variables();
 
 	ctrl->vfeImaskLocal.resetAckIrq = TRUE;
