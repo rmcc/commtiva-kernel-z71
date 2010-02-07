@@ -83,9 +83,7 @@ enum {
 	VDEC_BUFFER_TYPE_OUTPUT,
 	VDEC_BUFFER_TYPE_INTERNAL1,
 	VDEC_BUFFER_TYPE_INTERNAL2,
-	VDEC_BUFFER_TYPE_INTERNAL = VDEC_BUFFER_TYPE_INTERNAL1,
-	VDEC_BUFFER_TYPE_LUMA,
-	VDEC_BUFFER_TYPE_CHROMA
+	VDEC_BUFFER_TYPE_INTERNAL
 };
 
 enum {
@@ -101,14 +99,8 @@ enum {
 	VDEC_PROPERTY_DIMENSION,
 	VDEC_PROPERTY_CWIN,
 	VDEC_PROPERTY_INPUT_BUF_REQ,
-	VDEC_PROPERTY_OUTPUT_BUF_REQ,
-	VDEC_LUMA_CHROMA_STRIDE
+	VDEC_PROPERTY_OUTPUT_BUF_REQ
 };
-
-enum{
-	VDEC_COLOR_FORMAT_NV21 = 0x01,
-	VDEC_COLOR_FORMAT_NV21_YAMOTO = 0x02
-   };
 
 struct vdec_input_buf_info {
 	u32 offset;
@@ -198,11 +190,6 @@ struct vdec_rectangle {
 	u32 height;
 };
 
-struct vdec_stridetype {
-	u32 luma;
-	u32 chroma;
-};
-
 struct vdec_frame_info {
 	u32 status;		/* video decode status */
 	u32 offset;		/* buffer offset */
@@ -229,9 +216,6 @@ struct vdec_frame_info {
 	u32 flags;		/* input flags */
 	u32 performance_stats;	/* performance statistics returned by decoder */
 	u32 data3;              /* user data field 3 */
-	u32 chroma_addr;
-	struct vdec_stridetype stride;
-	u32 reserved;
 };
 
 struct vdec_buf_info {
@@ -337,7 +321,6 @@ union vdec_property {
 	struct vdec_cropping_window cwin;
 	struct vdec_buf_desc input;
 	struct vdec_buf_desc output;
-	struct vdec_stridetype stride;
 	u32 def_type;
 };
 
