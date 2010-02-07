@@ -254,8 +254,10 @@ static int diagchar_read(struct file *file, char __user *buf, size_t count,
 		if (driver->client_map[i] == current->tgid)
 			index = i;
 
-	if (index == -1)
+	if (index == -1) {
+		printk(KERN_ALERT "\n Client PID not found in table");
 		return -EINVAL;
+	}
 
 	wait_event_interruptible(driver->wait_q,
 				  driver->data_ready[index]);

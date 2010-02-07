@@ -600,7 +600,7 @@ void diagfwd_init(void)
 		goto err;
 	if (driver->client_map == NULL &&
 	    (driver->client_map = kzalloc
-	     (driver->num_clients, GFP_KERNEL)) == NULL)
+	     ((driver->num_clients) * 4, GFP_KERNEL)) == NULL)
 		goto err;
 	if (driver->data_ready == NULL &&
 	     (driver->data_ready = kzalloc(driver->num_clients,
