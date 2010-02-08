@@ -2224,6 +2224,12 @@ config FB_MSM_MDDI_TOSHIBA_COMMON_VGA
 	select FB_MSM_MDDI_TOSHIBA_COMMON
 	default n
 
+config FB_MSM_MDDI_ORISE
+	depends on FB_MSM_MDDI_2
+	bool
+	select FB_MSM_MDDI
+	default n
+
 config FB_MSM_MDDI_AUTO_DETECT
 	bool
 	select FB_MSM_MDDI
