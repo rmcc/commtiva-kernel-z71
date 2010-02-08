@@ -51,8 +51,10 @@
   #define FMDBG(fmt, args...)
 #endif
 
+#define MARIMBA_2_1 0x02010204
 #define WAIT_TIMEOUT 2000
-#define TAVARUA_DELAY 20
+#define RADIO_INIT_TIME 15
+#define TAVARUA_DELAY 10
 /*
  * The frequency is set in units of 62.5 Hz when using V4L2_TUNER_CAP_LOW,
  * 62.5 kHz otherwise.
@@ -116,7 +118,7 @@ enum tavarua_xfr_t {
 #define STATUS_REG_NUM 	3
 
 enum register_t {
-	STATUS_REG1,
+	STATUS_REG1 = 0,
 	STATUS_REG2,
 	STATUS_REG3,
 	RDCTRL,
