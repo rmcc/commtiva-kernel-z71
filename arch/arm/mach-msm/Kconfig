@@ -596,13 +596,20 @@ config MSM_ONCRPCROUTER_DEBUG
 	  Support for debugging the ONCRPC router for communication
 	  between the ARM9 and ARM11
 
-config MSM_RPCSERVERS
-	depends on MSM_ONCRPCROUTER
-	select RTC_HCTOSYS
+config MSM_RPCSERVER_TIME_REMOTE
+	depends on MSM_ONCRPCROUTER && RTC_HCTOSYS
 	default y
-	bool "Kernel side RPC server bundle"
+	bool "Time remote RPC server"
 	help
-	  none
+	  The time remote server receives notification of time bases and
+	  reports these events to registered callback functions.
+
+config MSM_RPCSERVER_WATCHDOG
+	depends on MSM_ONCRPCROUTER
+	default y
+	bool "Watchdog RPC server"
+	help
+	  The dog_keepalive server handles watchdog events.
 
 config MSM_RPC_PING
 	depends on MSM_ONCRPCROUTER && DEBUG_FS
