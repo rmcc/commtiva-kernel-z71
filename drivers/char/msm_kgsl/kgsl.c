@@ -926,7 +926,7 @@ static int kgsl_ioctl_sharedmem_from_pmem(struct kgsl_file_private *private,
 		if (!param.len)
 			param.len = len;
 
-		if (param.offset + param.len >= len) {
+		if (param.offset + param.len > len) {
 			KGSL_DRV_ERR("%s: region too large "
 					"0x%x + 0x%x >= 0x%lx\n",
 				     __func__, param.offset, param.len, len);
