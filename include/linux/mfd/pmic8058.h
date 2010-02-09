@@ -49,6 +49,9 @@
 #define PM8058_GPIOS		NR_PMIC8058_GPIO_IRQS
 #define PM8058_MPPS		NR_PMIC8058_MPP_IRQS
 
+/* IRQ# for GPIO number = 1 .. PM8058_GPIOS */
+#define PM8058_IRQ_GPIO(n)	(PM8058_FIRST_GPIO_IRQ + (n) - 1)
+
 #define PM8058_MAX_SUBDEVICES	16
 
 struct pm8058_platform_data {
@@ -61,13 +64,16 @@ struct pm8058_platform_data {
 };
 
 /* GPIO parameters */
+/* direction */
 #define	PM_GPIO_DIR_OUT			0x01
 #define	PM_GPIO_DIR_IN			0x02
 #define	PM_GPIO_DIR_BOTH		(PM_GPIO_DIR_OUT | PM_GPIO_DIR_IN)
 
+/* output_buffer */
 #define	PM_GPIO_OUT_BUF_OPEN_DRAIN	1
 #define	PM_GPIO_OUT_BUF_CMOS		0
 
+/* pull */
 #define	PM_GPIO_PULL_UP_30		0
 #define	PM_GPIO_PULL_UP_1P5		1
 #define	PM_GPIO_PULL_UP_31P5		2
@@ -75,15 +81,31 @@ struct pm8058_platform_data {
 #define	PM_GPIO_PULL_DN			4
 #define	PM_GPIO_PULL_NO			5
 
+/* vin_sel: Voltage Input Select */
+#define	PM_GPIO_VIN_VPH			0
+#define	PM_GPIO_VIN_BB			1
+#define	PM_GPIO_VIN_S3			2
+#define	PM_GPIO_VIN_L3			3
+#define	PM_GPIO_VIN_L7			4
+#define	PM_GPIO_VIN_L6			5
+#define	PM_GPIO_VIN_L5			6
+#define	PM_GPIO_VIN_L2			7
+
+/* out_strength */
 #define	PM_GPIO_STRENGTH_NO		0
 #define	PM_GPIO_STRENGTH_HIGH		1
 #define	PM_GPIO_STRENGTH_MED		2
 #define	PM_GPIO_STRENGTH_LOW		3
 
+/* function */
 #define	PM_GPIO_FUNC_NORMAL		0
 #define	PM_GPIO_FUNC_PAIRED		1
 #define	PM_GPIO_FUNC_1			2
 #define	PM_GPIO_FUNC_2			3
+#define	PM_GPIO_DTEST1			4
+#define	PM_GPIO_DTEST2			5
+#define	PM_GPIO_DTEST3			6
+#define	PM_GPIO_DTEST4			7
 
 struct pm8058_gpio {
 	int		direction;
