@@ -113,6 +113,7 @@ printk(KERN_DEBUG format, ## arg)
 #define MI2S_RX_MODE__MI2S_RX_DMA_ACK_SYNCH_EN__SYNC_ENABLE 0x1
 
 #define HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_BMSK				0x1000
+#define HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_SHFT				0xC
 #define HWIO_AUDIO1_MI2S_MODE_MI2S_TX_RX_WORD_TYPE_BMSK  		0x300
 #define HWIO_AUDIO1_MI2S_MODE_MI2S_TX_RX_WORD_TYPE_SHFT  		0x8
 #define HWIO_AUDIO1_MI2S_TX_MODE_MI2S_TX_STEREO_MODE_BMSK		0x4
@@ -193,7 +194,7 @@ static void mi2s_release(struct mi2s_state *mi2s, uint8_t dev_id)
 		baddr + MI2S_RESET_OFFSET);
 }
 
-/*static void mi2s_master(struct mi2s_state *mi2s, uint8_t dev_id, bool master)
+static void mi2s_master(struct mi2s_state *mi2s, uint8_t dev_id, bool master)
 {
 	void __iomem *baddr = get_base_addr(mi2s, dev_id);
 	uint32_t val;
@@ -202,16 +203,18 @@ static void mi2s_release(struct mi2s_state *mi2s, uint8_t dev_id)
 		if (master) {
 			writel(
 			((val & ~HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_BMSK) |
-			MI2S_MODE__MI2S_MASTER__MASTER),
+			 (MI2S_MODE__MI2S_MASTER__MASTER <<
+			  HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_SHFT)),
 			baddr + MI2S_MODE_OFFSET);
 		} else {
 			writel(
 			((val & ~HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_BMSK) |
-			MI2S_MODE__MI2S_MASTER__SLAVE),
+			 (MI2S_MODE__MI2S_MASTER__SLAVE <<
+			  HWIO_AUDIO1_MI2S_MODE_MI2S_MASTER_SHFT)),
 			baddr + MI2S_MODE_OFFSET);
 		}
 	}
-}*/
+}
 
 static void mi2s_set_word_type(struct mi2s_state *mi2s, uint8_t dev_id,
 	uint8_t size)
@@ -443,6 +446,8 @@ bool mi2s_set_hdmi_output_path(uint8_t channels, uint8_t size, uint8_t sd_line)
 	/* Put device in reset */
 	mi2s_reset(mi2s, HDMI);
 
+	mi2s_master(mi2s, HDMI, 1);
+
 	/* Set word type */
 	if (size <= WT_MAX)
 		mi2s_set_word_type(mi2s, HDMI, size);
@@ -528,6 +533,8 @@ bool mi2s_set_hdmi_input_path(uint8_t channels, uint8_t size, uint8_t sd_line)
 	/* Put device in reset */
 	mi2s_reset(mi2s, HDMI);
 
+	mi2s_master(mi2s, HDMI, 1);
+
 	/* Set word type */
 	if (size <= WT_MAX)
 		mi2s_set_word_type(mi2s, HDMI, size);
@@ -572,6 +579,8 @@ bool mi2s_set_codec_output_path(uint8_t channels, uint8_t size)
 	/* Put device in reset */
 	mi2s_reset(mi2s, CODEC_TX);
 
+	mi2s_master(mi2s, CODEC_TX, 1);
+
 	/* Enable clock crossing synchronization of RD DMA ACK */
 	mi2s_set_output_clk_synch(mi2s, CODEC_TX);
 
@@ -603,6 +612,8 @@ bool mi2s_set_codec_input_path(uint8_t channels, uint8_t size)
 	mutex_lock(&the_mi2s_state.mutex_lock);
 	/* Put device in reset */
 	mi2s_reset(mi2s, CODEC_RX);
+
+	mi2s_master(mi2s, CODEC_RX, 1);
 
 	/* Enable clock crossing synchronization of WR DMA ACK */
 	mi2s_set_input_clk_synch(mi2s, CODEC_RX);
