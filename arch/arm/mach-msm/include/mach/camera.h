@@ -42,7 +42,6 @@
 #define NUM_AUTOFOCUS_MULTI_WINDOW_GRIDS 16
 #define NUM_STAT_OUTPUT_BUFFERS      3
 #define NUM_AF_STAT_OUTPUT_BUFFERS      3
-#define MSM_AXI_QOS_PREVIEW	128000
 
 enum msm_queue {
 	MSM_CAM_Q_CTRL,     /* control command or control command status */
