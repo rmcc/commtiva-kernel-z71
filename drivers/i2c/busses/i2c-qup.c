@@ -151,6 +151,7 @@ struct qup_i2c_dev {
 	int                          out_irq;
 	int                          err_irq;
 	struct clk                   *clk;
+	struct clk                   *pclk;
 	struct i2c_adapter           adapter;
 
 	struct i2c_msg               *msg;
@@ -670,7 +671,7 @@ qup_i2c_probe(struct platform_device *pdev)
 	struct qup_i2c_dev	*dev;
 	struct resource         *qup_mem, *gsbi_mem, *qup_io, *gsbi_io;
 	struct resource		*in_irq, *out_irq, *err_irq;
-	struct clk         *clk;
+	struct clk         *clk, *pclk;
 	int ret = 0;
 	struct msm_i2c_platform_data *pdata;
 
@@ -733,6 +734,17 @@ qup_i2c_probe(struct platform_device *pdev)
 		goto err_clk_get_failed;
 	}
 
+	if (pdata->pclk != NULL) {
+		pclk = clk_get(&pdev->dev, pdata->pclk);
+		if (IS_ERR(pclk)) {
+			dev_err(&pdev->dev, "Could not get pclock\n");
+			ret = PTR_ERR(pclk);
+			clk_put(clk);
+			goto err_clk_get_failed;
+		}
+	} else
+		pclk = NULL;
+
 	if (!(pdata->msm_i2c_config_gpio)) {
 		dev_err(&pdev->dev, "config_gpio function not initialized\n");
 		ret = -ENOSYS;
@@ -758,6 +770,7 @@ qup_i2c_probe(struct platform_device *pdev)
 	dev->out_irq = out_irq->start;
 	dev->err_irq = err_irq->start;
 	dev->clk = clk;
+	dev->pclk = pclk;
 	dev->base = ioremap(qup_mem->start, resource_size(qup_mem));
 	if (!dev->base) {
 		ret = -ENOMEM;
@@ -774,6 +787,8 @@ qup_i2c_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dev);
 
 	clk_enable(clk);
+	if (pclk)
+		clk_enable(pclk);
 	dev->pdata = pdata;
 	dev->clk_ctl = 0;
 
@@ -822,6 +837,8 @@ err_request_irq_failed:
 	i2c_del_adapter(&dev->adapter);
 err_i2c_add_adapter_failed:
 	clk_disable(clk);
+	if (pclk)
+		clk_disable(pclk);
 	iounmap(dev->gsbi);
 err_gsbi_failed:
 	iounmap(dev->base);
@@ -830,6 +847,8 @@ err_ioremap_failed:
 err_alloc_dev_failed:
 err_config_failed:
 	clk_put(clk);
+	if (pclk)
+		clk_put(pclk);
 err_clk_get_failed:
 	release_mem_region(gsbi_mem->start, resource_size(gsbi_mem));
 	release_mem_region(qup_mem->start, resource_size(qup_mem));
@@ -849,6 +868,10 @@ qup_i2c_remove(struct platform_device *pdev)
 	i2c_del_adapter(&dev->adapter);
 	clk_disable(dev->clk);
 	clk_put(dev->clk);
+	if (dev->pclk) {
+		clk_disable(dev->pclk);
+		clk_put(dev->pclk);
+	}
 	iounmap(dev->gsbi);
 	iounmap(dev->base);
 	kfree(dev);
@@ -867,6 +890,8 @@ static int qup_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 	struct qup_i2c_dev *dev = platform_get_drvdata(pdev);
 
 	clk_disable(dev->clk);
+	if (dev->pclk)
+		clk_disable(dev->pclk);
 	return 0;
 }
 
@@ -875,6 +900,8 @@ static int qup_i2c_resume(struct platform_device *pdev)
 	struct qup_i2c_dev *dev = platform_get_drvdata(pdev);
 
 	clk_enable(dev->clk);
+	if (dev->pclk)
+		clk_enable(dev->pclk);
 	return 0;
 }
 #else
