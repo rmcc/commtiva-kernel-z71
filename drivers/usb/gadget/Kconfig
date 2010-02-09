@@ -742,6 +742,31 @@ config USB_ANDROID_CDC_ECM
 	  android gadget.
 	  Say "y" to link the CDC-ECM as a part of android gadget
 
+config USB_ANDROID_RMNET
+	bool "RmNet function driver"
+	depends on USB_ANDROID
+	default n
+	help
+	  Enabling this option adds rmnet support to the
+	  android gadget. Rmnet is an alternative to CDC-ECM
+	  and Windows RNDIS. It uses QUALCOMM MSM Interface
+	  for control transfers. It acts like a bridge between
+	  Host and modem found in MSM chipsets.
+
+config RMNET_SMD_CTL_CHANNEL
+	string "control SMD channel name"
+	depends on USB_ANDROID_RMNET
+	default ""
+	help
+	  Control SMD channel for transferring QMI messages
+
+config RMNET_SMD_DATA_CHANNEL
+	string "Data SMD channel name"
+	depends on USB_ANDROID_RMNET
+	default ""
+	help
+	  Data SMD channel for transferring network data
+
 config USB_F_SERIAL
 	tristate "generic serial function driver"
 	depends on USB_ANDROID
