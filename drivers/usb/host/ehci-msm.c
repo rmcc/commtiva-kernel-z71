@@ -385,9 +385,7 @@ static irqreturn_t ehci_msm_irq(struct usb_hcd *hcd)
 static int ehci_msm_bus_suspend(struct usb_hcd *hcd)
 {
 	int ret;
-#ifdef CONFIG_USB_MSM_OTG_72K
 	struct msmusb_hcd *mhcd = hcd_to_mhcd(hcd);
-#endif
 
 	ret = ehci_bus_suspend(hcd);
 	if (ret) {
