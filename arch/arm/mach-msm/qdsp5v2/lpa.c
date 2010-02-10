@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -453,6 +453,18 @@ int lpa_cmd_codec_config(struct lpa_drv *lpa,
 		break;
 	case 44100:
 		sample_rate = LPA_SAMPLE_RATE_44P1KHZ;
+		break;
+	case 32000:
+		sample_rate = LPA_SAMPLE_RATE_32KHZ;
+		break;
+	case 22050:
+		sample_rate = LPA_SAMPLE_RATE_22P05KHZ;
+		break;
+	case 16000:
+		sample_rate = LPA_SAMPLE_RATE_16KHZ;
+		break;
+	case 11025:
+		sample_rate = LPA_SAMPLE_RATE_11P025KHZ;
 		break;
 	case 8000:
 		sample_rate = LPA_SAMPLE_RATE_8KHZ;
