@@ -314,18 +314,13 @@ void pm_qos_remove_requirement(int pm_qos_class, char *name)
 	struct pm_qos_object *class = pm_qos_array[pm_qos_class];
 	struct requirement_list *node;
 	int pending_update = 0;
-	int (*remove_fn)(struct pm_qos_object *, char *, s32, void **) = NULL;
-	s32 value = 0;
-	void **node_data = NULL;
+	void *node_data = NULL;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
 	list_for_each_entry(node,
 		&class->requirements.list, list) {
 		if (strcmp(node->name, name) == 0) {
-			remove_fn = class->remove_fn;
-			value = class->default_value;
-			node_data = &node->data;
-
+			node_data = node->data;
 			kfree(node->name);
 			list_del(&node->list);
 			kfree(node);
@@ -335,8 +330,9 @@ void pm_qos_remove_requirement(int pm_qos_class, char *name)
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
-	if (pending_update && remove_fn)
-		remove_fn(class, name, value, node_data);
+	if (pending_update && class->remove_fn)
+		class->remove_fn(class, name,
+			class->default_value, &node_data);
 }
 EXPORT_SYMBOL_GPL(pm_qos_remove_requirement);
 
