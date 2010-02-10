@@ -383,6 +383,10 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MNCNTR_MODE		BVAL(6, 5, 0x2) /* Dual-edge mode. */
 
 /* Register offsets used more than once. */
+#define EMDH_NS			0x0050
+#define PMDH_NS			0x008C
+#define UART_NS			0x00E0
+#define UART3_NS		0x0468
 #define USBH_MD			0x02BC
 #define USBH_NS			0x02C0
 #define USBH2_NS		0x046C
@@ -390,6 +394,7 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define CAM_VFE_NS		0x0044
 #define GLBL_CLK_ENA_SC		0x03BC
 #define GLBL_CLK_ENA_2_SC	0x03C0
+#define GRP_NS			0x0084
 #define SDAC_NS			0x009C
 #define TV_NS			0x00CC
 #define HDMI_NS			0x0484
@@ -398,6 +403,7 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MI2S_NS			0x02E0
 #define LPA_NS			0x02E8
 #define MDC_NS			0x007C
+#define MDP_LCDC_NS		0x0390
 #define MDP_VSYNC_REG		0x0460
 #define PLL_ENA_REG		0x0260
 
@@ -434,11 +440,11 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_1RATE(I2C,		0x0068, B(9), B(11),	clk_tbl_tcxo),
 	CLK_1RATE(I2C_2,	0x02D8, B(0), B(2),	clk_tbl_tcxo),
 	CLK_1RATE(QUP_I2C,	0x04F0, B(0), B(2),	clk_tbl_tcxo),
-	CLK_1RATE(UART1,	0x00E0, B(5), B(4),	clk_tbl_tcxo),
-	CLK_1RATE(UART3,	0x0468, B(5), B(4),	clk_tbl_tcxo),
+	CLK_1RATE(UART1,	UART_NS, B(5), B(4),	clk_tbl_tcxo),
+	CLK_1RATE(UART3,	UART3_NS, B(5), B(4),	clk_tbl_tcxo),
 
-	CLK_BASIC(EMDH,	0x0050,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
-	CLK_BASIC(PMDH,	0x008C,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
+	CLK_BASIC(EMDH,	EMDH_NS,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
+	CLK_BASIC(PMDH,	PMDH_NS,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
 	CLK_BASIC(MDP,	0x014C, B(9), B(11),	clk_tbl_mdp_core, AXI_MDP),
 
 	CLK_MND8_P(VPE, 0x015C, 22, 15, B(9), B(11), clk_tbl_vpe,
@@ -482,9 +488,9 @@ static struct clk_local clk_local_tbl[] = {
 							NONE, chld_sdac_m),
 	CLK_SLAVE(SDAC_S, SDAC_NS, B(9), SDAC_M),
 
-	CLK_MND16(MDP_LCDC_P, 0x0390, B(9), B(11), clk_tbl_mdp_lcdc,
+	CLK_MND16(MDP_LCDC_P, MDP_LCDC_NS, B(9), B(11), clk_tbl_mdp_lcdc,
 							NONE, chld_mdp_lcdc_p),
-	CLK_SLAVE(MDP_LCDC_PAD_P, 0x0390, B(12), MDP_LCDC_P),
+	CLK_SLAVE(MDP_LCDC_PAD_P, MDP_LCDC_NS, B(12), MDP_LCDC_P),
 	CLK_1RATE(MDP_VSYNC, MDP_VSYNC_REG, B(0), 0, clk_tbl_mdp_vsync),
 
 	CLK_MND16(MI2S_CODEC_RX_M, MI2S_RX_NS, B(12), B(11),
@@ -501,10 +507,10 @@ static struct clk_local clk_local_tbl[] = {
 
 	CLK_LOCAL(GRP_2D, BASIC, 0, 0x0034, F_MASK_BASIC | (7 << 12),
 			B(7), B(11), clk_tbl_grp, AXI_GRP_2D, NULL),
-	CLK_LOCAL(GRP_3D_SRC, BASIC, 0, 0x0084, F_MASK_BASIC | (7 << 12),
+	CLK_LOCAL(GRP_3D_SRC, BASIC, 0, GRP_NS, F_MASK_BASIC | (7 << 12),
 			0, B(11), clk_tbl_grp, AXI_LI_GRP, chld_grp_3d_src),
-	CLK_SLAVE(GRP_3D, 0x0084, B(7), GRP_3D_SRC),
-	CLK_SLAVE(IMEM, 0x0084, B(9), GRP_3D_SRC),
+	CLK_SLAVE(GRP_3D, GRP_NS, B(7), GRP_3D_SRC),
+	CLK_SLAVE(IMEM, GRP_NS, B(9), GRP_3D_SRC),
 	CLK_LOCAL(LPA_CODEC, BASIC, 0, LPA_NS, BM(1, 0), B(9), 0,
 					clk_tbl_lpa_codec, NONE, NULL),
 
@@ -916,8 +922,8 @@ static struct reg_init {
 
 	/* Enable UMDX_P clock. Known to causes issues, so never turn off. */
 	{REG(GLBL_CLK_ENA_2_SC), B(2), B(2)},
-	{REG(0x0050), 0x3 << 17, 0x3 << 17}, /* EMDH RX div = div-4. */
-	{REG(0x008C), 0x3 << 17, 0x3 << 17}, /* PMDH RX div = div-4. */
+	{REG(EMDH_NS), BM(18, 17) , BVAL(18, 17, 0x3)}, /* RX div = div-4. */
+	{REG(PMDH_NS), BM(18, 17), BVAL(18, 17, 0x3)}, /* RX div = div-4. */
 	/* MI2S_CODEC_RX_S src = MI2S_CODEC_RX_M. */
 	{REG(MI2S_RX_NS), B(14), 0x0},
 	/* MI2S_CODEC_TX_S src = MI2S_CODEC_TX_M. */
@@ -928,14 +934,14 @@ static struct reg_init {
 	{REG(0x02F0), 0xF, 0xD}, /* MI2S_CODEC_TX_S div = div-8. */
 	{REG(0x02E4), 0xF, 0x3}, /* MI2S_S div = div-4. */
 	{REG(MDC_NS), 0x3, 0x3}, /* MDC src = external MDH src. */
-	{REG(SDAC_NS), 0x3 << 14, 0x0}, /* SDAC div = div-1. */
+	{REG(SDAC_NS), BM(15, 14), 0x0}, /* SDAC div = div-1. */
 	/* Disable sources TCXO/5 & TCXO/6. UART1 src = TCXO*/
-	{REG(0x00E0), 0x3 << 25 | 0x7, 0x0},
-	{REG(0x0468), 0x7, 0x0}, /* UART3 src = TCXO. */
+	{REG(UART_NS), BM(26, 25) | BM(2, 0), 0x0},
+	{REG(UART3_NS), 0x7, 0x0}, /* UART3 src = TCXO. */
 	{REG(MDP_VSYNC_REG), 0xC, 0x4}, /* MDP VSYNC src = LPXO. */
 	/* HDMI div = div-1, non-inverted. tv_enc_src = tv_clk_src */
 	{REG(HDMI_NS), 0x7, 0x0},
-	{REG(0x00CC), 0x3 << 14, 0x0}, /* tv_clk_src_div2 = div-1 */
+	{REG(TV_NS), BM(15, 14), 0x0}, /* tv_clk_src_div2 = div-1 */
 
 	/* USBH core clocks src = USB_HS_SRC. */
 	{REG(USBH_NS), B(15), B(15)},
