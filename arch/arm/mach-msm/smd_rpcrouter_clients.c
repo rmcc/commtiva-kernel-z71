@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -61,6 +61,7 @@
 
 #include <linux/kernel.h>
 #include <linux/kthread.h>
+#include <linux/delay.h>
 
 #include <mach/msm_rpcrouter.h>
 #include "smd_rpcrouter.h"
@@ -83,7 +84,7 @@ static int rpc_clients_cb_thread(void *data)
 {
 	struct msm_rpc_client_cb_item *cb_item;
 	struct msm_rpc_client *client;
-	struct rpc_request_hdr *req;
+	struct rpc_request_hdr req;
 
 	client = data;
 	for (;;) {
@@ -100,24 +101,30 @@ static int rpc_clients_cb_thread(void *data)
 				list);
 			list_del(&cb_item->list);
 			mutex_unlock(&client->cb_item_list_lock);
-			req = (struct rpc_request_hdr *)cb_item->buf;
+			xdr_init_input(&client->cb_xdr, cb_item->buf,
+				       cb_item->size);
+			xdr_recv_req(&client->cb_xdr, &req);
 
-			if (be32_to_cpu(req->type) != 0)
+			if (req.type != 0)
 				goto bad_rpc;
-			if (be32_to_cpu(req->rpc_vers) != 2)
+			if (req.rpc_vers != 2)
 				goto bad_rpc;
-			if (be32_to_cpu(req->prog) !=
+			if (req.prog !=
 			    (client->prog | 0x01000000))
 				goto bad_rpc;
 
-			client->cb_func(client,
-					cb_item->buf, cb_item->size);
+			if (client->version == 2)
+				client->cb_func2(client, &req, &client->cb_xdr);
+			else
+				client->cb_func(client, client->cb_xdr.in_buf,
+						client->cb_xdr.in_size);
  bad_rpc:
 			kfree(cb_item->buf);
 			kfree(cb_item);
 			mutex_lock(&client->cb_item_list_lock);
 		}
 		mutex_unlock(&client->cb_item_list_lock);
+		xdr_init_input(&client->cb_xdr, NULL, 0);
 	}
 	complete_and_exit(&client->cb_complete, 0);
 }
@@ -129,11 +136,12 @@ static int rpc_clients_thread(void *data)
 	struct msm_rpc_client *client;
 	int rc = 0;
 	struct msm_rpc_client_cb_item *cb_item;
-	struct rpc_request_hdr *req;
+	struct rpc_request_hdr req;
 
 	client = data;
 	for (;;) {
 		rc = msm_rpc_read(client->ept, &buffer, -1, HZ);
+
 		if (client->exit_flag)
 			break;
 		if (rc < ((int)(sizeof(uint32_t) * 2)))
@@ -141,26 +149,37 @@ static int rpc_clients_thread(void *data)
 
 		type = be32_to_cpu(*((uint32_t *)buffer + 1));
 		if (type == 1) {
-			client->buf = buffer;
-			client->read_avail = 1;
-			wake_up(&client->reply_wait);
-		} else if (type == 0) {
-			cb_item = kmalloc(sizeof(*cb_item), GFP_KERNEL);
-			if (!cb_item) {
-				pr_err("%s: no memory for cb item\n",
-				       __func__);
+
+			if (client->xdr.in_buf != NULL) {
+				pr_err("%s: input xdr not empty\n", __func__);
 				continue;
 			}
-
+			xdr_init_input(&client->xdr, buffer, rc);
+			wake_up(&client->reply_wait);
+		} else if (type == 0) {
 			if (client->cb_thread == NULL) {
-				req = (struct rpc_request_hdr *)buffer;
+				xdr_init_input(&client->cb_xdr, buffer, rc);
+				xdr_recv_req(&client->cb_xdr, &req);
 
-				if ((be32_to_cpu(req->rpc_vers) == 2) &&
-				    (be32_to_cpu(req->prog) ==
-				     (client->prog | 0x01000000)))
-					client->cb_func(client, buffer, rc);
+				if ((req.rpc_vers == 2) &&
+				    (req.prog == (client->prog | 0x01000000))) {
+					if (client->version == 2)
+						client->cb_func2(client, &req,
+							 &client->cb_xdr);
+					else
+						client->cb_func(client,
+						client->cb_xdr.in_buf, rc);
+				}
 				kfree(buffer);
+				xdr_init_input(&client->cb_xdr, NULL, 0);
 			} else {
+				cb_item = kmalloc(sizeof(*cb_item), GFP_KERNEL);
+				if (!cb_item) {
+					pr_err("%s: no memory for cb item\n",
+					       __func__);
+					continue;
+				}
+
 				INIT_LIST_HEAD(&cb_item->list);
 				cb_item->buf = buffer;
 				cb_item->size = rc;
@@ -179,32 +198,40 @@ static int rpc_clients_thread(void *data)
 static struct msm_rpc_client *msm_rpc_create_client(void)
 {
 	struct msm_rpc_client *client;
+	void *buf;
 
 	client = kmalloc(sizeof(struct msm_rpc_client), GFP_KERNEL);
 	if (!client)
 		return ERR_PTR(-ENOMEM);
 
-	client->req = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
-	if (!client->req) {
+	buf = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
+	if (!buf) {
 		kfree(client);
 		return ERR_PTR(-ENOMEM);
 	}
+	xdr_init_output(&client->xdr, buf, MSM_RPC_MSGSIZE_MAX);
 
-	client->reply = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
-	if (!client->reply) {
-		kfree(client->req);
+	buf = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
+	if (!buf) {
+		kfree(client->xdr.out_buf);
+		xdr_init_output(&client->xdr, NULL, 0);
 		kfree(client);
 		return ERR_PTR(-ENOMEM);
 	}
+	xdr_init_output(&client->cb_xdr, buf, MSM_RPC_MSGSIZE_MAX);
 
 	init_waitqueue_head(&client->reply_wait);
 	mutex_init(&client->req_lock);
-	mutex_init(&client->reply_lock);
+	mutex_init(&client->xdr.out_lock);
+	mutex_init(&client->cb_xdr.out_lock);
 	client->buf = NULL;
-	client->read_avail = 0;
 	client->cb_buf = NULL;
 	client->cb_size = 0;
 	client->exit_flag = 0;
+
+	xdr_init_input(&client->xdr, NULL, 0);
+	xdr_init_input(&client->cb_xdr, NULL, 0);
+
 	init_completion(&client->complete);
 	init_completion(&client->cb_complete);
 	INIT_LIST_HEAD(&client->cb_item_list);
@@ -216,6 +243,16 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 	atomic_set(&client->next_cb_id, 1);
 
 	return client;
+}
+
+static void msm_rpc_destroy_client(struct msm_rpc_client *client)
+{
+	kfree(client->xdr.out_buf);
+	xdr_init_output(&client->xdr, NULL, 0);
+	kfree(client->cb_xdr.out_buf);
+	xdr_init_output(&client->cb_xdr, NULL, 0);
+
+	kfree(client);
 }
 
 void msm_rpc_remove_all_cb_func(struct msm_rpc_client *client)
@@ -268,14 +305,15 @@ struct msm_rpc_client *msm_rpc_register_client(
 
 	ept = msm_rpc_connect_compatible(prog, ver, MSM_RPC_UNINTERRUPTIBLE);
 	if (IS_ERR(ept)) {
-		kfree(client);
+		msm_rpc_destroy_client(client);
 		return (struct msm_rpc_client *)ept;
 	}
 
 	client->prog = prog;
 	client->ver = ver;
-	client->ept = ept;
+	client->ept = client->xdr.ept = client->cb_xdr.ept = ept;
 	client->cb_func = cb_func;
+	client->version = 1;
 
 	/* start the read thread */
 	client->read_thread = kthread_run(rpc_clients_thread, client,
@@ -283,7 +321,7 @@ struct msm_rpc_client *msm_rpc_register_client(
 	if (IS_ERR(client->read_thread)) {
 		rc = PTR_ERR(client->read_thread);
 		msm_rpc_close(client->ept);
-		kfree(client);
+		msm_rpc_destroy_client(client);
 		return ERR_PTR(rc);
 	}
 
@@ -300,13 +338,92 @@ struct msm_rpc_client *msm_rpc_register_client(
 		client->exit_flag = 1;
 		wait_for_completion(&client->complete);
 		msm_rpc_close(client->ept);
-		kfree(client);
+		msm_rpc_destroy_client(client);
 		return ERR_PTR(rc);
 	}
 
 	return client;
 }
 EXPORT_SYMBOL(msm_rpc_register_client);
+
+/*
+ * Interface to be used to register the client.
+ *
+ * name: string representing the client
+ *
+ * prog: program number of the client
+ *
+ * ver: version number of the client
+ *
+ * create_cb_thread: if set calls the callback function from a seprate thread
+ *                   which helps the client requests to be processed without
+ *                   getting loaded by callback handling.
+ *
+ * cb_func: function to be called if callback request is received.
+ *          unmarshaling should be handled by the user in callback function
+ *
+ * Return Value:
+ *        Pointer to initialized client data sturcture
+ *        Or, the error code if registration fails.
+ *
+ */
+struct msm_rpc_client *msm_rpc_register_client2(
+	const char *name,
+	uint32_t prog, uint32_t ver,
+	uint32_t create_cb_thread,
+	int (*cb_func)(struct msm_rpc_client *,
+		       struct rpc_request_hdr *req, struct msm_rpc_xdr *))
+{
+	struct msm_rpc_client *client;
+	struct msm_rpc_endpoint *ept;
+	int rc;
+
+	client = msm_rpc_create_client();
+	if (IS_ERR(client))
+		return client;
+
+	ept = msm_rpc_connect_compatible(prog, ver, MSM_RPC_UNINTERRUPTIBLE);
+	if (IS_ERR(ept)) {
+		msm_rpc_destroy_client(client);
+		return (struct msm_rpc_client *)ept;
+	}
+
+	client->prog = prog;
+	client->ver = ver;
+	client->ept = client->xdr.ept = client->cb_xdr.ept = ept;
+	client->cb_func2 = cb_func;
+	client->version = 2;
+
+	/* start the read thread */
+	client->read_thread = kthread_run(rpc_clients_thread, client,
+					  "k%sclntd", name);
+	if (IS_ERR(client->read_thread)) {
+		rc = PTR_ERR(client->read_thread);
+		msm_rpc_close(client->ept);
+		msm_rpc_destroy_client(client);
+		return ERR_PTR(rc);
+	}
+
+	if (!create_cb_thread || (cb_func == NULL)) {
+		client->cb_thread = NULL;
+		return client;
+	}
+
+	/* start the callback thread */
+	client->cb_thread = kthread_run(rpc_clients_cb_thread, client,
+					"k%sclntcbd", name);
+	if (IS_ERR(client->cb_thread)) {
+		rc = PTR_ERR(client->cb_thread);
+		client->exit_flag = 1;
+		wait_for_completion(&client->complete);
+		msm_rpc_close(client->ept);
+		msm_rpc_destroy_client(client);
+		return ERR_PTR(rc);
+	}
+
+	return client;
+}
+EXPORT_SYMBOL(msm_rpc_register_client2);
 
 /*
  * Interface to be used to unregister the client
@@ -332,8 +449,8 @@ int msm_rpc_unregister_client(struct msm_rpc_client *client)
 
 	msm_rpc_close(client->ept);
 	msm_rpc_remove_all_cb_func(client);
-	kfree(client->req);
-	kfree(client->reply);
+	kfree(client->xdr.out_buf);
+	kfree(client->cb_xdr.out_buf);
 	kfree(client);
 	return 0;
 }
@@ -374,26 +491,28 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 				       void *buf, void *data),
 		       void *ret_data, long timeout)
 {
-	int size = 0;
 	struct rpc_reply_hdr *rpc_rsp;
 	int rc = 0;
 
 	mutex_lock(&client->req_lock);
 
-	msm_rpc_setup_req((struct rpc_request_hdr *)client->req, client->prog,
-			  client->ver, proc);
-	size = sizeof(struct rpc_request_hdr);
+	msm_rpc_setup_req((struct rpc_request_hdr *)client->xdr.out_buf,
+			  client->prog, client->ver, proc);
+	client->xdr.out_index = sizeof(struct rpc_request_hdr);
 
 	if (arg_func) {
-		rc = arg_func(client, (void *)((struct rpc_request_hdr *)
-					       client->req + 1), arg_data);
+		rc = arg_func(client,
+			      (void *)((struct rpc_request_hdr *)
+				       client->xdr.out_buf + 1),
+			      arg_data);
 		if (rc < 0)
 			goto release_locks;
 		else
-			size += rc;
+			client->xdr.out_index += rc;
 	}
 
-	rc = msm_rpc_write(client->ept, client->req, size);
+	rc = msm_rpc_write(client->ept, client->xdr.out_buf,
+			   client->xdr.out_index);
 	if (rc < 0) {
 		pr_err("%s: couldn't send RPC request:%d\n", __func__, rc);
 		goto release_locks;
@@ -404,16 +523,14 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 		timeout = msecs_to_jiffies(10000);
 
 	rc = wait_event_timeout(client->reply_wait,
-				client->read_avail, timeout);
+				xdr_read_avail(&client->xdr), timeout);
 	if (rc == 0) {
 		rc = -ETIMEDOUT;
 		goto release_locks;
 	} else
 		rc = 0;
 
-	client->read_avail = 0;
-
-	rpc_rsp = (struct rpc_reply_hdr *)client->buf;
+	rpc_rsp = (struct rpc_reply_hdr *)client->xdr.in_buf;
 	if (be32_to_cpu(rpc_rsp->reply_stat) != RPCMSG_REPLYSTAT_ACCEPTED) {
 		pr_err("%s: RPC call was denied! %d\n", __func__,
 		       be32_to_cpu(rpc_rsp->reply_stat));
@@ -433,12 +550,109 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 		rc = ret_func(client, (void *)(rpc_rsp + 1), ret_data);
 
  free_and_release:
-	kfree(client->buf);
+	kfree(client->xdr.in_buf);
+	xdr_init_input(&client->xdr, NULL, 0);
+	client->xdr.out_index = 0;
  release_locks:
 	mutex_unlock(&client->req_lock);
 	return rc;
 }
 EXPORT_SYMBOL(msm_rpc_client_req);
+
+/*
+ * Interface to be used to send a client request.
+ * If the request takes any arguments or expects any return, the user
+ * should handle it in 'arg_func' and 'ret_func' respectively.
+ * Marshaling and Unmarshaling should be handled by the user in argument
+ * and return functions.
+ *
+ * client: pointer to client data sturcture
+ *
+ * proc: procedure being requested
+ *
+ * arg_func: argument function pointer.  'xdr' is the xdr being used.
+ *   'data' is arg_data.
+ *
+ * ret_func: return function pointer.  'xdr' is the xdr being used.
+ *   'data' is ret_data.
+ *
+ * arg_data: passed as an input parameter to argument function.
+ *
+ * ret_data: passed as an input parameter to return function.
+ *
+ * timeout: timeout for reply wait in jiffies.  If negative timeout is
+ *   specified a default timeout of 10s is used.
+ *
+ * Return Value:
+ *        0 on success, otherwise an error code is returned.
+ */
+int msm_rpc_client_req2(struct msm_rpc_client *client, uint32_t proc,
+			int (*arg_func)(struct msm_rpc_client *client,
+					struct msm_rpc_xdr *xdr, void *data),
+			void *arg_data,
+			int (*ret_func)(struct msm_rpc_client *client,
+					struct msm_rpc_xdr *xdr, void *data),
+			void *ret_data, long timeout)
+{
+	struct rpc_reply_hdr rpc_rsp;
+	int rc = 0;
+
+	mutex_lock(&client->req_lock);
+
+	xdr_start_request(&client->xdr, client->prog, client->ver, proc);
+	if (arg_func) {
+		rc = arg_func(client, &client->xdr, arg_data);
+		if (rc < 0) {
+			mutex_unlock(&client->xdr.out_lock);
+			goto release_locks;
+		}
+	}
+
+	rc = xdr_send_msg(&client->xdr);
+	if (rc < 0) {
+		pr_err("%s: couldn't send RPC request:%d\n", __func__, rc);
+		goto release_locks;
+	} else
+		rc = 0;
+
+	if (timeout < 0)
+		timeout = msecs_to_jiffies(10000);
+
+	rc = wait_event_timeout(client->reply_wait,
+				xdr_read_avail(&client->xdr), timeout);
+	if (rc == 0)
+		return -ETIMEDOUT;
+	else
+		rc = 0;
+
+	xdr_recv_reply(&client->xdr, &rpc_rsp);
+	if (rpc_rsp.reply_stat != RPCMSG_REPLYSTAT_ACCEPTED) {
+		pr_err("%s: RPC call was denied! %d\n",
+		       __func__, rpc_rsp.reply_stat);
+		rc = -EPERM;
+		goto free_and_release;
+	}
+
+	if (rpc_rsp.data.acc_hdr.accept_stat != RPC_ACCEPTSTAT_SUCCESS) {
+		pr_err("%s: RPC call was not successful (%d)\n", __func__,
+		       rpc_rsp.data.acc_hdr.accept_stat);
+		rc = -EINVAL;
+		goto free_and_release;
+	}
+
+	client->xdr.in_index = sizeof(rpc_rsp);
+	if (ret_func)
+		rc = ret_func(client, &client->xdr, ret_data);
+
+ free_and_release:
+	kfree(client->xdr.in_buf);
+	xdr_init_input(&client->xdr, NULL, 0);
+	client->xdr.in_index = 0;
+ release_locks:
+	mutex_unlock(&client->req_lock);
+	return rc;
+}
+EXPORT_SYMBOL(msm_rpc_client_req2);
 
 /*
  * Interface to be used to start accepted reply message required in
@@ -460,9 +674,9 @@ void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
 {
 	struct rpc_reply_hdr *reply;
 
-	mutex_lock(&client->reply_lock);
+	mutex_lock(&client->cb_xdr.out_lock);
 
-	reply = (struct rpc_reply_hdr *)client->reply;
+	reply = (struct rpc_reply_hdr *)client->cb_xdr.out_buf;
 
 	reply->xid = cpu_to_be32(xid);
 	reply->type = cpu_to_be32(1); /* reply */
@@ -472,6 +686,7 @@ void *msm_rpc_start_accepted_reply(struct msm_rpc_client *client,
 	reply->data.acc_hdr.verf_flavor = 0;
 	reply->data.acc_hdr.verf_length = 0;
 
+	client->cb_xdr.out_index = sizeof(*reply);
 	return reply + 1;
 }
 EXPORT_SYMBOL(msm_rpc_start_accepted_reply);
@@ -492,12 +707,13 @@ int msm_rpc_send_accepted_reply(struct msm_rpc_client *client, uint32_t size)
 {
 	int rc = 0;
 
-	size += sizeof(struct rpc_reply_hdr);
-	rc = msm_rpc_write(client->ept, client->reply, size);
+	client->cb_xdr.out_index += size;
+	rc = msm_rpc_write(client->ept, client->cb_xdr.out_buf,
+			   client->cb_xdr.out_index);
 	if (rc > 0)
 		rc = 0;
 
-	mutex_unlock(&client->reply_lock);
+	mutex_unlock(&client->cb_xdr.out_lock);
 	return rc;
 }
 EXPORT_SYMBOL(msm_rpc_send_accepted_reply);

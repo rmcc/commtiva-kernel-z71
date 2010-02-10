@@ -1,7 +1,7 @@
 /** arch/arm/mach-msm/smd_rpcrouter.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -211,4 +211,8 @@ void get_requesting_client(struct msm_rpc_endpoint *ept, uint32_t xid,
 
 extern dev_t msm_rpcrouter_devno;
 extern struct class *msm_rpcrouter_class;
+
+void xdr_init_input(struct msm_rpc_xdr *xdr, void *buf, uint32_t size);
+void xdr_init_output(struct msm_rpc_xdr *xdr, void *buf, uint32_t size);
+uint32_t xdr_read_avail(struct msm_rpc_xdr *xdr);
 #endif
