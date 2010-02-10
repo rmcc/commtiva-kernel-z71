@@ -20,6 +20,7 @@
 #include <mach/debug_audio_mm.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/wakelock.h>
 #include <mach/msm_adsp.h>
 
 #include <mach/qdsp5v2/audpreproc.h>
@@ -34,6 +35,7 @@
 #define MSM_ADSP_ENC_CODEC_QCELP 5
 
 static DEFINE_MUTEX(audpreproc_lock);
+static struct wake_lock audpre_wake_lock;
 
 struct msm_adspenc_info {
 	const char *module_name;
@@ -87,6 +89,15 @@ struct audpreproc_state {
 static struct audpreproc_state the_audpreproc_state = {
 	.lock = &audpreproc_lock,
 };
+
+static inline void prevent_suspend(void)
+{
+	wake_lock(&audpre_wake_lock);
+}
+static inline void allow_suspend(void)
+{
+	wake_unlock(&audpre_wake_lock);
+}
 
 /* DSP preproc event handler */
 static void audpreproc_dsp_event(void *data, unsigned id, size_t len,
@@ -210,6 +221,7 @@ int audpreproc_enable(int enc_id, audpreproc_event_func func, void *private)
 			audpreproc->private[enc_id] = NULL;
 			goto out;
 		}
+		prevent_suspend();
 		if (msm_adsp_enable(audpreproc->mod)) {
 			MM_ERR("Can not enable AUDPREPROCTASK\n");
 			audpreproc->open_count = 0;
@@ -250,6 +262,7 @@ void audpreproc_disable(int enc_id, void *private)
 		MM_DBG("Put AUDPREPROCTASK\n");
 		msm_adsp_put(audpreproc->mod);
 		audpreproc->mod = NULL;
+		allow_suspend();
 	}
 out:
 	mutex_unlock(audpreproc->lock);
@@ -317,6 +330,8 @@ int audpreproc_aenc_alloc(unsigned enc_type, const char **module_name,
 		    msm_enc_database.enc_info_list[idx].module_queueids;
 		encid = msm_enc_database.enc_info_list[idx].module_encid;
 	}
+	wake_lock_init(&audpre_wake_lock, WAKE_LOCK_SUSPEND, "audpre");
+
 	mutex_unlock(audpreproc->lock);
 	return encid;
 }

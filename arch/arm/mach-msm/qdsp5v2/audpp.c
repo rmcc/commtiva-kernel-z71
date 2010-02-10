@@ -23,6 +23,8 @@
 #include <linux/delay.h>
 #include <linux/sched.h>
 #include <linux/platform_device.h>
+#include <linux/wakelock.h>
+
 
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
@@ -64,6 +66,7 @@ module_init(_dsp_log_init);
 
 static DEFINE_MUTEX(audpp_lock);
 static DEFINE_MUTEX(audpp_dec_lock);
+static struct wake_lock audpp_wake_lock;
 
 #define CH_COUNT 5
 #define AUDPP_CLNT_MAX_COUNT 6
@@ -134,6 +137,15 @@ struct audpp_state the_audpp_state = {
 	.lock = &audpp_lock,
 	.lock_dec = &audpp_dec_lock,
 };
+
+static inline void prevent_suspend(void)
+{
+	wake_lock(&audpp_wake_lock);
+}
+static inline void allow_suspend(void)
+{
+	wake_unlock(&audpp_wake_lock);
+}
 
 int audpp_send_queue1(void *cmd, unsigned len)
 {
@@ -364,6 +376,7 @@ int audpp_enable(int id, audpp_event_func func, void *private)
 			goto out;
 		}
 		LOG(EV_ENABLE, 2);
+		prevent_suspend();
 		msm_adsp_enable(audpp->mod);
 		audpp_dsp_config(1);
 	} else {
@@ -413,6 +426,7 @@ void audpp_disable(int id, void *private)
 		msm_adsp_disable(audpp->mod);
 		msm_adsp_put(audpp->mod);
 		audpp->mod = NULL;
+		allow_suspend();
 	}
 out:
 	mutex_unlock(audpp->lock);
@@ -993,6 +1007,7 @@ static int audpp_probe(struct platform_device *pdev)
 			nr_codec_support);
 	}
 
+	wake_lock_init(&audpp_wake_lock, WAKE_LOCK_SUSPEND, "audpp");
 	for (idx = 0; idx < audpp->dec_database->num_dec; idx++) {
 		rc = device_create_file(&pdev->dev, &dev_attr_decoder[idx]);
 		if (rc)
