@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -53,6 +53,8 @@
 #define PM8058_IRQ_GPIO(n)	(PM8058_FIRST_GPIO_IRQ + (n) - 1)
 
 #define PM8058_MAX_SUBDEVICES	16
+
+struct pm8058_chip;
 
 struct pm8058_platform_data {
 	/* This table is only needed for misc interrupts. */
@@ -126,7 +128,7 @@ int pm8058_gpio_set_direction(unsigned gpio, int direction);
 int pm8058_gpio_set(unsigned gpio, int value);
 int pm8058_gpio_get(unsigned gpio);
 
-int pm8058_mpp_get(unsigned mpp);
+int pm8058_mpp_get(struct pm8058_chip *pm_chip, unsigned mpp);
 
 int pm8058_gpio_config_kypd_drv(int gpio_start, int num_gpios);
 int pm8058_gpio_config_kypd_sns(int gpio_start, int num_gpios);

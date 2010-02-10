@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -59,6 +59,7 @@
  *
  */
 
+#include <linux/platform_device.h>
 #include <linux/gpio.h>
 #include <linux/mfd/pmic8058.h>
 #include "gpio_chip.h"
@@ -79,8 +80,11 @@ static int pm8058_mpp_get_irq_num(struct gpio_chip *chip,
 
 static int pm8058_mpp_read(struct gpio_chip *chip, unsigned n)
 {
+	struct pm8058_chip	*pm_chip;
+
 	n -= chip->start;
-	return pm8058_mpp_get(n);
+	pm_chip = dev_get_drvdata(chip->dev);
+	return pm8058_mpp_get(pm_chip, n);
 }
 
 struct msm_gpio_chip pm8058_mpp_chip = {
@@ -93,13 +97,46 @@ struct msm_gpio_chip pm8058_mpp_chip = {
 	}
 };
 
-static int __init pm8058_mpp_init(void)
+static int __devinit pm8058_mpp_probe(struct platform_device *pdev)
 {
 	int	rc;
 
+	pm8058_mpp_chip.chip.dev = &pdev->dev;
 	rc = register_gpio_chip(&pm8058_mpp_chip.chip);
 	pr_info("%s: register_gpio_chip(): rc=%d\n", __func__, rc);
 
 	return rc;
 }
-device_initcall(pm8058_mpp_init);
+
+static int __devexit pm8058_mpp_remove(struct platform_device *pdev)
+{
+	return 0;
+}
+
+static struct platform_driver pm8058_mpp_driver = {
+	.probe		= pm8058_mpp_probe,
+	.remove		= __devexit_p(pm8058_mpp_remove),
+	.driver		= {
+		.name = "pm8058-mpp",
+		.owner = THIS_MODULE,
+	},
+};
+
+static int __init pm8058_mpp_init(void)
+{
+	return platform_driver_register(&pm8058_mpp_driver);
+}
+
+static void __exit pm8058_mpp_exit(void)
+{
+	platform_driver_unregister(&pm8058_mpp_driver);
+}
+
+module_init(pm8058_mpp_init);
+module_exit(pm8058_mpp_exit);
+
+MODULE_LICENSE("Dual BSD/GPL");
+MODULE_DESCRIPTION("PMIC8058 MPP driver");
+MODULE_VERSION("1.0");
+MODULE_ALIAS("platform:pm8058-mpp");
+
