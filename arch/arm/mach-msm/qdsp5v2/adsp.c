@@ -32,17 +32,6 @@
 #include <linux/module.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
-#include <linux/wakelock.h>
-
-static struct wake_lock adsp_wake_lock;
-static inline void prevent_suspend(void)
-{
-	wake_lock(&adsp_wake_lock);
-}
-static inline void allow_suspend(void)
-{
-	wake_unlock(&adsp_wake_lock);
-}
 
 #include <linux/io.h>
 #include <mach/msm_iomap.h>
@@ -850,10 +839,8 @@ int msm_adsp_enable(struct msm_adsp_module *module)
 			clk_enable(module->clk);
 
 		mutex_lock(&adsp_open_lock);
-		if (adsp_open_count++ == 0) {
+		if (adsp_open_count++ == 0)
 			enable_irq(INT_ADSP);
-			prevent_suspend();
-		}
 		mutex_unlock(&adsp_open_lock);
 		break;
 	case ADSP_STATE_ENABLING:
@@ -909,7 +896,6 @@ int msm_adsp_disable(struct msm_adsp_module *module)
 		mutex_lock(&adsp_open_lock);
 		if (--adsp_open_count == 0) {
 			disable_irq(INT_ADSP);
-			allow_suspend();
 			MM_INFO("disable interrupt\n");
 		}
 		mutex_unlock(&adsp_open_lock);
@@ -924,7 +910,6 @@ static int msm_adsp_probe(struct platform_device *pdev)
 	unsigned count;
 	int rc, i;
 
-	wake_lock_init(&adsp_wake_lock, WAKE_LOCK_SUSPEND, "adsp");
 	adsp_info.init_info_ptr = kzalloc(
 		(sizeof(struct adsp_rtos_mp_mtoa_init_info_type)), GFP_KERNEL);
 	if (!adsp_info.init_info_ptr)
