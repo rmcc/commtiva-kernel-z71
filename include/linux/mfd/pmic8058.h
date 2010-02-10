@@ -124,9 +124,12 @@ int pm8058_read(u16 addr, u8 *values, unsigned int len);
 int pm8058_write(u16 addr, u8 *values, unsigned int len);
 
 int pm8058_gpio_config(int gpio, struct pm8058_gpio *param);
-int pm8058_gpio_set_direction(unsigned gpio, int direction);
-int pm8058_gpio_set(unsigned gpio, int value);
-int pm8058_gpio_get(unsigned gpio);
+
+int pm8058_gpio_config_h(void *pm_handle, int gpio, struct pm8058_gpio *param);
+int pm8058_gpio_set_direction(struct pm8058_chip *pm_chip,
+			      unsigned gpio, int direction);
+int pm8058_gpio_set(struct pm8058_chip *pm_chip, unsigned gpio, int value);
+int pm8058_gpio_get(struct pm8058_chip *pm_chip, unsigned gpio);
 
 int pm8058_mpp_get(struct pm8058_chip *pm_chip, unsigned mpp);
 
