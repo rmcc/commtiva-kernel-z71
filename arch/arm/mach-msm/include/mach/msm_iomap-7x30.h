@@ -63,6 +63,10 @@
 #define MSM_CLK_CTL_PHYS      0xAB800000
 #define MSM_CLK_CTL_SIZE      SZ_4K
 
+#define MSM_CLK_CTL_SH2_BASE  IOMEM(0xE0006000)
+#define MSM_CLK_CTL_SH2_PHYS  0xABA01000
+#define MSM_CLK_CTL_SH2_SIZE  SZ_4K
+
 #define MSM_ACC_BASE          IOMEM(0xE0007000)
 #define MSM_ACC_PHYS          0xC0101000
 #define MSM_ACC_SIZE          SZ_4K
