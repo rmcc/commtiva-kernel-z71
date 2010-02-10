@@ -1,6 +1,8 @@
 /* interface for the pm_qos_power infrastructure of the linux kernel.
  *
  * Mark Gross <mgross@linux.intel.com>
+ *
+ * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  */
 #ifndef __PM_QOS_PARAMS_H__
 #define __PM_QOS_PARAMS_H__
@@ -37,11 +39,15 @@ struct pm_qos_object {
 	s32 default_value;
 	atomic_t target_value;
 	s32 (*comparitor)(s32, s32);
-	void *data;
-	int (*add_fn)(struct pm_qos_object *, char *, s32, void **);
-	int (*update_fn)(struct pm_qos_object *, char *, s32, void **);
-	int (*remove_fn)(struct pm_qos_object *, char *, s32, void **);
+	struct pm_qos_plugin {
+		void *data;
+		int (*add_fn)(struct pm_qos_object *, char *, s32, void **);
+		int (*update_fn)(struct pm_qos_object *, char *, s32, void **);
+		int (*remove_fn)(struct pm_qos_object *, char *, s32, void **);
+	} *plugin;
 };
+
+int pm_qos_register_plugin(int pm_qos_class, struct pm_qos_plugin *plugin);
 
 int pm_qos_add_requirement(int qos, char *name, s32 value);
 int pm_qos_update_requirement(int qos, char *name, s32 new_value);

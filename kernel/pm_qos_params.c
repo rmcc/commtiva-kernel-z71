@@ -135,8 +135,22 @@ static s32 min_compare(s32 v1, s32 v2)
 	return min(v1, v2);
 }
 
-static int pm_qos_update_target(struct pm_qos_object *class, char *name,
-				s32 value, void **data)
+int pm_qos_register_plugin(int pm_qos_class, struct pm_qos_plugin *plugin)
+{
+	if (pm_qos_class >= PM_QOS_NUM_CLASSES)
+		return -EINVAL;
+
+	/* Plugins should not be changed once registered. */
+	if (pm_qos_array[pm_qos_class]->plugin)
+		return -EPERM;
+
+	pm_qos_array[pm_qos_class]->plugin = plugin;
+
+	return 0;
+}
+
+static int pm_qos_update_target(struct pm_qos_object *class, char *request_name,
+				s32 value, void **request_data)
 {
 	s32 extreme_value;
 	struct requirement_list *node;
@@ -162,6 +176,12 @@ static int pm_qos_update_target(struct pm_qos_object *class, char *name,
 
 	return 0;
 }
+
+static struct pm_qos_plugin pm_qos_default_plugin = {
+	.add_fn = pm_qos_update_target,
+	.update_fn = pm_qos_update_target,
+	.remove_fn = pm_qos_update_target,
+};
 
 static int register_pm_qos_misc(struct pm_qos_object *qos)
 {
@@ -232,19 +252,15 @@ int pm_qos_add_requirement(int pm_qos_class, char *name, s32 value)
 		goto err_name_alloc_failed;
 	}
 
-	/* Use default update function if none specified. */
-	if (!class->add_fn)
-		class->add_fn = pm_qos_update_target;
-	if (!class->update_fn)
-		class->update_fn = pm_qos_update_target;
-	if (!class->remove_fn)
-		class->remove_fn = pm_qos_update_target;
+	/* Use default plugin if none specified. */
+	if (!class->plugin)
+		class->plugin = &pm_qos_default_plugin;
 
 	spin_lock_irqsave(&pm_qos_lock, flags);
 	list_add(&dep->list, &class->requirements.list);
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
-	rc = class->add_fn(class, name, dep->value, &dep->data);
+	rc = class->plugin->add_fn(class, name, dep->value, &dep->data);
 	if (rc)
 		goto err_add_fn_failed;
 
@@ -292,9 +308,9 @@ int pm_qos_update_requirement(int pm_qos_class, char *name, s32 new_value)
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
-	if (pending_update && class->update_fn)
-		rc = class->update_fn(class, name, node->value,
-			&node->data);
+	if (pending_update && class->plugin)
+		rc = class->plugin->update_fn(class, name,
+			node->value, &node->data);
 
 	return rc;
 }
@@ -330,8 +346,8 @@ void pm_qos_remove_requirement(int pm_qos_class, char *name)
 	}
 	spin_unlock_irqrestore(&pm_qos_lock, flags);
 
-	if (pending_update && class->remove_fn)
-		class->remove_fn(class, name,
+	if (pending_update && class->plugin->remove_fn)
+		class->plugin->remove_fn(class, name,
 			class->default_value, &node_data);
 }
 EXPORT_SYMBOL_GPL(pm_qos_remove_requirement);
