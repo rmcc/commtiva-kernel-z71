@@ -166,8 +166,8 @@
 #define SPI_NUM_CHIPSELECTS           4
 #define SPI_QSD_NAME                  "spi_qsd"
 
-/* 5 milliseconds */
-#define SPI_TRYLOCK_DELAY             5000
+/* 250 microseconds */
+#define SPI_TRYLOCK_DELAY             250
 
 /* Data Mover burst size */
 #define DM_BURST_SIZE                 16
