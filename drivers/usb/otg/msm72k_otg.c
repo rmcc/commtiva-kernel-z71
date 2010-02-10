@@ -317,8 +317,12 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	clk_disable(dev->pclk);
 	if (dev->cclk)
 		clk_disable(dev->cclk);
-	if (device_may_wakeup(dev->otg.dev))
+	if (device_may_wakeup(dev->otg.dev)) {
 		enable_irq_wake(dev->irq);
+		if (dev->vbus_on_irq)
+			enable_irq_wake(dev->vbus_on_irq);
+	}
+
 	dev->in_lpm = 1;
 
 	if (!vbus && dev->pmic_notif_supp)
@@ -362,8 +366,11 @@ static int msm_otg_resume(struct msm_otg *dev)
 	if (is_host())
 		writel(readl(USB_PORTSC) | PORTSC_FPR, USB_PORTSC);
 
-	if (device_may_wakeup(dev->otg.dev))
+	if (device_may_wakeup(dev->otg.dev)) {
 		disable_irq_wake(dev->irq);
+		if (dev->vbus_on_irq)
+			disable_irq_wake(dev->vbus_on_irq);
+	}
 
 	dev->in_lpm = 0;
 	pr_info("%s: usb exited from low power mode\n", __func__);
