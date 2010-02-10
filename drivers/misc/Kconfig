@@ -274,6 +274,16 @@ config TSIF_CHRDEV
 	  To compile this driver as module, choose M here: the
 	  module will be called tsif_chrdev.
 
+config PMIC8058_PWM
+	tristate "Qualcomm PM8058 PWM support"
+	depends on PMIC8058
+	default y
+	help
+	  This option enables device driver support for the PWM channels
+	  on Qualcomm PM8058 chip. Pulse Width Modulation is used for
+	  purposes including software controlled brightness of backlight,
+	  motor control, and waveform generation.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 

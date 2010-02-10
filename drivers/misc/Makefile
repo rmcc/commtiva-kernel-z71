@@ -28,4 +28,5 @@ obj-$(CONFIG_TSIF) += msm_tsif.o
 msm_tsif-objs := tsif.o
 
 obj-$(CONFIG_TSIF_CHRDEV) += tsif_chrdev.o
+obj-$(CONFIG_PMIC8058_PWM) += pmic8058-pwm.o
 
