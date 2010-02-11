@@ -36,6 +36,8 @@
 #include <linux/slab.h>
 #include <linux/time.h>
 #include <linux/fs.h>
+#include <linux/debugfs.h>
+#include <linux/seq_file.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/string.h>
@@ -486,3 +488,129 @@ static int __init pm_qos_power_init(void)
 }
 
 late_initcall(pm_qos_power_init);
+
+#ifdef CONFIG_DEBUG_FS
+
+#define PM_QOS_CLASS_COUNT ARRAY_SIZE(pm_qos_array)
+
+static struct {
+	int pm_qos_class;
+	struct requirement_list *node;
+	unsigned long flags;
+} pvote;
+
+static void *votes_start(struct seq_file *m, loff_t *pos)
+{
+	struct list_head *head;
+	int n = 0;
+
+	spin_lock_irqsave(&pm_qos_lock, pvote.flags);
+
+	if (*pos < 0)
+		return NULL;
+
+	for (pvote.pm_qos_class = 0
+				; pvote.pm_qos_class < PM_QOS_CLASS_COUNT
+				; pvote.pm_qos_class++) {
+		if (!pm_qos_array[pvote.pm_qos_class])
+			continue;
+		pvote.node = NULL;
+		if (n == *pos)
+			return &pvote;
+		n++;
+		head = &pm_qos_array[pvote.pm_qos_class]->requirements.list;
+		list_for_each_entry(pvote.node, head, list) {
+			if (n == *pos)
+				return &pvote;
+			n++;
+		}
+	}
+
+	return NULL;
+}
+
+static void *votes_next(struct seq_file *m, void *p, loff_t *pos)
+{
+	struct pm_qos_object *class = pm_qos_array[pvote.pm_qos_class];
+
+	(*pos)++;
+
+	if (pvote.node == NULL) {
+		pvote.node = list_prepare_entry(pvote.node,
+					&class->requirements.list, list);
+	}
+	list_for_each_entry_continue(pvote.node,
+					&class->requirements.list, list) {
+		return &pvote;
+	}
+
+	pvote.node = NULL;
+	do {
+		pvote.pm_qos_class++;
+		if (pvote.pm_qos_class >= PM_QOS_CLASS_COUNT)
+			return NULL;
+	} while (!pm_qos_array[pvote.pm_qos_class]);
+
+	return &pvote;
+}
+
+static void votes_stop(struct seq_file *m, void *p)
+{
+	spin_unlock_irqrestore(&pm_qos_lock, pvote.flags);
+}
+
+static int votes_show(struct seq_file *m, void *p)
+{
+	struct pm_qos_object *class = pm_qos_array[pvote.pm_qos_class];
+
+	if (pvote.node) {
+		seq_printf(m, "\t%c %12d %s\n",
+			(pvote.node->value == atomic_read(&class->target_value)
+								? '*' : ' '),
+			pvote.node->value,
+			pvote.node->name);
+	} else {
+		if (pvote.pm_qos_class > 1)
+			seq_printf(m, "\n");
+		seq_printf(m, "%s target(%d) default(%d)\n",
+				class->name,
+				atomic_read(&class->target_value),
+				class->default_value);
+	}
+
+	return 0;
+}
+
+static const struct seq_operations votes_op = {
+	.start	= votes_start,
+	.next	= votes_next,
+	.stop	= votes_stop,
+	.show	= votes_show,
+};
+
+static int votes_open(struct inode *inode, struct file *file)
+{
+	return seq_open(file, &votes_op);
+}
+
+static const struct file_operations votes_fops = {
+	.open		= votes_open,
+	.read		= seq_read,
+	.llseek		= seq_lseek,
+	.release	= seq_release,
+};
+
+static __init int pm_qos_init_debugfs(void)
+{
+	struct dentry *entry;
+
+	entry = debugfs_create_file("pm_qos", 0444, NULL, NULL, &votes_fops);
+	if (!entry)
+		pr_warning("pm_qos: Could not create debugfs node 'pm_qos'\n");
+
+	return 0;
+}
+
+late_initcall(pm_qos_init_debugfs);
+
+#endif /* CONFIG_DEBUG_FS */
