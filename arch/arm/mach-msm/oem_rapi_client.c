@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -65,6 +65,7 @@
 #include <linux/sched.h>
 #include <linux/debugfs.h>
 #include <linux/uaccess.h>
+#include <linux/delay.h>
 #include <mach/msm_rpcrouter.h>
 #include <mach/oem_rapi_client.h>
 
@@ -81,13 +82,15 @@ static struct msm_rpc_client *rpc_client;
 static uint32_t open_count;
 static DEFINE_MUTEX(oem_rapi_client_lock);
 
+/* TODO: check where to allocate memory for return */
 static int oem_rapi_client_cb(struct msm_rpc_client *client,
-			      void *buffer, int in_size)
+			      struct rpc_request_hdr *req,
+			      struct msm_rpc_xdr *xdr)
 {
-	struct rpc_request_hdr *req;
-	void *buf, *cb_func, *reply;
-	uint32_t cb_id, accept_status, size;
+	uint32_t cb_id, accept_status;
 	int rc;
+	void *cb_func;
+	uint32_t temp;
 
 	struct oem_rapi_client_streaming_func_cb_arg arg;
 	struct oem_rapi_client_streaming_func_cb_ret ret;
@@ -96,44 +99,12 @@ static int oem_rapi_client_cb(struct msm_rpc_client *client,
 	ret.out_len = NULL;
 	ret.output = NULL;
 
-	req = (struct rpc_request_hdr *)buffer;
-	buf = (void *)(req + 1);
-
-	/* cb_id */
-	cb_id = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-
-	/* enum */
-	arg.event = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-
-	/* handle */
-	arg.handle = (void *)be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-
-	/* in_len */
-	arg.in_len = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-
-	/* input */
-	size = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-	if (size) {
-		arg.input = kmalloc(size, GFP_KERNEL);
-		if (arg.input)
-			memcpy(arg.input, buf, size);
-		else {
-			accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
-			goto oem_rapi_send_ack;
-		}
-	}
-	buf += size;
-	if (size & 0x3)
-		buf += 4 - (size & 0x3);
-
-	/* out_len */
-	arg.out_len_valid = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
+	xdr_recv_uint32(xdr, &cb_id);                    /* cb_id */
+	xdr_recv_uint32(xdr, &arg.event);                /* enum */
+	xdr_recv_uint32(xdr, (uint32_t *)(&arg.handle)); /* handle */
+	xdr_recv_uint32(xdr, &arg.in_len);               /* in_len */
+	xdr_recv_bytes(xdr, (void **)&arg.input, &temp); /* input */
+	xdr_recv_uint32(xdr, &arg.out_len_valid);        /* out_len */
 	if (arg.out_len_valid) {
 		ret.out_len = kmalloc(sizeof(*ret.out_len), GFP_KERNEL);
 		if (!ret.out_len) {
@@ -142,12 +113,10 @@ static int oem_rapi_client_cb(struct msm_rpc_client *client,
 		}
 	}
 
-	/* out */
-	arg.output_valid = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
+	xdr_recv_uint32(xdr, &arg.output_valid);         /* out */
 	if (arg.output_valid) {
-		arg.output_size = be32_to_cpu(*(uint32_t *)buf);
-		buf += sizeof(uint32_t);
+		xdr_recv_uint32(xdr, &arg.output_size);  /* ouput_size */
+
 		ret.output = kmalloc(arg.output_size, GFP_KERNEL);
 		if (!ret.output) {
 			accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
@@ -168,42 +137,23 @@ static int oem_rapi_client_cb(struct msm_rpc_client *client,
 		accept_status = RPC_ACCEPTSTAT_SYSTEM_ERR;
 
  oem_rapi_send_ack:
-	reply = msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid),
-					     accept_status);
+	xdr_start_accepted_reply(xdr, accept_status);
 
-	size = 0;
 	if (accept_status == RPC_ACCEPTSTAT_SUCCESS) {
-		*(uint32_t *)reply = cpu_to_be32((uint32_t)(ret.out_len != 0));
-		reply += sizeof(uint32_t);
-		size += sizeof(uint32_t);
+		uint32_t temp = sizeof(uint32_t);
+		xdr_send_pointer(xdr, (void **)&(ret.out_len), temp,
+				 xdr_send_uint32);
 
-		if (ret.out_len) {
-			*(uint32_t *)reply = cpu_to_be32(*ret.out_len);
-			reply += sizeof(uint32_t);
-			size += sizeof(uint32_t);
-		}
-
-		if (ret.output && ret.out_len) {
-			*(uint32_t *)reply =
-				cpu_to_be32((uint32_t)(*ret.out_len));
-			reply += sizeof(uint32_t);
-			size += sizeof(uint32_t);
-
-			memcpy(reply, ret.output, *ret.out_len);
-			reply += *ret.out_len;
-			size += *ret.out_len;
-			if (*ret.out_len & 0x3) {
-				memset(reply, 0, 4 - (*ret.out_len & 0x3));
-				reply += 4 - (*ret.out_len & 0x3);
-				size += 4 - (*ret.out_len & 0x3);
-			}
-		} else {
-			*(uint32_t *)reply = cpu_to_be32(0);
-			reply += sizeof(uint32_t);
-			size += sizeof(uint32_t);
+		/* output */
+		if (ret.output && ret.out_len)
+			xdr_send_bytes(xdr, (const void **)&ret.output,
+					     ret.out_len);
+		else {
+			temp = 0;
+			xdr_send_uint32(xdr, &temp);
 		}
 	}
-	rc = msm_rpc_send_accepted_reply(client, size);
+	rc = xdr_send_msg(xdr);
 	if (rc)
 		pr_err("%s: sending reply failed: %d\n", __func__, rc);
 
@@ -215,88 +165,46 @@ static int oem_rapi_client_cb(struct msm_rpc_client *client,
 }
 
 static int oem_rapi_client_streaming_function_arg(struct msm_rpc_client *client,
-						  void *buf, void *data)
+						  struct msm_rpc_xdr *xdr,
+						  void *data)
 {
-	int size = 0;
 	int cb_id;
 	struct oem_rapi_client_streaming_func_arg *arg = data;
 
-	/* enum */
-	*((uint32_t *)buf) = cpu_to_be32(arg->event);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-
-	/* cb_id */
 	cb_id = msm_rpc_add_cb_func(client, (void *)arg->cb_func);
 	if ((cb_id < 0) && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
 		return cb_id;
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
 
-	/* handle */
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)arg->handle);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
+	xdr_send_uint32(xdr, &arg->event);                /* enum */
+	xdr_send_uint32(xdr, &cb_id);                     /* cb_id */
+	xdr_send_uint32(xdr, (uint32_t *)(&arg->handle)); /* handle */
+	xdr_send_uint32(xdr, &arg->in_len);               /* in_len */
+	xdr_send_bytes(xdr, (const void **)&arg->input,
+			     &arg->in_len);                     /* input */
+	xdr_send_uint32(xdr, &arg->out_len_valid);        /* out_len */
+	xdr_send_uint32(xdr, &arg->output_valid);         /* output */
 
-	/* in_len */
-	*((uint32_t *)buf) = cpu_to_be32(arg->in_len);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
+	/* output_size */
+	if (arg->output_valid)
+		xdr_send_uint32(xdr, &arg->output_size);
 
-	/* input */
-	*((uint32_t *)buf) = cpu_to_be32(arg->in_len);
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-	memcpy(buf, arg->input, arg->in_len);
-	size += arg->in_len;
-	buf += arg->in_len;
-	if (arg->in_len & 0x3) {
-		memset(buf, 0, 4 - (arg->in_len & 0x3));
-		buf += 4 - (arg->in_len & 0x3);
-		size += 4 - (arg->in_len & 0x3);
-	}
-
-	/* out_len */
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)(arg->out_len_valid));
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-
-	/* output */
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)(arg->output_valid));
-	size += sizeof(uint32_t);
-	buf += sizeof(uint32_t);
-	if (arg->output_valid) {
-		*((uint32_t *)buf) = cpu_to_be32(arg->output_size);
-		size += sizeof(uint32_t);
-		buf += sizeof(uint32_t);
-	}
-
-	return size;
+	return 0;
 }
 
 static int oem_rapi_client_streaming_function_ret(struct msm_rpc_client *client,
-						  void *buf, void *data)
+						  struct msm_rpc_xdr *xdr,
+						  void *data)
 {
-	uint32_t data_present, size;
 	struct oem_rapi_client_streaming_func_ret *ret = data;
+	uint32_t temp;
 
 	/* out_len */
-	data_present = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-	if (data_present && ret->out_len) {
-		*ret->out_len = be32_to_cpu(*(uint32_t *)buf);
-		buf += sizeof(uint32_t);
-	}
+	xdr_recv_pointer(xdr, (void **)&(ret->out_len), sizeof(uint32_t),
+			 xdr_recv_uint32);
 
 	/* output */
-	size = be32_to_cpu(*(uint32_t *)buf);
-	buf += sizeof(uint32_t);
-	if (size && ret->output)
-		memcpy(ret->output, buf, size);
-	buf += size;
-	if (size & 0x3)
-		buf += 4 - (size & 0x3);
+	if (ret->out_len && *ret->out_len && ret->output)
+		xdr_recv_bytes(xdr, (void **)&ret->output, &temp);
 
 	return 0;
 }
@@ -306,11 +214,11 @@ int oem_rapi_client_streaming_function(
 	struct oem_rapi_client_streaming_func_arg *arg,
 	struct oem_rapi_client_streaming_func_ret *ret)
 {
-	return msm_rpc_client_req(client,
-				  OEM_RAPI_STREAMING_FUNCTION_PROC,
-				  oem_rapi_client_streaming_function_arg, arg,
-				  oem_rapi_client_streaming_function_ret,
-				  ret, -1);
+	return msm_rpc_client_req2(client,
+				   OEM_RAPI_STREAMING_FUNCTION_PROC,
+				   oem_rapi_client_streaming_function_arg, arg,
+				   oem_rapi_client_streaming_function_ret,
+				   ret, -1);
 }
 EXPORT_SYMBOL(oem_rapi_client_streaming_function);
 
@@ -331,10 +239,10 @@ struct msm_rpc_client *oem_rapi_client_init(void)
 {
 	mutex_lock(&oem_rapi_client_lock);
 	if (open_count == 0) {
-		rpc_client = msm_rpc_register_client("oemrapiclient",
-						     OEM_RAPI_PROG,
-						     OEM_RAPI_VERS, 0,
-						     oem_rapi_client_cb);
+		rpc_client = msm_rpc_register_client2("oemrapiclient",
+						      OEM_RAPI_PROG,
+						      OEM_RAPI_VERS, 0,
+						      oem_rapi_client_cb);
 		if (!IS_ERR(rpc_client))
 			open_count++;
 	}
@@ -351,8 +259,8 @@ static int oem_rapi_client_test_res;
 static int oem_rapi_client_null(struct msm_rpc_client *client,
 				void *arg, void *ret)
 {
-	return msm_rpc_client_req(client, OEM_RAPI_NULL_PROC,
-				  NULL, NULL, NULL, NULL, -1);
+	return msm_rpc_client_req2(client, OEM_RAPI_NULL_PROC,
+				   NULL, NULL, NULL, NULL, -1);
 }
 
 static int oem_rapi_client_test_streaming_cb_func(
@@ -360,7 +268,6 @@ static int oem_rapi_client_test_streaming_cb_func(
 	struct oem_rapi_client_streaming_func_cb_ret *ret)
 {
 	uint32_t size;
-	pr_info("oem rapi client test cb func\n");
 
 	size = (arg->in_len < OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE) ?
 		arg->in_len : OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE;
@@ -388,8 +295,6 @@ static ssize_t debug_write(struct file *fp, const char __user *buf,
 			   size_t count, loff_t *pos)
 {
 	char input[OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE];
-	char output[OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE];
-	uint32_t out_len;
 	struct oem_rapi_client_streaming_func_arg arg;
 	struct oem_rapi_client_streaming_func_ret ret;
 
@@ -425,10 +330,12 @@ static ssize_t debug_write(struct file *fp, const char __user *buf,
 		arg.output_valid = 1;
 		arg.output_size = OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE;
 
-		ret.out_len = &out_len;
-		ret.output = output;
 		oem_rapi_client_test_res = oem_rapi_client_streaming_function(
 			rpc_client, &arg, &ret);
+
+		kfree(ret.out_len);
+		kfree(ret.output);
+
 	} else
 		oem_rapi_client_test_res = -EINVAL;
 
