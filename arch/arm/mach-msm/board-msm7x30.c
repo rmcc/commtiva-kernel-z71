@@ -116,6 +116,7 @@
 #define PMIC_GPIO_INT		27
 #define PMIC_VREG_WLAN_LEVEL	2900
 #define PMIC_GPIO_SD_DET	35  /* PMIC GPIO Number 36 */
+#define PMIC_GPIO_SDC4_EN	17  /* PMIC GPIO Number 18 */
 
 #define FPGA_SDCC_STATUS       0x8E0001A8
 
@@ -149,6 +150,14 @@ int pm8058_gpios_init(void)
 		.inv_int_pol    = 0,
 	};
 #endif
+	struct pm8058_gpio sdc4_en = {
+		.direction      = PM_GPIO_DIR_OUT,
+		.pull           = PM_GPIO_PULL_UP_1P5,
+		.vin_sel        = 2,
+		.function       = PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol    = 0,
+	};
+
 	if (machine_is_msm7x30_fluid()) {
 		rc = pm8058_gpio_config(25, &backlight_drv); /* pmic gpio 26 */
 		if (rc) {
@@ -158,12 +167,25 @@ int pm8058_gpios_init(void)
 	}
 
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
+	if (machine_is_msm7x30_fluid())
+		sdcc_det.inv_int_pol = 1;
+
 		rc = pm8058_gpio_config(PMIC_GPIO_SD_DET, &sdcc_det);
 		if (rc) {
 			pr_err("%s PMIC_GPIO_SD_DET config failed\n", __func__);
 			return rc;
 		}
 #endif
+	if (machine_is_msm7x30_fluid()) {
+		rc = pm8058_gpio_config(PMIC_GPIO_SDC4_EN, &sdc4_en);
+		if (rc) {
+			pr_err("%s PMIC_GPIO_SDC4_EN config failed\n",
+								 __func__);
+			return rc;
+		}
+		gpio_set_value(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC4_EN), 1);
+	}
+
 	return 0;
 }
 
