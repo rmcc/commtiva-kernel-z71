@@ -487,7 +487,7 @@ int msm_snddev_withdraw_freq(u32 session_id, u32 capability, u32 clnt_type)
 		if ((info->sessions & session_mask)
 			&& (info->capability & capability)) {
 			if (!(info->sessions & ~(session_mask)))
-				info->set_sample_rate = info->sample_rate;
+				info->set_sample_rate = 0;
 		}
 	}
 	if (clnt_type == AUDDEV_CLNT_DEC)
@@ -567,8 +567,6 @@ int msm_snddev_request_freq(int *freq, u32 session_id,
 						= set_freq;
 			} else if (capability == SNDDEV_CAP_TX)
 				routing_info.voice_tx_sample_rate = set_freq;
-			else
-				routing_info.voice_rx_sample_rate = set_freq;
 
 			rc = set_freq;
 			info->set_sample_rate = set_freq;

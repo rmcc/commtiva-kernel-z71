@@ -281,9 +281,7 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 			set_freq = dev_info->sample_rate;
 			if (!msm_device_is_voice(route_cfg.dev_id)) {
 				msm_get_voc_freq(&tx_freq, &rx_freq);
-				if (dev_info->capability == SNDDEV_CAP_RX)
-					set_freq = rx_freq;
-				else
+				if (dev_info->capability == SNDDEV_CAP_TX)
 					set_freq = tx_freq;
 
 				if (set_freq == 0)
