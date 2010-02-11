@@ -154,7 +154,6 @@ struct venc_pmem_list {
 };
 struct venc_dev {
 	bool is_active;
-	bool pmem_mapped;
 	enum venc_state_type state;
 	struct list_head venc_msg_list_head;
 	struct list_head venc_msg_list_free;
@@ -274,7 +273,6 @@ static struct venc_pmem_list *venc_add_pmem_to_list(struct venc_dev *dvenc,
 	spin_lock_irqsave(&dvenc->venc_pmem_list_lock, flags);
 	list_add(&plist->list, &dvenc->venc_pmem_list_head);
 	spin_unlock_irqrestore(&dvenc->venc_pmem_list_lock, flags);
-	dvenc->pmem_mapped = 1;
 	return plist;
 
 err_venc_get_pmem:
@@ -1076,13 +1074,8 @@ static int q6venc_release(struct inode *inode, struct file *file)
 	dvenc = file->private_data;
 	dvenc->is_active = 0;
 	wake_up_all(&dvenc->venc_msg_evt);
-	if (dvenc->pmem_mapped) {
-		list_for_each_entry(plist, &dvenc->venc_pmem_list_head, list) {
-			put_pmem_file(plist->buf.file);
-		}
-		dvenc->pmem_mapped = 0;
-	}
-	dal_call_f0(dvenc->q6_handle, DAL_OP_CLOSE, 0);
+	dal_call_f0(dvenc->q6_handle, VENC_DALRPC_STOP, 1);
+	dal_call_f0(dvenc->q6_handle, DAL_OP_CLOSE, 1);
 	dal_detach(dvenc->q6_handle);
 	list_for_each_entry_safe(l, n, &dvenc->venc_msg_list_free, list) {
 		list_del(&l->list);
@@ -1096,6 +1089,8 @@ static int q6venc_release(struct inode *inode, struct file *file)
 		list_del(&plist->list);
 		kfree(plist);
 	}
+	list_for_each_entry(plist, &dvenc->venc_pmem_list_head, list)
+		put_pmem_file(plist->buf.file);
 	kfree(dvenc);
 	return ret;
 }
