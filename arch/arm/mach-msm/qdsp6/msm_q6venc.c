@@ -290,11 +290,18 @@ static struct venc_pmem_list *venc_get_pmem_from_list(
 {
 	struct venc_pmem_list *plist;
 	unsigned long flags;
+	struct file *file;
 	int found = 0;
 
+	file = fget(pmem_fd);
+	if (!file) {
+		pr_err("%s: invalid encoder buffer fd(%d)\n", __func__,
+			pmem_fd);
+		return NULL;
+	}
 	spin_lock_irqsave(&dvenc->venc_pmem_list_lock, flags);
 	list_for_each_entry(plist, &dvenc->venc_pmem_list_head, list) {
-		if (plist->buf.fd == pmem_fd && plist->buf.btype == btype &&
+		if (plist->buf.btype == btype && plist->buf.file == file &&
 			plist->buf.offset == offset) {
 			found = 1;
 			break;
