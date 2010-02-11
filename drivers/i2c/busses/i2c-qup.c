@@ -59,7 +59,7 @@
  *
  */
 
-#define DEBUG 0
+/* #define DEBUG */
 
 #include <linux/clk.h>
 #include <linux/err.h>
@@ -167,7 +167,7 @@ struct qup_i2c_dev {
 	void                         *complete;
 };
 
-#if DEBUG
+#ifdef DEBUG
 static void
 qup_print_status(struct qup_i2c_dev *dev)
 {
@@ -178,6 +178,10 @@ qup_print_status(struct qup_i2c_dev *dev)
 	dev_dbg(dev->dev, "Qup state is :0x%x\n", val);
 	val = readl(dev->base+QUP_IO_MODE);
 	dev_dbg(dev->dev, "Qup mode is :0x%x\n", val);
+}
+#else
+static inline void qup_print_status(struct qup_i2c_dev *dev)
+{
 }
 #endif
 
@@ -210,9 +214,7 @@ qup_i2c_interrupt(int irq, void *devid)
 intr_done:
 	dev_dbg(dev->dev, "QUP intr= %d, i2c status=0x%x, qup status = 0x%x\n",
 			irq, status, status1);
-#if DEBUG
 	qup_print_status(dev);
-#endif
 	dev->err = err;
 	complete(dev->complete);
 	return IRQ_HANDLED;
@@ -231,9 +233,7 @@ qup_i2c_poll_writeready(struct qup_i2c_dev *dev)
 		if (retries++ == 1000)
 			udelay(100);
 	}
-#if DEBUG
 	qup_print_status(dev);
-#endif
 	return -ETIMEDOUT;
 }
 
@@ -256,7 +256,7 @@ qup_i2c_poll_state(struct qup_i2c_dev *dev, uint32_t state)
 	return -ETIMEDOUT;
 }
 
-#if DEBUG
+#ifdef DEBUG
 static void qup_verify_fifo(struct qup_i2c_dev *dev, uint32_t val,
 				uint32_t addr, int rdwr)
 {
@@ -264,6 +264,11 @@ static void qup_verify_fifo(struct qup_i2c_dev *dev, uint32_t val,
 		dev_dbg(dev->dev, "RD:Wrote 0x%x to out_ff:0x%x\n", val, addr);
 	else
 		dev_dbg(dev->dev, "WR:Wrote 0x%x to out_ff:0x%x\n", val, addr);
+}
+#else
+static inline void qup_verify_fifo(struct qup_i2c_dev *dev, uint32_t val,
+				uint32_t addr, int rdwr)
+{
 }
 #endif
 
@@ -277,25 +282,22 @@ qup_issue_read(struct qup_i2c_dev *dev, struct i2c_msg *msg, int *idx,
 	if (*idx % 4) {
 		writel(carry_over | ((QUP_OUT_START | addr) << 16),
 		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx-2)); */
-#if DEBUG
+
 		qup_verify_fifo(dev, carry_over |
 			((QUP_OUT_START | addr) << 16), (uint32_t)dev->base
 			+ QUP_OUT_FIFO_BASE + (*idx - 2), 1);
-#endif
 		writel((QUP_OUT_REC | dev->cnt),
 			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx+2)); */
-#if DEBUG
+
 		qup_verify_fifo(dev, (QUP_OUT_REC | dev->cnt),
 		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx + 2), 1);
-#endif
 	} else {
 		writel(((QUP_OUT_REC | dev->cnt) << 16) | QUP_OUT_START | addr,
 			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx)); */
-#if DEBUG
+
 		qup_verify_fifo(dev, QUP_OUT_REC << 16 | dev->cnt << 16 |
 		QUP_OUT_START | addr,
 		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx), 1);
-#endif
 	}
 	*idx += 4;
 }
@@ -316,11 +318,10 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 		if (*idx % 4) {
 			writel(*carry_over | ((QUP_OUT_START | addr) << 16),
 					dev->base + QUP_OUT_FIFO_BASE);
-#if DEBUG
+
 			qup_verify_fifo(dev, *carry_over | QUP_OUT_DATA << 16 |
 				addr << 16, (uint32_t)dev->base +
 				QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
-#endif
 		} else
 			val = QUP_OUT_START | addr;
 		*idx += 2;
@@ -335,11 +336,10 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 			writel(val | ((QUP_OUT_DATA |
 				msg->buf[dev->pos]) << 16),
 				dev->base + QUP_OUT_FIFO_BASE);
-#if DEBUG
+
 			qup_verify_fifo(dev, val | QUP_OUT_DATA << 16 |
 				msg->buf[dev->pos] << 16, (uint32_t)dev->base +
 				QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
-#endif
 		} else
 			val = QUP_OUT_DATA | msg->buf[dev->pos];
 		(*idx) += 2;
@@ -371,20 +371,18 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 		} else {
 			writel((last_entry | msg->buf[dev->pos]),
 			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
-#if DEBUG
+
 			qup_verify_fifo(dev, last_entry | msg->buf[dev->pos],
 			(uint32_t)dev->base + QUP_OUT_FIFO_BASE +
 			(*idx), 0);
-#endif
 		}
 	} else {
 		writel(val | ((last_entry | msg->buf[dev->pos]) << 16),
 		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
-#if DEBUG
+
 		qup_verify_fifo(dev, val | (last_entry << 16) |
 		(msg->buf[dev->pos] << 16), (uint32_t)dev->base +
 		QUP_OUT_FIFO_BASE + (*idx) - 2, 0);
-#endif
 	}
 
 	*idx += 2;
@@ -493,9 +491,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			ret = -EIO;
 			goto out_err;
 		}
-#if DEBUG
+
 		qup_print_status(dev);
-#endif
 		/* HW limits Read upto 256 bytes in 1 read without stop
 		 * only FIFO mode supported right now, so read size of
 		 * in_fifo supported in 1 read
@@ -533,9 +530,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			ret = err;
 			goto out_err;
 		}
-#if DEBUG
+
 		qup_print_status(dev);
-#endif
 		writel(dev->clk_ctl, dev->base + QUP_I2C_CLK_CTL);
 
 		do {
@@ -548,9 +544,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				ret = err;
 				goto out_err;
 			}
-#if DEBUG
+
 			qup_print_status(dev);
-#endif
 			/* This operation is Write, check the next operation
 			 * and decide mode
 			 */
@@ -592,9 +587,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			}
 			dev_dbg(dev->dev, "idx:%d, rem:%d, num:%d, mode:%d\n",
 				idx, rem, num, dev->mode);
-#if DEBUG
+
 			qup_print_status(dev);
-#endif
 			timeout = wait_for_completion_timeout(&complete,
 					msecs_to_jiffies(dev->out_fifo_sz));
 			if (!timeout) {
