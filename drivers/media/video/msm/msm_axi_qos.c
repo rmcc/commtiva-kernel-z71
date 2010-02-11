@@ -29,7 +29,7 @@ int request_axi_qos(uint32_t freq)
 		rc = pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ,
 			MSM_AXI_QOS_NAME, freq);
 		if (rc < 0)
-			printk(KERN_ERR "request AXI bus QOS fails. rc = %d\n",
+			CDBG("request AXI bus QOS fails. rc = %d\n",
 				rc);
 		else {
 			CDBG("%s: request successful\n", __func__);
@@ -47,7 +47,7 @@ int update_axi_qos(uint32_t freq)
 		rc = pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
 			MSM_AXI_QOS_NAME, freq);
 		if (rc < 0)
-			printk(KERN_ERR "update AXI bus QOS fails. rc = %d\n",
+			CDBG("update AXI bus QOS fails. rc = %d\n",
 				rc);
 		else
 			CDBG("%s: request successful\n", __func__);
