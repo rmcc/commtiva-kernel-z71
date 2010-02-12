@@ -119,12 +119,11 @@ static int rpc_clients_cb_thread(void *data)
 				client->cb_func(client, client->cb_xdr.in_buf,
 						client->cb_xdr.in_size);
  bad_rpc:
-			kfree(cb_item->buf);
+			xdr_clean_input(&client->cb_xdr);
 			kfree(cb_item);
 			mutex_lock(&client->cb_item_list_lock);
 		}
 		mutex_unlock(&client->cb_item_list_lock);
-		xdr_init_input(&client->cb_xdr, NULL, 0);
 	}
 	complete_and_exit(&client->cb_complete, 0);
 }
@@ -149,11 +148,6 @@ static int rpc_clients_thread(void *data)
 
 		type = be32_to_cpu(*((uint32_t *)buffer + 1));
 		if (type == 1) {
-
-			if (client->xdr.in_buf != NULL) {
-				pr_err("%s: input xdr not empty\n", __func__);
-				continue;
-			}
 			xdr_init_input(&client->xdr, buffer, rc);
 			wake_up(&client->reply_wait);
 		} else if (type == 0) {
@@ -170,8 +164,7 @@ static int rpc_clients_thread(void *data)
 						client->cb_func(client,
 						client->cb_xdr.in_buf, rc);
 				}
-				kfree(buffer);
-				xdr_init_input(&client->cb_xdr, NULL, 0);
+				xdr_clean_input(&client->cb_xdr);
 			} else {
 				cb_item = kmalloc(sizeof(*cb_item), GFP_KERNEL);
 				if (!cb_item) {
@@ -204,6 +197,9 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 	if (!client)
 		return ERR_PTR(-ENOMEM);
 
+	xdr_init(&client->xdr);
+	xdr_init(&client->cb_xdr);
+
 	buf = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
 	if (!buf) {
 		kfree(client);
@@ -213,8 +209,7 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 
 	buf = kmalloc(MSM_RPC_MSGSIZE_MAX, GFP_KERNEL);
 	if (!buf) {
-		kfree(client->xdr.out_buf);
-		xdr_init_output(&client->xdr, NULL, 0);
+		xdr_clean_output(&client->xdr);
 		kfree(client);
 		return ERR_PTR(-ENOMEM);
 	}
@@ -222,15 +217,10 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 
 	init_waitqueue_head(&client->reply_wait);
 	mutex_init(&client->req_lock);
-	mutex_init(&client->xdr.out_lock);
-	mutex_init(&client->cb_xdr.out_lock);
 	client->buf = NULL;
 	client->cb_buf = NULL;
 	client->cb_size = 0;
 	client->exit_flag = 0;
-
-	xdr_init_input(&client->xdr, NULL, 0);
-	xdr_init_input(&client->cb_xdr, NULL, 0);
 
 	init_completion(&client->complete);
 	init_completion(&client->cb_complete);
@@ -247,10 +237,8 @@ static struct msm_rpc_client *msm_rpc_create_client(void)
 
 static void msm_rpc_destroy_client(struct msm_rpc_client *client)
 {
-	kfree(client->xdr.out_buf);
-	xdr_init_output(&client->xdr, NULL, 0);
-	kfree(client->cb_xdr.out_buf);
-	xdr_init_output(&client->cb_xdr, NULL, 0);
+	xdr_clean_output(&client->xdr);
+	xdr_clean_output(&client->cb_xdr);
 
 	kfree(client);
 }
@@ -449,8 +437,8 @@ int msm_rpc_unregister_client(struct msm_rpc_client *client)
 
 	msm_rpc_close(client->ept);
 	msm_rpc_remove_all_cb_func(client);
-	kfree(client->xdr.out_buf);
-	kfree(client->cb_xdr.out_buf);
+	xdr_clean_output(&client->xdr);
+	xdr_clean_output(&client->cb_xdr);
 	kfree(client);
 	return 0;
 }
@@ -493,13 +481,14 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 {
 	struct rpc_reply_hdr *rpc_rsp;
 	int rc = 0;
+	uint32_t req_xid;
 
 	mutex_lock(&client->req_lock);
 
 	msm_rpc_setup_req((struct rpc_request_hdr *)client->xdr.out_buf,
 			  client->prog, client->ver, proc);
 	client->xdr.out_index = sizeof(struct rpc_request_hdr);
-
+	req_xid = *(uint32_t *)client->xdr.out_buf;
 	if (arg_func) {
 		rc = arg_func(client,
 			      (void *)((struct rpc_request_hdr *)
@@ -522,15 +511,26 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 	if (timeout < 0)
 		timeout = msecs_to_jiffies(10000);
 
-	rc = wait_event_timeout(client->reply_wait,
-				xdr_read_avail(&client->xdr), timeout);
-	if (rc == 0) {
-		rc = -ETIMEDOUT;
-		goto release_locks;
-	} else
-		rc = 0;
+	do {
+		rc = wait_event_timeout(client->reply_wait,
+					xdr_read_avail(&client->xdr), timeout);
+		if (rc == 0) {
+			pr_err("%s: request timeout\n", __func__);
+			rc = -ETIMEDOUT;
+			goto release_locks;
+		}
 
-	rpc_rsp = (struct rpc_reply_hdr *)client->xdr.in_buf;
+		rpc_rsp = (struct rpc_reply_hdr *)client->xdr.in_buf;
+		if (req_xid != rpc_rsp->xid) {
+			pr_info("%s: xid mismatch, req %d reply %d\n",
+			       __func__, be32_to_cpu(req_xid),
+			       be32_to_cpu(rpc_rsp->xid));
+			timeout = rc;
+			xdr_clean_input(&client->xdr);
+		} else
+			rc = 0;
+	} while (rc);
+
 	if (be32_to_cpu(rpc_rsp->reply_stat) != RPCMSG_REPLYSTAT_ACCEPTED) {
 		pr_err("%s: RPC call was denied! %d\n", __func__,
 		       be32_to_cpu(rpc_rsp->reply_stat));
@@ -550,8 +550,7 @@ int msm_rpc_client_req(struct msm_rpc_client *client, uint32_t proc,
 		rc = ret_func(client, (void *)(rpc_rsp + 1), ret_data);
 
  free_and_release:
-	kfree(client->xdr.in_buf);
-	xdr_init_input(&client->xdr, NULL, 0);
+	xdr_clean_input(&client->xdr);
 	client->xdr.out_index = 0;
  release_locks:
 	mutex_unlock(&client->req_lock);
@@ -596,10 +595,12 @@ int msm_rpc_client_req2(struct msm_rpc_client *client, uint32_t proc,
 {
 	struct rpc_reply_hdr rpc_rsp;
 	int rc = 0;
+	uint32_t req_xid;
 
 	mutex_lock(&client->req_lock);
 
 	xdr_start_request(&client->xdr, client->prog, client->ver, proc);
+	req_xid = be32_to_cpu(*(uint32_t *)client->xdr.out_buf);
 	if (arg_func) {
 		rc = arg_func(client, &client->xdr, arg_data);
 		if (rc < 0) {
@@ -618,14 +619,26 @@ int msm_rpc_client_req2(struct msm_rpc_client *client, uint32_t proc,
 	if (timeout < 0)
 		timeout = msecs_to_jiffies(10000);
 
-	rc = wait_event_timeout(client->reply_wait,
-				xdr_read_avail(&client->xdr), timeout);
-	if (rc == 0)
-		return -ETIMEDOUT;
-	else
-		rc = 0;
+	do {
+		rc = wait_event_timeout(client->reply_wait,
+					xdr_read_avail(&client->xdr), timeout);
+		if (rc == 0) {
+			pr_err("%s: request timeout\n", __func__);
+			rc = -ETIMEDOUT;
+			goto release_locks;
+		}
 
-	xdr_recv_reply(&client->xdr, &rpc_rsp);
+		xdr_recv_reply(&client->xdr, &rpc_rsp);
+		/* TODO: may be this check should be a xdr function */
+		if (req_xid != rpc_rsp.xid) {
+			pr_info("%s: xid mismatch, req %d reply %d\n",
+				__func__, req_xid, rpc_rsp.xid);
+			timeout = rc;
+			xdr_clean_input(&client->xdr);
+		} else
+			rc = 0;
+	} while (rc);
+
 	if (rpc_rsp.reply_stat != RPCMSG_REPLYSTAT_ACCEPTED) {
 		pr_err("%s: RPC call was denied! %d\n",
 		       __func__, rpc_rsp.reply_stat);
@@ -640,14 +653,13 @@ int msm_rpc_client_req2(struct msm_rpc_client *client, uint32_t proc,
 		goto free_and_release;
 	}
 
-	client->xdr.in_index = sizeof(rpc_rsp);
 	if (ret_func)
 		rc = ret_func(client, &client->xdr, ret_data);
 
  free_and_release:
-	kfree(client->xdr.in_buf);
-	xdr_init_input(&client->xdr, NULL, 0);
-	client->xdr.in_index = 0;
+	xdr_clean_input(&client->xdr);
+	/* TODO: put it in xdr_reset_output */
+	client->xdr.out_index = 0;
  release_locks:
 	mutex_unlock(&client->req_lock);
 	return rc;
