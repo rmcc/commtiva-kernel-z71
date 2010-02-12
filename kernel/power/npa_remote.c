@@ -146,13 +146,20 @@ static int npa_get_remote_type(enum npa_data_type enum_type, int type)
 
 static void create_local_resource(struct work_struct *work)
 {
+	int err = 0;
 	struct npa_node_info *node_info =
 		container_of(work, struct npa_node_info, work);
 
 	/* Define the local node for the resource.
 	 * This will give the callback to the remote node creator
 	 */
-	int err = npa_define_node(node_info->node, &node_info->init_state,
+
+	npa_log(NPA_LOG_MASK_RESOURCE, NULL,
+			"NPA Remote: Remote resource [%s] is available, "
+			"creating local resource\n",
+			node_info->resource_name);
+
+	err = npa_define_node(node_info->node, &node_info->init_state,
 			node_info->user_callback, node_info->user_data);
 
 	BUG_ON(err);
@@ -203,6 +210,11 @@ int npa_remote_define_node(struct npa_node_definition *node,
 	/* Set the local callback pointer and wait for the remote
 	 * processor to give us a callback on availability
 	 */
+
+	npa_log(NPA_LOG_MASK_RESOURCE, NULL,
+			"NPA Remote: Checking if remote resource [%s] "
+			"is available\n", node_info->resource_name);
+
 	ret = npa_remote_resource_available(node_info->resource_name,
 			npa_remote_resource_available_cb, (void *)node_info);
 
@@ -227,6 +239,11 @@ unsigned int npa_local_agg_driver_fn(struct npa_resource *resource,
 	 * to the remote resource.
 	 */
 	if (!resource->definition->data) {
+		npa_log(NPA_LOG_MASK_CLIENT, resource,
+			"NPA Remote: Creating remote sync client [%s] "
+			"of resource [%s]\n",
+			client->name, resource->definition->name);
+
 		result = npa_remote_create_sync_client(
 					client->resource_name,
 					client->name,
@@ -234,12 +251,24 @@ unsigned int npa_local_agg_driver_fn(struct npa_resource *resource,
 						NPA_CLIENT_TYPE,
 						client->type),
 					&handle);
+
 		BUG_ON(result);
 		resource->definition->data = handle;
 	}
 
+	npa_log(NPA_LOG_MASK_CLIENT, resource,
+			"NPA Remote: Issuing remote request to resource [%s] "
+			"by client [%s] with state [%u]\n",
+			resource->definition->name, client->name,
+			PENDING_STATE(client));
+
 	result = npa_remote_issue_required_request(resource->definition->data,
 			PENDING_STATE(client), &new_state);
+
+	npa_log(NPA_LOG_MASK_CLIENT, resource,
+			"NPA Remote: Local resource[%s] new state [%u]\n",
+			resource->definition->name, new_state);
+
 	BUG_ON(result);
 	resource->active_state = new_state;
 
@@ -275,6 +304,12 @@ static void npa_remote_create_client_cb_fn(struct npa_client *client)
 	/* Create a remote client for this client and attach the handle
 	 * to the client's structure
 	 */
+
+	npa_log(NPA_LOG_MASK_CLIENT, client->resource,
+			"NPA Remote: Creating remote sync client [%s] "
+			"of resource [%s]\n",
+			client->name, client->resource->definition->name);
+
 	result = npa_remote_create_sync_client(
 			client->resource->definition->name,
 			client->name,
@@ -287,6 +322,11 @@ static void npa_remote_create_client_cb_fn(struct npa_client *client)
 
 static void npa_remote_destroy_client_cb_fn(struct npa_client *client)
 {
+	npa_log(NPA_LOG_MASK_CLIENT, client->resource,
+			"NPA Remote: Destroying remote client [%s] "
+			"of resource [%s]\n",
+			client->name, client->resource->definition->name);
+
 	npa_remote_destroy_client(client->resource_data);
 }
 
@@ -302,8 +342,19 @@ unsigned int npa_remote_agg_update_fn(struct npa_resource *resource,
 	 * its shadow client on the remote processor. The remote client is
 	 * created when the local clients are created.
 	 */
+	npa_log(NPA_LOG_MASK_CLIENT, resource,
+			"NPA Remote: Issuing remote request to resource [%s] "
+			"by client [%s] with state [%u]\n",
+			resource->definition->name, client->name,
+			PENDING_STATE(client));
+
 	result = npa_remote_issue_required_request(client->resource_data,
 			PENDING_STATE(client), &new_state);
+
+	npa_log(NPA_LOG_MASK_CLIENT, resource,
+			"NPA Remote: Local resource[%s] new state [%u]\n",
+			resource->definition->name, new_state);
+
 	BUG_ON(result);
 	resource->active_state = new_state;
 

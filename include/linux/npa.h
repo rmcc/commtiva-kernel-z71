@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,6 +32,9 @@
 
 #ifndef NPA_H
 #define NPA_H
+
+#include <linux/err.h>
+#include <linux/errno.h>
 
 /* The max string length for a resource/client/event name */
 #define NPA_NAME_MAX 64

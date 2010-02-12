@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -36,10 +36,20 @@
 #include <linux/workqueue.h>
 #include <linux/npa.h>
 
-#define ACTIVE_REQUEST  0
-#define PENDING_REQUEST 1
-#define ACTIVE_STATE(client) ((client)->work[ACTIVE_REQUEST].state)
-#define PENDING_STATE(client) ((client)->work[PENDING_REQUEST].state)
+#define ACTIVE_REQUEST		0
+#define PENDING_REQUEST		1
+#define ACTIVE_STATE(client)	((client)->work[ACTIVE_REQUEST].state)
+#define PENDING_STATE(client)	((client)->work[PENDING_REQUEST].state)
+
+#define NPA_LOG_MASK_NO_LOG	0
+#define NPA_LOG_MASK_RESOURCE	(1<<0)
+#define NPA_LOG_MASK_CLIENT	(1<<1)
+#define NPA_LOG_MASK_EVENT	(1<<2)
+#define NPA_LOG_MASK_LIST	(1<<3)
+#define NPA_LOG_MASK_PLUGIN	(1<<4)
+#define NPA_LOG_MASK_LOCKS	(1<<5)
+
+#define npa_log(lm, res, f, ...) _npa_log(lm, res, KERN_INFO f, ##__VA_ARGS__)
 
 struct npa_client;
 struct npa_event;
@@ -331,6 +341,8 @@ extern char npa_log_resource_name[];
 extern struct npa_resource *npa_log_resource;
 extern int npa_log_reset;
 
+void _npa_log(int log_mask, struct npa_resource *res, const char *fmt, ...);
+
 /* Debug functions to print resource, resource-states etc */
 /* Should be called in a resource locked context Eg. driver_function */
 void __print_resource(struct npa_resource *r);
@@ -338,6 +350,8 @@ void __print_resources(void);
 void __print_client_states(struct npa_resource *resource);
 void __print_aliases(void);
 #else
+static inline void _npa_log(int log_mask, struct npa_resource *res,
+		const char *fmt, ...) {}
 static inline void __print_resource(struct npa_resource *r) {}
 static inline void __print_resources(void) {}
 static inline void __print_client_states(struct npa_resource *resource) {}
