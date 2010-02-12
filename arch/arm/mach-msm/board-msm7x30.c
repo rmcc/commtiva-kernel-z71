@@ -107,7 +107,7 @@
 #include <mach/msm_serial_hs.h>
 
 
-#define MSM_PMEM_SF_SIZE	0x1000000
+#define MSM_PMEM_SF_SIZE	0x1300000
 #define MSM_FB_SIZE		0x200000
 #define MSM_PMEM_GPU1_SIZE      0x1000000
 #define MSM_GPU_PHYS_SIZE       SZ_2M
