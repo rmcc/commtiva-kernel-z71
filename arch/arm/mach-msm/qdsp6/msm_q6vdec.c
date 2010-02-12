@@ -562,6 +562,22 @@ static int vdec_freebuffers(struct vdec_data *vd, void *argp)
 
 	return ret;
 }
+
+static int vdec_getversion(struct vdec_data *vd, void *argp)
+{
+	struct vdec_version ver_info;
+	int ret = 0;
+
+	ver_info.major = VDEC_GET_MAJOR_VERSION(VDEC_INTERFACE_VERSION);
+	ver_info.minor = VDEC_GET_MINOR_VERSION(VDEC_INTERFACE_VERSION);
+
+	ret = copy_to_user(((struct vdec_version *)argp),
+				&ver_info, sizeof(ver_info));
+
+	return ret;
+
+}
+
 static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct vdec_data *vd = file->private_data;
@@ -641,7 +657,15 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			pr_err("%s: remote function failed (%d)\n",
 			       __func__, ret);
 		break;
+	case VDEC_IOCTL_GETVERSION:
+		TRACE("VDEC_IOCTL_GETVERSION (pid=%d tid=%d)\n",
+			current->group_leader->pid, current->pid);
+		ret = vdec_getversion(vd, argp);
 
+		if (ret)
+			pr_err("%s: remote function failed (%d)\n",
+				__func__, ret);
+		break;
 	default:
 		pr_err("%s: invalid ioctl!\n", __func__);
 		ret = -EINVAL;
