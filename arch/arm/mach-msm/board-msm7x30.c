@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -129,7 +129,7 @@
 #define PM8058_GPIO_PM_TO_SYS(pm_gpio)     (pm_gpio + NR_GPIO_IRQS)
 #define PM8058_GPIO_SYS_TO_PM(sys_gpio)    (sys_gpio - NR_GPIO_IRQS)
 
-int pm8058_gpios_init(void)
+int pm8058_gpios_init(struct pm8058_chip *pm_chip)
 {
 	int rc;
 	struct pm8058_gpio backlight_drv = {
@@ -159,7 +159,8 @@ int pm8058_gpios_init(void)
 	};
 
 	if (machine_is_msm7x30_fluid()) {
-		rc = pm8058_gpio_config(25, &backlight_drv); /* pmic gpio 26 */
+		/* pmic gpio 26 */
+		rc = pm8058_gpio_config_h(pm_chip, 25, &backlight_drv);
 		if (rc) {
 			pr_err("%s PMIC GPIO 25 write failed\n", __func__);
 			return rc;
@@ -170,14 +171,15 @@ int pm8058_gpios_init(void)
 	if (machine_is_msm7x30_fluid())
 		sdcc_det.inv_int_pol = 1;
 
-		rc = pm8058_gpio_config(PMIC_GPIO_SD_DET, &sdcc_det);
-		if (rc) {
-			pr_err("%s PMIC_GPIO_SD_DET config failed\n", __func__);
-			return rc;
-		}
+	rc = pm8058_gpio_config_h(pm_chip, PMIC_GPIO_SD_DET, &sdcc_det);
+	if (rc) {
+		pr_err("%s PMIC_GPIO_SD_DET config failed\n", __func__);
+		return rc;
+	}
 #endif
+
 	if (machine_is_msm7x30_fluid()) {
-		rc = pm8058_gpio_config(PMIC_GPIO_SDC4_EN, &sdc4_en);
+		rc = pm8058_gpio_config_h(pm_chip, PMIC_GPIO_SDC4_EN, &sdc4_en);
 		if (rc) {
 			pr_err("%s PMIC_GPIO_SDC4_EN config failed\n",
 								 __func__);
