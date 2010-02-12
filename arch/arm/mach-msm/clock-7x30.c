@@ -859,7 +859,7 @@ static unsigned soc_clk_get_rate(unsigned id)
 	unsigned ret = 0;
 
 	spin_lock_irqsave(&clock_reg_lock, flags);
-	if (t->type == MND && t->type == BASIC)
+	if (t->type == MND || t->type == BASIC)
 		ret = t->current_freq->freq_hz;
 	else {
 		/* Walk up the tree to see if any parent has a rate. */
