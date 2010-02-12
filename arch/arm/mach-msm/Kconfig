@@ -52,6 +52,10 @@ if ARCH_QSD8X50
 config MSM_SOC_REV_A
 	bool "Rev. A"
 endif
+if ARCH_MSM7X30
+config MSM_SOC_REV_2
+	bool "Rev. 2"
+endif
 endchoice
 
 config  ARCH_MSM_ARM11
