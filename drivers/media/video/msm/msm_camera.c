@@ -160,8 +160,7 @@ static int check_overlap(struct hlist_head *ptype,
 		if (CONTAINS(region, &t, paddr) ||
 				CONTAINS(&t, region, paddr) ||
 				OVERLAPS(region, &t, paddr)) {
-			printk(KERN_ERR
-				" region (PHYS %p len %ld)"
+			CDBG(" region (PHYS %p len %ld)"
 				" clashes with registered region"
 				" (paddr %p len %ld)\n",
 				(void *)t.paddr, t.len,

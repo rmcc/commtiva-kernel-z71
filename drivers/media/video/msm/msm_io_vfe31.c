@@ -96,14 +96,14 @@ void __iomem *appbase, *mdcbase, *camifpadbase;
 
 void msm_io_w(u32 data, void __iomem *addr)
 {
-	printk(KERN_INFO "%s: %08x %08x\n", __func__, (int) (addr), (data));
+	CDBG("%s: %08x %08x\n", __func__, (int) (addr), (data));
 	writel((data), (addr));
 }
 
 u32 msm_io_r(void __iomem *addr)
 {
 	uint32_t data = readl(addr);
-	printk(KERN_INFO "%s: %08x %08x\n", __func__, (int) (addr), (data));
+	CDBG("%s: %08x %08x\n", __func__, (int) (addr), (data));
 	return data;
 }
 
@@ -124,7 +124,7 @@ void msm_io_dump(void __iomem *addr, int size)
 	int i;
 	u32 *p = (u32 *) addr;
 	u32 data;
-	printk(KERN_INFO "%s: %p %d\n", __func__, addr, size);
+	CDBG("%s: %p %d\n", __func__, addr, size);
 	line_str[0] = '\0';
 	p_str = line_str;
 	for (i = 0; i < size/4; i++) {
@@ -136,18 +136,18 @@ void msm_io_dump(void __iomem *addr, int size)
 		sprintf(p_str, "%08x ", data);
 		p_str += 9;
 		if ((i + 1) % 4 == 0) {
-			printk(KERN_INFO "%s\n", line_str);
+			CDBG("%s\n", line_str);
 			line_str[0] = '\0';
 			p_str = line_str;
 		}
 	}
 	if (line_str[0] != '\0')
-		printk(KERN_INFO "%s\n", line_str);
+		CDBG("%s\n", line_str);
 }
 
 void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len)
 {
-	printk(KERN_INFO "%s: %p %p %d\n", __func__, dest_addr, src_addr, len);
+	CDBG("%s: %p %p %d\n", __func__, dest_addr, src_addr, len);
 	msm_io_memcpy_toio(dest_addr, src_addr, len / 4);
 	msm_io_dump(dest_addr, len);
 }
@@ -158,37 +158,37 @@ static void msm_camera_vreg_enable(void)
 	int rc;
 	sensor_vreg = vreg_get(NULL, "gp2");
 	if (IS_ERR(sensor_vreg)) {
-		printk(KERN_INFO "%s: vreg_get(%s) failed (%ld)\n",
+		CDBG("%s: vreg_get(%s) failed (%ld)\n",
 			__func__, "gp2", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
 		rc = vreg_set_level(sensor_vreg, 2600);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg_set level failed (%d)\n",
+			CDBG("%s: vreg_set level failed (%d)\n",
 				__func__, rc);
 		}
 		rc = vreg_enable(sensor_vreg);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg_enable() = %d \n",
+			CDBG("%s: vreg_enable() = %d \n",
 				__func__, rc);
 		}
 	}
 	sensor_vreg = vreg_get(NULL, "lvsw1");
 	if (IS_ERR(sensor_vreg)) {
-		printk(KERN_INFO "%s: vreg_get(%s) failed (%ld)\n",
+		CDBG("%s: vreg_get(%s) failed (%ld)\n",
 			__func__, "lvsw1", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
 		rc = vreg_set_level(sensor_vreg, 1800);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg_set level failed (%d)\n",
+			CDBG("%s: vreg_set level failed (%d)\n",
 				__func__, rc);
 		}
 		rc = vreg_enable(sensor_vreg);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg_enable() = %d \n",
+			CDBG("%s: vreg_enable() = %d \n",
 				__func__, rc);
 		}
 	}
@@ -200,27 +200,27 @@ static void msm_camera_vreg_disable(void)
 	int rc;
 	sensor_vreg = vreg_get(NULL, "gp2");
 	if (IS_ERR(sensor_vreg)) {
-		printk(KERN_INFO "%s: sensor_vreg(%s) failed (%ld)\n",
+		CDBG("%s: sensor_vreg(%s) failed (%ld)\n",
 			__func__, "gp2", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
 		rc = vreg_disable(sensor_vreg);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg disable failed (%d)\n",
+			CDBG("%s: vreg disable failed (%d)\n",
 				__func__, rc);
 		}
 	}
 	sensor_vreg = vreg_get(NULL, "lvsw1");
 	if (IS_ERR(sensor_vreg)) {
-		printk(KERN_INFO "%s: sensor_vreg(%s) failed (%ld)\n",
+		CDBG("%s: sensor_vreg(%s) failed (%ld)\n",
 			__func__, "lvsw1", PTR_ERR(sensor_vreg));
 		return;
 	}
 	if (sensor_vreg) {
 		rc = vreg_disable(sensor_vreg);
 		if (rc) {
-			printk(KERN_INFO "%s: vreg disable failed (%d)\n",
+			CDBG("%s: vreg disable failed (%d)\n",
 				__func__, rc);
 		}
 	}
