@@ -337,7 +337,7 @@ static int audio_ioctl(struct audio_client *ac, void *ptr, uint32_t len)
 
 	hdr->size = len - sizeof(u32);
 	hdr->dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
-	hdr->src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
+	hdr->src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_APP);
 	hdr->context = ac->session;
 	ac->cb_status = -EBUSY;
 	r = dal_call(ac->client, AUDIO_OP_CONTROL, 5, ptr, len, &tmp, sizeof(tmp));
@@ -607,7 +607,7 @@ int q6audio_read(struct audio_client *ac, struct audio_buffer *ab)
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.size = sizeof(rpc) - sizeof(u32);
 	rpc.hdr.dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
-	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
+	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_APP);
 	rpc.hdr.context = ac->session;
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_TX;
 	rpc.buffer.addr = ab->phys;
@@ -629,7 +629,7 @@ int q6audio_write(struct audio_client *ac, struct audio_buffer *ab)
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.size = sizeof(rpc) - sizeof(u32);
 	rpc.hdr.dst = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_DSP);
-	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_MODEM);
+	rpc.hdr.src = AUDIO_ADDR(ac->session, 0, AUDIO_DOMAIN_APP);
 	rpc.hdr.context = ac->session;
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_DATA_RX;
 	rpc.buffer.addr = ab->phys;
@@ -758,7 +758,7 @@ static void audio_init(struct dal_client *client)
 	u32 tmp[3];
 
 	tmp[0] = 2 * sizeof(u32);
-	tmp[1] = 1;
+	tmp[1] = 0;
 	tmp[2] = 0;
 	dal_call(client, AUDIO_OP_INIT, 5, tmp, sizeof(tmp),
 		 tmp, sizeof(u32));
