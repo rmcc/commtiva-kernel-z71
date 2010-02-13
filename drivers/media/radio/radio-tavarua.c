@@ -120,6 +120,7 @@ struct tavarua_device {
 	int (*irqpin_setup)(struct marimba_fm_platform_data *pdata);
 	int (*irqpin_teardown)(struct marimba_fm_platform_data *pdata);
 	struct marimba_fm_platform_data *pdata;
+	unsigned int chipID;
 	/*RDS buffers + Radio event buffer*/
 	struct kfifo *data_buf[TAVARUA_BUF_MAX];
 	/* search paramters */
@@ -323,7 +324,7 @@ static int sync_read_xfr(struct tavarua_device *radio,
 		msecs_to_jiffies(WAIT_TIMEOUT)) || (retval < 0)) {
 		radio->xfr_in_progress = 0;
 		start_pending_xfr(radio);
-		return retval;
+		return -ETIME;
 	}
 	FMDBG("read xfr regs\n");
 	return retval;
@@ -345,7 +346,7 @@ static int sync_write_xfr(struct tavarua_device *radio,
 		msecs_to_jiffies(WAIT_TIMEOUT)) || (retval < 0)) {
 		radio->xfr_in_progress = 0;
 		start_pending_xfr(radio);
-		return retval;
+		return -ETIME;
 	}
 
 	FMDBG("write xfr regs\n");
@@ -643,6 +644,7 @@ static void read_int_stat(struct work_struct *work)
 		case RX_CONFIG:
 		case RADIO_CONFIG:
 		case RDS_CONFIG:
+		case CHIPID:
 			memcpy(radio->sync_xfr_regs,
 				&radio->registers[XFRCTRL+1], XFR_REG_NUM);
 			radio->xfr_in_progress = 0;
@@ -674,6 +676,7 @@ static void read_int_stat(struct work_struct *work)
 		case (0x80 | RX_CONFIG):
 		case (0x80 | RADIO_CONFIG):
 		case (0x80 | RDS_CONFIG):
+		case (0x80 | INT_CTRL):
 			radio->xfr_in_progress = 0;
 			complete(&radio->sync_req_done);
 			FMDBG("XFR write complete\n");
@@ -1032,30 +1035,44 @@ static int tavarua_fops_open(struct file *file)
 	}
 	if (value == FM_ENABLE) {
 		FMDBG("SoC is already initialized\n");
-		return 0;
-	}
+	} else {
+		FMDBG("initializing SoC\n");
+		radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+		value = FM_ENABLE;
+		retval = marimba_write_bit_mask(radio->marimba,
+				MARIMBA_XO_BUFF_CNTRL, &value, 1, value);
+		if (retval < 0) {
+			printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed\n",
+						__func__);
+			goto open_err;
+		}
 
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
-	value = FM_ENABLE;
-	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
-							&value, 1, value);
-	if (retval < 0) {
-		printk(KERN_ERR "%s:XO_BUFF_CNTRL write failed\n", __func__);
-		goto open_err;
+		/* Bring up FM core */
+		radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
+		retval = tavarua_write_registers(radio, LEAKAGE_CNTRL,
+							buffer, 6);
+		if (retval < 0) {
+			printk(KERN_ERR "%s: failed to bring up FM Core\n",
+							__func__);
+			goto open_err;
+		}
+		if (!wait_for_completion_timeout(&radio->sync_req_done,
+			msecs_to_jiffies(WAIT_TIMEOUT))) {
+			retval = -1;
+			goto open_err;
+		}
 	}
+	/* get Chip ID */
+	retval = sync_read_xfr(radio, CHIPID);
+	if (retval < 0)
+		goto open_err;
 
-	/* Bring up FM core */
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
-	retval = tavarua_write_registers(radio, LEAKAGE_CNTRL, buffer, 6);
-	if (retval < 0) {
-		printk(KERN_ERR "%s: failed to bring up FM Core\n", __func__);
-		goto open_err;
-	}
-	if (!wait_for_completion_timeout(&radio->sync_req_done,
-		msecs_to_jiffies(WAIT_TIMEOUT))) {
-		retval = -1;
-		goto open_err;
-	}
+	radio->chipID = (radio->sync_xfr_regs[1] << 24) |
+			(radio->sync_xfr_regs[4] << 16) |
+			(radio->sync_xfr_regs[5] << 8)  |
+			(radio->sync_xfr_regs[6]);
+
+	printk(KERN_WARNING DRIVER_NAME ": Chip ID %x\n", radio->chipID);
 
 	return 0;
 
@@ -1811,25 +1828,38 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 					enum radio_state_t state)
 {
 	int retval;
-	retval = tavarua_write_register(radio, STATUS_REG1, READY | TUNE
-			| SEARCH | SCANNEXT | SIGNAL | INTF | SYNC | AUDIO);
-	if (retval < 0)
-		return retval;
+	unsigned char int_ctrl[16];
+	int_ctrl[0] = READY | TUNE | SEARCH | SCANNEXT |
+				SIGNAL | INTF | SYNC | AUDIO;
+	if (state == FM_RECV)
+		int_ctrl[1] =  RDSDAT | RDSRT | RDSPS | RDSAF;
+	else
+		int_ctrl[1] = RDSRT | TXRDSDAT | TXRDSDONE;
 
-	if (state == FM_RECV) {
-		retval = tavarua_write_register(radio, STATUS_REG2,
-					RDSDAT | RDSRT | RDSPS | RDSAF);
+	int_ctrl[2] = TRANSFER | ERROR;
+
+	/* use xfr for interrupt setup */
+	if (radio->chipID == MARIMBA_2_1) {
+		retval = write_to_xfr(radio, INT_CTRL, int_ctrl, XFR_REG_NUM);
+		if (retval < 0)
+			return retval;
+	/* use register write to setup interrupts */
 	} else {
-		retval = tavarua_write_register(radio, STATUS_REG2, RDSRT |
-						TXRDSDAT | TXRDSDONE);
-	}
-	if (retval < 0)
-		return retval;
+		retval = tavarua_write_register(radio,
+					STATUS_REG1, int_ctrl[0]);
+		if (retval < 0)
+			return retval;
 
-	retval = tavarua_write_register(radio, STATUS_REG3,
-					TRANSFER | ERROR);
-	if (retval < 0)
-		return retval;
+		retval = tavarua_write_register(radio,
+					STATUS_REG2, int_ctrl[1]);
+		if (retval < 0)
+			return retval;
+
+		retval = tavarua_write_register(radio,
+					STATUS_REG3, int_ctrl[2]);
+		if (retval < 0)
+			return retval;
+	}
 
 	return 0;
 }
@@ -1847,7 +1877,8 @@ static int tavarua_start(struct tavarua_device *radio,
 	retval = tavarua_write_register(radio, RDCTRL, state);
 	if (retval < 0)
 		return retval;
-
+	/* wait for radio to init */
+	msleep(RADIO_INIT_TIME);
 	/* enable interrupts */
 	tavarua_setup_interrupts(radio, state);
 	/* default region is US */
