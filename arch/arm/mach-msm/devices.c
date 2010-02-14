@@ -1301,6 +1301,12 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("vfe_mdc_clk",	VFE_MDC_CLK,	NULL, 0),
 	CLK_PCOM("vfe_pclk",	VFE_PCLK,	NULL, OFF),
 	CLK_PCOM("vpe_clk",	VPE_CLK,	NULL, 0),
+
+#ifdef CONFIG_MSM_SOC_REV_2
+	CLK_PCOM("csi_clk",	CSI0_CLK,	NULL, 0),
+	CLK_PCOM("csi_pclk",	CSI0_PCLK,	NULL, 0),
+	CLK_PCOM("csi_vfe_clk",	CSI0_VFE_CLK,	NULL, 0),
+#endif
 };
 
 unsigned msm_num_clocks_7x30 = ARRAY_SIZE(msm_clocks_7x30);
