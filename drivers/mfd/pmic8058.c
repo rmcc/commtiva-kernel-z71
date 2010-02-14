@@ -213,48 +213,41 @@ ssbi_read(struct i2c_client *client, u16 addr, u8 *buf, size_t len)
 }
 
 /* External APIs */
-u8 pmic8058_get_rev(void)
+int pm8058_rev_is_a0(struct pm8058_chip *chip)
 {
-	if (pmic_chip == NULL)
+	if (chip == NULL)
 		return 0;
 
-	return pmic_chip->revision;
+	return chip->revision == PMIC8058_REV_A0;
 }
-EXPORT_SYMBOL(pmic8058_get_rev);
+EXPORT_SYMBOL(pm8058_rev_is_a0);
 
-int pmic8058_is_rev_a0(void)
+int pm8058_rev_is_b0(struct pm8058_chip *chip)
 {
-	if (pmic_chip == NULL)
+	if (chip == NULL)
 		return 0;
 
-	return pmic_chip->revision == PMIC8058_REV_A0;
+	return chip->revision == PMIC8058_REV_B0;
 }
-EXPORT_SYMBOL(pmic8058_is_rev_a0);
+EXPORT_SYMBOL(pm8058_rev_is_b0);
 
-int pmic8058_is_rev_b0(void)
+int pm8058_read(struct pm8058_chip *chip, u16 addr, u8 *values,
+		unsigned int len)
 {
-	if (pmic_chip == NULL)
-		return 0;
+	if (chip == NULL)
+		return -EINVAL;
 
-	return pmic_chip->revision == PMIC8058_REV_B0;
-}
-EXPORT_SYMBOL(pmic8058_is_rev_b0);
-
-int pm8058_read(u16 addr, u8 *values, unsigned int len)
-{
-	if (pmic_chip == NULL)
-		return -ENODEV;
-
-	return ssbi_read(pmic_chip->dev, addr, values, len);
+	return ssbi_read(chip->dev, addr, values, len);
 }
 EXPORT_SYMBOL(pm8058_read);
 
-int pm8058_write(u16 addr, u8 *values, unsigned int len)
+int pm8058_write(struct pm8058_chip *chip, u16 addr, u8 *values,
+		 unsigned int len)
 {
-	if (pmic_chip == NULL)
-		return -ENODEV;
+	if (chip == NULL)
+		return -EINVAL;
 
-	return ssbi_write(pmic_chip->dev, addr, values, len);
+	return ssbi_write(chip->dev, addr, values, len);
 }
 EXPORT_SYMBOL(pm8058_write);
 
@@ -1194,12 +1187,12 @@ static int debug_read_gpio_bank(int gpio, int bank, u8 *data)
 	local_irq_save(irqsave);
 
 	*data = bank << PM8058_GPIO_BANK_SHIFT;
-	rc = pm8058_write(SSBI_REG_ADDR_GPIO(gpio), data, 1);
+	rc = pm8058_write(pmic_chip, SSBI_REG_ADDR_GPIO(gpio), data, 1);
 	if (rc)
 		goto bail_out;
 
 	*data = bank << PM8058_GPIO_BANK_SHIFT;
-	rc = pm8058_read(SSBI_REG_ADDR_GPIO(gpio), data, 1);
+	rc = pm8058_read(pmic_chip, SSBI_REG_ADDR_GPIO(gpio), data, 1);
 
 bail_out:
 	local_irq_restore(irqsave);

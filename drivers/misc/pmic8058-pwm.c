@@ -220,6 +220,7 @@ struct pm8058_pwm_chip {
 	struct pwm_device	pwm_dev[PM8058_PWM_CHANNELS];
 	u8			bank_mask;
 	struct mutex		pwm_mutex;
+	struct pm8058_chip	*pm_chip;
 };
 
 static struct pm8058_pwm_chip	*pwm_chip;
@@ -238,9 +239,9 @@ static inline int pm8058_pwm_bank_enable(struct pwm_device *pwm, int enable)
 	else
 		reg = chip->bank_mask & ~(1 << pwm->pwm_id);
 
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_BANK_EN, &reg, 1);
+	rc = pm8058_write(chip->pm_chip, SSBI_REG_ADDR_LPG_BANK_EN, &reg, 1);
 	if (rc) {
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Enable LPG Bank)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Enable LPG Bank)\n",
 		       __func__, rc);
 		goto bail_out;
 	}
@@ -250,15 +251,16 @@ bail_out:
 	return rc;
 }
 
-static inline int pm8058_pwm_bank_sel(int bank)
+static inline int pm8058_pwm_bank_sel(struct pwm_device *pwm)
 {
 	int	rc;
 	u8	reg;
 
-	reg = bank;
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_BANK_SEL, &reg, 1);
+	reg = pwm->pwm_id;
+	rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_BANK_SEL,
+			     &reg, 1);
 	if (rc)
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Select PWM Bank)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Select PWM Bank)\n",
 		       __func__, rc);
 	return rc;
 }
@@ -273,9 +275,10 @@ static inline int pm8058_pwm_enable(struct pwm_device *pwm, int enable)
 	else
 		reg = pwm->pwm_ctl[0] & ~PM8058_PWM_PWM_EN;
 
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_CTL(0), &reg, 1);
+	rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_CTL(0),
+			  &reg, 1);
 	if (rc)
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
 		       __func__, rc);
 	else
 		pwm->pwm_ctl[0] = reg;
@@ -292,9 +295,10 @@ static inline int pm8058_pwm_output_enable(struct pwm_device *pwm, int enable)
 	else
 		reg = pwm->pwm_ctl[0] & ~PM8058_PWM_OUTPUT_EN;
 
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_CTL(0), &reg, 1);
+	rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_CTL(0),
+			  &reg, 1);
 	if (rc)
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
 		       __func__, rc);
 	else
 		pwm->pwm_ctl[0] = reg;
@@ -311,9 +315,10 @@ static inline int pm8058_pwm_ramp_generator(struct pwm_device *pwm, int enable)
 	else
 		reg = pwm->pwm_ctl[0] & ~PM8058_PWM_RAMP_GEN_EN;
 
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_CTL(0), &reg, 1);
+	rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_CTL(0),
+			  &reg, 1);
 	if (rc)
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
 		       __func__, rc);
 	else
 		pwm->pwm_ctl[0] = reg;
@@ -326,16 +331,17 @@ static inline int pm8058_pwm_ramp_start(struct pwm_device *pwm)
 	u8	reg;
 
 	reg = pwm->pwm_ctl[0] | PM8058_PWM_RAMP_START;
-	rc = pm8058_write(SSBI_REG_ADDR_LPG_CTL(0), &reg, 1);
+	rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_CTL(0),
+			  &reg, 1);
 	if (rc)
-		pr_err("%s: FAIL pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
+		pr_err("%s: pm8058_write(): rc=%d (Enable PWM Ctl 0)\n",
 		       __func__, rc);
 	return rc;
 }
 
 static void pm8058_pwm_start(struct pwm_device *pwm, int start)
 {
-	pm8058_pwm_bank_sel(pwm->pwm_id);
+	pm8058_pwm_bank_sel(pwm);
 	if (start) {
 		pm8058_pwm_output_enable(pwm, 1);
 		pm8058_pwm_enable(pwm, 1);
@@ -351,7 +357,7 @@ static int pm8058_pwm_configure(struct pwm_device *pwm,
 	int	i, rc;
 	u8	reg;
 
-	pm8058_pwm_bank_sel(pwm->pwm_id);
+	pm8058_pwm_bank_sel(pwm);
 
 	reg = (pwm_conf->pwm_size > 6) ? PM8058_PWM_SIZE_9_BIT : 0;
 	pwm->pwm_ctl[5] = reg;
@@ -382,11 +388,12 @@ static int pm8058_pwm_configure(struct pwm_device *pwm,
 	}
 
 	for (i = 0; i < 5; i++) {
-		rc = pm8058_write(SSBI_REG_ADDR_LPG_CTL(i+1),
+		rc = pm8058_write(pwm->chip->pm_chip,
+				  SSBI_REG_ADDR_LPG_CTL(i+1),
 				  &pwm->pwm_ctl[i+1], 1);
 		if (rc) {
-			pr_err("%s: FAIL pm8058_write(): rc=%d "
-			       "(PWM Ctl[%d])\n", __func__, rc, i+1);
+			pr_err("%s: pm8058_write(): rc=%d (PWM Ctl[%d])\n",
+			       __func__, rc, i+1);
 			break;
 		}
 	}
@@ -602,10 +609,15 @@ EXPORT_SYMBOL(pwm_disable);
 
 static int __devinit pmic8058_pwm_probe(struct platform_device *pdev)
 {
+	struct pm8058_chip	*pm_chip;
 	struct pm8058_pwm_chip	*chip;
 	int	i;
 
-	pr_notice("%s: OK\n", __func__);
+	pm_chip = platform_get_drvdata(pdev);
+	if (pm_chip == NULL) {
+		pr_err("%s: no parent data passed in.\n", __func__);
+		return -EFAULT;
+	}
 
 	chip = kzalloc(sizeof *chip, GFP_KERNEL);
 	if (chip == NULL) {
@@ -620,9 +632,11 @@ static int __devinit pmic8058_pwm_probe(struct platform_device *pdev)
 
 	mutex_init(&chip->pwm_mutex);
 
+	chip->pm_chip = pm_chip;
 	pwm_chip = chip;
 	platform_set_drvdata(pdev, chip);
 
+	pr_notice("%s: OK\n", __func__);
 	return 0;
 }
 
