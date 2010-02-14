@@ -304,12 +304,11 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
  */
 int msm_rpcrouter_create_server_pdev(struct rr_server *server)
 {
-	sprintf(server->pdev_name, "rs%.8x:%.8x",
-		server->prog,
-		(server->vers & RPC_VERSION_MODE_MASK) ? server->vers :
-		(server->vers & RPC_VERSION_MAJOR_MASK));
+	sprintf(server->pdev_name, "rs%.8x", server->prog);
 
-	server->p_device.base.id = -1;
+	server->p_device.base.id = (server->vers & RPC_VERSION_MODE_MASK) ?
+				   server->vers :
+				   (server->vers & RPC_VERSION_MAJOR_MASK);
 	server->p_device.base.name = server->pdev_name;
 
 	server->p_device.prog = server->prog;

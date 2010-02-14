@@ -37,7 +37,7 @@ static struct wake_lock vbus_wake_lock;
 #endif
 
 /* rpc related */
-#define APP_BATT_PDEV_NAME		"rs30100001:00000000"
+#define APP_BATT_PDEV_NAME		"rs30100001"
 #define APP_BATT_PROG			0x30100001
 #define APP_BATT_VER			0
 #define HTC_PROCEDURE_BATTERY_NULL	0
@@ -628,6 +628,9 @@ dont_need_update:
 static int htc_battery_probe(struct platform_device *pdev)
 {
 	int i, rc;
+
+	if (pdev->id != (APP_BATT_VER & RPC_VERSION_MAJOR_MASK))
+		return -EINVAL;
 
 	/* init battery gpio */
 	if ((rc = init_batt_gpio()) < 0) {

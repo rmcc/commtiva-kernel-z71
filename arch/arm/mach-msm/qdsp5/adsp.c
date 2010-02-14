@@ -1087,6 +1087,9 @@ static int msm_adsp_probe(struct platform_device *pdev)
 	unsigned count;
 	int rc, i;
 
+	if (pdev->id != (rpc_adsp_rtos_atom_vers & RPC_VERSION_MAJOR_MASK))
+		return -EINVAL;
+
 	wake_lock_init(&adsp_wake_lock, WAKE_LOCK_SUSPEND, "adsp");
 	adsp_info.init_info_ptr = kzalloc(
 		(sizeof(struct adsp_rtos_mp_mtoa_init_info_type)), GFP_KERNEL);
@@ -1183,7 +1186,7 @@ static struct platform_driver msm_adsp_driver = {
 	},
 };
 
-static char msm_adsp_driver_name[] = "rs00000000:00000000";
+static char msm_adsp_driver_name[] = "rs00000000";
 
 static int __init adsp_init(void)
 {
@@ -1197,9 +1200,8 @@ static int __init adsp_init(void)
 	rpc_adsp_rtos_mtoa_vers_comp = 0x00030002;
 
 	snprintf(msm_adsp_driver_name, sizeof(msm_adsp_driver_name),
-		"rs%08x:%08x",
-		rpc_adsp_rtos_atom_prog,
-		rpc_adsp_rtos_atom_vers & RPC_VERSION_MAJOR_MASK);
+		"rs%08x",
+		rpc_adsp_rtos_atom_prog);
 	msm_adsp_driver.driver.name = msm_adsp_driver_name;
 	rc = platform_driver_register(&msm_adsp_driver);
 	MM_INFO("%s -- %d\n", msm_adsp_driver_name, rc);
