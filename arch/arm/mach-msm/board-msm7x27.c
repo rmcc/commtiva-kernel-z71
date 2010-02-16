@@ -1631,6 +1631,13 @@ static void __init msm7x2x_init(void)
 	/* The appropriate maximum replacement for 160000 is: */
 	/* clk_get_max_axi_khz() */
 	kgsl_pdata.max_axi_freq = 160000;
+
+	/* 7x27 doesn't allow graphics clocks to be run asynchronously to */
+	/* the AXI bus */
+	kgsl_pdata.max_grp2d_freq = 0;
+	kgsl_pdata.set_grp2d_async = NULL;
+	kgsl_pdata.max_grp3d_freq = 0;
+	kgsl_pdata.set_grp3d_async = NULL;
 #endif
 
 	msm_hsusb_pdata.swfi_latency =
