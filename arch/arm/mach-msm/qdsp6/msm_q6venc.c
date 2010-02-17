@@ -306,6 +306,7 @@ static struct venc_pmem_list *venc_get_pmem_from_list(
 		}
 	}
 	spin_unlock_irqrestore(&dvenc->venc_pmem_list_lock, flags);
+	fput(file);
 	if (found)
 		return plist;
 
