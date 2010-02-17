@@ -82,6 +82,7 @@ struct voice_data {
 	int voc_event;
 	int dev_event;
 	atomic_t rel_start_flag;
+	atomic_t acq_start_flag;
 	struct task_struct *task;
 	struct completion complete;
 	wait_queue_head_t dev_wait;
@@ -153,6 +154,12 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_state = DEV_READY;
 				MM_DBG(" dev_state into ready \n");
 				wake_up(&v->dev_wait);
+				if (v->voc_state == VOICE_CHANGE) {
+					mutex_lock(&voice.lock);
+					v->dev_event = DEV_CHANGE_READY;
+					mutex_unlock(&voice.lock);
+					complete(&v->complete);
+				}
 			}
 		}
 		break;
@@ -222,6 +229,12 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_state = DEV_READY;
 				MM_DBG(" dev state into ready \n");
 				wake_up(&v->dev_wait);
+				if (v->voc_state == VOICE_CHANGE) {
+					mutex_lock(&voice.lock);
+					v->dev_event = DEV_CHANGE_READY;
+					mutex_unlock(&voice.lock);
+					complete(&v->complete);
+				}
 			}
 		} else
 			MM_ERR("Receive READY not at the proper state =%d\n",
@@ -268,10 +281,13 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_tx.mute = v->default_mute_val;
 				v->dev_rx.volume = v->default_vol_val;
 				voice_cmd_device_info(v);
+				/* send device change to modem */
+				voice_cmd_change();
 				rc = wait_event_interruptible(
-				v->voc_wait,
-					atomic_read(&v->rel_start_flag) == 1);
-				atomic_dec(&v->rel_start_flag);
+				v->voc_wait, (v->voc_state == VOICE_CHANGE)
+				|| (atomic_read(&v->rel_start_flag) == 1));
+				if (atomic_read(&v->rel_start_flag) == 1)
+					atomic_dec(&v->rel_start_flag);
 				/* clear Rx/Tx to Disable */
 				if (evt_payload->voc_devinfo.dev_type == DIR_RX)
 					v->dev_rx.enabled = VOICE_DEV_DISABLED;
@@ -307,10 +323,15 @@ static void voice_auddev_cb_function(u32 evt_id,
 			} else {
 				/* send mute and default volume value to MCAD */
 				voice_cmd_device_info(v);
+				/* send device change to modem */
+				voice_cmd_change();
+				/* block to wait for RELEASE_START
+						or CHANGE_START */
 				rc = wait_event_interruptible(
-				v->voc_wait,
-					atomic_read(&v->rel_start_flag) == 1);
-				atomic_dec(&v->rel_start_flag);
+				v->voc_wait, (v->voc_state == VOICE_CHANGE)
+				|| (atomic_read(&v->rel_start_flag) == 1));
+				if (atomic_read(&v->rel_start_flag) == 1)
+					atomic_dec(&v->rel_start_flag);
 				/* set voice call to END state */
 				v->v_call_status = VOICE_CALL_END;
 				v->dev_state = DEV_REL_DONE;
@@ -367,6 +388,8 @@ static void remote_cb_function(void *context, u32 param,
 
 	switch (hdr->id) {
 	case EVENT_ACQUIRE_START:
+		atomic_inc(&v->acq_start_flag);
+		wake_up(&v->dev_wait);
 		mutex_lock(&voice.lock);
 		v->voc_event = VOICE_ACQUIRE_START;
 		v->network = ((struct voice_network *)evt_buf)->network_info;
@@ -394,8 +417,10 @@ static void remote_cb_function(void *context, u32 param,
 		/* send network change to audio_dev,
 		if sample rate is less than 16k,
 		otherwise, send acquire done */
+		mutex_lock(&voice.lock);
 		v->voc_event = VOICE_NETWORK_RECONFIG;
 		v->network = ((struct voice_network *)evt_buf)->network_info;
+		mutex_unlock(&voice.lock);
 		complete(&v->complete);
 		break;
 	default:
@@ -440,24 +465,6 @@ static int voice_cmd_acquire_done(struct voice_data *v)
 
 	if (err)
 		MM_ERR("Voice acquire done command failed\n");
-	return err;
-}
-
-static int voice_cmd_release_done(struct voice_data *v)
-{
-	struct voice_header hdr;
-	int err;
-
-	MM_INFO("%s()\n", __func__);
-
-	hdr.id = CMD_RELEASE_DONE;
-	hdr.data_len = 0;
-
-	err = dalrpc_fcn_5(VOICE_DALRPC_CMD, v->handle, &hdr,
-		sizeof(struct voice_header));
-
-	if (err)
-		MM_ERR("Voice release done command failed\n");
 	return err;
 }
 
@@ -543,7 +550,6 @@ static int voice_thread(void *data)
 						== 1));
 					if (atomic_read(&v->rel_start_flag)
 						== 1) {
-						voice_cmd_release_done(v);
 						v->voc_state = VOICE_RELEASE;
 						atomic_dec(&v->rel_start_flag);
 					} else {
@@ -555,29 +561,31 @@ static int voice_thread(void *data)
 				}
 			} else
 				MM_ERR("Get this event at the wrong state\n");
+			if (atomic_read(&v->acq_start_flag))
+				atomic_dec(&v->acq_start_flag);
 			break;
 		case VOICE_RELEASE_START:
 			if ((v->dev_state == DEV_REL_DONE) ||
 					(v->dev_state == DEV_INIT)) {
-				voice_cmd_release_done(v);
 				v->voc_state = VOICE_RELEASE;
 			} else {
 				/* wait for the dev_state = RELEASE */
 				rc = wait_event_interruptible(v->dev_wait,
-					v->dev_state == DEV_REL_DONE);
-				voice_cmd_release_done(v);
+					(v->dev_state == DEV_REL_DONE)
+				|| (atomic_read(&v->acq_start_flag) == 1));
+				if (atomic_read(&v->acq_start_flag) == 1)
+					atomic_dec(&v->acq_start_flag);
 				v->voc_state = VOICE_RELEASE;
 			}
 			if (atomic_read(&v->rel_start_flag))
 				atomic_dec(&v->rel_start_flag);
 			break;
 		case VOICE_CHANGE_START:
-			if ((v->voc_state == VOICE_ACQUIRE)
-				&& (v->dev_state == DEV_CHANGE)) {
+			if (v->voc_state == VOICE_ACQUIRE)
 				v->voc_state = VOICE_CHANGE;
-				wake_up(&v->voc_wait);
-			} else
+			 else
 				MM_ERR("Get this event at the wrong state\n");
+			wake_up(&v->voc_wait);
 			break;
 		case VOICE_NETWORK_RECONFIG:
 			if ((v->voc_state == VOICE_ACQUIRE)
@@ -606,7 +614,6 @@ static int voice_thread(void *data)
 		}
 		mutex_lock(&voice.lock);
 		v->dev_event = 0;
-		v->voc_event = 0;
 		mutex_unlock(&voice.lock);
 	}
 	return 0;
@@ -636,6 +643,7 @@ static int __init voice_init(void)
 	v->dev_state = DEV_INIT;
 	v->voc_state = VOICE_INIT;
 	atomic_set(&v->rel_start_flag, 0);
+	atomic_set(&v->acq_start_flag, 0);
 	v->dev_event = 0;
 	v->voc_event = 0;
 	init_completion(&voice.complete);
