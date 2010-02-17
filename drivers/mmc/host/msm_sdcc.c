@@ -1697,8 +1697,8 @@ static struct platform_driver msmsdcc_driver = {
 
 static int __init msmsdcc_init(void)
 {
-	int ret = 0;
 #if defined(CONFIG_DEBUG_FS)
+	int ret = 0;
 	ret = msmsdcc_dbg_init();
 	if (ret) {
 		printk(KERN_ERR "Failed to create debug fs dir \n");
