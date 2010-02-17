@@ -73,6 +73,7 @@ __tagtable(ATAG_INITRD2, parse_tag_initrd2);
  * of holes in the memory map.  It is populated by arm_add_memory().
  */
 struct meminfo meminfo;
+EXPORT_SYMBOL(meminfo); /* XXX Temporary export for move_freepages_block() */
 
 void show_mem(void)
 {
