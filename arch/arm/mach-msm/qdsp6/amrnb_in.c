@@ -14,7 +14,6 @@
  *
  */
 
-#include <mach/debug_audio_mm.h>
 #include <linux/fs.h>
 #include <linux/module.h>
 #include <linux/miscdevice.h>
@@ -26,6 +25,7 @@
 #include <linux/msm_audio.h>
 #include <linux/msm_audio_amrnb.h>
 #include <mach/msm_qdsp6_audio.h>
+#include <mach/debug_audio_mm.h>
 #include "dal_audio_format.h"
 
 struct amrnb {
@@ -33,6 +33,7 @@ struct amrnb {
 	struct msm_audio_amrnb_enc_config_v2 cfg;
 	struct msm_audio_stream_config str_cfg;
 	struct audio_client *audio_client;
+	struct msm_voicerec_mode voicerec_mode;
 };
 
 
@@ -74,7 +75,8 @@ static long q6_amrnb_in_ioctl(struct file *file, unsigned int cmd,
 					amrnb->str_cfg.buffer_size,
 					amrnb->cfg.band_mode,
 					amrnb->cfg.dtx_enable,
-					AUDIO_FLAG_READ, acdb_id);
+					amrnb->voicerec_mode.rec_mode,
+					acdb_id);
 			if (!amrnb->audio_client) {
 				kfree(amrnb);
 				rc = -ENOMEM;
@@ -87,6 +89,20 @@ static long q6_amrnb_in_ioctl(struct file *file, unsigned int cmd,
 		break;
 	case AUDIO_FLUSH:
 		break;
+	case AUDIO_SET_INCALL: {
+		if (copy_from_user(&amrnb->voicerec_mode,
+			(void *)arg, sizeof(struct msm_voicerec_mode)))
+			rc = -EFAULT;
+
+		if (amrnb->voicerec_mode.rec_mode != AUDIO_FLAG_READ
+				&& amrnb->voicerec_mode.rec_mode !=
+				AUDIO_FLAG_INCALL_MIXED) {
+			amrnb->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
+			MM_ERR("Invalid rec_mode\n");
+			rc = -EINVAL;
+		}
+		break;
+	}
 	case AUDIO_GET_STREAM_CONFIG:
 		if (copy_to_user((void *)arg, &amrnb->str_cfg,
 			sizeof(struct msm_audio_stream_config)))
@@ -144,6 +160,8 @@ static int q6_amrnb_in_open(struct inode *inode, struct file *file)
 	amrnb->cfg.band_mode = 7;
 	amrnb->cfg.dtx_enable  = 3;
 	amrnb->cfg.frame_format = ADSP_AUDIO_FORMAT_AMRNB_FS;
+	amrnb->voicerec_mode.rec_mode = AUDIO_FLAG_READ;
+
 	return 0;
 }
 
