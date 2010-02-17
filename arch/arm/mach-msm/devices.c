@@ -1361,6 +1361,11 @@ struct clk msm_clocks_8x50[] = {
 	CLK_PCOM("usb_hs2_pclk",	USB_HS2_PCLK,	NULL, OFF),
 	CLK_PCOM("usb_hs3_clk",	USB_HS3_CLK,	NULL, OFF),
 	CLK_PCOM("usb_hs3_pclk",	USB_HS3_PCLK,	NULL, OFF),
+
+#ifdef CONFIG_MSM_SOC_REV_A
+	CLK_PCOM("qup_clk",	GSBI_CLK,	&qup_device_i2c.dev, 0),
+	CLK_PCOM("qup_pclk",	GSBI_PCLK,	&qup_device_i2c.dev, 0),
+#endif
 };
 
 unsigned msm_num_clocks_8x50 = ARRAY_SIZE(msm_clocks_8x50);
