@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -61,6 +61,8 @@
 #include <linux/fs.h>
 #include <linux/interrupt.h>
 #include <linux/clk.h>
+#include <mach/clk.h>
+#include <mach/dal_axi.h>
 #include <linux/uaccess.h>
 #include <linux/init.h>
 #include <linux/list.h>
@@ -1246,6 +1248,7 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	BUG_ON(kgsl_driver.imem_clk != NULL);
 
 	kgsl_driver.pdev = pdev;
+	pdata = pdev->dev.platform_data;
 
 	clk = clk_get(&pdev->dev, "grp_pclk");
 	if (IS_ERR(clk))
@@ -1260,6 +1263,18 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	}
 	kgsl_driver.grp_clk = clk;
 
+	/* put the AXI bus into asynchronous mode with the graphics cores */
+	if (pdata != NULL) {
+		if ((pdata->set_grp2d_async != NULL) &&
+			(pdata->max_grp2d_freq) &&
+			(!pdata->set_grp2d_async()))
+			clk_set_min_rate(clk, pdata->max_grp2d_freq);
+		if ((pdata->set_grp3d_async != NULL) &&
+			(pdata->max_grp3d_freq) &&
+			(!pdata->set_grp3d_async()))
+			clk_set_min_rate(clk, pdata->max_grp3d_freq);
+	}
+
 	clk = clk_get(&pdev->dev, "imem_clk");
 	if (IS_ERR(clk)) {
 		result = PTR_ERR(clk);
@@ -1272,7 +1287,6 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 				PM_QOS_DEFAULT_VALUE);
 
-	pdata = pdev->dev.platform_data;
 	if (pdata)
 		kgsl_driver.max_axi_freq = pdata->max_axi_freq;
 

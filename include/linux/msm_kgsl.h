@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -106,6 +106,10 @@ struct kgsl_shadowprop {
 
 struct kgsl_platform_data {
 	unsigned int max_axi_freq;
+	unsigned int max_grp2d_freq;
+	int (*set_grp2d_async)(void);
+	unsigned int max_grp3d_freq;
+	int (*set_grp3d_async)(void);
 };
 
 /* ioctls */
