@@ -2114,8 +2114,21 @@ static struct resource kgsl_resources[] = {
 		.flags = IORESOURCE_MEM,
 	},
 	{
+		.name = "kgsl_yamato_irq",
 		.start = INT_GRP_3D,
 		.end = INT_GRP_3D,
+		.flags = IORESOURCE_IRQ,
+	},
+	{
+		.name = "kgsl_g12_reg_memory",
+		.start = 0xA3900000, /* Z180 base address */
+		.end = 0xA3900FFF,
+		.flags = IORESOURCE_MEM,
+	},
+	{
+		.name  = "kgsl_g12_irq",
+		.start = INT_GRP_2D,
+		.end = INT_GRP_2D,
 		.flags = IORESOURCE_IRQ,
 	},
 };

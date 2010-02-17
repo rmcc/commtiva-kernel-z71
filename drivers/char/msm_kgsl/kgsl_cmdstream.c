@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -90,7 +90,7 @@ kgsl_cmdstream_readtimestamp(struct kgsl_device *device,
 	return timestamp;
 }
 
-static bool timestamp_cmp(unsigned int new, unsigned int old)
+bool timestamp_cmp(unsigned int new, unsigned int old)
 {
 	int ts_diff = new - old;
 	return (ts_diff >= 0) || (ts_diff < -20000);
@@ -113,8 +113,11 @@ void kgsl_cmdstream_memqueue_drain(struct kgsl_device *device)
 	struct kgsl_ringbuffer *rb = &device->ringbuffer;
 
 	/* get current EOP timestamp */
-	ts_processed =
-	    kgsl_cmdstream_readtimestamp(device, KGSL_TIMESTAMP_RETIRED);
+	if (device == &kgsl_driver.yamato_device)
+		ts_processed =
+		   kgsl_cmdstream_readtimestamp(device, KGSL_TIMESTAMP_RETIRED);
+	else
+		ts_processed = device->timestamp;
 
 	list_for_each_entry_safe(entry, entry_tmp, &rb->memqueue, free_list) {
 		/*NOTE: this assumes that the free list is sorted by

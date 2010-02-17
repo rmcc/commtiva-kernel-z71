@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -59,6 +59,8 @@ void kgsl_cmdstream_memqueue_drain(struct kgsl_device *device);
 uint32_t
 kgsl_cmdstream_readtimestamp(struct kgsl_device *device,
 			     enum kgsl_timestamp_type type);
+
+bool timestamp_cmp(unsigned int new, unsigned int old);
 
 int kgsl_cmdstream_check_timestamp(struct kgsl_device *device,
 				   unsigned int timestamp);

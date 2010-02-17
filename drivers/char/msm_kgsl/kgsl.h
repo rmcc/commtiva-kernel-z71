@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -57,22 +57,28 @@ struct kgsl_driver {
 	atomic_t open_count;
 	struct mutex mutex;
 
-	int interrupt_num;
-	int have_irq;
+	int yamato_interrupt_num;
+	int yamato_have_irq;
+	int g12_interrupt_num;
+	int g12_have_irq;
 
-	struct clk *grp_pclk;
-	struct clk *grp_clk;
+	struct clk *g12_grp_pclk;
+	struct clk *g12_grp_clk;
+	struct clk *yamato_grp_pclk;
+	struct clk *yamato_grp_clk;
 	struct clk *imem_clk;
 	unsigned int power_flags;
 	unsigned int is_suspended;
 	unsigned int max_axi_freq;
 
+	struct kgsl_devconfig g12_config;
 	struct kgsl_devconfig yamato_config;
 
 	uint32_t flags_debug;
 
 	struct kgsl_sharedmem shmem;
 	struct kgsl_device yamato_device;
+	struct kgsl_device g12_device;
 
 	struct list_head client_list;
 };
@@ -98,6 +104,12 @@ enum kgsl_status {
 #define KGSL_TRUE 1
 #define KGSL_FALSE 0
 
+/* TODO: Until idle detection is implemented, suspend/resume won't work.
+ *       Fill these in once that support is added
+ */
+#define KGSL_G12_PRE_HWACCESS() mutex_lock(&kgsl_driver.mutex)
+#define KGSL_G12_POST_HWACCESS() mutex_unlock(&kgsl_driver.mutex)
+
 #define KGSL_PRE_HWACCESS() \
 while (1) { \
 	mutex_lock(&kgsl_driver.mutex); \
@@ -119,6 +131,14 @@ void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry);
 
 int kgsl_pwrctrl(unsigned int pwrflag);
 int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
+int kgsl_g12_sleep(struct kgsl_device *device, const int idle);
+int kgsl_g12_wake(struct kgsl_device *device);
+int kgsl_idle(struct kgsl_device *device, unsigned int timeout);
+int kgsl_setstate(struct kgsl_device *device, uint32_t flags);
+int kgsl_regread(struct kgsl_device *device, unsigned int offsetwords,
+			unsigned int *value);
+int kgsl_regwrite(struct kgsl_device *device, unsigned int offsetwords,
+			unsigned int value);
 
 #ifdef CONFIG_MSM_KGSL_DRM
 extern int kgsl_drm_init(struct platform_device *dev);

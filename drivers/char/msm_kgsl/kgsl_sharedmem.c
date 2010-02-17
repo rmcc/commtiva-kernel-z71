@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -288,6 +288,26 @@ kgsl_sharedmem_read(const struct kgsl_memdesc *memdesc, void *dst,
 		return -ERANGE;
 	}
 	memcpy(dst, memdesc->hostptr + offsetbytes, sizebytes);
+	return 0;
+}
+
+int
+kgsl_sharedmem_write(const struct kgsl_memdesc *memdesc,
+			unsigned int offsetbytes,
+			void *src, unsigned int sizebytes)
+{
+	if (memdesc == NULL || memdesc->hostptr == NULL) {
+		KGSL_MEM_ERR("bad ptr memdesc %p hostptr %p\n", memdesc,
+				(memdesc ? memdesc->hostptr : NULL));
+		return -EINVAL;
+	}
+	if (offsetbytes + sizebytes > memdesc->size) {
+		KGSL_MEM_ERR("bad range: offset %d size %d memdesc %d\n",
+				offsetbytes, sizebytes, memdesc->size);
+		return -ERANGE;
+	}
+	memcpy((void *)(((char *)memdesc->hostptr) + offsetbytes),
+		src, sizebytes);
 	return 0;
 }
 

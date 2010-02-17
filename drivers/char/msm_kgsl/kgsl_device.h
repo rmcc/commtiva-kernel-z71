@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -31,10 +31,12 @@
 #include <linux/types.h>
 #include <linux/irqreturn.h>
 #include <linux/wait.h>
+#include <linux/workqueue.h>
 #include <linux/msm_kgsl.h>
 
 #include <asm/atomic.h>
 
+#include "kgsl_g12_drawctxt.h"
 #include "kgsl_drawctxt.h"
 #include "kgsl_mmu.h"
 #include "kgsl_ringbuffer.h"
@@ -54,12 +56,16 @@
 *****************************************************************************/
 #define KGSL_PWRFLAGS_POWER_OFF			0x00000001
 #define KGSL_PWRFLAGS_POWER_ON			0x00000002
-#define KGSL_PWRFLAGS_CLK_ON             0x00000004
-#define KGSL_PWRFLAGS_CLK_OFF            0x00000008
-#define KGSL_PWRFLAGS_OVERRIDE_ON        0x00000010
-#define KGSL_PWRFLAGS_OVERRIDE_OFF       0x00000020
-#define KGSL_PWRFLAGS_IRQ_ON             0x00000040
-#define KGSL_PWRFLAGS_IRQ_OFF            0x00000080
+#define KGSL_PWRFLAGS_YAMATO_CLK_ON		0x00000004
+#define KGSL_PWRFLAGS_YAMATO_CLK_OFF		0x00000008
+#define KGSL_PWRFLAGS_OVERRIDE_ON		0x00000010
+#define KGSL_PWRFLAGS_OVERRIDE_OFF		0x00000020
+#define KGSL_PWRFLAGS_YAMATO_IRQ_ON		0x00000040
+#define KGSL_PWRFLAGS_YAMATO_IRQ_OFF		0x00000080
+#define KGSL_PWRFLAGS_G12_CLK_ON		0x00000100
+#define KGSL_PWRFLAGS_G12_CLK_OFF		0x00000200
+#define KGSL_PWRFLAGS_G12_IRQ_ON		0x00000400
+#define KGSL_PWRFLAGS_G12_IRQ_OFF		0x00000800
 
 #define KGSL_CHIPID_YAMATODX_REV21  0x20100
 #define KGSL_CHIPID_YAMATODX_REV211 0x20101
@@ -79,6 +85,14 @@ int kgsl_yamato_cleanup_pt(struct kgsl_device *device,
 struct kgsl_device;
 struct platform_device;
 
+struct kgsl_functable {
+	int (*device_regread) (struct kgsl_device *device,
+				unsigned int offsetwords, unsigned int *value);
+	int (*device_regwrite) (struct kgsl_device *device,
+				unsigned int offsetwords, unsigned int value);
+	int (*device_setstate) (struct kgsl_device *device, uint32_t flags);
+	int (*device_idle) (struct kgsl_device *device, unsigned int timeout);
+};
 
 struct kgsl_memregion {
 	unsigned char  *mmio_virt_base;
@@ -104,8 +118,15 @@ struct kgsl_device {
 	struct kgsl_drawctxt drawctxt[KGSL_CONTEXT_MAX];
 	unsigned int hwaccess_blocked;
 	struct completion hwaccess_gate;
-
+	struct kgsl_functable ftbl;
 	wait_queue_head_t ib1_wq;
+
+	int current_timestamp;
+	int timestamp;
+
+	wait_queue_head_t wait_timestamp_wq;
+	struct workqueue_struct *irq_wq;
+	struct work_struct irq_work;
 };
 
 struct kgsl_devconfig {
@@ -154,19 +175,50 @@ int kgsl_yamato_init(struct kgsl_device *, struct kgsl_devconfig *);
 
 int kgsl_yamato_close(struct kgsl_device *device);
 
-int kgsl_yamato_runpending(struct kgsl_device *device);
-
 int __init kgsl_yamato_config(struct kgsl_devconfig *,
 				struct platform_device *pdev);
 
-#ifdef CONFIG_MSM_KGSL_MMU
 int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags);
-#else
-static inline int kgsl_yamato_setstate(struct kgsl_device *device,
-					uint32_t flags)
-{ return 0; }
-#endif
 
 irqreturn_t kgsl_yamato_isr(int irq, void *data);
+
+int kgsl_g12_start(struct kgsl_device *device, uint32_t flags);
+
+int kgsl_g12_stop(struct kgsl_device *device);
+
+int kgsl_g12_idle(struct kgsl_device *device, unsigned int timeout);
+
+int kgsl_g12_wake(struct kgsl_device *device);
+
+int kgsl_g12_suspend(struct kgsl_device *device);
+
+int kgsl_g12_getproperty(struct kgsl_device *device,
+				enum kgsl_property_type type, void *value,
+				unsigned int sizebytes);
+
+int kgsl_g12_regread(struct kgsl_device *device, unsigned int offsetwords,
+				unsigned int *value);
+
+int kgsl_g12_regwrite(struct kgsl_device *device, unsigned int offsetwords,
+				unsigned int value);
+
+int kgsl_g12_waittimestamp(struct kgsl_device *device,
+				unsigned int timestamp, unsigned int timeout);
+
+
+int kgsl_g12_init(struct kgsl_device *, struct kgsl_devconfig *);
+
+int kgsl_g12_close(struct kgsl_device *device);
+
+int __init kgsl_g12_config(struct kgsl_devconfig *,
+				struct platform_device *pdev);
+
+int kgsl_g12_setup_pt(struct kgsl_device *device,
+			struct kgsl_pagetable *);
+
+int kgsl_g12_cleanup_pt(struct kgsl_device *device,
+			struct kgsl_pagetable *);
+
+irqreturn_t kgsl_g12_isr(int irq, void *data);
 
 #endif  /* _KGSL_DEVICE_H */

@@ -8,7 +8,11 @@ msm_kgsl-y = \
 	kgsl_mmu.o \
 	kgsl_ringbuffer.o \
 	kgsl_sharedmem.o \
-	kgsl_yamato.o
+	kgsl_yamato.o \
+	kgsl_g12_drawctxt.o \
+	kgsl_g12_cmdwindow.o \
+	kgsl_g12_cmdstream.o \
+	kgsl_g12.o
 
 msm_kgsl-$(CONFIG_MSM_KGSL_DRM) += kgsl_drm.o
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -104,6 +104,10 @@ void kgsl_sharedmem_free(struct kgsl_memdesc *memdesc);
 
 int kgsl_sharedmem_read(const struct kgsl_memdesc *memdesc, void *dst,
 			unsigned int offsetbytes, unsigned int sizebytes);
+
+int kgsl_sharedmem_write(const struct kgsl_memdesc *memdesc,
+			unsigned int offsetbytes,
+			void *src, unsigned int sizebytes);
 
 int kgsl_sharedmem_set(const struct kgsl_memdesc *memdesc,
 			unsigned int offsetbytes, unsigned int value,

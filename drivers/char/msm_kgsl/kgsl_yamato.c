@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -100,6 +100,8 @@
 
 static struct timer_list idle_timer;
 static struct work_struct idle_check;
+
+static int kgsl_yamato_getfunctable(struct kgsl_functable *ftbl);
 
 void kgsl_yamato_timer(unsigned long data)
 {
@@ -331,7 +333,6 @@ error:
 
 }
 
-#ifdef CONFIG_MSM_KGSL_MMU
 int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags)
 {
 	unsigned int link[32];
@@ -339,6 +340,9 @@ int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags)
 	int sizedwords = 0;
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
+#ifndef CONFIG_MSM_KGSL_MMU
+	return 0;
+#endif
 	KGSL_MEM_DBG("device %p ctxt %p pt %p\n",
 			device,
 			device->drawctxt_active,
@@ -422,7 +426,6 @@ int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags)
 
 	return 0;
 }
-#endif
 
 static unsigned int
 kgsl_yamato_getchipid(struct kgsl_device *device)
@@ -505,6 +508,7 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	init_completion(&device->hwaccess_gate);
 	device->hwaccess_blocked = KGSL_FALSE;
 
+	kgsl_yamato_getfunctable(&device->ftbl);
 	if (config->mmu_config) {
 		device->mmu.config    = config->mmu_config;
 		device->mmu.mpu_base  = config->mpu_base;
@@ -542,7 +546,6 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	kgsl_yamato_regwrite(device, REG_SQ_VS_PROGRAM, 0x00000000);
 	kgsl_yamato_regwrite(device, REG_SQ_PS_PROGRAM, 0x00000000);
 
-
 	status = kgsl_mmu_init(device);
 	if (status != 0) {
 		status = -ENODEV;
@@ -556,7 +559,7 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	}
 
 	status = kgsl_sharedmem_alloc(memflags, sizeof(device->memstore),
-					&device->memstore);
+				&device->memstore);
 	if (status != 0)  {
 		status = -ENODEV;
 		goto error_close_cmdstream;
@@ -858,9 +861,9 @@ int kgsl_yamato_sleep(struct kgsl_device *device, const int idle)
 		/* See if the device is idle. If it is, we can shut down */
 		/* the core clock until the next attempt to access the HW. */
 		if (idle == KGSL_TRUE || kgsl_yamato_isidle(device)) {
-			kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_OFF);
+			kgsl_pwrctrl(KGSL_PWRFLAGS_YAMATO_IRQ_OFF);
 			/* Turn off the core clocks */
-			status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_OFF);
+			status = kgsl_pwrctrl(KGSL_PWRFLAGS_YAMATO_CLK_OFF);
 
 			/* Block further access to this core until it's awake */
 			device->hwaccess_blocked = KGSL_TRUE;
@@ -879,8 +882,8 @@ int kgsl_yamato_wake(struct kgsl_device *device)
 	int status = KGSL_SUCCESS;
 
 	/* Turn on the core clocks */
-	status = kgsl_pwrctrl(KGSL_PWRFLAGS_CLK_ON);
-	kgsl_pwrctrl(KGSL_PWRFLAGS_IRQ_ON);
+	status = kgsl_pwrctrl(KGSL_PWRFLAGS_YAMATO_CLK_ON);
+	kgsl_pwrctrl(KGSL_PWRFLAGS_YAMATO_IRQ_ON);
 
 	/* Re-enable HW access */
 	device->hwaccess_blocked = KGSL_FALSE;
@@ -976,13 +979,6 @@ int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 	return status;
 }
 
-int kgsl_yamato_runpending(struct kgsl_device *device)
-{
-	if (device->flags & KGSL_FLAGS_INITIALIZED)
-		kgsl_cmdstream_memqueue_drain(device);
-	return 0;
-}
-
 int __init kgsl_yamato_config(struct kgsl_devconfig *devconfig,
 				struct platform_device *pdev)
 {
@@ -1043,4 +1039,16 @@ int __init kgsl_yamato_config(struct kgsl_devconfig *devconfig,
 	result = 0;
 done:
 	return result;
+}
+
+static int kgsl_yamato_getfunctable(struct kgsl_functable *ftbl)
+{
+	if (ftbl == NULL)
+		return KGSL_FAILURE;
+	ftbl->device_regread = kgsl_yamato_regread;
+	ftbl->device_regwrite = kgsl_yamato_regwrite;
+	ftbl->device_setstate = kgsl_yamato_setstate;
+	ftbl->device_idle = kgsl_yamato_idle;
+
+	return KGSL_SUCCESS;
 }
