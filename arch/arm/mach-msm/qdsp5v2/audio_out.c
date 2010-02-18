@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -210,6 +210,10 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 			audio->out[idx].used = 0;
 			frame = audio->out + audio->out_tail;
 			if (frame->used) {
+				/* Reset teos flag to avoid stale
+				 * PCMDMAMISS been considered
+				 */
+				audio->teos = 0;
 				audio_dsp_send_buffer(
 					audio, audio->out_tail, frame->used);
 				audio->out_tail ^= 1;
@@ -223,7 +227,8 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 	}
 	case AUDPP_MSG_PCMDMAMISSED:
 		MM_INFO("PCMDMAMISSED %d\n", msg[0]);
-		audio->teos = 1;
+		audio->teos++;
+		MM_DBG("PCMDMAMISSED Count per Buffer %d\n", audio->teos);
 		wake_up(&audio->wait);
 		break;
 	case AUDPP_MSG_CFG_MSG:
@@ -428,6 +433,10 @@ static int audio_fsync(struct file *file, struct dentry *dentry,
 
 	mutex_lock(&audio->write_lock);
 
+	/* PCM DMAMISS message is sent only once in
+	 * hpcm interface. So, wait for buffer complete
+	 * and teos flag.
+	 */
 	rc = wait_event_interruptible(audio->wait,
 		(!audio->out[0].used &&
 		!audio->out[1].used));
@@ -435,15 +444,8 @@ static int audio_fsync(struct file *file, struct dentry *dentry,
 	if (rc < 0)
 		goto done;
 
-	/* pcm dmamiss message is sent continously when
-	 * decoder is starved so no race condition concern
-	 */
-
-	audio->teos = 0;
-
 	rc = wait_event_interruptible(audio->wait,
 		audio->teos);
-
 done:
 	mutex_unlock(&audio->write_lock);
 	return rc;
@@ -518,6 +520,10 @@ static ssize_t audio_write(struct file *file, const char __user *buf,
 		spin_lock_irqsave(&audio->dsp_lock, flags);
 		frame = audio->out + audio->out_tail;
 		if (frame->used && audio->out_needed) {
+			/* Reset teos flag to avoid stale
+			 * PCMDMAMISS been considered
+			 */
+			audio->teos = 0;
 			audio_dsp_send_buffer(audio, audio->out_tail,
 					frame->used);
 			audio->out_tail ^= 1;
