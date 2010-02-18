@@ -36,6 +36,7 @@
 #include <linux/android_pmem.h>
 
 #include "msm7kv2-pcm.h"
+#include <mach/qdsp5v2/audio_dev_ctl.h>
 
 #define HOSTPCM_STREAM_ID 5
 
@@ -69,7 +70,7 @@ static struct snd_pcm_hardware msm_pcm_capture_hardware = {
 	.formats =              USE_FORMATS,
 	.rates =                USE_RATE,
 	.rate_min =             8000,
-	.rate_max =             8000,
+	.rate_max =             48000,
 	.channels_min =         1,
 	.channels_max =         1,
 	.buffer_bytes_max =     MAX_BUFFER_CAPTURE_SIZE,
@@ -90,6 +91,35 @@ static struct snd_pcm_hw_constraint_list constraints_sample_rates = {
 	.list = supported_sample_rates,
 	.mask = 0,
 };
+static void pcm_in_listener(u32 evt_id, union auddev_evt_data *evt_payload,
+							void *private_data)
+{
+	struct msm_audio *prtd = (struct msm_audio *) private_data;
+
+	MM_DBG("evt_id = 0x%8x\n", evt_id);
+	switch (evt_id) {
+	case AUDDEV_EVT_FREQ_CHG: {
+		MM_DBG("Encoder Driver got sample rate change event\n");
+		MM_DBG("sample rate %d\n", evt_payload->freq_info.sample_rate);
+		MM_DBG("dev_type %d\n", evt_payload->freq_info.dev_type);
+		MM_DBG("acdb_dev_id %d\n", evt_payload->freq_info.acdb_dev_id);
+		if (prtd->running == 1) {
+			/* Stop Recording sample rate does not match
+			with device sample rate */
+			if (evt_payload->freq_info.sample_rate !=
+				prtd->samp_rate) {
+				alsa_in_record_config(prtd, 0);
+				prtd->abort = 1;
+				wake_up(&the_locks.read_wait);
+			}
+		}
+		break;
+	}
+	default:
+		MM_DBG("Unknown Event\n");
+		break;
+	}
+}
 
 static void msm_pcm_enqueue_data(struct snd_pcm_substream *substream)
 {
@@ -168,7 +198,7 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = runtime->private_data;
 	int ret = 0;
-
+	uint32_t freq;
 	MM_DBG("\n");
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
@@ -185,6 +215,32 @@ static int msm_pcm_capture_prepare(struct snd_pcm_substream *substream)
 
 	if (prtd->enabled)
 		return 0;
+
+	freq = prtd->samp_rate;
+
+	ret = msm_snddev_request_freq(&freq, prtd->session_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+	MM_DBG("sample rate configured %d sample rate requested %d\n",
+			freq, prtd->samp_rate);
+
+	if (ret < 0) {
+		MM_DBG("sample rate can not be set, return code %d\n", ret);
+		msm_snddev_withdraw_freq(prtd->session_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+		MM_DBG("msm_snddev_withdraw_freq\n");
+		return ret;
+	}
+
+	/* Configured sample rate is not as requested,
+		reject the request */
+	if (freq != prtd->samp_rate) {
+		MM_DBG("sample rate can not be configured to %d\n",
+							prtd->samp_rate);
+		msm_snddev_withdraw_freq(prtd->session_id,
+					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+		MM_DBG("msm_snddev_withdraw_freq\n");
+		return ret;
+	}
 
 	prtd->data = prtd->substream->dma_buffer.area;
 	prtd->phys = prtd->substream->dma_buffer.addr;
@@ -310,6 +366,19 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 			kfree(prtd);
 			return -ENODEV;
 		}
+
+		prtd->abort = 0;
+		prtd->device_events = AUDDEV_EVT_FREQ_CHG;
+		MM_ERR("Register device event listener\n");
+		ret = auddev_register_evt_listner(prtd->device_events,
+				AUDDEV_CLNT_ENC, prtd->session_id,
+				pcm_in_listener, (void *) prtd);
+
+		if (ret) {
+			MM_ERR("failed to register device event listener\n");
+			goto evt_error;
+		}
+
 	}
 	prtd->substream = substream;
 	ret = snd_pcm_hw_constraint_list(runtime, 0,
@@ -343,7 +412,11 @@ static int msm_pcm_open(struct snd_pcm_substream *substream)
 
 	copy_count = 0;
 	return 0;
-
+evt_error:
+	audpreproc_aenc_free(prtd->session_id);
+	msm_adsp_put(prtd->audrec);
+	kfree(prtd);
+	return ret;
 }
 
 static int msm_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
@@ -434,8 +507,14 @@ static int msm_pcm_capture_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct msm_audio *prtd = runtime->private_data;
+	int ret = 0;
 
 	MM_DBG("\n");
+	ret = msm_snddev_withdraw_freq(prtd->session_id,
+			SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
+	MM_DBG("msm_snddev_withdraw_freq\n");
+	auddev_unregister_evt_listner(AUDDEV_CLNT_ENC, prtd->session_id);
+	prtd->abort = 0;
 	wake_up(&the_locks.enable_wait);
 	alsa_audrec_disable(prtd);
 	audpreproc_aenc_free(prtd->session_id);

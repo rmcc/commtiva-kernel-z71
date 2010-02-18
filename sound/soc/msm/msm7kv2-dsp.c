@@ -46,7 +46,7 @@ static int alsa_dsp_read_buffer(struct msm_audio *audio,
 			uint32_t read_cnt);
 static void alsa_get_dsp_frames(struct msm_audio *prtd);
 static int alsa_in_param_config(struct msm_audio *audio);
-static int alsa_in_record_config(struct msm_audio *prtd, int enable);
+
 static int alsa_in_mem_config(struct msm_audio *audio);
 static int alsa_in_enc_config(struct msm_audio *audio, int enable);
 
@@ -410,7 +410,7 @@ static int alsa_in_param_config(struct msm_audio *prtd)
 	return audpreproc_send_audreccmdqueue(&cmd, sizeof(cmd));
 }
 
-static int alsa_in_record_config(struct msm_audio *prtd, int enable)
+int alsa_in_record_config(struct msm_audio *prtd, int enable)
 {
 	struct audpreproc_afe_cmd_audio_record_cfg cmd;
 	int i;
@@ -504,12 +504,20 @@ int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
 	while (count > 0) {
 		ret = wait_event_interruptible(the_locks.read_wait,
 					      (prtd->in_count > 0)
-					      || prtd->stopped);
+					      || prtd->stopped ||
+						  prtd->abort);
+
 		if (ret < 0)
 			break;
 
 		if (prtd->stopped) {
 			ret = -EBUSY;
+			break;
+		}
+
+		if (prtd->abort) {
+			MM_DBG(" prtd->abort ! \n");
+			ret = -EPERM; /* Not permitted due to abort */
 			break;
 		}
 
