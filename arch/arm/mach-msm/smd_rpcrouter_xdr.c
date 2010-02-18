@@ -418,8 +418,24 @@ int xdr_send_msg(struct msm_rpc_xdr *xdr)
 	return rc;
 }
 
+void xdr_init(struct msm_rpc_xdr *xdr)
+{
+	mutex_init(&xdr->out_lock);
+	mutex_init(&xdr->in_lock);
+
+	xdr->in_buf = NULL;
+	xdr->in_size = 0;
+	xdr->in_index = 0;
+
+	xdr->out_buf = NULL;
+	xdr->out_size = 0;
+	xdr->out_index = 0;
+}
+
 void xdr_init_input(struct msm_rpc_xdr *xdr, void *buf, uint32_t size)
 {
+	mutex_lock(&xdr->in_lock);
+
 	xdr->in_buf = buf;
 	xdr->in_size = size;
 	xdr->in_index = 0;
@@ -429,6 +445,24 @@ void xdr_init_output(struct msm_rpc_xdr *xdr, void *buf, uint32_t size)
 {
 	xdr->out_buf = buf;
 	xdr->out_size = size;
+	xdr->out_index = 0;
+}
+
+void xdr_clean_input(struct msm_rpc_xdr *xdr)
+{
+	kfree(xdr->in_buf);
+	xdr->in_buf = NULL;
+	xdr->in_size = 0;
+	xdr->in_index = 0;
+
+	mutex_unlock(&xdr->in_lock);
+}
+
+void xdr_clean_output(struct msm_rpc_xdr *xdr)
+{
+	kfree(xdr->out_buf);
+	xdr->out_buf = NULL;
+	xdr->out_size = 0;
 	xdr->out_index = 0;
 }
 
