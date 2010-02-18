@@ -2937,6 +2937,11 @@ static struct msm_gpio sdc1_lvlshft_cfg_data[] = {
 	{GPIO_CFG(35, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), "sdc1_lvlshft"},
 };
 
+static struct msm_gpio msm_nand_ebi2_cfg_data[] = {
+	{GPIO_CFG(86, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "ebi2_cs1"},
+	{GPIO_CFG(115, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "ebi2_busy1"},
+};
+
 static struct msm_gpio sdc1_cfg_data[] = {
 	{GPIO_CFG(38, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "sdc1_clk"},
 	{GPIO_CFG(39, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_cmd"},
@@ -3198,6 +3203,17 @@ static void msm_sdc1_lvlshft_enable(void)
 		printk(KERN_ERR "%s: Failed to turn on GPIO 35\n", __func__);
 }
 
+static void __init msm_7x30_init_nand(void)
+{
+	int rc;
+	/* Enable GPIO 86 & 115 */
+	rc = msm_gpios_request_enable(msm_nand_ebi2_cfg_data,
+				ARRAY_SIZE(msm_nand_ebi2_cfg_data));
+	if (rc)
+		printk(KERN_ERR "%s: Failed to enable GPIO 86 & 115\n",
+			 __func__);
+}
+
 static void __init msm7x30_init_mmc(void)
 {
 	vreg_s3 = vreg_get(NULL, "s3");
@@ -3283,6 +3299,7 @@ static void __init msm7x30_init(void)
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 	rmt_storage_add_ramfs();
 	msm7x30_init_mmc();
+	msm_7x30_init_nand();
 	msm_qsd_spi_init();
 	spi_register_board_info(msm_spi_board_info,
 		ARRAY_SIZE(msm_spi_board_info));
