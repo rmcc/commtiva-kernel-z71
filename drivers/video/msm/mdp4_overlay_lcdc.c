@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -158,10 +158,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 
 	if (lcdc_pipe == NULL) {
 		ptype = mdp4_overlay_format2type(format);
-		pipe = mdp4_overlay_pipe_alloc();
-		pipe->pipe_type = ptype;
-		/* use RGB1 pipe */
-		pipe->pipe_num  = OVERLAY_PIPE_RGB1;
+		pipe = mdp4_overlay_pipe_alloc(ptype);
 		pipe->mixer_stage  = MDP4_MIXER_STAGE_BASE;
 		pipe->mixer_num  = MDP4_MIXER0;
 		pipe->src_format = format;
@@ -284,7 +281,6 @@ int mdp_lcdc_on(struct platform_device *pdev)
 int mdp_lcdc_off(struct platform_device *pdev)
 {
 	int ret = 0;
-	struct mdp4_overlay_pipe *pipe;
 
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
@@ -298,9 +294,9 @@ int mdp_lcdc_off(struct platform_device *pdev)
 	/* delay to make sure the last frame finishes */
 	mdelay(100);
 
-	/* dis-engage rgb0 from mixer */
-	pipe = lcdc_pipe;
-	mdp4_mixer_stage_down(pipe);
+	/* dis-engage rgb0 from mixer0 */
+	if (lcdc_pipe)
+		mdp4_mixer_stage_down(lcdc_pipe);
 
 	return ret;
 }

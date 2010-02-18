@@ -1,5 +1,4 @@
-
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -236,6 +235,8 @@ void mdp4_hw_init(void)
 	mdp4_mixer_blend_init(1);
 	mdp4_vg_qseed_init(0);
 	mdp4_vg_qseed_init(1);
+
+	/* yuv2rgb */
 	mdp4_vg_csc_mv_setup(0);
 	mdp4_vg_csc_mv_setup(1);
 	mdp4_vg_csc_pre_bv_setup(0);
@@ -247,14 +248,21 @@ void mdp4_hw_init(void)
 	mdp4_vg_csc_post_lv_setup(0);
 	mdp4_vg_csc_post_lv_setup(1);
 
+	/* rgb2yuv */
+	mdp4_mixer1_csc_mv_setup();
+	mdp4_mixer1_csc_pre_bv_setup();
+	mdp4_mixer1_csc_post_bv_setup();
+	mdp4_mixer1_csc_pre_lv_setup();
+	mdp4_mixer1_csc_post_lv_setup();
+
 	mdp4_mixer_gc_lut_setup(0);
 	mdp4_mixer_gc_lut_setup(1);
 
 	mdp4_vg_igc_lut_setup(0);
 	mdp4_vg_igc_lut_setup(1);
 
-	 mdp4_rgb_igc_lut_setup(0);
-	 mdp4_rgb_igc_lut_setup(1);
+	mdp4_rgb_igc_lut_setup(0);
+	mdp4_rgb_igc_lut_setup(1);
 
 	outp32(MDP_EBI2_PORTMAP_MODE, 0x3);
 
@@ -312,7 +320,6 @@ void mdp4_clear_lcdc(void)
 	outpdw(MDP_BASE + 0xc0038, 0);	/* lcdc ctl polarity */
 }
 
-static struct mdp_dma_data overlay1_data;
 static int intr_dma_p;
 static int intr_dma_s;
 static int intr_dma_e;
@@ -401,11 +408,14 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		}
 		if (isr & INTR_OVERLAY1_DONE) {
 			intr_overlay1++;
-			dma = &overlay1_data;
-			dma->busy = FALSE;
-			mdp_pipe_ctrl(MDP_OVERLAY1_BLOCK,
-					MDP_BLOCK_POWER_OFF, TRUE);
-			complete(&dma->comp);
+			/* disable DTV interrupt */
+			dma = &dma_e_data;
+			mdp_intr_mask &= ~INTR_OVERLAY1_DONE;
+			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+			dma->waiting = FALSE;
+#ifdef CONFIG_FB_MSM_DTV
+			mdp4_overlay1_done_dtv();
+#endif
 		}
 		if (isr & INTR_DMA_P_HISTOGRAM) {
 			isr = inpdw(MDP_DMA_P_HIST_INTR_STATUS);
@@ -1111,6 +1121,92 @@ void mdp4_vg_csc_post_lv_setup(int vp_num)
 		off++;
 	}
 }
+
+static uint32 csc_rgb2yuv_matrix_tab[9] = {
+	0x0083, 0x0102, 0x0032,
+	0xffb5, 0xff6c, 0x00e1,
+	0x00e1, 0xff45, 0xffdc
+};
+
+static uint32 csc_rgb2yuv_pre_bv_tab[3] = {0, 0, 0};
+
+static uint32 csc_rgb2yuv_post_bv_tab[3] = {0x0010, 0x0080, 0x0080};
+
+static  uint32 csc_rgb2yuv_pre_lv_tab[6] = {
+	0x00, 0xff, 0x00,
+	0xff, 0x00, 0xff
+};
+
+static  uint32 csc_rgb2yuv_post_lv_tab[6] = {
+	0x0010, 0x00eb, 0x0010,
+	0x00f0, 0x0010, 0x00f0
+};
+
+void mdp4_mixer1_csc_mv_setup(void)
+{
+	uint32 *off;
+	int i;
+
+	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2400);
+
+	for (i = 0; i < 9; i++) {
+		outpdw(off, csc_rgb2yuv_matrix_tab[i]);
+		off++;
+	}
+}
+
+void mdp4_mixer1_csc_pre_bv_setup(void)
+{
+	uint32 *off;
+	int i;
+
+	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2500);
+
+	for (i = 0; i < 3; i++) {
+		outpdw(off, csc_rgb2yuv_pre_bv_tab[i]);
+		off++;
+	}
+}
+
+void mdp4_mixer1_csc_post_bv_setup(void)
+{
+	uint32 *off;
+	int i;
+
+	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2580);
+
+	for (i = 0; i < 3; i++) {
+		outpdw(off, csc_rgb2yuv_post_bv_tab[i]);
+		off++;
+	}
+}
+
+void mdp4_mixer1_csc_pre_lv_setup(void)
+{
+	uint32 *off;
+	int i;
+
+	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2600);
+
+	for (i = 0; i < 6; i++) {
+		outpdw(off, csc_rgb2yuv_pre_lv_tab[i]);
+		off++;
+	}
+}
+
+void mdp4_mixer1_csc_post_lv_setup(void)
+{
+	uint32 *off;
+	int i;
+
+	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2680);
+
+	for (i = 0; i < 6; i++) {
+		outpdw(off, csc_rgb2yuv_post_lv_tab[i]);
+		off++;
+	}
+}
+
 
 char gc_lut[] = {
 	0x0, 0x1, 0x2, 0x2, 0x3, 0x4, 0x5, 0x6,

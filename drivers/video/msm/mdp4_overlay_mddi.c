@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -112,10 +112,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 	if (mddi_pipe == NULL) {
 		ptype = mdp4_overlay_format2type(format);
-		pipe = mdp4_overlay_pipe_alloc();
-		pipe->pipe_type = ptype;
-		/* use RGB1 pipe */
-		pipe->pipe_num  = OVERLAY_PIPE_RGB1;
+		pipe = mdp4_overlay_pipe_alloc(ptype);
 		pipe->mixer_num  = MDP4_MIXER0;
 		pipe->src_format = format;
 		mdp4_overlay_format2pipe(pipe);
@@ -229,8 +226,10 @@ void mdp4_overlay0_done_mddi()
 void mdp4_mddi_overlay_restore(void)
 {
 	/* mutex holded by caller */
-	mdp4_overlay_update_lcd(mddi_mfd);
-	mdp4_mddi_overlay_kickoff(mddi_mfd, mddi_pipe);
+	if (mddi_mfd && mddi_pipe) {
+		mdp4_overlay_update_lcd(mddi_mfd);
+		mdp4_mddi_overlay_kickoff(mddi_mfd, mddi_pipe);
+	}
 }
 
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,

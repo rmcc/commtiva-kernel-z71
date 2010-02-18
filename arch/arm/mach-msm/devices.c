@@ -1,7 +1,7 @@
 /* linux/arch/arm/mach-msm/devices.c
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -939,6 +939,11 @@ static struct platform_device msm_lcdc_device = {
 	.id     = 0,
 };
 
+static struct platform_device msm_dtv_device = {
+	.name   = "dtv",
+	.id     = 0,
+};
+
 static struct platform_device msm_tvenc_device = {
 	.name   = "tvenc",
 	.id     = 0,
@@ -1070,6 +1075,8 @@ void __init msm_fb_register_device(char *name, void *data)
 		msm_register_device(&msm_tvenc_device, data);
 	else if (!strncmp(name, "lcdc", 4))
 		msm_register_device(&msm_lcdc_device, data);
+	else if (!strncmp(name, "dtv", 3))
+		msm_register_device(&msm_dtv_device, data);
 	else
 		printk(KERN_ERR "%s: unknown device! %s\n", __func__, name);
 }
@@ -1281,6 +1288,8 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("sdc_pclk",	SDC4_PCLK,	&msm_device_sdc4.dev, OFF),
 	CLK_PCOM("spi_clk",	SPI_CLK,	NULL, 0),
 	CLK_PCOM("spi_pclk",	SPI_PCLK,	NULL, 0),
+	CLK_PCOM("tv_dac_clk",	TV_DAC_CLK,	NULL, 0),
+	CLK_PCOM("tv_enc_clk",	TV_ENC_CLK,	NULL, 0),
 	CLK_PCOM("uart_clk",	UART1_CLK,	&msm_device_uart1.dev, OFF),
 	CLK_PCOM("uart_clk",	UART2_CLK,	&msm_device_uart2.dev, 0),
 	CLK_PCOM("uart_clk",	UART3_CLK,	&msm_device_uart3.dev, OFF),

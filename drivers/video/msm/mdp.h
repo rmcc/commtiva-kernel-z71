@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -546,7 +546,8 @@ struct mdp_dma_data {
 #define DMA_AHBM_LCD_SEL_PRIMARY            0
 #define DMA_AHBM_LCD_SEL_SECONDARY          0
 #define DMA_IBUF_C3ALPHA_EN                 0
-#define DMA_DITHER_EN                       BIT(24)
+#define DMA_DITHER_EN                       BIT(24)	/* dma_p */
+#define DMA_DEFLKR_EN                       BIT(24)	/* dma_e */
 #define DMA_MDDI_DMAOUT_LCD_SEL_PRIMARY     0
 #define DMA_MDDI_DMAOUT_LCD_SEL_SECONDARY   0
 #define DMA_MDDI_DMAOUT_LCD_SEL_EXTERNAL    0

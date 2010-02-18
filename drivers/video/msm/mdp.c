@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -731,6 +731,7 @@ static void mdp_drv_init(void)
 	dma_e_data.busy = FALSE;
 	dma_e_data.waiting = FALSE;
 	init_completion(&dma_e_data.comp);
+	mutex_init(&dma_e_data.ov_mutex);
 
 #ifndef CONFIG_FB_MSM_MDP22
 	init_completion(&mdp_hist_comp);
@@ -1020,6 +1021,17 @@ static int mdp_probe(struct platform_device *pdev)
 		mdp_config_vsync(mfd);
 		break;
 
+#ifdef CONFIG_FB_MSM_DTV
+	case DTV_PANEL:
+		pdata->on = mdp4_dtv_on;
+		pdata->off = mdp4_dtv_off;
+		mfd->hw_refresh = TRUE;
+		mfd->cursor_update = mdp_hw_cursor_update;
+		mfd->dma_fnc = mdp4_dtv_overlay;
+		mfd->dma = &dma_e_data;
+		mdp4_display_intf_sel(EXTERNAL_INTF_SEL, DTV_INTF);
+		break;
+#endif
 	case HDMI_PANEL:
 	case LCDC_PANEL:
 		pdata->on = mdp_lcdc_on;

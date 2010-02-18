@@ -108,7 +108,7 @@
 
 
 #define MSM_PMEM_SF_SIZE	0x1300000
-#define MSM_FB_SIZE		0x200000
+#define MSM_FB_SIZE		0x500000
 #define MSM_PMEM_GPU1_SIZE      0x1000000
 #define MSM_GPU_PHYS_SIZE       SZ_2M
 #define MSM_PMEM_ADSP_SIZE      0x2000000
@@ -1625,7 +1625,10 @@ static struct i2c_board_info msm_i2c_board_info[] = {
 		I2C_BOARD_INFO("m33c01", OPTNAV_I2C_SLAVE_ADDR),
 		.irq		= MSM_GPIO_TO_INT(OPTNAV_IRQ),
 		.platform_data = &optnav_data,
-	}
+	},
+	{
+		I2C_BOARD_INFO("adv7520", 0x72 >> 1),
+	},
 };
 
 static struct i2c_board_info msm_marimba_board_info[] = {
@@ -2009,6 +2012,162 @@ static struct platform_device lcdc_sharp_panel_device = {
 	}
 };
 
+static struct msm_gpio dtv_panel_gpios[] = {
+#ifdef HDMI_INT
+	{ GPIO_CFG(18, 0, GPIO_INPUT,  GPIO_PULL_DOWN, GPIO_4MA), "hdmi_int" },
+#endif
+	{ GPIO_CFG(120, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "wca_mclk" },
+	{ GPIO_CFG(121, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "wca_sd0" },
+	{ GPIO_CFG(122, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "wca_sd1" },
+	{ GPIO_CFG(123, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "wca_sd2" },
+	{ GPIO_CFG(124, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_8MA), "dtv_pclk" },
+	{ GPIO_CFG(125, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_en" },
+	{ GPIO_CFG(126, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_vsync" },
+	{ GPIO_CFG(127, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_hsync" },
+	{ GPIO_CFG(128, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data0" },
+	{ GPIO_CFG(129, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data1" },
+	{ GPIO_CFG(130, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data2" },
+	{ GPIO_CFG(131, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data3" },
+	{ GPIO_CFG(132, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data4" },
+	{ GPIO_CFG(160, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data5" },
+	{ GPIO_CFG(161, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data6" },
+	{ GPIO_CFG(162, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data7" },
+	{ GPIO_CFG(163, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data8" },
+	{ GPIO_CFG(164, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_data9" },
+	{ GPIO_CFG(165, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat10" },
+	{ GPIO_CFG(166, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat11" },
+	{ GPIO_CFG(167, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat12" },
+	{ GPIO_CFG(168, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat13" },
+	{ GPIO_CFG(169, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat14" },
+	{ GPIO_CFG(170, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat15" },
+	{ GPIO_CFG(171, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat16" },
+	{ GPIO_CFG(172, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat17" },
+	{ GPIO_CFG(173, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat18" },
+	{ GPIO_CFG(174, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat19" },
+	{ GPIO_CFG(175, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat20" },
+	{ GPIO_CFG(176, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat21" },
+	{ GPIO_CFG(177, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat22" },
+	{ GPIO_CFG(178, 1, GPIO_OUTPUT,  GPIO_NO_PULL, GPIO_4MA), "dtv_dat23" },
+};
+
+
+#ifdef HDMI_RESET
+static unsigned dtv_reset_gpio =
+	GPIO_CFG(37, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_2MA);
+#endif
+
+static void dtv_panel_power(int on)
+{
+	int flag_on = !!on;
+	static int dtv_power_save_on;
+	struct vreg *vreg_ldo17, *vreg_ldo8;
+	int rc;
+
+	if (dtv_power_save_on == flag_on)
+		return;
+
+	dtv_power_save_on = flag_on;
+
+#ifdef HDMI_RESET
+	if (on) {
+		/* reset Toshiba WeGA chip -- toggle reset pin -- gpio_180 */
+		rc = gpio_tlmm_config(dtv_reset_gpio, GPIO_ENABLE);
+		if (rc) {
+			pr_err("%s: gpio_tlmm_config(%#x)=%d\n",
+				       __func__, dtv_reset_gpio, rc);
+			return;
+		}
+
+		gpio_set_value(37, 0);	/* bring reset line low to hold reset*/
+	}
+#endif
+
+	if (on) {
+		rc = msm_gpios_enable(dtv_panel_gpios,
+				ARRAY_SIZE(dtv_panel_gpios));
+		if (rc < 0) {
+			printk(KERN_ERR "%s: gpio config failed: %d\n",
+				__func__, rc);
+		}
+	} else
+		msm_gpios_disable(dtv_panel_gpios,
+				ARRAY_SIZE(dtv_panel_gpios));
+
+	vreg_ldo8 = vreg_get(NULL, "gp7");
+
+	if (IS_ERR(vreg_ldo8)) {
+		pr_err("%s:  vreg17 get failed (%ld)\n",
+			__func__, PTR_ERR(vreg_ldo8));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_ldo8, 1800);
+	if (rc) {
+		pr_err("%s: vreg LDO18 set level failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	if (on)
+		rc = vreg_enable(vreg_ldo8);
+	else
+		rc = vreg_disable(vreg_ldo8);
+
+	if (rc) {
+		pr_err("%s: LDO8 vreg enable failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	mdelay(5);		/* ensure power is stable */
+
+	/*  -- LDO17 for HDMI */
+	vreg_ldo17 = vreg_get(NULL, "gp11");
+
+	if (IS_ERR(vreg_ldo17)) {
+		pr_err("%s:  vreg17 get failed (%ld)\n",
+			__func__, PTR_ERR(vreg_ldo17));
+		return;
+	}
+
+	rc = vreg_set_level(vreg_ldo17, 2600);
+	if (rc) {
+		pr_err("%s: vreg LDO17 set level failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	if (on)
+		rc = vreg_enable(vreg_ldo17);
+	else
+		rc = vreg_disable(vreg_ldo17);
+
+	if (rc) {
+		pr_err("%s: LDO17 vreg enable failed (%d)\n",
+			__func__, rc);
+		return;
+	}
+
+	mdelay(5);		/* ensure power is stable */
+
+#ifdef HDMI_RESET
+	if (on) {
+		gpio_set_value(37, 1);	/* bring reset line high */
+		mdelay(10);		/* 10 msec before IO can be accessed */
+	}
+#endif
+
+}
+
+static struct lcdc_platform_data dtv_pdata = {
+	.lcdc_power_save   = dtv_panel_power,
+};
+
+static struct platform_device hdmi_adv7520_panel_device = {
+	.name   = "adv7520",
+	.id     = 0,
+};
+
 static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
        .inject_rx_on_wakeup = 1,
        .rx_to_inject = 0xFD,
@@ -2339,6 +2498,7 @@ static void display_common_power(int on)
 			return;
 		}
 	}
+
 	mdelay(5);		/* ensure power is stable */
 
 	if (machine_is_msm7x30_fluid()) {
@@ -2514,6 +2674,7 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("pmdh", &mddi_pdata);
 	msm_fb_register_device("lcdc", &lcdc_pdata);
+	msm_fb_register_device("dtv", &dtv_pdata);
 }
 
 static struct msm_panel_common_pdata lcdc_toshiba_panel_data = {
@@ -2793,6 +2954,7 @@ static struct platform_device *devices[] __initdata = {
 	&msm_rotator_device,
 #endif
 	&lcdc_sharp_panel_device,
+	&hdmi_adv7520_panel_device,
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_adsp_device,
 	&msm_device_i2c,
@@ -3346,8 +3508,7 @@ static void __init msm7x30_init(void)
 	aux_pcm_gpio_init();
 #endif
 
-	if (machine_is_msm7x30_surf())
-		i2c_register_board_info(0, msm_i2c_board_info,
+	i2c_register_board_info(0, msm_i2c_board_info,
 			ARRAY_SIZE(msm_i2c_board_info));
 
 	i2c_register_board_info(2, msm_marimba_board_info,

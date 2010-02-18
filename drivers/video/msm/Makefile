@@ -27,6 +27,11 @@ else
 obj-y += mdp_dma_lcdc.o
 endif
 
+ifeq ($(CONFIG_FB_MSM_DTV),y)
+obj-y += mdp4_dtv.o
+obj-y += mdp4_overlay_dtv.o
+endif
+
 obj-y += mdp_dma.o
 obj-y += mdp_dma_s.o
 obj-y += mdp_vsync.o
@@ -79,6 +84,8 @@ obj-$(CONFIG_FB_MSM_LCDC_GORDON_VGA) += lcdc_gordon.o
 obj-$(CONFIG_FB_MSM_LCDC_WXGA) += lcdc_wxga.o
 obj-$(CONFIG_FB_MSM_LCDC_TOSHIBA_WVGA_PT) += lcdc_toshiba_wvga_pt.o
 obj-$(CONFIG_FB_MSM_LCDC_SHARP_WVGA_PT) += lcdc_sharp_wvga_pt.o
+obj-$(CONFIG_FB_MSM_HDMI_ADV7520_PANEL) += adv7520.o
+
 
 obj-$(CONFIG_FB_MSM_TVOUT_NTSC) += tv_ntsc.o
 obj-$(CONFIG_FB_MSM_TVOUT_PAL) += tv_pal.o

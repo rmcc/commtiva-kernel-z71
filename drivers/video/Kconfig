@@ -2193,8 +2193,13 @@ config FB_MSM_LCDC
 	default n
 
 config FB_MSM_OVERLAY
-	depends on FB_MSM_MDP40 && ANDROID_PMEM
+	depends on FB_MSM_MDP40
 	bool "MDP4 overlay support"
+	default n
+
+config FB_MSM_DTV
+	depends on FB_MSM_OVERALY
+	bool
 	default n
 
 config FB_MSM_MDDI_2
@@ -2372,6 +2377,14 @@ config FB_MSM_SECONDARY_PANEL_NONE
 	---help---
 	  No secondary panel
 endchoice
+
+config FB_MSM_HDMI_ADV7520_PANEL
+	depends on FB_MSM_MDP40
+        bool "LCDC HDMI ADV7520 720p Panel"
+        select FB_MSM_DTV
+	default n
+        ---help---
+        Support for LCDC 720p HDMI panel attached to ADV7520
 
 config FB_MSM_TVOUT_NTSC
 	bool

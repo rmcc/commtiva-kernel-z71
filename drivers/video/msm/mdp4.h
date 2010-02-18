@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -119,7 +119,7 @@ enum {
 
 enum {
 	OVERLAY_PIPE_RGB1,
-	OVERLAY_PIPE_RGB2,
+	OVERLAY_PIPE_RGB2
 };
 
 enum {
@@ -211,10 +211,11 @@ enum {
 
 #define MDP4_MAX_VIDEO_PIPE 2
 #define MDP4_MAX_RGB_PIPE 2
-#define MDP4_MAX_OVERLAY_PIPE 	16
+#define MDP4_MAX_OVERLAY_PIPE 	4
 
 
 struct mdp4_overlay_pipe {
+	uint32 pipe_used;
 	uint32 pipe_type;		/* rgb, video/graphic */
 	uint32 pipe_num;
 	uint32 pipe_ndx;
@@ -307,12 +308,20 @@ void mdp4_vg_csc_pre_bv_setup(int vp_num);
 void mdp4_vg_csc_post_bv_setup(int vp_num);
 void mdp4_vg_csc_pre_lv_setup(int vp_num);
 void mdp4_vg_csc_post_lv_setup(int vp_num);
+void mdp4_mixer1_csc_mv_setup(void);
+void mdp4_mixer1_csc_pre_bv_setup(void);
+void mdp4_mixer1_csc_post_bv_setup(void);
+void mdp4_mixer1_csc_pre_lv_setup(void);
+void mdp4_mixer1_csc_post_lv_setup(void);
 irqreturn_t mdp4_isr(int irq, void *ptr);
 void mdp4_overlay_format_to_pipe(uint32 format, struct mdp4_overlay_pipe *pipe);
 uint32 mdp4_overlay_format(struct mdp4_overlay_pipe *pipe);
 uint32 mdp4_overlay_unpack_pattern(struct mdp4_overlay_pipe *pipe);
 uint32 mdp4_overlay_op_mode(struct mdp4_overlay_pipe *pipe);
 void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd);
+void mdp4_dtv_overlay(struct msm_fb_data_type *mfd);
+int mdp4_dtv_on(struct platform_device *pdev);
+int mdp4_dtv_off(struct platform_device *pdev);
 void mdp4_overlay_rgb_setup(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all);
 void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe);
@@ -329,13 +338,16 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req);
 int mdp4_overlay_unset(struct fb_info *info, int ndx);
 int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req,
 				struct file **pp_src_file);
-struct mdp4_overlay_pipe *mdp4_overlay_pipe_alloc(void);
+struct mdp4_overlay_pipe *mdp4_overlay_pipe_alloc(int ptype);
 void mdp4_overlay_pipe_free(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe);
+void mdp4_overlay_dmae_cfg(struct msm_fb_data_type *mfd, int lcdc);
+void mdp4_overlay_dmae_xy(struct mdp4_overlay_pipe *pipe);
 int mdp4_overlay_active(int mixer);
 void mdp4_overlay0_done_lcdc(void);
 void mdp4_overlay0_done_mddi(void);
+void mdp4_overlay1_done_dtv(void);
 void mdp4_mddi_overlay_restore(void);
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);

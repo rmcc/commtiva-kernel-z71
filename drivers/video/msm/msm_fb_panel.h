@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -49,6 +49,7 @@ typedef struct panel_id_s {
 #define EXT_MDDI_PANEL 4	/* Ext.MDDI */
 #define TV_PANEL       5	/* TV */
 #define HDMI_PANEL     6	/* HDMI TV */
+#define DTV_PANEL      7	/* DTV */
 
 /* panel class */
 typedef enum {
