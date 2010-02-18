@@ -56,13 +56,29 @@
  */
 
 #include <linux/delay.h>
-#ifdef CONFIG_ARCH_MSM7X30
+#include <linux/pwm.h>
+#ifdef CONFIG_PMIC8058_PWM
 #include <linux/mfd/pmic8058.h>
+#include <linux/pmic8058-pwm.h>
 #endif
 #include <mach/gpio.h>
 #include "msm_fb.h"
 
+
 static int lcdc_sharp_panel_off(struct platform_device *pdev);
+
+#ifdef CONFIG_PMIC8058_PWM
+static struct pwm_device *bl_pwm;
+
+/* 50 Khz == 20000 ns period
+ * divide 20000 ns to 15 levels
+ * each level has 1333 ns
+ */
+
+#define PWM_PERIOD 20000	/* ns, period of 50Khz */
+#define PWM_LEVEL 15
+#define PWM_DUTY_LEVEL (PWM_PERIOD / PWM_LEVEL)
+#endif
 
 static int spi_cs;
 static int spi_sclk;
@@ -254,13 +270,40 @@ static int lcdc_sharp_panel_off(struct platform_device *pdev)
 	return 0;
 }
 
+static void lcdc_sharp_panel_set_backlight(struct msm_fb_data_type *mfd)
+{
+	int bl_level;
+
+	bl_level = mfd->bl_level;
+
+#ifdef CONFIG_PMIC8058_PWM
+	if (bl_pwm) {
+		pwm_config(bl_pwm, PWM_DUTY_LEVEL * bl_level, PWM_PERIOD);
+		pwm_enable(bl_pwm);
+	}
+#endif
+}
+
 static int __init sharp_probe(struct platform_device *pdev)
 {
 	if (pdev->id == 0) {
 		lcdc_sharp_pdata = pdev->dev.platform_data;
 		return 0;
 	}
+
+#ifdef CONFIG_PMIC8058_PWM
+	bl_pwm = pwm_request(lcdc_sharp_pdata->gpio, "backlight");
+	if (bl_pwm == NULL || IS_ERR(bl_pwm)) {
+		pr_err("%s pwm_request() failed\n", __func__);
+		bl_pwm = NULL;
+	}
+
+	printk(KERN_INFO "sharp_probe: bl_pwm=%x LPG_chan=%d\n",
+			(int) bl_pwm, (int)lcdc_sharp_pdata->gpio);
+#endif
+
 	msm_fb_add_device(pdev);
+
 	return 0;
 }
 
@@ -274,6 +317,7 @@ static struct platform_driver this_driver = {
 static struct msm_fb_panel_data sharp_panel_data = {
 	.on = lcdc_sharp_panel_on,
 	.off = lcdc_sharp_panel_off,
+	.set_backlight = lcdc_sharp_panel_set_backlight,
 };
 
 static struct platform_device this_device = {

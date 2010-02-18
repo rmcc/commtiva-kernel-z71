@@ -136,10 +136,11 @@ int pm8058_gpios_init(struct pm8058_chip *pm_chip)
 	struct pm8058_gpio backlight_drv = {
 		.direction      = PM_GPIO_DIR_OUT,
 		.output_buffer  = PM_GPIO_OUT_BUF_CMOS,
-		.output_value   = 1,
+		.output_value   = 0,
 		.pull           = PM_GPIO_PULL_NO,
+		.vin_sel        = 2,
 		.out_strength   = PM_GPIO_STRENGTH_HIGH,
-		.function       = PM_GPIO_FUNC_NORMAL,
+		.function       = PM_GPIO_FUNC_2,
 	};
 
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
@@ -2002,6 +2003,7 @@ static void lcdc_config_gpios(int enable)
 static struct msm_panel_common_pdata lcdc_sharp_panel_data = {
 	.panel_config_gpio = lcdc_config_gpios,
 	.gpio_num          = lcdc_gpio_array_num,
+	.gpio = 2, 	/* LPG PMIC_GPIO26 channel number */
 };
 
 static struct platform_device lcdc_sharp_panel_device = {
