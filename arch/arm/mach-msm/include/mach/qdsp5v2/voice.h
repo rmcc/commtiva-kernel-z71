@@ -46,10 +46,6 @@
 #define EVENT_CHANGE_START              0x54
 #define EVENT_NETWORK_RECONFIG          0x53
 
-/* VOLUME RANGE */
-#define MIN_VOLUME	-5000
-#define MAX_VOLUME	1300
-
 /* voice state */
 enum {
 	VOICE_INIT = 0,

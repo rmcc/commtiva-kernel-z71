@@ -99,6 +99,8 @@ static struct snddev_icodec_data snddev_iearpiece_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
+	.max_voice_rx_vol = 1100,
+	.min_voice_rx_vol = -400,
 };
 
 static struct platform_device msm_iearpiece_device = {
@@ -193,6 +195,8 @@ static struct snddev_icodec_data snddev_ihs_stereo_rx_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
+	.max_voice_rx_vol = 400,
+	.min_voice_rx_vol = -1100,
 };
 
 static struct platform_device msm_ihs_stereo_rx_device = {
@@ -229,6 +233,8 @@ static struct snddev_icodec_data snddev_ihs_mono_rx_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
+	.max_voice_rx_vol = 400,
+	.max_voice_rx_vol = -1100,
 };
 
 static struct platform_device msm_ihs_mono_rx_device = {
@@ -265,6 +271,8 @@ static struct snddev_icodec_data snddev_ihs_ffa_stereo_rx_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = msm_snddev_hsed_pamp_on,
 	.pamp_off = msm_snddev_hsed_pamp_off,
+	.max_voice_rx_vol = 400,
+	.min_voice_rx_vol = -1100,
 };
 
 static struct platform_device msm_ihs_ffa_stereo_rx_device = {
@@ -301,6 +309,8 @@ static struct snddev_icodec_data snddev_ihs_ffa_mono_rx_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = msm_snddev_hsed_pamp_on,
 	.pamp_off = msm_snddev_hsed_pamp_off,
+	.max_voice_rx_vol = 400,
+	.min_voice_rx_vol = -1100,
 };
 
 static struct platform_device msm_ihs_ffa_mono_rx_device = {
@@ -432,6 +442,8 @@ static struct snddev_icodec_data snddev_ispeaker_rx_data = {
 	.default_sample_rate = 48000,
 	.pamp_on = &msm_snddev_poweramp_on,
 	.pamp_off = &msm_snddev_poweramp_off,
+	.max_voice_rx_vol = 500,
+	.min_voice_rx_vol = -1000,
 };
 
 static struct platform_device msm_ispeaker_rx_device = {
@@ -559,6 +571,8 @@ static struct snddev_ecodec_data snddev_bt_sco_earpiece_data = {
 	.conf_pcm_ctl_val = BT_SCO_PCM_CTL_VAL,
 	.conf_aux_codec_intf = BT_SCO_AUX_CODEC_INTF,
 	.conf_data_format_padding_val = BT_SCO_DATA_FORMAT_PADDING,
+	.max_voice_rx_vol = 400,
+	.min_voice_rx_vol = -1100,
 };
 
 static struct snddev_ecodec_data snddev_bt_sco_mic_data = {
@@ -802,6 +816,8 @@ static struct snddev_icodec_data snddev_itty_hs_mono_rx_data = {
 	.default_sample_rate = 8000,
 	.pamp_on = NULL,
 	.pamp_off = NULL,
+	.max_voice_rx_vol = 400,
+	.min_voice_rx_vol = -1100,
 };
 
 static struct platform_device msm_itty_hs_mono_rx_device = {

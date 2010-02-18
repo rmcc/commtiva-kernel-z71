@@ -97,6 +97,8 @@ struct voice_data {
 	uint32_t default_sample_val;
 	/* call status */
 	int v_call_status; /* Start or End */
+	s32 max_rx_vol;
+	s32 min_rx_vol;
 };
 
 static struct voice_data voice;
@@ -193,6 +195,10 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_rx.sample =
 					evt_payload->voc_devinfo.dev_sample;
 				v->dev_rx.enabled = VOICE_DEV_ENABLED;
+				v->max_rx_vol =
+					evt_payload->voc_devinfo.max_rx_vol;
+				v->min_rx_vol =
+					evt_payload->voc_devinfo.min_rx_vol;
 			} else {
 				v->dev_tx.dev_acdb_id =
 					evt_payload->voc_devinfo.acdb_dev_id;
@@ -216,6 +222,10 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_rx.sample =
 					evt_payload->voc_devinfo.dev_sample;
 				v->dev_rx.enabled = VOICE_DEV_ENABLED;
+				v->max_rx_vol =
+					evt_payload->voc_devinfo.max_rx_vol;
+				v->min_rx_vol =
+					evt_payload->voc_devinfo.min_rx_vol;
 			} else {
 				v->dev_tx.dev_acdb_id =
 					evt_payload->voc_devinfo.acdb_dev_id;
@@ -246,10 +256,12 @@ static void voice_auddev_cb_function(u32 evt_id,
 				evt_payload->voc_vm_info.dev_vm_val.mute;
 		else {
 			/* convert the vol from percentage to db */
-			vol = MIN_VOLUME + ((MAX_VOLUME - (MIN_VOLUME)) *
+			vol = v->min_rx_vol + ((v->max_rx_vol - v->min_rx_vol) *
 				evt_payload->voc_vm_info.dev_vm_val.vol)/100;
 			MM_DBG("vol=%d, after convert vol2=%d \n",
 				evt_payload->voc_vm_info.dev_vm_val.vol, vol);
+			MM_DBG(" min vol=%d, max vol=%d\n",
+				v->min_rx_vol, v->max_rx_vol);
 			v->dev_rx.volume = (u32)vol;
 		}
 		/* send device info */
@@ -633,6 +645,8 @@ static int __init voice_init(void)
 	v->default_mute_val = 1;  /* default is mute */
 	v->default_vol_val = 0;
 	v->default_sample_val = 8000;
+	v->max_rx_vol = 0;
+	v->min_rx_vol = 0;
 
 	/* initialize dev_rx and dev_tx */
 	memset(&v->dev_tx, 0, sizeof(struct device_data));

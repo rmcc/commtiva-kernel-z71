@@ -385,7 +385,10 @@ static int snddev_ecodec_probe(struct platform_device *pdev)
 	msm_snddev_register(dev_info);
 	ecodec->data = pdata;
 	ecodec->sample_rate = 8000; /* Default to 8KHz */
-
+	 if (pdata->capability & SNDDEV_CAP_RX) {
+		dev_info->max_voc_rx_vol = pdata->max_voice_rx_vol;
+		dev_info->min_voc_rx_vol = pdata->min_voice_rx_vol;
+	}
 error:
 	return rc;
 }
