@@ -916,8 +916,8 @@ static struct reg_init {
 
 	/* Enable UMDX_P clock. Known to causes issues, so never turn off. */
 	{REG(GLBL_CLK_ENA_2_SC), B(2), B(2)},
-	{REG(0x0050), 0x3 << 17, 0x3}, /* EMDH RX div = div-4. */
-	{REG(0x008C), 0x3 << 17, 0x3}, /* PMDH RX div = div-4. */
+	{REG(0x0050), 0x3 << 17, 0x3 << 17}, /* EMDH RX div = div-4. */
+	{REG(0x008C), 0x3 << 17, 0x3 << 17}, /* PMDH RX div = div-4. */
 	/* MI2S_CODEC_RX_S src = MI2S_CODEC_RX_M. */
 	{REG(MI2S_RX_NS), B(14), 0x0},
 	/* MI2S_CODEC_TX_S src = MI2S_CODEC_TX_M. */
