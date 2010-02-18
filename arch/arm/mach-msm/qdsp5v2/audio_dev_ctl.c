@@ -757,6 +757,11 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 			goto skip_check;
 		if (callback->clnt_type == AUDDEV_CLNT_AUDIOCAL)
 			goto aud_cal;
+		if (evt_id == AUDDEV_EVT_STREAM_VOL_CHG) {
+			MM_DBG("AUDDEV_EVT_STREAM_VOL_CHG\n");
+			goto volume_strm;
+		}
+
 		session_mask = (0x1 << (clnt_id))
 				<< (8 * ((int)callback->clnt_type-1));
 		MM_DBG("dev_info->sessions = %08x\n", dev_info->sessions);
@@ -773,9 +778,12 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 			|| (evt_id == AUDDEV_EVT_DEV_CHG_VOICE))
 			goto voc_events;
 
+volume_strm:
 		if (callback->clnt_type == AUDDEV_CLNT_DEC) {
 			MM_DBG("AUDDEV_CLNT_DEC\n");
 			if (evt_id == AUDDEV_EVT_STREAM_VOL_CHG) {
+				MM_DBG("clnt_id = %d, dev_id = %d\n",
+					clnt_id, dev_id);
 				if (clnt_id != dev_id)
 					goto sent_dec;
 				else
@@ -804,8 +812,10 @@ static void broadcast_event(u32 evt_id, u32 dev_id)
 					evt_payload,
 					callback->private_data);
 sent_dec:
-			routing_info.dec_freq[clnt_id].freq
-					= dev_info->set_sample_rate;
+			if (evt_id != AUDDEV_EVT_STREAM_VOL_CHG)
+				routing_info.dec_freq[clnt_id].freq
+						= dev_info->set_sample_rate;
+
 			if (callback->cb_next == NULL)
 				break;
 			else {

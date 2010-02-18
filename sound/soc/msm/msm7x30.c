@@ -49,6 +49,9 @@ static struct snd_kcontrol_new snd_msm_controls[];
 char snddev_name[AUDIO_DEV_CTL_MAX_DEV][44];
 #define NUMID_DEVICES   8
 #define SIMP_CONTROLS   (NUMID_DEVICES - 1)
+#define MSM_MAX_VOLUME 0x3FFF
+#define MSM_VOLUME_STEP ((MSM_MAX_VOLUME+17)/100) /* 17 added to avoid
+						      more deviation */
 
 static int msm_v_call_info(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_info *uinfo)
@@ -152,7 +155,16 @@ static int msm_volume_put(struct snd_kcontrol *kcontrol,
 	int dec_id = ucontrol->value.integer.value[0];
 	int volume = ucontrol->value.integer.value[1];
 
+	if ((volume < 0) || (volume > 100))
+		return -EINVAL;
+
+	volume = (MSM_VOLUME_STEP * volume);
+
+	if (volume > MSM_MAX_VOLUME)
+		volume = MSM_MAX_VOLUME;
+
 	msm_vol_ctl.volume = volume;
+	MM_DBG("dec_id %d, volume %d", dec_id, volume);
 	mixer_post_event(AUDDEV_EVT_STREAM_VOL_CHG, dec_id);
 
 	return ret;
