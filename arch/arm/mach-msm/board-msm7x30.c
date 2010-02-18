@@ -2628,7 +2628,7 @@ enum {
 	BT_TX,
 };
 
-static struct msm_gpio bt_config_power_on[] = {
+static struct msm_gpio bt_config_gpio[] = {
 	{ GPIO_CFG(134, 1, GPIO_OUTPUT, GPIO_NO_PULL,   GPIO_2MA),
 		"UART1DM_RFR" },
 	{ GPIO_CFG(135, 1, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
@@ -2636,16 +2636,6 @@ static struct msm_gpio bt_config_power_on[] = {
 	{ GPIO_CFG(136, 1, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
 		"UART1DM_Rx" },
 	{ GPIO_CFG(137, 1, GPIO_OUTPUT, GPIO_NO_PULL,   GPIO_2MA),
-		"UART1DM_Tx" }
-};
-static struct msm_gpio bt_config_power_off[] = {
-	{ GPIO_CFG(134, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
-		"UART1DM_RFR" },
-	{ GPIO_CFG(135, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
-		"UART1DM_CTS" },
-	{ GPIO_CFG(136, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
-		"UART1DM_Rx" },
-	{ GPIO_CFG(137, 0, GPIO_INPUT,  GPIO_NO_PULL,   GPIO_2MA),
 		"UART1DM_Tx" }
 };
 
@@ -2763,64 +2753,39 @@ static int marimba_bt(int on)
 	return 0;
 }
 
+#define BT_POWER_VREG_COUNT 4
+static struct vreg *vregs_bt[BT_POWER_VREG_COUNT];
+static const char *vregs_bt_name[BT_POWER_VREG_COUNT] = {
+	"gp16",
+	"xo_out",
+	"s2",
+	"wlan"
+};
+
 static int bluetooth_power(int on)
 {
-	int rc;
-	struct vreg *vreg_wlan;
+	int i, rc;
 
-	vreg_wlan = vreg_get(NULL, "wlan");
+	if (!on) {
+		rc = marimba_bt(on);
+		if (rc < 0)
+			return -EIO;
+	}
 
-	if (IS_ERR(vreg_wlan)) {
-		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-		       __func__, PTR_ERR(vreg_wlan));
-		return PTR_ERR(vreg_wlan);
+	for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
+		rc = on ? vreg_enable(vregs_bt[i]) : vreg_disable(vregs_bt[i]);
+		if (rc < 0) {
+			printk(KERN_ERR "%s: vreg %s %s failed (%d)\n",
+			       __func__, on ? "enable" : "disable",
+			       vregs_bt_name[i], rc);
+			return -EIO;
+		}
 	}
 
 	if (on) {
-		rc = msm_gpios_enable(bt_config_power_on,
-			ARRAY_SIZE(bt_config_power_on));
-
-		if (rc < 0) {
-			printk(KERN_ERR
-				"%s: gpio config failed: %d\n",
-				__func__, rc);
-			return rc;
-		}
-
-		rc = vreg_set_level(vreg_wlan, PMIC_VREG_WLAN_LEVEL);
-		if (rc) {
-			printk(KERN_ERR "%s: vreg wlan set level failed (%d)\n",
-			       __func__, rc);
-			return -EIO;
-		}
-		rc = vreg_enable(vreg_wlan);
-		if (rc) {
-			printk(KERN_ERR "%s: vreg wlan enable failed (%d)\n",
-			       __func__, rc);
-			return -EIO;
-		}
 		rc = marimba_bt(on);
-		if (rc)
+		if (rc < 0)
 			return -EIO;
-	} else {
-		rc = marimba_bt(on);
-		if (rc)
-			return -EIO;
-		rc = vreg_disable(vreg_wlan);
-		if (rc) {
-			printk(KERN_ERR "%s: vreg wlan disable failed (%d)\n",
-			       __func__, rc);
-			return -EIO;
-		}
-
-		rc = msm_gpios_enable(bt_config_power_off,
-					ARRAY_SIZE(bt_config_power_off));
-		if (rc < 0) {
-			printk(KERN_ERR
-				"%s: gpio config failed: %d\n",
-				__func__, rc);
-			return rc;
-		}
 	}
 
 	printk(KERN_DEBUG "Bluetooth power switch: %d\n", on);
@@ -2830,6 +2795,27 @@ static int bluetooth_power(int on)
 
 static void __init bt_power_init(void)
 {
+	int i, rc;
+
+	for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
+		vregs_bt[i] = vreg_get(NULL, vregs_bt_name[i]);
+		if (IS_ERR(vregs_bt[i])) {
+			printk(KERN_ERR "%s: vreg get %s failed (%ld)\n",
+			       __func__, vregs_bt_name[i],
+			       PTR_ERR(vregs_bt[i]));
+			return;
+		}
+	}
+
+	rc = msm_gpios_enable(bt_config_gpio, ARRAY_SIZE(bt_config_gpio));
+
+	if (rc < 0) {
+		printk(KERN_ERR
+			"%s: gpio config failed: %d\n",
+			__func__, rc);
+		return;
+	}
+
 	msm_bt_power_device.dev.platform_data = &bluetooth_power;
 }
 #else
