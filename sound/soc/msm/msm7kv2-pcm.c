@@ -376,15 +376,23 @@ static int msm_pcm_playback_close(struct snd_pcm_substream *substream)
 	int ret = 0;
 
 	MM_DBG("\n");
+	if ((!prtd->mmap_flag) && prtd->enabled) {
+		ret = wait_event_interruptible(the_locks.eos_wait,
+		(!(prtd->out[0].used) && !(prtd->out[1].used)));
 
-	/* pcm dmamiss message is sent continously
-	 * when decoder is starved so no race
-	 * condition concern
+		if (ret < 0)
+			goto done;
+	}
+
+	/* PCM DMAMISS message is sent only once in
+	 * hpcm interface. So, wait for buffer complete
+	 * and teos flag.
 	 */
 	if (prtd->enabled)
 		ret = wait_event_interruptible(the_locks.eos_wait,
 					prtd->eos_ack);
 
+done:
 	alsa_audio_disable(prtd);
 	audpp_adec_free(prtd->session_id);
 	kfree(prtd);

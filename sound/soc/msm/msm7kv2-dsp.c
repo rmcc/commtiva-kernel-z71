@@ -101,6 +101,9 @@ void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 			if (frame->used) {
 				alsa_dsp_send_buffer(
 					prtd, prtd->out_tail, frame->used);
+				/* Reset eos_ack flag to avoid stale
+				 * PCMDMAMISS been considered
+				 */
 				prtd->eos_ack = 0;
 				prtd->out_tail ^= 1;
 			} else {
@@ -113,7 +116,8 @@ void alsa_dsp_event(void *data, unsigned id, uint16_t *msg)
 	}
 	case AUDPP_MSG_PCMDMAMISSED:
 		MM_ERR("PCMDMAMISSED %d\n", msg[0]);
-		prtd->eos_ack = 1;
+		prtd->eos_ack++;
+		MM_DBG("PCMDMAMISSED Count per Buffer %d\n", prtd->eos_ack);
 		wake_up(&the_locks.eos_wait);
 		break;
 	case AUDPP_MSG_CFG_MSG:
@@ -322,6 +326,9 @@ ssize_t alsa_send_buffer(struct msm_audio *prtd, const char __user *buf,
 		if (frame->used && prtd->out_needed) {
 			alsa_dsp_send_buffer(prtd, prtd->out_tail,
 					      frame->used);
+			/* Reset eos_ack flag to avoid stale
+			 * PCMDMAMISS been considered
+			 */
 			prtd->eos_ack = 0;
 			prtd->out_tail ^= 1;
 			prtd->out_needed--;
