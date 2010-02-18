@@ -41,10 +41,18 @@ static void snd_qsd_timer(unsigned long data)
 {
 	struct qsd_audio *prtd = (struct qsd_audio *)data;
 
+	pr_debug("prtd->buffer_cnt = %d\n", prtd->buffer_cnt);
+	pr_debug("prtd->intcnt = %d\n", prtd->intcnt);
 	if (!prtd->enabled)
 		return;
 	prtd->timerintcnt++;
-	snd_pcm_period_elapsed(prtd->substream);
+	if (prtd->start) {
+		if (prtd->intcnt) {
+			prtd->pcm_irq_pos += prtd->pcm_count;
+			prtd->intcnt--;
+		}
+		snd_pcm_period_elapsed(prtd->substream);
+	}
 	if (prtd->enabled)
 		add_timer(&prtd->timer);
 }
@@ -126,7 +134,7 @@ int qsd_audio_volume_update(struct qsd_audio *prtd)
 	struct cad_flt_cfg_strm_vol cad_strm_volume;
 	struct cad_filter_struct flt;
 
-	printk(KERN_INFO "qsd_audio_volume_update: updating volume");
+	pr_debug("qsd_audio_volume_update: updating volume");
 	memset(&cad_strm_volume, 0, sizeof(struct cad_flt_cfg_strm_vol));
 	memset(&flt, 0, sizeof(struct cad_filter_struct));
 
@@ -141,7 +149,7 @@ int qsd_audio_volume_update(struct qsd_audio *prtd)
 		&flt,
 		sizeof(struct cad_filter_struct));
 	if (rc)
-		printk(KERN_ERR "cad_ioctl() set volume failed\n");
+		pr_debug("cad_ioctl() set volume failed\n");
 	return rc;
 }
 
@@ -155,15 +163,16 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 	struct cad_write_pcm_format_struct_type cad_write_pcm_fmt;
 	u32 stream_device[1];
 	unsigned long expiry = 0;
-
+	pr_debug("qsd_pcm_playback_prepare\n");
 	prtd->pcm_size = snd_pcm_lib_buffer_bytes(substream);
 	prtd->pcm_count = snd_pcm_lib_period_bytes(substream);
 	prtd->pcm_irq_pos = 0;
 	prtd->pcm_buf_pos = 0;
 	atomic_set(&prtd->copy_count, 0);
-
 	if (prtd->enabled)
 		return 0;
+	prtd->start = 0;
+	prtd->intcnt = 0;
 
 	cad_stream_info.app_type = CAD_STREAM_APP_PLAYBACK;
 	cad_stream_info.priority = 0;
@@ -174,7 +183,7 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 		       &cad_stream_info,
 		       sizeof(struct cad_stream_info_struct_type));
 	if (rc)
-		printk(KERN_ERR "cad ioctl failed\n");
+		pr_debug("cad ioctl failed\n");
 
 	cad_write_pcm_fmt.us_ver_id = CAD_WRITE_PCM_VERSION_10;
 	cad_write_pcm_fmt.pcm.us_sample_rate =
@@ -187,7 +196,7 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 		       &cad_write_pcm_fmt,
 		       sizeof(struct cad_write_pcm_format_struct_type));
 	if (rc)
-		printk(KERN_ERR "cad ioctl failed\n");
+		pr_debug("cad ioctl failed\n");
 
 	stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_RX ;
 	cad_stream_dev.device = (u32 *) &stream_device[0];
@@ -197,12 +206,12 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 		       &cad_stream_dev,
 		       sizeof(struct cad_stream_device_struct_type));
 	if (rc)
-		printk(KERN_ERR "cad ioctl  failed\n");
+		pr_debug("cad ioctl  failed\n");
 
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
 		NULL, 0);
 	if (rc)
-		printk(KERN_ERR "cad ioctl failed\n");
+		pr_debug("cad ioctl failed\n");
 	else {
 		prtd->enabled = 1;
 		expiry = ((unsigned long)((prtd->pcm_count * 1000)
@@ -217,14 +226,21 @@ static int qsd_pcm_playback_prepare(struct snd_pcm_substream *substream)
 static int qsd_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	int ret = 0;
+	struct snd_pcm_runtime *runtime = substream->runtime;
 
+	struct qsd_audio *prtd = runtime->private_data;
 	switch (cmd) {
 	case SNDRV_PCM_TRIGGER_START:
+		pr_info("TRIGGER_START\n");
+		prtd->start = 1;
 		break;
 	case SNDRV_PCM_TRIGGER_RESUME:
 	case SNDRV_PCM_TRIGGER_PAUSE_RELEASE:
 		break;
 	case SNDRV_PCM_TRIGGER_STOP:
+		prtd->start = 0;
+		pr_info("TRIGGER_STOP\n");
+		break;
 	case SNDRV_PCM_TRIGGER_SUSPEND:
 	case SNDRV_PCM_TRIGGER_PAUSE_PUSH:
 		break;
@@ -240,16 +256,23 @@ qsd_pcm_playback_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
+	snd_pcm_uframes_t pcm_frame;
+	pr_debug("qsd_pcm_playback_pointer %d %d %d \n",
+			prtd->pcm_irq_pos, prtd->pcm_size, prtd->intcnt);
 
 	if (prtd->pcm_irq_pos >= prtd->pcm_size)
 		prtd->pcm_irq_pos = 0;
-	return bytes_to_frames(runtime, (prtd->pcm_irq_pos));
+	pcm_frame =  bytes_to_frames(runtime, (prtd->pcm_irq_pos));
+	pr_debug("qsd_pcm_playback_pointer %d\n", (int)pcm_frame);
+
+	return pcm_frame;
 }
 
 void alsa_event_cb_playback(u32 event, void *evt_packet,
 			u32 evt_packet_len, void *client_data)
 {
 	struct qsd_audio *prtd = client_data;
+	pr_debug("alsa_event_cb_playback \n");
 	if (event == CAD_EVT_STATUS_EOS) {
 
 		prtd->eos_ack = 1;
@@ -258,15 +281,15 @@ void alsa_event_cb_playback(u32 event, void *evt_packet,
 		return ;
 	}
 	prtd->intcnt++;
-	prtd->pcm_irq_pos += prtd->pcm_count;
 	return ;
 }
+
 void alsa_event_cb_capture(u32 event, void *evt_packet,
 			u32 evt_packet_len, void *client_data)
 {
 	struct qsd_audio *prtd = client_data;
 	prtd->intcnt++;
-	prtd->pcm_irq_pos += prtd->pcm_count;
+	pr_debug("alsa_event_cb_capture pcm_irq_pos = %d\n", prtd->pcm_irq_pos);
 }
 
 
@@ -283,12 +306,12 @@ static int qsd_pcm_open(struct snd_pcm_substream *substream)
 		return ret;
 	}
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		printk(KERN_INFO "Stream = SNDRV_PCM_STREAM_PLAYBACK\n");
+		pr_debug("Stream = SNDRV_PCM_STREAM_PLAYBACK\n");
 		runtime->hw = qsd_pcm_playback_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_PLAYBACK;
 		prtd->cos.op_code = CAD_OPEN_OP_WRITE;
 	} else {
-		printk(KERN_INFO "Stream = SNDRV_PCM_STREAM_CAPTURE\n");
+		pr_debug("Stream = SNDRV_PCM_STREAM_CAPTURE\n");
 		runtime->hw = qsd_pcm_capture_hardware;
 		prtd->dir = SNDRV_PCM_STREAM_CAPTURE;
 		prtd->cos.op_code = CAD_OPEN_OP_READ;
@@ -341,6 +364,7 @@ static int qsd_pcm_playback_copy(struct snd_pcm_substream *substream, int a,
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct qsd_audio *prtd = runtime->private_data;
 
+	pr_debug("qsd_pcm_playback_copy\n");
 	fbytes = frames_to_bytes(runtime, frames);
 	prtd->cbs.buffer = (void *)buf;
 	prtd->cbs.phys_addr = 0;
@@ -479,9 +503,8 @@ static int qsd_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_INFO,
 		&cad_stream_info,
 		sizeof(struct cad_stream_info_struct_type));
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	cad_write_pcm_fmt.us_ver_id = CAD_WRITE_PCM_VERSION_10;
 	cad_write_pcm_fmt.pcm.us_sample_rate =
@@ -493,9 +516,8 @@ static int qsd_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_CONFIG,
 	       &cad_write_pcm_fmt,
 	       sizeof(struct cad_write_pcm_format_struct_type));
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	stream_device[0] = CAD_HW_DEVICE_ID_DEFAULT_TX ;
 	cad_stream_dev.device = (u32 *) &stream_device[0];
@@ -504,9 +526,8 @@ static int qsd_pcm_capture_prepare(struct snd_pcm_substream *substream)
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_SET_STREAM_DEVICE,
 	       &cad_stream_dev,
 	       sizeof(struct cad_stream_device_struct_type));
-	if (rc) {
+	if (rc)
 		return rc;
-	}
 
 	rc = cad_ioctl(prtd->cad_w_handle, CAD_IOCTL_CMD_STREAM_START,
 			NULL, 0);
