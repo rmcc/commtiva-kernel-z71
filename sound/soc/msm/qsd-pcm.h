@@ -88,6 +88,7 @@ struct qsd_audio {
 	int intcnt;
 	int timerintcnt;
 	int buffer_cnt;
+	int start;
 
 	struct cad_open_struct_type cos;
 	uint32_t cad_w_handle;
