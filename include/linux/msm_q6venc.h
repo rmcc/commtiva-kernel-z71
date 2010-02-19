@@ -270,6 +270,11 @@ struct venc_seq_config {
 	struct venc_q6_config q6_config;
 };
 
+struct venc_version {
+	unsigned int major;
+	unsigned int minor;
+};
+
 #define VENC_IOCTL_MAGIC 'V'
 
 #define VENC_IOCTL_CMD_READ_NEXT_MSG \
@@ -319,5 +324,8 @@ struct venc_seq_config {
 
 #define VENC_IOCTL_SET_QP_RANGE \
 	_IOW(VENC_IOCTL_MAGIC, 18, struct venc_qp_range)
+
+#define VENC_IOCTL_GET_VERSION \
+	 _IOR(VENC_IOCTL_MAGIC, 19, struct venc_version)
 
 #endif

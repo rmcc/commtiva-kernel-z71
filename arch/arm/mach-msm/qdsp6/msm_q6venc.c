@@ -949,6 +949,23 @@ static void venc_q6_callback(void *data, int len, void *cookie)
 	return;
 }
 
+static int venc_get_version(struct venc_dev *dvenc, void *argp)
+{
+	struct venc_version ver_info;
+	int ret = 0;
+
+	ver_info.major = VENC_GET_MAJOR_VERSION(VENC_INTERFACE_VERSION);
+	ver_info.minor = VENC_GET_MINOR_VERSION(VENC_INTERFACE_VERSION);
+
+	ret = copy_to_user(((struct venc_version *)argp),
+				&ver_info, sizeof(ver_info));
+	if (ret)
+		pr_err("%s failed to copy_to_user\n", __func__);
+
+	return ret;
+
+}
+
 static long q6venc_ioctl(struct file *file, u32 cmd,
 			   unsigned long arg)
 {
@@ -1015,6 +1032,9 @@ static long q6venc_ioctl(struct file *file, u32 cmd,
 		break;
 	case VENC_IOCTL_CMD_STOP_READ_MSG:
 		ret = venc_stop_read_msg(dvenc);
+		break;
+	case VENC_IOCTL_GET_VERSION:
+		ret = venc_get_version(dvenc, argp);
 		break;
 	default:
 		pr_err("%s: invalid ioctl code (%d)\n", __func__, cmd);
