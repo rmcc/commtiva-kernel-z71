@@ -185,6 +185,12 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 	rx_dev_id = ucontrol->value.integer.value[0];
 	rx_dev_info = audio_dev_ctrl_find_dev(rx_dev_id);
 
+	if (IS_ERR(rx_dev_info)) {
+		MM_ERR("pass invalid dev_id\n");
+		rc = PTR_ERR(rx_dev_info);
+		return rc;
+	}
+
 	if (!(rx_dev_info->capability & SNDDEV_CAP_RX)) {
 		MM_ERR("First Dev is supposed to be RX\n");
 		return -EFAULT;
@@ -192,12 +198,6 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 
 	MM_DBG("route cfg %d STREAM_VOICE_RX type\n",
 		rx_dev_id);
-
-	if (IS_ERR(rx_dev_info)) {
-		MM_ERR("pass invalid dev_id\n");
-		rc = PTR_ERR(rx_dev_info);
-		return rc;
-	}
 
 	msm_set_voc_route(rx_dev_info, AUDIO_ROUTE_STREAM_VOICE_RX,
 				rx_dev_id);
@@ -209,6 +209,12 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 	tx_dev_id = ucontrol->value.integer.value[1];
 	tx_dev_info = audio_dev_ctrl_find_dev(tx_dev_id);
 
+	if (IS_ERR(tx_dev_info)) {
+		MM_ERR("pass invalid dev_id\n");
+		rc = PTR_ERR(tx_dev_info);
+		return rc;
+	}
+
 	if (!(tx_dev_info->capability & SNDDEV_CAP_TX)) {
 		MM_ERR("Second Dev is supposed to be Tx\n");
 		return -EFAULT;
@@ -216,12 +222,6 @@ static int msm_voice_put(struct snd_kcontrol *kcontrol,
 
 	MM_DBG("route cfg %d %d type\n",
 		tx_dev_id, AUDIO_ROUTE_STREAM_VOICE_TX);
-
-	if (IS_ERR(tx_dev_info)) {
-		MM_ERR("pass invalid dev_id\n");
-		rc = PTR_ERR(tx_dev_info);
-		return rc;
-	}
 
 	msm_set_voc_route(tx_dev_info, AUDIO_ROUTE_STREAM_VOICE_TX,
 				tx_dev_id);
