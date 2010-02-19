@@ -756,36 +756,58 @@ void msm_snddev_poweramp_off(void)
 	pr_info("%s: power off amplifier\n", __func__);
 }
 
+static struct vreg *snddev_vreg_ncp, *snddev_vreg_gp4;
+
 void msm_snddev_hsed_pamp_on(void)
 {
-	struct vreg *vreg_ncp;
 	int rc;
 
-	vreg_ncp = vreg_get(NULL, "ncp");
-	if (IS_ERR(vreg_ncp)) {
+	snddev_vreg_gp4 = vreg_get(NULL, "gp4");
+	if (IS_ERR(snddev_vreg_gp4)) {
 		pr_err("%s: vreg_get(%s) failed (%ld)\n",
-		__func__, "ncp", PTR_ERR(vreg_ncp));
+		__func__, "gp4", PTR_ERR(snddev_vreg_gp4));
 		return;
 	}
-	rc = vreg_enable(vreg_ncp);
+	rc = vreg_enable(snddev_vreg_gp4);
 	if (rc)
-		pr_err("%s: vreg_enable failed (%d)\n", __func__, rc);
+		pr_err("%s: vreg_enable(gp4) failed (%d)\n", __func__, rc);
+
+	snddev_vreg_ncp = vreg_get(NULL, "ncp");
+	if (IS_ERR(snddev_vreg_ncp)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "ncp", PTR_ERR(snddev_vreg_ncp));
+		return;
+	}
+	rc = vreg_enable(snddev_vreg_ncp);
+	if (rc)
+		pr_err("%s: vreg_enable(ncp) failed (%d)\n", __func__, rc);
 }
 
 void msm_snddev_hsed_pamp_off(void)
 {
-	struct vreg *vreg_ncp;
 	int rc;
 
-	vreg_ncp = vreg_get(NULL, "ncp");
-	if (IS_ERR(vreg_ncp)) {
+	if (IS_ERR(snddev_vreg_ncp)) {
 		pr_err("%s: vreg_get(%s) failed (%ld)\n",
-		__func__, "ncp", PTR_ERR(vreg_ncp));
+		__func__, "ncp", PTR_ERR(snddev_vreg_ncp));
 		return;
 	}
-	rc = vreg_disable(vreg_ncp);
+	rc = vreg_disable(snddev_vreg_ncp);
 	if (rc)
-		pr_err("%s: vreg_disable failed (%d)\n", __func__, rc);
+		pr_err("%s: vreg_disable(ncp) failed (%d)\n", __func__, rc);
+	vreg_put(snddev_vreg_ncp);
+
+	if (IS_ERR(snddev_vreg_gp4)) {
+		pr_err("%s: vreg_get(%s) failed (%ld)\n",
+		__func__, "gp4", PTR_ERR(snddev_vreg_gp4));
+		return;
+	}
+	rc = vreg_disable(snddev_vreg_gp4);
+	if (rc)
+		pr_err("%s: vreg_disable(gp4) failed (%d)\n", __func__, rc);
+
+	vreg_put(snddev_vreg_gp4);
+
 }
 
 static unsigned aux_pcm_gpio_on[] = {
