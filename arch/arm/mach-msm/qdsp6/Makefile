@@ -8,6 +8,7 @@ obj-y += qcelp_in.o
 obj-y += evrc_in.o
 obj-y += amrnb_in.o
 obj-y += mp3.o
+obj-y += dtmf.o
 obj-y += routing.o
 obj-y += audio_ctl.o
 obj-y += msm_q6vdec.o

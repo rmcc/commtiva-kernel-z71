@@ -440,6 +440,27 @@ static int audio_mp3_open(struct audio_client *ac, uint32_t bufsz,
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
+static int audio_dtmf_open(struct audio_client *ac,
+			  uint32_t rate, uint32_t channels)
+{
+	struct adsp_open_command rpc;
+
+	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.format.standard.format = ADSP_AUDIO_FORMAT_DTMF;
+	rpc.format.standard.channels = channels;
+	rpc.format.standard.bits_per_sample = 16;
+	rpc.format.standard.sampling_rate = rate;
+	rpc.format.standard.is_signed = 1;
+	rpc.format.standard.is_interleaved = 0;
+
+	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_OPEN_WRITE;
+	rpc.device = ADSP_AUDIO_DEVICE_ID_DEFAULT;
+	rpc.stream_context = ADSP_AUDIO_DEVICE_CONTEXT_PLAYBACK;
+
+	return audio_ioctl(ac, &rpc, sizeof(rpc));
+}
+
 static int audio_aac_open(struct audio_client *ac, uint32_t bufsz,
 			  uint32_t sample_rate, uint32_t channels,
 			  uint32_t bit_rate, uint32_t flags,
@@ -1564,6 +1585,50 @@ struct audio_client *q6audio_open_mp3(uint32_t bufsz, uint32_t rate,
 			q6_device_volume(audio_rx_device_id, rx_vol_level));
 	mutex_unlock(&audio_path_lock);
 	return ac;
+}
+
+struct audio_client *q6audio_open_dtmf(uint32_t rate,
+				      uint32_t channels, uint32_t acdb_id)
+{
+	struct audio_client *ac;
+
+	if (q6audio_init())
+		return 0;
+
+	ac = audio_client_alloc(0);
+	if (!ac)
+		return 0;
+
+	ac->flags = AUDIO_FLAG_WRITE;
+	audio_rx_path_enable(1, acdb_id);
+
+	audio_dtmf_open(ac, rate, channels);
+	audio_command(ac, ADSP_AUDIO_IOCTL_CMD_SESSION_START);
+
+	mutex_lock(&audio_path_lock);
+	audio_rx_mute(ac_control, audio_rx_device_id, 0);
+	audio_rx_volume(ac_control, audio_rx_device_id,
+		q6_device_volume(audio_rx_device_id, rx_vol_level));
+	mutex_unlock(&audio_path_lock);
+
+	return ac;
+}
+
+int q6audio_play_dtmf(struct audio_client *ac, uint16_t dtmf_hi,
+			 uint16_t dtmf_low, uint16_t duration, uint16_t rx_gain)
+{
+	struct adsp_audio_dtmf_start_command dtmf_cmd;
+
+	dtmf_cmd.hdr.opcode = ADSP_AUDIO_IOCTL_CMD_SESSION_DTMF_START;
+	dtmf_cmd.hdr.response_type = ADSP_AUDIO_RESPONSE_COMMAND;
+	dtmf_cmd.tone1_hz = dtmf_hi;
+	dtmf_cmd.tone2_hz = dtmf_low;
+	dtmf_cmd.duration_usec = duration * 1000;
+	dtmf_cmd.gain_mb = rx_gain;
+
+	return audio_ioctl(ac, &dtmf_cmd,
+		 sizeof(struct adsp_audio_dtmf_start_command));
+
 }
 
 int q6audio_mp3_close(struct audio_client *ac)

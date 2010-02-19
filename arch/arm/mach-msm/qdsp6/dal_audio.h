@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -267,6 +267,14 @@ struct adsp_device_switch_command {
 #define ADSP_PATH_RX	0
 #define ADSP_PATH_TX	1
 #define ADSP_PATH_BOTH	2
+
+struct adsp_audio_dtmf_start_command {
+	struct adsp_command_hdr hdr;
+	u32 tone1_hz;
+	u32 tone2_hz;
+	u32 duration_usec;
+	s32 gain_mb;
+} __attribute__ ((packed));
 
 /* These commands will affect a logical device and all its associated */
 /* streams. */
