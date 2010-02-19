@@ -607,6 +607,7 @@ static int audio_open(struct inode *inode, struct file *file)
 
 	audio->vol_pan.volume = 0x2000;
 	audio->vol_pan.pan = 0x0;
+	audio->source = 0x0;
 
 	audio_flush(audio);
 	audio->device_events = AUDDEV_EVT_DEV_RDY
