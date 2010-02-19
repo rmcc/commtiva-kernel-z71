@@ -1,6 +1,6 @@
 /* drivers/mtd/devices/msm_nand.h
  *
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  * Copyright (C) 2007 Google, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
@@ -180,6 +180,7 @@ extern unsigned long ebi2_register_base;
 #define CLEAN_DATA_32			0xFFFFFFFF
 
 #define EBI2_REG(off)   		(ebi2_register_base + (off))
+#define EBI2_CHIP_SELECT_CFG0           EBI2_REG(0x0000)
 #define EBI2_CFG_REG		       	EBI2_REG(0x0004)
 #define EBI2_NAND_ADM_MUX       	EBI2_REG(0x005C)
 
