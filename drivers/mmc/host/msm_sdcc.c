@@ -21,6 +21,7 @@
 #include <linux/ioport.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
+#include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/highmem.h>
@@ -1152,6 +1153,13 @@ msmsdcc_platform_status_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t
+msmsdcc_platform_sdiowakeup_irq(int irq, void *dev_id)
+{
+	printk(KERN_INFO "%s: SDIO Wake up IRQ : %d\n", __func__, irq);
+	return IRQ_HANDLED;
+}
+
 static void
 msmsdcc_status_notify_cb(int card_present, void *dev_id)
 {
@@ -1466,10 +1474,26 @@ msmsdcc_probe(struct platform_device *pdev)
 		host->eject = !host->oldstat;
 	}
 
+	if (host->plat->sdiowakeup_irq) {
+		ret = request_irq(plat->sdiowakeup_irq,
+			msmsdcc_platform_sdiowakeup_irq,
+			IRQF_SHARED | IRQF_TRIGGER_FALLING,
+			DRIVER_NAME "sdiowakeup", host);
+		if (ret) {
+			printk(KERN_ERR "Unable to get sdio wakeup"
+				"IRQ %d (%d)\n",
+				plat->sdiowakeup_irq, ret);
+			goto platform_irq_free;
+		} else {
+			set_irq_wake(host->plat->sdiowakeup_irq, 1);
+			disable_irq(host->plat->sdiowakeup_irq);
+		}
+	}
+
 	ret = request_irq(irqres->start, msmsdcc_irq, IRQF_SHARED,
 			  DRIVER_NAME " (cmd)", host);
 	if (ret)
-		goto platform_irq_free;
+		goto sdiowakeup_irq_free;
 
 	ret = request_irq(irqres->end, msmsdcc_pio_irq, IRQF_SHARED,
 			  DRIVER_NAME " (pio)", host);
@@ -1528,6 +1552,11 @@ msmsdcc_probe(struct platform_device *pdev)
 	return 0;
  irq_free:
 	free_irq(irqres->start, host);
+ sdiowakeup_irq_free:
+	if (plat->sdiowakeup_irq) {
+		set_irq_wake(host->plat->sdiowakeup_irq, 0);
+		free_irq(plat->sdiowakeup_irq, host);
+	}
  platform_irq_free:
 	if (plat->status_irq)
 		free_irq(plat->status_irq, host);
@@ -1572,6 +1601,11 @@ static int msmsdcc_remove(struct platform_device *pdev)
 
 	if (plat->status_irq)
 		free_irq(plat->status_irq, host);
+
+	if (plat->sdiowakeup_irq) {
+		set_irq_wake(host->plat->sdiowakeup_irq, 0);
+		free_irq(plat->sdiowakeup_irq, host);
+	}
 
 	free_irq(host->irqres->start, host);
 	free_irq(host->irqres->end, host);
@@ -1624,6 +1658,9 @@ msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 				host->clks_on = 0;
 			}
 		}
+
+		if (host->plat->sdiowakeup_irq)
+			enable_irq(host->plat->sdiowakeup_irq);
 	}
 	return rc;
 }
@@ -1650,6 +1687,9 @@ msmsdcc_resume(struct platform_device *dev)
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
 		spin_unlock_irqrestore(&host->lock, flags);
+
+		if (host->plat->sdiowakeup_irq)
+			disable_irq(host->plat->sdiowakeup_irq);
 
 		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO) {
 #ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
