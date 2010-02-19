@@ -166,6 +166,8 @@ struct msm_audio {
 	uint32_t in_count; /* number of buffers available to read() */
 
 	unsigned short samp_rate_index;
+	uint32_t device_events; /* device events interested in */
+	int abort; /* set when error, like sample rate mismatch */
 
 	/* audpre settings */
 	/* For different sample rate, the coeff might be different. *
@@ -203,5 +205,5 @@ extern int alsa_buffer_read(struct msm_audio *prtd, void __user *buf,
 ssize_t alsa_send_buffer(struct msm_audio *prtd, const char __user *buf,
 		size_t count, loff_t *pos);
 extern struct msm_adsp_ops alsa_audrec_adsp_ops;
-
+extern int alsa_in_record_config(struct msm_audio *prtd, int enable);
 #endif /*_MSM_PCM_H*/
