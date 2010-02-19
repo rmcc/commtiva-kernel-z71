@@ -1536,6 +1536,44 @@ static void __init msm7x2x_init_mmc(void)
 #define msm7x2x_init_mmc() do {} while (0)
 #endif
 
+static unsigned mpp_deep_sleep = 3;
+static int __init wifi_power_init(void)
+{
+	int rc;
+	struct vreg *vreg_wlan;
+
+	rc = mpp_config_digital_out(mpp_deep_sleep,
+	     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
+	     MPP_DLOGIC_OUT_CTRL_LOW));
+	if (rc) {
+		printk(KERN_ERR "%s: return val:  (%d)\n",
+		       __func__, rc);
+		return -EIO;
+	}
+
+	vreg_wlan = vreg_get(NULL, "wlan");
+	if (IS_ERR(vreg_wlan)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+		       __func__, PTR_ERR(vreg_wlan));
+		return PTR_ERR(vreg_wlan);
+	}
+
+	rc = vreg_set_level(vreg_wlan, 2600);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg set level failed (%d)\n",
+		       __func__, rc);
+		return -EIO;
+	}
+
+	rc = vreg_enable(vreg_wlan);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg enable failed (%d)\n",
+		       __func__, rc);
+		return -EIO;
+	}
+
+	return 0;
+}
 
 static struct msm_pm_platform_data msm7x25_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
@@ -1699,6 +1737,7 @@ static void __init msm7x2x_init(void)
 	rmt_storage_add_ramfs();
 	msm7x2x_init_mmc();
 	bt_power_init();
+	wifi_power_init();
 
 	if (cpu_is_msm7x27())
 		msm_pm_set_platform_data(msm7x27_pm_data);
