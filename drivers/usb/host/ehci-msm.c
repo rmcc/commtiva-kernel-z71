@@ -276,30 +276,27 @@ static int usb_suspend_phy(struct usb_hcd *hcd)
 
 static int usb_lpm_enter(struct usb_hcd *hcd)
 {
-	unsigned long flags;
 	struct device *dev = container_of((void *)hcd, struct device,
 							driver_data);
 	struct msmusb_hcd *mhcd = hcd_to_mhcd(hcd);
 
-	spin_lock_irqsave(&mhcd->lock, flags);
+	disable_irq(hcd->irq);
 	if (mhcd->in_lpm) {
 		pr_info("%s: already in lpm. nothing to do\n", __func__);
-		spin_unlock_irqrestore(&mhcd->lock, flags);
+		enable_irq(hcd->irq);
 		return 0;
 	}
 
 	if (HC_IS_RUNNING(hcd->state)) {
 		pr_info("%s: can't enter into lpm. controller is runnning\n",
 			__func__);
-		spin_unlock_irqrestore(&mhcd->lock, flags);
+		enable_irq(hcd->irq);
 		return -1;
 	}
 
 	pr_info("%s: lpm enter procedure started\n", __func__);
 
 	mhcd->in_lpm = 1;
-	disable_irq(hcd->irq);
-	spin_unlock_irqrestore(&mhcd->lock, flags);
 
 	if (usb_suspend_phy(hcd)) {
 		mhcd->in_lpm = 0;
