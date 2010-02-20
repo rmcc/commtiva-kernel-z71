@@ -21,6 +21,7 @@ struct mmc_platform_data {
 	unsigned int (*status)(struct device *);
 	unsigned int status_irq;
 	struct embedded_sdio_data *embedded_sdio;
+	unsigned int sdiowakeup_irq;
 	int (*register_status_notify)(void (*callback)(int card_present, void *dev_id), void *dev_id);
 	unsigned long irq_flags;
 	unsigned long mmc_bus_width;
