@@ -3,7 +3,7 @@
  * Core MSM framebuffer driver.
  *
  * Copyright (C) 2007 Google Incorporated
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1738,7 +1738,11 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 {
 	int	ret;
 	struct msmfb_overlay_data req;
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	struct file *p_src_file = 0;
+
+	if (mfd->overlay_play_enable == 0)	/* nothing to do */
+		return 0;
 
 	ret = copy_from_user(&req, argp, sizeof(req));
 	if (ret) {
@@ -1753,6 +1757,23 @@ static int msmfb_overlay_play(struct fb_info *info, unsigned long *argp)
 		put_pmem_file(p_src_file);
 
 	return ret;
+}
+
+static int msmfb_overlay_play_enable(struct fb_info *info, unsigned long *argp)
+{
+	int	ret, enable;
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	ret = copy_from_user(&enable, argp, sizeof(enable));
+	if (ret) {
+		printk(KERN_ERR "%s:msmfb_overlay_play_enable ioctl failed \n",
+			__func__);
+		return ret;
+	}
+
+	mfd->overlay_play_enable = enable;
+
+	return 0;
 }
 
 #endif
@@ -1837,6 +1858,11 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	case MSMFB_OVERLAY_PLAY:
 		down(&msm_fb_ioctl_ppp_sem);
 		ret = msmfb_overlay_play(info, argp);
+		up(&msm_fb_ioctl_ppp_sem);
+		break;
+	case MSMFB_OVERLAY_PLAY_ENABLE:
+		down(&msm_fb_ioctl_ppp_sem);
+		ret = msmfb_overlay_play_enable(info, argp);
 		up(&msm_fb_ioctl_ppp_sem);
 		break;
 #endif
