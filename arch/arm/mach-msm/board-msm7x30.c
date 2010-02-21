@@ -365,16 +365,6 @@ static struct pmic8058_keypad_data surf_keypad_data = {
 	.wakeup			= 1,
 };
 
-static struct platform_device surf_keypad_device = {
-	.name		= "pmic8058_keypad",
-	.id		= -1,
-	.num_resources  = ARRAY_SIZE(resources_keypad),
-	.resource       = resources_keypad,
-	.dev		= {
-		.platform_data = &surf_keypad_data,
-	},
-};
-
 static struct pmic8058_keypad_data fluid_keypad_data = {
 	.input_name		= "fluid-keypad",
 	.input_phys_device	= "fluid-keypad/input0",
@@ -390,15 +380,8 @@ static struct pmic8058_keypad_data fluid_keypad_data = {
 	.wakeup			= 1,
 };
 
-static struct platform_device fluid_keypad_device = {
-	.name		= "pmic8058_keypad",
-	.id		= -1,
-	.num_resources  = ARRAY_SIZE(resources_keypad),
-	.resource       = resources_keypad,
-	.dev		= {
-		.platform_data = &fluid_keypad_data,
-	},
-};
+/* Put sub devices with fixed location first in sub_devices array */
+#define	PM8058_SUBDEV_KPD	0
 
 static struct pm8058_platform_data pm8058_7x30_data = {
 	.pm_irqs = {
@@ -408,8 +391,12 @@ static struct pm8058_platform_data pm8058_7x30_data = {
 	},
 	.init = pm8058_gpios_init,
 
-	.num_subdevs = 3,
+	.num_subdevs = 4,
 	.sub_devices = {
+		{	.name = "pm8058-keypad",
+			.num_resources	= ARRAY_SIZE(resources_keypad),
+			.resources	= resources_keypad,
+		},
 		{	.name = "pm8058-gpio",
 		},
 		{	.name = "pm8058-mpp",
@@ -832,6 +819,18 @@ static int __init buses_init(void)
 				  GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE))
 		pr_err("%s: gpio_tlmm_config (gpio=%d) failed\n",
 		       __func__, PMIC_GPIO_INT);
+
+	if (machine_is_msm7x30_fluid()) {
+		pm8058_7x30_data.sub_devices[PM8058_SUBDEV_KPD].platform_data
+			= &fluid_keypad_data;
+		pm8058_7x30_data.sub_devices[PM8058_SUBDEV_KPD].data_size
+			= sizeof(fluid_keypad_data);
+	} else {
+		pm8058_7x30_data.sub_devices[PM8058_SUBDEV_KPD].platform_data
+			= &surf_keypad_data;
+		pm8058_7x30_data.sub_devices[PM8058_SUBDEV_KPD].data_size
+			= sizeof(surf_keypad_data);
+	}
 
 	i2c_register_board_info(6 /* I2C_SSBI ID */, pm8058_boardinfo,
 				ARRAY_SIZE(pm8058_boardinfo));
@@ -3301,11 +3300,6 @@ static void __init msm7x30_init(void)
 
 	i2c_register_board_info(4 /* QUP ID */, msm_camera_boardinfo,
 				ARRAY_SIZE(msm_camera_boardinfo));
-
-	if (machine_is_msm7x30_surf() || machine_is_msm7x30_ffa())
-		platform_device_register(&surf_keypad_device);
-	else if (machine_is_msm7x30_fluid())
-		platform_device_register(&fluid_keypad_device);
 
 	bt_power_init();
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
