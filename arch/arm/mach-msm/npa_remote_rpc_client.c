@@ -96,55 +96,6 @@
 
 #define NPA_REMOTE_CALLBACK_TYPE_PROC		1
 
-#define SEND_UINT32(buf, i, size)  do { \
-	*((uint32_t *)buf) = cpu_to_be32(i); \
-	size += sizeof(uint32_t); \
-	buf += sizeof(uint32_t); \
-} while (0);
-
-#define SEND_INT32(buf, i, size)  do { \
-	*((int32_t *)buf) = cpu_to_be32(i); \
-	size += sizeof(int32_t); \
-	buf += sizeof(int32_t); \
-} while (0);
-
-#define SEND_CALLBACK(buf, cb, size)  do { \
-	uint32_t cb_id = msm_rpc_add_cb_func(client, (void *)cb); \
-	if (cb_id < 0 && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID)) \
-		return cb_id; \
-	*((uint32_t *)buf) = cpu_to_be32((uint32_t)cb_id);\
-	size += sizeof(uint32_t); \
-	buf += sizeof(uint32_t);\
-} while (0);
-
-#define SEND_STRING(buf, str, size) do { \
-	uint32_t len = 0; \
-	if (str) { \
-		len = strlen((const char *)str) + 1; \
-		SEND_UINT32(buf, len, size); \
-		memcpy(buf, str, len); \
-		size += len; \
-		buf += len; \
-		if (len & 0x3) { \
-			memset(buf, 0, 4 - (len & 0x3)); \
-			buf += 4 - (len & 0x3); \
-			size += 4 - (len & 0x3); \
-		} \
-	} else { \
-		SEND_UINT32(buf, len, size); \
-	} \
-} while (0);
-
-#define RECV_UINT32(buf, r) do { \
-	r = be32_to_cpu(*(uint32_t *)buf); \
-	buf += sizeof(uint32_t); \
-} while (0);
-
-#define RECV_INT32(buf, r) do { \
-	r = be32_to_cpu(*(int32_t *)buf); \
-	buf += sizeof(int32_t); \
-} while (0);
-
 struct npa_remote_cb_data {
 	uint32_t cb_id;
 	uint32_t context;
@@ -211,33 +162,20 @@ struct npa_remote_issue_required_request_ret {
 static struct msm_rpc_client *npa_rpc_client;
 static struct workqueue_struct *npa_rpc_wq;
 
-static int npa_remote_cb(struct msm_rpc_client *client,
-		void *buffer, int in_size)
+static int npa_remote_cb(struct msm_rpc_client *client, struct msm_rpc_xdr *xdr)
 {
 	int err = 0;
 	int array_length = 0;
-	void *buf;
 	unsigned int status = RPC_ACCEPTSTAT_SYSTEM_ERR;
-	struct rpc_request_hdr *req = (struct rpc_request_hdr *)buffer;
 	struct npa_remote_cb_data arg;
 	npa_remote_callback cb_fn = NULL;
 
-	buf = (void *)(req + 1);
-
-	RECV_UINT32(buf, arg.cb_id);
-	RECV_UINT32(buf, arg.context);
-	RECV_UINT32(buf, arg.type);
-	RECV_UINT32(buf, array_length);
-	if (array_length > 0) {
-		int i;
-		arg.buffer = kzalloc(array_length * sizeof(int32_t),
-				GFP_KERNEL);
-		if (!arg.buffer)
-			return -ENOMEM;
-		for (i = 0; i < array_length; i++)
-			RECV_INT32(buf, arg.buffer[i]);
-	}
-	RECV_UINT32(buf, arg.size);
+	xdr_recv_uint32(xdr, &arg.cb_id);
+	xdr_recv_uint32(xdr, &arg.context);
+	xdr_recv_uint32(xdr, &arg.type);
+	xdr_recv_array(xdr, (void **)&arg.buffer, &array_length, INT_MAX,
+			sizeof(int32_t), (void *)xdr_recv_int32);
+	xdr_recv_uint32(xdr, &arg.size);
 
 	cb_fn = (npa_remote_callback) msm_rpc_get_cb_func(client, arg.cb_id);
 	if (cb_fn) {
@@ -245,8 +183,8 @@ static int npa_remote_cb(struct msm_rpc_client *client,
 		status = RPC_ACCEPTSTAT_SUCCESS;
 	}
 
-	msm_rpc_start_accepted_reply(client, be32_to_cpu(req->xid), status);
-	err = msm_rpc_send_accepted_reply(client, 0);
+	xdr_start_accepted_reply(xdr, status);
+	err = xdr_send_msg(xdr);
 	if (err) {
 		pr_err("NPA Remote callback %s: send accepted reply failed: "
 				"%d\n", __func__, err);
@@ -259,16 +197,22 @@ static int npa_remote_cb(struct msm_rpc_client *client,
 }
 
 static int npa_remote_cb_fn(struct msm_rpc_client *client,
-		void *buffer, int in_size)
+		struct rpc_request_hdr *req, struct msm_rpc_xdr *xdr)
 {
 	int ret = 0;
-	struct rpc_request_hdr *req = (struct rpc_request_hdr *)buffer;
 
-	switch (be32_to_cpu(req->procedure)) {
+	switch (req->procedure) {
 	case NPA_REMOTE_CALLBACK_TYPE_PROC:
-		ret = npa_remote_cb(client, buffer, in_size);
+		ret = npa_remote_cb(client, xdr);
 		break;
 	default:
+		pr_err("NPA RPC: callback procedure not supported %d\n",
+				req->procedure);
+		xdr_start_accepted_reply(xdr, RPC_ACCEPTSTAT_PROC_UNAVAIL);
+		ret = xdr_send_msg(xdr);
+		if (ret)
+			pr_err("NPA RPC: %s error sending reply %d\n",
+					__func__, ret);
 		break;
 	}
 
@@ -277,31 +221,35 @@ static int npa_remote_cb_fn(struct msm_rpc_client *client,
 
 int npa_remote_null(void)
 {
-	return msm_rpc_client_req(npa_rpc_client, NPA_REMOTE_NULL_PROC,
+	return msm_rpc_client_req2(npa_rpc_client, NPA_REMOTE_NULL_PROC,
 			NULL, NULL, NULL, NULL, -1);
 }
 
 static int npa_remote_init_arg_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	int size = 0;
-	struct npa_remote_init_arg *arg = (struct npa_remote_init_arg *)data;
+	struct npa_remote_init_arg *arg = data;
+	unsigned int cb_id = 0;
 
-	SEND_UINT32(buf, arg->major, size);
-	SEND_UINT32(buf, arg->minor, size);
-	SEND_UINT32(buf, arg->build, size);
-	SEND_CALLBACK(buf, arg->callback, size);
-	SEND_UINT32(buf, arg->context, size);
+	cb_id = msm_rpc_add_cb_func(client, (void *)arg->callback);
+	if (cb_id < 0 && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
+		return cb_id;
 
-	return size;
+	xdr_send_uint32(xdr, &arg->major);
+	xdr_send_uint32(xdr, &arg->minor);
+	xdr_send_uint32(xdr, &arg->build);
+	xdr_send_uint32(xdr, &cb_id);
+	xdr_send_uint32(xdr, &arg->context);
+
+	return 0;
 }
 
 static int npa_remote_init_ret_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	struct npa_remote_init_ret *ret = (struct npa_remote_init_ret *)data;
+	struct npa_remote_init_ret *ret = data;
 
-	RECV_INT32(buf, ret->result);
+	xdr_recv_int32(xdr, &ret->result);
 
 	return 0;
 }
@@ -319,7 +267,7 @@ int npa_remote_init(unsigned int major, unsigned int minor, unsigned int build,
 	arg.callback = (void *)callback;
 	arg.context = (uint32_t)context;
 
-	err = msm_rpc_client_req(npa_rpc_client,
+	err = msm_rpc_client_req2(npa_rpc_client,
 			NPA_REMOTE_INIT_PROC,
 			npa_remote_init_arg_fn, &arg,
 			npa_remote_init_ret_fn, &ret, -1);
@@ -333,26 +281,34 @@ int npa_remote_init(unsigned int major, unsigned int minor, unsigned int build,
 EXPORT_SYMBOL(npa_remote_init);
 
 static int npa_remote_resource_available_arg_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	int size = 0;
-	struct npa_remote_resource_available_arg *arg =
-		(struct npa_remote_resource_available_arg *)data;
+	struct npa_remote_resource_available_arg *arg = data;
+	unsigned int cb_id = 0;
+	int len = 0;
 
-	SEND_STRING(buf, arg->resource_name, size);
-	SEND_CALLBACK(buf, arg->callback, size);
-	SEND_UINT32(buf, arg->context, size);
+	cb_id = msm_rpc_add_cb_func(client, (void *)arg->callback);
+	if (cb_id < 0 && (cb_id != MSM_RPC_CLIENT_NULL_CB_ID))
+		return cb_id;
 
-	return size;
+	if (arg->resource_name) {
+		len = strlen(arg->resource_name) + 1;
+		xdr_send_bytes(xdr, (const void **)&arg->resource_name, &len);
+	} else {
+		xdr_send_uint32(xdr, &len);
+	}
+	xdr_send_uint32(xdr, &cb_id);
+	xdr_send_uint32(xdr, &arg->context);
+
+	return 0;
 }
 
 static int npa_remote_resource_available_ret_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	struct npa_remote_resource_available_ret *ret =
-		(struct npa_remote_resource_available_ret *)data;
+	struct npa_remote_resource_available_ret *ret = data;
 
-	RECV_UINT32(ret, ret->result);
+	xdr_recv_uint32(xdr, &ret->result);
 
 	return 0;
 }
@@ -368,7 +324,7 @@ int npa_remote_resource_available(const char *resource_name,
 	arg.callback = (void *)callback;
 	arg.context = (uint32_t)context;
 
-	err = msm_rpc_client_req(npa_rpc_client,
+	err = msm_rpc_client_req2(npa_rpc_client,
 			NPA_REMOTE_RESOURCE_AVAILABLE_PROC,
 			npa_remote_resource_available_arg_fn, &arg,
 			npa_remote_resource_available_ret_fn, &ret, -1);
@@ -382,30 +338,39 @@ int npa_remote_resource_available(const char *resource_name,
 EXPORT_SYMBOL(npa_remote_resource_available);
 
 static int npa_remote_create_sync_client_arg_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	int size = 0;
-	struct npa_remote_create_sync_client_arg *arg =
-		(struct npa_remote_create_sync_client_arg *)data;
+	struct npa_remote_create_sync_client_arg *arg = data;
+	int len = 0;
 
-	SEND_STRING(buf, arg->resource_name, size);
-	SEND_STRING(buf, arg->client_name, size);
-	SEND_UINT32(buf, arg->client_type, size);
-	SEND_UINT32(buf, arg->handle_is_valid, size);
+	if (arg->resource_name) {
+		len = strlen(arg->resource_name) + 1;
+		xdr_send_bytes(xdr, (const void **)&arg->resource_name, &len);
+	} else {
+		xdr_send_uint32(xdr, &len);
+	}
+	if (arg->client_name) {
+		len = strlen(arg->client_name) + 1;
+		xdr_send_bytes(xdr, (const void **)&arg->client_name, &len);
+	} else {
+		len = 0;
+		xdr_send_uint32(xdr, &len);
+	}
+	xdr_send_uint32(xdr, &arg->client_type);
+	xdr_send_uint32(xdr, &arg->handle_is_valid);
 
-	return size;
+	return 0;
 }
 
 static int npa_remote_create_sync_client_ret_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	struct npa_remote_create_sync_client_ret *ret =
-		(struct npa_remote_create_sync_client_ret *)data;
+	struct npa_remote_create_sync_client_ret *ret = data;
 
-	RECV_INT32(buf, ret->result);
-	RECV_UINT32(buf, ret->handle_is_valid);
+	xdr_recv_int32(xdr, &ret->result);
+	xdr_recv_uint32(xdr, &ret->handle_is_valid);
 	if (ret->handle_is_valid)
-		RECV_UINT32(buf, ret->handle);
+		xdr_recv_uint32(xdr, &ret->handle);
 
 	return 0;
 }
@@ -424,7 +389,7 @@ int npa_remote_create_sync_client(const char *resource_name,
 	arg.client_type = client_type;
 	arg.handle_is_valid = handle != NULL;
 
-	err = msm_rpc_client_req(npa_rpc_client,
+	err = msm_rpc_client_req2(npa_rpc_client,
 			NPA_REMOTE_CREATE_SYNC_CLIENT_PROC,
 			npa_remote_create_sync_client_arg_fn, &arg,
 			npa_remote_create_sync_client_ret_fn, &ret, -1);
@@ -441,24 +406,21 @@ int npa_remote_create_sync_client(const char *resource_name,
 EXPORT_SYMBOL(npa_remote_create_sync_client);
 
 static int npa_remote_destroy_client_arg_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	int size = 0;
-	struct npa_remote_destroy_client_arg *arg =
-		(struct npa_remote_destroy_client_arg *)data;
+	struct npa_remote_destroy_client_arg *arg = data;
 
-	SEND_UINT32(buf, arg->handle, size);
+	xdr_send_uint32(xdr, &arg->handle);
 
-	return size;
+	return 0;
 }
 
 static int npa_remote_destroy_client_ret_fn(struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	struct npa_remote_destroy_client_ret *ret =
-		(struct npa_remote_destroy_client_ret *)data;
+	struct npa_remote_destroy_client_ret *ret = data;
 
-	RECV_INT32(buf, ret->result);
+	xdr_recv_int32(xdr, &ret->result);
 
 	return 0;
 }
@@ -471,7 +433,7 @@ int npa_remote_destroy_client(void *handle)
 
 	arg.handle = (uint32_t)handle;
 
-	err = msm_rpc_client_req(npa_rpc_client,
+	err = msm_rpc_client_req2(npa_rpc_client,
 			NPA_REMOTE_DESTROY_CLIENT_PROC,
 			npa_remote_destroy_client_arg_fn, &arg,
 			npa_remote_destroy_client_ret_fn, &ret, -1);
@@ -486,30 +448,27 @@ EXPORT_SYMBOL(npa_remote_destroy_client);
 
 static int npa_remote_issue_required_request_arg_fn(
 		struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	int size = 0;
-	struct npa_remote_issue_required_request_arg *arg =
-		(struct npa_remote_issue_required_request_arg *)data;
+	struct npa_remote_issue_required_request_arg *arg = data;
 
-	SEND_UINT32(buf, arg->handle, size);
-	SEND_UINT32(buf, arg->state, size);
-	SEND_UINT32(buf, arg->new_state_valid, size);
+	xdr_send_uint32(xdr, &arg->handle);
+	xdr_send_uint32(xdr, &arg->state);
+	xdr_send_uint32(xdr, &arg->new_state_valid);
 
-	return size;
+	return 0;
 }
 
 static int npa_remote_issue_required_request_ret_fn(
 		struct msm_rpc_client *client,
-		void *buf, void *data)
+		struct msm_rpc_xdr *xdr, void *data)
 {
-	struct npa_remote_issue_required_request_ret *ret =
-		(struct npa_remote_issue_required_request_ret *)data;
+	struct npa_remote_issue_required_request_ret *ret = data;
 
-	RECV_INT32(buf, ret->result);
-	RECV_UINT32(buf, ret->new_state_is_valid);
+	xdr_recv_int32(xdr, &ret->result);
+	xdr_recv_uint32(xdr, &ret->new_state_is_valid);
 	if (ret->new_state_is_valid)
-		RECV_UINT32(buf, ret->new_state);
+		xdr_recv_uint32(xdr, &ret->new_state);
 
 	return 0;
 }
@@ -525,7 +484,7 @@ int npa_remote_issue_required_request(void *handle, unsigned int state,
 	arg.state = state;
 	arg.new_state_valid = new_state != NULL;
 
-	err = msm_rpc_client_req(npa_rpc_client,
+	err = msm_rpc_client_req2(npa_rpc_client,
 			NPA_REMOTE_ISSUE_REQUIRED_REQUEST_PROC,
 			npa_remote_issue_required_request_arg_fn, &arg,
 			npa_remote_issue_required_request_ret_fn, &ret, -1);
@@ -610,11 +569,13 @@ static int __devinit npa_rpc_init_probe(struct platform_device *pdev)
 {
 	struct work_struct *work = NULL;
 
-	npa_rpc_client = msm_rpc_register_client(
-					"npa-remote-client",
-					NPA_REMOTEPROG,
-					NPA_REMOTEVERS,
-					1, npa_remote_cb_fn);
+	if (pdev->id != (NPA_REMOTEVERS & RPC_VERSION_MAJOR_MASK))
+		return -EINVAL;
+
+	npa_rpc_client = msm_rpc_register_client2("npa-remote-client",
+						NPA_REMOTEPROG,
+						NPA_REMOTEVERS,
+						1, npa_remote_cb_fn);
 
 	if (IS_ERR(npa_rpc_client)) {
 		pr_err("NPA REMOTE: RPC client creation failed\n");
@@ -647,8 +608,7 @@ static int __init npa_rpc_init(void)
 	int err = 0;
 
 	snprintf(npa_rpc_driver_name, sizeof(npa_rpc_driver_name),
-		"rs%08x:%08x", NPA_REMOTEPROG,
-		NPA_REMOTEVERS & RPC_VERSION_MAJOR_MASK);
+		"rs%08x", NPA_REMOTEPROG);
 	npa_rpc_init_driver.driver.name = npa_rpc_driver_name;
 
 	npa_rpc_wq = create_workqueue("npa-rpc");
