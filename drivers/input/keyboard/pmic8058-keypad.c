@@ -735,7 +735,7 @@ static struct platform_driver pmic8058_kp_driver = {
 	.suspend	= pmic8058_kp_suspend,
 	.resume		= pmic8058_kp_resume,
 	.driver		= {
-		.name = "pmic8058_keypad",
+		.name = "pm8058-keypad",
 		.owner = THIS_MODULE,
 	},
 };
