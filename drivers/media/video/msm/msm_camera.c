@@ -912,7 +912,6 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 					rc = msm_divert_frame(sync, data, &se);
 			else if ((sync->pp_mask & (PP_SNAP|PP_RAW_SNAP)) &&
 				  (data->type == VFE_MSG_SNAPSHOT ||
-				   data->type == VFE_MSG_OUTPUT_T ||
 				   data->type == VFE_MSG_OUTPUT_S))
 					rc = msm_divert_snapshot(sync,
 								data, &se);
@@ -2012,9 +2011,6 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 	if (qtype != MSM_CAM_Q_VFE_MSG)
 		goto for_config;
 
-	if (qcmd->on_heap)
-		qcmd->on_heap++;
-
 	CDBG("%s: vdata->type %d\n", __func__, vdata->type);
 		switch (vdata->type) {
 		case VFE_MSG_OUTPUT_P:
@@ -2032,11 +2028,15 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 			}
 		CDBG("%s: msm_enqueue frame_q\n", __func__);
 		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
+		if (qcmd->on_heap)
+			qcmd->on_heap++;
 		break;
 
 		case VFE_MSG_OUTPUT_V:
 		CDBG("%s: msm_enqueue video frame_q\n", __func__);
 		msm_enqueue(&sync->frame_q, &qcmd->list_frame);
+		if (qcmd->on_heap)
+			qcmd->on_heap++;
 		break;
 
 		case VFE_MSG_SNAPSHOT:
@@ -2052,7 +2052,23 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 			}
 
 		msm_enqueue(&sync->pict_q, &qcmd->list_pict);
+		if (qcmd->on_heap)
+			qcmd->on_heap++;
+		break;
 
+		case VFE_MSG_STATS_AWB:
+		CDBG("%s: qtype %d, AWB stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_STATS_AEC:
+		CDBG("%s: qtype %d, AEC stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_GENERAL:
+		CDBG("%s: qtype %d, general msg, enqueue event_q.\n",
+		    __func__, vdata->type);
 		break;
 
 		default:
