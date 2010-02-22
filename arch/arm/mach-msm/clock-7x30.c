@@ -394,6 +394,7 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define CAM_VFE_NS		0x0044
 #define GLBL_CLK_ENA_SC		0x03BC
 #define GLBL_CLK_ENA_2_SC	0x03C0
+#define GLBL_SLEEP_EN_SC	0x0488
 #define GRP_NS			0x0084
 #define SDAC_NS			0x009C
 #define TV_NS			0x00CC
@@ -922,6 +923,11 @@ static struct reg_init {
 
 	/* Enable UMDX_P clock. Known to causes issues, so never turn off. */
 	{REG(GLBL_CLK_ENA_2_SC), B(2), B(2)},
+	/* For global clocks to be on we must have GLBL_ROOT_ENA set and
+	 * GLBL_SRC_CLK cleared */
+	{REG(GLBL_CLK_ENA_SC), B(29), B(29)},
+	{REG(GLBL_SLEEP_EN_SC), B(29), 0x0},
+
 	{REG(EMDH_NS), BM(18, 17) , BVAL(18, 17, 0x3)}, /* RX div = div-4. */
 	{REG(PMDH_NS), BM(18, 17), BVAL(18, 17, 0x3)}, /* RX div = div-4. */
 	/* MI2S_CODEC_RX_S src = MI2S_CODEC_RX_M. */
