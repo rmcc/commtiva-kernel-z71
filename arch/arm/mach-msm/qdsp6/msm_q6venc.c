@@ -64,6 +64,7 @@
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
+#include <linux/wakelock.h>
 #include <linux/android_pmem.h>
 #include <linux/msm_q6venc.h>
 #include "dal.h"
@@ -180,6 +181,30 @@ static struct class *venc_class;
 static struct venc_dev *venc_device_p;
 static int venc_ref;
 
+static DEFINE_MUTEX(idlecount_lock);
+static int idlecount;
+static struct wake_lock wakelock;
+static struct wake_lock idlelock;
+
+static void prevent_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (++idlecount == 1) {
+		wake_lock(&idlelock);
+		wake_lock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
+
+static void allow_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (--idlecount == 0) {
+		wake_unlock(&idlelock);
+		wake_unlock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
 
 static inline int venc_check_version(u32 client, u32 server)
 {
@@ -1052,6 +1077,7 @@ static int q6venc_open(struct inode *inode, struct file *file)
 	}
 	dvenc->state = VENC_STATE_STOP;
 	dvenc->is_active = 1;
+	prevent_sleep();
 	return ret;
 err_venc_dal_open:
 	dal_detach(dvenc->q6_handle);
@@ -1100,6 +1126,7 @@ static int q6venc_release(struct inode *inode, struct file *file)
 		kfree(plist);
 	}
 	kfree(dvenc);
+	allow_sleep();
 	return ret;
 }
 
@@ -1113,6 +1140,9 @@ const struct file_operations q6venc_fops = {
 static int __init q6venc_init(void)
 {
 	int ret = 0;
+
+	wake_lock_init(&idlelock, WAKE_LOCK_IDLE, "venc_idle");
+	wake_lock_init(&wakelock, WAKE_LOCK_SUSPEND, "venc_suspend");
 
 	venc_device_p = kzalloc(sizeof(struct venc_dev), GFP_KERNEL);
 	if (!venc_device_p) {
