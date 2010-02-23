@@ -55,6 +55,11 @@ struct audio_client *q6voice_open(uint32_t flags);
 struct audio_client *q6audio_open_mp3(uint32_t bufsz, uint32_t rate,
 				      uint32_t channels, uint32_t acdb_id);
 
+struct audio_client *q6audio_open_dtmf(uint32_t rate, uint32_t channels,
+							uint32_t acdb_id);
+int q6audio_play_dtmf(struct audio_client *ac, uint16_t dtmf_hi,
+			uint16_t dtmf_low, uint16_t duration, uint16_t rx_gain);
+
 struct audio_client *q6audio_open_aac(uint32_t bufsz, uint32_t samplerate,
 					uint32_t channels, uint32_t bitrate,
 					uint32_t stream_format, uint32_t flags,
