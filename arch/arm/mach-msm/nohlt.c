@@ -63,7 +63,6 @@
 #include <linux/fs.h>
 #include <asm/system.h>
 
-#ifdef CONFIG_DEBUG_FS
 static int set_nohalt(void *data, u64 val)
 {
 	if (val)
@@ -83,4 +82,3 @@ static int __init init_hlt_debug(void)
 }
 
 late_initcall(init_hlt_debug);
-#endif
