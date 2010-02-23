@@ -724,6 +724,28 @@ static struct platform_device msm_camera_sensor_mt9t013 = {
 	},
 };
 #endif
+
+#ifdef CONFIG_MSM_GEMINI
+static struct resource msm_gemini_resources[] = {
+	{
+		.start  = 0xA3A00000,
+		.end    = 0xA3A00000 + 0x0150 - 1,
+		.flags  = IORESOURCE_MEM,
+	},
+	{
+		.start  = INT_JPEG,
+		.end    = INT_JPEG,
+		.flags  = IORESOURCE_IRQ,
+	},
+};
+
+static struct platform_device msm_gemini_device = {
+	.name           = "msm_gemini",
+	.resource       = msm_gemini_resources,
+	.num_resources  = ARRAY_SIZE(msm_gemini_resources),
+};
+#endif
+
 #endif /*CONFIG_MSM_CAMERA*/
 
 #ifdef CONFIG_MSM7KV2_AUDIO
@@ -2784,6 +2806,9 @@ static struct platform_device *devices[] __initdata = {
 	&msm_camera_sensor_mt9p012,
 #endif
 	&msm_device_ss_mfc_720p,
+#ifdef CONFIG_MSM_GEMINI
+	&msm_gemini_device,
+#endif
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
