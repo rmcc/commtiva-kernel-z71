@@ -512,7 +512,7 @@ int msm_gemini_input_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 	buf_p->cbcr_buffer_addr = buf_p->y_buffer_addr + buf_cmd.y_len;
 	buf_p->cbcr_len       = buf_cmd.cbcr_len;
 
-	buf_p->buf_cmd.num_of_mcu_rows = buf_cmd.num_of_mcu_rows;
+	buf_p->num_of_mcu_rows = buf_cmd.num_of_mcu_rows;
 
 	if (!buf_p->y_buffer_addr || !buf_p->cbcr_buffer_addr) {
 		GMN_PR_ERR("%s:%d] v2p wrong\n", __func__, __LINE__);
