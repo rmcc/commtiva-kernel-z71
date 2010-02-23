@@ -505,6 +505,7 @@ static void usb_ept_start(struct msm_endpoint *ept)
 {
 	struct usb_info *ui = ept->ui;
 	struct msm_request *req = ept->req;
+	unsigned n = ept->bit;
 
 	BUG_ON(req->live);
 
@@ -517,6 +518,17 @@ static void usb_ept_start(struct msm_endpoint *ept)
 
 	/* start the endpoint */
 	writel(1 << ept->bit, USB_ENDPTPRIME);
+
+	/* It is observed that endpoint is left unprimed under heavy load.
+	 * Reprime the endpoint only when H/W acknowledgement in ENDPTSTAT
+	 * and ep bit in ENDPTPRIME are missing.
+	 */
+	while (!((readl(USB_ENDPTPRIME) & (1 << n)) ||
+		(readl(USB_ENDPTSTAT) & (1 << n)))) {
+
+		udelay(10);
+		writel(1 << n, USB_ENDPTPRIME);
+	}
 
 	/* mark this chain of requests as live */
 	while (req) {
