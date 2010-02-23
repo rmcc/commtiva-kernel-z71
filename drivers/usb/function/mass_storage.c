@@ -2705,8 +2705,6 @@ static void /* __init_or_exit */ fsg_unbind(void *_ctxt)
 		raise_exception(fsg, FSG_STATE_EXIT);
 		wait_for_completion(&fsg->thread_notifier);
 
-		/* The cleanup routine waits for this completion also */
-		complete(&fsg->thread_notifier);
 	}
 
 	/* Free the data buffers */
@@ -2940,7 +2938,6 @@ static int __exit fsg_remove(struct platform_device *pdev)
 	wake_lock_destroy(&fsg->wake_lock_idle);
 	switch_dev_unregister(&fsg->sdev);
 	test_and_clear_bit(REGISTERED, &fsg->atomic_bitflags);
-	wait_for_completion(&fsg->thread_notifier);
 	close_all_backing_files(fsg);
 	kref_put(&fsg->ref, fsg_release);
 
