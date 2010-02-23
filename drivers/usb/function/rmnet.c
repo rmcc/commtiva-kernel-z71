@@ -832,16 +832,14 @@ static void rmnet_free_buf(struct rmnet_dev *dev)
 	list_for_each_safe(act, tmp, &dev->qmi_req_pool) {
 		qmi = list_entry(act, struct qmi_buf, list);
 		list_del(&qmi->list);
-		kfree(qmi->buf);
-		kfree(qmi);
+		rmnet_free_qmi(qmi);
 	}
 
 	/* free all buffers in qmi request pool */
 	list_for_each_safe(act, tmp, &dev->qmi_resp_pool) {
 		qmi = list_entry(act, struct qmi_buf, list);
 		list_del(&qmi->list);
-		kfree(qmi->buf);
-		kfree(qmi);
+		rmnet_free_qmi(qmi);
 	}
 
 	rmnet_free_req(dev->epnotify, dev->notify_req);
