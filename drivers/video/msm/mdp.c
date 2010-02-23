@@ -874,8 +874,8 @@ static int mdp_irq_clk_setup(void)
 	 * mdp_clk should greater than mdp_pclk always
 	 */
 	clk_set_rate(mdp_clk, 122880000); /* 122.88 Mhz */
-	printk(KERN_INFO "mdp_clk: mdp_clk=%d mdp_pclk=%d\n",
-		(int)clk_get_rate(mdp_clk), (int)clk_get_rate(mdp_pclk));
+	printk(KERN_INFO "mdp_clk: mdp_clk=%d\n",
+				(int)clk_get_rate(mdp_clk));
 #endif
 
 	return 0;
@@ -919,7 +919,7 @@ static int mdp_probe(struct platform_device *pdev)
 		/* initializing mdp hw */
 #ifdef CONFIG_FB_MSM_MDP40
 		mdp4_hw_init();
-		mdp4_fetch_cfg(clk_get_rate(mdp_clk), clk_get_rate(mdp_pclk));
+		mdp4_fetch_cfg(clk_get_rate(mdp_clk));
 #else
 		mdp_hw_init();
 #endif

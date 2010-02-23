@@ -183,18 +183,14 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	return -1;
 }
 
-void mdp4_fetch_cfg(uint32 clk, uint32 pclk)
+void mdp4_fetch_cfg(uint32 core_clk)
 {
 
 	uint32 dmap_data, vg_data;
 	char *base;
 	int i;
 
-	if (clk <= pclk)
-		printk(KERN_INFO "mdp4_fetch_cfg: ERROR!! mdp_clk=%d \
-				<= mdp_pclk=%d\n", (int)clk, (int)pclk);
-
-	if (clk >= 90000000) { /* 90 Mhz */
+	if (core_clk >= 90000000) { /* 90 Mhz */
 		dmap_data = 0x47; /* 16 bytes-burst x 8 req */
 		vg_data = 0xc7; /* 16 bytes-burs x 8 req */
 	} else {
