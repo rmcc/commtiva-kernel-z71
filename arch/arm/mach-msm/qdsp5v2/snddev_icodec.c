@@ -677,6 +677,10 @@ static int snddev_icodec_probe(struct platform_device *pdev)
 	icodec->data = pdata;
 	icodec->sample_rate = pdata->default_sample_rate;
 	dev_info->sample_rate = pdata->default_sample_rate;
+	if (pdata->capability & SNDDEV_CAP_RX) {
+		dev_info->max_voc_rx_vol = pdata->max_voice_rx_vol;
+		dev_info->min_voc_rx_vol = pdata->min_voice_rx_vol;
+	}
 error:
 	return rc;
 }

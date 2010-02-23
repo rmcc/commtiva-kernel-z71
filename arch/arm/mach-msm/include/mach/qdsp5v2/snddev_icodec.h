@@ -45,5 +45,7 @@ struct snddev_icodec_data {
 	u32 default_sample_rate;
 	void (*pamp_on) (void);
 	void (*pamp_off) (void);
+	s32 max_voice_rx_vol;
+	s32 min_voice_rx_vol;
 };
 #endif

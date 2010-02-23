@@ -50,6 +50,8 @@ struct msm_snddev_info {
 	u32 sample_rate;
 	u32 set_sample_rate;
 	u32 sessions;
+	s32 max_voc_rx_vol;
+	s32 min_voc_rx_vol;
 };
 
 struct msm_volume {
@@ -81,6 +83,8 @@ struct auddev_evt_voc_devinfo {
 	u32 dev_type;
 	u32 acdb_dev_id;
 	u32 dev_sample;
+	s32 max_rx_vol; 	/* unit is mb (milibel */
+	s32 min_rx_vol;		/* unit is mb */
 };
 
 struct auddev_evt_audcal_info {
