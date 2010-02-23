@@ -136,6 +136,7 @@ struct pmic8058_kp {
 	u16 stuckstate[MATRIX_MAX_ROWS];
 
 	u32	flags;
+	struct pm8058_chip	*pm_chip;
 };
 
 static int pmic8058_kp_write_u8(struct pmic8058_kp *kp,
@@ -143,7 +144,7 @@ static int pmic8058_kp_write_u8(struct pmic8058_kp *kp,
 {
 	int rc;
 
-	rc = pm8058_write(reg, &data, 1);
+	rc = pm8058_write(kp->pm_chip, reg, &data, 1);
 	if (rc < 0)
 		dev_warn(kp->dev, "Error writing pmic8058: %X - ret %X\n",
 				reg, rc);
@@ -155,7 +156,7 @@ static int pmic8058_kp_read(struct pmic8058_kp *kp,
 {
 	int rc;
 
-	rc = pm8058_read(reg, data, num_bytes);
+	rc = pm8058_read(kp->pm_chip, reg, data, num_bytes);
 	if (rc < 0)
 		dev_warn(kp->dev, "Error reading pmic8058: %X - ret %X\n",
 				reg, rc);
@@ -244,13 +245,13 @@ static int pmic8058_kp_read_data(struct pmic8058_kp *kp, u16 *state,
 	int rc, row;
 	u8 new_data[MATRIX_MAX_ROWS];
 
-	if (pmic8058_is_rev_b0())
+	if (pm8058_rev_is_b0(kp->pm_chip))
 		pmic8058_chk_sync_read(kp);
 
 	rc = pmic8058_kp_read(kp, new_data, data_reg, read_rows);
 
 	if (!rc) {
-		if (pmic8058_is_rev_a0())
+		if (pm8058_rev_is_a0(kp->pm_chip))
 			pmic8058_chk_read_state(kp, data_reg);
 		for (row = 0; row < kp->pdata->num_rows; row++) {
 			dev_dbg(kp->dev, "new_data[%d] = %d\n", row,
@@ -285,7 +286,7 @@ static int pmic8058_kp_read_matrix(struct pmic8058_kp *kp, u16 *new_state,
 	rc = pmic8058_kp_read_data(kp, new_state, KEYP_RECENT_DATA,
 					 read_rows);
 
-	if (pmic8058_is_rev_b0()) {
+	if (pm8058_rev_is_b0(kp->pm_chip)) {
 		/* 4 * 32KHz clocks */
 		udelay((4 * USEC_PER_SEC / KEYP_CLOCK_FREQ) + 1);
 
@@ -399,7 +400,7 @@ static irqreturn_t pmic8058_kp_irq(int irq, void *data)
 	u8 ctrl_val, events;
 	int rc;
 
-	if (pmic8058_is_rev_a0())
+	if (pm8058_rev_is_a0(kp->pm_chip))
 		mdelay(1);
 
 	dev_dbg(kp->dev, "key sense irq\n");
@@ -456,7 +457,7 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 
 	rc = pmic8058_kp_write_u8(kp, ctrl_val, KEYP_CTRL);
 
-	if (pmic8058_is_rev_a0())
+	if (pm8058_rev_is_a0(kp->pm_chip))
 		bits = fls(kp->pdata->debounce_ms[0]) - 1;
 	else
 		bits = kp->pdata->debounce_ms[1] / 5;
@@ -520,6 +521,13 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	int rc, i;
 	unsigned short *keycodes;
 	u8 ctrl_val;
+	struct pm8058_chip	*pm_chip;
+
+	pm_chip = platform_get_drvdata(pdev);
+	if (pm_chip == NULL) {
+		dev_err(&pdev->dev, "no parent data passed in\n");
+		return -EFAULT;
+	}
 
 	if (!pdata || !pdata->num_cols || !pdata->num_rows ||
 		pdata->num_cols > MATRIX_MAX_COLS ||
@@ -543,7 +551,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 		return -EINVAL;
 	}
 
-	if (pmic8058_is_rev_a0()) {
+	if (pm8058_rev_is_a0(pm_chip)) {
 		if (!pdata->debounce_ms
 			|| !is_power_of_2(pdata->debounce_ms[0])
 			|| pdata->debounce_ms[0] > MAX_DEBOUNCE_A0_TIME
@@ -576,9 +584,10 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	kp->pdata	= pdata;
 	kp->dev		= &pdev->dev;
 	kp->keycodes	= keycodes;
+	kp->pm_chip	= pm_chip;
 
 	/* REVISIT: actual revision with the fix */
-	if (pmic8058_is_rev_a0() || pmic8058_is_rev_b0())
+	if (pm8058_rev_is_a0(pm_chip) || pm8058_rev_is_b0(pm_chip))
 		kp->flags |= KEYF_FIX_LAST_ROW;
 
 	kp->input = input_allocate_device();
