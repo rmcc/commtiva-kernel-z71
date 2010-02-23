@@ -1794,7 +1794,7 @@ module_exit(msmsdcc_exit);
 module_param(msmsdcc_fmin, uint, 0444);
 module_param(msmsdcc_fmax, uint, 0444);
 
-MODULE_DESCRIPTION("Qualcomm MSM 7X00A Multimedia Card Interface driver");
+MODULE_DESCRIPTION("Qualcomm Multimedia Card Interface driver");
 MODULE_LICENSE("GPL");
 
 #if defined(CONFIG_DEBUG_FS)
