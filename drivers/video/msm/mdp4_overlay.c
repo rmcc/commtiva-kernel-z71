@@ -199,9 +199,9 @@ static void mdp4_scale_setup(struct mdp4_overlay_pipe *pipe)
 
 		if (pipe->pipe_type == OVERLAY_TYPE_VG) {
 			if (pipe->dst_w <= (pipe->src_w / 4))
-				pipe->op_mode |= MDP4_OP_SCALEY_MN_PHASE;
+				pipe->op_mode |= MDP4_OP_SCALEX_MN_PHASE;
 			else
-				pipe->op_mode |= MDP4_OP_SCALEY_FIR;
+				pipe->op_mode |= MDP4_OP_SCALEX_FIR;
 		}
 
 		pipe->phasex_step = mdp4_scale_phase_step(29,
