@@ -2596,16 +2596,28 @@ static int marimba_bt(int on)
 		{ 0xE7, 0x00, 0x21 },
 	};
 
-	const struct marimba_variant_register bt_marimba[2][3] = {
+	const struct marimba_config_register v210_bt_on[] = {
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x21, 0x21 },
+	};
+
+	const struct marimba_config_register v210_bt_off[] = {
+		{ 0x06, 0x88, 0xFF },
+		{ 0xE7, 0x00, 0x21 },
+	};
+
+	const struct marimba_variant_register bt_marimba[2][4] = {
 		{
 			{ ARRAY_SIZE(v10_bt_off), v10_bt_off },
 			{ 0, NULL },
 			{ ARRAY_SIZE(v201_bt_off), v201_bt_off },
+			{ ARRAY_SIZE(v210_bt_off), v210_bt_off }
 		},
 		{
 			{ ARRAY_SIZE(v10_bt_on), v10_bt_on },
 			{ 0, NULL },
-			{ ARRAY_SIZE(v201_bt_on), v201_bt_on }
+			{ ARRAY_SIZE(v201_bt_on), v201_bt_on },
+			{ ARRAY_SIZE(v210_bt_on), v210_bt_on }
 		}
 	};
 
