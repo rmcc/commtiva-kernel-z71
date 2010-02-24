@@ -2,7 +2,7 @@
  * Driver for HighSpeed USB Client Controller in MSM7K
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  * Author: Mike Lockwood <lockwood@android.com>
  *         Brian Swetland <swetland@google.com>
  *
@@ -43,6 +43,8 @@
 #include <mach/msm_hsusb_hw.h>
 #include <mach/clk.h>
 #include <mach/rpc_hsusb.h>
+#include <linux/uaccess.h>
+#include <linux/wakelock.h>
 
 static const char driver_name[] = "msm72k_udc";
 
@@ -72,6 +74,8 @@ static const char *const ep_name[] = {
 
 /* current state of VBUS */
 static int vbus;
+/*To release the wakelock from debugfs*/
+static int release_wlocks;
 
 struct msm_request {
 	struct usb_request req;
@@ -201,6 +205,7 @@ struct usb_info {
 
 	struct otg_transceiver *xceiv;
 	enum usb_device_state usb_state;
+	struct wake_lock	wlock;
 };
 
 static const struct usb_ep_ops msm72k_ep_ops;
@@ -210,6 +215,7 @@ static int msm72k_wakeup(struct usb_gadget *_gadget);
 static int msm72k_pullup(struct usb_gadget *_gadget, int is_active);
 static int msm72k_set_halt(struct usb_ep *_ep, int value);
 static void flush_endpoint(struct msm_endpoint *ept);
+
 
 static ssize_t print_switch_name(struct switch_dev *sdev, char *buf)
 {
@@ -549,6 +555,7 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 			return -EAGAIN;
 		}
 
+		wake_lock(&ui->wlock);
 		otg_set_suspend(ui->xceiv, 0);
 		schedule_delayed_work(&ui->rw_work, REMOTE_WAKEUP_DELAY);
 	}
@@ -1000,6 +1007,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 			break;
 		}
 		if (ui->online) {
+			wake_lock(&ui->wlock);
 			ui->usb_state = USB_STATE_CONFIGURED;
 			ui->driver->resume(&ui->gadget);
 
@@ -1021,6 +1029,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 		writel(0xffffffff, USB_ENDPTFLUSH);
 		writel(0, USB_ENDPTCTRL(1));
 
+		wake_lock(&ui->wlock);
 		if (ui->online != 0) {
 			/* marking us offline will cause ept queue attempts
 			** to fail
@@ -1294,7 +1303,6 @@ static void usb_do_work(struct work_struct *w)
 				enum chg_type temp;
 
 				pr_info("msm72k_udc: ONLINE -> OFFLINE\n");
-
 				otg_set_suspend(ui->xceiv, 0);
 				/* synchronize with irq context */
 				spin_lock_irqsave(&ui->lock, iflags);
@@ -1340,6 +1348,7 @@ static void usb_do_work(struct work_struct *w)
 				ui->state = USB_STATE_OFFLINE;
 				usb_do_work_check_vbus(ui);
 				msm72k_pm_qos_update(0);
+				wake_unlock(&ui->wlock);
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -1349,6 +1358,12 @@ static void usb_do_work(struct work_struct *w)
 					break;
 
 				hsusb_chg_vbus_draw(0);
+				/* To support TCXO during bus suspend
+				 * This might be dummy check since bus suspend
+				 * is not implemented as of now
+				 * */
+				if (release_wlocks)
+					wake_unlock(&ui->wlock);
 
 				/* TBD: Initiate LPM at usb bus suspend */
 				break;
@@ -1554,6 +1569,52 @@ const struct file_operations debug_cycle_ops = {
 	.write = debug_write_cycle,
 };
 
+static ssize_t debug_read_release_wlocks(struct file *file, char __user *ubuf,
+				 size_t count, loff_t *ppos)
+{
+	char kbuf[10];
+	size_t c = 0;
+
+	memset(kbuf, 0, 10);
+
+	c = scnprintf(kbuf, 10, "%d", release_wlocks);
+
+	if (copy_to_user(ubuf, kbuf, c))
+		return -EFAULT;
+
+	return c;
+}
+static ssize_t debug_write_release_wlocks(struct file *file,
+		const char __user *buf, size_t count, loff_t *ppos)
+{
+	char kbuf[10];
+	long temp;
+
+	memset(kbuf, 0, 10);
+
+	if (copy_from_user(kbuf, buf, count > 10 ? 10 : count))
+		return -EFAULT;
+
+	if (strict_strtol(kbuf, 10, &temp))
+		return -EINVAL;
+
+	if (temp)
+		release_wlocks = 1;
+	else
+		release_wlocks = 0;
+
+	return count;
+}
+static int debug_wake_lock_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+const struct file_operations debug_wlocks_ops = {
+	.open = debug_wake_lock_open,
+	.read = debug_read_release_wlocks,
+	.write = debug_write_release_wlocks,
+};
 static void usb_debugfs_init(struct usb_info *ui)
 {
 	struct dentry *dent;
@@ -1564,6 +1625,8 @@ static void usb_debugfs_init(struct usb_info *ui)
 	debugfs_create_file("status", 0444, dent, ui, &debug_stat_ops);
 	debugfs_create_file("reset", 0222, dent, ui, &debug_reset_ops);
 	debugfs_create_file("cycle", 0222, dent, ui, &debug_cycle_ops);
+	debugfs_create_file("release_wlocks", 0666, dent, ui,
+						&debug_wlocks_ops);
 }
 #else
 static void usb_debugfs_init(struct usb_info *ui) {}
@@ -1778,6 +1841,9 @@ static int msm72k_udc_vbus_session(struct usb_gadget *_gadget, int is_active)
 
 	ui->usb_state = is_active ? USB_STATE_POWERED : USB_STATE_NOTATTACHED;
 
+	if (is_active)
+		wake_lock(&ui->wlock);
+
 	msm_hsusb_set_vbus_state(is_active);
 	return 0;
 }
@@ -1819,7 +1885,6 @@ static int msm72k_wakeup(struct usb_gadget *_gadget)
 		pr_err("%s: device is not configured\n", __func__);
 		return -ENODEV;
 	}
-
 	otg_set_suspend(ui->xceiv, 0);
 
 	disable_irq(otg->irq);
@@ -2006,6 +2071,9 @@ static int msm72k_probe(struct platform_device *pdev)
 
 	the_usb_info = ui;
 
+	wake_lock_init(&ui->wlock,
+			WAKE_LOCK_SUSPEND, "usb_bus_active");
+
 	pm_qos_add_requirement(PM_QOS_CPU_DMA_LATENCY, DRIVER_NAME,
 					PM_QOS_DEFAULT_VALUE);
 	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
@@ -2019,6 +2087,7 @@ static int msm72k_probe(struct platform_device *pdev)
 		pr_err("%s: Cannot bind the transceiver, retval:(%d)\n",
 				__func__, retval);
 		switch_dev_unregister(&ui->sdev);
+		wake_lock_destroy(&ui->wlock);
 		return usb_free(ui, retval);
 	}
 

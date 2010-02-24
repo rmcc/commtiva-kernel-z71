@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -32,7 +32,6 @@
 #include <linux/usb.h>
 #include <linux/usb/gadget.h>
 #include <linux/usb/otg.h>
-#include <linux/wakelock.h>
 
 #define OTGSC_BSVIE            (1 << 27)
 #define OTGSC_IDIE             (1 << 24)
@@ -60,7 +59,6 @@ struct msm_otg {
 	int			vbus_on_irq;
 	void __iomem		*regs;
 	u8			in_lpm;
-	struct wake_lock	wlock;
 
 	unsigned int 		core_clk;
 	int 			(*rpc_connect)(int);

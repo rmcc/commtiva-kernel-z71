@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -151,88 +151,6 @@ static void disable_sess_valid(struct msm_otg *dev)
 	writel(readl(USB_OTGSC) & ~OTGSC_BSVIE, USB_OTGSC);
 }
 
-int release_wlocks;
-struct dentry *debugfs_dent;
-struct dentry *rel_wlocks_file;
-#if defined(CONFIG_DEBUG_FS)
-static ssize_t debug_read_release_wlocks(struct file *file, char __user *ubuf,
-				 size_t count, loff_t *ppos)
-{
-	char kbuf[100];
-	size_t c = 0;
-
-	memset(kbuf, 0, 100);
-
-	c = scnprintf(kbuf, 100, "%d", release_wlocks);
-
-	if (copy_to_user(ubuf, kbuf, c))
-		return -EFAULT;
-
-	return c;
-}
-static ssize_t debug_write_release_wlocks(struct file *file,
-		const char __user *buf, size_t count, loff_t *ppos)
-{
-	char kbuf[100];
-	long temp;
-
-	memset(kbuf, 0, 100);
-
-	if (copy_from_user(kbuf, buf, count > 99 ? 99 : count))
-		return -EFAULT;
-
-	if (strict_strtol(kbuf, 10, &temp))
-		return -EINVAL;
-
-	if (temp)
-		release_wlocks = 1;
-	else
-		release_wlocks = 0;
-
-	return count;
-}
-
-static int debug_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
-const struct file_operations debug_wlocks_ops = {
-	.open = debug_open,
-	.read = debug_read_release_wlocks,
-	.write = debug_write_release_wlocks,
-};
-
-static void msm_otg_debugfs_init(struct msm_otg *dev)
-{
-	debugfs_dent = debugfs_create_dir("otg", 0);
-
-	if (IS_ERR(debugfs_dent) || !debugfs_dent)
-		return;
-
-	rel_wlocks_file = debugfs_create_file("release_wlocks", 0666,
-				debugfs_dent, dev, &debug_wlocks_ops);
-
-	return;
-}
-
-static void msm_otg_debugfs_cleanup(void)
-{
-	if (rel_wlocks_file && !IS_ERR(rel_wlocks_file))
-		debugfs_remove(rel_wlocks_file);
-
-	if (debugfs_dent && !IS_ERR(debugfs_dent))
-		debugfs_remove(debugfs_dent);
-}
-
-#else
-
-static void msm_otg_debugfs_init(struct msm_otg *dev) { }
-static void msm_otg_debugfs_cleanup() { }
-
-#endif
-
 static int msm_otg_set_clk(struct otg_transceiver *xceiv, int on)
 {
 	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
@@ -336,8 +254,6 @@ out:
 	/* TBD: as there is no bus suspend implemented as of now
 	 * it should be dummy check
 	 */
-	if (!vbus || release_wlocks)
-		wake_unlock(&dev->wlock);
 
 	return 0;
 }
@@ -349,7 +265,6 @@ static int msm_otg_resume(struct msm_otg *dev)
 	if (!dev->in_lpm)
 		return 0;
 
-	wake_lock(&dev->wlock);
 
 	clk_enable(dev->pclk);
 	if (dev->cclk)
@@ -706,10 +621,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto free_otg_irq;
 	}
 
-	wake_lock_init(&dev->wlock,
-			WAKE_LOCK_SUSPEND, "usb_bus_active");
-	wake_lock(&dev->wlock);
-	msm_otg_debugfs_init(dev);
 	device_init_wakeup(&pdev->dev, 1);
 
 	if (vbus_on_irq) {
@@ -759,8 +670,6 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 		clk_put(dev->cclk);
 	clk_put(dev->pclk);
 	clk_put(dev->clk);
-	wake_lock_destroy(&dev->wlock);
-	msm_otg_debugfs_cleanup();
 	kfree(dev);
 	if (dev->rpc_connect)
 		dev->rpc_connect(0);
