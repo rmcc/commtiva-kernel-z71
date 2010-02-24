@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -460,6 +460,8 @@ enum vdec_output_fromat {
 struct vdec_picsize {
 	uint32_t frame_width;
 	uint32_t frame_height;
+	uint32_t stride;
+	uint32_t scan_lines;
 };
 
 struct vdec_seqheader {
@@ -486,8 +488,10 @@ struct vdec_input_frameinfo {
 };
 
 struct vdec_framesize {
-	uint32_t width;
-	uint32_t height;
+	uint32_t   n_left;
+	uint32_t   n_top;
+	uint32_t   n_right;
+	uint32_t   n_bottom;
 };
 
 struct vdec_output_frameinfo {
