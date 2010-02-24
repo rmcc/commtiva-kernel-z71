@@ -215,6 +215,7 @@ static int msm72k_wakeup(struct usb_gadget *_gadget);
 static int msm72k_pullup(struct usb_gadget *_gadget, int is_active);
 static int msm72k_set_halt(struct usb_ep *_ep, int value);
 static void flush_endpoint(struct msm_endpoint *ept);
+static void msm72k_pm_qos_update(int);
 
 
 static ssize_t print_switch_name(struct switch_dev *sdev, char *buf)
@@ -297,6 +298,18 @@ static void usb_chg_detect(struct work_struct *w)
 	maxpower = usb_get_max_power(ui);
 	if (maxpower > 0)
 		hsusb_chg_vbus_draw(maxpower);
+
+	/* USB driver prevents idle and suspend power collapse(pc)
+	 * while USB cable is connected. But when dedicated charger is
+	 * connected, driver can vote for idle and suspend pc.
+	 * To allow idle & suspend pc when dedicated charger is connected,
+	 * release the wakelock and set driver latency to default sothat,
+	 * driver will reacquire wakelocks for any sub-sequent usb interrupts.
+	 * */
+	if (temp == USB_CHG_TYPE__WALLCHARGER) {
+		msm72k_pm_qos_update(0);
+		wake_unlock(&ui->wlock);
+	}
 }
 
 static int usb_ep_get_stall(struct msm_endpoint *ept)
@@ -1301,7 +1314,8 @@ static void usb_do_work(struct work_struct *w)
 			 */
 			if (flags & USB_FLAG_VBUS_OFFLINE) {
 				enum chg_type temp;
-
+				if (ui->chg_type == USB_CHG_TYPE__WALLCHARGER)
+					msm72k_pm_qos_update(1);
 				pr_info("msm72k_udc: ONLINE -> OFFLINE\n");
 				otg_set_suspend(ui->xceiv, 0);
 				/* synchronize with irq context */
@@ -1841,7 +1855,7 @@ static int msm72k_udc_vbus_session(struct usb_gadget *_gadget, int is_active)
 
 	ui->usb_state = is_active ? USB_STATE_POWERED : USB_STATE_NOTATTACHED;
 
-	if (is_active)
+	if (is_active || ui->chg_type == USB_CHG_TYPE__WALLCHARGER)
 		wake_lock(&ui->wlock);
 
 	msm_hsusb_set_vbus_state(is_active);
