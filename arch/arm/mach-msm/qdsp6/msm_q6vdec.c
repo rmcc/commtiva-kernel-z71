@@ -43,6 +43,7 @@
 #include <linux/sched.h>
 #include <linux/spinlock.h>
 #include <linux/uaccess.h>
+#include <linux/wakelock.h>
 
 #include <linux/android_pmem.h>
 #include <linux/msm_q6vdec.h>
@@ -134,6 +135,31 @@ static dev_t vdec_device_no;
 static struct cdev vdec_cdev;
 static int ref_cnt;
 static DEFINE_MUTEX(vdec_ref_lock);
+
+static DEFINE_MUTEX(idlecount_lock);
+static int idlecount;
+static struct wake_lock wakelock;
+static struct wake_lock idlelock;
+
+static void prevent_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (++idlecount == 1) {
+		wake_lock(&idlelock);
+		wake_lock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
+
+static void allow_sleep(void)
+{
+	mutex_lock(&idlecount_lock);
+	if (--idlecount == 0) {
+		wake_unlock(&idlelock);
+		wake_unlock(&wakelock);
+	}
+	mutex_unlock(&idlecount_lock);
+}
 
 static inline int vdec_check_version(u32 client, u32 server)
 {
@@ -833,6 +859,7 @@ static int vdec_open(struct inode *inode, struct file *file)
 	}
 
 	vd->running = 1;
+	prevent_sleep();
 
 	return 0;
 vdec_open_err_handle_version:
@@ -887,6 +914,7 @@ static int vdec_release(struct inode *inode, struct file *file)
 	mutex_unlock(&vdec_ref_lock);
 
 	kfree(vd);
+	allow_sleep();
 	return 0;
 }
 
@@ -901,6 +929,9 @@ static int __init vdec_init(void)
 {
 	struct device *class_dev;
 	int rc = 0;
+
+	wake_lock_init(&idlelock, WAKE_LOCK_IDLE, "vdec_idle");
+	wake_lock_init(&wakelock, WAKE_LOCK_SUSPEND, "vdec_suspend");
 
 	rc = alloc_chrdev_region(&vdec_device_no, 0, 1, "vdec");
 	if (rc < 0) {
