@@ -29,7 +29,12 @@
 #ifndef MSM_GEMINI_COMMON_H
 #define MSM_GEMINI_COMMON_H
 
-#define GMN_DBG      dev_dbg
+#ifdef MSM_GEMINI_DEBUG
+#define GMN_DBG(fmt, args...) printk(KERN_INFO "gemini: " fmt, ##args)
+#else
+#define GMN_DBG(fmt, args...) do { } while (0)
+#endif
+
 #define GMN_PR_ERR   pr_err
 
 enum GEMINI_MODE {
