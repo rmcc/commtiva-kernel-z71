@@ -840,7 +840,7 @@ endchoice
 config NPA_REMOTE_ONCRPC
 	bool "Enables NPA remoting through ONCRPC protocol."
 	depends on NPA && MSM_ONCRPCROUTER
-	select CONFIG_NPA_REMOTE
+	select NPA_REMOTE
 	default n
 	help
 	  Enables Linux NPA clients to talk to NPA nodes in the modem
