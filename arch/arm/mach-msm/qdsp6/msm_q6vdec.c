@@ -506,14 +506,15 @@ static int vdec_close(struct vdec_data *vd, void *argp)
 	vd->close_decode = 1;
 	wake_up(&vd->vdec_msg_evt);
 
-	if (vd->mem_initialized) {
-		list_for_each_entry(l, &vd->vdec_mem_list_head, list)
-		    put_pmem_file(l->mem.file);
-	}
-
 	ret = dal_call_f0(vd->vdec_handle, DAL_OP_CLOSE, 0);
 	if (ret)
 		pr_err("%s: failed to close daldevice (%d)\n", __func__, ret);
+
+	if (vd->mem_initialized) {
+		list_for_each_entry(l, &vd->vdec_mem_list_head, list)
+			put_pmem_file(l->mem.file);
+	}
+
 	return ret;
 }
 static int vdec_getdecattributes(struct vdec_data *vd, void *argp)
@@ -889,6 +890,9 @@ static int vdec_release(struct inode *inode, struct file *file)
 
 	vd->running = 0;
 	wake_up_all(&vd->vdec_msg_evt);
+
+	if (!vd->close_decode)
+		vdec_close(vd, NULL);
 
 	ret = dal_detach(vd->vdec_handle);
 	if (ret)
