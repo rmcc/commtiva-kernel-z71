@@ -22,6 +22,11 @@
 #include <asm/io.h>
 #include <asm/mach/map.h>
 #include <asm/cacheflush.h>
+#if defined(CONFIG_NPA_REMOTE)
+#include <linux/npa_remote.h>
+#include <linux/completion.h>
+#include <linux/err.h>
+#endif
 
 int arch_io_remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 			    unsigned long pfn, unsigned long size, pgprot_t prot)
@@ -142,13 +147,32 @@ void *alloc_bootmem_aligned(unsigned long size, unsigned long alignment)
 	return (void *)addr;
 }
 
+#if defined(CONFIG_NPA_REMOTE)
+struct npa_client *npa_memory_client;
+#endif
+
 static int change_memory_power_state(unsigned long start_pfn,
 	unsigned long nr_pages, int state)
 {
 	unsigned long start;
 	unsigned long size;
 	unsigned long virtual;
+	int rc = 0;
+#if defined(CONFIG_NPA_REMOTE)
+	static atomic_t node_created_flag = ATOMIC_INIT(1);
 
+	if (atomic_dec_and_test(&node_created_flag)) {
+		/* Create NPA 'required' client. */
+		npa_memory_client = npa_create_sync_client(NPA_MEMORY_NODE_NAME,
+			"memory node", NPA_CLIENT_REQUIRED);
+		if (IS_ERR(npa_client)) {
+			rc = PTR_ERR(npa_client);
+			return rc;
+		}
+	}
+
+	rc = npa_issue_required_request(npa_memory_client, state);
+#else
 	if (state == MEMORY_DEEP_POWERDOWN) {
 		/* simulate turning off memory by writing bit pattern into it */
 		start = start_pfn << PAGE_SHIFT;
@@ -156,7 +180,8 @@ static int change_memory_power_state(unsigned long start_pfn,
 		virtual = __phys_to_virt(start);
 		memset((void *)virtual, 0x27, size);
 	}
-	return 0;
+#endif
+	return rc;
 }
 
 int platform_physical_remove_pages(unsigned long start_pfn,
