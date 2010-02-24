@@ -78,6 +78,11 @@ enum {
 	VDEC_QUEUE_BADSTATE,
 };
 
+enum {
+	VDEC_COLOR_FORMAT_NV21 = 0x01,
+	VDEC_COLOR_FORMAT_NV21_YAMOTO = 0x02
+   };
+
 struct vdec_input_buf_info {
 	u32 offset;
 	u32 data;
@@ -119,7 +124,7 @@ struct vdec_config {
 	u32 h264_nal_len_size;
 	u32 postproc_flag;
 	u32 fruc_enable;
-	u32 reserved;
+	u32 color_format;           /* used to set YUV color format */
 };
 
 struct vdec_vc1_panscan_regions {
