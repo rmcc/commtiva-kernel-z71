@@ -223,19 +223,21 @@ static int venc_get_msg(struct venc_dev *dvenc, void *msg)
 	struct venc_msg_list *l;
 	unsigned long flags;
 	int ret = 0;
+	struct venc_msg qdsp_msg;
 
 	if (!dvenc->is_active)
 		return -EPERM;
 	spin_lock_irqsave(&dvenc->venc_msg_list_lock, flags);
 	list_for_each_entry_reverse(l, &dvenc->venc_msg_list_head, list) {
-		if (copy_to_user(msg, &l->msg_data, sizeof(struct venc_msg)))
-			pr_err("%s failed to copy_to_user\n", __func__);
+		memcpy(&qdsp_msg, &l->msg_data, sizeof(struct venc_msg));
 		list_del(&l->list);
 		list_add(&l->list, &dvenc->venc_msg_list_free);
 		ret = 1;
 		break;
 	}
 	spin_unlock_irqrestore(&dvenc->venc_msg_list_lock, flags);
+	if (copy_to_user(msg, &qdsp_msg, sizeof(struct venc_msg)))
+		pr_err("%s failed to copy_to_user\n", __func__);
 	return ret;
 }
 
