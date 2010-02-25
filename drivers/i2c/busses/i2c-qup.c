@@ -123,8 +123,10 @@ enum {
 
 };
 
-/* Packing Unpacking words in FIFOs */
+/* Packing Unpacking words in FIFOs , and IO modes*/
 enum {
+	QUP_FIFO_MODE = 0,
+	QUP_BLK_MODE  = 1U << 12,
 	QUP_UNPACK_EN = 1U << 14,
 	QUP_PACK_EN = 1U << 15,
 };
@@ -232,7 +234,8 @@ qup_i2c_interrupt(int irq, void *devid)
 	if (op_flgs & QUP_OUT_SVC_FLAG)
 		writel(QUP_OUT_SVC_FLAG, dev->base + QUP_OPERATIONAL);
 	if (dev->msg->flags == I2C_M_RD) {
-		if (op_flgs & QUP_MX_INPUT_DONE)
+		if ((op_flgs & QUP_MX_INPUT_DONE) ||
+			(op_flgs & QUP_IN_SVC_FLAG))
 			writel(QUP_IN_SVC_FLAG, dev->base + QUP_OPERATIONAL);
 		else
 			return IRQ_HANDLED;
@@ -304,8 +307,11 @@ qup_issue_read(struct qup_i2c_dev *dev, struct i2c_msg *msg, int *idx,
 		uint32_t carry_over)
 {
 	uint16_t addr = (msg->addr << 1) | 1;
+	/* QUP limit 256 bytes per read. By HW design, 0 in the 8-bit field
+	 * is treated as 256 byte read.
+	 */
+	uint16_t rd_len = ((dev->cnt == 256) ? 0 : dev->cnt);
 
-	/* QUP limit 256 bytes per read */
 	if (*idx % 4) {
 		writel(carry_over | ((QUP_OUT_START | addr) << 16),
 		dev->base + QUP_OUT_FIFO_BASE);/* + (*idx-2)); */
@@ -313,16 +319,16 @@ qup_issue_read(struct qup_i2c_dev *dev, struct i2c_msg *msg, int *idx,
 		qup_verify_fifo(dev, carry_over |
 			((QUP_OUT_START | addr) << 16), (uint32_t)dev->base
 			+ QUP_OUT_FIFO_BASE + (*idx - 2), 1);
-		writel((QUP_OUT_REC | dev->cnt),
+		writel((QUP_OUT_REC | rd_len),
 			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx+2)); */
 
-		qup_verify_fifo(dev, (QUP_OUT_REC | dev->cnt),
+		qup_verify_fifo(dev, (QUP_OUT_REC | rd_len),
 		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx + 2), 1);
 	} else {
-		writel(((QUP_OUT_REC | dev->cnt) << 16) | QUP_OUT_START | addr,
+		writel(((QUP_OUT_REC | rd_len) << 16) | QUP_OUT_START | addr,
 			dev->base + QUP_OUT_FIFO_BASE);/* + (*idx)); */
 
-		qup_verify_fifo(dev, QUP_OUT_REC << 16 | dev->cnt << 16 |
+		qup_verify_fifo(dev, QUP_OUT_REC << 16 | rd_len << 16 |
 		QUP_OUT_START | addr,
 		(uint32_t)dev->base + QUP_OUT_FIFO_BASE + (*idx), 1);
 	}
@@ -429,6 +435,25 @@ qup_update_state(struct qup_i2c_dev *dev, uint32_t state)
 }
 
 static int
+qup_set_read_mode(struct qup_i2c_dev *dev, int rd_len)
+{
+	if (rd_len > 256) {
+		dev_err(dev->dev, "HW doesn't support READs > 256 bytes\n");
+		return -EPROTONOSUPPORT;
+	}
+	if (rd_len <= dev->in_fifo_sz) {
+		writel(QUP_FIFO_MODE | QUP_PACK_EN | QUP_UNPACK_EN,
+			dev->base + QUP_IO_MODE);
+		writel(rd_len, dev->base + QUP_MX_READ_CNT);
+	} else {
+		writel(QUP_BLK_MODE | QUP_PACK_EN | QUP_UNPACK_EN,
+			dev->base + QUP_IO_MODE);
+		writel(rd_len, dev->base + QUP_MX_INPUT_CNT);
+	}
+	return 0;
+}
+
+static int
 qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
 	DECLARE_COMPLETION_ONSTACK(complete);
@@ -526,30 +551,18 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		 * only FIFO mode supported right now, so read size of
 		 * in_fifo supported in 1 read
 		 */
-		if (dev->msg->flags == I2C_M_RD) {
-			if (dev->cnt > dev->in_fifo_sz) {
-				dev_err(dev->dev, "No Block mode support\n");
-				ret = -EPROTONOSUPPORT;
+		if (dev->msg->flags & I2C_M_RD) {
+			ret = qup_set_read_mode(dev, dev->cnt);
+			if (ret != 0)
 				goto out_err;
-			}
-			writel(dev->cnt, dev->base + QUP_MX_READ_CNT);
 		} else {
-			if (dev->cnt > dev->out_fifo_sz) {
-				dev_err(dev->dev, "No Block mode support\n");
-				ret = -EPROTONOSUPPORT;
-				goto out_err;
-			} else if (rem > 1) {
+			if (rem > 1) {
 				struct i2c_msg *next = msgs + 1;
 				if (next->addr == msgs->addr &&
 					next->flags == I2C_M_RD) {
-					if (next->len > dev->in_fifo_sz) {
-						dev_err(dev->dev,
-						"No Block mode support\n");
-						ret = -EPROTONOSUPPORT;
+					ret = qup_set_read_mode(dev, next->len);
+					if (ret != 0)
 						goto out_err;
-					}
-					writel(next->len, dev->base +
-							QUP_MX_READ_CNT);
 				}
 			}
 		}
@@ -579,10 +592,11 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 			 * and decide mode
 			 */
 			while (filled == false) {
-				if (msgs->flags & I2C_M_RD)
+				if ((msgs->flags & I2C_M_RD) &&
+					(dev->cnt == msgs->len))
 					qup_issue_read(dev, msgs, &idx,
 							carry_over);
-				else
+				else if (!(msgs->flags & I2C_M_RD))
 					qup_issue_write(dev, msgs, rem, &idx,
 							&carry_over);
 				if (idx >= dev->out_fifo_sz)
