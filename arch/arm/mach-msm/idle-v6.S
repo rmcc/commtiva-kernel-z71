@@ -20,29 +20,33 @@
 #include <asm/assembler.h>
 
 ENTRY(msm_arch_idle)
-	mov     r0, #0
-	mcr     p15, 0, r0, c7, c10, 0   /* flush entire data cache */
+	cpsid   f
+
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
 	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
 
 	mov     r0, #0
+	mcr     p15, 0, r0, c7, c5, 0    /* invalidate icache and flush */
+	                                 /* branch target cache */
+	mcr     p15, 0, r0, c7, c14, 0   /* clean and invalidate dcache */
+
 	mcr     p15, 0, r0, c7, c10, 4   /* dsb                */
 	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
 
 	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
 	mcr     p15, 0, r0, c7, c5, 4    /* isb                */
 
+	cpsie   f
 	mov     pc, lr
 
 ENTRY(msm_pm_collapse)
 	ldr     r0, =saved_state
 	stmia   r0!, {r4-r14}
 
-#if defined(CONFIG_MSM_FIQ_SUPPORT)
 	cpsid   f
-#endif
+
 	mrc     p15, 0, r1, c1, c0, 0 /* MMU control */
 	mrc     p15, 0, r2, c2, c0, 0 /* ttb */
 	mrc     p15, 0, r3, c3, c0, 0 /* dacr */
@@ -58,23 +62,23 @@ ENTRY(msm_pm_collapse)
 	mrc	p15, 0, r1, c1, c0, 2	/* read CACR */
 	stmia   r0!, {r1}
 
-	mov     r0, #0
-	mcr     p15, 0, r0, c7, c10, 0   /* flush entire data cache */
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
 	mcr     p15, 0, r0, c1, c0, 0    /* disable d/i cache  */
 
 	mov     r0, #0
+	mcr     p15, 0, r0, c7, c5, 0    /* invalidate icache and flush */
+	                                 /* branch target cache */
+	mcr     p15, 0, r0, c7, c14, 0   /* clean and invalidate dcache */
+
 	mcr     p15, 0, r0, c7, c10, 4   /* dsb                */
 	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
 
 	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
 	mcr     p15, 0, r0, c7, c5, 4    /* isb                */
 
-#if defined(CONFIG_MSM_FIQ_SUPPORT)
 	cpsie   f
-#endif
 
 	ldr     r0, =saved_state         /* restore registers */
 	ldmfd   r0, {r4-r14}
