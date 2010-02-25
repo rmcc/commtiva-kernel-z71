@@ -1008,17 +1008,17 @@ int __init kgsl_yamato_config(struct kgsl_devconfig *devconfig,
 	 *	2 = translate within va_range, otherwise fault
 	 */
 	devconfig->mmu_config = 1 /* mmu enable */
-		    | (1 << MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_R0_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_R1_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_R2_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_R3_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__CP_R4_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__VGT_R0_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__VGT_R1_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)
-		    | (1 << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT);
+		    | (2 << MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_R2_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_R3_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__CP_R4_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__VGT_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__VGT_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)
+		    | (2 << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT);
 
 	/*TODO: these should probably be configurable from platform device
 	 * stuff */
