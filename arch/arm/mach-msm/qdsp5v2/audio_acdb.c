@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -184,7 +184,8 @@ s32 acdb_calibrate_device(void *data)
 	if (result)
 		goto done;
 
-	while (true) {
+	while (!kthread_should_stop()) {
+		MM_DBG("Waiting for Device Ready Event\n");
 		wait_event_interruptible(acdb_data.wait,
 					acdb_data.acdb_compl);
 		acdb_data.acdb_compl = 0;
@@ -193,12 +194,14 @@ s32 acdb_calibrate_device(void *data)
 		result = acdb_get_calibration();
 		if (result < 0) {
 			mutex_unlock(&acdb_data.acdb_mutex);
-			goto done;
+			MM_ERR("Not able to get calibration data, continue\n");
+			continue;
 		}
 		if (!((acdb_data.device_info->dev_type == RX_DEVICE)
 			&& (acdb_data.acdb_state & AUDPP_READY)) &&
 			!((acdb_data.device_info->dev_type == TX_DEVICE)
 			&& (acdb_data.acdb_state & AUDPREPROC_READY))) {
+			MM_DBG("Waiting for either AUDPP/AUDPREPROC Event\n");
 
 			mutex_unlock(&acdb_data.acdb_mutex);
 			rc = wait_event_interruptible(acdb_data.wait,
@@ -212,8 +215,9 @@ s32 acdb_calibrate_device(void *data)
 
 		mutex_unlock(&acdb_data.acdb_mutex);
 	}
+
 done:
-	return result;
+	return 0;
 }
 
 
@@ -408,7 +412,6 @@ void device_cb(u32 evt_id, union auddev_evt_data *evt, void *private)
 		goto done;
 
 	audcal_info = evt->audcal_info;
-
 	mutex_lock(&acdb_data.acdb_mutex);
 	if (acdb_data.acdb_state & CAL_DATA_READY) {
 		if (audcal_info.dev_type == acdb_data.device_info->dev_type) {
