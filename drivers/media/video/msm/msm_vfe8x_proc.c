@@ -383,13 +383,15 @@ static void vfe_write_lens_roll_off_table(struct vfe_cmd_roll_off_config *in)
 
 	/* pack and write delta table */
 	for (i = 0; i < VFE_ROLL_OFF_DELTA_TABLE_SIZE; i++) {
-		data = *pDeltaR | (*pDeltaGr << 16);
+		data = (((int)(*pDeltaR)) & 0x0000FFFF) |
+			(((int)(*pDeltaGr))<<16);
 		pDeltaR++;
 		pDeltaGr++;
 
 		writel(data, ctrl->vfebase + VFE_DMI_DATA_LO);
 
-		data = *pDeltaB | (*pDeltaGb << 16);
+		data = (((int)(*pDeltaB)) & 0x0000FFFF) |
+			(((int)(*pDeltaGb))<<16);
 		pDeltaB++;
 		pDeltaGb++;
 
