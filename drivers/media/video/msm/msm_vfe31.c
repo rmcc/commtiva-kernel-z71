@@ -1039,10 +1039,9 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		cmdp_local, (vfe31_cmd[cmd->id].length));
 		}
 		break;
-	case V31_DEMOSAIC_2_UPDATE:
-	case V31_DEMOSAIC_2_CFG: {
+	case V31_DEMOSAIC_2_UPDATE: /* 38 BPC update   */
+	case V31_DEMOSAIC_2_CFG: {  /* 14 BPC config   */
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
-		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
 		if (!cmdp) {
 			rc = -ENOMEM;
 			goto proc_general_done;
@@ -1055,7 +1054,10 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		}
 		cmdp_local = cmdp;
 		new_val = *cmdp_local;
+
+		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
 		old_val &= BPC_MASK;
+
 		new_val = new_val | old_val;
 		*cmdp_local = new_val;
 		msm_io_memcpy(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF,
@@ -1065,9 +1067,8 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 			cmdp_local, (vfe31_cmd[cmd->id].length));
 		}
 		break;
-	case V31_DEMOSAIC_1_UPDATE:
-	case V31_DEMOSAIC_1_CFG: {
-		uint32_t temp;
+	case V31_DEMOSAIC_1_UPDATE:/* 37 ABF update  */
+	case V31_DEMOSAIC_1_CFG: { /* 13 ABF config  */
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
 		if (!cmdp) {
 			rc = -ENOMEM;
@@ -1080,10 +1081,16 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 			goto proc_general_done;
 		}
 		cmdp_local = cmdp;
-		temp = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
-		*cmdp_local = *cmdp_local | temp;
+		new_val = *cmdp_local;
+
+		old_val = msm_io_r(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF);
+		old_val &= ABF_MASK;
+		new_val = new_val | old_val;
+		*cmdp_local = new_val;
+
 		msm_io_memcpy(vfe31_ctrl->vfebase + V31_DEMOSAIC_0_OFF,
-		cmdp_local, 4);
+		    cmdp_local, 4);
+
 		cmdp_local += 1;
 		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
 		cmdp_local, (vfe31_cmd[cmd->id].length));
