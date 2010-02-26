@@ -23,7 +23,6 @@
 #include <linux/list.h>
 #include <linux/delay.h>
 #include <linux/platform_device.h>
-#include <linux/workqueue.h>
 #include "msm_vfe8x_proc.h"
 #include <media/msm_camera.h>
 #include <mach/board.h>
@@ -1646,7 +1645,7 @@ static void vfe_process_output_path_irq(struct vfe_interrupt_status *irqstatus)
 	}
 }
 
-static void __vfe_do_work(struct isr_queue_cmd *qcmd)
+static void __vfe_do_tasklet(struct isr_queue_cmd *qcmd)
 {
 	if (qcmd->vfeInterruptStatus.regUpdateIrq) {
 		CDBG("irq regUpdateIrq\n");
@@ -1739,7 +1738,7 @@ static void put_irq_cmd(void)
 	spin_unlock_irqrestore(&ctrl->irqs_lock, flags);
 }
 
-static void vfe_do_work(struct work_struct *work)
+static void vfe_do_tasklet(unsigned long data)
 {
 	int cnt = 0;
 	unsigned long flags;
@@ -1754,7 +1753,7 @@ static void vfe_do_work(struct work_struct *work)
 	CDBG("%s\n", __func__);
 
 	while ((qcmd = next_irq_cmd())) {
-		__vfe_do_work(qcmd);
+		__vfe_do_tasklet(qcmd);
 		put_irq_cmd();
 		cnt++;
 	}
@@ -1765,7 +1764,7 @@ static void vfe_do_work(struct work_struct *work)
 	spin_unlock_irqrestore(&msm_vfe_ctrl_lock, flags);
 }
 
-DECLARE_WORK(vfe_work, vfe_do_work);
+DECLARE_TASKLET(vfe_tasklet, vfe_do_tasklet, 0);
 
 static irqreturn_t vfe_parse_irq(int irq_num, void *data)
 {
@@ -1803,7 +1802,7 @@ static irqreturn_t vfe_parse_irq(int irq_num, void *data)
 	vfe_get_camif_status(&qcmd->vfeCamifStatusLocal, &irq);
 	vfe_get_performance_monitor_data(&qcmd->vfePmData, &irq);
 	spin_unlock_irqrestore(&ctrl->irqs_lock, flags);
-	schedule_work(&vfe_work);
+	tasklet_schedule(&vfe_tasklet);
 
 done:
 	/* clear the pending interrupt of the same kind.*/
