@@ -127,6 +127,55 @@ void kgsl_g12_timer(unsigned long data)
 	schedule_work(&idle_check);
 }
 
+void kgsl_g12_check_open(void)
+{
+	if (atomic_inc_return(&kgsl_driver.g12_open_count) == 1)
+		kgsl_g12_first_open_locked();
+}
+
+int kgsl_g12_last_release_locked(void)
+{
+	KGSL_DRV_INFO("kgsl_g12_last_release_locked()\n");
+
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE)
+		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_OFF);
+
+	/* close g12 */
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
+		kgsl_g12_close(&kgsl_driver.g12_device);
+		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_OFF);
+	}
+
+	return KGSL_SUCCESS;
+}
+
+int kgsl_g12_first_open_locked(void)
+{
+	int result = KGSL_SUCCESS;
+
+	KGSL_DRV_INFO("kgsl_g12_first_open()\n");
+
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE)
+		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_ON);
+
+	/* init g12 */
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
+		result = kgsl_g12_init(&kgsl_driver.g12_device,
+			&kgsl_driver.g12_config);
+		if (result != 0)
+			goto done;
+
+		result = kgsl_g12_start(&kgsl_driver.g12_device, 0);
+		if (result != 0)
+			goto done;
+
+		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_ON);
+	}
+ done:
+	return result;
+
+}
+
 void kgsl_g12_idle_check(struct work_struct *work)
 {
 	struct kgsl_device *device = &kgsl_driver.g12_device;
