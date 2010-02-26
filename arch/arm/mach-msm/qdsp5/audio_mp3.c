@@ -4,7 +4,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -1908,8 +1908,11 @@ static int audio_release(struct inode *inode, struct file *file)
 	audio->event_abort = 1;
 	wake_up(&audio->event_wait);
 	audmp3_reset_event_queue(audio);
-	iounmap(audio->data);
-	pmem_kfree(audio->phys);
+	MM_DBG("pmem area = 0x%8x\n", (unsigned int)audio->data);
+	if (audio->data) {
+		iounmap(audio->data);
+		pmem_kfree(audio->phys);
+	}
 	if (audio->read_data) {
 		iounmap(audio->read_data);
 		pmem_kfree(audio->read_phys);
@@ -2098,37 +2101,42 @@ static int audio_open(struct inode *inode, struct file *file)
 	}
 	audio->dec_id = decid & MSM_AUD_DECODER_MASK;
 
-	while (pmem_sz >= DMASZ_MIN) {
-		MM_DBG("pmemsz = %d \n", pmem_sz);
-		audio->phys = pmem_kalloc(pmem_sz, PMEM_MEMTYPE_EBI1|
-					PMEM_ALIGNMENT_4K);
-		if (!IS_ERR((void *)audio->phys)) {
-			audio->data = ioremap(audio->phys, pmem_sz);
-			if (!audio->data) {
+	/* Non AIO interface */
+	if (!(file->f_flags & O_NONBLOCK)) {
+		while (pmem_sz >= DMASZ_MIN) {
+			MM_DBG("pmemsz = %d \n", pmem_sz);
+			audio->phys = pmem_kalloc(pmem_sz, PMEM_MEMTYPE_EBI1|
+						PMEM_ALIGNMENT_4K);
+			if (!IS_ERR((void *)audio->phys)) {
+				audio->data = ioremap(audio->phys, pmem_sz);
+				if (!audio->data) {
+					MM_ERR("could not allocate write\
+						buffers\n");
+					rc = -ENOMEM;
+					pmem_kfree(audio->phys);
+					audpp_adec_free(audio->dec_id);
+					MM_INFO("audio instance 0x%08x\
+						freeing\n", (int)audio);
+					kfree(audio);
+					goto done;
+				}
+				MM_INFO("write buf: phy addr 0x%08x kernel addr\
+					0x%08x\n", audio->phys,\
+					(int)audio->data);
+				break;
+			} else if (pmem_sz == DMASZ_MIN) {
 				MM_ERR("could not allocate write buffers\n");
 				rc = -ENOMEM;
-				pmem_kfree(audio->phys);
 				audpp_adec_free(audio->dec_id);
-				MM_INFO("audio instance 0x%08x freeing\n",
-						(int)audio);
+				MM_INFO("audio instance 0x%08x freeing\n",\
+					(int)audio);
 				kfree(audio);
 				goto done;
-			}
-			MM_INFO("write buf: phy addr 0x%08x kernel addr \
-				0x%08x\n", audio->phys, (int)audio->data);
-			break;
+			} else
+				pmem_sz >>= 1;
 		}
-		else if (pmem_sz == DMASZ_MIN) {
-			MM_ERR("could not allocate write buffers\n");
-			rc = -ENOMEM;
-			audpp_adec_free(audio->dec_id);
-			MM_INFO("audio instance 0x%08x freeing\n", (int)audio);
-			kfree(audio);
-			goto done;
-		} else
-		pmem_sz >>= 1;
+		audio->out_dma_sz = pmem_sz;
 	}
-	audio->out_dma_sz = pmem_sz;
 
 	if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK) {
 		rc = audmgr_open(&audio->audmgr);
@@ -2163,6 +2171,13 @@ static int audio_open(struct inode *inode, struct file *file)
 		audio->drv_ops.out_flush = audio_flush;
 		audio->drv_ops.in_flush = audio_flush_pcm_buf;
 		audio->drv_ops.fsync = audmp3_sync_fsync;
+		audio->out[0].data = audio->data + 0;
+		audio->out[0].addr = audio->phys + 0;
+		audio->out[0].size = (audio->out_dma_sz >> 1);
+
+		audio->out[1].data = audio->data + audio->out[0].size;
+		audio->out[1].addr = audio->phys + audio->out[0].size;
+		audio->out[1].size = audio->out[0].size;
 	}
 
 	/* Initialize all locks of audio instance */
@@ -2181,14 +2196,6 @@ static int audio_open(struct inode *inode, struct file *file)
 	init_waitqueue_head(&audio->wait);
 	init_waitqueue_head(&audio->event_wait);
 	spin_lock_init(&audio->event_queue_lock);
-
-	audio->out[0].data = audio->data + 0;
-	audio->out[0].addr = audio->phys + 0;
-	audio->out[0].size = (audio->out_dma_sz >> 1);
-
-	audio->out[1].data = audio->data + audio->out[0].size;
-	audio->out[1].addr = audio->phys + audio->out[0].size;
-	audio->out[1].size = audio->out[0].size;
 
 	audio->out_sample_rate = 44100;
 	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
@@ -2225,8 +2232,10 @@ static int audio_open(struct inode *inode, struct file *file)
 done:
 	return rc;
 err:
-	iounmap(audio->data);
-	pmem_kfree(audio->phys);
+	if (audio->data) {
+		iounmap(audio->data);
+		pmem_kfree(audio->phys);
+	}
 	audpp_adec_free(audio->dec_id);
 	MM_INFO("audio instance 0x%08x freeing\n", (int)audio);
 	kfree(audio);
