@@ -402,6 +402,7 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MI2S_RX_NS		0x0070
 #define MI2S_TX_NS		0x0078
 #define MI2S_NS			0x02E0
+#define MFC_NS			0x0154
 #define LPA_NS			0x02E8
 #define MDC_NS			0x007C
 #define MDP_LCDC_NS		0x0390
@@ -422,6 +423,7 @@ static uint32_t pll_count[NUM_PLL];
 
 static uint32_t chld_grp_3d_src[] = 	{C(IMEM), C(GRP_3D), C(NONE)};
 static uint32_t chld_mdp_lcdc_p[] = 	{C(MDP_LCDC_PAD_PCLK), C(NONE)};
+static uint32_t chld_mfc[] = 		{C(MFC_DIV2), C(NONE)};
 static uint32_t chld_mi2s_codec_rx[] =	{C(MI2S_CODEC_RX_S), C(NONE)};
 static uint32_t chld_mi2s_codec_tx[] =	{C(MI2S_CODEC_TX_S), C(NONE)};
 static uint32_t chld_mi2s[] = 		{C(MI2S_S), C(NONE)};
@@ -450,9 +452,9 @@ static struct clk_local clk_local_tbl[] = {
 
 	CLK_MND8_P(VPE, 0x015C, 22, 15, B(9), B(11), clk_tbl_vpe,
 							AXI_VPE, NULL),
-	/* Combining MFC and MFC_DIV2 clocks. */
-	CLK_MND8_P(MFC, 0x0154, 24, 17, B(9)|B(15), B(11), clk_tbl_mfc,
-							AXI_MFC, NULL),
+	CLK_MND8_P(MFC, MFC_NS, 24, 17, B(9), B(11), clk_tbl_mfc,
+							AXI_MFC, chld_mfc),
+	CLK_SLAVE(MFC_DIV2, MFC_NS, B(15), MFC),
 
 	CLK_MND8(SDC1,	0x00A4, 19, 12, B(9), B(11),	clk_tbl_sdc1_3,	NULL),
 	CLK_MND8(SDC2,	0x00AC, 20, 13, B(9), B(11),	clk_tbl_sdc2_4,	NULL),
