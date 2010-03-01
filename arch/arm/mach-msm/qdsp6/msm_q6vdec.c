@@ -69,6 +69,7 @@
 #define TRACE(fmt,x...)		do { } while (0)
 #endif
 
+#define MAX_SUPPORTED_INSTANCES 2
 
 enum {
 	VDEC_DALRPC_INITIALIZE = DAL_OP_FIRST_DEVICE_API,
@@ -801,8 +802,8 @@ static int vdec_open(struct inode *inode, struct file *file)
 
 	pr_info("q6vdec_open()\n");
 	mutex_lock(&vdec_ref_lock);
-	if (ref_cnt > 0) {
-		pr_err("%s: Instance alredy running\n", __func__);
+	if (ref_cnt >= MAX_SUPPORTED_INSTANCES) {
+		pr_err("%s: Max allowed instances exceeded \n", __func__);
 		mutex_unlock(&vdec_ref_lock);
 		return -EBUSY;
 	}
