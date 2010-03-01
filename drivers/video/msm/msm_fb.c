@@ -238,6 +238,9 @@ static int msm_fb_probe(struct platform_device *pdev)
 
 	mfd->panel_info.frame_count = 0;
 	mfd->bl_level = mfd->panel_info.bl_max;
+#ifdef CONFIG_FB_MSM_OVERLAY
+	mfd->overlay_play_enable = 1;
+#endif
 
 	rc = msm_fb_register(mfd);
 	if (rc)
