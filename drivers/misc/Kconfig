@@ -286,5 +286,6 @@ config PMIC8058_PWM
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
+source "drivers/misc/video_core/720p/Kconfig"
 
 endif # MISC_DEVICES
