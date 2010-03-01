@@ -596,6 +596,14 @@ config MSM_ONCRPCROUTER_DEBUG
 	  Support for debugging the ONCRPC router for communication
 	  between the ARM9 and ARM11
 
+config MSM_RPC_LOOPBACK_XPRT
+	depends on MSM_ONCRPCROUTER
+	default n
+	bool "MSM RPC local routing support"
+	help
+	  Support for routing RPC messages between APPS clients
+	  and APPS servers.  Helps in testing APPS RPC framework.
+
 config MSM_RPCSERVER_TIME_REMOTE
 	depends on MSM_ONCRPCROUTER && RTC_HCTOSYS
 	default y
