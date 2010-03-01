@@ -913,8 +913,8 @@ static struct snddev_icodec_data snddev_ispeaker_tx_data = {
 	.pmctl_id = ispk_pmctl_id,
 	.pmctl_id_sz = ARRAY_SIZE(ispk_pmctl_id),
 	.default_sample_rate = 8000,
-	.pamp_on = NULL,
-	.pamp_off = NULL,
+	.pamp_on = msm_snddev_tx_route_config,
+	.pamp_off = msm_snddev_tx_route_deconfig,
 };
 
 static struct platform_device msm_ispeaker_tx_device = {
@@ -962,6 +962,13 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_spk_idual_mic_broadside_device,
 	&msm_itty_hs_mono_tx_device,
 	&msm_itty_hs_mono_rx_device,
+	&msm_ispeaker_tx_device,
+};
+
+static struct platform_device *snd_devices_fluid[] __initdata = {
+	&msm_ihs_stereo_rx_device,
+	&msm_ihs_mono_rx_device,
+	&msm_ispeaker_rx_device,
 	&msm_ispeaker_tx_device,
 };
 
@@ -1057,13 +1064,16 @@ void __init msm_snddev_init(void)
 	if (machine_is_msm7x30_ffa()) {
 		platform_add_devices(snd_devices_ffa,
 		ARRAY_SIZE(snd_devices_ffa));
+
 #ifdef CONFIG_DEBUG_FS
 		debugfs_hsed_config = debugfs_create_file("msm_hsed_config",
 					S_IFREG | S_IRUGO, NULL,
 		(void *) "msm_hsed_config", &snddev_hsed_config_debug_fops);
 #endif
-	}
-	else
+	} else if (machine_is_msm7x30_surf())
 		platform_add_devices(snd_devices_surf,
 		ARRAY_SIZE(snd_devices_surf));
+	else
+		platform_add_devices(snd_devices_fluid,
+		ARRAY_SIZE(snd_devices_fluid));
 }

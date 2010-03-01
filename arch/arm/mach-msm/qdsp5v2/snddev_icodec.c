@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -379,6 +379,10 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;;
 
+	/* Reuse pamp_on for TX platform-specific setup  */
+	if (icodec->data->pamp_on)
+		icodec->data->pamp_on();
+
 	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
 		pmic_hsed_enable(icodec->data->pmctl_id[i],
 			 PM_HSED_ENABLE_PWM_TCXO);
@@ -419,6 +423,8 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
 	if (IS_ERR_VALUE(trc))
 		goto error_afe;
+
+
 	icodec->enabled = 1;
 	return 0;
 
@@ -432,6 +438,15 @@ error_invalid_freq:
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
+
+	/* Disable mic bias */
+	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
+		pmic_hsed_enable(icodec->data->pmctl_id[i],
+			 PM_HSED_ENABLE_OFF);
+	}
+
+	if (icodec->data->pamp_off)
+		icodec->data->pamp_off();
 
 	pr_err("%s: encounter error\n", __func__);
 	return -ENODEV;
@@ -498,6 +513,10 @@ static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
+
+	/* Reuse pamp_off for TX platform-specific setup  */
+	if (icodec->data->pamp_off)
+		icodec->data->pamp_off();
 
 	icodec->enabled = 0;
 	return 0;
