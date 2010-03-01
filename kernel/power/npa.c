@@ -157,9 +157,9 @@ static void resource_creation_handler(void *data, unsigned int state,
 static void send_single_event(struct work_struct *work);
 static void send_update_events(struct work_struct *work);
 
+#ifdef CONFIG_NPA_LOG
 void _npa_log(int log_mask, struct npa_resource *res, const char *fmt, ...)
 {
-#ifdef CONFIG_NPA_LOG
 	if (npa_log_reset) {
 		npa_log_mask = 0;
 		npa_log_resource = NULL;
@@ -182,10 +182,8 @@ void _npa_log(int log_mask, struct npa_resource *res, const char *fmt, ...)
 			vprintk(fmt, ap);
 			va_end(ap);
 		}
-#endif
 }
 
-#ifdef CONFIG_NPA_LOG
 void __print_resource(struct npa_resource *r)
 {
 	struct npa_client *client = NULL;
@@ -1542,6 +1540,7 @@ static int npa_init(void)
 	return 0;
 }
 
+#ifdef CONFIG_NPA_DEBUG
 /* ** DEBUG use only **
  * NPA reset function. Releases all resources and resource states.
  * This function should be called only when there all the clients and events
@@ -1603,6 +1602,7 @@ void npa_reset(void)
 	write_unlock(&list_lock);
 }
 EXPORT_SYMBOL(npa_reset);
+#endif
 
 /* NPA needs to be made available before the resources. Should be way up in the
  * initialization list of the kernel.
