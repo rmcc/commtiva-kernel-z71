@@ -157,7 +157,7 @@ struct msm_rpc_xdr {
 	void *in_buf;
 	uint32_t in_size;
 	uint32_t in_index;
-	struct mutex in_lock;
+	wait_queue_head_t in_buf_wait_q;
 
 	void *out_buf;
 	uint32_t out_size;
