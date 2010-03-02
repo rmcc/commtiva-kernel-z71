@@ -1141,12 +1141,8 @@ static long kgsl_ioctl_sharedmem_from_vmalloc(struct kgsl_file_private *private,
 	kgsl_cache_range_op((unsigned int)vmalloc_area, len,
 			KGSL_CACHE_INV | KGSL_CACHE_VMALLOC_ADDR);
 
-	if (!kgsl_cache_enable) {
-		KGSL_MEM_INFO("Caching for memory allocation turned off\n");
-		vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
-	} else {
-		KGSL_MEM_INFO("Caching for memory allocation turned on\n");
-	}
+	if (!kgsl_cache_enable)
+		vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
 
 	result = remap_vmalloc_range(vma, vmalloc_area, 0);
 	if (result) {
