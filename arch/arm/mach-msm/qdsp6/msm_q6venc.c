@@ -377,7 +377,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf1.region = 0;
+	pcfg->recon_buf1.region = pbufs->recon_buf[0].src;
 	pcfg->recon_buf1.phys = plist->buf.paddr;
 	pcfg->recon_buf1.size = plist->buf.size;
 	pcfg->recon_buf1.offset = 0;
@@ -389,7 +389,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf2.region = 0;
+	pcfg->recon_buf2.region = pbufs->recon_buf[1].src;
 	pcfg->recon_buf2.phys = plist->buf.paddr;
 	pcfg->recon_buf2.size = plist->buf.size;
 	pcfg->recon_buf2.offset = 0;
@@ -401,7 +401,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->wb_buf.region = 0;
+	pcfg->wb_buf.region = pbufs->wb_buf.src;
 	pcfg->wb_buf.phys = plist->buf.paddr;
 	pcfg->wb_buf.size = plist->buf.size;
 	pcfg->wb_buf.offset = 0;
@@ -413,7 +413,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->cmd_buf.region = 0;
+	pcfg->cmd_buf.region = pbufs->cmd_buf.src;
 	pcfg->cmd_buf.phys = plist->buf.paddr;
 	pcfg->cmd_buf.size = plist->buf.size;
 	pcfg->cmd_buf.offset = 0;
@@ -425,7 +425,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 		" failed\n", __func__);
 		return -EPERM;
 	}
-	pcfg->vlc_buf.region = 0;
+	pcfg->vlc_buf.region = pbufs->vlc_buf.src;
 	pcfg->vlc_buf.phys = plist->buf.paddr;
 	pcfg->vlc_buf.size = plist->buf.size;
 	pcfg->vlc_buf.offset = 0;
