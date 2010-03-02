@@ -329,6 +329,8 @@ static ssize_t debug_write(struct file *fp, const char __user *buf,
 		arg.out_len_valid = 1;
 		arg.output_valid = 1;
 		arg.output_size = OEM_RAPI_CLIENT_MAX_OUT_BUFF_SIZE;
+		ret.out_len = NULL;
+		ret.output = NULL;
 
 		oem_rapi_client_test_res = oem_rapi_client_streaming_function(
 			rpc_client, &arg, &ret);
