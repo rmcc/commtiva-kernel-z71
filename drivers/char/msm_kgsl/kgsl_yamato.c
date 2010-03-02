@@ -370,6 +370,12 @@ int kgsl_yamato_setstate(struct kgsl_device *device, uint32_t flags)
 		}
 
 		if (flags & KGSL_MMUFLAGS_TLBFLUSH) {
+			if (!(flags & KGSL_MMUFLAGS_PTUPDATE)) {
+				*cmds++ = pm4_type3_packet(PM4_WAIT_FOR_IDLE,
+								1);
+				*cmds++ = 0x00000000;
+				sizedwords += 2;
+			}
 			*cmds++ = pm4_type0_packet(REG_MH_MMU_INVALIDATE, 1);
 			*cmds++ = mh_mmu_invalidate;
 			sizedwords += 2;
