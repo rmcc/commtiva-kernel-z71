@@ -2292,7 +2292,7 @@ static struct platform_device android_pmem_adsp_device = {
 
 
 static struct kgsl_platform_data kgsl_pdata = {
-	.max_axi_freq = 0, /*7x30 bringup, no request to made now*/
+	.max_axi_freq = 192000,
 	.max_grp2d_freq = 245 * 1000*1000,
 	.set_grp2d_async = set_grp2d_async,
 	.max_grp3d_freq = 245 * 1000*1000,
