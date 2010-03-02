@@ -322,6 +322,7 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
 
 	dev->cdev = cdev;
+	dev->gadget = gadget;
 	/* register our configuration */
 	ret = usb_add_config(cdev, &android_config_driver);
 	if (ret) {
@@ -449,8 +450,24 @@ static void android_switch_composition(unsigned short pid)
 static DEVICE_ATTR(composition, 0664,
 		android_show_compswitch, android_store_compswitch);
 
+static ssize_t android_remote_wakeup(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	struct usb_gadget *gadget = _android_dev->gadget;
+
+	if (!gadget)
+		return -ENODEV;
+
+	pr_debug("Calling remote wakeup....\n");
+	usb_gadget_wakeup(gadget);
+
+	return count;
+}
+static DEVICE_ATTR(remote_wakeup, S_IWUSR, 0, android_remote_wakeup);
+
 static struct attribute *android_attrs[] = {
 	&dev_attr_composition.attr,
+	&dev_attr_remote_wakeup.attr,
 	NULL,
 };
 
