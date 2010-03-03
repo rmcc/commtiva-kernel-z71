@@ -44,6 +44,7 @@
 
 #define VFE_ADSP_EVENT 0xFFFF
 #define SNAPSHOT_MASK_MODE 0x00000002
+#define MSM_AXI_QOS_PREVIEW	192000
 
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;

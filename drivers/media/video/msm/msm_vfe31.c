@@ -69,6 +69,7 @@
 		break;							\
 	}								\
 }
+#define MSM_AXI_QOS_PREVIEW	192000
 
 static struct vfe31_ctrl_type *vfe31_ctrl;
 static void  *vfe_syncdata;
