@@ -370,7 +370,7 @@ static void vfe_write_lens_roll_off_table(struct vfe_cmd_roll_off_config *in)
 		writel(data, ctrl->vfebase + VFE_DMI_DATA_LO);
 
 		data = (((uint32_t)(*initB)) & 0x0000FFFF) |
-			(((uint32_t)(*initGr))<<16);
+			(((uint32_t)(*initGb))<<16);
 		initB++;
 		initGb++;
 
