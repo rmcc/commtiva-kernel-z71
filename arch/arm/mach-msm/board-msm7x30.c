@@ -104,6 +104,7 @@
 #include <linux/usb/android.h>
 #endif
 #include "pm.h"
+#include "spm.h"
 #include <linux/msm_kgsl.h>
 #include <mach/dal_axi.h>
 #include <mach/msm_serial_hs.h>
@@ -1810,6 +1811,12 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].idle_enabled = 1,
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].latency = 4594,
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN].residency = 23740,
+
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE].supported = 1,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE].suspend_enabled = 0,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE].idle_enabled = 1,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE].latency = 300,
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE].residency = 6000,
 
 	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].supported = 1,
 	[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].suspend_enabled
@@ -3625,6 +3632,32 @@ static void msm7x30_init_uart2(void)
 }
 #endif
 
+#ifdef CONFIG_MSM_SPM
+static struct msm_spm_platform_data msm_spm_data __initdata = {
+	.reg_base_addr = MSM_SAW_BASE,
+
+	.reg_init_values[MSM_SPM_REG_SAW_CFG] = 0x02,
+	.reg_init_values[MSM_SPM_REG_SAW_SPM_CTL] = 0x18,
+	.reg_init_values[MSM_SPM_REG_SAW_SPM_SLP_TMR_DLY] = 0x00006666,
+	.reg_init_values[MSM_SPM_REG_SAW_SPM_WAKE_TMR_DLY] = 0xBF000666,
+
+	.reg_init_values[MSM_SPM_REG_SAW_SPM_PMIC_CTL] = 0xA0AE6E,
+	.reg_init_values[MSM_SPM_REG_SAW_SLP_CLK_EN] = 0x01,
+	.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_PRECLMP_EN] = 0x03,
+	.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_POSTCLMP_EN] = 0x00,
+
+	.reg_init_values[MSM_SPM_REG_SAW_SLP_CLMP_EN] = 0x01,
+	.reg_init_values[MSM_SPM_REG_SAW_SLP_RST_EN] = 0x00,
+	.reg_init_values[MSM_SPM_REG_SAW_SPM_MPM_CFG] = 0x00,
+
+	.awake_vlevel = 0xAE,
+	.retention_vlevel = 0xA0,
+	.collapse_vlevel = 0x6E,
+	.retention_mid_vlevel = 0xA0,
+	.collapse_mid_vlevel = 0xA0,
+};
+#endif
+
 static void __init msm7x30_init(void)
 {
 	if (socinfo_init() < 0)
@@ -3655,6 +3688,9 @@ static void __init msm7x30_init(void)
 	spi_register_board_info(msm_spi_board_info,
 		ARRAY_SIZE(msm_spi_board_info));
 	msm_fb_add_devices();
+#ifdef CONFIG_MSM_SPM
+	msm_spm_init(&msm_spm_data, 1);
+#endif
 	msm_pm_set_platform_data(msm_pm_data);
 	msm_device_i2c_init();
 	msm_device_i2c_2_init();
