@@ -847,7 +847,57 @@ static void msm_marimba_shutdown_power(void)
 	}
 };
 
-static int msm_fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
+static int fm_radio_setup(struct marimba_fm_platform_data *pdata)
+{
+	int rc;
+	uint32_t irqcfg;
+	pdata->vreg_s2 = vreg_get(NULL, "s2");
+	if (IS_ERR(pdata->vreg_s2)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(pdata->vreg_s2));
+		return -1;
+	}
+	rc = vreg_enable(pdata->vreg_s2);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		return rc;
+	}
+
+	pdata->vreg_xo_out = vreg_get(NULL, "xo_out");
+	if (IS_ERR(pdata->vreg_xo_out)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(pdata->vreg_xo_out));
+		rc = -1;
+		goto fm_xo_out_fail;
+	}
+	rc = vreg_enable(pdata->vreg_xo_out);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		goto fm_xo_out_fail;
+	}
+	irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_NO_PULL,
+					GPIO_2MA);
+	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
+	if (rc) {
+		printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, irqcfg, rc);
+		rc = -EIO;
+		goto fm_gpio_config_fail;
+
+	}
+	return 0;
+fm_gpio_config_fail:
+	vreg_disable(pdata->vreg_xo_out);
+fm_xo_out_fail:
+	vreg_disable(pdata->vreg_s2);
+	return rc;
+
+
+};
+
+static void fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
 {
 	int rc;
 	uint32_t irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_PULL_UP,
@@ -856,32 +906,25 @@ static int msm_fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
 	if (rc) {
 		printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
 				__func__, irqcfg, rc);
-		return -EIO;
 	}
-	printk(KERN_INFO "%s\n", __func__);
-	return 0;
-};
-
-static int msm_fm_radio_setup(struct marimba_fm_platform_data *pdata)
-{
-	int rc;
-	uint32_t irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_NO_PULL,
-					GPIO_2MA);
-	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
+	rc = vreg_disable(pdata->vreg_s2);
 	if (rc) {
-		printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, irqcfg, rc);
-		return -EIO;
+		printk(KERN_ERR "%s: return val: %d \n",
+					__func__, rc);
 	}
-	printk(KERN_INFO "%s\n", __func__);
-	return 0;
+	rc = vreg_disable(pdata->vreg_xo_out);
+	if (rc) {
+		printk(KERN_ERR "%s: return val: %d \n",
+					__func__, rc);
+	}
 };
 
 static struct marimba_fm_platform_data marimba_fm_pdata = {
-	.gpio_shutdown = msm_fm_radio_shutdown,
-	.gpio_setup =  msm_fm_radio_setup,
-	.gpioirq = MSM_GPIO_TO_INT(147),
-	.vreg_fm = NULL,
+	.fm_setup =  fm_radio_setup,
+	.fm_shutdown = fm_radio_shutdown,
+	.irq = MSM_GPIO_TO_INT(147),
+	.vreg_s2 = NULL,
+	.vreg_xo_out = NULL,
 };
 
 

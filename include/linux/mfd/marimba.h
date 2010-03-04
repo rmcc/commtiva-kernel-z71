@@ -62,10 +62,11 @@ struct marimba_top_level_platform_data{
 };
 
 struct marimba_fm_platform_data{
-	int gpioirq;
-	int (*gpio_setup)(struct marimba_fm_platform_data *pdata);
-	int (*gpio_shutdown)(struct marimba_fm_platform_data *pdata);
-	struct vreg *vreg_fm;
+	int irq;
+	int (*fm_setup)(struct marimba_fm_platform_data *pdata);
+	void (*fm_shutdown)(struct marimba_fm_platform_data *pdata);
+	struct vreg *vreg_s2;
+	struct vreg *vreg_xo_out;
 };
 
 struct marimba_codec_platform_data{
