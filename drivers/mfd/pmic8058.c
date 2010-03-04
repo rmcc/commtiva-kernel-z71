@@ -1335,7 +1335,7 @@ static void __exit pm8058_exit(void)
 	debug_exit();
 }
 
-subsys_initcall(pm8058_init);
+arch_initcall(pm8058_init);
 module_exit(pm8058_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");
