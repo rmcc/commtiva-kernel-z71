@@ -68,6 +68,7 @@
 #include <linux/mfd/tps65023.h>
 #include <linux/bma150.h>
 #include <linux/power_supply.h>
+#include <linux/clk.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -482,29 +483,22 @@ static int ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
 	return 0;
 }
 
+struct clk *hs_clk, *phy_clk;
 #define CLKRGM_APPS_RESET_USBH      37
 #define CLKRGM_APPS_RESET_USB_PHY   34
 static void msm_hsusb_apps_reset_link(int reset)
 {
-	unsigned usb_id = CLKRGM_APPS_RESET_USBH;
-
 	if (reset)
-		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
-				&usb_id, NULL);
+		clk_reset(hs_clk, CLK_RESET_ASSERT);
 	else
-		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
-				&usb_id, NULL);
+		clk_reset(hs_clk, CLK_RESET_DEASSERT);
 }
 
 static void msm_hsusb_apps_reset_phy(void)
 {
-	unsigned usb_phy_id = CLKRGM_APPS_RESET_USB_PHY;
-
-	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
-			&usb_phy_id, NULL);
+	clk_reset(phy_clk, CLK_RESET_ASSERT);
 	msleep(1);
-	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
-			&usb_phy_id, NULL);
+	clk_reset(phy_clk, CLK_RESET_DEASSERT);
 }
 
 #define ULPI_VERIFY_MAX_LOOP_COUNT  3
@@ -2073,15 +2067,12 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_nand,
 	&msm_device_i2c,
 	&qsd_device_spi,
-	&msm_device_hsusb_peripheral,
-	&msm_device_gadget_peripheral,
 #ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
 #endif
 #ifdef CONFIG_USB_ANDROID
 	&android_usb_device,
 #endif
-	&msm_device_otg,
 	&msm_device_tssc,
 	&msm_audio_device,
 	&msm_device_uart_dm1,
@@ -2128,8 +2119,32 @@ static void kgsl_phys_memory_init(void)
 		resource_size(&kgsl_resources[1]), "kgsl");
 }
 
-static void __init qsd8x50_init_host(void)
+static void __init qsd8x50_init_usb(void)
 {
+	hs_clk = clk_get(NULL, "usb_hs_clk");
+	if (IS_ERR(hs_clk)) {
+		printk(KERN_ERR "%s: hs_clk clk get failed\n", __func__);
+		return;
+	}
+
+	phy_clk = clk_get(NULL, "usb_phy_clk");
+	if (IS_ERR(phy_clk)) {
+		printk(KERN_ERR "%s: phy_clk clk get failed\n", __func__);
+		return;
+	}
+
+#ifdef CONFIG_USB_MSM_OTG_72K
+	platform_device_register(&msm_device_otg);
+#endif
+
+#ifdef CONFIG_USB_FUNCTION_MSM_HSUSB
+	platform_device_register(&msm_device_hsusb_peripheral);
+#endif
+
+#ifdef CONFIG_USB_MSM_72K
+	platform_device_register(&msm_device_gadget_peripheral);
+#endif
+
 	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		return;
 
@@ -2575,7 +2590,7 @@ static void __init qsd8x50_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
 #endif
-	qsd8x50_init_host();
+	qsd8x50_init_usb();
 	qsd8x50_init_mmc();
 	bt_power_init();
 	audio_gpio_init();
