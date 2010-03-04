@@ -2109,6 +2109,11 @@ static int msm_rpcrouter_add_xprt(struct rpcrouter_xprt *xprt)
 		return -ENOMEM;
 	}
 
+	if (!strcmp(xprt->name, "rpcrouter_loopback_xprt")) {
+		xprt_info->remote_pid = RPCROUTER_PID_LOCAL;
+		xprt_info->initialized = 1;
+	}
+
 	spin_lock_irqsave(&xprt_info_list_lock, flags);
 	list_add_tail(&xprt_info->list, &xprt_info_list);
 	spin_unlock_irqrestore(&xprt_info_list_lock, flags);

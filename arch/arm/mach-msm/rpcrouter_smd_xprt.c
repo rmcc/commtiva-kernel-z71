@@ -120,6 +120,75 @@ static void rpcrouter_smd_remote_notify(void *_dev, unsigned event)
 					  RPCROUTER_XPRT_EVENT_DATA);
 }
 
+#if defined(CONFIG_MSM_RPC_LOOPBACK_XPRT)
+
+static struct rpcrouter_smd_xprt smd_loopback_xprt;
+
+static int rpcrouter_smd_loopback_read_avail(void)
+{
+	return smd_read_avail(smd_loopback_xprt.channel);
+}
+
+static int rpcrouter_smd_loopback_read(void *data, uint32_t len)
+{
+	return smd_read(smd_loopback_xprt.channel, data, len);
+}
+
+static int rpcrouter_smd_loopback_write_avail(void)
+{
+	return smd_write_avail(smd_loopback_xprt.channel);
+}
+
+static int rpcrouter_smd_loopback_write(void *data, uint32_t len)
+{
+	return smd_write(smd_loopback_xprt.channel, data, len);
+}
+
+static int rpcrouter_smd_loopback_close(void)
+{
+	return smd_close(smd_loopback_xprt.channel);
+}
+
+static void rpcrouter_smd_loopback_notify(void *_dev, unsigned event)
+{
+	if (event == SMD_EVENT_DATA)
+		msm_rpcrouter_xprt_notify(&smd_loopback_xprt.xprt,
+					  RPCROUTER_XPRT_EVENT_DATA);
+}
+
+static int rpcrouter_smd_loopback_probe(struct platform_device *pdev)
+{
+	int rc;
+
+	smd_loopback_xprt.xprt.name = "rpcrouter_loopback_xprt";
+	smd_loopback_xprt.xprt.read_avail = rpcrouter_smd_loopback_read_avail;
+	smd_loopback_xprt.xprt.read = rpcrouter_smd_loopback_read;
+	smd_loopback_xprt.xprt.write_avail = rpcrouter_smd_loopback_write_avail;
+	smd_loopback_xprt.xprt.write = rpcrouter_smd_loopback_write;
+	smd_loopback_xprt.xprt.close = rpcrouter_smd_loopback_close;
+
+	/* Open up SMD LOOPBACK channel */
+	rc = smd_named_open_on_edge("local_loopback", SMD_LOOPBACK_TYPE,
+				    &smd_loopback_xprt.channel, NULL,
+				    rpcrouter_smd_loopback_notify);
+	if (rc < 0)
+		return rc;
+
+	msm_rpcrouter_xprt_notify(&smd_loopback_xprt.xprt,
+				  RPCROUTER_XPRT_EVENT_OPEN);
+	return 0;
+}
+
+static struct platform_driver rpcrouter_smd_loopback_driver = {
+	.probe		= rpcrouter_smd_loopback_probe,
+	.driver		= {
+			.name	= "local_loopback",
+			.owner	= THIS_MODULE,
+	},
+};
+
+#endif
+
 static int rpcrouter_smd_remote_probe(struct platform_device *pdev)
 {
 	int rc;
@@ -152,6 +221,12 @@ static struct platform_driver rpcrouter_smd_remote_driver = {
 
 static int __init rpcrouter_smd_init(void)
 {
+#if defined(CONFIG_MSM_RPC_LOOPBACK_XPRT)
+	int rc;
+	rc = platform_driver_register(&rpcrouter_smd_loopback_driver);
+	if (rc < 0)
+		return rc;
+#endif
 	return platform_driver_register(&rpcrouter_smd_remote_driver);
 }
 
