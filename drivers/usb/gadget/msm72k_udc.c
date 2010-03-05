@@ -1244,13 +1244,15 @@ static void msm72k_pm_qos_update(int vote)
 	if (vote) {
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, swfi_latency);
-		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-						MSM_AXI_MAX_FREQ);
+		if (depends_on_axi_freq(the_usb_info->xceiv))
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				DRIVER_NAME, MSM_AXI_MAX_FREQ);
 	} else {
 		pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY,
 				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
-		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-						PM_QOS_DEFAULT_VALUE);
+		if (depends_on_axi_freq(the_usb_info->xceiv))
+			pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
+				DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
 	}
 }
 

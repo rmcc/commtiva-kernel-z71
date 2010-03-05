@@ -78,6 +78,15 @@ static void msm_xusb_pm_qos_update(struct msmusb_hcd *mhcd, int vote)
 {
 	struct usb_hcd *hcd = mhcd_to_hcd(mhcd);
 
+	if (PHY_TYPE(mhcd->pdata->phy_info) == USB_PHY_SERIAL_PMIC)
+		goto vote_for_axi;
+
+#ifdef CONFIG_USB_MSM_OTG_72K
+	if (!depends_on_axi_freq(mhcd->xceiv))
+		return;
+#endif
+
+vote_for_axi:
 	if (vote) {
 		pm_qos_update_requirement(PM_QOS_SYSTEM_BUS_FREQ,
 				(char *)hcd->self.bus_name,
