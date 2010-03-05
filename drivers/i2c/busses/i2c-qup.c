@@ -718,6 +718,7 @@ qup_i2c_probe(struct platform_device *pdev)
 	struct clk         *clk, *pclk;
 	int ret = 0;
 	struct msm_i2c_platform_data *pdata;
+	const char *qup_apps_clk_name = "qup_clk";
 
 	dev_dbg(&pdev->dev, "qup_i2c_probe\n");
 
@@ -769,7 +770,10 @@ qup_i2c_probe(struct platform_device *pdev)
 		return -EBUSY;
 	}
 
-	clk = clk_get(&pdev->dev, "qup_clk");
+	if (pdata->clk != NULL)
+		qup_apps_clk_name = pdata->clk;
+
+	clk = clk_get(&pdev->dev, qup_apps_clk_name);
 	if (IS_ERR(clk)) {
 		dev_err(&pdev->dev, "Could not get clock\n");
 		ret = PTR_ERR(clk);
