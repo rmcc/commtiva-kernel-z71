@@ -121,75 +121,75 @@ static struct platform_device mass_storage_device = {
 /* dynamic composition */
 static struct usb_composition usb_func_composition[] = {
 	{
-		.product_id         = 0x9015,
-		/* MSC + ADB */
-		.functions	    = 0x12 /* 10010 */
-	},
-	{
-		.product_id         = 0xF000,
 		/* MSC */
-		.functions	    = 0x02, /* 0010 */
+		.product_id         = 0xF000,
+		.functions	    = 0x02,
+		.adb_product_id     = 0x9015,
+		.adb_functions	    = 0x12
 	},
+#ifdef CONFIG_USB_F_SERIAL
 	{
-		.product_id         = 0xF005,
-		/* MODEM ONLY */
-		.functions	    = 0x03,
+		/* MODEM */
+		.product_id         = 0xF00B,
+		.functions	    = 0x06,
+		.adb_product_id     = 0x901E,
+		.adb_functions	    = 0x16,
 	},
-
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
 	{
-		.product_id         = 0x8080,
+		/* DIAG */
+		.product_id         = 0x900E,
+		.functions	    = 0x04,
+		.adb_product_id     = 0x901D,
+		.adb_functions	    = 0x14,
+	},
+#endif
+#if defined(CONFIG_USB_ANDROID_DIAG) && defined(CONFIG_USB_F_SERIAL)
+	{
 		/* DIAG + MODEM */
-		.functions	    = 0x34,
+		.product_id         = 0x9004,
+		.functions	    = 0x64,
+		.adb_product_id     = 0x901F,
+		.adb_functions	    = 0x0614,
 	},
 	{
-		.product_id         = 0x8082,
-		/* DIAG + ADB + MODEM */
-		.functions	    = 0x0314,
-	},
-	{
-		.product_id         = 0x8085,
-		/* DIAG + ADB + MODEM + NMEA + MSC*/
-		.functions	    = 0x25314,
-	},
-	{
+		/* DIAG + MODEM + NMEA*/
 		.product_id         = 0x9016,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA*/
 		.functions	    = 0x764,
+		.adb_product_id     = 0x9020,
+		.adb_functions	    = 0x7614,
 	},
 	{
+		/* DIAG + MODEM + NMEA + MSC */
 		.product_id         = 0x9017,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA + MSC*/
 		.functions	    = 0x2764,
+		.adb_product_id     = 0x9018,
+		.adb_functions	    = 0x27614,
 	},
+#endif
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 	{
-		.product_id         = 0x9018,
-		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
-		.functions	    = 0x27614,
+		/* MSC + CDC-ECM */
+		.product_id         = 0x9014,
+		.functions	    = 0x82,
+		.adb_product_id     = 0x9023,
+		.adb_functions	    = 0x812,
 	},
-	{
-		.product_id         = 0xF009,
-		/* CDC-ECM*/
-		.functions	    = 0x08,
-	},
+#endif
 #ifdef CONFIG_USB_ANDROID_RMNET
 	{
-		.product_id         = 0x9021,
 		/* DIAG + RMNET */
+		.product_id         = 0x9021,
 		.functions	    = 0x94,
-	},
-	{
-		.product_id         = 0x9022,
-		/* DIAG + ADB + RMNET */
-		.functions	    = 0x914,
+		.adb_product_id     = 0x9022,
+		.adb_functions	    = 0x914,
 	},
 #endif
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,
-	.product_id	= 0x9018,
-	.functions	= 0x27614,
 	.version	= 0x0100,
-	.serial_number  = "1234567890ABCDEF",
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.product_name	= "Qualcomm HSUSB Device",
