@@ -356,6 +356,7 @@ void mdp4_vg_igc_lut_setup(int num);
 void mdp4_mixer_gc_lut_setup(int mixer_num);
 void mdp4_fetch_cfg(uint32 clk);
 uint32 mdp4_rgb_igc_lut_cvt(uint32 ndx);
+void mdp4_vg_qseed_init(int);
 
 #ifdef CONFIG_DEBUG_FS
 int mdp4_debugfs_init(void);
