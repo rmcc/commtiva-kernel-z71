@@ -431,7 +431,7 @@ static int __init i2c_ssbi_init(void)
 {
 	return platform_driver_register(&i2c_ssbi_driver);
 }
-subsys_initcall(i2c_ssbi_init);
+arch_initcall(i2c_ssbi_init);
 
 static void __exit i2c_ssbi_exit(void)
 {

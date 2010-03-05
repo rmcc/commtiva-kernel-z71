@@ -668,7 +668,7 @@ static void __exit pm8058_pwm_exit(void)
 	platform_driver_unregister(&pmic8058_pwm_driver);
 }
 
-module_init(pm8058_pwm_init);
+subsys_initcall(pm8058_pwm_init);
 module_exit(pm8058_pwm_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");

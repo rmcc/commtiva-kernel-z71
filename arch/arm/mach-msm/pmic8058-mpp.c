@@ -132,7 +132,7 @@ static void __exit pm8058_mpp_exit(void)
 	platform_driver_unregister(&pm8058_mpp_driver);
 }
 
-module_init(pm8058_mpp_init);
+subsys_initcall(pm8058_mpp_init);
 module_exit(pm8058_mpp_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");
