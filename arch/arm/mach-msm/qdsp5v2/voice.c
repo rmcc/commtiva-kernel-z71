@@ -512,11 +512,9 @@ EXPORT_SYMBOL(voice_cmd_device_info);
 
 void voice_change_sample_rate(struct voice_data *v)
 {
-	int freq = 8000;
+	int freq = 48000;
 	int rc = 0;
 
-	if (v->network == NETWORK_WCDMA_WB)
-		freq = 16000;
 	MM_INFO(" network =%d, vote freq=%d\n", v->network, freq);
 	if (freq != v->dev_tx.sample) {
 		rc = msm_snddev_request_freq(&freq, 0,
@@ -540,7 +538,7 @@ static int voice_thread(void *data)
 		wait_for_completion(&v->complete);
 		init_completion(&v->complete);
 
-		MM_INFO(" voc_event=%d, voice state =%d, dev_event=%d/n",
+		MM_INFO(" voc_event=%d, voice state =%d, dev_event=%d\n",
 				v->voc_event, v->voc_state, v->dev_event);
 		switch (v->voc_event) {
 		case VOICE_ACQUIRE_START:
@@ -564,6 +562,8 @@ static int voice_thread(void *data)
 						== 1) {
 						v->voc_state = VOICE_RELEASE;
 						atomic_dec(&v->rel_start_flag);
+						msm_snddev_withdraw_freq(0,
+						SNDDEV_CAP_TX, AUDDEV_CLNT_VOC);
 					} else {
 						voice_change_sample_rate(v);
 						rc = voice_cmd_device_info(v);
@@ -580,6 +580,8 @@ static int voice_thread(void *data)
 			if ((v->dev_state == DEV_REL_DONE) ||
 					(v->dev_state == DEV_INIT)) {
 				v->voc_state = VOICE_RELEASE;
+				msm_snddev_withdraw_freq(0, SNDDEV_CAP_TX,
+					AUDDEV_CLNT_VOC);
 			} else {
 				/* wait for the dev_state = RELEASE */
 				rc = wait_event_interruptible(v->dev_wait,
@@ -588,6 +590,8 @@ static int voice_thread(void *data)
 				if (atomic_read(&v->acq_start_flag) == 1)
 					atomic_dec(&v->acq_start_flag);
 				v->voc_state = VOICE_RELEASE;
+				msm_snddev_withdraw_freq(0, SNDDEV_CAP_TX,
+					AUDDEV_CLNT_VOC);
 			}
 			if (atomic_read(&v->rel_start_flag))
 				atomic_dec(&v->rel_start_flag);
