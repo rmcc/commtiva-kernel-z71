@@ -182,6 +182,13 @@ static struct pm8058_chip *pmic_chip;
 static irqreturn_t pm8058_int_handler(int irq, void *devid);
 
 /* Helper Functions */
+DEFINE_RATELIMIT_STATE(pm8058_msg_ratelimit, 60 * HZ, 10);
+
+static inline int pm8058_can_print(void)
+{
+	return __ratelimit(&pm8058_msg_ratelimit);
+}
+
 static inline int
 ssbi_write(struct i2c_client *client, u16 addr, const u8 *buf, size_t len)
 {
@@ -793,8 +800,9 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 				goto bail_out;
 
 			if (!blocks[i]) {
-				pr_err("%s: Spurious master: %d (blocks=0)",
-					__func__, i);
+				if (pm8058_can_print())
+					pr_err("%s: Spurious master: %d "
+					       "(blocks=0)", __func__, i);
 				spurious += 10000;
 			}
 		} else
@@ -815,10 +823,10 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 				goto bail_out;
 
 			if (!bits) {
-				pr_err("%s: Spurious block: "
-				       "[master, block] ="
-				       "[%d, %d] (bits=0)\n",
-					__func__, i, j);
+				if (pm8058_can_print())
+					pr_err("%s: Spurious block: "
+					       "[master, block]=[%d, %d] "
+					       "(bits=0)\n", __func__, i, j);
 				spurious += 100;
 				continue;
 			}
@@ -846,17 +854,12 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 					pm8058_config_irq(chip,
 							  &block, &config);
 
-					pr_err("%s: Spurious IRQ: "
-					       "[master, block, bit]="
-					       "[%d, %d (%d), %d]\n",
-						__func__, i, j, block, k);
-					pr_err("%s: Allowed "
-					       "[masters, blocks, irqs]="
-					       "[0x%x, 0x%x, 0x%x]\n",
-					       __func__,
-					       chip->masters_allowed,
-					       chip->blocks_allowed[i],
-					       chip->irqs_allowed[block]);
+					if (pm8058_can_print())
+						pr_err("%s: Spurious IRQ: "
+						       "[master, block, bit]="
+						       "[%d, %d (%d), %d]\n",
+							__func__,
+						       i, j, block, k);
 					spurious++;
 				}
 			}
@@ -866,7 +869,7 @@ static void pm8058_handle_isr(struct pm8058_chip *chip)
 
 bail_out:
 	if (spurious) {
-		if (!printk_ratelimit())
+		if (!pm8058_can_print())
 			return;
 
 		pr_err("%s: spurious = %d (handled = %d)\n",
