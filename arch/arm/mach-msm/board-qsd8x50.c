@@ -240,6 +240,15 @@ static struct usb_composition usb_func_composition[] = {
 		.adb_functions	    = 0x914,
 	},
 #endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	{
+		/* RNDIS */
+		.product_id         = 0xF00E,
+		.functions	    = 0xA,
+		.adb_product_id     = 0x9024,
+		.adb_functions	    = 0x1A,
+	},
+#endif
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,

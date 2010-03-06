@@ -34,7 +34,7 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
-#ifdef CONFIG_USB_ANDROID_CDC_ECM
+#if defined(CONFIG_USB_ANDROID_CDC_ECM) || defined(CONFIG_USB_ANDROID_RNDIS)
 #include "u_ether.h"
 #endif
 
@@ -88,7 +88,7 @@ module_param_call(serial_number, android_set_sn, param_get_string,
 MODULE_PARM_DESC(serial_number, "SerialNumber string");
 
 static const char longname[] = "Gadget Android";
-#ifdef CONFIG_USB_ANDROID_CDC_ECM
+#if defined(CONFIG_USB_ANDROID_CDC_ECM) || defined(CONFIG_USB_ANDROID_RNDIS)
 static u8 hostaddr[ETH_ALEN];
 #endif
 
@@ -108,6 +108,7 @@ struct android_dev {
 	unsigned long functions;
 };
 
+static int rndis_enabled;
 static int acm_func_cnt;
 static int gser_func_cnt;
 static struct android_dev *_android_dev;
@@ -174,6 +175,7 @@ android_func_attr(modem, ANDROID_GENERIC_MODEM);
 android_func_attr(nmea, ANDROID_GENERIC_NMEA);
 android_func_attr(cdc_ecm, ANDROID_CDC_ECM);
 android_func_attr(rmnet, ANDROID_RMNET);
+android_func_attr(rndis, ANDROID_RNDIS);
 
 static struct attribute *android_func_attrs[] = {
 	&dev_attr_adb.attr,
@@ -185,6 +187,7 @@ static struct attribute *android_func_attrs[] = {
 	&dev_attr_nmea.attr,
 	&dev_attr_cdc_ecm.attr,
 	&dev_attr_rmnet.attr,
+	&dev_attr_rndis.attr,
 	NULL,
 };
 
@@ -200,6 +203,7 @@ static int  android_bind_config(struct usb_configuration *c)
 	unsigned long n;
 	acm_func_cnt = 0;
 	gser_func_cnt = 0;
+	rndis_enabled = 0;
 	printk(KERN_DEBUG "android_bind_config\n");
 	n = dev->functions;
 	while (n) {
@@ -264,6 +268,14 @@ static int  android_bind_config(struct usb_configuration *c)
 			}
 			break;
 #endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
+		case ANDROID_RNDIS:
+			ret = rndis_bind_config(c, hostaddr);
+			if (ret)
+				return ret;
+			rndis_enabled = 1;
+			break;
+#endif
 		default:
 			ret = -EINVAL;
 			return ret;
@@ -285,7 +297,7 @@ static int android_unbind(struct usb_composite_dev *cdev)
 {
 	if (acm_func_cnt || gser_func_cnt)
 		gserial_cleanup();
-#ifdef CONFIG_USB_ANDROID_CDC_ECM
+#if defined(CONFIG_USB_ANDROID_CDC_ECM) || defined(CONFIG_USB_ANDROID_RNDIS)
 	gether_cleanup();
 #endif
 
@@ -330,6 +342,14 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_SELFPOWER;
 	dev->cdev = cdev;
 	dev->gadget = gadget;
+
+#if defined(CONFIG_USB_ANDROID_CDC_ECM) || defined(CONFIG_USB_ANDROID_RNDIS)
+	/* set up network link layer */
+	ret = gether_setup(cdev->gadget, hostaddr);
+	if (ret < 0)
+		return ret;
+#endif
+
 	/* register our configuration */
 	ret = usb_add_config(cdev, &android_config_driver);
 	if (ret) {
@@ -359,7 +379,7 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		if (ret < 0)
 			return ret;
 	}
-	if (acm_func_cnt) {
+	if (acm_func_cnt || rndis_enabled) {
 		device_desc.bDeviceClass         = USB_CLASS_MISC;
 		device_desc.bDeviceSubClass      = USB_SUB_CLASS_COMMON;
 		device_desc.bDeviceProtocol      = USB_PROTOCOL_IAD;
@@ -368,12 +388,6 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		device_desc.bDeviceSubClass      = 0;
 		device_desc.bDeviceProtocol      = 0;
 	}
-#ifdef CONFIG_USB_ANDROID_CDC_ECM
-	/* set up network link layer */
-	ret = gether_setup(cdev->gadget, hostaddr);
-	if (ret < 0)
-		return ret;
-#endif
 
 	return 0;
 }
