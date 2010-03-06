@@ -421,11 +421,11 @@ static uint32_t *pll_status_addr[NUM_PLL] = {
 static uint32_t pll_count[NUM_PLL];
 
 static uint32_t chld_grp_3d_src[] = 	{C(IMEM), C(GRP_3D), C(NONE)};
-static uint32_t chld_mdp_lcdc_p[] = 	{C(MDP_LCDC_PAD_P), C(NONE)};
+static uint32_t chld_mdp_lcdc_p[] = 	{C(MDP_LCDC_PAD_PCLK), C(NONE)};
 static uint32_t chld_mi2s_codec_rx[] =	{C(MI2S_CODEC_RX_S), C(NONE)};
 static uint32_t chld_mi2s_codec_tx[] =	{C(MI2S_CODEC_TX_S), C(NONE)};
 static uint32_t chld_mi2s[] = 		{C(MI2S_S), C(NONE)};
-static uint32_t chld_sdac_m[] = 	{C(SDAC_S), C(NONE)};
+static uint32_t chld_sdac_m[] = 	{C(SDAC), C(NONE)};
 static uint32_t chld_tv[] = 		{C(TV_DAC), C(TV_ENC), C(TSIF_REF),
 					 C(HDMI), C(NONE)};
 static uint32_t chld_usb_src[] = 	{C(USB_HS), C(USB_HS_CORE),
@@ -479,7 +479,7 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_MND16(UART2DM, 0x00DC, B(9), B(11), clk_tbl_uartdm, NONE, NULL),
 	CLK_MND16(JPEG,    0x0164, B(9), B(11), clk_tbl_vfe_jpeg,
 							AXI_LI_JPEG, NULL),
-	CLK_MND16(CAM, 0x0374, 0, B(9), clk_tbl_cam, NONE, NULL),
+	CLK_MND16(CAM_M, 0x0374, 0, B(9), clk_tbl_cam, NONE, NULL),
 	CLK_MND16(VFE, CAM_VFE_NS, B(9), B(13), clk_tbl_vfe_jpeg,
 							AXI_LI_VFE, chld_vfe),
 	CLK_SLAVE(VFE_MDC, CAM_VFE_NS, B(11), VFE),
@@ -487,11 +487,11 @@ static struct clk_local clk_local_tbl[] = {
 
 	CLK_MND16(SDAC_M, SDAC_NS, B(12), B(11), clk_tbl_sdac,
 							NONE, chld_sdac_m),
-	CLK_SLAVE(SDAC_S, SDAC_NS, B(9), SDAC_M),
+	CLK_SLAVE(SDAC, SDAC_NS, B(9), SDAC_M),
 
-	CLK_MND16(MDP_LCDC_P, MDP_LCDC_NS, B(9), B(11), clk_tbl_mdp_lcdc,
+	CLK_MND16(MDP_LCDC_PCLK, MDP_LCDC_NS, B(9), B(11), clk_tbl_mdp_lcdc,
 							NONE, chld_mdp_lcdc_p),
-	CLK_SLAVE(MDP_LCDC_PAD_P, MDP_LCDC_NS, B(12), MDP_LCDC_P),
+	CLK_SLAVE(MDP_LCDC_PAD_PCLK, MDP_LCDC_NS, B(12), MDP_LCDC_PCLK),
 	CLK_1RATE(MDP_VSYNC, MDP_VSYNC_REG, B(0), 0, clk_tbl_mdp_vsync),
 
 	CLK_MND16(MI2S_CODEC_RX_M, MI2S_RX_NS, B(12), B(11),
@@ -528,10 +528,10 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_GLBL(PMDH_P,	GLBL_CLK_ENA_2_SC,	B(4)),
 	CLK_GLBL(ROTATOR_IMEM,	GLBL_CLK_ENA_2_SC,	B(23)),
 	CLK_GLBL(ROTATOR_P,	GLBL_CLK_ENA_2_SC,	B(25)),
-	CLK_GLBL(SDC1_H,	GLBL_CLK_ENA_SC,	B(7)),
-	CLK_GLBL(SDC2_H,	GLBL_CLK_ENA_SC,	B(8)),
-	CLK_GLBL(SDC3_H,	GLBL_CLK_ENA_SC,	B(27)),
-	CLK_GLBL(SDC4_H,	GLBL_CLK_ENA_SC,	B(28)),
+	CLK_GLBL(SDC1_P,	GLBL_CLK_ENA_SC,	B(7)),
+	CLK_GLBL(SDC2_P,	GLBL_CLK_ENA_SC,	B(8)),
+	CLK_GLBL(SDC3_P,	GLBL_CLK_ENA_SC,	B(27)),
+	CLK_GLBL(SDC4_P,	GLBL_CLK_ENA_SC,	B(28)),
 	CLK_GLBL(SPI_P,		GLBL_CLK_ENA_2_SC,	B(10)),
 	CLK_GLBL(TSIF_P,	GLBL_CLK_ENA_SC,	B(18)),
 	CLK_GLBL(UART1DM_P,	GLBL_CLK_ENA_SC,	B(17)),
