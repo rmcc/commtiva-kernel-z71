@@ -158,10 +158,10 @@ static struct vfe31_cmd_type vfe31_cmd[] = {
 		{V31_STATS_AF_UPDATE, V31_STATS_AF_LEN, V31_STATS_AF_OFF},
 /*55*/	{V31_STATS_AE_UPDATE, V31_STATS_AE_LEN, V31_STATS_AE_OFF},
 		{V31_STATS_AWB_UPDATE, V31_STATS_AWB_LEN, V31_STATS_AWB_OFF},
-		{V31_STATS_RS_UPDATE},
-		{V31_STATS_CS_UPDATE},
+		{V31_STATS_RS_UPDATE, V31_STATS_RS_LEN, V31_STATS_RS_OFF},
+		{V31_STATS_CS_UPDATE, V31_STATS_CS_LEN, V31_STATS_CS_OFF},
 		{V31_STATS_SKIN_UPDATE},
-/*60*/	{V31_STATS_IHIST_UPDATE},
+/*60*/	{V31_STATS_IHIST_UPDATE, V31_STATS_IHIST_LEN, V31_STATS_IHIST_OFF},
 		{V31_DUMMY_4},
 		{V31_EPOCH1_ACK},
 		{V31_EPOCH2_ACK},
@@ -196,11 +196,12 @@ static struct vfe31_cmd_type vfe31_cmd[] = {
 		{V31_STATS_AE_STOP},
 		{V31_STATS_AWB_START, V31_STATS_AWB_LEN, V31_STATS_AWB_OFF},
 		{V31_STATS_AWB_STOP},
-/*95*/	{V31_STATS_RS_START},
+/*95*/	{V31_STATS_RS_START, V31_STATS_RS_LEN, V31_STATS_RS_OFF},
 		{V31_STATS_RS_STOP},
-		{V31_STATS_CS_START},
+		{V31_STATS_CS_START, V31_STATS_CS_LEN, V31_STATS_CS_OFF},
 		{V31_STATS_CS_STOP},
-		{V31_STATS_SKIN_START},
+		{V31_STATS_SKIN_START, V31_STATS_IHIST_LEN,
+			V31_STATS_IHIST_OFF},
 /*100*/	{V31_STATS_SKIN_STOP},
 		{V31_STATS_IHIST_START},
 		{V31_STATS_IHIST_STOP},
@@ -257,6 +258,9 @@ static void vfe_addr_convert(struct msm_vfe_phy_info *pinfo,
 	case VFE_MSG_STATS_AF:
 	case VFE_MSG_STATS_AEC:
 	case VFE_MSG_STATS_AWB:
+	case VFE_MSG_STATS_IHIST:
+	case VFE_MSG_STATS_RS:
+	case VFE_MSG_STATS_CS:
 		pinfo->sbuf_phy =
 		((struct vfe_message *)data)->_u.msgStats.buffer;
 		break;
@@ -653,11 +657,22 @@ static void vfe31_reset_internal_variables(void)
 	vfe31_ctrl->vfeFrameSkipPeriod  = 31;
 	/* Stats control variables. */
 	memset(&(vfe31_ctrl->afStatsControl), 0,
-		sizeof(vfe31_ctrl->afStatsControl));
+		sizeof(struct vfe_stats_control));
+
 	memset(&(vfe31_ctrl->awbStatsControl), 0,
-		sizeof(vfe31_ctrl->awbStatsControl));
+		sizeof(struct vfe_stats_control));
+
 	memset(&(vfe31_ctrl->aecStatsControl), 0,
-		sizeof(vfe31_ctrl->aecStatsControl));
+		sizeof(struct vfe_stats_control));
+
+	memset(&(vfe31_ctrl->ihistStatsControl), 0,
+		sizeof(struct vfe_stats_control));
+
+	memset(&(vfe31_ctrl->rsStatsControl), 0,
+		sizeof(struct vfe_stats_control));
+
+	memset(&(vfe31_ctrl->csStatsControl), 0,
+		sizeof(struct vfe_stats_control));
 }
 
 static void vfe31_reset(void)
@@ -746,6 +761,50 @@ static uint32_t vfe_stats_af_buf_init(struct vfe_cmd_stats_buf *in)
 	vfe31_ctrl->afStatsControl.nextFrameAddrBuf = in->statsBuf[2];
 	return 0;
 }
+
+
+static uint32_t vfe_stats_ihist_buf_init(struct vfe_cmd_stats_buf *in)
+{
+	uint32_t *ptr = in->statsBuf;
+	uint32_t addr;
+
+	addr = ptr[0];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_HIST_WR_PING_ADDR);
+	addr = ptr[1];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_HIST_WR_PONG_ADDR);
+
+	vfe31_ctrl->ihistStatsControl.nextFrameAddrBuf = in->statsBuf[2];
+	return 0;
+}
+
+
+static uint32_t vfe_stats_rs_buf_init(struct vfe_cmd_stats_buf *in)
+{
+	uint32_t *ptr = in->statsBuf;
+	uint32_t addr;
+
+	addr = ptr[0];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_RS_WR_PING_ADDR);
+	addr = ptr[1];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_RS_WR_PONG_ADDR);
+
+	vfe31_ctrl->rsStatsControl.nextFrameAddrBuf = in->statsBuf[2];
+	return 0;
+}
+static uint32_t vfe_stats_cs_buf_init(struct vfe_cmd_stats_buf *in)
+{
+	uint32_t *ptr = in->statsBuf;
+	uint32_t addr;
+
+	addr = ptr[0];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_CS_WR_PING_ADDR);
+	addr = ptr[1];
+	msm_io_w(addr, vfe31_ctrl->vfebase + VFE_BUS_STATS_CS_WR_PONG_ADDR);
+
+	vfe31_ctrl->csStatsControl.nextFrameAddrBuf = in->statsBuf[2];
+	return 0;
+}
+
 
 static void vfe31_start_common(void){
 	unsigned long flags;
@@ -1005,6 +1064,71 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 				cmdp, (vfe31_cmd[cmd->id].length));
 		}
 		break;
+
+	case V31_STATS_IHIST_START: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val |= IHIST_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+				cmdp, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+
+
+	case V31_STATS_RS_START: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val |= RS_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+				cmdp, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+
+	case V31_STATS_CS_START: {
+		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
+		if (!cmdp) {
+			rc = -ENOMEM;
+			goto proc_general_done;
+		}
+		if (copy_from_user(cmdp,
+			(void __user *)(cmd->value),
+			cmd->length)) {
+			rc = -EFAULT;
+			goto proc_general_done;
+		}
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val |= CS_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		msm_io_memcpy(vfe31_ctrl->vfebase + vfe31_cmd[cmd->id].offset,
+				cmdp, (vfe31_cmd[cmd->id].length));
+		}
+		break;
+
 	case V31_MCE_UPDATE:
 	case V31_MCE_CFG:{
 		cmdp = kmalloc(cmd->length, GFP_ATOMIC);
@@ -1218,9 +1342,6 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 		}
 		break;
 
-	case V31_STATS_AWB_ENQ:
-		break;
-
 	case V31_STATS_AWB_STOP: {
 		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
 		old_val &= ~AWB_ENABLE_MASK;
@@ -1238,6 +1359,30 @@ static int vfe31_proc_general(struct msm_vfe31_cmd *cmd)
 	case V31_STATS_AF_STOP: {
 		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
 		old_val &= ~AF_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		}
+		break;
+
+	case V31_STATS_IHIST_STOP: {
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val &= ~IHIST_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		}
+		break;
+
+	case V31_STATS_RS_STOP: {
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val &= ~RS_ENABLE_MASK;
+		msm_io_w(old_val,
+			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		}
+		break;
+
+	case V31_STATS_CS_STOP: {
+		old_val = msm_io_r(vfe31_ctrl->vfebase + VFE_MODULE_CFG);
+		old_val &= ~CS_ENABLE_MASK;
 		msm_io_w(old_val,
 			vfe31_ctrl->vfebase + VFE_MODULE_CFG);
 		}
@@ -1286,6 +1431,24 @@ static void vfe31_stats_aec_ack(struct vfe_cmd_stats_ack *pAck)
 	vfe31_ctrl->aecStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
 	vfe31_ctrl->aecStatsControl.ackPending = FALSE;
 }
+
+static void vfe31_stats_ihist_ack(struct vfe_cmd_stats_ack *pAck)
+{
+	vfe31_ctrl->ihistStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
+	vfe31_ctrl->ihistStatsControl.ackPending = FALSE;
+}
+static void vfe31_stats_rs_ack(struct vfe_cmd_stats_ack *pAck)
+{
+	vfe31_ctrl->rsStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
+	vfe31_ctrl->rsStatsControl.ackPending = FALSE;
+}
+static void vfe31_stats_cs_ack(struct vfe_cmd_stats_ack *pAck)
+{
+	vfe31_ctrl->csStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
+	vfe31_ctrl->csStatsControl.ackPending = FALSE;
+}
+
+
 static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 {
 	struct msm_vfe31_cmd vfecmd;
@@ -1298,6 +1461,9 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 	if (cmd->cmd_type != CMD_FRAME_BUF_RELEASE &&
 		cmd->cmd_type != CMD_STATS_AEC_BUF_RELEASE &&
 		cmd->cmd_type != CMD_STATS_AWB_BUF_RELEASE &&
+		cmd->cmd_type != CMD_STATS_IHIST_BUF_RELEASE &&
+		cmd->cmd_type != CMD_STATS_RS_BUF_RELEASE &&
+		cmd->cmd_type != CMD_STATS_CS_BUF_RELEASE &&
 		cmd->cmd_type != CMD_STATS_AF_BUF_RELEASE) {
 		if (copy_from_user(&vfecmd,
 				(void __user *)(cmd->value),
@@ -1323,8 +1489,11 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 
 	CDBG("%s: cmdType = %d\n", __func__, cmd->cmd_type);
 
-	if ((cmd->cmd_type == CMD_STATS_AF_ENABLE) ||
-		(cmd->cmd_type == CMD_STATS_AWB_ENABLE) ||
+	if ((cmd->cmd_type == CMD_STATS_AF_ENABLE)    ||
+		(cmd->cmd_type == CMD_STATS_AWB_ENABLE)   ||
+		(cmd->cmd_type == CMD_STATS_IHIST_ENABLE) ||
+		(cmd->cmd_type == CMD_STATS_RS_ENABLE)    ||
+		(cmd->cmd_type == CMD_STATS_CS_ENABLE)    ||
 		(cmd->cmd_type == CMD_STATS_AEC_ENABLE)) {
 		struct axidata *axid;
 		axid = data;
@@ -1354,6 +1523,15 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 			break;
 		case CMD_STATS_AWB_ENABLE:
 			rc = vfe_stats_awb_buf_init(scfg);
+			break;
+		case CMD_STATS_IHIST_ENABLE:
+			rc = vfe_stats_ihist_buf_init(scfg);
+			break;
+		case CMD_STATS_RS_ENABLE:
+			rc = vfe_stats_rs_buf_init(scfg);
+			break;
+		case CMD_STATS_CS_ENABLE:
+			rc = vfe_stats_cs_buf_init(scfg);
 			break;
 		}
 	}
@@ -1401,6 +1579,16 @@ static int vfe31_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 		break;
 	case CMD_STATS_AWB_BUF_RELEASE:
 		vfe31_stats_awb_ack(sack);
+		break;
+
+	case CMD_STATS_IHIST_BUF_RELEASE:
+		vfe31_stats_ihist_ack(sack);
+		break;
+	case CMD_STATS_RS_BUF_RELEASE:
+		vfe31_stats_rs_ack(sack);
+		break;
+	case CMD_STATS_CS_BUF_RELEASE:
+		vfe31_stats_cs_ack(sack);
 		break;
 
 	case CMD_AXI_CFG_PREVIEW: {
@@ -1893,6 +2081,24 @@ vfe_send_stats_msg(uint32_t bufAddress, uint32_t statsNum)
 		vfe31_ctrl->awbStatsControl.ackPending = TRUE;
 		}
 		break;
+
+	case statsIhistNum: {
+		msg._d = MSG_ID_STATS_IHIST;
+		vfe31_ctrl->ihistStatsControl.ackPending = TRUE;
+		}
+		break;
+	case statsRsNum: {
+		msg._d = MSG_ID_STATS_RS;
+		vfe31_ctrl->rsStatsControl.ackPending = TRUE;
+		}
+		break;
+	case statsCsNum: {
+		msg._d = MSG_ID_STATS_CS;
+		vfe31_ctrl->csStatsControl.ackPending = TRUE;
+		}
+		break;
+
+
 	default:
 		goto stats_done;
 	}
@@ -1939,6 +2145,44 @@ static void vfe31_process_stats_af_irq(void){
 	} else
 		vfe31_ctrl->afStatsControl.droppedStatsFrameCount++;
 }
+
+static void vfe31_process_stats_ihist_irq(void){
+	if (!(vfe31_ctrl->ihistStatsControl.ackPending)) {
+		vfe31_ctrl->ihistStatsControl.bufToRender =
+			vfe31_process_stats_irq_common(statsIhistNum,
+			vfe31_ctrl->ihistStatsControl.nextFrameAddrBuf);
+
+		vfe_send_stats_msg(vfe31_ctrl->ihistStatsControl.bufToRender,
+						statsIhistNum);
+	} else
+		vfe31_ctrl->ihistStatsControl.droppedStatsFrameCount++;
+}
+
+
+static void vfe31_process_stats_rs_irq(void){
+	if (!(vfe31_ctrl->rsStatsControl.ackPending)) {
+		vfe31_ctrl->rsStatsControl.bufToRender =
+			vfe31_process_stats_irq_common(statsRsNum,
+			vfe31_ctrl->rsStatsControl.nextFrameAddrBuf);
+
+		vfe_send_stats_msg(vfe31_ctrl->rsStatsControl.bufToRender,
+						statsRsNum);
+	} else
+		vfe31_ctrl->rsStatsControl.droppedStatsFrameCount++;
+}
+
+static void vfe31_process_stats_cs_irq(void){
+	if (!(vfe31_ctrl->csStatsControl.ackPending)) {
+		vfe31_ctrl->csStatsControl.bufToRender =
+			vfe31_process_stats_irq_common(statsCsNum,
+			vfe31_ctrl->csStatsControl.nextFrameAddrBuf);
+
+		vfe_send_stats_msg(vfe31_ctrl->csStatsControl.bufToRender,
+						statsCsNum);
+	} else
+		vfe31_ctrl->csStatsControl.droppedStatsFrameCount++;
+}
+
 
 static void vfe31_do_tasklet(unsigned long data)
 {
@@ -2023,6 +2267,21 @@ static void vfe31_do_tasklet(unsigned long data)
 			VFE_IRQ_STATUS0_STATS_AF) {
 			CDBG("Stats AF irq occured.\n");
 			vfe31_process_stats_af_irq();
+		}
+		if (qcmd->vfeInterruptStatus0 &
+			VFE_IRQ_STATUS0_STATS_IHIST) {
+			CDBG("Stats IHIST irq occured.\n");
+			vfe31_process_stats_ihist_irq();
+		}
+		if (qcmd->vfeInterruptStatus0 &
+			VFE_IRQ_STATUS0_STATS_RS) {
+			CDBG("Stats RS irq occured.\n");
+			vfe31_process_stats_rs_irq();
+		}
+		if (qcmd->vfeInterruptStatus0 &
+			VFE_IRQ_STATUS0_STATS_CS) {
+			CDBG("Stats CS irq occured.\n");
+			vfe31_process_stats_cs_irq();
 		}
 	}
 	} else {

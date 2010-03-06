@@ -218,6 +218,10 @@ struct msm_camera_cfg_cmd {
 #define CMD_AXI_CFG_PREVIEW		36
 #define CMD_AXI_CFG_VIDEO		37
 
+#define CMD_STATS_IHIST_ENABLE 38
+#define CMD_STATS_RS_ENABLE 39
+#define CMD_STATS_CS_ENABLE 40
+
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
 	int cmd_type;
