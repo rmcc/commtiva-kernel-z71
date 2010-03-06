@@ -938,29 +938,60 @@ static struct marimba_fm_platform_data marimba_fm_pdata = {
 
 static int msm_marimba_tsadc_power(int vreg_on)
 {
-	struct vreg *vreg_tsadc;
+	struct vreg *vreg_tsadc_gp12, *vreg_tsadc_s2;
 	int rc = 0;
 
-	vreg_tsadc = vreg_get(NULL, "gp12");
+	vreg_tsadc_gp12 = vreg_get(NULL, "gp12");
 	/* LDO18 */
-	if (IS_ERR(vreg_tsadc)) {
+	if (IS_ERR(vreg_tsadc_gp12)) {
 		printk(KERN_ERR "%s: vreg_get() failed (%ld)\n",
-				__func__, PTR_ERR(vreg_tsadc));
-		return PTR_ERR(vreg_tsadc);
+				__func__, PTR_ERR(vreg_tsadc_gp12));
+		rc = PTR_ERR(vreg_tsadc_gp12);
+		goto vreg_gp12_fail;
 	}
 
 	if (vreg_on) {
-		rc = vreg_enable(vreg_tsadc);
+		rc = vreg_enable(vreg_tsadc_gp12);
 		if (rc)
 			printk(KERN_ERR "%s: vreg_enable() = %d \n",
 					__func__, rc);
+		goto vreg_gp12_fail;
 	} else {
-		rc = vreg_disable(vreg_tsadc);
+		rc = vreg_disable(vreg_tsadc_gp12);
 		if (rc)
 			printk(KERN_ERR "%s: vreg_disable() = %d \n",
 					__func__, rc);
+		goto vreg_gp12_fail;
 	}
 
+	/* Enable s2/RF1 for B0 */
+	vreg_tsadc_s2 = vreg_get(NULL, "s2");
+	if (IS_ERR(vreg_tsadc_s2)) {
+		printk(KERN_ERR "%s: vreg_get() failed (%ld)\n",
+				__func__, PTR_ERR(vreg_tsadc_s2));
+		rc = PTR_ERR(vreg_tsadc_s2);
+		goto vreg_s2_fail;
+	}
+
+	if (vreg_on) {
+		rc = vreg_enable(vreg_tsadc_s2);
+		if (rc)
+			printk(KERN_ERR "%s: vreg_enable() = %d \n",
+					__func__, rc);
+		goto vreg_s2_fail;
+	} else {
+		rc = vreg_disable(vreg_tsadc_s2);
+		if (rc)
+			printk(KERN_ERR "%s: vreg_disable() = %d \n",
+					__func__, rc);
+		goto vreg_s2_fail;
+	}
+
+	return rc;
+
+vreg_s2_fail:
+	vreg_disable(vreg_tsadc_gp12);
+vreg_gp12_fail:
 	return rc;
 }
 
