@@ -412,6 +412,8 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MDP_LCDC_NS		0x0390
 #define MDP_VSYNC_REG		0x0460
 #define PLL_ENA_REG		0x0260
+#define LPA_CORE_CLK_MA0	0x04F4
+#define LPA_CORE_CLK_MA2	0x04FC
 
 static uint32_t *pll_status_addr[NUM_PLL] = {
 	[PLL_0] = MSM_CLK_CTL_BASE + 0x318,
@@ -948,7 +950,9 @@ static struct reg_init {
 	/* MI2S_CODEC_TX_S src = MI2S_CODEC_TX_M. */
 	{REG(MI2S_TX_NS), B(14), 0x0},
 	{REG(MI2S_NS), B(14), 0x0}, /* MI2S_S src = MI2S_M. */
-	{REG(LPA_NS), B(4), B(4)}, /* LPA CORE src = LPA_CODEC. */
+	/* Allow DSP to decide the LPA CORE src. */
+	{REG(LPA_CORE_CLK_MA0), B(0), B(0)},
+	{REG(LPA_CORE_CLK_MA2), B(0), B(0)},
 	{REG(0x02EC), 0xF, 0xD}, /* MI2S_CODEC_RX_S div = div-8. */
 	{REG(0x02F0), 0xF, 0xD}, /* MI2S_CODEC_TX_S div = div-8. */
 	{REG(0x02E4), 0xF, 0x3}, /* MI2S_S div = div-4. */
@@ -991,12 +995,14 @@ static __init int soc_clk_init(void)
 	}
 
 	/* This is just to update the driver data structures. The actual
-	 * register set up is taken care of in the register init loop. */
+	 * register set up is taken care of in the register init loop
+	 * or is the default value out of reset. */
 	set_1rate(I2C);
 	set_1rate(I2C_2);
 	set_1rate(QUP_I2C);
 	set_1rate(UART1);
 	set_1rate(UART3);
+	set_1rate(MI2S_CODEC_RX_M);
 
 	return 0;
 }
