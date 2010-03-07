@@ -749,6 +749,21 @@ static int soc_clk_reset(unsigned id, enum clk_reset_action action)
 	return -EPERM;
 }
 
+static long soc_clk_round_rate(unsigned id, unsigned rate)
+{
+	struct clk_local *t = &clk_local_tbl[id];
+	struct clk_freq_tbl *f;
+
+	if (t->type != MND && t->type != BASIC)
+		return -EINVAL;
+
+	for (f = t->freq_tbl; f->freq_hz != FREQ_END; f++)
+		if (f->freq_hz >= rate)
+			return f->freq_hz;
+
+	return -EPERM;
+}
+
 static int soc_clk_set_rate(unsigned id, unsigned rate)
 {
 	struct clk_local *t = &clk_local_tbl[id];
@@ -760,6 +775,13 @@ static int soc_clk_set_rate(unsigned id, unsigned rate)
 	uint32_t reg_val = 0;
 	int i, ret = 0;
 	unsigned long flags;
+	long rounded;
+
+	rounded = soc_clk_round_rate(id, rate);
+	if (rounded != rate)
+		pr_warning("Use clk_round_rate() before clk_set_rate() with "
+			   "clock %u\n", id);
+	rate = rounded;
 
 	if (t->type != MND && t->type != BASIC)
 		return -EPERM;
@@ -849,7 +871,8 @@ release_lock:
 
 static int soc_clk_set_min_rate(unsigned id, unsigned rate)
 {
-	return -EPERM;
+	long rounded = soc_clk_round_rate(id, rate);
+	return soc_clk_set_rate(id, rounded);
 }
 
 static int soc_clk_set_max_rate(unsigned id, unsigned rate)
@@ -891,21 +914,6 @@ static unsigned soc_clk_get_rate(unsigned id)
 static unsigned soc_clk_is_enabled(unsigned id)
 {
 	return !!(clk_local_tbl[id].count);
-}
-
-static long soc_clk_round_rate(unsigned id, unsigned rate)
-{
-	struct clk_local *t = &clk_local_tbl[id];
-	struct clk_freq_tbl *f;
-
-	if (t->type != MND && t->type != BASIC)
-		return -EINVAL;
-
-	for (f = t->freq_tbl; f->freq_hz != FREQ_END; f++)
-		if (f->freq_hz >= rate)
-			return f->freq_hz;
-
-	return -EPERM;
 }
 
 struct clk_ops clk_ops_7x30 = {

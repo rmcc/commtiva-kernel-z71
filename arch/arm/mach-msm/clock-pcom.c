@@ -112,8 +112,8 @@ unsigned pc_clk_is_enabled(unsigned id)
 long pc_clk_round_rate(unsigned id, unsigned rate)
 {
 
-	/* Not supported. */
-	return -EPERM;
+	/* Not really supported; pc_clk_set_rate() does rounding on it's own. */
+	return rate;
 }
 
 struct clk_ops clk_ops_pcom = {
