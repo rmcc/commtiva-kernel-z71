@@ -108,7 +108,6 @@ struct diag_context {
 	struct diag_operations *operations;
 	struct work_struct diag_work;
 	unsigned diag_configured;
-	unsigned diag_opened;
 	unsigned char i_serial_number;
 	char *serial_number;
 	unsigned short  product_id;
@@ -206,6 +205,7 @@ static int diag_function_set_alt(struct usb_function *f,
 {
 	struct diag_context  *dev = func_to_dev(f);
 	struct usb_composite_dev *cdev = f->config->cdev;
+	unsigned long flags;
 	int status = -ENODEV;
 
 	if (!dev)
@@ -217,18 +217,27 @@ static int diag_function_set_alt(struct usb_function *f,
 			&hs_bulk_out_desc, &fs_bulk_in_desc);
 	usb_ep_enable(dev->in, dev->in_desc);
 	usb_ep_enable(dev->out, dev->out_desc);
-	dev->diag_configured = 1;
 	dev->i_serial_number = cdev->desc.iSerialNumber;
 	dev->product_id   = cdev->desc.idProduct;
 	schedule_work(&dev->diag_work);
+
+	spin_lock_irqsave(&dev->dev_lock , flags);
+	dev->diag_configured = 1;
+	spin_unlock_irqrestore(&dev->dev_lock , flags);
+
 	return 0;
 }
 static void diag_function_disable(struct usb_function *f)
 {
 	struct diag_context  *dev = func_to_dev(f);
+	unsigned long flags;
 
 	printk(KERN_INFO "diag_function_disable\n");
+
+	spin_lock_irqsave(&dev->dev_lock , flags);
 	dev->diag_configured = 0;
+	spin_unlock_irqrestore(&dev->dev_lock , flags);
+
 	if (dev->in) {
 		usb_ep_fifo_flush(dev->in);
 		usb_ep_disable(dev->in);
@@ -246,6 +255,8 @@ static void diag_function_disable(struct usb_function *f)
 int diag_usb_register(struct diag_operations *func)
 {
 	struct diag_context *ctxt = &_context;
+	unsigned long flags;
+	int connected;
 
 	if (func == NULL) {
 		printk(KERN_ERR "%s:registering"
@@ -253,7 +264,11 @@ int diag_usb_register(struct diag_operations *func)
 		return -1;
 	}
 	ctxt->operations = func;
-	if (ctxt->diag_configured == 1)
+	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	connected = ctxt->diag_configured;
+	spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+
+	if (connected)
 		if ((ctxt->operations) &&
 			(ctxt->operations->diag_connect))
 				ctxt->operations->diag_connect();
@@ -296,7 +311,6 @@ int diag_open(int num_req)
 		} else
 			goto read_error;
 		}
-	ctxt->diag_opened = 1;
 	return 0;
 read_error:
 	printk(KERN_ERR "%s:read requests allocation failure\n", __func__);
@@ -314,7 +328,6 @@ write_error:
 		list_del(&write_entry->re_entry);
 		diag_free_req_entry(ctxt->in, write_entry);
 	}
-	ctxt->diag_opened = 0;
 	return -ENOMEM;
 }
 EXPORT_SYMBOL(diag_open);
@@ -339,7 +352,6 @@ void diag_close(void)
 		list_del(&req_entry->re_entry);
 		diag_free_req_entry(ctxt->out, req_entry);
 	}
-	ctxt->diag_opened = 0;
 	return;
 }
 EXPORT_SYMBOL(diag_close);
@@ -380,9 +392,11 @@ int diag_read(struct diag_request *d_req)
 	struct diag_context *ctxt = &_context;
 
 
-	if (!ctxt->diag_opened || !ctxt->diag_configured)
-		return -EIO;
 	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	if (!ctxt->diag_configured) {
+		spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+		return -EIO;
+	}
 	if (!list_empty(&ctxt->dev_read_req_list)) {
 		req_entry = list_entry(ctxt->dev_read_req_list.next ,
 				struct diag_req_entry , re_entry);
@@ -419,9 +433,11 @@ int diag_write(struct diag_request *d_req)
 	struct diag_req_entry *req_entry = NULL;
 	struct diag_context *ctxt = &_context;
 
-	if (!ctxt->diag_opened || !ctxt->diag_configured)
-		return -EIO;
 	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	if (!ctxt->diag_configured) {
+		spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+		return -EIO;
+	}
 	if (!list_empty(&ctxt->dev_write_req_list)) {
 		req_entry = list_entry(ctxt->dev_write_req_list.next ,
 				struct diag_req_entry , re_entry);
