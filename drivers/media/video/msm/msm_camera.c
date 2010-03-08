@@ -874,11 +874,9 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 			se.stats_event.len,
 			se.stats_event.msg_id);
 
-		if ((data->type == VFE_MSG_STATS_AF) ||
-				(data->type == VFE_MSG_STATS_WE) ||
-				(data->type == VFE_MSG_STATS_AEC) ||
-				(data->type == VFE_MSG_STATS_AWB)) {
-
+		if ((data->type >= VFE_MSG_STATS_AEC) &&
+		    (data->type <=  VFE_MSG_STATS_WE)) {
+			/* the check above includes all stats type. */
 			stats.buffer =
 			msm_pmem_stats_ptov_lookup(sync,
 					data->phy.sbuf_phy,
@@ -1104,6 +1102,47 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 		}
 		axi_data.region = &region[0];
 		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+
+	case CMD_STATS_IHIST_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_IHIST, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+	case CMD_STATS_RS_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_RS, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+	case CMD_STATS_CS_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_CS, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
 	case CMD_GENERAL:
 	case CMD_STATS_DISABLE:
 		return sync->vfefn.vfe_config(&cfgcmd, NULL);
@@ -1413,6 +1452,13 @@ static int msm_put_stats_buffer(struct msm_sync *sync, void __user *arg)
 			cfgcmd.cmd_type = CMD_STATS_AEC_BUF_RELEASE;
 		else if (buf.type == STAT_AWB)
 			cfgcmd.cmd_type = CMD_STATS_AWB_BUF_RELEASE;
+		else if (buf.type == STAT_IHIST)
+			cfgcmd.cmd_type = CMD_STATS_IHIST_BUF_RELEASE;
+		else if (buf.type == STAT_RS)
+			cfgcmd.cmd_type = CMD_STATS_RS_BUF_RELEASE;
+		else if (buf.type == STAT_CS)
+			cfgcmd.cmd_type = CMD_STATS_CS_BUF_RELEASE;
+
 		else {
 			pr_err("%s: invalid buf type %d\n",
 				__func__,
@@ -2066,11 +2112,26 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 		     __func__, vdata->type);
 		break;
 
+		case VFE_MSG_STATS_IHIST:
+		CDBG("%s: qtype %d, ihist stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_STATS_RS:
+		CDBG("%s: qtype %d, rs stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_STATS_CS:
+		CDBG("%s: qtype %d, cs stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+
 		case VFE_MSG_GENERAL:
 		CDBG("%s: qtype %d, general msg, enqueue event_q.\n",
 		    __func__, vdata->type);
 		break;
-
 		default:
 		CDBG("%s: qtype %d not handled\n", __func__, vdata->type);
 		/* fall through, send to config. */
