@@ -815,7 +815,7 @@ int __init rmt_storage_add_ramfs(void)
 }
 
 #if defined(CONFIG_ARCH_MSM7X30)
-static struct resource msm_ss_mfc_720p_resources[] = {
+static struct resource msm_vidc_720p_resources[] = {
 	{
 		.start	= 0xA3B00000,
 		.end	= 0xA3B00000 + SZ_4K - 1,
@@ -828,11 +828,11 @@ static struct resource msm_ss_mfc_720p_resources[] = {
 	},
 };
 
-struct platform_device msm_device_ss_mfc_720p = {
-	.name = "msm_ss_mfc_720p",
+struct platform_device msm_device_vidc_720p = {
+	.name = "msm_vidc_720p",
 	.id = 0,
-	.num_resources = ARRAY_SIZE(msm_ss_mfc_720p_resources),
-	.resource = msm_ss_mfc_720p_resources,
+	.num_resources = ARRAY_SIZE(msm_vidc_720p_resources),
+	.resource = msm_vidc_720p_resources,
 };
 
 #endif
