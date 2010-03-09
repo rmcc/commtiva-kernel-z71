@@ -79,6 +79,7 @@ static int mmc_queue_thread(void *d)
 #ifdef CONFIG_MMC_BLOCK_PARANOID_RESUME
 		if (mq->check_status) {
 			struct mmc_command cmd;
+			int retries = 3;
 
 			do {
 				int err;
@@ -95,11 +96,13 @@ static int mmc_queue_thread(void *d)
 					printk(KERN_ERR "%s: failed to get status (%d)\n",
 					       __func__, err);
 					msleep(5);
+					retries--;
 					continue;
 				}
 				printk(KERN_DEBUG "%s: status 0x%.8x\n", __func__, cmd.resp[0]);
-			} while (!(cmd.resp[0] & R1_READY_FOR_DATA) ||
-				(R1_CURRENT_STATE(cmd.resp[0]) == 7));
+			} while (retries &&
+				(!(cmd.resp[0] & R1_READY_FOR_DATA) ||
+				(R1_CURRENT_STATE(cmd.resp[0]) == 7)));
 			mq->check_status = 0;
                 }
 #endif
