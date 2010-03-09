@@ -270,7 +270,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	if (ret == 0) {
 		/* enable LCDC block */
 		MDP_OUTP(MDP_BASE + LCDC_BASE, 1);
-		mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	}
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -287,16 +287,18 @@ int mdp_lcdc_off(struct platform_device *pdev)
 	MDP_OUTP(MDP_BASE + LCDC_BASE, 0);
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
-	mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	ret = panel_next_off(pdev);
 
 	/* delay to make sure the last frame finishes */
 	mdelay(100);
 
+#ifdef LCDC_RGB_UNSTAGE
 	/* dis-engage rgb0 from mixer0 */
 	if (lcdc_pipe)
 		mdp4_mixer_stage_down(lcdc_pipe);
+#endif
 
 	return ret;
 }
