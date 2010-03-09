@@ -174,8 +174,7 @@ void mdp4_mddi_setup(int mddi, unsigned long id)
 	outpdw(MDP_BASE + 0x0090, bits); /* MDP_MDDI_PARAM_WR_SEL */
 }
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file)
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 {
 
 	/* not implemented yet */
