@@ -106,7 +106,6 @@
 #include <mach/dal_axi.h>
 #include <mach/msm_serial_hs.h>
 
-
 #define MSM_PMEM_SF_SIZE	0x1700000
 #define MSM_FB_SIZE		0x500000
 #define MSM_PMEM_GPU1_SIZE      0x1000000
@@ -2691,16 +2690,6 @@ static struct platform_device lcdc_toshiba_panel_device = {
 
 #if defined(CONFIG_MARIMBA_CORE) && \
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
-
-static struct resource msm_bt_power_resources[] = {
-	{
-		.name = "bt_power_gpios",
-		.start = 134,
-		.end = 137,
-		.flags  = IORESOURCE_IO
-	}
-};
-
 static struct platform_device msm_bt_power_device = {
 	.name = "bt_power",
 	.id     = -1
@@ -2858,76 +2847,62 @@ static const char *vregs_bt_name[BT_POWER_VREG_COUNT] = {
 	"wlan"
 };
 
-static int bluetooth_power(int on)
+static int bluetooth_power_regulators(int on)
 {
 	int i, rc;
 
-	if (on) {
-		for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
-			rc = vreg_enable(vregs_bt[i]);
-			if (rc < 0) {
-				printk(KERN_ERR "%s: vreg %s enable failed (%d)\n",
-					__func__, vregs_bt_name[i], rc);
-				return -EIO;
-			}
+	for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
+		rc = on ? vreg_enable(vregs_bt[i]) :
+			  vreg_disable(vregs_bt[i]);
+		if (rc < 0) {
+			printk(KERN_ERR "%s: vreg %s %s failed (%d)\n",
+				__func__, vregs_bt_name[i],
+			       on ? "enable" : "disable", rc);
+			return -EIO;
 		}
+	}
+	return 0;
+}
+
+static int bluetooth_power(int on)
+{
+	int rc;
+
+	if (on) {
+		rc = bluetooth_power_regulators(on);
+		if (rc < 0)
+			return -EIO;
 
 		rc = marimba_bt(on);
-		if (rc)
+		if (rc < 0)
 			return -EIO;
 
 		rc = msm_gpios_enable(bt_config_power_on,
 			ARRAY_SIZE(bt_config_power_on));
 
-		if (rc < 0) {
-			printk(KERN_ERR
-				"%s: gpio config failed: %d\n",
-				__func__, rc);
+		if (rc < 0)
 			return rc;
-		}
 
 	} else {
 		rc = msm_gpios_enable(bt_config_power_off,
 					ARRAY_SIZE(bt_config_power_off));
-		if (rc < 0) {
-			printk(KERN_ERR
-				"%s: gpio config failed: %d\n",
-				__func__, rc);
+		if (rc < 0)
 			return rc;
-		}
 
-		if (NULL == platform_get_resource_byname
-				(&msm_bt_power_device,
-				 IORESOURCE_IO,
-				 "bt_power_gpios")) {
-			rc = platform_device_add_resources
-					(&msm_bt_power_device,
-					 msm_bt_power_resources,
-					 ARRAY_SIZE(msm_bt_power_resources));
-			if (rc < 0) {
-				printk(KERN_ERR
-					"%s: resource add failed (%d)\n",
-					__func__, rc);
-				return rc;
-			}
-		} else {
-			rc = marimba_bt(on);
-			if (rc)
-				return -EIO;
+		/* check for initial RFKILL block (power off) */
+		if (platform_get_drvdata(&msm_bt_power_device) == NULL)
+			goto out;
 
-			for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
-				rc = vreg_disable(vregs_bt[i]);
-				if (rc < 0) {
-					printk(KERN_ERR
-					 "%s: vreg %s disable failed (%d)\n",
-						__func__, vregs_bt_name[i],
-						rc);
-					return -EIO;
-				}
-			}
-		}
+		rc = marimba_bt(on);
+		if (rc < 0)
+			return -EIO;
+
+		rc = bluetooth_power_regulators(on);
+		if (rc < 0)
+			return -EIO;
 	}
 
+out:
 	printk(KERN_DEBUG "Bluetooth power switch: %d\n", on);
 
 	return 0;
