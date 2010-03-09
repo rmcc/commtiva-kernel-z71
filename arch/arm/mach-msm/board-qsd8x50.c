@@ -116,7 +116,6 @@
 #define SMEM_SPINLOCK_I2C	"S:6"
 
 #define MSM_PMEM_ADSP_SIZE	0x2196000
-#define MSM_PMEM_GPU1_SIZE	0x800000
 #define MSM_FB_SIZE         0x177000
 #define MSM_AUDIO_SIZE		0x80000
 #define MSM_GPU_PHYS_SIZE 	SZ_2M
@@ -134,8 +133,8 @@
 
 #define MSM_FB_BASE		MSM_PMEM_SMI_BASE
 #define MSM_GPU_PHYS_BASE 	(MSM_FB_BASE + MSM_FB_SIZE)
-#define MSM_PMEM_GPU0_BASE	(MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
-#define MSM_PMEM_GPU0_SIZE	(MSM_PMEM_SMI_SIZE - MSM_FB_SIZE \
+#define MSM_PMEM_SMIPOOL_BASE	(MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
+#define MSM_PMEM_SMIPOOL_SIZE	(MSM_PMEM_SMI_SIZE - MSM_FB_SIZE \
 					- MSM_GPU_PHYS_SIZE)
 
 #define PMEM_KERNEL_EBI1_SIZE	0x28000
@@ -709,21 +708,14 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
-#ifdef CONFIG_PMEM_GPU0
-static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
-	.name = "pmem_gpu0",
-	.start = MSM_PMEM_GPU0_BASE,
-	.size = MSM_PMEM_GPU0_SIZE,
+static struct android_pmem_platform_data android_pmem_smipool_pdata = {
+	.name = "pmem_smipool",
+	.start = MSM_PMEM_SMI_BASE,
+	.size = MSM_PMEM_SMI_SIZE,
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
-#endif
 
-static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
-	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 0,
-};
 
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
@@ -737,30 +729,23 @@ static struct platform_device android_pmem_adsp_device = {
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
-#ifdef CONFIG_PMEM_GPU0
-static struct platform_device android_pmem_gpu0_device = {
+static struct platform_device android_pmem_smipool_device = {
 	.name = "android_pmem",
 	.id = 2,
-	.dev = { .platform_data = &android_pmem_gpu0_pdata },
+	.dev = { .platform_data = &android_pmem_smipool_pdata },
 };
-#endif
 
-static struct platform_device android_pmem_gpu1_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
 
 static struct platform_device android_pmem_kernel_ebi1_device = {
 	.name = "android_pmem",
-	.id = 5,
+	.id = 3,
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 static struct platform_device android_pmem_kernel_smi_device = {
 	.name = "android_pmem",
-	.id = 6,
+	.id = 4,
 	.dev = { .platform_data = &android_pmem_kernel_smi_pdata },
 };
 #endif
@@ -2060,10 +2045,7 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-#ifdef CONFIG_PMEM_GPU0
-	&android_pmem_gpu0_device,
-#endif
-	&android_pmem_gpu1_device,
+	&android_pmem_smipool_device,
 	&msm_device_nand,
 	&msm_device_i2c,
 	&qsd_device_spi,
@@ -2520,7 +2502,7 @@ static void __init pmem_kernel_ebi1_size_setup(char **p)
 __early_param("pmem_kernel_ebi1_size=", pmem_kernel_ebi1_size_setup);
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
-static unsigned pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+static unsigned pmem_kernel_smi_size = MSM_PMEM_SMIPOOL_SIZE;
 static void __init pmem_kernel_smi_size_setup(char **p)
 {
 	pmem_kernel_smi_size = memparse(*p, p);
@@ -2529,8 +2511,8 @@ static void __init pmem_kernel_smi_size_setup(char **p)
 	   available - the kernel mapping code has no way of knowing
 	   if it has gone over the edge */
 
-	if (pmem_kernel_smi_size > MSM_PMEM_GPU0_SIZE)
-		pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+	if (pmem_kernel_smi_size > MSM_PMEM_SMIPOOL_SIZE)
+		pmem_kernel_smi_size = MSM_PMEM_SMIPOOL_SIZE;
 }
 __early_param("pmem_kernel_smi_size=", pmem_kernel_smi_size_setup);
 #endif
@@ -2549,12 +2531,6 @@ static void __init pmem_adsp_size_setup(char **p)
 }
 __early_param("pmem_adsp_size=", pmem_adsp_size_setup);
 
-static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
-static void __init pmem_gpu1_size_setup(char **p)
-{
-	pmem_gpu1_size = memparse(*p, p);
-}
-__early_param("pmem_gpu1_size=", pmem_gpu1_size_setup);
 
 static unsigned audio_size = MSM_AUDIO_SIZE;
 static void __init audio_size_setup(char **p)
@@ -2627,20 +2603,20 @@ static void __init qsd8x50_allocate_memory_regions(void)
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 	size = pmem_kernel_smi_size;
-	if (size > MSM_PMEM_GPU0_SIZE) {
+	if (size > MSM_PMEM_SMIPOOL_SIZE) {
 		printk(KERN_ERR "pmem kernel smi arena size %lu is too big\n",
 			size);
 
-		size = MSM_PMEM_GPU0_SIZE;
+		size = MSM_PMEM_SMIPOOL_SIZE;
 	}
 
-	android_pmem_kernel_smi_pdata.start = MSM_PMEM_GPU0_BASE;
+	android_pmem_kernel_smi_pdata.start = MSM_PMEM_SMIPOOL_BASE;
 	android_pmem_kernel_smi_pdata.size = size;
 
 	pr_info("allocating %lu bytes at %lx (%lx physical)"
 		"for pmem kernel smi arena\n", size,
-		(long unsigned int) MSM_PMEM_GPU0_BASE,
-		__pa(MSM_PMEM_GPU0_BASE));
+		(long unsigned int) MSM_PMEM_SMIPOOL_BASE,
+		__pa(MSM_PMEM_SMIPOOL_BASE));
 #endif
 
 	size = pmem_mdp_size;
@@ -2661,14 +2637,6 @@ static void __init qsd8x50_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
 
 	size = MSM_FB_SIZE;
 	addr = (void *)MSM_FB_BASE;
