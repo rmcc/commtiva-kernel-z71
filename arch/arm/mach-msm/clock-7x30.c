@@ -381,7 +381,8 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define CLK_BRIDGE(id, glbl, root, par) \
 		CLK_LOCAL(id, NORATE, 0, glbl, 0, 0, root, NULL, par, NULL)
 
-#define REG(off) (MSM_CLK_CTL_BASE + off)
+#define REG_BASE(off) (MSM_CLK_CTL_BASE + off)
+#define REG(off) (MSM_CLK_CTL_SH2_BASE + off)
 #define MNCNTR_EN_MASK		B(8)
 #define MNCNTR_RST_MASK		B(7)
 #define MNCNTR_MODE_MASK	BM(6, 5)
@@ -411,18 +412,18 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MDC_NS			0x007C
 #define MDP_LCDC_NS		0x0390
 #define MDP_VSYNC_REG		0x0460
-#define PLL_ENA_REG		0x0260
+#define PLL_ENA_REG		0x0264
 #define LPA_CORE_CLK_MA0	0x04F4
 #define LPA_CORE_CLK_MA2	0x04FC
 
 static uint32_t *pll_status_addr[NUM_PLL] = {
-	[PLL_0] = MSM_CLK_CTL_BASE + 0x318,
-	[PLL_1] = MSM_CLK_CTL_BASE + 0x334,
-	[PLL_2] = MSM_CLK_CTL_BASE + 0x350,
-	[PLL_3] = MSM_CLK_CTL_BASE + 0x36C,
-	[PLL_4] = MSM_CLK_CTL_BASE + 0x254,
-	[PLL_5] = MSM_CLK_CTL_BASE + 0x258,
-	[PLL_6] = MSM_CLK_CTL_BASE + 0x4EC,
+	[PLL_0] = REG_BASE(0x318),
+	[PLL_1] = REG_BASE(0x334),
+	[PLL_2] = REG_BASE(0x350),
+	[PLL_3] = REG_BASE(0x36C),
+	[PLL_4] = REG_BASE(0x254),
+	[PLL_5] = REG_BASE(0x258),
+	[PLL_6] = REG_BASE(0x4EC),
 };
 
 static uint32_t pll_count[NUM_PLL];
