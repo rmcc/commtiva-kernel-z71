@@ -470,7 +470,7 @@ static long mt9d112_set_sensor_mode(int mode)
 		if (rc < 0)
 			return rc;
 
-		clock = 0x0250;
+		clock = 0x23C;
 
 		rc =
 			mt9d112_i2c_write(mt9d112_client->addr,
