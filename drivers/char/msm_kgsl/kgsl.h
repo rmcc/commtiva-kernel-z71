@@ -128,7 +128,7 @@ while (1) { \
 #define KGSL_POST_HWACCESS() \
 	mutex_unlock(&kgsl_driver.mutex)
 
-void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry);
+void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry, bool preserve);
 
 int kgsl_pwrctrl(unsigned int pwrflag);
 int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
