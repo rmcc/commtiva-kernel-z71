@@ -904,9 +904,34 @@ static int soc_clk_set_max_rate(unsigned id, unsigned rate)
 	return -EPERM;
 }
 
-static int soc_clk_set_flags(unsigned id, unsigned flags)
+static int soc_clk_set_flags(unsigned id, unsigned clk_flags)
 {
-	return -EPERM;
+	uint32_t regval, ret = 0;
+	unsigned long flags;
+
+	spin_lock_irqsave(&clock_reg_lock, flags);
+	switch (id) {
+	case C(VFE):
+		regval = readl(REG(CAM_VFE_NS));
+		/* Flag values chosen for backward compatibility
+		 * with proc_comm remote clock control. */
+		if (clk_flags == 0x00000100) {
+			/* Select external source. */
+			regval |= B(14);
+		} else if (clk_flags == 0x00000200) {
+			/* Select internal source. */
+			regval &= ~B(14);
+		} else
+			ret = -EINVAL;
+
+		writel(regval, REG(CAM_VFE_NS));
+		break;
+	default:
+		ret = -EPERM;
+	}
+	spin_unlock_irqrestore(&clock_reg_lock, flags);
+
+	return ret;
 }
 
 static unsigned soc_clk_get_rate(unsigned id)
