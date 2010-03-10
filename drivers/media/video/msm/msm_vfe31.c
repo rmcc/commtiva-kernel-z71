@@ -400,22 +400,27 @@ void vfe_stop(void)
 		vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_0);
 	msm_io_w(VFE_CLEAR_ALL_IRQS,
 		vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_1);
-	msm_io_w(1,
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(1,
 		vfe31_ctrl->vfebase + VFE_IRQ_CMD);
 
 	/* in either continuous or snapshot mode, stop command can be issued
 	 * at any time. stop camif immediately. */
 	msm_io_w(CAMIF_COMMAND_STOP_IMMEDIATELY,
 		vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
-
+	wmb();
 	/* axi halt command. */
 	msm_io_w(AXI_HALT,
 		vfe31_ctrl->vfebase + VFE_AXI_CMD);
+	wmb();
 	while (axiBusyFlag) {
 		if (msm_io_r(vfe31_ctrl->vfebase + VFE_AXI_STATUS) & 0x1)
 			axiBusyFlag = false;
 	}
-	msm_io_w(AXI_HALT_CLEAR,
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(AXI_HALT_CLEAR,
 		vfe31_ctrl->vfebase + VFE_AXI_CMD);
 
 	/* after axi halt, then ok to apply global reset. */
@@ -426,7 +431,9 @@ void vfe_stop(void)
 	msm_io_w(VFE_IMASK_WHILE_STOPPING_1,
 		vfe31_ctrl->vfebase + VFE_IRQ_MASK_1);
 
-	msm_io_w(VFE_RESET_UPON_STOP_CMD,
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(VFE_RESET_UPON_STOP_CMD,
 		vfe31_ctrl->vfebase + VFE_GLOBAL_RESET);
 }
 
@@ -692,7 +699,10 @@ static void vfe31_reset(void)
 	/* clear all pending interrupts*/
 	msm_io_w(VFE_CLEAR_ALL_IRQS, vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_0);
 	msm_io_w(VFE_CLEAR_ALL_IRQS, vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_1);
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_IRQ_CMD);
+
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_IRQ_CMD);
 
 	/* enable reset_ack interrupt.  */
 	msm_io_w(VFE_IMASK_WHILE_STOPPING_1,
@@ -702,7 +712,10 @@ static void vfe31_reset(void)
 	 * is done, hardware interrupt will be generated.  VFE ist processes
 	 * the interrupt to complete the function call.  Note that the reset
 	 * function is synchronous. */
-	msm_io_w(VFE_RESET_UPON_RESET_CMD,
+
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(VFE_RESET_UPON_RESET_CMD,
 		vfe31_ctrl->vfebase + VFE_GLOBAL_RESET);
 }
 
@@ -818,10 +831,12 @@ static void vfe31_start_common(void){
 		vfe31_ctrl->vfebase + VFE_IRQ_MASK_1);
 
 	msm_io_dump(vfe31_ctrl->vfebase, 0x600);
-	dmb();
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
-	dmb();
+
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
 	msm_io_w(1, vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
+	wmb();
 
 	spin_lock_irqsave(&vfe31_ctrl->state_lock, flags);
 	vfe31_ctrl->vstate = VFE_STATE_ACTIVE;
@@ -929,8 +944,9 @@ static int vfe31_start(void)
 static void vfe31_update(void)
 {
 	vfe31_ctrl->update_ack_pending = TRUE;
-	dmb();
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
 	return;
 }
 
@@ -1768,9 +1784,15 @@ static void vfe31_process_reg_update_irq(void)
 					V31_AXI_OUT_OFF + 20 + 24 *
 					(vfe31_ctrl->outpath.out1.ch1));
 			}
-			msm_io_w(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
+
+			/* Ensure the write order while writing
+			to the command register using the barrier */
+			msm_io_w_mb(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
 				vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
-			temp = msm_io_r(vfe31_ctrl->vfebase +
+
+			/* Ensure the read order while reading
+			to the command register using the barrier */
+			temp = msm_io_r_mb(vfe31_ctrl->vfebase +
 				VFE_CAMIF_COMMAND);
 			/* then do reg_update. */
 			msm_io_w(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
@@ -1838,9 +1860,11 @@ static void vfe31_process_camif_sof_irq(void)
 		vfe31_ctrl->vfe_capture_count--;
 		/* if last frame to be captured: */
 		if (vfe31_ctrl->vfe_capture_count == 0) {
-			msm_io_w(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
+			/* Ensure the write order while writing
+			to the command register using the barrier */
+			msm_io_w_mb(CAMIF_COMMAND_STOP_AT_FRAME_BOUNDARY,
 				vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
-			temp = msm_io_r(vfe31_ctrl->vfebase +
+			temp = msm_io_r_mb(vfe31_ctrl->vfebase +
 				VFE_CAMIF_COMMAND);
 		}
 	} /* if raw snapshot mode. */
@@ -2240,6 +2264,11 @@ static void vfe31_do_tasklet(unsigned long data)
 			if ((vfe31_ctrl->outpath.out0.capture_cnt == 0) &&
 				(vfe31_ctrl->outpath.out1.capture_cnt == 0)) {
 				vfe31_send_msg_no_payload(MSG_ID_SNAPSHOT_DONE);
+
+				/* Ensure the write order while writing
+				to the command register using the barrier */
+				msm_io_w_mb(CAMIF_COMMAND_STOP_IMMEDIATELY,
+				vfe31_ctrl->vfebase + VFE_CAMIF_COMMAND);
 		}
 	}
 		/* then process stats irq. */
@@ -2343,7 +2372,10 @@ static irqreturn_t vfe31_parse_irq(int irq_num, void *data)
 	/* clear the pending interrupt of the same kind.*/
 	msm_io_w(irq.vfeIrqStatus0, vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_0);
 	msm_io_w(irq.vfeIrqStatus1, vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_1);
-	msm_io_w(1, vfe31_ctrl->vfebase + VFE_IRQ_CMD);
+
+	/* Ensure the write order while writing
+	to the command register using the barrier */
+	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_IRQ_CMD);
 
 	return IRQ_HANDLED;
 }
