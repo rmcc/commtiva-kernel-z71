@@ -72,6 +72,7 @@
 #ifdef CONFIG_ARCH_MSM7X25
 #define MSM_PMEM_MDP_SIZE	0xb21000
 #define MSM_PMEM_ADSP_SIZE	0x97b000
+#define MSM_PMEM_AUDIO_SIZE	0x121000
 #define MSM_FB_SIZE		0x200000
 #define PMEM_KERNEL_EBI1_SIZE	0x80000
 #endif
@@ -79,6 +80,7 @@
 #ifdef CONFIG_ARCH_MSM7X27
 #define MSM_PMEM_MDP_SIZE	0x1C91000
 #define MSM_PMEM_ADSP_SIZE	0xAE4000
+#define MSM_PMEM_AUDIO_SIZE	0x121000
 #define MSM_FB_SIZE		0x177000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
@@ -473,6 +475,12 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
+static struct android_pmem_platform_data android_pmem_audio_pdata = {
+	.name = "pmem_audio",
+	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
+	.cached = 0,
+};
+
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
 	.id = 0,
@@ -483,6 +491,12 @@ static struct platform_device android_pmem_adsp_device = {
 	.name = "android_pmem",
 	.id = 1,
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
+};
+
+static struct platform_device android_pmem_audio_device = {
+	.name = "android_pmem",
+	.id = 2,
+	.dev = { .platform_data = &android_pmem_audio_pdata },
 };
 
 static struct platform_device android_pmem_kernel_ebi1_device = {
@@ -1209,6 +1223,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
+	&android_pmem_audio_device,
 	&msm_fb_device,
 	&lcdc_gordon_panel_device,
 	&msm_device_uart_dm1,
@@ -1756,6 +1771,13 @@ static void __init pmem_adsp_size_setup(char **p)
 }
 __early_param("pmem_adsp_size=", pmem_adsp_size_setup);
 
+static unsigned pmem_audio_size = MSM_PMEM_AUDIO_SIZE;
+static void __init pmem_audio_size_setup(char **p)
+{
+	pmem_audio_size = memparse(*p, p);
+}
+__early_param("pmem_audio_size=", pmem_audio_size_setup);
+
 static unsigned fb_size = MSM_FB_SIZE;
 static void __init fb_size_setup(char **p)
 {
@@ -1795,6 +1817,14 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
+	size = pmem_audio_size;
+	if (size) {
+		addr = alloc_bootmem(size);
+		android_pmem_audio_pdata.start = __pa(addr);
+		android_pmem_audio_pdata.size = size;
+		pr_info("allocating %lu bytes at %p (%lx physical) for audio "
+			"pmem arena\n", size, addr, __pa(addr));
+	}
 	size = fb_size ? : MSM_FB_SIZE;
 	addr = alloc_bootmem(size);
 	msm_fb_resources[0].start = __pa(addr);
