@@ -385,9 +385,11 @@ static int vfe31_enable(struct camera_enable_cmd *enable)
 void vfe_stop(void)
 {
 	uint8_t  axiBusyFlag = true;
-
+	unsigned long flags;
 	/* for reset hw modules, and send msg when reset_irq comes.*/
+	spin_lock_irqsave(&vfe31_ctrl->stop_flag_lock, flags);
 	vfe31_ctrl->stop_ack_pending = TRUE;
+	spin_unlock_irqrestore(&vfe31_ctrl->stop_flag_lock, flags);
 
 	/* disable all interrupts.  */
 	msm_io_w(VFE_DISABLE_ALL_IRQS,
@@ -639,9 +641,17 @@ static void vfe31_reset_internal_variables(void)
 	vfe31_ctrl->vfeImaskCompositePacked = 0;
 	/* state control variables */
 	vfe31_ctrl->start_ack_pending = FALSE;
+
+	spin_lock_irqsave(&vfe31_ctrl->stop_flag_lock, flags);
 	vfe31_ctrl->stop_ack_pending  = FALSE;
+	spin_unlock_irqrestore(&vfe31_ctrl->stop_flag_lock, flags);
+
 	vfe31_ctrl->reset_ack_pending  = FALSE;
+
+	spin_lock_irqsave(&vfe31_ctrl->update_ack_lock, flags);
 	vfe31_ctrl->update_ack_pending = FALSE;
+	spin_unlock_irqrestore(&vfe31_ctrl->update_ack_lock, flags);
+
 	vfe31_ctrl->req_stop_video_rec = FALSE;
 	vfe31_ctrl->req_start_video_rec = FALSE;
 
@@ -943,7 +953,10 @@ static int vfe31_start(void)
 }
 static void vfe31_update(void)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->update_ack_lock, flags);
 	vfe31_ctrl->update_ack_pending = TRUE;
+	spin_unlock_irqrestore(&vfe31_ctrl->update_ack_lock, flags);
 	/* Ensure the write order while writing
 	to the command register using the barrier */
 	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
@@ -1432,20 +1445,29 @@ proc_general_done:
 
 static void vfe31_stats_af_ack(struct vfe_cmd_stats_ack *pAck)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->af_ack_lock, flags);
 	vfe31_ctrl->afStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
 	vfe31_ctrl->afStatsControl.ackPending = FALSE;
+	spin_unlock_irqrestore(&vfe31_ctrl->af_ack_lock, flags);
 }
 
 static void vfe31_stats_awb_ack(struct vfe_cmd_stats_ack *pAck)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->awb_ack_lock, flags);
 	vfe31_ctrl->awbStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
 	vfe31_ctrl->awbStatsControl.ackPending = FALSE;
+	spin_unlock_irqrestore(&vfe31_ctrl->awb_ack_lock, flags);
 }
 
 static void vfe31_stats_aec_ack(struct vfe_cmd_stats_ack *pAck)
 {
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->aec_ack_lock, flags);
 	vfe31_ctrl->aecStatsControl.nextFrameAddrBuf = pAck->nextStatsBuf;
 	vfe31_ctrl->aecStatsControl.ackPending = FALSE;
+	spin_unlock_irqrestore(&vfe31_ctrl->aec_ack_lock, flags);
 }
 
 static void vfe31_stats_ihist_ack(struct vfe_cmd_stats_ack *pAck)
@@ -1732,6 +1754,7 @@ static void vfe31_send_msg_no_payload(enum VFE31_MESSAGE_ID id)
 static void vfe31_process_reg_update_irq(void)
 {
 	uint32_t  temp;
+	unsigned long flags;
 	if (vfe31_ctrl->req_start_video_rec) {
 		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
@@ -1755,9 +1778,18 @@ static void vfe31_process_reg_update_irq(void)
 		vfe31_send_msg_no_payload(MSG_ID_START_ACK);
 		vfe31_ctrl->start_ack_pending = FALSE;
 	} else {
+		spin_lock_irqsave(&vfe31_ctrl->update_ack_lock, flags);
 		if (vfe31_ctrl->update_ack_pending == TRUE) {
+			spin_unlock_irqrestore(
+				&vfe31_ctrl->update_ack_lock, flags);
 			vfe31_send_msg_no_payload(MSG_ID_UPDATE_ACK);
+			spin_lock_irqsave(&vfe31_ctrl->update_ack_lock, flags);
 			vfe31_ctrl->update_ack_pending = FALSE;
+			spin_unlock_irqrestore(
+				&vfe31_ctrl->update_ack_lock, flags);
+		} else {
+			spin_unlock_irqrestore(
+				&vfe31_ctrl->update_ack_lock, flags);
 		}
 	}
 	if (vfe31_ctrl->operation_mode & 1) {  /* in snapshot mode */
@@ -1833,13 +1865,19 @@ static void vfe31_set_default_reg_values(void)
 
 static void vfe31_process_reset_irq(void)
 {
+	unsigned long flags;
+
+	spin_lock_irqsave(&vfe31_ctrl->state_lock, flags);
 	vfe31_ctrl->vstate = VFE_STATE_IDLE;
+	spin_unlock_irqrestore(&vfe31_ctrl->state_lock, flags);
 
+	spin_lock_irqsave(&vfe31_ctrl->stop_flag_lock, flags);
 	if (vfe31_ctrl->stop_ack_pending) {
-
 		vfe31_ctrl->stop_ack_pending = FALSE;
+		spin_unlock_irqrestore(&vfe31_ctrl->stop_flag_lock, flags);
 		vfe31_send_msg_no_payload(MSG_ID_STOP_ACK);
 	} else {
+		spin_unlock_irqrestore(&vfe31_ctrl->stop_flag_lock, flags);
 		/* this is from reset command. */
 		vfe31_set_default_reg_values();
 
@@ -2082,6 +2120,7 @@ static uint32_t  vfe31_process_stats_irq_common(uint32_t statsNum,
 static void
 vfe_send_stats_msg(uint32_t bufAddress, uint32_t statsNum)
 {
+	unsigned long flags;
 	struct  vfe_message msg;
 	/* fill message with right content. */
 	/* @todo This is causing issues, need further investigate */
@@ -2092,17 +2131,23 @@ vfe_send_stats_msg(uint32_t bufAddress, uint32_t statsNum)
 	switch (statsNum) {
 	case statsAeNum:{
 		msg._d = MSG_ID_STATS_AEC;
+		spin_lock_irqsave(&vfe31_ctrl->aec_ack_lock, flags);
 		vfe31_ctrl->aecStatsControl.ackPending = TRUE;
+		spin_unlock_irqrestore(&vfe31_ctrl->aec_ack_lock, flags);
 		}
 		break;
 	case statsAfNum:{
 		msg._d = MSG_ID_STATS_AF;
+		spin_lock_irqsave(&vfe31_ctrl->af_ack_lock, flags);
 		vfe31_ctrl->afStatsControl.ackPending = TRUE;
+		spin_unlock_irqrestore(&vfe31_ctrl->af_ack_lock, flags);
 		}
 		break;
 	case statsAwbNum: {
 		msg._d = MSG_ID_STATS_AWB;
+		spin_lock_irqsave(&vfe31_ctrl->awb_ack_lock, flags);
 		vfe31_ctrl->awbStatsControl.ackPending = TRUE;
+		spin_unlock_irqrestore(&vfe31_ctrl->awb_ack_lock, flags);
 		}
 		break;
 
@@ -2135,39 +2180,57 @@ stats_done:
 }
 
 static void vfe31_process_stats_ae_irq(void){
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->aec_ack_lock, flags);
 	if (!(vfe31_ctrl->aecStatsControl.ackPending)) {
+		spin_unlock_irqrestore(&vfe31_ctrl->aec_ack_lock, flags);
 		vfe31_ctrl->aecStatsControl.bufToRender =
 			vfe31_process_stats_irq_common(statsAeNum,
 			vfe31_ctrl->aecStatsControl.nextFrameAddrBuf);
 
 		vfe_send_stats_msg(vfe31_ctrl->aecStatsControl.bufToRender,
 						statsAeNum);
-	} else
+	} else{
+		spin_unlock_irqrestore(&vfe31_ctrl->aec_ack_lock, flags);
 		vfe31_ctrl->aecStatsControl.droppedStatsFrameCount++;
+	}
+
 }
 
 static void vfe31_process_stats_awb_irq(void){
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->awb_ack_lock, flags);
 	if (!(vfe31_ctrl->awbStatsControl.ackPending)) {
+		spin_unlock_irqrestore(&vfe31_ctrl->awb_ack_lock, flags);
 		vfe31_ctrl->awbStatsControl.bufToRender =
 			vfe31_process_stats_irq_common(statsAwbNum,
 			vfe31_ctrl->awbStatsControl.nextFrameAddrBuf);
 
 		vfe_send_stats_msg(vfe31_ctrl->awbStatsControl.bufToRender,
 						statsAwbNum);
-	} else
+	} else{
+		spin_unlock_irqrestore(&vfe31_ctrl->awb_ack_lock, flags);
 		vfe31_ctrl->awbStatsControl.droppedStatsFrameCount++;
+	}
+
 }
 
 static void vfe31_process_stats_af_irq(void){
+	unsigned long flags;
+	spin_lock_irqsave(&vfe31_ctrl->af_ack_lock, flags);
 	if (!(vfe31_ctrl->afStatsControl.ackPending)) {
+		spin_unlock_irqrestore(&vfe31_ctrl->af_ack_lock, flags);
 		vfe31_ctrl->afStatsControl.bufToRender =
 			vfe31_process_stats_irq_common(statsAfNum,
 			vfe31_ctrl->afStatsControl.nextFrameAddrBuf);
 
 		vfe_send_stats_msg(vfe31_ctrl->afStatsControl.bufToRender,
 						statsAfNum);
-	} else
+	} else{
+		spin_unlock_irqrestore(&vfe31_ctrl->af_ack_lock, flags);
 		vfe31_ctrl->afStatsControl.droppedStatsFrameCount++;
+	}
+
 }
 
 static void vfe31_process_stats_ihist_irq(void){
@@ -2349,17 +2412,15 @@ static irqreturn_t vfe31_parse_irq(int irq_num, void *data)
 		return IRQ_HANDLED;
 	}
 
-	spin_lock_irqsave(&vfe31_ctrl->ack_lock, flags);
-
+	spin_lock_irqsave(&vfe31_ctrl->stop_flag_lock, flags);
 	if (vfe31_ctrl->stop_ack_pending) {
 		irq.vfeIrqStatus0 &= VFE_IMASK_WHILE_STOPPING_0;
 		irq.vfeIrqStatus1 &= VFE_IMASK_WHILE_STOPPING_1;
 	}
+	spin_unlock_irqrestore(&vfe31_ctrl->stop_flag_lock, flags);
 
 	CDBG("vfe_parse_irq: Irq_status0 = 0x%x, Irq_status1 = 0x%x.\n",
 		irq.vfeIrqStatus0, irq.vfeIrqStatus1);
-
-	spin_unlock_irqrestore(&vfe31_ctrl->ack_lock, flags);
 
 	qcmd->vfeInterruptStatus0 = irq.vfeIrqStatus0;
 	qcmd->vfeInterruptStatus1 = irq.vfeIrqStatus1;
@@ -2447,11 +2508,15 @@ static int vfe31_resource_init(struct msm_vfe_callback *presp,
 
 	vfe31_ctrl->extlen = sizeof(struct vfe31_frame_extra);
 
-	spin_lock_init(&vfe31_ctrl->ack_lock);
+	spin_lock_init(&vfe31_ctrl->stop_flag_lock);
 	spin_lock_init(&vfe31_ctrl->state_lock);
 	spin_lock_init(&vfe31_ctrl->io_lock);
-
+	spin_lock_init(&vfe31_ctrl->update_ack_lock);
 	spin_lock_init(&vfe31_ctrl->tasklet_lock);
+
+	spin_lock_init(&vfe31_ctrl->aec_ack_lock);
+	spin_lock_init(&vfe31_ctrl->awb_ack_lock);
+	spin_lock_init(&vfe31_ctrl->af_ack_lock);
 	INIT_LIST_HEAD(&vfe31_ctrl->tasklet_q);
 
 	vfe31_ctrl->syncdata = sdata;
