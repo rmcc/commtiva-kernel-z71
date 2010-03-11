@@ -340,6 +340,4 @@ u32 msm_io_r_mb(void __iomem *addr);
 void msm_io_dump(void __iomem *addr, int size);
 void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len);
 
-int clk_set_flags(struct clk *clk, unsigned long flags);
-
 #endif
