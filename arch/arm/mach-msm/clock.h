@@ -48,6 +48,7 @@ struct clk_ops {
 
 struct clk {
 	uint32_t id;
+	uint32_t remote_id;
 	uint32_t count;
 	uint32_t flags;
 	const char *name;
