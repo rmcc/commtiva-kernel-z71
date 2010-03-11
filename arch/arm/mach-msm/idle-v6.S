@@ -22,6 +22,12 @@
 ENTRY(msm_arch_idle)
 	cpsid   f
 
+#if defined(CONFIG_ARCH_MSM7X27)
+	mov     r0, #0
+	mcr     p15, 0, r0, c7, c10, 0   /* flush entire data cache */
+	mcr     p15, 0, r0, c7, c10, 4   /* dsb                */
+	mcr     p15, 0, r0, c7, c0, 4    /* wait for interrupt */
+#else
 	mrc     p15, 0, r1, c1, c0, 0    /* read current CR    */
 	bic     r0, r1, #(1 << 2)        /* clear dcache bit   */
 	bic     r0, r0, #(1 << 12)       /* clear icache bit   */
@@ -37,6 +43,7 @@ ENTRY(msm_arch_idle)
 
 	mcr     p15, 0, r1, c1, c0, 0    /* restore d/i cache  */
 	mcr     p15, 0, r0, c7, c5, 4    /* isb                */
+#endif
 
 	cpsie   f
 	mov     pc, lr
