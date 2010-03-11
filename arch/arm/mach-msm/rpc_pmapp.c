@@ -320,13 +320,17 @@ void msm_pm_app_rpc_deinit(void)
 }
 EXPORT_SYMBOL(msm_pm_app_rpc_deinit);
 
-
 #define PMAPP_RPC_TIMEOUT (5*HZ)
 
-#define PMAPP_RPC_PROG	0x30000060
+#define PMAPP_RPC_PROG		0x30000060
 #define PMAPP_RPC_VER_2_1	0x00020001
+#define PMAPP_RPC_VER_3_1	0x00030001
 
-#define PMAPP_DISPLAY_CLOCK_CONFIG_PROC 21
+#define PMAPP_DISPLAY_CLOCK_CONFIG_PROC		21
+#define PMAPP_CLOCK_VOTE_PROC			27
+
+/* Clock voter name max length */
+#define PMAPP_CLOCK_VOTER_ID_LEN		4
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
@@ -472,12 +476,11 @@ static int pmapp_rpc_req_reply(struct pmapp_buf *tbuf, struct pmapp_buf *rbuf,
 
 	if ((pm->endpoint == NULL) || IS_ERR(pm->endpoint)) {
 		pm->endpoint = msm_rpc_connect_compatible(PMAPP_RPC_PROG,
-					PMAPP_RPC_VER_2_1, 0);
+					PMAPP_RPC_VER_3_1, 0);
 		if (IS_ERR(pm->endpoint)) {
 			pm->endpoint = msm_rpc_connect_compatible(
 				PMAPP_RPC_PROG, PMAPP_RPC_VER_2_1, 0);
 		}
-
 		if (IS_ERR(pm->endpoint)) {
 			ans  = PTR_ERR(pm->endpoint);
 			printk(KERN_ERR "%s: init rpc failed! ans = %d\n",
@@ -571,3 +574,13 @@ int pmapp_display_clock_config(uint enable)
 			PMAPP_DISPLAY_CLOCK_CONFIG_PROC);
 }
 EXPORT_SYMBOL(pmapp_display_clock_config);
+
+int pmapp_clock_vote(const char *voter_id, uint clock_id, uint vote)
+{
+	if (strlen(voter_id) != PMAPP_CLOCK_VOTER_ID_LEN)
+		return -EINVAL;
+
+	return pmapp_rpc_set_only(*((uint *) voter_id), clock_id, vote, 0, 3,
+			PMAPP_CLOCK_VOTE_PROC);
+}
+EXPORT_SYMBOL(pmapp_clock_vote);
