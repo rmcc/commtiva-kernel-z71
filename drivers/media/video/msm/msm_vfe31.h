@@ -977,9 +977,14 @@ struct vfe31_ctrl_type {
 
 	uint32_t vfeImaskCompositePacked;
 
-	spinlock_t  ack_lock;
+	spinlock_t  stop_flag_lock;
+	spinlock_t  update_ack_lock;
 	spinlock_t  state_lock;
 	spinlock_t  io_lock;
+
+	spinlock_t  aec_ack_lock;
+	spinlock_t  awb_ack_lock;
+	spinlock_t  af_ack_lock;
 
 	struct msm_vfe_callback *resp;
 	uint32_t extlen;
