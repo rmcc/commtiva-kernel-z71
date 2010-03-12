@@ -219,7 +219,12 @@ static int lcdc_probe(struct platform_device *pdev)
 	 * get/set panel specific fb info
 	 */
 	mfd->panel_info = pdata->panel_info;
+
+#ifdef MSMFB_FRAMEBUF_32
+	mfd->fb_imgType = MDP_RGBA_8888;
+#else
 	mfd->fb_imgType = MDP_RGB_565;
+#endif
 
 	fbi = mfd->fbi;
 	fbi->var.pixclock = mfd->panel_info.clk_rate;

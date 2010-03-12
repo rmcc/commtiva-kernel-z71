@@ -815,7 +815,26 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		var->red.msb_right = 0;
 		var->transp.offset = 24;
 		var->transp.length = 8;
-		bpp = 3;
+		bpp = 4;
+		break;
+
+	case MDP_RGBA_8888:
+		fix->type = FB_TYPE_PACKED_PIXELS;
+		fix->xpanstep = 1;
+		fix->ypanstep = 1;
+		var->vmode = FB_VMODE_NONINTERLACED;
+		var->blue.offset = 8;
+		var->green.offset = 16;
+		var->red.offset = 24;
+		var->blue.length = 8;
+		var->green.length = 8;
+		var->red.length = 8;
+		var->blue.msb_right = 0;
+		var->green.msb_right = 0;
+		var->red.msb_right = 0;
+		var->transp.offset = 0;
+		var->transp.length = 8;
+		bpp = 4;
 		break;
 
 	case MDP_YCRYCB_H2V1:
@@ -861,7 +880,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->yres = panel_info->yres;
 	var->xres_virtual = panel_info->xres;
 	var->yres_virtual = panel_info->yres * mfd->fb_page;
-	var->bits_per_pixel = bpp * 8,	/* FrameBuffer color depth */
+	var->bits_per_pixel = bpp * 8;	/* FrameBuffer color depth */
 		/*
 		 * id field for fb app
 		 */
@@ -1246,6 +1265,23 @@ static int msm_fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 				return -EINVAL;
 		break;
 
+	case 32:
+		if ((var->blue.offset != 8) ||
+			(var->green.offset != 16) ||
+			(var->red.offset != 24) ||
+			(var->blue.length != 8) ||
+			(var->green.length != 8) ||
+			(var->red.length != 8) ||
+			(var->blue.msb_right != 0) ||
+			(var->green.msb_right != 0) ||
+			(var->red.msb_right != 0) ||
+			!(((var->transp.offset == 0) &&
+				(var->transp.length == 8)) ||
+			((var->transp.offset == 0) &&
+				(var->transp.length == 8))))
+				return -EINVAL;
+		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -1297,6 +1333,10 @@ static int msm_fb_set_par(struct fb_info *info)
 			mfd->fb_imgType = MDP_ARGB_8888;
 			info->var.bits_per_pixel = 32;
 		}
+		break;
+
+	case 32:
+		mfd->fb_imgType = MDP_RGBA_8888;
 		break;
 
 	default:

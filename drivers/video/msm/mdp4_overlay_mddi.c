@@ -87,8 +87,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 {
 	MDPIBUF *iBuf = &mfd->ibuf;
 	uint8 *src;
-	int bpp, ptype;
-	uint32 format;
+	int ptype;
 	uint32 mddi_ld_param;
 	uint16 mddi_vdo_packet_reg;
 	struct mdp4_overlay_pipe *pipe;
@@ -98,23 +97,14 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 	mddi_mfd = mfd;		/* keep it */
 
-	bpp = iBuf->bpp;
-
-	if (bpp == 2)
-		format = MDP_RGB_565;
-	else if (bpp == 3)
-		format = MDP_RGB_888;
-	else
-		format = MDP_ARGB_8888;
-
 	/* MDP cmd block enable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
 	if (mddi_pipe == NULL) {
-		ptype = mdp4_overlay_format2type(format);
+		ptype = mdp4_overlay_format2type(mfd->fb_imgType);
 		pipe = mdp4_overlay_pipe_alloc(ptype);
 		pipe->mixer_num  = MDP4_MIXER0;
-		pipe->src_format = format;
+		pipe->src_format = mfd->fb_imgType;
 		mdp4_overlay_format2pipe(pipe);
 
 		mddi_pipe = pipe; /* keep it */
@@ -181,7 +171,8 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 		pipe->srcp0_ystride = fbi->fix.line_length;
 	} else {
 		/* starting input address */
-		src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width) * bpp;
+		src += (iBuf->dma_x + iBuf->dma_y * iBuf->ibuf_width)
+					* iBuf->bpp;
 
 		pipe->src_height = iBuf->dma_h;
 		pipe->src_width = iBuf->dma_w;
@@ -194,7 +185,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 		pipe->dst_y = iBuf->dma_y;
 		pipe->dst_x = iBuf->dma_x;
 		pipe->srcp0_addr = (uint32) src;
-		pipe->srcp0_ystride = iBuf->ibuf_width * bpp;
+		pipe->srcp0_ystride = iBuf->ibuf_width * iBuf->bpp;
 	}
 #endif
 
