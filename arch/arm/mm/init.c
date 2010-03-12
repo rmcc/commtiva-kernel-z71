@@ -233,6 +233,24 @@ static unsigned long __init bootmem_init_node(int node, struct meminfo *mi)
 		start = bank_pfn_start(bank);
 		end = bank_pfn_end(bank);
 
+#if defined(CONFIG_FLATMEM) && !defined(CONFIG_HOLES_IN_ZONE)
+		/*
+		 * The VM code assumes that hole end addresses are aligned if
+		 * CONFIG_HOLES_IN_ZONE is not enabled. This results in
+		 * panics since we free unused memmap entries on ARM.
+		 * This check shouldn't be necessary for the last bank's end
+		 * address, since the VM code accounts for the total zone size.
+		 */
+		if ((i < (mi->nr_banks - 1)) &&
+		    (end & (MAX_ORDER_NR_PAGES - 1))) {
+			pr_err("Memory bank[%d] not aligned to 0x%x bytes.\n"
+			       "\tMake bank end address align with MAX_ORDER\n"
+			       "\tor enable option CONFIG_HOLES_IN_ZONE.\n",
+			       i, __pfn_to_phys(MAX_ORDER_NR_PAGES));
+			BUG();
+		}
+#endif
+
 		if (start_pfn > start)
 			start_pfn = start;
 		if (end_pfn < end)
