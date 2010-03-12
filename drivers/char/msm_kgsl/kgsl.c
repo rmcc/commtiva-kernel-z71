@@ -250,7 +250,10 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 
 			clk_disable(kgsl_driver.yamato_grp_clk);
 			clk_disable(kgsl_driver.imem_clk);
-			if (kgsl_driver.power_flags & KGSL_PWRFLAGS_G12_CLK_OFF)
+			if ((kgsl_driver.g12_device.hwaccess_blocked ==
+				KGSL_TRUE) ||
+				(kgsl_driver.power_flags &
+				KGSL_PWRFLAGS_G12_CLK_OFF))
 				pm_qos_update_requirement(
 					PM_QOS_SYSTEM_BUS_FREQ,
 					DRIVER_NAME, PM_QOS_DEFAULT_VALUE);
