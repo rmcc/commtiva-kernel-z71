@@ -146,7 +146,7 @@ struct msm_rotator_dev {
 	struct class *class;
 	dev_t dev_num;
 	int processing;
-	int last_session_id;
+	int last_session_idx;
 	struct mutex rotator_lock;
 	struct mutex imem_lock;
 	int imem_owner;
@@ -724,9 +724,14 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	out_paddr += info.dst.offset;
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	s = info.session_id;
-	if ((s < 0) || (s >= MAX_SESSIONS) ||
-	    (msm_rotator_dev->img_info[s] == NULL)) {
+	for (s = 0; s < MAX_SESSIONS; s++)
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(info.session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s]
+			))
+			break;
+
+	if (s == MAX_SESSIONS) {
 		dev_dbg(msm_rotator_dev->device,
 			"%s() : Attempt to use invalid session_id %d\n",
 			__func__, s);
@@ -771,35 +776,35 @@ static int msm_rotator_do_rotate(unsigned long arg)
 		rc = msm_rotator_rgb_types(msm_rotator_dev->img_info[s],
 					   in_paddr, out_paddr,
 					   use_imem,
-					   msm_rotator_dev->last_session_id
+					   msm_rotator_dev->last_session_idx
 								!= s);
 		break;
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
 		rc = msm_rotator_ycxcx_h2v2(msm_rotator_dev->img_info[s],
 					    in_paddr, out_paddr, use_imem,
-					    msm_rotator_dev->last_session_id
+					    msm_rotator_dev->last_session_idx
 								!= s);
 		break;
 	case MDP_Y_CRCB_H2V2_TILE:
 	case MDP_Y_CBCR_H2V2_TILE:
 		rc = msm_rotator_ycxcx_h2v2_tile(msm_rotator_dev->img_info[s],
-						in_paddr, out_paddr, use_imem,
-						msm_rotator_dev->last_session_id
-								!= s);
+				in_paddr, out_paddr, use_imem,
+				msm_rotator_dev->last_session_idx
+				!= s);
 	break;
 
 	case MDP_Y_CBCR_H2V1:
 	case MDP_Y_CRCB_H2V1:
 		rc = msm_rotator_ycxcx_h2v1(msm_rotator_dev->img_info[s],
 					    in_paddr, out_paddr, use_imem,
-					    msm_rotator_dev->last_session_id
+					    msm_rotator_dev->last_session_idx
 								!= s);
 		break;
 	case MDP_YCRYCB_H2V1:
 		rc = msm_rotator_ycrycb(msm_rotator_dev->img_info[s],
-					in_paddr, out_paddr, use_imem,
-					msm_rotator_dev->last_session_id != s);
+				in_paddr, out_paddr, use_imem,
+				msm_rotator_dev->last_session_idx != s);
 		break;
 	default:
 		rc = -EINVAL;
@@ -807,9 +812,10 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	}
 
 	if (rc != 0) {
-		msm_rotator_dev->last_session_id = INVALID_SESSION;
+		msm_rotator_dev->last_session_idx = INVALID_SESSION;
 		goto do_rotate_exit;
-	}
+	} else
+		msm_rotator_dev->last_session_idx = s;
 
 	iowrite32(3, MSM_ROTATOR_INTR_ENABLE);
 
@@ -844,6 +850,7 @@ static int msm_rotator_start(unsigned long arg)
 	struct msm_rotator_img_info info;
 	int rc = 0;
 	int s;
+	int first_free_index = INVALID_SESSION;
 
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
@@ -905,31 +912,47 @@ static int msm_rotator_start(unsigned long arg)
 	}
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	/* allocate a session id */
-	s = 0;
-	while (s < MAX_SESSIONS) {
-		if (msm_rotator_dev->img_info[s] == NULL) {
-			info.session_id = s;
-			msm_rotator_dev->img_info[s] =
-				kzalloc(sizeof(struct msm_rotator_img_info),
-					GFP_KERNEL);
-			if (!msm_rotator_dev->img_info[s]) {
-				printk(KERN_ERR "%s : unable to alloc mem\n",
-				       __func__);
-				rc = -ENOMEM;
-				goto rotator_start_exit;
-			}
+	for (s = 0; s < MAX_SESSIONS; s++) {
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(info.session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s]
+			)) {
 			*(msm_rotator_dev->img_info[s]) = info;
+
+			if (msm_rotator_dev->last_session_idx == s)
+				msm_rotator_dev->last_session_idx =
+				INVALID_SESSION;
 			break;
 		}
-		s++;
+
+		if ((msm_rotator_dev->img_info[s] == NULL) &&
+			(first_free_index ==
+			INVALID_SESSION))
+			first_free_index = s;
 	}
-	if (s >= MAX_SESSIONS) {
+
+	if ((s == MAX_SESSIONS) && (first_free_index != INVALID_SESSION)) {
+		/* allocate a session id */
+		msm_rotator_dev->img_info[first_free_index] =
+			kzalloc(sizeof(struct msm_rotator_img_info),
+					GFP_KERNEL);
+		if (!msm_rotator_dev->img_info[first_free_index]) {
+			printk(KERN_ERR "%s : unable to alloc mem\n",
+					__func__);
+			rc = -ENOMEM;
+			goto rotator_start_exit;
+		}
+		info.session_id = (unsigned int)
+			msm_rotator_dev->img_info[first_free_index];
+		*(msm_rotator_dev->img_info[first_free_index]) = info;
+
+		if (copy_to_user((void __user *)arg, &info, sizeof(info)))
+			rc = -EFAULT;
+	} else if (s == MAX_SESSIONS) {
 		dev_dbg(msm_rotator_dev->device, "%s: all sessions in use\n",
 			__func__);
 		rc = -EBUSY;
-	} else if (copy_to_user((void __user *)arg, &info, sizeof(info)))
-		rc = -EFAULT;
+	}
 
 rotator_start_exit:
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
@@ -941,20 +964,27 @@ static int msm_rotator_finish(unsigned long arg)
 {
 	int rc = 0;
 	int s;
+	unsigned int session_id;
 
-	if (copy_from_user(&s, (void __user *)arg, sizeof(s)))
+	if (copy_from_user(&session_id, (void __user *)arg, sizeof(s)))
 		return -EFAULT;
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	if ((s < 0) || (s >= MAX_SESSIONS) ||
-	    (msm_rotator_dev->img_info[s] == NULL))
-		rc = -EINVAL;
-	else {
-		kfree(msm_rotator_dev->img_info[s]);
-		msm_rotator_dev->img_info[s] = NULL;
+	for (s = 0; s < MAX_SESSIONS; s++) {
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s])) {
+			if (msm_rotator_dev->last_session_idx == s)
+				msm_rotator_dev->last_session_idx =
+					INVALID_SESSION;
+			kfree(msm_rotator_dev->img_info[s]);
+			msm_rotator_dev->img_info[s] = NULL;
+			break;
+		}
 	}
-	if (s == msm_rotator_dev->last_session_id)
-		msm_rotator_dev->last_session_id = INVALID_SESSION;
+
+	if (s == MAX_SESSIONS)
+		rc = -EINVAL;
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 	return rc;
 }
@@ -1000,7 +1030,7 @@ static int __devinit msm_rotator_probe(struct platform_device *pdev)
 	}
 	for (i = 0; i < MAX_SESSIONS; i++)
 		msm_rotator_dev->img_info[i] = NULL;
-	msm_rotator_dev->last_session_id = INVALID_SESSION;
+	msm_rotator_dev->last_session_idx = INVALID_SESSION;
 
 	msm_rotator_dev->imem_owner = IMEM_NO_OWNER;
 	mutex_init(&msm_rotator_dev->imem_lock);
