@@ -32,6 +32,7 @@
 #include "smd_private.h"
 #include "clock.h"
 #include "acpuclock.h"
+#include "socinfo.h"
 
 #define SCSS_CLK_CTL_ADDR	(MSM_ACC_BASE + 0x04)
 #define SCSS_CLK_SEL_ADDR	(MSM_ACC_BASE + 0x08)
@@ -70,16 +71,15 @@ struct clkctl_acpu_speed {
 
 static struct clock_state drv_state = { 0 };
 
-#ifdef CONFIG_CPU_FREQ_MSM
 static struct cpufreq_frequency_table freq_table[] = {
 	{ 0, 122880 },
 	{ 1, 245760 },
 	{ 2, 368640 },
 	{ 3, 768000 },
+	/* 806.4MHz is updated to 1024MHz at runtime for QSD8x55. */
 	{ 4, 806400 },
 	{ 5, CPUFREQ_TABLE_END },
 };
-#endif
 
 /* Use negative numbers for sources that can't be enabled/disabled */
 #define SRC_LPXO (-2)
@@ -93,8 +93,9 @@ static struct clkctl_acpu_speed acpu_freq_tbl[] = {
 	{ 245760, PLL_3,    5, 2,  61440,  1200, VDD_RAW(1200) },
 	{ 368640, PLL_3,    5, 1,  122800, 1200, VDD_RAW(1200) },
 	{ 768000, PLL_1,    2, 0,  153600, 1200, VDD_RAW(1200) },
-	/* ACPU @ 806.4MHz requires MSMC1 @ 1.2V. Voting
-	 * for AXI @ 192MHz accomplishes this implicitly. */
+	/* ACPU >= 806.4MHz requires MSMC1 @ 1.2V. Voting for
+	 * AXI @ 192MHz accomplishes this implicitly. 806.4MHz
+	 * is updated to 1024MHz at runtime for QSD8x55. */
 	{ 806400, PLL_2,    3, 0,  192000, 1200, VDD_RAW(1200) },
 	{ 0 }
 };
@@ -364,6 +365,18 @@ static void __init lpj_init(void)
 	}
 }
 
+/* Update frequency tables for a 1024MHz PLL2. */
+void __init pll2_1024mhz_fixup(void)
+{
+	if (acpu_freq_tbl[ARRAY_SIZE(acpu_freq_tbl)-2].acpu_clk_khz != 806400
+		  || freq_table[ARRAY_SIZE(freq_table)-2].frequency != 806400) {
+		pr_err("Frequency table fixups for PLL2 rate failed.\n");
+		BUG();
+	}
+	acpu_freq_tbl[ARRAY_SIZE(acpu_freq_tbl)-2].acpu_clk_khz = 1024000;
+	freq_table[ARRAY_SIZE(freq_table)-2].frequency = 1024000;
+}
+
 #define RPM_BYPASS_MASK	(1 << 3)
 #define PMIC_MODE_MASK	(1 << 4)
 static void __init saw_init(void)
@@ -384,6 +397,9 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 	mutex_init(&drv_state.lock);
 	drv_state.acpu_switch_time_us = clkdata->acpu_switch_time_us;
 	drv_state.vdd_switch_time_us = clkdata->vdd_switch_time_us;
+	/* PLL2 runs at 1024MHz for QSD8x55. */
+	if (cpu_is_qsd8x55())
+		pll2_1024mhz_fixup();
 	saw_init();
 	acpuclk_init();
 	lpj_init();
