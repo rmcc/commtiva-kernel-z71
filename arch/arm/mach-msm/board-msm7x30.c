@@ -2937,20 +2937,18 @@ static int marimba_bt(int on)
 	return 0;
 }
 
-#define BT_POWER_VREG_COUNT 4
-static struct vreg *vregs_bt[BT_POWER_VREG_COUNT];
-static const char *vregs_bt_name[BT_POWER_VREG_COUNT] = {
+static const char *vregs_bt_name[] = {
 	"gp16",
-	"xo_out",
 	"s2",
 	"wlan"
 };
+static struct vreg *vregs_bt[ARRAY_SIZE(vregs_bt_name)];
 
 static int bluetooth_power_regulators(int on)
 {
 	int i, rc;
 
-	for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
+	for (i = 0; i < ARRAY_SIZE(vregs_bt_name); i++) {
 		rc = on ? vreg_enable(vregs_bt[i]) :
 			  vreg_disable(vregs_bt[i]);
 		if (rc < 0) {
@@ -2966,13 +2964,24 @@ static int bluetooth_power_regulators(int on)
 static int bluetooth_power(int on)
 {
 	int rc;
+	const char *id = "BTPW";
 
 	if (on) {
 		rc = bluetooth_power_regulators(on);
 		if (rc < 0)
 			return -EIO;
 
+		rc = pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+					  PMAPP_CLOCK_VOTE_ON);
+		if (rc < 0)
+			return -EIO;
+
 		rc = marimba_bt(on);
+		if (rc < 0)
+			return -EIO;
+
+		rc = pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+					  PMAPP_CLOCK_VOTE_PIN_CTRL);
 		if (rc < 0)
 			return -EIO;
 
@@ -2996,6 +3005,11 @@ static int bluetooth_power(int on)
 		if (rc < 0)
 			return -EIO;
 
+		rc = pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+					  PMAPP_CLOCK_VOTE_OFF);
+		if (rc < 0)
+			return -EIO;
+
 		rc = bluetooth_power_regulators(on);
 		if (rc < 0)
 			return -EIO;
@@ -3011,7 +3025,7 @@ static void __init bt_power_init(void)
 {
 	int i;
 
-	for (i = 0; i < BT_POWER_VREG_COUNT; i++) {
+	for (i = 0; i < ARRAY_SIZE(vregs_bt_name); i++) {
 		vregs_bt[i] = vreg_get(NULL, vregs_bt_name[i]);
 		if (IS_ERR(vregs_bt[i])) {
 			printk(KERN_ERR "%s: vreg get %s failed (%ld)\n",
