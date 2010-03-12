@@ -935,16 +935,11 @@ static unsigned soc_clk_get_rate(unsigned id)
 	unsigned long flags;
 	unsigned ret = 0;
 
+	if (t->type == NORATE)
+		return -EINVAL;
+
 	spin_lock_irqsave(&clock_reg_lock, flags);
-	if (t->type == MND || t->type == BASIC)
-		ret = t->current_freq->freq_hz;
-	else {
-		/* Walk up the tree to see if any parent has a rate. */
-		while (t->type == NORATE && t->parent != C(NONE))
-			t = &clk_local_tbl[t->parent];
-		if (t->type == MND || t->type == BASIC)
-			ret = t->current_freq->freq_hz;
-	}
+	ret = t->current_freq->freq_hz;
 	spin_unlock_irqrestore(&clock_reg_lock, flags);
 
 	/* Return 0 if the rate has never been set. Might not be correct,
