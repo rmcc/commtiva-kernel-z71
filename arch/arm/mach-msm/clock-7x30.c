@@ -137,6 +137,13 @@ static uint32_t src_pll_tbl[] = {
 	F_RAW(f, s, MD8(m, n), N8(nmsb, nlsb, m, n)|SPDIV(s, div), !!(n))
 #define F_END	F_RAW(FREQ_END, SRC_MAX, 0, 0, 0)
 
+static struct clk_freq_tbl clk_tbl_csi[] = {
+	F_MND8(153600000, 24, 17, SRC_PLL1, 2, 2, 5),
+	F_MND8(192000000, 24, 17, SRC_PLL1, 4, 0, 0),
+	F_MND8(384000000, 24, 17, SRC_PLL1, 2, 0, 0),
+	F_END,
+};
+
 static struct clk_freq_tbl clk_tbl_tcxo[] = {
 	F_RAW(19200000, SRC_MAX, 0, 0, 0),
 	F_END,
@@ -389,9 +396,11 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define MNCNTR_MODE		BVAL(6, 5, 0x2) /* Dual-edge mode. */
 
 /* Register offsets used more than once. */
+#define CSI_NS			0x0174
 #define EMDH_NS			0x0050
 #define PMDH_NS			0x008C
 #define UART_NS			0x00E0
+#define UART2_NS		0x0464
 #define UART3_NS		0x0468
 #define USBH_MD			0x02BC
 #define USBH_NS			0x02C0
@@ -441,7 +450,8 @@ static uint32_t chld_usb_src[] = 	{C(USB_HS), C(USB_HS_CORE),
 					 C(USB_HS2), C(USB_HS2_CORE),
 					 C(USB_HS3), C(USB_HS3_CORE),
 					 C(NONE)};
-uint32_t chld_vfe[] = 			{C(VFE_MDC), C(VFE_CAMIF), C(NONE)};
+uint32_t chld_vfe[] = 			{C(VFE_MDC), C(VFE_CAMIF), C(CSI0_VFE),
+					 C(NONE)};
 
 static struct clk_local clk_local_tbl[] = {
 	CLK_NORATE(MDC,		MDC_NS, B(9), B(11)),
@@ -451,6 +461,7 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_1RATE(I2C_2,	0x02D8, B(0), B(2),	clk_tbl_tcxo),
 	CLK_1RATE(QUP_I2C,	0x04F0, B(0), B(2),	clk_tbl_tcxo),
 	CLK_1RATE(UART1,	UART_NS, B(5), B(4),	clk_tbl_tcxo),
+	CLK_1RATE(UART2,	UART2_NS, B(5), B(4),	clk_tbl_tcxo),
 	CLK_1RATE(UART3,	UART3_NS, B(5), B(4),	clk_tbl_tcxo),
 
 	CLK_BASIC(EMDH,	EMDH_NS,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
@@ -493,6 +504,7 @@ static struct clk_local clk_local_tbl[] = {
 							AXI_LI_VFE, chld_vfe),
 	CLK_SLAVE(VFE_MDC, CAM_VFE_NS, B(11), VFE),
 	CLK_SLAVE(VFE_CAMIF, CAM_VFE_NS, B(15), VFE),
+	CLK_SLAVE(CSI0_VFE, CSI_NS, B(15), VFE),
 
 	CLK_MND16(SDAC_M, SDAC_NS, B(12), B(11), clk_tbl_sdac,
 							NONE, chld_sdac_m),
@@ -524,12 +536,15 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_LOCAL(LPA_CODEC, BASIC, 0, LPA_NS, BM(1, 0), B(9), 0,
 					clk_tbl_lpa_codec, NONE, NULL),
 
+	CLK_MND8(CSI0, CSI_NS, 24, 17, B(9), B(11), clk_tbl_csi, NULL),
+
 	/* For global clocks to be on we must have GLBL_ROOT_ENA set */
 	CLK_NORATE(GLBL_ROOT,	GLBL_CLK_ENA_SC, 0,	B(29)),
 
 	/* Peripheral bus clocks. */
 	CLK_GLBL(ADM,	 	GLBL_CLK_ENA_SC,	B(5)),
 	CLK_GLBL(CAMIF_PAD_P,	GLBL_CLK_ENA_SC,	B(9)),
+	CLK_GLBL(CSI0_P,	GLBL_CLK_ENA_SC,	B(30)),
 	CLK_GLBL(EMDH_P,	GLBL_CLK_ENA_2_SC,	B(3)),
 	CLK_GLBL(GRP_2D_P,	GLBL_CLK_ENA_SC,	B(24)),
 	CLK_GLBL(GRP_3D_P,	GLBL_CLK_ENA_2_SC,	B(17)),
