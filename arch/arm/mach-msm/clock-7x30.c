@@ -424,6 +424,12 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define PLL_ENA_REG		0x0264
 #define LPA_CORE_CLK_MA0	0x04F4
 #define LPA_CORE_CLK_MA2	0x04FC
+#define SH2_OWN_GLBL_REG	0x0404
+#define SH2_OWN_APPS1_REG	0x040C
+#define SH2_OWN_APPS2_REG	0x0414
+#define SH2_OWN_ROW1_REG	0x041C
+#define SH2_OWN_ROW2_REG	0x0424
+#define SH2_OWN_APPS3_REG	0x0444
 
 static uint32_t *pll_status_addr[NUM_PLL] = {
 	[PLL_0] = REG_BASE(0x318),
@@ -947,15 +953,140 @@ struct clk_ops clk_ops_7x30 = {
 	.round_rate = soc_clk_round_rate,
 };
 
-#if 0
+enum {
+	SH2_OWN_GLBL,
+	SH2_OWN_APPS1,
+	SH2_OWN_APPS2,
+	SH2_OWN_ROW1,
+	SH2_OWN_ROW2,
+	SH2_OWN_APPS3,
+	NUM_OWNERSHIP
+};
+static __initdata uint32_t ownership_regs[NUM_OWNERSHIP];
+
+static void __init cache_ownership(void)
+{
+	ownership_regs[SH2_OWN_GLBL] = readl(REG_BASE(SH2_OWN_GLBL_REG));
+	ownership_regs[SH2_OWN_APPS1] = readl(REG_BASE(SH2_OWN_APPS1_REG));
+	ownership_regs[SH2_OWN_APPS2] = readl(REG_BASE(SH2_OWN_APPS2_REG));
+	ownership_regs[SH2_OWN_ROW1] = readl(REG_BASE(SH2_OWN_ROW1_REG));
+	ownership_regs[SH2_OWN_ROW2] = readl(REG_BASE(SH2_OWN_ROW2_REG));
+	ownership_regs[SH2_OWN_APPS3] = readl(REG_BASE(SH2_OWN_APPS3_REG));
+}
+
+/*
+ * This is a many-to-one mapping since we don't know how the remote clock code
+ * has decided to handle the dependencies between clocks for a particular
+ * hardware block. We determine the ownership for all the clocks on a block by
+ * checking the ownership bit of one register (usually the ns register).
+ */
+#define O(x) &ownership_regs[x]
+static struct clk_local_ownership {
+	uint32_t *reg;
+	uint32_t bit;
+} ownership_map[] __initdata = {
+	[C(GRP_2D)]			= { O(SH2_OWN_APPS1), B(6) },
+	[C(GRP_2D_P)]			= { O(SH2_OWN_APPS1), B(6) },
+	[C(HDMI)]			= { O(SH2_OWN_APPS1), B(31) },
+	[C(JPEG)]			= { O(SH2_OWN_APPS1), B(0) },
+	[C(JPEG_P)]			= { O(SH2_OWN_APPS1), B(0) },
+	[C(LPA_CODEC)]			= { O(SH2_OWN_APPS1), B(23) },
+	[C(LPA_CORE)]			= { O(SH2_OWN_APPS1), B(23) },
+	[C(LPA_P)]			= { O(SH2_OWN_APPS1), B(23) },
+	[C(MI2S_CODEC_RX_M)]		= { O(SH2_OWN_APPS1), B(12) },
+	[C(MI2S_CODEC_RX_S)]		= { O(SH2_OWN_APPS1), B(12) },
+	[C(MI2S_CODEC_TX_M)]		= { O(SH2_OWN_APPS1), B(14) },
+	[C(MI2S_CODEC_TX_S)]		= { O(SH2_OWN_APPS1), B(14) },
+	[C(MIDI)]			= { O(SH2_OWN_APPS1), B(22) },
+	[C(SDAC)]			= { O(SH2_OWN_APPS1), B(26) },
+	[C(VFE)]			= { O(SH2_OWN_APPS1), B(8) },
+	[C(VFE_CAMIF)]			= { O(SH2_OWN_APPS1), B(8) },
+	[C(VFE_MDC)]			= { O(SH2_OWN_APPS1), B(8) },
+	[C(VFE_P)]			= { O(SH2_OWN_APPS1), B(8) },
+
+	[C(GRP_3D)]			= { O(SH2_OWN_APPS2), B(0) },
+	[C(GRP_3D_P)]			= { O(SH2_OWN_APPS2), B(0) },
+	[C(GRP_3D_SRC)]			= { O(SH2_OWN_APPS2), B(0) },
+	[C(IMEM)]			= { O(SH2_OWN_APPS2), B(0) },
+	[C(MDP_LCDC_PAD_PCLK)]		= { O(SH2_OWN_APPS2), B(4) },
+	[C(MDP_LCDC_PCLK)]		= { O(SH2_OWN_APPS2), B(4) },
+	[C(MDP_P)]			= { O(SH2_OWN_APPS2), B(4) },
+	[C(MDP_VSYNC)]			= { O(SH2_OWN_APPS2), B(28) },
+	[C(TSIF_REF)]			= { O(SH2_OWN_APPS2), B(5) },
+	[C(TSIF_P)]			= { O(SH2_OWN_APPS2), B(5) },
+	[C(TV)]				= { O(SH2_OWN_APPS2), B(2) },
+	[C(TV_DAC)]			= { O(SH2_OWN_APPS2), B(2) },
+	[C(TV_ENC)]			= { O(SH2_OWN_APPS2), B(2) },
+
+	[C(EMDH)]			= { O(SH2_OWN_ROW1), B(7) },
+	[C(EMDH_P)]			= { O(SH2_OWN_ROW1), B(7) },
+	[C(I2C)]			= { O(SH2_OWN_ROW1), B(11) },
+	[C(I2C_2)]			= { O(SH2_OWN_ROW1), B(12) },
+	[C(MDC)]			= { O(SH2_OWN_ROW1), B(17) },
+	[C(PMDH)]			= { O(SH2_OWN_ROW1), B(19) },
+	[C(PMDH_P)]			= { O(SH2_OWN_ROW1), B(19) },
+	[C(SDC1)]			= { O(SH2_OWN_ROW1), B(23) },
+	[C(SDC1_P)]			= { O(SH2_OWN_ROW1), B(23) },
+	[C(SDC2)]			= { O(SH2_OWN_ROW1), B(25) },
+	[C(SDC2_P)]			= { O(SH2_OWN_ROW1), B(25) },
+	[C(SDC3)]			= { O(SH2_OWN_ROW1), B(27) },
+	[C(SDC3_P)]			= { O(SH2_OWN_ROW1), B(27) },
+	[C(SDC4)]			= { O(SH2_OWN_ROW1), B(29) },
+	[C(SDC4_P)]			= { O(SH2_OWN_ROW1), B(29) },
+	[C(UART2)]			= { O(SH2_OWN_ROW1), B(0) },
+	[C(UART3)]			= { O(SH2_OWN_ROW1), B(1) },
+	[C(USB_HS2)]			= { O(SH2_OWN_ROW1), B(2) },
+	[C(USB_HS2_CORE)]		= { O(SH2_OWN_ROW1), B(2) },
+	[C(USB_HS2_P)]			= { O(SH2_OWN_ROW1), B(2) },
+	[C(USB_HS3)]			= { O(SH2_OWN_ROW1), B(4) },
+	[C(USB_HS3_CORE)]		= { O(SH2_OWN_ROW1), B(4) },
+	[C(USB_HS3_P)]			= { O(SH2_OWN_ROW1), B(4) },
+
+	[C(QUP_I2C)]			= { O(SH2_OWN_ROW2), B(3) },
+	[C(SPI)]			= { O(SH2_OWN_ROW2), B(1) },
+	[C(SPI_P)]			= { O(SH2_OWN_ROW2), B(1) },
+	[C(UART1)]			= { O(SH2_OWN_ROW2), B(9) },
+	[C(UART1DM)]			= { O(SH2_OWN_ROW2), B(6) },
+	[C(UART1DM_P)]			= { O(SH2_OWN_ROW2), B(6) },
+	[C(UART2DM)]			= { O(SH2_OWN_ROW2), B(8) },
+	[C(UART2DM_P)]			= { O(SH2_OWN_ROW2), B(8) },
+	[C(USB_HS)]			= { O(SH2_OWN_ROW2), B(11) },
+	[C(USB_HS_CORE)]		= { O(SH2_OWN_ROW2), B(11) },
+	[C(USB_HS_P)]			= { O(SH2_OWN_ROW2), B(11) },
+
+	[C(CAM_M)]			= { O(SH2_OWN_APPS3), B(6) },
+	[C(CSI0)]			= { O(SH2_OWN_APPS3), B(11) },
+	[C(CSI0_VFE)]			= { O(SH2_OWN_APPS3), B(11) },
+	[C(CSI0_P)]			= { O(SH2_OWN_APPS3), B(11) },
+	[C(MDP)]			= { O(SH2_OWN_APPS3), B(0) },
+	[C(MFC)]			= { O(SH2_OWN_APPS3), B(2) },
+	[C(MFC_DIV2)]			= { O(SH2_OWN_APPS3), B(2) },
+	[C(MFC_P)]			= { O(SH2_OWN_APPS3), B(2) },
+	[C(VPE)]			= { O(SH2_OWN_APPS3), B(4) },
+
+	[C(ADM)]			= { O(SH2_OWN_GLBL), B(8) },
+	[C(AXI_ROTATOR)]		= { O(SH2_OWN_GLBL), B(13) },
+	[C(CAMIF_PAD_P)]		= { O(SH2_OWN_GLBL), B(8) },
+	[C(ROTATOR_IMEM)]		= { O(SH2_OWN_GLBL), B(13) },
+	[C(ROTATOR_P)]			= { O(SH2_OWN_GLBL), B(13) },
+};
+
+struct clk_ops * __init clk_7x30_is_local(uint32_t id)
+{
+	uint32_t local, bit = ownership_map[id].bit;
+	uint32_t *reg = ownership_map[id].reg;
+
+	BUG_ON(id >= ARRAY_SIZE(ownership_map) || !reg);
+
+	local = *reg & bit;
+	return local ? &clk_ops_7x30 : NULL;
+}
+
 static struct reg_init {
 	void *reg;
 	uint32_t mask;
 	uint32_t val;
 } ri_list[] __initdata = {
-	/* TODO: Remove next line from commercial code. */
-	{REG(PLL_ENA_REG), 0x7F, 0x7F}, /* Turn on all PLLs. */
-
 	/* Enable UMDX_P clock. Known to causes issues, so never turn off. */
 	{REG(GLBL_CLK_ENA_2_SC), B(2), B(2)},
 
@@ -990,11 +1121,12 @@ static struct reg_init {
 
 #define set_1rate(clk) \
 	soc_clk_set_rate(C(clk), clk_local_tbl[C(clk)].freq_tbl->freq_hz)
-static __init int soc_clk_init(void)
+__init int clk_7x30_init(void)
 {
 	int i;
 	uint32_t val;
 
+	cache_ownership();
 	/* Disable all the child clocks of USB_HS_SRC. This needs to be done
 	 * before the register init loop since it changes the source of the
 	 * USB HS core clocks. */
@@ -1022,6 +1154,3 @@ static __init int soc_clk_init(void)
 
 	return 0;
 }
-
-arch_initcall(soc_clk_init);
-#endif
