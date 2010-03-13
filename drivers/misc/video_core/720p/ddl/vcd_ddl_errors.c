@@ -1,0 +1,498 @@
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ *
+ *     * Redistributions of source code must retain the above copyright
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above
+ *       copyright notice, this list of conditions and the following
+ *       disclaimer in the documentation and/or other materials provided
+ *       with the distribution.
+ *     * Neither the name of Code Aurora Forum, Inc. nor the names of its
+ *       contributors may be used to endorse or promote products derived
+ *       from this software without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * Alternatively, and instead of the terms immediately above, this
+ * software may be relicensed by the recipient at their option under the
+ * terms of the GNU General Public License version 2 ("GPL") and only
+ * version 2.  If the recipient chooses to relicense the software under
+ * the GPL, then the recipient shall replace all of the text immediately
+ * above and including this paragraph with the text immediately below
+ * and between the words START OF ALTERNATE GPL TERMS and END OF
+ * ALTERNATE GPL TERMS and such notices and license terms shall apply
+ * INSTEAD OF the notices and licensing terms given above.
+ *
+ * START OF ALTERNATE GPL TERMS
+ *
+ * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ *
+ * This software was originally licensed under the Code Aurora Forum
+ * Inc. Dual BSD/GPL License version 1.1 and relicensed as permitted
+ * under the terms thereof by a recipient under the General Public
+ * License Version 2.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ *
+ * THIS SOFTWARE IS PROVIDED "AS IS" AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+ * IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+ * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ * END OF ALTERNATE GPL TERMS
+ *
+ */
+
+#include "video_core_type.h"
+#include "vcd_ddl_utils.h"
+#include "vcd_ddl.h"
+
+#define DEBUG 0
+
+#if DEBUG
+#define DBG(x...) printk(KERN_DEBUG x)
+#else
+#define DBG(x...)
+#endif
+
+#define INVALID_CHANNEL_NUMBER  1
+#define INVALID_COMMAND_ID 2
+#define CHANNEL_ALREADY_IN_USE 3
+#define CHANNEL_NOT_SET_BEFORE_CHANNEL_CLOSE 4
+#define CHANNEL_SET_ERROR_INIT_CODEC 5
+#define INIT_CODEC_ALREADY_CALLED 6
+#define CHANNEL_SET_ERROR_INIT_BUFFERS 7
+#define INIT_CODEC_ERROR_INIT_BUFFERS 8
+#define INIT_BUFFER_ALREADY_CALLED  9
+#define CHANNEL_SET_ERROR_FRAME_RUN 10
+#define INIT_CODEC_ERROR_FRAME_RUN 11
+#define INIT_BUFFERS_ERROR_FRAME_RUN 12
+#define CODEC_LIMIT_EXCEEDED 13
+#define FIRMWARE_SIZE_ZERO 14
+#define FIRMWARE_ADDRESS_EXT_ZERO 15
+#define CONTEXT_DMA_IN_ERROR 16
+#define CONTEXT_DMA_OUT_ERROR 17
+#define PROGRAM_DMA_ERROR 18
+#define CONTEXT_STORE_EXT_ADD_ZERO 19
+#define MEM_ALLOCATION_FAILED 20
+
+
+#define UNSUPPORTED_FEATURE_IN_PROFILE 27
+#define RESOLUTION_NOT_SUPPORTED 28
+#define HEADER_NOT_FOUND 52
+#define MB_NUM_INVALID 61
+#define FRAME_RATE_NOT_SUPPORTED 62
+#define INVALID_QP_VALUE 63
+#define INVALID_RC_REACTION_COEFFICIENT 64
+#define INVALID_CPB_SIZE_AT_GIVEN_LEVEL 65
+
+#define ALLOC_DPB_SIZE_NOT_SUFFICIENT 71
+#define ALLOC_DB_SIZE_NOT_SUFFICIENT 72
+#define ALLOC_COMV_SIZE_NOT_SUFFICIENT 73
+#define NUM_BUF_OUT_OF_RANGE 74
+#define NULL_CONTEXT_POINTER 75
+#define NULL_COMAMND_CONTROL_COMM_POINTER 76
+#define NULL_METADATA_INPUT_POINTER 77
+#define NULL_DPB_POINTER 78
+#define NULL_DB_POINTER 79
+#define NULL_COMV_POINTER 80
+
+#define DIVIDE_BY_ZERO 81
+#define BIT_STREAM_BUF_EXHAUST 82
+#define DMA_NOT_STOPPED 83
+#define DMA_TX_NOT_COMPLETE 84
+
+#define MB_HEADER_NOT_DONE  85
+#define MB_COEFF_NOT_DONE 86
+#define CODEC_SLICE_NOT_DONE 87
+#define VME_NOT_READY 88
+#define VC1_BITPLANE_DECODE_ERR 89
+
+
+#define VSP_NOT_READY 90
+#define BUFFER_FULL_STATE 91
+
+#define SYNC_POINT_NOT_RECEIVED 111
+#define RESOLUTION_MISMATCH 112
+#define NV_QUANT_ERR 113
+#define SYNC_MARKER_ERR 114
+#define FEATURE_NOT_SUPPORTED 115
+#define MEM_CORRUPTION  116
+#define INVALID_REFERENCE_FRAME  117
+#define PICTURE_CODING_TYPE_ERR  118
+#define MV_RANGE_ERR  119
+#define PICTURE_STRUCTURE_ERR 120
+#define SLICE_ADDR_INVALID  121
+#define NON_PAIRED_FIELD_NOT_SUPPORTED  122
+#define NON_FRAME_DATA_RECEIVED 123
+#define INCOMPLETE_FRAME  124
+#define NO_BUFFER_RELEASED_FROM_HOST  125
+#define PICTURE_MANAGEMENT_ERROR  128
+#define INVALID_MMCO  129
+#define INVALID_PIC_REORDERING 130
+#define INVALID_POC_TYPE 131
+#define ACTIVE_SPS_NOT_PRESENT 132
+#define ACTIVE_PPS_NOT_PRESENT 133
+
+
+#define METADATA_NO_SPACE_QP 151
+#define METADATA_NO_SAPCE_CONCEAL_MB 152
+#define METADATA_NO_SPACE_VC1_PARAM 153
+#define METADATA_NO_SPACE_SEI 154
+#define METADATA_NO_SPACE_VUI 155
+#define METADATA_NO_SPACE_EXTRA 156
+#define METADATA_NO_SPACE_DATA_NONE 157
+#define FRAME_RATE_UNKNOWN 158
+#define ASPECT_RATIO_UNKOWN 159
+#define COLOR_PRIMARIES_UNKNOWN 160
+#define TRANSFER_CHAR_UNKWON 161
+#define MATRIX_COEFF_UNKNOWN 162
+#define NON_SEQ_SLICE_ADDR 163
+#define BROKEN_LINK 164
+#define FRAME_CONCEALED 165
+#define PROFILE_UNKOWN 166
+#define LEVEL_UNKOWN 167
+#define BIT_RATE_NOT_SUPPORTED 168
+#define COLOR_DIFF_FORMAT_NOT_SUPPORTED 169
+#define NULL_EXTRA_METADATA_POINTER  170
+#define SYNC_POINT_NOT_RECEIVED_STARTED_DECODING  171
+#define NULL_FW_DEBUG_INFO_POINTER  172
+#define ALLOC_DEBUG_INFO_SIZE_INSUFFICIENT  173
+
+
+#define METADATA_NO_SPACE_MB_INFO 180
+#define METADATA_NO_SPACE_SLICE_SIZE 181
+
+static u32 ddl_handle_hw_fatal_errors(struct ddl_context_type
+			*p_ddl_context)
+{
+	u32 b_status = FALSE;
+
+	switch (p_ddl_context->nCmdErrStatus) {
+
+	case INVALID_CHANNEL_NUMBER:
+	case INVALID_COMMAND_ID:
+	case CHANNEL_ALREADY_IN_USE:
+	case CHANNEL_NOT_SET_BEFORE_CHANNEL_CLOSE:
+	case CHANNEL_SET_ERROR_INIT_CODEC:
+	case INIT_CODEC_ALREADY_CALLED:
+	case CHANNEL_SET_ERROR_INIT_BUFFERS:
+	case INIT_CODEC_ERROR_INIT_BUFFERS:
+	case INIT_BUFFER_ALREADY_CALLED:
+	case CHANNEL_SET_ERROR_FRAME_RUN:
+	case INIT_CODEC_ERROR_FRAME_RUN:
+	case INIT_BUFFERS_ERROR_FRAME_RUN:
+	case CODEC_LIMIT_EXCEEDED:
+	case FIRMWARE_SIZE_ZERO:
+	case FIRMWARE_ADDRESS_EXT_ZERO:
+
+	case CONTEXT_DMA_IN_ERROR:
+	case CONTEXT_DMA_OUT_ERROR:
+	case PROGRAM_DMA_ERROR:
+	case CONTEXT_STORE_EXT_ADD_ZERO:
+	case MEM_ALLOCATION_FAILED:
+
+	case DIVIDE_BY_ZERO:
+	case BIT_STREAM_BUF_EXHAUST:
+	case DMA_NOT_STOPPED:
+	case DMA_TX_NOT_COMPLETE:
+
+	case VSP_NOT_READY:
+	case BUFFER_FULL_STATE:
+		{
+			ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
+
+			p_ddl_context->nDeviceState = DDL_DEVICE_HWFATAL;
+
+			p_ddl_context->ddl_callback
+			(
+				VCD_EVT_IND_HWERRFATAL,
+				VCD_ERR_HW_FATAL,
+				NULL,
+				0,
+				(void *) p_ddl_context->p_current_ddl,
+				p_ddl_context->p_client_data
+			);
+
+			DDL_IDLE(p_ddl_context);
+
+			b_status = TRUE;
+			break;
+		}
+	}
+	return b_status;
+}
+
+void ddl_client_fatal_cb(struct ddl_context_type *p_ddl_context)
+{
+	struct ddl_client_context_type  *p_ddl =
+		p_ddl_context->p_current_ddl;
+
+	if (DDL_CMD_DECODE_FRAME == p_ddl_context->e_cmd_state)
+		ddl_decode_dynamic_property(p_ddl, FALSE);
+	else if (DDL_CMD_ENCODE_FRAME == p_ddl_context->e_cmd_state)
+		ddl_encode_dynamic_property(p_ddl, FALSE);
+
+	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
+
+	ddl_move_client_state(p_ddl, DDL_CLIENT_FATAL_ERROR);
+
+	p_ddl_context->ddl_callback
+	(
+		VCD_EVT_IND_HWERRFATAL,
+		VCD_ERR_CLIENT_FATAL,
+		NULL,
+		0,
+		(void *)p_ddl,
+		p_ddl_context->p_client_data
+	);
+
+	DDL_IDLE(p_ddl_context);
+}
+
+static u32 ddl_handle_client_fatal_errors(struct ddl_context_type
+			*p_ddl_context)
+{
+	u32 b_status = FALSE;
+
+	switch (p_ddl_context->nCmdErrStatus) {
+	case UNSUPPORTED_FEATURE_IN_PROFILE:
+	case RESOLUTION_NOT_SUPPORTED:
+	case HEADER_NOT_FOUND:
+
+	case MB_NUM_INVALID:
+	case FRAME_RATE_NOT_SUPPORTED:
+	case INVALID_QP_VALUE:
+	case INVALID_RC_REACTION_COEFFICIENT:
+	case INVALID_CPB_SIZE_AT_GIVEN_LEVEL:
+
+	case ALLOC_DPB_SIZE_NOT_SUFFICIENT:
+	case ALLOC_DB_SIZE_NOT_SUFFICIENT:
+	case ALLOC_COMV_SIZE_NOT_SUFFICIENT:
+	case NUM_BUF_OUT_OF_RANGE:
+	case NULL_CONTEXT_POINTER:
+	case NULL_COMAMND_CONTROL_COMM_POINTER:
+	case NULL_METADATA_INPUT_POINTER:
+	case NULL_DPB_POINTER:
+	case NULL_DB_POINTER:
+	case NULL_COMV_POINTER:
+		{
+			b_status = TRUE;
+			break;
+		}
+	}
+
+	if (FALSE == b_status)
+		DBG("UNKNOWN-OP-FAILED");
+
+	ddl_client_fatal_cb(p_ddl_context);
+
+	return TRUE;
+}
+
+static void ddl_input_failed_cb(struct ddl_context_type *p_ddl_context,
+			u32 vcd_event, u32 vcd_status)
+{
+	struct ddl_client_context_type  *p_ddl = p_ddl_context->p_current_ddl;
+
+	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
+
+	if (TRUE == p_ddl->b_decoding)
+		ddl_decode_dynamic_property(p_ddl, FALSE);
+	else
+		ddl_encode_dynamic_property(p_ddl, FALSE);
+
+	p_ddl->input_frame.b_frm_trans_end = TRUE;
+
+	p_ddl_context->ddl_callback(vcd_event,
+		vcd_status, &p_ddl->input_frame,
+		sizeof(struct ddl_frame_data_type_tag),
+		(void *)p_ddl, p_ddl_context->p_client_data);
+
+	ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME);
+	DDL_IDLE(p_ddl_context);
+}
+
+static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
+			*p_ddl_context)
+{
+	u32   vcd_status = VCD_S_SUCCESS;
+	u32   vcd_event = VCD_EVT_RESP_INPUT_DONE;
+
+	if (DDL_CMD_DECODE_FRAME != p_ddl_context->e_cmd_state &&
+		DDL_CMD_ENCODE_FRAME != p_ddl_context->e_cmd_state) {
+		return FALSE;
+	}
+	switch (p_ddl_context->nCmdErrStatus) {
+
+	case SYNC_POINT_NOT_RECEIVED:
+		{
+		vcd_status = VCD_ERR_IFRAME_EXPECTED;
+		break;
+		}
+	case NON_PAIRED_FIELD_NOT_SUPPORTED:
+		{
+		vcd_status = VCD_ERR_INTRLCD_FIELD_DROP;
+		break;
+		}
+	case NO_BUFFER_RELEASED_FROM_HOST:
+		{
+		vcd_event = VCD_EVT_RESP_OUTPUT_REQ;
+		break;
+		}
+	case MB_HEADER_NOT_DONE:
+	case MB_COEFF_NOT_DONE:
+	case CODEC_SLICE_NOT_DONE:
+	case VME_NOT_READY:
+	case VC1_BITPLANE_DECODE_ERR:
+
+	case RESOLUTION_MISMATCH:
+	case NV_QUANT_ERR:
+	case SYNC_MARKER_ERR:
+	case FEATURE_NOT_SUPPORTED:
+	case MEM_CORRUPTION:
+	case INVALID_REFERENCE_FRAME:
+	case PICTURE_CODING_TYPE_ERR:
+	case MV_RANGE_ERR:
+	case PICTURE_STRUCTURE_ERR:
+	case SLICE_ADDR_INVALID:
+	case NON_FRAME_DATA_RECEIVED:
+	case INCOMPLETE_FRAME:
+	case PICTURE_MANAGEMENT_ERROR:
+	case INVALID_MMCO:
+	case INVALID_PIC_REORDERING:
+	case INVALID_POC_TYPE:
+	case ACTIVE_SPS_NOT_PRESENT:
+	case ACTIVE_PPS_NOT_PRESENT:
+		{
+			vcd_status = VCD_ERR_BITSTREAM_ERR;
+			break;
+		}
+	}
+
+	if (VCD_S_SUCCESS == vcd_status && VCD_EVT_RESP_INPUT_DONE ==
+		vcd_event) {
+		return FALSE;
+	}
+
+	ddl_input_failed_cb(p_ddl_context, vcd_event, vcd_status);
+	return TRUE;
+}
+
+static u32 ddl_handle_disp_pic_warnings(struct ddl_context_type *p_ddl_context)
+{
+	u32 b_status = FALSE;
+
+	switch (p_ddl_context->nDispPicErrStatus) {
+	case METADATA_NO_SPACE_QP:
+	case METADATA_NO_SAPCE_CONCEAL_MB:
+	case METADATA_NO_SPACE_VC1_PARAM:
+	case METADATA_NO_SPACE_SEI:
+	case METADATA_NO_SPACE_VUI:
+	case METADATA_NO_SPACE_EXTRA:
+	case METADATA_NO_SPACE_DATA_NONE:
+		{
+			b_status = TRUE;
+			DBG("DISP-WARNING-IGNORED!!");
+			break;
+		}
+	}
+	return b_status;
+}
+
+static u32 ddl_handle_core_warnings(struct ddl_context_type *p_ddl_context)
+{
+	u32 b_status = FALSE;
+
+	switch (p_ddl_context->nCmdErrStatus) {
+	case FRAME_RATE_UNKNOWN:
+	case ASPECT_RATIO_UNKOWN:
+	case COLOR_PRIMARIES_UNKNOWN:
+	case TRANSFER_CHAR_UNKWON:
+	case MATRIX_COEFF_UNKNOWN:
+	case NON_SEQ_SLICE_ADDR:
+	case BROKEN_LINK:
+	case FRAME_CONCEALED:
+	case PROFILE_UNKOWN:
+	case LEVEL_UNKOWN:
+	case BIT_RATE_NOT_SUPPORTED:
+	case COLOR_DIFF_FORMAT_NOT_SUPPORTED:
+	case NULL_EXTRA_METADATA_POINTER:
+	case SYNC_POINT_NOT_RECEIVED_STARTED_DECODING:
+
+	case NULL_FW_DEBUG_INFO_POINTER:
+	case ALLOC_DEBUG_INFO_SIZE_INSUFFICIENT:
+
+	case METADATA_NO_SPACE_MB_INFO:
+	case METADATA_NO_SPACE_SLICE_SIZE:
+		{
+			b_status = TRUE;
+			DBG("CMD-WARNING-IGNORED!!");
+			break;
+		}
+	}
+	return b_status;
+}
+
+u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context)
+{
+	u32 b_status = FALSE;
+
+	if (!p_ddl_context->nCmdErrStatus &&
+		!p_ddl_context->nDispPicErrStatus)
+		return FALSE;
+
+	if (DDL_CMD_INVALID == p_ddl_context->e_cmd_state) {
+		DBG("SPURIOUS_INTERRUPT_ERROR");
+		return TRUE;
+	}
+
+	if (0x0 == p_ddl_context->nOpFailed) {
+		u32 b_disp_status;
+		b_status = ddl_handle_core_warnings(p_ddl_context);
+		b_disp_status = ddl_handle_disp_pic_warnings(p_ddl_context);
+		if (!b_status && !b_disp_status)
+			DBG("ddl_warning:Unknown");
+
+		return FALSE;
+	}
+
+	DBG("OPFAILED!!");
+
+	b_status = ddl_handle_hw_fatal_errors(p_ddl_context);
+
+	if (!b_status)
+		b_status = ddl_handle_core_recoverable_errors(p_ddl_context);
+
+	if (!b_status)
+		b_status = ddl_handle_client_fatal_errors(p_ddl_context);
+
+	return b_status;
+}
