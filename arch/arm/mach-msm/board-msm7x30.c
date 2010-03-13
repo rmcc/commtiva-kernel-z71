@@ -71,6 +71,7 @@
 #include <linux/input.h>
 #include <linux/smsc911x.h>
 #include <linux/ofn_atlab.h>
+#include <linux/power_supply.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -92,6 +93,7 @@
 #include <mach/pmic.h>
 #include <mach/rpc_pmapp.h>
 #include <mach/qdsp5v2/aux_pcm.h>
+#include <mach/msm_battery.h>
 
 #include <asm/mach/mmc.h>
 #include <mach/vreg.h>
@@ -2955,6 +2957,19 @@ static struct msm_ts_platform_data msm_ts_data = {
 	.inv_y          = 4096,
 };
 
+static struct msm_psy_batt_pdata msm_psy_batt_data = {
+	.voltage_min_design 	= 2800,
+	.voltage_max_design	= 4300,
+	.avail_chg_sources   	= AC_CHG | USB_CHG ,
+	.batt_technology        = POWER_SUPPLY_TECHNOLOGY_LION,
+};
+
+static struct platform_device msm_batt_device = {
+	.name 		    = "msm-battery",
+	.id		    = -1,
+	.dev.platform_data  = &msm_psy_batt_data,
+};
+
 static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
@@ -3025,6 +3040,7 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_MSM_GEMINI
 	&msm_gemini_device,
 #endif
+	&msm_batt_device,
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
