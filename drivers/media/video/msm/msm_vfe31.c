@@ -463,7 +463,8 @@ static void vfe31_release(struct platform_device *pdev)
 	vfe31_ctrl = NULL;
 	release_mem_region(vfemem->start, (vfemem->end - vfemem->start) + 1);
 	msm_camio_disable(pdev);
-
+	/* release AXI frequency request */
+	release_axi_qos();
 	vfe_syncdata = NULL;
 }
 
@@ -2541,7 +2542,10 @@ static int vfe31_init(struct msm_vfe_callback *presp,
 	rc = vfe31_resource_init(presp, dev, vfe_syncdata);
 	if (rc < 0)
 		return rc;
-
+		/* Set required axi bus frequency */
+	rc = request_axi_qos(MSM_AXI_QOS_PREVIEW);
+	if (rc < 0)
+		CDBG("request of axi qos failed\n");
 	/* Bring up all the required GPIOs and Clocks */
 	rc = msm_camio_enable(dev);
 	return rc;
