@@ -254,8 +254,8 @@ int kgsl_g12_setstate(struct kgsl_device *device, uint32_t flags)
 #ifdef CONFIG_MSM_KGSL_MMU
 	unsigned int mh_mmu_invalidate = 0x00000003; /*invalidate all and tc */
 
-	kgsl_g12_idle(device, KGSL_TIMEOUT_DEFAULT);
 	if (flags & KGSL_MMUFLAGS_PTUPDATE) {
+		kgsl_g12_idle(device, KGSL_TIMEOUT_DEFAULT);
 		kgsl_g12_regwrite(device, ADDR_MH_MMU_PT_BASE,
 				     device->mmu.hwpagetable->base.gpuaddr);
 		kgsl_g12_regwrite(device, ADDR_MH_MMU_VA_RANGE,
@@ -735,7 +735,18 @@ int __init kgsl_g12_config(struct kgsl_devconfig *devconfig,
 	 *	1 = translate within va_range, otherwise use phyisical
 	 *	2 = translate within va_range, otherwise fault
 	 */
-	devconfig->mmu_config = 1; /* mmu enable */
+	devconfig->mmu_config = 1 /* mmu enable */
+		    | (MMU_CONFIG << MH_MMU_CONFIG__RB_W_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_W_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_R2_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_R3_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__CP_R4_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__VGT_R0_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__VGT_R1_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__TC_R_CLNT_BEHAVIOR__SHIFT)
+		    | (MMU_CONFIG << MH_MMU_CONFIG__PA_W_CLNT_BEHAVIOR__SHIFT);
 
 	devconfig->va_base = 0x66000000;
 	devconfig->va_range = SZ_32M;

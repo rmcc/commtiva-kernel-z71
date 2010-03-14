@@ -436,6 +436,9 @@ static int kgsl_first_open_locked(void)
 	#endif
 	kgsl_driver.is_suspended = KGSL_FALSE;
 
+	INIT_LIST_HEAD(&kgsl_driver.pagetable_list);
+	mutex_init(&kgsl_driver.pt_mutex);
+
 	/* init devices */
 	result = kgsl_yamato_init(&kgsl_driver.yamato_device,
 					&kgsl_driver.yamato_config);
@@ -610,43 +613,6 @@ kgsl_sharedmem_find(struct kgsl_file_private *private, unsigned int gpuaddr)
 	return result;
 }
 
-static struct kgsl_mem_entry *
-kgsl_sharedmem_find_phys(struct kgsl_file_private *private,
-			unsigned int physaddr)
-{
-	struct kgsl_mem_entry *entry = NULL, *result = NULL;
-
-	BUG_ON(private == NULL);
-
-	list_for_each_entry(entry, &private->mem_list, list) {
-		if (entry->memdesc.physaddr == physaddr) {
-			result = entry;
-			break;
-		}
-	}
-	return result;
-}
-
-struct kgsl_mem_entry *
-kgsl_sharedmem_find_region_phys(struct kgsl_file_private *private,
-				unsigned int physaddr,
-				size_t size)
-{
-	struct kgsl_mem_entry *entry = NULL, *result = NULL;
-
-	BUG_ON(private == NULL);
-
-	list_for_each_entry(entry, &private->mem_list, list) {
-		if (physaddr >= entry->memdesc.physaddr &&
-		    ((physaddr + size) <=
-			(entry->memdesc.physaddr + entry->memdesc.size))) {
-			result = entry;
-			break;
-		}
-	}
-
-	return result;
-}
 /*call with driver locked */
 struct kgsl_mem_entry *
 kgsl_sharedmem_find_region(struct kgsl_file_private *private,
@@ -850,7 +816,7 @@ static long kgsl_ioctl_rb_issueibcmds(struct kgsl_file_private *private,
 			goto done;
 		}
 
-		if (kgsl_sharedmem_find_region_phys(private, param.ibaddr,
+		if (kgsl_sharedmem_find_region(private, param.ibaddr,
 				param.sizedwords*sizeof(uint32_t)) == NULL) {
 			KGSL_DRV_ERR("invalid cmd buffer ibaddr %08x " \
 					"sizedwords %d\n",
@@ -1109,10 +1075,7 @@ static long kgsl_ioctl_sharedmem_free(struct kgsl_file_private *private,
 		result = -EFAULT;
 		goto done;
 	}
-	if (param.gpuaddr > kgsl_driver.yamato_device.mmu.va_base)
-		entry = kgsl_sharedmem_find(private, param.gpuaddr);
-	else
-		entry = kgsl_sharedmem_find_phys(private, param.gpuaddr);
+	entry = kgsl_sharedmem_find(private, param.gpuaddr);
 
 	if (entry == NULL) {
 		KGSL_DRV_ERR("invalid gpuaddr %08x\n", param.gpuaddr);
@@ -1360,9 +1323,8 @@ static int kgsl_ioctl_sharedmem_from_pmem(struct kgsl_file_private *private,
 
 	/* If the offset is not at 4K boundary then add the correct offset
 	 * value to gpuaddr */
-	entry->memdesc.physaddr += (param.offset & ~KGSL_PAGEMASK);
-	/* Once Z180 MMU is working then use memdesc.gpuaddr */
-	param.gpuaddr = entry->memdesc.physaddr;
+	entry->memdesc.gpuaddr += (param.offset & ~KGSL_PAGEMASK);
+	param.gpuaddr = entry->memdesc.gpuaddr;
 
 	if (copy_to_user(arg, &param, sizeof(param))) {
 		result = -EFAULT;
