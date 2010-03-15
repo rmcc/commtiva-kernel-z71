@@ -224,7 +224,7 @@ static int msmrtc_tod_proc_result(struct msm_rpc_client *client, void *buff,
 			rtc_time_to_tm(0, rtc_args->tm);
 		}
 
-	return 0;
+		return 0;
 	} else
 		return 0;
 }
@@ -256,7 +256,7 @@ msmrtc_timeremote_set_time(struct device *dev, struct rtc_time *tm)
 	}
 
 	return 0;
-	}
+}
 
 static int
 msmrtc_timeremote_read_time(struct device *dev, struct rtc_time *tm)
@@ -326,7 +326,8 @@ msmrtc_timeremote_set_time_secure(struct device *dev, struct rtc_time *tm)
 	rtc_args.proc = TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN;
 	rtc_args.tm = tm;
 
-	rc = msm_rpc_client_req(rpc_client, TIMEREMOTE_PROCEEDURE_SET_JULIAN,
+	rc = msm_rpc_client_req(rpc_client,
+			TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN,
 				msmrtc_tod_proc_args, &rtc_args,
 				NULL, NULL, -1);
 	if (rc) {
