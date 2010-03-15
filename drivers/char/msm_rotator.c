@@ -595,7 +595,8 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	struct msm_rotator_data_info info;
 	unsigned int in_paddr, out_paddr, vaddr;
 	unsigned long len;
-	struct file *file;
+	struct file *src_file = 0;
+	struct file *dst_file = 0;
 	int use_imem = 0;
 	int s;
 
@@ -604,7 +605,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 
 	rc = get_pmem_file(info.src.memory_id, (unsigned long *)&in_paddr,
 			   (unsigned long *)&vaddr, (unsigned long *)&len,
-			   &file);
+			   &src_file);
 	if (rc) {
 		printk(KERN_ERR "%s: in get_pmem_file() failed id=0x%08x\n",
 		       DRIVER_NAME, info.src.memory_id);
@@ -614,7 +615,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 
 	rc = get_pmem_file(info.dst.memory_id, (unsigned long *)&out_paddr,
 			   (unsigned long *)&vaddr, (unsigned long *)&len,
-			   &file);
+			   &dst_file);
 	if (rc) {
 		printk(KERN_ERR "%s: out get_pmem_file() failed id=0x%08x\n",
 		       DRIVER_NAME, info.dst.memory_id);
@@ -718,7 +719,10 @@ do_rotate_exit:
 	msm_rotator_imem_free(ROTATOR_REQUEST);
 	schedule_delayed_work(&msm_rotator_dev->rot_clk_work, HZ);
 do_rotate_unlock_mutex:
-	put_pmem_file(file);
+	if (src_file)
+		put_pmem_file(src_file);
+	if (dst_file)
+		put_pmem_file(dst_file);
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 	dev_dbg(msm_rotator_dev->device, "%s() returning rc = %d\n",
 		__func__, rc);
