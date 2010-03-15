@@ -1640,7 +1640,7 @@ static void kgsl_driver_cleanup(void)
 static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 {
 	int result = 0;
-	struct clk *clk;
+	struct clk *clk, *grp_clk;
 	struct resource *res = NULL;
 	struct kgsl_platform_data *pdata = NULL;
 
@@ -1666,7 +1666,12 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 		KGSL_DRV_ERR("clk_get(grp_clk) returned %d\n", result);
 		goto done;
 	}
-	kgsl_driver.yamato_grp_clk = clk;
+	kgsl_driver.yamato_grp_clk = grp_clk = clk;
+
+	clk = clk_get(&pdev->dev, "grp_src_clk");
+	if (IS_ERR(clk)) {
+		clk = grp_clk; /* Fallback to slave */
+	}
 
 	/* put the AXI bus into asynchronous mode with the graphics cores */
 	if (pdata != NULL) {
