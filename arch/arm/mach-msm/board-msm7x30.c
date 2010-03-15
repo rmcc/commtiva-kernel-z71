@@ -2786,6 +2786,7 @@ static int marimba_bt(int on)
 	};
 
 	const struct marimba_config_register v210_bt_on[] = {
+		{ 0xE9, 0x01, 0x01 },
 		{ 0x06, 0x88, 0xFF },
 		{ 0xE7, 0x21, 0x21 },
 	};
@@ -2793,6 +2794,7 @@ static int marimba_bt(int on)
 	const struct marimba_config_register v210_bt_off[] = {
 		{ 0x06, 0x88, 0xFF },
 		{ 0xE7, 0x00, 0x21 },
+		{ 0xE9, 0x00, 0x01 },
 	};
 
 	const struct marimba_variant_register bt_marimba[2][4] = {
