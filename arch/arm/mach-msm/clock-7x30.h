@@ -157,5 +157,14 @@ void pll_disable(uint32_t pll);
 	.dbg_name = #clk_id, \
 	}
 
+#define CLK_7X30S(clk_name, l_id, r_id, clk_dev, clk_flags) {	\
+	.name = clk_name, \
+	.id = L_7X30_##l_id, \
+	.remote_id = P_##r_id, \
+	.flags = clk_flags, \
+	.dev = clk_dev, \
+	.dbg_name = #l_id, \
+	}
+
 #endif
 
