@@ -374,6 +374,9 @@ static void msm_pm_config_hw_before_power_down(void)
 #if defined(CONFIG_ARCH_MSM7X30)
 	writel(1, APPS_PWRDOWN);
 	writel(4, APPS_SECOP);
+#elif defined(CONFIG_ARCH_MSM7X27)
+	writel(0x1f, APPS_CLK_SLEEP_EN);
+	writel(1, APPS_PWRDOWN);
 #else
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 	writel(1, APPS_PWRDOWN);
