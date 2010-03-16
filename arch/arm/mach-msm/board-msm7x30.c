@@ -2442,71 +2442,52 @@ static void display_common_power(int on)
 		}
 	}
 
-	if (on)
+	if (on) {
 		rc = vreg_enable(vreg_ldo20);
-	else
-		rc = vreg_disable(vreg_ldo20);
+		if (rc) {
+			pr_err("%s: LDO20 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
 
-	if (rc) {
-		pr_err("%s: LDO20 vreg enable failed (%d)\n",
-		       __func__, rc);
-		return;
-	}
-
-	if (on)
 		rc = vreg_enable(vreg_ldo12);
-	else
-		rc = vreg_disable(vreg_ldo12);
+		if (rc) {
+			pr_err("%s: LDO12 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
 
-	if (rc) {
-		pr_err("%s: LDO12 vreg enable failed (%d)\n",
-		       __func__, rc);
-		return;
-	}
-
-	if (on)
 		rc = vreg_enable(vreg_ldo16);
-	else
-		rc = vreg_disable(vreg_ldo16);
+		if (rc) {
+			pr_err("%s: LDO16 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
 
-	if (rc) {
-		pr_err("%s: LDO16 vreg enable failed (%d)\n",
-		       __func__, rc);
-		return;
-	}
-
-	if (machine_is_msm7x30_fluid()) {
-		if (on)
+		if (machine_is_msm7x30_fluid()) {
 			rc = vreg_enable(vreg_ldo8);
-		else
-			rc = vreg_disable(vreg_ldo8);
-
-		if (rc) {
-			pr_err("%s: LDO8 vreg enable failed (%d)\n",
-				__func__, rc);
-			return;
-		}
-	} else {
-		if (on)
+			if (rc) {
+				pr_err("%s: LDO8 vreg enable failed (%d)\n",
+					__func__, rc);
+				return;
+			}
+		} else {
 			rc = vreg_enable(vreg_ldo15);
-		else
-			rc = vreg_disable(vreg_ldo15);
-		if (rc) {
-			pr_err("%s: LDO15 vreg enable failed (%d)\n",
-				__func__, rc);
-			return;
+			if (rc) {
+				pr_err("%s: LDO15 vreg enable failed (%d)\n",
+					__func__, rc);
+				return;
+			}
 		}
-	}
 
-	mdelay(5);		/* ensure power is stable */
+		mdelay(5);		/* ensure power is stable */
 
-	if (machine_is_msm7x30_fluid()) {
-		if (on) {
+		if (machine_is_msm7x30_fluid()) {
 			rc = msm_gpios_request_enable(fluid_vee_reset_gpio,
 					ARRAY_SIZE(fluid_vee_reset_gpio));
 			if (rc)
 				pr_err("%s gpio_request_enable failed rc=%d\n",
-						__func__, rc);
+							__func__, rc);
 			else {
 				/* assert vee reset_n */
 				gpio_set_value(20, 1);
@@ -2514,20 +2495,62 @@ static void display_common_power(int on)
 				mdelay(1);
 				gpio_set_value(20, 1);
 			}
-		} else
+		}
+
+		gpio_set_value(180, 1);	/* bring reset line high */
+		mdelay(10);	/* 10 msec before IO can be accessed */
+		pmapp_display_clock_config(1);
+
+	} else {
+		rc = vreg_disable(vreg_ldo20);
+		if (rc) {
+			pr_err("%s: LDO20 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
+
+
+		rc = vreg_disable(vreg_ldo16);
+		if (rc) {
+			pr_err("%s: LDO16 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
+
+		gpio_set_value(180, 0);	/* bring reset line low */
+
+		if (machine_is_msm7x30_fluid()) {
+			rc = vreg_disable(vreg_ldo8);
+			if (rc) {
+				pr_err("%s: LDO8 vreg enable failed (%d)\n",
+					__func__, rc);
+				return;
+			}
+		} else {
+			rc = vreg_disable(vreg_ldo15);
+			if (rc) {
+				pr_err("%s: LDO15 vreg enable failed (%d)\n",
+					__func__, rc);
+				return;
+			}
+		}
+
+		mdelay(5);	/* ensure power is stable */
+
+		rc = vreg_disable(vreg_ldo12);
+		if (rc) {
+			pr_err("%s: LDO12 vreg enable failed (%d)\n",
+			       __func__, rc);
+			return;
+		}
+
+		if (machine_is_msm7x30_fluid()) {
 			msm_gpios_disable_free(fluid_vee_reset_gpio,
 					ARRAY_SIZE(fluid_vee_reset_gpio));
-	}
+		}
 
-	if (on) {
-		gpio_set_value(180, 1);	/* bring reset line high */
-		mdelay(10);		/* 10 msec before IO can be accessed */
-	}
-
-	if (on)
-		pmapp_display_clock_config(1);
-	else
 		pmapp_display_clock_config(0);
+	}
 }
 
 static int msm_fb_mddi_sel_clk(u32 *clk_rate)
