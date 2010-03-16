@@ -110,7 +110,6 @@
 
 #define MSM_PMEM_SF_SIZE	0x1700000
 #define MSM_FB_SIZE		0x500000
-#define MSM_PMEM_GPU1_SIZE      0x1000000
 #define MSM_GPU_PHYS_SIZE       SZ_2M
 #define MSM_PMEM_ADSP_SIZE      0x2000000
 #define PMEM_KERNEL_EBI1_SIZE   0x600000
@@ -2221,19 +2220,6 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
-static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
-	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 0,
-};
-
-static struct platform_device android_pmem_gpu1_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
-
-
 static struct android_pmem_platform_data android_pmem_kernel_ebi1_pdata = {
        .name = PMEM_KERNEL_EBI1_DATA_NAME,
 	/* if no allocator_type, defaults to PMEM_ALLOCATORTYPE_BITMAP,
@@ -3019,7 +3005,6 @@ static struct platform_device *devices[] __initdata = {
    (defined(CONFIG_MSM_BT_POWER) || defined(CONFIG_MSM_BT_POWER_MODULE))
 	&msm_bt_power_device,
 #endif
-	&android_pmem_gpu1_device,
 	&msm_device_kgsl,
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart2,
@@ -3592,13 +3577,6 @@ static void __init fb_size_setup(char **p)
 }
 __early_param("fb_size=", fb_size_setup);
 
-static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
-static void __init pmem_gpu1_size_setup(char **p)
-{
-	pmem_gpu1_size = memparse(*p, p);
-}
-__early_param("pmem_gpu1_size=", pmem_gpu1_size_setup);
-
 static unsigned gpu_phys_size = MSM_GPU_PHYS_SIZE;
 static void __init gpu_phys_size_setup(char **p)
 {
@@ -3640,15 +3618,6 @@ static void __init msm7x30_allocate_memory_regions(void)
 	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
-
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
 
 	size = gpu_phys_size;
 	if (size) {
