@@ -376,6 +376,20 @@ u32 vcd_core_is_busy(struct vcd_dev_ctxt_type *p_dev_ctxt)
 	}
 }
 
+void vcd_device_timer_start(struct vcd_dev_ctxt_type *p_dev_ctxt)
+{
+	if (p_dev_ctxt->config.pf_timer_start)
+		p_dev_ctxt->config.pf_timer_start(p_dev_ctxt->p_hw_timer_handle,
+			p_dev_ctxt->n_hw_time_out);
+}
+
+void vcd_device_timer_stop(struct vcd_dev_ctxt_type *p_dev_ctxt)
+{
+	if (p_dev_ctxt->config.pf_timer_stop)
+		p_dev_ctxt->config.pf_timer_stop(p_dev_ctxt->p_hw_timer_handle);
+}
+
+
 u32 vcd_common_allocate_set_buffer(
 	struct vcd_clnt_ctxt_type_t *p_cctxt,
 	 enum vcd_buffer_type e_buffer,
@@ -471,6 +485,12 @@ u32 vcd_set_buffer_internal(
 		VCD_MSG_ERROR("Couldn't get physical address");
 
 		return VCD_ERR_BAD_POINTER;
+	}
+
+	if (((u32)p_buf_entry->p_physical %
+		p_buf_pool->buf_req.n_align) != 0) {
+		VCD_MSG_ERROR("Physical addr is not aligned");
+		return VCD_ERR_BAD_POINTER ;
 	}
 
 	p_buf_entry->n_size = n_buf_size;
@@ -695,7 +715,7 @@ void vcd_flush_in_use_buffer_pool_entries(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	struct vcd_buffer_pool_type *p_buf_pool, u32 event)
 {
 	u32 i;
-	VCD_MSG_LOW("VCD_FlushBufferPoolEntries: event=0x%x", event);
+	VCD_MSG_LOW("vcd_flush_buffer_pool_entries: event=0x%x", event);
 
 	if (NULL != p_buf_pool->a_entries) {
 		for (i = 0; i <= p_buf_pool->n_count; i++) {
@@ -788,7 +808,7 @@ u32 vcd_buffer_pool_entry_en_q(
 	}
 
 	if (b_found) {
-		VCD_MSG_ERROR("\nThis output buffer is already present"
+		VCD_MSG_ERROR("\n this output buffer is already present"
 			" in queue");
 		VCD_MSG_ERROR("\n Vir Addr %p Phys Addr %p",
 			p_entry->p_virtual, p_entry->p_physical);
@@ -932,7 +952,7 @@ u32 vcd_flush_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt, u32 n_mode)
 
 void vcd_flush_buffers_in_err_fatal(struct vcd_clnt_ctxt_type_t *p_cctxt)
 {
-	VCD_MSG_LOW("\n VCD_FlushBuffersInErrFatal:");
+	VCD_MSG_LOW("\n vcd_flush_buffers_in_err_fatal:");
 	(void) vcd_flush_buffers(p_cctxt, VCD_FLUSH_ALL);
 	vcd_flush_in_use_buffer_pool_entries(p_cctxt,
 		&p_cctxt->in_buf_pool, VCD_EVT_RESP_INPUT_FLUSHED);
@@ -1008,14 +1028,14 @@ void vcd_destroy_client_context(struct vcd_clnt_ctxt_type_t *p_cctxt)
 						   (void *)&n_idx));
 			if (VCD_FAILED(rc))
 				VCD_MSG_ERROR("\n Failed: "
-					"sched_FlushClientBuffer");
+					"sched_flush_client_buffer");
 		}
 
 		rc = vcd_map_sched_status(sched_remove_client
 					  (p_dev_ctxt->sched_hdl,
 					   p_cctxt->sched_clnt_hdl));
 		if (VCD_FAILED(rc))
-			VCD_MSG_ERROR("\n Failed: sched_RemoveClient");
+			VCD_MSG_ERROR("\n Failed: sched_remove_client");
 
 		p_cctxt->b_sched_clnt_valid = FALSE;
 	}
@@ -1171,8 +1191,10 @@ u32 vcd_submit_cmd_sess_start(struct vcd_transc_type *p_transc)
 		rc = ddl_encode_start(p_transc->p_cctxt->ddl_handle,
 					  (void *)p_transc);
 	}
-	if (!VCD_FAILED(rc))
+	if (!VCD_FAILED(rc)) {
 		p_transc->p_cctxt->status.n_cmd_submitted++;
+		vcd_device_timer_start(p_transc->p_cctxt->p_dev_ctxt);
+	}
 	return rc;
 }
 
@@ -1189,8 +1211,10 @@ u32 vcd_submit_cmd_sess_end(struct vcd_transc_type *p_transc)
 		rc = ddl_encode_end(p_transc->p_cctxt->ddl_handle,
 					(void *)p_transc);
 	}
-	if (!VCD_FAILED(rc))
+	if (!VCD_FAILED(rc)) {
 		p_transc->p_cctxt->status.n_cmd_submitted++;
+		vcd_device_timer_start(p_transc->p_cctxt->p_dev_ctxt);
+	}
 	return rc;
 }
 
@@ -1213,7 +1237,7 @@ u32 vcd_submit_command_in_continue(struct vcd_dev_ctxt_type
 	u32 b_result = FALSE, n_flush = 0, event = 0;
 	u32 b_break = FALSE;
 
-	VCD_MSG_LOW("\n VCD_SubmitCommand:");
+	VCD_MSG_LOW("\n vcd_submit_command:");
 
 	while (!b_break) {
 		b_result = vcd_get_next_queued_client_cmd(p_dev_ctxt,
@@ -1260,7 +1284,7 @@ u32 vcd_submit_command_in_continue(struct vcd_dev_ctxt_type
 			}
 		 default:
 			{
-				VCD_MSG_ERROR("\n VCD_SubmitCommand: Unknown"
+				VCD_MSG_ERROR("\n vcd_submit_command: Unknown"
 					"command %d", (int)cmd);
 				vcd_assert();
 				break;
@@ -1270,7 +1294,7 @@ u32 vcd_submit_command_in_continue(struct vcd_dev_ctxt_type
 		 if (!VCD_FAILED(rc)) {
 			b_break = TRUE;
 		 } else	{
-			VCD_MSG_ERROR("VCD_SubmitCommand %d: failed 0x%x",
+			VCD_MSG_ERROR("vcd_submit_command %d: failed 0x%x",
 				cmd, rc);
 			p_client->callback(event, rc, NULL, 0, p_client,
 				p_client->p_client_data);
@@ -1292,7 +1316,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	struct ddl_frame_data_type_tag ddl_ip_frm;
 	struct ddl_frame_data_type_tag ddl_op_frm;
 
-	VCD_MSG_LOW("VCD_SubmitFrame:");
+	VCD_MSG_LOW("vcd_submit_frame:");
 	if (NULL == p_dev_ctxt->p_cctxt_list_head) {
 		VCD_MSG_HIGH("Client list empty");
 		return FALSE;
@@ -1300,7 +1324,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	rc = vcd_map_sched_status(sched_de_queue_frame(p_dev_ctxt->
 		sched_hdl, (void **) &p_ip_buf_entry, (void **) &p_cctxt));
 	if (VCD_FAILED(rc)) {
-		VCD_MSG_FATAL("VCD_SubmitFrame: sched_DeQueueFrame"
+		VCD_MSG_FATAL("vcd_submit_frame: sched_de_queue_frame"
 			"failed 0x%x", rc);
 		return FALSE;
 	}
@@ -1356,6 +1380,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	}
 	p_ip_frm_entry->n_ip_frm_tag = p_transc->n_ip_frm_tag;
 	if (!VCD_FAILED(rc)) {
+		vcd_device_timer_start(p_dev_ctxt);
 		p_cctxt->status.n_frame_submitted++;
 		b_result = TRUE;
 		if (p_ip_frm_entry->n_flags & VCD_FRAME_FLAG_EOS)
@@ -1363,8 +1388,8 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 				VCD_CLIENT_STATE_EOS, evcode);
 	} else {
 		VCD_MSG_ERROR("Frame submission failed. rc = 0x%x", rc);
-		b_result = FALSE;
-		vcd_assert();
+		vcd_handle_submit_frame_failed(p_dev_ctxt, p_transc);
+		b_result = TRUE;
 	}
 	return b_result;
 }
@@ -1415,11 +1440,11 @@ u32 vcd_process_cmd_sess_start(struct vcd_clnt_ctxt_type_t *p_cctxt)
 }
 
 void vcd_send_frame_done_in_eos(struct vcd_clnt_ctxt_type_t *p_cctxt,
-	 struct vcd_frame_data_type *p_input_frame)
+	 struct vcd_frame_data_type *p_input_frame, u32 valid_opbuf)
 {
 	VCD_MSG_LOW("vcd_send_frame_done_in_eos:");
 
-	if (NULL == p_input_frame->p_virtual) {
+	if (NULL == p_input_frame->p_virtual && valid_opbuf == FALSE) {
 		VCD_MSG_MED("Sending NULL output with EOS");
 
 		p_cctxt->out_buf_pool.a_entries[0].frame.n_flags =
@@ -1587,7 +1612,7 @@ u32 vcd_handle_recvd_eos(
 					   p_cctxt->n_sched_o_tkn_per_ip_frm));
 	} else if (!p_cctxt->b_decoding) {
 
-		vcd_send_frame_done_in_eos(p_cctxt, p_input_frame);
+		vcd_send_frame_done_in_eos(p_cctxt, p_input_frame, FALSE);
 
 		if (p_cctxt->status.b_eos_wait_for_op_buf) {
 			vcd_do_client_state_transition(p_cctxt,
@@ -1711,58 +1736,59 @@ u32 vcd_handle_first_decode_frame(struct vcd_clnt_ctxt_type_t *p_cctxt)
 u32 vcd_setup_with_ddl_capabilities(struct vcd_dev_ctxt_type *p_dev_ctxt)
 {
 	struct vcd_property_hdr_type Prop_hdr;
-	struct ddl_property_command_depth_type cmd_depth;
 	struct ddl_property_capability_type capability;
 	u32 rc = VCD_S_SUCCESS;
 
 	VCD_MSG_LOW("vcd_setup_with_ddl_capabilities:");
 
 	if (0 == p_dev_ctxt->n_ddl_cmd_ch_depth) {
-
-		Prop_hdr.prop_id = DDL_I_COMMAND_DEPTH;
-		Prop_hdr.n_size = sizeof(cmd_depth);
-
-		rc = ddl_get_property(NULL, &Prop_hdr, &cmd_depth);
-
-		if (!VCD_FAILED(rc)) {
-			p_dev_ctxt->b_ddl_cmd_concurrency =
-				!cmd_depth.b_exclusive;
-			p_dev_ctxt->n_ddl_frame_ch_depth =
-				cmd_depth.n_frame_command_depth;
-			p_dev_ctxt->n_ddl_cmd_ch_depth =
-				cmd_depth.n_general_command_depth;
-			vcd_reset_device_channels(p_dev_ctxt);
-		}
-	}
-
-	VCD_FAILED_RETURN(rc, "Failed: DDL get DDL_I_COMMAND_DEPTH");
-
-	if (NULL == p_dev_ctxt->a_trans_tbl) {
 		Prop_hdr.prop_id = DDL_I_CAPABILITY;
 		Prop_hdr.n_size = sizeof(capability);
+
+		/*
+		** Since this is underlying core's property we don't need a
+		** ddl client handle.
+		*/
 		rc = ddl_get_property(NULL, &Prop_hdr, &capability);
 
 		if (!VCD_FAILED(rc)) {
+			/*
+			** Allocate the transaction table.
+			*/
 			p_dev_ctxt->n_trans_tbl_size =
 				(VCD_MAX_CLIENT_TRANSACTIONS *
-				 capability.n_max_num_client) +
-				p_dev_ctxt->n_ddl_cmd_ch_depth;
+				capability.n_max_num_client) +
+				capability.n_general_command_depth;
 
 			p_dev_ctxt->a_trans_tbl = (struct vcd_transc_type *)
 				vcd_malloc(sizeof(struct vcd_transc_type) *
-					   p_dev_ctxt->n_trans_tbl_size);
+				p_dev_ctxt->n_trans_tbl_size);
 
 			if (NULL == p_dev_ctxt->a_trans_tbl) {
 				VCD_MSG_ERROR("Transaction table alloc failed");
 
 				rc = VCD_ERR_ALLOC_FAIL;
-			} else {
-				memset(p_dev_ctxt->a_trans_tbl,
-					   0,
-					   sizeof(struct vcd_transc_type) *
-					   p_dev_ctxt->n_trans_tbl_size);
-			}
+			} else	{
+				memset(p_dev_ctxt->a_trans_tbl, 0,
+					sizeof(struct vcd_transc_type) *
+					p_dev_ctxt->n_trans_tbl_size);
 
+				/*
+				** Set the command/frame depth
+				*/
+				p_dev_ctxt->b_ddl_cmd_concurrency =
+					!capability.b_exclusive;
+				p_dev_ctxt->n_ddl_frame_ch_depth =
+					capability.n_frame_command_depth;
+				p_dev_ctxt->n_ddl_cmd_ch_depth =
+					capability.n_general_command_depth;
+
+				vcd_reset_device_channels(p_dev_ctxt);
+
+				p_dev_ctxt->n_hw_time_out =
+					capability.n_ddl_time_out_in_ms;
+
+			}
 		}
 	}
 	return rc;
@@ -1964,9 +1990,7 @@ void vcd_handle_input_done_in_eos(
 	(void)vcd_handle_input_done(p_cctxt,
 		p_payload, VCD_EVT_RESP_INPUT_DONE, status);
 
-	if (VCD_FAILED(status)) {
-		vcd_handle_input_done_failed(p_cctxt, p_transc);
-	} else if ((p_frame->vcd_frm.n_flags & VCD_FRAME_FLAG_EOS)) {
+	if ((p_frame->vcd_frm.n_flags & VCD_FRAME_FLAG_EOS)) {
 		VCD_MSG_HIGH("Got input done for EOS initiator");
 		p_transc->b_input_done = FALSE;
 		p_transc->b_in_use = TRUE;
@@ -2019,9 +2043,7 @@ void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 	p_cctxt->status.n_int_field_cnt++;
 
-	if (VCD_DEC_NUM_INTERLACED_FIELDS == p_cctxt->status.n_int_field_cnt) {
-		p_cctxt->status.n_int_field_cnt = 0;
-
+	if (1 == p_cctxt->status.n_int_field_cnt) {
 		rc = vcd_map_sched_status(sched_update_client_o_tkn
 					  (p_cctxt->p_dev_ctxt->sched_hdl,
 					   p_cctxt->sched_clnt_hdl, TRUE,
@@ -2029,7 +2051,9 @@ void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 		if (VCD_FAILED(rc))
 			VCD_MSG_ERROR("sched_update_client_o_tkn failed");
-	}
+	} else if (VCD_DEC_NUM_INTERLACED_FIELDS
+			   == p_cctxt->status.n_int_field_cnt)
+		p_cctxt->status.n_int_field_cnt = 0;
 }
 
 u32 vcd_handle_output_required(struct vcd_clnt_ctxt_type_t
@@ -2100,7 +2124,7 @@ u32 vcd_handle_output_required(struct vcd_clnt_ctxt_type_t
 }
 
 
-u32 VCD_handle_output_required_in_flushing(
+u32 vcd_handle_output_required_in_flushing(
 struct vcd_clnt_ctxt_type_t *p_cctxt, void *p_payload)
 {
 	u32 rc;
@@ -2222,21 +2246,11 @@ void vcd_handle_frame_done_for_interlacing(
 	 struct vcd_transc_type *p_transc_ip1,
 	 struct ddl_frame_data_type_tag *p_op_frm, u32 status)
 {
-	u32 rc;
 	struct vcd_transc_type *p_transc_ip2 =
 		(struct vcd_transc_type *)p_op_frm->n_intrlcd_ip_frm_tag;
 
 	if (VCD_ERR_INTRLCD_FIELD_DROP == status) {
 		p_cctxt->status.n_int_field_cnt = 0;
-
-		rc = vcd_map_sched_status(sched_update_client_o_tkn
-					  (p_cctxt->p_dev_ctxt->sched_hdl,
-					   p_cctxt->sched_clnt_hdl, TRUE,
-					   p_cctxt->n_sched_o_tkn_per_ip_frm));
-
-		if (VCD_FAILED(rc))
-			VCD_MSG_ERROR("sched_update_client_o_tkn failed");
-
 		return;
 	}
 
@@ -2405,6 +2419,7 @@ void vcd_handle_eos_trans_end(struct vcd_clnt_ctxt_type_t *p_cctxt)
 void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	 struct vcd_transc_type *p_transc, u32 status)
 {
+	struct vcd_frame_data_type  vcd_frm;
 	VCD_MSG_LOW("vcd_handle_eos_done:");
 
 	if (VCD_FAILED(status))
@@ -2422,13 +2437,20 @@ void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 
 		p_cctxt->status.b_eos_prev_valid = FALSE;
 	} else {
-		p_transc->p_ip_buf_entry->frame.n_ip_frm_tag =
-			p_transc->n_ip_frm_tag;
+		if (NULL != p_transc->p_ip_buf_entry) {
+			p_transc->p_ip_buf_entry->frame.n_ip_frm_tag =
+				p_transc->n_ip_frm_tag;
 
-		vcd_send_frame_done_in_eos(p_cctxt,
-					   &p_transc->p_ip_buf_entry->frame);
+			vcd_send_frame_done_in_eos(p_cctxt,
+				&p_transc->p_ip_buf_entry->frame, FALSE);
+		} else {
+			memset(&vcd_frm, 0, sizeof(struct vcd_frame_data_type));
+			vcd_frm.n_ip_frm_tag = p_transc->n_ip_frm_tag;
+			vcd_frm.time_stamp = p_transc->time_stamp;
+			vcd_frm.n_flags = VCD_FRAME_FLAG_EOS;
+			vcd_send_frame_done_in_eos(p_cctxt, &vcd_frm, TRUE);
+		}
 	}
-
 	if (NULL != p_transc->p_ip_buf_entry) {
 		if (NULL != p_transc->p_ip_buf_entry->frame.p_virtual) {
 			p_transc->p_ip_buf_entry->frame.n_ip_frm_tag =
@@ -2493,7 +2515,7 @@ void vcd_handle_stop_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	u32 rc = VCD_S_SUCCESS, seq_hdrpresent = 0;
 	union sched_value_type sched_val;
 	struct vcd_property_hdr_type  prop_hdr;
-	VCD_MSG_LOW("VCD_HandleStopDone:");
+	VCD_MSG_LOW("vcd_handle_stop_done:");
 	p_cctxt->status.n_cmd_submitted--;
 	vcd_mark_command_channel(p_cctxt->p_dev_ctxt, p_transc);
 
@@ -2557,7 +2579,7 @@ void vcd_handle_stop_done_in_starting(struct vcd_clnt_ctxt_type_t
 	*p_cctxt, struct vcd_transc_type *p_transc, u32 status)
 {
 	u32 rc;
-	VCD_MSG_LOW("VCD_HandleStopDoneInStarting:");
+	VCD_MSG_LOW("vcd_handle_stop_done_in_starting:");
 	p_cctxt->status.n_cmd_submitted--;
 	vcd_mark_command_channel(p_cctxt->p_dev_ctxt, p_transc);
 	if (!VCD_FAILED(status)) {
@@ -2581,7 +2603,7 @@ void vcd_handle_stop_done_in_invalid(struct vcd_clnt_ctxt_type_t
 	*p_cctxt, u32 status)
 {
 	u32 rc;
-	VCD_MSG_LOW("VCD_HandleStopDoneInInvalid:");
+	VCD_MSG_LOW("vcd_handle_stop_done_in_invalid:");
 	if (!VCD_FAILED(status)) {
 		vcd_client_cmd_flush_and_en_q(p_cctxt, VCD_CMD_CLIENT_CLOSE);
 		if (0 != p_cctxt->status.n_frame_submitted) {
@@ -3126,4 +3148,28 @@ void vcd_handle_trans_pending(struct vcd_clnt_ctxt_type_t *p_cctxt)
 	p_cctxt->status.n_frame_submitted--;
 	p_cctxt->status.n_frame_delayed++;
 	vcd_mark_frame_channel(p_cctxt->p_dev_ctxt);
+}
+
+void vcd_handle_submit_frame_failed(struct vcd_dev_ctxt_type
+	*p_dev_ctxt, struct vcd_transc_type *p_transc)
+{
+	struct vcd_clnt_ctxt_type_t *p_cctxt = p_transc->p_cctxt;
+	u32 rc;
+
+	vcd_mark_frame_channel(p_dev_ctxt);
+	p_transc->b_in_use = FALSE;
+
+	vcd_handle_err_fatal(p_cctxt, VCD_EVT_IND_HWERRFATAL,
+		VCD_ERR_CLIENT_FATAL);
+
+	if (vcd_get_command_channel(p_dev_ctxt, &p_transc)) {
+		p_transc->e_type = VCD_CMD_CODEC_STOP;
+		p_transc->p_cctxt = p_cctxt;
+		rc = vcd_submit_cmd_sess_end(p_transc);
+		if (VCD_FAILED(rc))	{
+			vcd_release_command_channel(p_dev_ctxt, p_transc);
+			VCD_MSG_ERROR("rc = 0x%x. Failed: VCD_SubmitCmdSessEnd",
+				rc);
+		}
+	}
 }

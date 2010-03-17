@@ -54,6 +54,7 @@ struct vid_dec_dev {
 	s32 device_handle;
 	struct video_client_ctx vdec_clients[VID_DEC_MAX_DECODER_CLIENTS];
 	u32 num_clients;
+	void(*pf_timer_handler)(void *);
 };
 
 #endif

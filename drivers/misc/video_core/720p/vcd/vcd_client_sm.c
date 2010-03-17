@@ -161,7 +161,7 @@ static u32 vcd_encode_start_in_open(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 	VCD_FAILED_RETURN(rc, "Failed: Get VCD_I_VOP_TIMING");
 	if (0 == timing.n_vop_time_resolution) {
-		VCD_MSG_ERROR("VopTimeResolution value is zero");
+		VCD_MSG_ERROR("Vop_time_resolution value is zero");
 		return VCD_ERR_FAIL;
 	}
 	p_cctxt->n_time_resoln = timing.n_vop_time_resolution;
@@ -901,9 +901,9 @@ static void vcd_clnt_cb_in_starting
 	struct vcd_dev_ctxt_type *p_dev_ctxt = p_cctxt->p_dev_ctxt;
 	struct vcd_transc_type *p_transc =
 		(struct vcd_transc_type *)p_client_data;
-	VCD_MSG_LOW("VCD_ClntCbInStarting:");
+	VCD_MSG_LOW("vcd_clnt_cb_in_starting:");
 	if (p_cctxt->ddl_handle != ddl_handle) {
-		VCD_MSG_ERROR("VCD_ClntCbInIniting: Wrong DDL handle %p",
+		VCD_MSG_ERROR("vcd_clnt_cb_in_initing: Wrong DDL handle %p",
 			ddl_handle);
 		return;
 	}
@@ -1147,7 +1147,7 @@ static void vcd_clnt_cb_in_flushing
 		}
 	case VCD_EVT_RESP_OUTPUT_REQ:
 		{
-			rc = VCD_handle_output_required_in_flushing(p_cctxt,
+			rc = vcd_handle_output_required_in_flushing(p_cctxt,
 				p_payload);
 			break;
 		}
@@ -1242,7 +1242,7 @@ static void vcd_clnt_cb_in_stopping
 		}
 	case VCD_EVT_RESP_OUTPUT_REQ:
 		{
-			rc = VCD_handle_output_required_in_flushing(p_cctxt,
+			rc = vcd_handle_output_required_in_flushing(p_cctxt,
 				p_payload);
 			break;
 		}
@@ -1540,7 +1540,7 @@ static void vcd_clnt_exit_eos
 {
 	u32 rc;
 	VCD_MSG_MED("Exiting CLIENT_STATE_EOS on api %d", n_state_event_type);
-	rc = vcd_map_sched_status( sched_suspend_resume_client(
+	rc = vcd_map_sched_status(sched_suspend_resume_client(
 		p_cctxt->p_dev_ctxt->sched_hdl, p_cctxt->sched_clnt_hdl, TRUE));
 	if (VCD_FAILED(rc))
 		VCD_MSG_ERROR("Failed: sched_suspend_resume_client. rc=0x%x",

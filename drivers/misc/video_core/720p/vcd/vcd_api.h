@@ -106,6 +106,11 @@ struct vcd_init_config_type {
 	void (*pf_interrupt_clr) (void);
 	void (*pf_register_isr) (void *p_device_name);
 	void (*pf_deregister_isr) (void);
+	u32  (*pf_timer_create) (void (*pf_timer_handler)(void *),
+		void *p_user_data, void **pp_timer_handle);
+	void (*pf_timer_release) (void *p_timer_handle);
+	void (*pf_timer_start) (void *p_timer_handle, u32 n_time_out);
+	void (*pf_timer_stop) (void *p_timer_handle);
 };
 
 u32 vcd_init(struct vcd_init_config_type *p_config, s32 *p_driver_handle);

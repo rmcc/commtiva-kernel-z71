@@ -139,7 +139,6 @@
 #define VSP_NOT_READY 90
 #define BUFFER_FULL_STATE 91
 
-#define SYNC_POINT_NOT_RECEIVED 111
 #define RESOLUTION_MISMATCH 112
 #define NV_QUANT_ERR 113
 #define SYNC_MARKER_ERR 114
@@ -160,6 +159,8 @@
 #define INVALID_POC_TYPE 131
 #define ACTIVE_SPS_NOT_PRESENT 132
 #define ACTIVE_PPS_NOT_PRESENT 133
+#define INVALID_SPS_ID 134
+#define INVALID_PPS_ID 135
 
 
 #define METADATA_NO_SPACE_QP 151
@@ -185,17 +186,33 @@
 #define SYNC_POINT_NOT_RECEIVED_STARTED_DECODING  171
 #define NULL_FW_DEBUG_INFO_POINTER  172
 #define ALLOC_DEBUG_INFO_SIZE_INSUFFICIENT  173
-
+#define MAX_STAGE_COUNTER_EXCEEDED 174
 
 #define METADATA_NO_SPACE_MB_INFO 180
 #define METADATA_NO_SPACE_SLICE_SIZE 181
+#define RESOLUTION_WARNING 182
+
+void ddl_hw_fatal_cb(struct ddl_context_type *p_ddl_context)
+{
+	/* Invalidate the command state */
+	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
+	p_ddl_context->n_device_state = DDL_DEVICE_HWFATAL;
+
+	/* callback to the client to indicate hw fatal error */
+	p_ddl_context->ddl_callback(VCD_EVT_IND_HWERRFATAL,
+					VCD_ERR_HW_FATAL, NULL, 0,
+					(void *)p_ddl_context->p_current_ddl,
+					p_ddl_context->p_client_data);
+
+	DDL_IDLE(p_ddl_context);
+}
 
 static u32 ddl_handle_hw_fatal_errors(struct ddl_context_type
 			*p_ddl_context)
 {
 	u32 b_status = FALSE;
 
-	switch (p_ddl_context->nCmdErrStatus) {
+	switch (p_ddl_context->n_cmd_err_status) {
 
 	case INVALID_CHANNEL_NUMBER:
 	case INVALID_COMMAND_ID:
@@ -220,32 +237,14 @@ static u32 ddl_handle_hw_fatal_errors(struct ddl_context_type
 	case MEM_ALLOCATION_FAILED:
 
 	case DIVIDE_BY_ZERO:
-	case BIT_STREAM_BUF_EXHAUST:
 	case DMA_NOT_STOPPED:
 	case DMA_TX_NOT_COMPLETE:
 
 	case VSP_NOT_READY:
 	case BUFFER_FULL_STATE:
-		{
-			ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
-
-			p_ddl_context->nDeviceState = DDL_DEVICE_HWFATAL;
-
-			p_ddl_context->ddl_callback
-			(
-				VCD_EVT_IND_HWERRFATAL,
-				VCD_ERR_HW_FATAL,
-				NULL,
-				0,
-				(void *) p_ddl_context->p_current_ddl,
-				p_ddl_context->p_client_data
-			);
-
-			DDL_IDLE(p_ddl_context);
-
-			b_status = TRUE;
-			break;
-		}
+		ddl_hw_fatal_cb(p_ddl_context);
+		b_status = TRUE;
+		break;
 	}
 	return b_status;
 }
@@ -282,10 +281,12 @@ static u32 ddl_handle_client_fatal_errors(struct ddl_context_type
 {
 	u32 b_status = FALSE;
 
-	switch (p_ddl_context->nCmdErrStatus) {
+	switch (p_ddl_context->n_cmd_err_status) {
 	case UNSUPPORTED_FEATURE_IN_PROFILE:
 	case RESOLUTION_NOT_SUPPORTED:
 	case HEADER_NOT_FOUND:
+	case INVALID_SPS_ID:
+	case INVALID_PPS_ID:
 
 	case MB_NUM_INVALID:
 	case FRAME_RATE_NOT_SUPPORTED:
@@ -329,34 +330,27 @@ static void ddl_input_failed_cb(struct ddl_context_type *p_ddl_context,
 	else
 		ddl_encode_dynamic_property(p_ddl, FALSE);
 
-	p_ddl->input_frame.b_frm_trans_end = TRUE;
-
 	p_ddl_context->ddl_callback(vcd_event,
 		vcd_status, &p_ddl->input_frame,
 		sizeof(struct ddl_frame_data_type_tag),
 		(void *)p_ddl, p_ddl_context->p_client_data);
 
 	ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME);
-	DDL_IDLE(p_ddl_context);
 }
 
 static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 			*p_ddl_context)
 {
+	struct ddl_client_context_type  *p_ddl = p_ddl_context->p_current_ddl;
 	u32   vcd_status = VCD_S_SUCCESS;
 	u32   vcd_event = VCD_EVT_RESP_INPUT_DONE;
+	u32   eos = FALSE;
 
 	if (DDL_CMD_DECODE_FRAME != p_ddl_context->e_cmd_state &&
 		DDL_CMD_ENCODE_FRAME != p_ddl_context->e_cmd_state) {
 		return FALSE;
 	}
-	switch (p_ddl_context->nCmdErrStatus) {
-
-	case SYNC_POINT_NOT_RECEIVED:
-		{
-		vcd_status = VCD_ERR_IFRAME_EXPECTED;
-		break;
-		}
+	switch (p_ddl_context->n_cmd_err_status) {
 	case NON_PAIRED_FIELD_NOT_SUPPORTED:
 		{
 		vcd_status = VCD_ERR_INTRLCD_FIELD_DROP;
@@ -367,12 +361,20 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 		vcd_event = VCD_EVT_RESP_OUTPUT_REQ;
 		break;
 		}
+	case BIT_STREAM_BUF_EXHAUST:
 	case MB_HEADER_NOT_DONE:
 	case MB_COEFF_NOT_DONE:
 	case CODEC_SLICE_NOT_DONE:
 	case VME_NOT_READY:
 	case VC1_BITPLANE_DECODE_ERR:
-
+		{
+			u32 b_reset_core;
+			/* need to reset the internal core hw engine */
+			b_reset_core = ddl_hal_engine_reset(p_ddl_context);
+			if (FALSE == b_reset_core)
+				return TRUE;
+			/* fall through to process bitstream error handling */
+		}
 	case RESOLUTION_MISMATCH:
 	case NV_QUANT_ERR:
 	case SYNC_MARKER_ERR:
@@ -402,36 +404,68 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 		return FALSE;
 	}
 
+	p_ddl->input_frame.b_frm_trans_end = TRUE;
+
+	eos = ((VCD_EVT_RESP_INPUT_DONE == vcd_event) &&
+		(0 != (VCD_FRAME_FLAG_EOS & p_ddl->input_frame.
+				vcd_frm.n_flags)));
+
+	if ((TRUE == p_ddl->b_decoding && TRUE == eos) ||
+		(FALSE == p_ddl->b_decoding))
+		p_ddl->input_frame.b_frm_trans_end = FALSE;
+
+	if (VCD_EVT_RESP_INPUT_DONE == vcd_event &&
+		TRUE == p_ddl->b_decoding &&
+		FALSE == p_ddl->codec_data.decoder.b_header_in_start &&
+		0 == p_ddl->codec_data.decoder.dec_disp_info.n_img_size_x &&
+		0 == p_ddl->codec_data.decoder.dec_disp_info.n_img_size_y
+		) {
+		/* this is first frame seq. header only case */
+		vcd_status = VCD_S_SUCCESS;
+		p_ddl->input_frame.vcd_frm.n_flags |=
+			VCD_FRAME_FLAG_CODECCONFIG;
+		p_ddl->input_frame.b_frm_trans_end = !eos;
+		/* put just some non - zero value */
+		p_ddl->codec_data.decoder.dec_disp_info.n_img_size_x = 0xff;
+	}
+	/* inform client about input failed */
 	ddl_input_failed_cb(p_ddl_context, vcd_event, vcd_status);
+
+	/* for Encoder case, we need to send output done also */
+	if (FALSE == p_ddl->b_decoding) {
+		/* transaction is complete after this callback */
+		p_ddl->output_frame.b_frm_trans_end = !eos;
+		/* error case: NO data present */
+		p_ddl->output_frame.vcd_frm.n_data_len = 0;
+		/* call back to client for output frame done */
+		p_ddl_context->ddl_callback(VCD_EVT_RESP_OUTPUT_DONE,
+		VCD_ERR_FAIL, &(p_ddl->output_frame),
+			sizeof(struct ddl_frame_data_type_tag),
+			(void *)p_ddl, p_ddl_context->p_client_data);
+
+		if (TRUE == eos) {
+			DBG("ENC-EOS_DONE");
+			/* send client EOS DONE callback */
+			p_ddl_context->ddl_callback(VCD_EVT_RESP_EOS_DONE,
+				VCD_S_SUCCESS, NULL, 0, (void *)p_ddl,
+				p_ddl_context->p_client_data);
+		}
+	}
+
+	/* if it is decoder EOS case */
+	if (TRUE == p_ddl->b_decoding && TRUE == eos)
+		ddl_decode_eos_run(p_ddl);
+	else
+		DDL_IDLE(p_ddl_context);
+
 	return TRUE;
 }
 
-static u32 ddl_handle_disp_pic_warnings(struct ddl_context_type *p_ddl_context)
+static u32 ddl_handle_core_warnings(u32 n_err_status)
 {
 	u32 b_status = FALSE;
 
-	switch (p_ddl_context->nDispPicErrStatus) {
-	case METADATA_NO_SPACE_QP:
-	case METADATA_NO_SAPCE_CONCEAL_MB:
-	case METADATA_NO_SPACE_VC1_PARAM:
-	case METADATA_NO_SPACE_SEI:
-	case METADATA_NO_SPACE_VUI:
-	case METADATA_NO_SPACE_EXTRA:
-	case METADATA_NO_SPACE_DATA_NONE:
-		{
-			b_status = TRUE;
-			DBG("DISP-WARNING-IGNORED!!");
-			break;
-		}
-	}
-	return b_status;
-}
-
-static u32 ddl_handle_core_warnings(struct ddl_context_type *p_ddl_context)
-{
-	u32 b_status = FALSE;
-
-	switch (p_ddl_context->nCmdErrStatus) {
+	switch (n_err_status) {
 	case FRAME_RATE_UNKNOWN:
 	case ASPECT_RATIO_UNKOWN:
 	case COLOR_PRIMARIES_UNKNOWN:
@@ -449,9 +483,20 @@ static u32 ddl_handle_core_warnings(struct ddl_context_type *p_ddl_context)
 
 	case NULL_FW_DEBUG_INFO_POINTER:
 	case ALLOC_DEBUG_INFO_SIZE_INSUFFICIENT:
+	case MAX_STAGE_COUNTER_EXCEEDED:
 
 	case METADATA_NO_SPACE_MB_INFO:
 	case METADATA_NO_SPACE_SLICE_SIZE:
+	case RESOLUTION_WARNING:
+
+	/* decoder warnings */
+	case METADATA_NO_SPACE_QP:
+	case METADATA_NO_SAPCE_CONCEAL_MB:
+	case METADATA_NO_SPACE_VC1_PARAM:
+	case METADATA_NO_SPACE_SEI:
+	case METADATA_NO_SPACE_VUI:
+	case METADATA_NO_SPACE_EXTRA:
+	case METADATA_NO_SPACE_DATA_NONE:
 		{
 			b_status = TRUE;
 			DBG("CMD-WARNING-IGNORED!!");
@@ -465,8 +510,8 @@ u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context)
 {
 	u32 b_status = FALSE;
 
-	if (!p_ddl_context->nCmdErrStatus &&
-		!p_ddl_context->nDispPicErrStatus)
+	if (!p_ddl_context->n_cmd_err_status &&
+		!p_ddl_context->n_disp_pic_err_status)
 		return FALSE;
 
 	if (DDL_CMD_INVALID == p_ddl_context->e_cmd_state) {
@@ -474,10 +519,12 @@ u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context)
 		return TRUE;
 	}
 
-	if (0x0 == p_ddl_context->nOpFailed) {
+	if (0x0 == p_ddl_context->n_op_failed) {
 		u32 b_disp_status;
-		b_status = ddl_handle_core_warnings(p_ddl_context);
-		b_disp_status = ddl_handle_disp_pic_warnings(p_ddl_context);
+		b_status = ddl_handle_core_warnings(p_ddl_context->
+			n_cmd_err_status);
+		b_disp_status = ddl_handle_core_warnings(
+			p_ddl_context->n_disp_pic_err_status);
 		if (!b_status && !b_disp_status)
 			DBG("ddl_warning:Unknown");
 

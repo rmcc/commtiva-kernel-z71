@@ -50,8 +50,8 @@
 #define DDL_DEVICE_NOTINIT  0
 #define DDL_DEVICE_INITED   1
 #define DDL_DEVICE_HWFATAL  2
-#define DDL_IS_INITIALIZED(pDdlContext)  \
-(p_ddl_context->nDeviceState == DDL_DEVICE_INITED)
+#define DDL_IS_INITIALIZED(p_ddl_context)  \
+(p_ddl_context->n_device_state == DDL_DEVICE_INITED)
 
 #define DDLCOMMAND_STATE_IS(p_ddl_context, command_state) \
 (command_state == (p_ddl_context)->e_cmd_state)
@@ -229,12 +229,12 @@ struct ddl_context_type {
 	struct ddl_buf_addr_type dbg_core_dump;
 	u32 enable_dbg_core_dump;
 	struct ddl_client_context_type *a_ddl_clients[VCD_MAX_NO_CLIENT];
-	u32 nDeviceState;
+	u32 n_device_state;
 	u32 n_ddl_busy;
 	u32  intr_status;
-	u32 nCmdErrStatus;
-	u32 nDispPicErrStatus;
-	u32 nOpFailed;
+	u32 n_cmd_err_status;
+	u32 n_disp_pic_err_status;
+	u32 n_op_failed;
 };
 
 struct ddl_client_context_type {
@@ -279,7 +279,7 @@ u32 ddl_decoder_ready_to_start(struct ddl_client_context_type *,
 u32 ddl_get_yuv_buffer_size
     (struct vcd_property_frame_size_type *p_frame_size,
      struct vcd_property_buffer_format_type *p_buf_format, u32 inter_lace);
-void ddl_calculate_stride(struct vcd_property_frame_size_type *p_frameSize,
+void ddl_calculate_stride(struct vcd_property_frame_size_type *p_frame_size,
 						  u32 inter_lace);
 void ddl_encode_dynamic_property(struct ddl_client_context_type *p_ddl,
 				 u32 b_enable);
@@ -288,4 +288,6 @@ void ddl_decode_dynamic_property(struct ddl_client_context_type *p_ddl,
 void ddl_set_initial_default_values(struct ddl_client_context_type *p_ddl);
 u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context);
 void ddl_client_fatal_cb(struct ddl_context_type *p_ddl_context);
+void ddl_hw_fatal_cb(struct ddl_context_type *p_ddl_context);
+u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context);
 #endif

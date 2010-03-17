@@ -54,8 +54,7 @@
 #define DDL_I_SEQHDR_ALIGN_BYTES (VCD_I_CUSTOM_DDL_BASE + 0x7)
 #define DDL_I_SEQHDR_PRESENT (VCD_I_CUSTOM_DDL_BASE + 0xb)
 #define DDL_I_CAPABILITY    (VCD_I_CUSTOM_DDL_BASE + 0x8)
-#define DDL_I_COMMAND_DEPTH  (VCD_I_CUSTOM_DDL_BASE + 0x9)
-#define DDL_I_FRAME_PROC_UNITS    (VCD_I_CUSTOM_DDL_BASE + 0xA)
+#define DDL_I_FRAME_PROC_UNITS    (VCD_I_CUSTOM_DDL_BASE + 0x9)
 
 struct vcd_property_rc_level_type {
 	u32 b_frame_level_rc;
@@ -82,12 +81,10 @@ struct ddl_property_dec_pic_buffers_type {
 
 struct ddl_property_capability_type {
 	u32 n_max_num_client;
-};
-
-struct ddl_property_command_depth_type {
 	u32 n_general_command_depth;
 	u32 n_frame_command_depth;
 	u32 b_exclusive;
+	u32   n_ddl_time_out_in_ms;
 };
 
 #endif

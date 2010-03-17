@@ -76,7 +76,8 @@ struct vcd_dev_state_table_type_t {
 				u32 n_size, u32 *ddl_handle,
 				void *const p_client_data);
 
-		void (*pf_timeout) (void);
+		void (*pf_timeout) (struct vcd_drv_ctxt_type_t *p_drv_ctxt,
+							void *p_user_data);
 	} ev_hdlr;
 
 	void (*pf_entry) (struct vcd_drv_ctxt_type_t *p_drv_ctxt,

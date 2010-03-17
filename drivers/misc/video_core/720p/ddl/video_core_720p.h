@@ -62,28 +62,28 @@ do { \
 	(void) out_dword(io,  ((current_reg_content & (u32)(~(mask))) | \
 				((u32)((val) & (mask)))))
 
-extern u32 VID_C_REG_817468_SHADOW;
-extern u32 VID_C_REG_767703_SHADOW;
-extern u32 VID_C_REG_703273_SHADOW;
-extern u32 VID_C_REG_688165_SHADOW;
-extern u32 VID_C_REG_842480_SHADOW;
-extern u32 VID_C_REG_830933_SHADOW;
-extern u32 VID_C_REG_396763_SHADOW[32];
-extern u32 VID_C_REG_492691_SHADOW;
-extern u32 VID_C_REG_586901_SHADOW;
-extern u32 VID_C_REG_37680_SHADOW;
-extern u32 VID_C_REG_797110_SHADOW;
-extern u32 VID_C_REG_928824_SHADOW;
-extern u32 VID_C_REG_4084_SHADOW;
-extern u32 VID_C_REG_623236_SHADOW;
-extern u32 VID_C_REG_967981_SHADOW;
-extern u32 VID_C_REG_754370_SHADOW;
-extern u32 VID_C_REG_934882_SHADOW;
-extern u32 VID_C_REG_354189_SHADOW;
-extern u32 VID_C_REG_360816_SHADOW;
-extern u32 VID_C_REG_812777_SHADOW;
-extern u32 VID_C_REG_990962_SHADOW;
-extern u32 VID_C_REG_684964_SHADOW;
+extern u32 VID_C_REG_319934_SHADOW;
+extern u32 VID_C_REG_101184_SHADOW;
+extern u32 VID_C_REG_490443_SHADOW;
+extern u32 VID_C_REG_64895_SHADOW;
+extern u32 VID_C_REG_804959_SHADOW;
+extern u32 VID_C_REG_883500_SHADOW;
+extern u32 VID_C_REG_615716_SHADOW[32];
+extern u32 VID_C_REG_603032_SHADOW;
+extern u32 VID_C_REG_792026_SHADOW;
+extern u32 VID_C_REG_844152_SHADOW;
+extern u32 VID_C_REG_147682_SHADOW;
+extern u32 VID_C_REG_407718_SHADOW;
+extern u32 VID_C_REG_854681_SHADOW;
+extern u32 VID_C_REG_128234_SHADOW;
+extern u32 VID_C_REG_988552_SHADOW;
+extern u32 VID_C_REG_94750_SHADOW;
+extern u32 VID_C_REG_76706_SHADOW;
+extern u32 VID_C_REG_486169_SHADOW;
+extern u32 VID_C_REG_699747_SHADOW;
+extern u32 VID_C_REG_166247_SHADOW;
+extern u32 VID_C_REG_926519_SHADOW;
+extern u32 VID_C_REG_965480_SHADOW;
 
 extern u8 *vid_c_base_addr;
 
@@ -92,2252 +92,2271 @@ extern u8 *vid_c_base_addr;
 		0x00000000)
 #define VIDC_720P_WRAPPER_REG_BASE_PHYS          VIDC_720P_BASE_PHYS
 
-#define VIDC_REG_898679_ADDR                     \
+#define VIDC_REG_614413_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 00000000)
-#define VIDC_REG_898679_PHYS                     \
+#define VIDC_REG_614413_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 00000000)
-#define VIDC_REG_898679_RMSK                            0x1
-#define VIDC_REG_898679_SHFT                              0
-#define VIDC_REG_898679_IN                       \
-	in_dword_masked(VIDC_REG_898679_ADDR,  VIDC_REG_898679_RMSK)
-#define VIDC_REG_898679_INM(m)                   \
-	in_dword_masked(VIDC_REG_898679_ADDR,  m)
-#define VIDC_REG_898679_OUT(v)                   \
-	out_dword(VIDC_REG_898679_ADDR, v)
-#define VIDC_REG_898679_OUTM(m, v)                \
+#define VIDC_REG_614413_RMSK                            0x1
+#define VIDC_REG_614413_SHFT                              0
+#define VIDC_REG_614413_IN                       \
+	in_dword_masked(VIDC_REG_614413_ADDR,        \
+		VIDC_REG_614413_RMSK)
+#define VIDC_REG_614413_INM(m)                   \
+	in_dword_masked(VIDC_REG_614413_ADDR,  m)
+#define VIDC_REG_614413_OUT(v)                   \
+	out_dword(VIDC_REG_614413_ADDR, v)
+#define VIDC_REG_614413_OUTM(m, v)                \
 do { \
-	out_dword_masked_ns(VIDC_REG_898679_ADDR, m, v, \
-			VIDC_REG_898679_IN); \
+	out_dword_masked_ns(VIDC_REG_614413_ADDR, m, v, \
+			VIDC_REG_614413_IN); \
 } while (0)
-#define VIDC_REG_898679_DMA_START_BMSK                  0x1
-#define VIDC_REG_898679_DMA_START_SHFT                    0
+#define VIDC_REG_614413_DMA_START_BMSK                  0x1
+#define VIDC_REG_614413_DMA_START_SHFT                    0
 
-#define VIDC_REG_639306_ADDR                 \
+#define VIDC_REG_591577_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000000c)
-#define VIDC_REG_639306_PHYS                 \
+#define VIDC_REG_591577_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000000c)
-#define VIDC_REG_639306_RMSK                 0xffffffff
-#define VIDC_REG_639306_SHFT                          0
-#define VIDC_REG_639306_IN                   \
-	in_dword_masked(VIDC_REG_639306_ADDR,  \
-			VIDC_REG_639306_RMSK)
-#define VIDC_REG_639306_INM(m)               \
-	in_dword_masked(VIDC_REG_639306_ADDR,  m)
-#define VIDC_REG_639306_OUT(v)               \
-	out_dword(VIDC_REG_639306_ADDR, v)
-#define VIDC_REG_639306_OUTM(m, v)            \
+#define VIDC_REG_591577_RMSK                 0xffffffff
+#define VIDC_REG_591577_SHFT                          0
+#define VIDC_REG_591577_IN                   \
+	in_dword_masked(VIDC_REG_591577_ADDR,  \
+			VIDC_REG_591577_RMSK)
+#define VIDC_REG_591577_INM(m)               \
+	in_dword_masked(VIDC_REG_591577_ADDR,  m)
+#define VIDC_REG_591577_OUT(v)               \
+	out_dword(VIDC_REG_591577_ADDR, v)
+#define VIDC_REG_591577_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_639306_ADDR, m, v, \
-			VIDC_REG_639306_IN); \
+	out_dword_masked_ns(VIDC_REG_591577_ADDR, m, v, \
+			VIDC_REG_591577_IN); \
 } while (0)
-#define VIDC_REG_639306_BOOTCODE_SIZE_BMSK   0xffffffff
-#define VIDC_REG_639306_BOOTCODE_SIZE_SHFT            0
+#define VIDC_REG_591577_BOOTCODE_SIZE_BMSK   0xffffffff
+#define VIDC_REG_591577_BOOTCODE_SIZE_SHFT            0
 
-#define VIDC_REG_341300_ADDR                   \
+#define VIDC_REG_203921_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000014)
-#define VIDC_REG_341300_PHYS                   \
+#define VIDC_REG_203921_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000014)
-#define VIDC_REG_341300_RMSK                   0xffffffff
-#define VIDC_REG_341300_SHFT                            0
-#define VIDC_REG_341300_IN                     \
-	in_dword_masked(VIDC_REG_341300_ADDR,  \
-			VIDC_REG_341300_RMSK)
-#define VIDC_REG_341300_INM(m)                 \
-	in_dword_masked(VIDC_REG_341300_ADDR,  m)
-#define VIDC_REG_341300_OUT(v)                 \
-	out_dword(VIDC_REG_341300_ADDR, v)
-#define VIDC_REG_341300_OUTM(m, v)              \
+#define VIDC_REG_203921_RMSK                   0xffffffff
+#define VIDC_REG_203921_SHFT                            0
+#define VIDC_REG_203921_IN                     \
+	in_dword_masked(VIDC_REG_203921_ADDR,  \
+			VIDC_REG_203921_RMSK)
+#define VIDC_REG_203921_INM(m)                 \
+	in_dword_masked(VIDC_REG_203921_ADDR,  m)
+#define VIDC_REG_203921_OUT(v)                 \
+	out_dword(VIDC_REG_203921_ADDR, v)
+#define VIDC_REG_203921_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_341300_ADDR, m, v, \
-			VIDC_REG_341300_IN); \
+	out_dword_masked_ns(VIDC_REG_203921_ADDR, m, v, \
+			VIDC_REG_203921_IN); \
 } while (0)
-#define VIDC_REG_341300_DMA_EXTADDR_BMSK       0xffffffff
-#define VIDC_REG_341300_DMA_EXTADDR_SHFT                0
+#define VIDC_REG_203921_DMA_EXTADDR_BMSK       0xffffffff
+#define VIDC_REG_203921_DMA_EXTADDR_SHFT                0
 
-#define VIDC_REG_766291_ADDR_ADDR            \
+#define VIDC_REG_275113_ADDR_ADDR            \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000018)
-#define VIDC_REG_766291_ADDR_PHYS            \
+#define VIDC_REG_275113_ADDR_PHYS            \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000018)
-#define VIDC_REG_766291_ADDR_RMSK            0xffffffff
-#define VIDC_REG_766291_ADDR_SHFT                     0
-#define VIDC_REG_766291_ADDR_IN              \
-	in_dword_masked(VIDC_REG_766291_ADDR_ADDR,  \
-			VIDC_REG_766291_ADDR_RMSK)
-#define VIDC_REG_766291_ADDR_INM(m)          \
-	in_dword_masked(VIDC_REG_766291_ADDR_ADDR,  m)
-#define VIDC_REG_766291_ADDR_OUT(v)          \
-	out_dword(VIDC_REG_766291_ADDR_ADDR, v)
-#define VIDC_REG_766291_ADDR_OUTM(m, v)       \
+#define VIDC_REG_275113_ADDR_RMSK            0xffffffff
+#define VIDC_REG_275113_ADDR_SHFT                     0
+#define VIDC_REG_275113_ADDR_IN              \
+	in_dword_masked(VIDC_REG_275113_ADDR_ADDR,  \
+			VIDC_REG_275113_ADDR_RMSK)
+#define VIDC_REG_275113_ADDR_INM(m)          \
+	in_dword_masked(VIDC_REG_275113_ADDR_ADDR,  m)
+#define VIDC_REG_275113_ADDR_OUT(v)          \
+	out_dword(VIDC_REG_275113_ADDR_ADDR, v)
+#define VIDC_REG_275113_ADDR_OUTM(m, v)       \
 do { \
-	out_dword_masked_ns(VIDC_REG_766291_ADDR_ADDR, m, v, \
-			VIDC_REG_766291_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_275113_ADDR_ADDR, m, v, \
+			VIDC_REG_275113_ADDR_IN); \
 } while (0)
-#define VIDC_REG_715796_ADDR_BMSK 0xffffffff
-#define VIDC_REG_715796_ADDR_SHFT          0
+#define VIDC_REG_742076_ADDR_BMSK 0xffffffff
+#define VIDC_REG_742076_ADDR_SHFT          0
 
-#define VIDC_REG_592511_ADDR_ADDR              \
+#define VIDC_REG_988007_ADDR_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000001c)
-#define VIDC_REG_592511_ADDR_PHYS              \
+#define VIDC_REG_988007_ADDR_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000001c)
-#define VIDC_REG_592511_ADDR_RMSK              0xffffffff
-#define VIDC_REG_592511_ADDR_SHFT                       0
-#define VIDC_REG_592511_ADDR_IN                \
-	in_dword_masked(VIDC_REG_592511_ADDR_ADDR,  \
-			VIDC_REG_592511_ADDR_RMSK)
-#define VIDC_REG_592511_ADDR_INM(m)            \
-	in_dword_masked(VIDC_REG_592511_ADDR_ADDR,  m)
-#define VIDC_REG_592511_ADDR_OUT(v)            \
-	out_dword(VIDC_REG_592511_ADDR_ADDR, v)
-#define VIDC_REG_592511_ADDR_OUTM(m, v)         \
+#define VIDC_REG_988007_ADDR_RMSK              0xffffffff
+#define VIDC_REG_988007_ADDR_SHFT                       0
+#define VIDC_REG_988007_ADDR_IN                \
+	in_dword_masked(VIDC_REG_988007_ADDR_ADDR,  \
+			VIDC_REG_988007_ADDR_RMSK)
+#define VIDC_REG_988007_ADDR_INM(m)            \
+	in_dword_masked(VIDC_REG_988007_ADDR_ADDR,  m)
+#define VIDC_REG_988007_ADDR_OUT(v)            \
+	out_dword(VIDC_REG_988007_ADDR_ADDR, v)
+#define VIDC_REG_988007_ADDR_OUTM(m, v)         \
 do { \
-	out_dword_masked_ns(VIDC_REG_592511_ADDR_ADDR, m, v, \
-			VIDC_REG_592511_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_988007_ADDR_ADDR, m, v, \
+			VIDC_REG_988007_ADDR_IN); \
 } while (0)
-#define VIDC_REG_592511_ADDR_EXT_BUF_END_ADDR_BMSK 0xffffffff
-#define VIDC_REG_592511_ADDR_EXT_BUF_END_ADDR_SHFT          0
+#define VIDC_REG_988007_ADDR_EXT_BUF_END_ADDR_BMSK 0xffffffff
+#define VIDC_REG_988007_ADDR_EXT_BUF_END_ADDR_SHFT          0
 
-#define VIDC_REG_133233_ADDR_ADDR                  \
+#define VIDC_REG_531515_ADDR_ADDR                  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000020)
-#define VIDC_REG_133233_ADDR_PHYS                  \
+#define VIDC_REG_531515_ADDR_PHYS                  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000020)
-#define VIDC_REG_133233_ADDR_RMSK                  0xffffffff
-#define VIDC_REG_133233_ADDR_SHFT                           0
-#define VIDC_REG_133233_ADDR_IN                    \
-	in_dword_masked(VIDC_REG_133233_ADDR_ADDR,  \
-			VIDC_REG_133233_ADDR_RMSK)
-#define VIDC_REG_133233_ADDR_INM(m)                \
-	in_dword_masked(VIDC_REG_133233_ADDR_ADDR,  m)
-#define VIDC_REG_133233_ADDR_OUT(v)                \
-	out_dword(VIDC_REG_133233_ADDR_ADDR, v)
-#define VIDC_REG_133233_ADDR_OUTM(m, v)             \
+#define VIDC_REG_531515_ADDR_RMSK                  0xffffffff
+#define VIDC_REG_531515_ADDR_SHFT                           0
+#define VIDC_REG_531515_ADDR_IN                    \
+	in_dword_masked(VIDC_REG_531515_ADDR_ADDR,  \
+			VIDC_REG_531515_ADDR_RMSK)
+#define VIDC_REG_531515_ADDR_INM(m)                \
+	in_dword_masked(VIDC_REG_531515_ADDR_ADDR,  m)
+#define VIDC_REG_531515_ADDR_OUT(v)                \
+	out_dword(VIDC_REG_531515_ADDR_ADDR, v)
+#define VIDC_REG_531515_ADDR_OUTM(m, v)             \
 do { \
-	out_dword_masked_ns(VIDC_REG_133233_ADDR_ADDR, m, v, \
-			VIDC_REG_133233_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_531515_ADDR_ADDR, m, v, \
+			VIDC_REG_531515_ADDR_IN); \
 } while (0)
-#define VIDC_REG_133233_ADDR_DMA_INT_ADDR_BMSK     0xffffffff
-#define VIDC_REG_133233_ADDR_DMA_INT_ADDR_SHFT              0
+#define VIDC_REG_531515_ADDR_DMA_INT_ADDR_BMSK     0xffffffff
+#define VIDC_REG_531515_ADDR_DMA_INT_ADDR_SHFT              0
 
-#define VIDC_REG_713038_ADDR                 \
+#define VIDC_REG_87912_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000024)
-#define VIDC_REG_713038_PHYS                 \
+#define VIDC_REG_87912_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000024)
-#define VIDC_REG_713038_RMSK                 0xffffffff
-#define VIDC_REG_713038_SHFT                          0
-#define VIDC_REG_713038_IN                   \
-	in_dword_masked(VIDC_REG_713038_ADDR,  \
-			VIDC_REG_713038_RMSK)
-#define VIDC_REG_713038_INM(m)               \
-	in_dword_masked(VIDC_REG_713038_ADDR,  m)
-#define VIDC_REG_713038_OUT(v)               \
-	out_dword(VIDC_REG_713038_ADDR, v)
-#define VIDC_REG_713038_OUTM(m, v)            \
+#define VIDC_REG_87912_RMSK                 0xffffffff
+#define VIDC_REG_87912_SHFT                          0
+#define VIDC_REG_87912_IN                   \
+	in_dword_masked(VIDC_REG_87912_ADDR,  \
+			VIDC_REG_87912_RMSK)
+#define VIDC_REG_87912_INM(m)               \
+	in_dword_masked(VIDC_REG_87912_ADDR,  m)
+#define VIDC_REG_87912_OUT(v)               \
+	out_dword(VIDC_REG_87912_ADDR, v)
+#define VIDC_REG_87912_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_713038_ADDR, m, v, \
-			VIDC_REG_713038_IN); \
+	out_dword_masked_ns(VIDC_REG_87912_ADDR, m, v, \
+			VIDC_REG_87912_IN); \
 } while (0)
-#define VIDC_REG_713038_HOST_PTR_ADDR_BMSK   0xffffffff
-#define VIDC_REG_713038_HOST_PTR_ADDR_SHFT            0
+#define VIDC_REG_87912_HOST_PTR_ADDR_BMSK   0xffffffff
+#define VIDC_REG_87912_HOST_PTR_ADDR_SHFT            0
 
-#define VIDC_REG_405933_ADDR                      \
+#define VIDC_REG_896825_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000028)
-#define VIDC_REG_405933_PHYS                      \
+#define VIDC_REG_896825_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000028)
-#define VIDC_REG_405933_RMSK                             0x1
-#define VIDC_REG_405933_SHFT                               0
-#define VIDC_REG_405933_IN                        \
-	in_dword_masked(VIDC_REG_405933_ADDR,  VIDC_REG_405933_RMSK)
-#define VIDC_REG_405933_INM(m)                    \
-	in_dword_masked(VIDC_REG_405933_ADDR,  m)
-#define VIDC_REG_405933_OUT(v)                    \
-	out_dword(VIDC_REG_405933_ADDR, v)
-#define VIDC_REG_405933_OUTM(m, v)                 \
+#define VIDC_REG_896825_RMSK                             0x1
+#define VIDC_REG_896825_SHFT                               0
+#define VIDC_REG_896825_IN                        \
+	in_dword_masked(VIDC_REG_896825_ADDR,         \
+	VIDC_REG_896825_RMSK)
+#define VIDC_REG_896825_INM(m)                    \
+	in_dword_masked(VIDC_REG_896825_ADDR,  m)
+#define VIDC_REG_896825_OUT(v)                    \
+	out_dword(VIDC_REG_896825_ADDR, v)
+#define VIDC_REG_896825_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_405933_ADDR, m, v, \
-			VIDC_REG_405933_IN); \
+	out_dword_masked_ns(VIDC_REG_896825_ADDR, m, v, \
+			VIDC_REG_896825_IN); \
 } while (0)
-#define VIDC_REG_405933_LAST_DEC_BMSK                    0x1
-#define VIDC_REG_405933_LAST_DEC_SHFT                      0
+#define VIDC_REG_896825_LAST_DEC_BMSK                    0x1
+#define VIDC_REG_896825_LAST_DEC_SHFT                      0
 
-#define VIDC_REG_496251_ADDR                        \
+#define VIDC_REG_174526_ADDR                        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000002c)
-#define VIDC_REG_496251_PHYS                        \
+#define VIDC_REG_174526_PHYS                        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000002c)
-#define VIDC_REG_496251_RMSK                               0x1
-#define VIDC_REG_496251_SHFT                                 0
-#define VIDC_REG_496251_IN                          \
-	in_dword_masked(VIDC_REG_496251_ADDR,  VIDC_REG_496251_RMSK)
-#define VIDC_REG_496251_INM(m)                      \
-	in_dword_masked(VIDC_REG_496251_ADDR,  m)
-#define VIDC_REG_496251_DONE_M_BMSK                        0x1
-#define VIDC_REG_496251_DONE_M_SHFT                          0
+#define VIDC_REG_174526_RMSK                               0x1
+#define VIDC_REG_174526_SHFT                                 0
+#define VIDC_REG_174526_IN                          \
+	in_dword_masked(VIDC_REG_174526_ADDR,  VIDC_REG_174526_RMSK)
+#define VIDC_REG_174526_INM(m)                      \
+	in_dword_masked(VIDC_REG_174526_ADDR,  m)
+#define VIDC_REG_174526_DONE_M_BMSK                        0x1
+#define VIDC_REG_174526_DONE_M_SHFT                          0
 
-#define VIDC_REG_456374_ADDR                   \
+#define VIDC_REG_736316_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000044)
-#define VIDC_REG_456374_PHYS                   \
+#define VIDC_REG_736316_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000044)
-#define VIDC_REG_456374_RMSK                          0x1
-#define VIDC_REG_456374_SHFT                            0
-#define VIDC_REG_456374_IN                     \
-	in_dword_masked(VIDC_REG_456374_ADDR,  \
-			VIDC_REG_456374_RMSK)
-#define VIDC_REG_456374_INM(m)                 \
-	in_dword_masked(VIDC_REG_456374_ADDR,  m)
-#define VIDC_REG_456374_OUT(v)                 \
-	out_dword(VIDC_REG_456374_ADDR, v)
-#define VIDC_REG_456374_OUTM(m, v)              \
+#define VIDC_REG_736316_RMSK                          0x1
+#define VIDC_REG_736316_SHFT                            0
+#define VIDC_REG_736316_IN                     \
+	in_dword_masked(VIDC_REG_736316_ADDR,  \
+			VIDC_REG_736316_RMSK)
+#define VIDC_REG_736316_INM(m)                 \
+	in_dword_masked(VIDC_REG_736316_ADDR,  m)
+#define VIDC_REG_736316_OUT(v)                 \
+	out_dword(VIDC_REG_736316_ADDR, v)
+#define VIDC_REG_736316_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_456374_ADDR, m, v, \
-			VIDC_REG_456374_IN); \
+	out_dword_masked_ns(VIDC_REG_736316_ADDR, m, v, \
+			VIDC_REG_736316_IN); \
 } while (0)
-#define VIDC_REG_456374_BITS_ENDIAN_BMSK              0x1
-#define VIDC_REG_456374_BITS_ENDIAN_SHFT                0
+#define VIDC_REG_736316_BITS_ENDIAN_BMSK              0x1
+#define VIDC_REG_736316_BITS_ENDIAN_SHFT                0
 
-#define VIDC_REG_822291_ADDR                 \
+#define VIDC_REG_761892_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000054)
-#define VIDC_REG_822291_PHYS                 \
+#define VIDC_REG_761892_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000054)
-#define VIDC_REG_822291_RMSK                 0xffffffff
-#define VIDC_REG_822291_SHFT                          0
-#define VIDC_REG_822291_IN                   \
-	in_dword_masked(VIDC_REG_822291_ADDR,  \
-			VIDC_REG_822291_RMSK)
-#define VIDC_REG_822291_INM(m)               \
-	in_dword_masked(VIDC_REG_822291_ADDR,  m)
-#define VIDC_REG_822291_OUT(v)               \
-	out_dword(VIDC_REG_822291_ADDR, v)
-#define VIDC_REG_822291_OUTM(m, v)            \
+#define VIDC_REG_761892_RMSK                 0xffffffff
+#define VIDC_REG_761892_SHFT                          0
+#define VIDC_REG_761892_IN                   \
+	in_dword_masked(VIDC_REG_761892_ADDR,  \
+			VIDC_REG_761892_RMSK)
+#define VIDC_REG_761892_INM(m)               \
+	in_dword_masked(VIDC_REG_761892_ADDR,  m)
+#define VIDC_REG_761892_OUT(v)               \
+	out_dword(VIDC_REG_761892_ADDR, v)
+#define VIDC_REG_761892_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_822291_ADDR, m, v, \
-			VIDC_REG_822291_IN); \
+	out_dword_masked_ns(VIDC_REG_761892_ADDR, m, v, \
+			VIDC_REG_761892_IN); \
 } while (0)
-#define VIDC_REG_822291_DEC_UNIT_SIZE_BMSK   0xffffffff
-#define VIDC_REG_822291_DEC_UNIT_SIZE_SHFT            0
+#define VIDC_REG_761892_DEC_UNIT_SIZE_BMSK   0xffffffff
+#define VIDC_REG_761892_DEC_UNIT_SIZE_SHFT            0
 
-#define VIDC_REG_103784_ADDR                 \
+#define VIDC_REG_782249_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000058)
-#define VIDC_REG_103784_PHYS                 \
+#define VIDC_REG_782249_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000058)
-#define VIDC_REG_103784_RMSK                 0xffffffff
-#define VIDC_REG_103784_SHFT                          0
-#define VIDC_REG_103784_IN                   \
-	in_dword_masked(VIDC_REG_103784_ADDR,  \
-			VIDC_REG_103784_RMSK)
-#define VIDC_REG_103784_INM(m)               \
-	in_dword_masked(VIDC_REG_103784_ADDR,  m)
-#define VIDC_REG_103784_ENC_UNIT_SIZE_BMSK   0xffffffff
-#define VIDC_REG_103784_ENC_UNIT_SIZE_SHFT            0
+#define VIDC_REG_782249_RMSK                 0xffffffff
+#define VIDC_REG_782249_SHFT                          0
+#define VIDC_REG_782249_IN                   \
+	in_dword_masked(VIDC_REG_782249_ADDR,  \
+			VIDC_REG_782249_RMSK)
+#define VIDC_REG_782249_INM(m)               \
+	in_dword_masked(VIDC_REG_782249_ADDR,  m)
+#define VIDC_REG_782249_ENC_UNIT_SIZE_BMSK   0xffffffff
+#define VIDC_REG_782249_ENC_UNIT_SIZE_SHFT            0
 
-#define VIDC_REG_249975_ADDR                \
+#define VIDC_REG_66693_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000005c)
-#define VIDC_REG_249975_PHYS                \
+#define VIDC_REG_66693_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000005c)
-#define VIDC_REG_249975_RMSK                       0xf
-#define VIDC_REG_249975_SHFT                         0
-#define VIDC_REG_249975_IN                  \
-	in_dword_masked(VIDC_REG_249975_ADDR,  \
-			VIDC_REG_249975_RMSK)
-#define VIDC_REG_249975_INM(m)              \
-	in_dword_masked(VIDC_REG_249975_ADDR,  m)
-#define VIDC_REG_249975_OUT(v)              \
-	out_dword(VIDC_REG_249975_ADDR, v)
-#define VIDC_REG_249975_OUTM(m, v)           \
+#define VIDC_REG_66693_RMSK                       0xf
+#define VIDC_REG_66693_SHFT                         0
+#define VIDC_REG_66693_IN                  \
+	in_dword_masked(VIDC_REG_66693_ADDR,  \
+			VIDC_REG_66693_RMSK)
+#define VIDC_REG_66693_INM(m)              \
+	in_dword_masked(VIDC_REG_66693_ADDR,  m)
+#define VIDC_REG_66693_OUT(v)              \
+	out_dword(VIDC_REG_66693_ADDR, v)
+#define VIDC_REG_66693_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_249975_ADDR, m, v, \
-			VIDC_REG_249975_IN); \
+	out_dword_masked_ns(VIDC_REG_66693_ADDR, m, v, \
+			VIDC_REG_66693_IN); \
 } while (0)
-#define VIDC_REG_249975_START_BYTE_NUM_BMSK        0xf
-#define VIDC_REG_249975_START_BYTE_NUM_SHFT          0
+#define VIDC_REG_66693_START_BYTE_NUM_BMSK        0xf
+#define VIDC_REG_66693_START_BYTE_NUM_SHFT          0
 
-#define VIDC_REG_257551_ADDR               \
+#define VIDC_REG_114286_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000060)
-#define VIDC_REG_257551_PHYS               \
+#define VIDC_REG_114286_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000060)
-#define VIDC_REG_257551_RMSK               0xffffffff
-#define VIDC_REG_257551_SHFT                        0
-#define VIDC_REG_257551_IN                 \
-	in_dword_masked(VIDC_REG_257551_ADDR,  \
-			VIDC_REG_257551_RMSK)
-#define VIDC_REG_257551_INM(m)             \
-	in_dword_masked(VIDC_REG_257551_ADDR,  m)
-#define VIDC_REG_257551_ENC_HEADER_SIZE_BMSK 0xffffffff
-#define VIDC_REG_257551_ENC_HEADER_SIZE_SHFT          0
+#define VIDC_REG_114286_RMSK               0xffffffff
+#define VIDC_REG_114286_SHFT                        0
+#define VIDC_REG_114286_IN                 \
+	in_dword_masked(VIDC_REG_114286_ADDR,  \
+			VIDC_REG_114286_RMSK)
+#define VIDC_REG_114286_INM(m)             \
+	in_dword_masked(VIDC_REG_114286_ADDR,  m)
+#define VIDC_REG_114286_ENC_HEADER_SIZE_BMSK 0xffffffff
+#define VIDC_REG_114286_ENC_HEADER_SIZE_SHFT          0
 
-#define VIDC_REG_30435_ADDR                   \
+#define VIDC_REG_713080_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000100)
-#define VIDC_REG_30435_PHYS                   \
+#define VIDC_REG_713080_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000100)
-#define VIDC_REG_30435_RMSK                         0x1f
-#define VIDC_REG_30435_SHFT                            0
-#define VIDC_REG_30435_IN                     \
-	in_dword_masked(VIDC_REG_30435_ADDR,  \
-			VIDC_REG_30435_RMSK)
-#define VIDC_REG_30435_INM(m)                 \
-	in_dword_masked(VIDC_REG_30435_ADDR,  m)
-#define VIDC_REG_30435_OUT(v)                 \
-	out_dword(VIDC_REG_30435_ADDR, v)
-#define VIDC_REG_30435_OUTM(m, v)              \
+#define VIDC_REG_713080_RMSK                         0x1f
+#define VIDC_REG_713080_SHFT                            0
+#define VIDC_REG_713080_IN                     \
+	in_dword_masked(VIDC_REG_713080_ADDR,  \
+			VIDC_REG_713080_RMSK)
+#define VIDC_REG_713080_INM(m)                 \
+	in_dword_masked(VIDC_REG_713080_ADDR,  m)
+#define VIDC_REG_713080_OUT(v)                 \
+	out_dword(VIDC_REG_713080_ADDR, v)
+#define VIDC_REG_713080_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_30435_ADDR, m, v, \
-			VIDC_REG_30435_IN); \
+	out_dword_masked_ns(VIDC_REG_713080_ADDR, m, v, \
+			VIDC_REG_713080_IN); \
 } while (0)
-#define VIDC_REG_30435_ENC_ON_BMSK                  0x10
-#define VIDC_REG_30435_ENC_ON_SHFT                   0x4
-#define VIDC_REG_30435_STANDARD_SEL_BMSK             0xf
-#define VIDC_REG_30435_STANDARD_SEL_SHFT               0
+#define VIDC_REG_713080_ENC_ON_BMSK                  0x10
+#define VIDC_REG_713080_ENC_ON_SHFT                   0x4
+#define VIDC_REG_713080_STANDARD_SEL_BMSK             0xf
+#define VIDC_REG_713080_STANDARD_SEL_SHFT               0
 
-#define VIDC_REG_255774_ADDR                         \
+#define VIDC_REG_97293_ADDR                         \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000104)
-#define VIDC_REG_255774_PHYS                         \
+#define VIDC_REG_97293_PHYS                         \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000104)
-#define VIDC_REG_255774_RMSK                               0x1f
-#define VIDC_REG_255774_SHFT                                  0
-#define VIDC_REG_255774_IN                           \
-	in_dword_masked(VIDC_REG_255774_ADDR,  VIDC_REG_255774_RMSK)
-#define VIDC_REG_255774_INM(m)                       \
-	in_dword_masked(VIDC_REG_255774_ADDR,  m)
-#define VIDC_REG_255774_OUT(v)                       \
-	out_dword(VIDC_REG_255774_ADDR, v)
-#define VIDC_REG_255774_OUTM(m, v)                    \
+#define VIDC_REG_97293_RMSK                               0x1f
+#define VIDC_REG_97293_SHFT                                  0
+#define VIDC_REG_97293_IN                           \
+	in_dword_masked(VIDC_REG_97293_ADDR,  VIDC_REG_97293_RMSK)
+#define VIDC_REG_97293_INM(m)                       \
+	in_dword_masked(VIDC_REG_97293_ADDR,  m)
+#define VIDC_REG_97293_OUT(v)                       \
+	out_dword(VIDC_REG_97293_ADDR, v)
+#define VIDC_REG_97293_OUTM(m, v)                    \
 do { \
-	out_dword_masked_ns(VIDC_REG_255774_ADDR, m, v, \
-			VIDC_REG_255774_IN); \
+	out_dword_masked_ns(VIDC_REG_97293_ADDR, m, v, \
+			VIDC_REG_97293_IN); \
 } while (0)
-#define VIDC_REG_255774_CH_ID_BMSK                         0x1f
-#define VIDC_REG_255774_CH_ID_SHFT                            0
+#define VIDC_REG_97293_CH_ID_BMSK                         0x1f
+#define VIDC_REG_97293_CH_ID_SHFT                            0
 
-#define VIDC_REG_342124_ADDR                     \
+#define VIDC_REG_224135_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000108)
-#define VIDC_REG_342124_PHYS                     \
+#define VIDC_REG_224135_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000108)
-#define VIDC_REG_342124_RMSK                            0x1
-#define VIDC_REG_342124_SHFT                              0
-#define VIDC_REG_342124_IN                       \
-	in_dword_masked(VIDC_REG_342124_ADDR,  VIDC_REG_342124_RMSK)
-#define VIDC_REG_342124_INM(m)                   \
-	in_dword_masked(VIDC_REG_342124_ADDR,  m)
-#define VIDC_REG_342124_OUT(v)                   \
-	out_dword(VIDC_REG_342124_ADDR, v)
-#define VIDC_REG_342124_OUTM(m, v)                \
+#define VIDC_REG_224135_RMSK                            0x1
+#define VIDC_REG_224135_SHFT                              0
+#define VIDC_REG_224135_IN                       \
+	in_dword_masked(VIDC_REG_224135_ADDR,        \
+	VIDC_REG_224135_RMSK)
+#define VIDC_REG_224135_INM(m)                   \
+	in_dword_masked(VIDC_REG_224135_ADDR,  m)
+#define VIDC_REG_224135_OUT(v)                   \
+	out_dword(VIDC_REG_224135_ADDR, v)
+#define VIDC_REG_224135_OUTM(m, v)                \
 do { \
-	out_dword_masked_ns(VIDC_REG_342124_ADDR, m, v, \
-			VIDC_REG_342124_IN); \
+	out_dword_masked_ns(VIDC_REG_224135_ADDR, m, v, \
+			VIDC_REG_224135_IN); \
 } while (0)
-#define VIDC_REG_342124_CPU_RESET_BMSK                  0x1
-#define VIDC_REG_342124_CPU_RESET_SHFT                    0
+#define VIDC_REG_224135_CPU_RESET_BMSK                  0x1
+#define VIDC_REG_224135_CPU_RESET_SHFT                    0
 
-#define VIDC_REG_616562_ADDR                        \
+#define VIDC_REG_832522_ADDR                        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000010c)
-#define VIDC_REG_616562_PHYS                        \
+#define VIDC_REG_832522_PHYS                        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000010c)
-#define VIDC_REG_616562_RMSK                               0x1
-#define VIDC_REG_616562_SHFT                                 0
-#define VIDC_REG_616562_IN                          \
-	in_dword_masked(VIDC_REG_616562_ADDR,  VIDC_REG_616562_RMSK)
-#define VIDC_REG_616562_INM(m)                      \
-	in_dword_masked(VIDC_REG_616562_ADDR,  m)
-#define VIDC_REG_616562_OUT(v)                      \
-	out_dword(VIDC_REG_616562_ADDR, v)
-#define VIDC_REG_616562_OUTM(m, v)                   \
+#define VIDC_REG_832522_RMSK                               0x1
+#define VIDC_REG_832522_SHFT                                 0
+#define VIDC_REG_832522_IN                          \
+	in_dword_masked(VIDC_REG_832522_ADDR,  VIDC_REG_832522_RMSK)
+#define VIDC_REG_832522_INM(m)                      \
+	in_dword_masked(VIDC_REG_832522_ADDR,  m)
+#define VIDC_REG_832522_OUT(v)                      \
+	out_dword(VIDC_REG_832522_ADDR, v)
+#define VIDC_REG_832522_OUTM(m, v)                   \
 do { \
-	out_dword_masked_ns(VIDC_REG_616562_ADDR, m, v, \
-			VIDC_REG_616562_IN); \
+	out_dword_masked_ns(VIDC_REG_832522_ADDR, m, v, \
+			VIDC_REG_832522_IN); \
 } while (0)
-#define VIDC_REG_616562_FW_END_BMSK                        0x1
-#define VIDC_REG_616562_FW_END_SHFT                          0
+#define VIDC_REG_832522_FW_END_BMSK                        0x1
+#define VIDC_REG_832522_FW_END_SHFT                          0
 
-#define VIDC_REG_261304_ADDR                    \
+#define VIDC_REG_361582_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000110)
-#define VIDC_REG_261304_PHYS                    \
+#define VIDC_REG_361582_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000110)
-#define VIDC_REG_261304_RMSK                           0x1
-#define VIDC_REG_261304_SHFT                             0
-#define VIDC_REG_261304_IN                      \
-	in_dword_masked(VIDC_REG_261304_ADDR,  \
-			VIDC_REG_261304_RMSK)
-#define VIDC_REG_261304_INM(m)                  \
-	in_dword_masked(VIDC_REG_261304_ADDR,  m)
-#define VIDC_REG_261304_OUT(v)                  \
-	out_dword(VIDC_REG_261304_ADDR, v)
-#define VIDC_REG_261304_OUTM(m, v)               \
+#define VIDC_REG_361582_RMSK                           0x1
+#define VIDC_REG_361582_SHFT                             0
+#define VIDC_REG_361582_IN                      \
+	in_dword_masked(VIDC_REG_361582_ADDR,  \
+			VIDC_REG_361582_RMSK)
+#define VIDC_REG_361582_INM(m)                  \
+	in_dword_masked(VIDC_REG_361582_ADDR,  m)
+#define VIDC_REG_361582_OUT(v)                  \
+	out_dword(VIDC_REG_361582_ADDR, v)
+#define VIDC_REG_361582_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_261304_ADDR, m, v, \
-			VIDC_REG_261304_IN); \
+	out_dword_masked_ns(VIDC_REG_361582_ADDR, m, v, \
+			VIDC_REG_361582_IN); \
 } while (0)
-#define VIDC_REG_261304_BUS_MASTER_BMSK                0x1
-#define VIDC_REG_261304_BUS_MASTER_SHFT                  0
+#define VIDC_REG_361582_BUS_MASTER_BMSK                0x1
+#define VIDC_REG_361582_BUS_MASTER_SHFT                  0
 
-#define VIDC_REG_7977_ADDR                   \
+#define VIDC_REG_314435_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000114)
-#define VIDC_REG_7977_PHYS                   \
+#define VIDC_REG_314435_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000114)
-#define VIDC_REG_7977_RMSK                          0x1
-#define VIDC_REG_7977_SHFT                            0
-#define VIDC_REG_7977_IN                     \
-	in_dword_masked(VIDC_REG_7977_ADDR,  \
-			VIDC_REG_7977_RMSK)
-#define VIDC_REG_7977_INM(m)                 \
-	in_dword_masked(VIDC_REG_7977_ADDR,  m)
-#define VIDC_REG_7977_OUT(v)                 \
-	out_dword(VIDC_REG_7977_ADDR, v)
-#define VIDC_REG_7977_OUTM(m, v)              \
+#define VIDC_REG_314435_RMSK                          0x1
+#define VIDC_REG_314435_SHFT                            0
+#define VIDC_REG_314435_IN                     \
+	in_dword_masked(VIDC_REG_314435_ADDR,  \
+			VIDC_REG_314435_RMSK)
+#define VIDC_REG_314435_INM(m)                 \
+	in_dword_masked(VIDC_REG_314435_ADDR,  m)
+#define VIDC_REG_314435_OUT(v)                 \
+	out_dword(VIDC_REG_314435_ADDR, v)
+#define VIDC_REG_314435_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_7977_ADDR, m, v, \
-			VIDC_REG_7977_IN); \
+	out_dword_masked_ns(VIDC_REG_314435_ADDR, m, v, \
+			VIDC_REG_314435_IN); \
 } while (0)
-#define VIDC_REG_7977_FRAME_START_BMSK              0x1
-#define VIDC_REG_7977_FRAME_START_SHFT                0
+#define VIDC_REG_314435_FRAME_START_BMSK              0x1
+#define VIDC_REG_314435_FRAME_START_SHFT                0
 
-#define VIDC_REG_652102_ADDR                    \
+#define VIDC_REG_999267_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000118)
-#define VIDC_REG_652102_PHYS                    \
+#define VIDC_REG_999267_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000118)
-#define VIDC_REG_652102_RMSK                        0xffff
-#define VIDC_REG_652102_SHFT                             0
-#define VIDC_REG_652102_IN                      \
-	in_dword_masked(VIDC_REG_652102_ADDR,  \
-			VIDC_REG_652102_RMSK)
-#define VIDC_REG_652102_INM(m)                  \
-	in_dword_masked(VIDC_REG_652102_ADDR,  m)
-#define VIDC_REG_652102_OUT(v)                  \
-	out_dword(VIDC_REG_652102_ADDR, v)
-#define VIDC_REG_652102_OUTM(m, v)               \
+#define VIDC_REG_999267_RMSK                        0xffff
+#define VIDC_REG_999267_SHFT                             0
+#define VIDC_REG_999267_IN                      \
+	in_dword_masked(VIDC_REG_999267_ADDR,  \
+			VIDC_REG_999267_RMSK)
+#define VIDC_REG_999267_INM(m)                  \
+	in_dword_masked(VIDC_REG_999267_ADDR,  m)
+#define VIDC_REG_999267_OUT(v)                  \
+	out_dword(VIDC_REG_999267_ADDR, v)
+#define VIDC_REG_999267_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_652102_ADDR, m, v, \
-			VIDC_REG_652102_IN); \
+	out_dword_masked_ns(VIDC_REG_999267_ADDR, m, v, \
+			VIDC_REG_999267_IN); \
 } while (0)
-#define VIDC_REG_652102_IMG_SIZE_X_BMSK             0xffff
-#define VIDC_REG_652102_IMG_SIZE_X_SHFT                  0
+#define VIDC_REG_999267_IMG_SIZE_X_BMSK             0xffff
+#define VIDC_REG_999267_IMG_SIZE_X_SHFT                  0
 
-#define VIDC_REG_122456_ADDR                    \
+#define VIDC_REG_345712_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000011c)
-#define VIDC_REG_122456_PHYS                    \
+#define VIDC_REG_345712_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000011c)
-#define VIDC_REG_122456_RMSK                        0xffff
-#define VIDC_REG_122456_SHFT                             0
-#define VIDC_REG_122456_IN                      \
-	in_dword_masked(VIDC_REG_122456_ADDR,  \
-			VIDC_REG_122456_RMSK)
-#define VIDC_REG_122456_INM(m)                  \
-	in_dword_masked(VIDC_REG_122456_ADDR,  m)
-#define VIDC_REG_122456_OUT(v)                  \
-	out_dword(VIDC_REG_122456_ADDR, v)
-#define VIDC_REG_122456_OUTM(m, v)               \
+#define VIDC_REG_345712_RMSK                        0xffff
+#define VIDC_REG_345712_SHFT                             0
+#define VIDC_REG_345712_IN                      \
+	in_dword_masked(VIDC_REG_345712_ADDR,  \
+			VIDC_REG_345712_RMSK)
+#define VIDC_REG_345712_INM(m)                  \
+	in_dword_masked(VIDC_REG_345712_ADDR,  m)
+#define VIDC_REG_345712_OUT(v)                  \
+	out_dword(VIDC_REG_345712_ADDR, v)
+#define VIDC_REG_345712_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_122456_ADDR, m, v, \
-			VIDC_REG_122456_IN); \
+	out_dword_masked_ns(VIDC_REG_345712_ADDR, m, v, \
+			VIDC_REG_345712_IN); \
 } while (0)
-#define VIDC_REG_122456_IMG_SIZE_Y_BMSK             0xffff
-#define VIDC_REG_122456_IMG_SIZE_Y_SHFT                  0
+#define VIDC_REG_345712_IMG_SIZE_Y_BMSK             0xffff
+#define VIDC_REG_345712_IMG_SIZE_Y_SHFT                  0
 
-#define VIDC_REG_669330_ADDR                       \
+#define VIDC_REG_443811_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000124)
-#define VIDC_REG_669330_PHYS                       \
+#define VIDC_REG_443811_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000124)
-#define VIDC_REG_669330_RMSK                              0x1
-#define VIDC_REG_669330_SHFT                                0
-#define VIDC_REG_669330_IN                         \
-	in_dword_masked(VIDC_REG_669330_ADDR,  VIDC_REG_669330_RMSK)
-#define VIDC_REG_669330_INM(m)                     \
-	in_dword_masked(VIDC_REG_669330_ADDR,  m)
-#define VIDC_REG_669330_OUT(v)                     \
-	out_dword(VIDC_REG_669330_ADDR, v)
-#define VIDC_REG_669330_OUTM(m, v)                  \
+#define VIDC_REG_443811_RMSK                              0x1
+#define VIDC_REG_443811_SHFT                                0
+#define VIDC_REG_443811_IN                         \
+	in_dword_masked(VIDC_REG_443811_ADDR,  VIDC_REG_443811_RMSK)
+#define VIDC_REG_443811_INM(m)                     \
+	in_dword_masked(VIDC_REG_443811_ADDR,  m)
+#define VIDC_REG_443811_OUT(v)                     \
+	out_dword(VIDC_REG_443811_ADDR, v)
+#define VIDC_REG_443811_OUTM(m, v)                  \
 do { \
-	out_dword_masked_ns(VIDC_REG_669330_ADDR, m, v, \
-			VIDC_REG_669330_IN); \
+	out_dword_masked_ns(VIDC_REG_443811_ADDR, m, v, \
+			VIDC_REG_443811_IN); \
 } while (0)
-#define VIDC_REG_669330_POST_ON_BMSK                      0x1
-#define VIDC_REG_669330_POST_ON_SHFT                        0
+#define VIDC_REG_443811_POST_ON_BMSK                      0x1
+#define VIDC_REG_443811_POST_ON_SHFT                        0
 
-#define VIDC_REG_530137_ADDR                    \
+#define VIDC_REG_538267_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000128)
-#define VIDC_REG_530137_PHYS                    \
+#define VIDC_REG_538267_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000128)
-#define VIDC_REG_530137_RMSK                    0xffffffff
-#define VIDC_REG_530137_SHFT                             0
-#define VIDC_REG_530137_IN                      \
-	in_dword_masked(VIDC_REG_530137_ADDR,  \
-			VIDC_REG_530137_RMSK)
-#define VIDC_REG_530137_INM(m)                  \
-	in_dword_masked(VIDC_REG_530137_ADDR,  m)
-#define VIDC_REG_530137_OUT(v)                  \
-	out_dword(VIDC_REG_530137_ADDR, v)
-#define VIDC_REG_530137_OUTM(m, v)               \
+#define VIDC_REG_538267_RMSK                    0xffffffff
+#define VIDC_REG_538267_SHFT                             0
+#define VIDC_REG_538267_IN                      \
+	in_dword_masked(VIDC_REG_538267_ADDR,  \
+			VIDC_REG_538267_RMSK)
+#define VIDC_REG_538267_INM(m)                  \
+	in_dword_masked(VIDC_REG_538267_ADDR,  m)
+#define VIDC_REG_538267_OUT(v)                  \
+	out_dword(VIDC_REG_538267_ADDR, v)
+#define VIDC_REG_538267_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_530137_ADDR, m, v, \
-			VIDC_REG_530137_IN); \
+	out_dword_masked_ns(VIDC_REG_538267_ADDR, m, v, \
+			VIDC_REG_538267_IN); \
 } while (0)
-#define VIDC_REG_530137_QUOTIENT_VAL_BMSK       0xffff0000
-#define VIDC_REG_530137_QUOTIENT_VAL_SHFT             0x10
-#define VIDC_REG_530137_REMAINDER_VAL_BMSK          0xffff
-#define VIDC_REG_530137_REMAINDER_VAL_SHFT               0
+#define VIDC_REG_538267_QUOTIENT_VAL_BMSK       0xffff0000
+#define VIDC_REG_538267_QUOTIENT_VAL_SHFT             0x10
+#define VIDC_REG_538267_REMAINDER_VAL_BMSK          0xffff
+#define VIDC_REG_538267_REMAINDER_VAL_SHFT               0
 
-#define VIDC_REG_460639_ADDR                \
+#define VIDC_REG_661565_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000012c)
-#define VIDC_REG_460639_PHYS                \
+#define VIDC_REG_661565_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000012c)
-#define VIDC_REG_460639_RMSK                       0x1
-#define VIDC_REG_460639_SHFT                         0
-#define VIDC_REG_460639_IN                  \
-	in_dword_masked(VIDC_REG_460639_ADDR,  \
-			VIDC_REG_460639_RMSK)
-#define VIDC_REG_460639_INM(m)              \
-	in_dword_masked(VIDC_REG_460639_ADDR,  m)
-#define VIDC_REG_460639_OUT(v)              \
-	out_dword(VIDC_REG_460639_ADDR, v)
-#define VIDC_REG_460639_OUTM(m, v)           \
+#define VIDC_REG_661565_RMSK                       0x1
+#define VIDC_REG_661565_SHFT                         0
+#define VIDC_REG_661565_IN                  \
+	in_dword_masked(VIDC_REG_661565_ADDR,  \
+			VIDC_REG_661565_RMSK)
+#define VIDC_REG_661565_INM(m)              \
+	in_dword_masked(VIDC_REG_661565_ADDR,  m)
+#define VIDC_REG_661565_OUT(v)              \
+	out_dword(VIDC_REG_661565_ADDR, v)
+#define VIDC_REG_661565_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_460639_ADDR, m, v, \
-			VIDC_REG_460639_IN); \
+	out_dword_masked_ns(VIDC_REG_661565_ADDR, m, v, \
+			VIDC_REG_661565_IN); \
 } while (0)
-#define VIDC_REG_460639_SEQUENCE_START_BMSK        0x1
-#define VIDC_REG_460639_SEQUENCE_START_SHFT          0
+#define VIDC_REG_661565_SEQUENCE_START_BMSK        0x1
+#define VIDC_REG_661565_SEQUENCE_START_SHFT          0
 
-#define VIDC_REG_893174_ADDR                      \
+#define VIDC_REG_141269_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000130)
-#define VIDC_REG_893174_PHYS                      \
+#define VIDC_REG_141269_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000130)
-#define VIDC_REG_893174_RMSK                             0x1
-#define VIDC_REG_893174_SHFT                               0
-#define VIDC_REG_893174_IN                        \
-	in_dword_masked(VIDC_REG_893174_ADDR,  VIDC_REG_893174_RMSK)
-#define VIDC_REG_893174_INM(m)                    \
-	in_dword_masked(VIDC_REG_893174_ADDR,  m)
-#define VIDC_REG_893174_OUT(v)                    \
-	out_dword(VIDC_REG_893174_ADDR, v)
-#define VIDC_REG_893174_OUTM(m, v)                 \
+#define VIDC_REG_141269_RMSK                             0x1
+#define VIDC_REG_141269_SHFT                               0
+#define VIDC_REG_141269_IN                        \
+	in_dword_masked(VIDC_REG_141269_ADDR,         \
+	VIDC_REG_141269_RMSK)
+#define VIDC_REG_141269_INM(m)                    \
+	in_dword_masked(VIDC_REG_141269_ADDR,  m)
+#define VIDC_REG_141269_OUT(v)                    \
+	out_dword(VIDC_REG_141269_ADDR, v)
+#define VIDC_REG_141269_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_893174_ADDR, m, v, \
-			VIDC_REG_893174_IN); \
+	out_dword_masked_ns(VIDC_REG_141269_ADDR, m, v, \
+			VIDC_REG_141269_IN); \
 } while (0)
-#define VIDC_REG_893174_SW_RESET_BMSK                    0x1
-#define VIDC_REG_893174_SW_RESET_SHFT                      0
+#define VIDC_REG_141269_SW_RESET_BMSK                    0x1
+#define VIDC_REG_141269_SW_RESET_SHFT                      0
 
-#define VIDC_REG_481035_ADDR                      \
+#define VIDC_REG_193553_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000134)
-#define VIDC_REG_481035_PHYS                      \
+#define VIDC_REG_193553_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000134)
-#define VIDC_REG_481035_RMSK                             0x1
-#define VIDC_REG_481035_SHFT                               0
-#define VIDC_REG_481035_IN                        \
-	in_dword_masked(VIDC_REG_481035_ADDR,  VIDC_REG_481035_RMSK)
-#define VIDC_REG_481035_INM(m)                    \
-	in_dword_masked(VIDC_REG_481035_ADDR,  m)
-#define VIDC_REG_481035_OUT(v)                    \
-	out_dword(VIDC_REG_481035_ADDR, v)
-#define VIDC_REG_481035_OUTM(m, v)                 \
+#define VIDC_REG_193553_RMSK                             0x1
+#define VIDC_REG_193553_SHFT                               0
+#define VIDC_REG_193553_IN                        \
+	in_dword_masked(VIDC_REG_193553_ADDR,         \
+	VIDC_REG_193553_RMSK)
+#define VIDC_REG_193553_INM(m)                    \
+	in_dword_masked(VIDC_REG_193553_ADDR,  m)
+#define VIDC_REG_193553_OUT(v)                    \
+	out_dword(VIDC_REG_193553_ADDR, v)
+#define VIDC_REG_193553_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_481035_ADDR, m, v, \
-			VIDC_REG_481035_IN); \
+	out_dword_masked_ns(VIDC_REG_193553_ADDR, m, v, \
+			VIDC_REG_193553_IN); \
 } while (0)
-#define VIDC_REG_481035_FW_START_BMSK                    0x1
-#define VIDC_REG_481035_FW_START_SHFT                      0
+#define VIDC_REG_193553_FW_START_BMSK                    0x1
+#define VIDC_REG_193553_FW_START_SHFT                      0
 
-#define VIDC_REG_627510_ADDR                    \
+#define VIDC_REG_215724_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000138)
-#define VIDC_REG_627510_PHYS                    \
+#define VIDC_REG_215724_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000138)
-#define VIDC_REG_627510_RMSK                           0x1
-#define VIDC_REG_627510_SHFT                             0
-#define VIDC_REG_627510_IN                      \
-	in_dword_masked(VIDC_REG_627510_ADDR,  \
-			VIDC_REG_627510_RMSK)
-#define VIDC_REG_627510_INM(m)                  \
-	in_dword_masked(VIDC_REG_627510_ADDR,  m)
-#define VIDC_REG_627510_OUT(v)                  \
-	out_dword(VIDC_REG_627510_ADDR, v)
-#define VIDC_REG_627510_OUTM(m, v)               \
+#define VIDC_REG_215724_RMSK                           0x1
+#define VIDC_REG_215724_SHFT                             0
+#define VIDC_REG_215724_IN                      \
+	in_dword_masked(VIDC_REG_215724_ADDR,  \
+			VIDC_REG_215724_RMSK)
+#define VIDC_REG_215724_INM(m)                  \
+	in_dword_masked(VIDC_REG_215724_ADDR,  m)
+#define VIDC_REG_215724_OUT(v)                  \
+	out_dword(VIDC_REG_215724_ADDR, v)
+#define VIDC_REG_215724_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_627510_ADDR, m, v, \
-			VIDC_REG_627510_IN); \
+	out_dword_masked_ns(VIDC_REG_215724_ADDR, m, v, \
+			VIDC_REG_215724_IN); \
 } while (0)
-#define VIDC_REG_627510_ARM_ENDIAN_BMSK                0x1
-#define VIDC_REG_627510_ARM_ENDIAN_SHFT                  0
+#define VIDC_REG_215724_ARM_ENDIAN_BMSK                0x1
+#define VIDC_REG_215724_ARM_ENDIAN_SHFT                  0
 
-#define VIDC_REG_49209_ADDR                      \
+#define VIDC_REG_846346_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000013c)
-#define VIDC_REG_49209_PHYS                      \
+#define VIDC_REG_846346_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000013c)
-#define VIDC_REG_49209_RMSK                             0x1
-#define VIDC_REG_49209_SHFT                               0
-#define VIDC_REG_49209_IN                        \
-	in_dword_masked(VIDC_REG_49209_ADDR,  VIDC_REG_49209_RMSK)
-#define VIDC_REG_49209_INM(m)                    \
-	in_dword_masked(VIDC_REG_49209_ADDR,  m)
-#define VIDC_REG_49209_OUT(v)                    \
-	out_dword(VIDC_REG_49209_ADDR, v)
-#define VIDC_REG_49209_OUTM(m, v)                 \
+#define VIDC_REG_846346_RMSK                             0x1
+#define VIDC_REG_846346_SHFT                               0
+#define VIDC_REG_846346_IN                        \
+	in_dword_masked(VIDC_REG_846346_ADDR,         \
+	VIDC_REG_846346_RMSK)
+#define VIDC_REG_846346_INM(m)                    \
+	in_dword_masked(VIDC_REG_846346_ADDR,  m)
+#define VIDC_REG_846346_OUT(v)                    \
+	out_dword(VIDC_REG_846346_ADDR, v)
+#define VIDC_REG_846346_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_49209_ADDR, m, v, \
-			VIDC_REG_49209_IN); \
+	out_dword_masked_ns(VIDC_REG_846346_ADDR, m, v, \
+			VIDC_REG_846346_IN); \
 } while (0)
-#define VIDC_REG_49209_ERR_CTRL_BMSK                    0x1
-#define VIDC_REG_49209_ERR_CTRL_SHFT                      0
+#define VIDC_REG_846346_ERR_CTRL_BMSK                    0x1
+#define VIDC_REG_846346_ERR_CTRL_SHFT                      0
 
-#define VIDC_REG_396197_ADDR                 \
+#define VIDC_REG_765787_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000200)
-#define VIDC_REG_396197_PHYS                 \
+#define VIDC_REG_765787_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000200)
-#define VIDC_REG_396197_RMSK                 0xffffffff
-#define VIDC_REG_396197_SHFT                          0
-#define VIDC_REG_396197_IN                   \
-	in_dword_masked(VIDC_REG_396197_ADDR,  \
-			VIDC_REG_396197_RMSK)
-#define VIDC_REG_396197_INM(m)               \
-	in_dword_masked(VIDC_REG_396197_ADDR,  m)
-#define VIDC_REG_396197_OUT(v)               \
-	out_dword(VIDC_REG_396197_ADDR, v)
-#define VIDC_REG_396197_OUTM(m, v)            \
+#define VIDC_REG_765787_RMSK                 0xffffffff
+#define VIDC_REG_765787_SHFT                          0
+#define VIDC_REG_765787_IN                   \
+	in_dword_masked(VIDC_REG_765787_ADDR,  \
+			VIDC_REG_765787_RMSK)
+#define VIDC_REG_765787_INM(m)               \
+	in_dword_masked(VIDC_REG_765787_ADDR,  m)
+#define VIDC_REG_765787_OUT(v)               \
+	out_dword(VIDC_REG_765787_ADDR, v)
+#define VIDC_REG_765787_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_396197_ADDR, m, v, \
-			VIDC_REG_396197_IN); \
+	out_dword_masked_ns(VIDC_REG_765787_ADDR, m, v, \
+			VIDC_REG_765787_IN); \
 } while (0)
-#define VIDC_REG_396197_FW_STT_ADDR_0_BMSK   0xffffffff
-#define VIDC_REG_396197_FW_STT_ADDR_0_SHFT            0
+#define VIDC_REG_765787_FW_STT_ADDR_0_BMSK   0xffffffff
+#define VIDC_REG_765787_FW_STT_ADDR_0_SHFT            0
 
-#define VIDC_REG_368592_ADDR                 \
+#define VIDC_REG_225040_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000204)
-#define VIDC_REG_368592_PHYS                 \
+#define VIDC_REG_225040_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000204)
-#define VIDC_REG_368592_RMSK                 0xffffffff
-#define VIDC_REG_368592_SHFT                          0
-#define VIDC_REG_368592_IN                   \
-	in_dword_masked(VIDC_REG_368592_ADDR,  \
-			VIDC_REG_368592_RMSK)
-#define VIDC_REG_368592_INM(m)               \
-	in_dword_masked(VIDC_REG_368592_ADDR,  m)
-#define VIDC_REG_368592_OUT(v)               \
-	out_dword(VIDC_REG_368592_ADDR, v)
-#define VIDC_REG_368592_OUTM(m, v)            \
+#define VIDC_REG_225040_RMSK                 0xffffffff
+#define VIDC_REG_225040_SHFT                          0
+#define VIDC_REG_225040_IN                   \
+	in_dword_masked(VIDC_REG_225040_ADDR,  \
+			VIDC_REG_225040_RMSK)
+#define VIDC_REG_225040_INM(m)               \
+	in_dword_masked(VIDC_REG_225040_ADDR,  m)
+#define VIDC_REG_225040_OUT(v)               \
+	out_dword(VIDC_REG_225040_ADDR, v)
+#define VIDC_REG_225040_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_368592_ADDR, m, v, \
-			VIDC_REG_368592_IN); \
+	out_dword_masked_ns(VIDC_REG_225040_ADDR, m, v, \
+			VIDC_REG_225040_IN); \
 } while (0)
-#define VIDC_REG_368592_FW_STT_ADDR_1_BMSK   0xffffffff
-#define VIDC_REG_368592_FW_STT_ADDR_1_SHFT            0
+#define VIDC_REG_225040_FW_STT_ADDR_1_BMSK   0xffffffff
+#define VIDC_REG_225040_FW_STT_ADDR_1_SHFT            0
 
-#define VIDC_REG_60733_ADDR                 \
+#define VIDC_REG_942456_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000208)
-#define VIDC_REG_60733_PHYS                 \
+#define VIDC_REG_942456_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000208)
-#define VIDC_REG_60733_RMSK                 0xffffffff
-#define VIDC_REG_60733_SHFT                          0
-#define VIDC_REG_60733_IN                   \
-	in_dword_masked(VIDC_REG_60733_ADDR,  \
-			VIDC_REG_60733_RMSK)
-#define VIDC_REG_60733_INM(m)               \
-	in_dword_masked(VIDC_REG_60733_ADDR,  m)
-#define VIDC_REG_60733_OUT(v)               \
-	out_dword(VIDC_REG_60733_ADDR, v)
-#define VIDC_REG_60733_OUTM(m, v)            \
+#define VIDC_REG_942456_RMSK                 0xffffffff
+#define VIDC_REG_942456_SHFT                          0
+#define VIDC_REG_942456_IN                   \
+	in_dword_masked(VIDC_REG_942456_ADDR,  \
+			VIDC_REG_942456_RMSK)
+#define VIDC_REG_942456_INM(m)               \
+	in_dword_masked(VIDC_REG_942456_ADDR,  m)
+#define VIDC_REG_942456_OUT(v)               \
+	out_dword(VIDC_REG_942456_ADDR, v)
+#define VIDC_REG_942456_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_60733_ADDR, m, v, \
-			VIDC_REG_60733_IN); \
+	out_dword_masked_ns(VIDC_REG_942456_ADDR, m, v, \
+			VIDC_REG_942456_IN); \
 } while (0)
-#define VIDC_REG_60733_FW_STT_ADDR_2_BMSK   0xffffffff
-#define VIDC_REG_60733_FW_STT_ADDR_2_SHFT            0
+#define VIDC_REG_942456_FW_STT_ADDR_2_BMSK   0xffffffff
+#define VIDC_REG_942456_FW_STT_ADDR_2_SHFT            0
 
-#define VIDC_REG_36891_ADDR_3_ADDR                 \
+#define VIDC_REG_942170_ADDR_3_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000020c)
-#define VIDC_REG_36891_ADDR_3_PHYS                 \
+#define VIDC_REG_942170_ADDR_3_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000020c)
-#define VIDC_REG_36891_ADDR_3_RMSK                 0xffffffff
-#define VIDC_REG_36891_ADDR_3_SHFT                          0
-#define VIDC_REG_36891_ADDR_3_IN                   \
-	in_dword_masked(VIDC_REG_36891_ADDR_3_ADDR,  \
-			VIDC_REG_36891_ADDR_3_RMSK)
-#define VIDC_REG_36891_ADDR_3_INM(m)               \
-	in_dword_masked(VIDC_REG_36891_ADDR_3_ADDR,  m)
-#define VIDC_REG_36891_ADDR_3_OUT(v)               \
-	out_dword(VIDC_REG_36891_ADDR_3_ADDR, v)
-#define VIDC_REG_36891_ADDR_3_OUTM(m, v)            \
+#define VIDC_REG_942170_ADDR_3_RMSK                 0xffffffff
+#define VIDC_REG_942170_ADDR_3_SHFT                          0
+#define VIDC_REG_942170_ADDR_3_IN                   \
+	in_dword_masked(VIDC_REG_942170_ADDR_3_ADDR,  \
+			VIDC_REG_942170_ADDR_3_RMSK)
+#define VIDC_REG_942170_ADDR_3_INM(m)               \
+	in_dword_masked(VIDC_REG_942170_ADDR_3_ADDR,  m)
+#define VIDC_REG_942170_ADDR_3_OUT(v)               \
+	out_dword(VIDC_REG_942170_ADDR_3_ADDR, v)
+#define VIDC_REG_942170_ADDR_3_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_36891_ADDR_3_ADDR, m, v, \
-			VIDC_REG_36891_ADDR_3_IN); \
+	out_dword_masked_ns(VIDC_REG_942170_ADDR_3_ADDR, m, v, \
+			VIDC_REG_942170_ADDR_3_IN); \
 } while (0)
-#define VIDC_REG_36891_ADDR_3_FW_STT_ADDR_3_BMSK   0xffffffff
-#define VIDC_REG_36891_ADDR_3_FW_STT_ADDR_3_SHFT            0
+#define VIDC_REG_942170_ADDR_3_FW_STT_ADDR_3_BMSK   0xffffffff
+#define VIDC_REG_942170_ADDR_3_FW_STT_ADDR_3_SHFT            0
 
-#define VIDC_REG_683268_ADDR                 \
+#define VIDC_REG_880188_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000210)
-#define VIDC_REG_683268_PHYS                 \
+#define VIDC_REG_880188_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000210)
-#define VIDC_REG_683268_RMSK                 0xffffffff
-#define VIDC_REG_683268_SHFT                          0
-#define VIDC_REG_683268_IN                   \
-	in_dword_masked(VIDC_REG_683268_ADDR,  \
-			VIDC_REG_683268_RMSK)
-#define VIDC_REG_683268_INM(m)               \
-	in_dword_masked(VIDC_REG_683268_ADDR,  m)
-#define VIDC_REG_683268_OUT(v)               \
-	out_dword(VIDC_REG_683268_ADDR, v)
-#define VIDC_REG_683268_OUTM(m, v)            \
+#define VIDC_REG_880188_RMSK                 0xffffffff
+#define VIDC_REG_880188_SHFT                          0
+#define VIDC_REG_880188_IN                   \
+	in_dword_masked(VIDC_REG_880188_ADDR,  \
+			VIDC_REG_880188_RMSK)
+#define VIDC_REG_880188_INM(m)               \
+	in_dword_masked(VIDC_REG_880188_ADDR,  m)
+#define VIDC_REG_880188_OUT(v)               \
+	out_dword(VIDC_REG_880188_ADDR, v)
+#define VIDC_REG_880188_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_683268_ADDR, m, v, \
-			VIDC_REG_683268_IN); \
+	out_dword_masked_ns(VIDC_REG_880188_ADDR, m, v, \
+			VIDC_REG_880188_IN); \
 } while (0)
-#define VIDC_REG_683268_FW_STT_ADDR_4_BMSK   0xffffffff
-#define VIDC_REG_683268_FW_STT_ADDR_4_SHFT            0
+#define VIDC_REG_880188_FW_STT_ADDR_4_BMSK   0xffffffff
+#define VIDC_REG_880188_FW_STT_ADDR_4_SHFT            0
 
-#define VIDC_REG_382641_ADDR                 \
+#define VIDC_REG_40293_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000214)
-#define VIDC_REG_382641_PHYS                 \
+#define VIDC_REG_40293_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000214)
-#define VIDC_REG_382641_RMSK                 0xffffffff
-#define VIDC_REG_382641_SHFT                          0
-#define VIDC_REG_382641_IN                   \
-	in_dword_masked(VIDC_REG_382641_ADDR,  \
-			VIDC_REG_382641_RMSK)
-#define VIDC_REG_382641_INM(m)               \
-	in_dword_masked(VIDC_REG_382641_ADDR,  m)
-#define VIDC_REG_382641_OUT(v)               \
-	out_dword(VIDC_REG_382641_ADDR, v)
-#define VIDC_REG_382641_OUTM(m, v)            \
+#define VIDC_REG_40293_RMSK                 0xffffffff
+#define VIDC_REG_40293_SHFT                          0
+#define VIDC_REG_40293_IN                   \
+	in_dword_masked(VIDC_REG_40293_ADDR,  \
+			VIDC_REG_40293_RMSK)
+#define VIDC_REG_40293_INM(m)               \
+	in_dword_masked(VIDC_REG_40293_ADDR,  m)
+#define VIDC_REG_40293_OUT(v)               \
+	out_dword(VIDC_REG_40293_ADDR, v)
+#define VIDC_REG_40293_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_382641_ADDR, m, v, \
-			VIDC_REG_382641_IN); \
+	out_dword_masked_ns(VIDC_REG_40293_ADDR, m, v, \
+			VIDC_REG_40293_IN); \
 } while (0)
-#define VIDC_REG_382641_FW_STT_ADDR_5_BMSK   0xffffffff
-#define VIDC_REG_382641_FW_STT_ADDR_5_SHFT            0
+#define VIDC_REG_40293_FW_STT_ADDR_5_BMSK   0xffffffff
+#define VIDC_REG_40293_FW_STT_ADDR_5_SHFT            0
 
-#define VIDC_REG_36891_ADDR_6_ADDR                 \
+#define VIDC_REG_942170_ADDR_6_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000218)
-#define VIDC_REG_36891_ADDR_6_PHYS                 \
+#define VIDC_REG_942170_ADDR_6_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000218)
-#define VIDC_REG_36891_ADDR_6_RMSK                 0xffffffff
-#define VIDC_REG_36891_ADDR_6_SHFT                          0
-#define VIDC_REG_36891_ADDR_6_IN                   \
-	in_dword_masked(VIDC_REG_36891_ADDR_6_ADDR,  \
-			VIDC_REG_36891_ADDR_6_RMSK)
-#define VIDC_REG_36891_ADDR_6_INM(m)               \
-	in_dword_masked(VIDC_REG_36891_ADDR_6_ADDR,  m)
-#define VIDC_REG_36891_ADDR_6_OUT(v)               \
-	out_dword(VIDC_REG_36891_ADDR_6_ADDR, v)
-#define VIDC_REG_36891_ADDR_6_OUTM(m, v)            \
+#define VIDC_REG_942170_ADDR_6_RMSK                 0xffffffff
+#define VIDC_REG_942170_ADDR_6_SHFT                          0
+#define VIDC_REG_942170_ADDR_6_IN                   \
+	in_dword_masked(VIDC_REG_942170_ADDR_6_ADDR,  \
+			VIDC_REG_942170_ADDR_6_RMSK)
+#define VIDC_REG_942170_ADDR_6_INM(m)               \
+	in_dword_masked(VIDC_REG_942170_ADDR_6_ADDR,  m)
+#define VIDC_REG_942170_ADDR_6_OUT(v)               \
+	out_dword(VIDC_REG_942170_ADDR_6_ADDR, v)
+#define VIDC_REG_942170_ADDR_6_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_36891_ADDR_6_ADDR, m, v, \
-			VIDC_REG_36891_ADDR_6_IN); \
+	out_dword_masked_ns(VIDC_REG_942170_ADDR_6_ADDR, m, v, \
+			VIDC_REG_942170_ADDR_6_IN); \
 } while (0)
-#define VIDC_REG_36891_ADDR_6_FW_STT_ADDR_6_BMSK   0xffffffff
-#define VIDC_REG_36891_ADDR_6_FW_STT_ADDR_6_SHFT            0
+#define VIDC_REG_942170_ADDR_6_FW_STT_ADDR_6_BMSK   0xffffffff
+#define VIDC_REG_942170_ADDR_6_FW_STT_ADDR_6_SHFT            0
 
-#define VIDC_REG_385703_ADDR                  \
+#define VIDC_REG_958768_ADDR                  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000230)
-#define VIDC_REG_385703_PHYS                  \
+#define VIDC_REG_958768_PHYS                  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000230)
-#define VIDC_REG_385703_RMSK                  0xffffffff
-#define VIDC_REG_385703_SHFT                           0
-#define VIDC_REG_385703_IN                    \
-	in_dword_masked(VIDC_REG_385703_ADDR,  \
-			VIDC_REG_385703_RMSK)
-#define VIDC_REG_385703_INM(m)                \
-	in_dword_masked(VIDC_REG_385703_ADDR,  m)
-#define VIDC_REG_385703_OUT(v)                \
-	out_dword(VIDC_REG_385703_ADDR, v)
-#define VIDC_REG_385703_OUTM(m, v)             \
+#define VIDC_REG_958768_RMSK                  0xffffffff
+#define VIDC_REG_958768_SHFT                           0
+#define VIDC_REG_958768_IN                    \
+	in_dword_masked(VIDC_REG_958768_ADDR,  \
+			VIDC_REG_958768_RMSK)
+#define VIDC_REG_958768_INM(m)                \
+	in_dword_masked(VIDC_REG_958768_ADDR,  m)
+#define VIDC_REG_958768_OUT(v)                \
+	out_dword(VIDC_REG_958768_ADDR, v)
+#define VIDC_REG_958768_OUTM(m, v)             \
 do { \
-	out_dword_masked_ns(VIDC_REG_385703_ADDR, m, v, \
-			VIDC_REG_385703_IN); \
+	out_dword_masked_ns(VIDC_REG_958768_ADDR, m, v, \
+			VIDC_REG_958768_IN); \
 } while (0)
-#define VIDC_REG_541626_ADDR_BMSK     0xffffffff
-#define VIDC_REG_541626_ADDR_SHFT              0
+#define VIDC_REG_699384_ADDR_BMSK     0xffffffff
+#define VIDC_REG_699384_ADDR_SHFT              0
 
-#define VIDC_REG_270065_ADDR                   \
+#define VIDC_REG_979942_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000234)
-#define VIDC_REG_270065_PHYS                   \
+#define VIDC_REG_979942_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000234)
-#define VIDC_REG_270065_RMSK                   0xffffffff
-#define VIDC_REG_270065_SHFT                            0
-#define VIDC_REG_270065_IN                     \
-	in_dword_masked(VIDC_REG_270065_ADDR,  \
-			VIDC_REG_270065_RMSK)
-#define VIDC_REG_270065_INM(m)                 \
-	in_dword_masked(VIDC_REG_270065_ADDR,  m)
-#define VIDC_REG_270065_OUT(v)                 \
-	out_dword(VIDC_REG_270065_ADDR, v)
-#define VIDC_REG_270065_OUTM(m, v)              \
+#define VIDC_REG_979942_RMSK                   0xffffffff
+#define VIDC_REG_979942_SHFT                            0
+#define VIDC_REG_979942_IN                     \
+	in_dword_masked(VIDC_REG_979942_ADDR,  \
+			VIDC_REG_979942_RMSK)
+#define VIDC_REG_979942_INM(m)                 \
+	in_dword_masked(VIDC_REG_979942_ADDR,  m)
+#define VIDC_REG_979942_OUT(v)                 \
+	out_dword(VIDC_REG_979942_ADDR, v)
+#define VIDC_REG_979942_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_270065_ADDR, m, v, \
-			VIDC_REG_270065_IN); \
+	out_dword_masked_ns(VIDC_REG_979942_ADDR, m, v, \
+			VIDC_REG_979942_IN); \
 } while (0)
-#define VIDC_REG_270065_DB_STT_ADDR_BMSK       0xffffffff
-#define VIDC_REG_270065_DB_STT_ADDR_SHFT                0
+#define VIDC_REG_979942_DB_STT_ADDR_BMSK       0xffffffff
+#define VIDC_REG_979942_DB_STT_ADDR_SHFT                0
 
-#define VIDC_REG_582300_ADDR                       \
+#define VIDC_REG_839021_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000300)
-#define VIDC_REG_582300_PHYS                       \
+#define VIDC_REG_839021_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000300)
-#define VIDC_REG_582300_RMSK                           0xff1f
-#define VIDC_REG_582300_SHFT                                0
-#define VIDC_REG_582300_IN                         \
-	in_dword_masked(VIDC_REG_582300_ADDR,  VIDC_REG_582300_RMSK)
-#define VIDC_REG_582300_INM(m)                     \
-	in_dword_masked(VIDC_REG_582300_ADDR,  m)
-#define VIDC_REG_582300_OUT(v)                     \
-	out_dword(VIDC_REG_582300_ADDR, v)
-#define VIDC_REG_582300_OUTM(m, v)                  \
+#define VIDC_REG_839021_RMSK                           0xff1f
+#define VIDC_REG_839021_SHFT                                0
+#define VIDC_REG_839021_IN                         \
+	in_dword_masked(VIDC_REG_839021_ADDR,  VIDC_REG_839021_RMSK)
+#define VIDC_REG_839021_INM(m)                     \
+	in_dword_masked(VIDC_REG_839021_ADDR,  m)
+#define VIDC_REG_839021_OUT(v)                     \
+	out_dword(VIDC_REG_839021_ADDR, v)
+#define VIDC_REG_839021_OUTM(m, v)                  \
 do { \
-	out_dword_masked_ns(VIDC_REG_582300_ADDR, m, v, \
-			VIDC_REG_582300_IN); \
+	out_dword_masked_ns(VIDC_REG_839021_ADDR, m, v, \
+			VIDC_REG_839021_IN); \
 } while (0)
-#define VIDC_REG_582300_LEVEL_BMSK                     0xff00
-#define VIDC_REG_582300_LEVEL_SHFT                        0x8
-#define VIDC_REG_582300_PROFILE_BMSK                     0x1f
-#define VIDC_REG_582300_PROFILE_SHFT                        0
+#define VIDC_REG_839021_LEVEL_BMSK                     0xff00
+#define VIDC_REG_839021_LEVEL_SHFT                        0x8
+#define VIDC_REG_839021_PROFILE_BMSK                     0x1f
+#define VIDC_REG_839021_PROFILE_SHFT                        0
 
-#define VIDC_REG_106897_ADDR                      \
+#define VIDC_REG_950374_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000308)
-#define VIDC_REG_106897_PHYS                      \
+#define VIDC_REG_950374_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000308)
-#define VIDC_REG_106897_RMSK                          0xffff
-#define VIDC_REG_106897_SHFT                               0
-#define VIDC_REG_106897_IN                        \
-	in_dword_masked(VIDC_REG_106897_ADDR,  VIDC_REG_106897_RMSK)
-#define VIDC_REG_106897_INM(m)                    \
-	in_dword_masked(VIDC_REG_106897_ADDR,  m)
-#define VIDC_REG_106897_OUT(v)                    \
-	out_dword(VIDC_REG_106897_ADDR, v)
-#define VIDC_REG_106897_OUTM(m, v)                 \
+#define VIDC_REG_950374_RMSK                          0xffff
+#define VIDC_REG_950374_SHFT                               0
+#define VIDC_REG_950374_IN                        \
+	in_dword_masked(VIDC_REG_950374_ADDR,         \
+	VIDC_REG_950374_RMSK)
+#define VIDC_REG_950374_INM(m)                    \
+	in_dword_masked(VIDC_REG_950374_ADDR,  m)
+#define VIDC_REG_950374_OUT(v)                    \
+	out_dword(VIDC_REG_950374_ADDR, v)
+#define VIDC_REG_950374_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_106897_ADDR, m, v, \
-			VIDC_REG_106897_IN); \
+	out_dword_masked_ns(VIDC_REG_950374_ADDR, m, v, \
+			VIDC_REG_950374_IN); \
 } while (0)
-#define VIDC_REG_106897_I_PERIOD_BMSK                 0xffff
-#define VIDC_REG_106897_I_PERIOD_SHFT                      0
+#define VIDC_REG_950374_I_PERIOD_BMSK                 0xffff
+#define VIDC_REG_950374_I_PERIOD_SHFT                      0
 
-#define VIDC_REG_923745_ADDR               \
+#define VIDC_REG_504878_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000310)
-#define VIDC_REG_923745_PHYS               \
+#define VIDC_REG_504878_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000310)
-#define VIDC_REG_923745_RMSK                      0xd
-#define VIDC_REG_923745_SHFT                        0
-#define VIDC_REG_923745_IN                 \
-	in_dword_masked(VIDC_REG_923745_ADDR,  \
-			VIDC_REG_923745_RMSK)
-#define VIDC_REG_923745_INM(m)             \
-	in_dword_masked(VIDC_REG_923745_ADDR,  m)
-#define VIDC_REG_923745_OUT(v)             \
-	out_dword(VIDC_REG_923745_ADDR, v)
-#define VIDC_REG_923745_OUTM(m, v)          \
+#define VIDC_REG_504878_RMSK                      0xd
+#define VIDC_REG_504878_SHFT                        0
+#define VIDC_REG_504878_IN                 \
+	in_dword_masked(VIDC_REG_504878_ADDR,  \
+			VIDC_REG_504878_RMSK)
+#define VIDC_REG_504878_INM(m)             \
+	in_dword_masked(VIDC_REG_504878_ADDR,  m)
+#define VIDC_REG_504878_OUT(v)             \
+	out_dword(VIDC_REG_504878_ADDR, v)
+#define VIDC_REG_504878_OUTM(m, v)          \
 do { \
-	out_dword_masked_ns(VIDC_REG_923745_ADDR, m, v, \
-			VIDC_REG_923745_IN); \
+	out_dword_masked_ns(VIDC_REG_504878_ADDR, m, v, \
+			VIDC_REG_504878_IN); \
 } while (0)
-#define VIDC_REG_923745_FIXED_NUMBER_BMSK         0xc
-#define VIDC_REG_923745_FIXED_NUMBER_SHFT         0x2
-#define VIDC_REG_923745_ENTROPY_SEL_BMSK          0x1
-#define VIDC_REG_923745_ENTROPY_SEL_SHFT            0
+#define VIDC_REG_504878_FIXED_NUMBER_BMSK         0xc
+#define VIDC_REG_504878_FIXED_NUMBER_SHFT         0x2
+#define VIDC_REG_504878_ENTROPY_SEL_BMSK          0x1
+#define VIDC_REG_504878_ENTROPY_SEL_SHFT            0
 
-#define VIDC_REG_19004_ADDR            \
+#define VIDC_REG_458130_ADDR            \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000314)
-#define VIDC_REG_19004_PHYS            \
+#define VIDC_REG_458130_PHYS            \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000314)
-#define VIDC_REG_19004_RMSK                 0xfff
-#define VIDC_REG_19004_SHFT                     0
-#define VIDC_REG_19004_IN              \
-	in_dword_masked(VIDC_REG_19004_ADDR,  \
-			VIDC_REG_19004_RMSK)
-#define VIDC_REG_19004_INM(m)          \
-	in_dword_masked(VIDC_REG_19004_ADDR,  m)
-#define VIDC_REG_19004_OUT(v)          \
-	out_dword(VIDC_REG_19004_ADDR, v)
-#define VIDC_REG_19004_OUTM(m, v)       \
+#define VIDC_REG_458130_RMSK                 0xfff
+#define VIDC_REG_458130_SHFT                     0
+#define VIDC_REG_458130_IN              \
+	in_dword_masked(VIDC_REG_458130_ADDR,  \
+			VIDC_REG_458130_RMSK)
+#define VIDC_REG_458130_INM(m)          \
+	in_dword_masked(VIDC_REG_458130_ADDR,  m)
+#define VIDC_REG_458130_OUT(v)          \
+	out_dword(VIDC_REG_458130_ADDR, v)
+#define VIDC_REG_458130_OUTM(m, v)       \
 do { \
-	out_dword_masked_ns(VIDC_REG_19004_ADDR, m, v, \
-			VIDC_REG_19004_IN); \
+	out_dword_masked_ns(VIDC_REG_458130_ADDR, m, v, \
+			VIDC_REG_458130_IN); \
 } while (0)
-#define VIDC_REG_19004_SLICE_ALPHA_C0_OFFSET_DIV2_BMSK      \
+#define VIDC_REG_458130_SLICE_ALPHA_C0_OFFSET_DIV2_BMSK      \
 	0xf80
-#define VIDC_REG_19004_SLICE_ALPHA_C0_OFFSET_DIV2_SHFT        \
+#define VIDC_REG_458130_SLICE_ALPHA_C0_OFFSET_DIV2_SHFT      \
 	0x7
-#define VIDC_REG_19004_SLICE_BETA_OFFSET_DIV2_BMSK       0x7c
-#define VIDC_REG_19004_SLICE_BETA_OFFSET_DIV2_SHFT        0x2
+#define VIDC_REG_458130_SLICE_BETA_OFFSET_DIV2_BMSK       0x7c
+#define VIDC_REG_458130_SLICE_BETA_OFFSET_DIV2_SHFT        0x2
 #define \
 	\
-VIDC_REG_19004_DISABLE_DEBLOCKING_FILTER_IDC_BMSK        0x3
+VIDC_REG_458130_DISABLE_DEBLOCKING_FILTER_IDC_BMSK        0x3
 #define \
 	\
-VIDC_REG_19004_DISABLE_DEBLOCKING_FILTER_IDC_SHFT          0
+VIDC_REG_458130_DISABLE_DEBLOCKING_FILTER_IDC_SHFT          0
 
-#define VIDC_REG_201982_ADDR                   \
+#define VIDC_REG_314290_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000318)
-#define VIDC_REG_201982_PHYS                   \
+#define VIDC_REG_314290_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000318)
-#define VIDC_REG_201982_RMSK                          0x1
-#define VIDC_REG_201982_SHFT                            0
-#define VIDC_REG_201982_IN                     \
-	in_dword_masked(VIDC_REG_201982_ADDR,  \
-			VIDC_REG_201982_RMSK)
-#define VIDC_REG_201982_INM(m)                 \
-	in_dword_masked(VIDC_REG_201982_ADDR,  m)
-#define VIDC_REG_201982_OUT(v)                 \
-	out_dword(VIDC_REG_201982_ADDR, v)
-#define VIDC_REG_201982_OUTM(m, v)              \
+#define VIDC_REG_314290_RMSK                          0x1
+#define VIDC_REG_314290_SHFT                            0
+#define VIDC_REG_314290_IN                     \
+	in_dword_masked(VIDC_REG_314290_ADDR,  \
+			VIDC_REG_314290_RMSK)
+#define VIDC_REG_314290_INM(m)                 \
+	in_dword_masked(VIDC_REG_314290_ADDR,  m)
+#define VIDC_REG_314290_OUT(v)                 \
+	out_dword(VIDC_REG_314290_ADDR, v)
+#define VIDC_REG_314290_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_201982_ADDR, m, v, \
-			VIDC_REG_201982_IN); \
+	out_dword_masked_ns(VIDC_REG_314290_ADDR, m, v, \
+			VIDC_REG_314290_IN); \
 } while (0)
-#define VIDC_REG_201982_SHORT_HD_ON_BMSK              0x1
-#define VIDC_REG_201982_SHORT_HD_ON_SHFT                0
+#define VIDC_REG_314290_SHORT_HD_ON_BMSK              0x1
+#define VIDC_REG_314290_SHORT_HD_ON_SHFT                0
 
-#define VIDC_REG_724140_ADDR                    \
+#define VIDC_REG_588301_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000031c)
-#define VIDC_REG_724140_PHYS                    \
+#define VIDC_REG_588301_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000031c)
-#define VIDC_REG_724140_RMSK                           0x1
-#define VIDC_REG_724140_SHFT                             0
-#define VIDC_REG_724140_IN                      \
-	in_dword_masked(VIDC_REG_724140_ADDR,  \
-			VIDC_REG_724140_RMSK)
-#define VIDC_REG_724140_INM(m)                  \
-	in_dword_masked(VIDC_REG_724140_ADDR,  m)
-#define VIDC_REG_724140_OUT(v)                  \
-	out_dword(VIDC_REG_724140_ADDR, v)
-#define VIDC_REG_724140_OUTM(m, v)               \
+#define VIDC_REG_588301_RMSK                           0x1
+#define VIDC_REG_588301_SHFT                             0
+#define VIDC_REG_588301_IN                      \
+	in_dword_masked(VIDC_REG_588301_ADDR,  \
+			VIDC_REG_588301_RMSK)
+#define VIDC_REG_588301_INM(m)                  \
+	in_dword_masked(VIDC_REG_588301_ADDR,  m)
+#define VIDC_REG_588301_OUT(v)                  \
+	out_dword(VIDC_REG_588301_ADDR, v)
+#define VIDC_REG_588301_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_724140_ADDR, m, v, \
-			VIDC_REG_724140_IN); \
+	out_dword_masked_ns(VIDC_REG_588301_ADDR, m, v, \
+			VIDC_REG_588301_IN); \
 } while (0)
-#define VIDC_REG_724140_MSLICE_ENA_BMSK                0x1
-#define VIDC_REG_724140_MSLICE_ENA_SHFT                  0
+#define VIDC_REG_588301_MSLICE_ENA_BMSK                0x1
+#define VIDC_REG_588301_MSLICE_ENA_SHFT                  0
 
-#define VIDC_REG_176761_ADDR                    \
+#define VIDC_REG_1517_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000320)
-#define VIDC_REG_176761_PHYS                    \
+#define VIDC_REG_1517_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000320)
-#define VIDC_REG_176761_RMSK                           0x3
-#define VIDC_REG_176761_SHFT                             0
-#define VIDC_REG_176761_IN                      \
-	in_dword_masked(VIDC_REG_176761_ADDR,  \
-			VIDC_REG_176761_RMSK)
-#define VIDC_REG_176761_INM(m)                  \
-	in_dword_masked(VIDC_REG_176761_ADDR,  m)
-#define VIDC_REG_176761_OUT(v)                  \
-	out_dword(VIDC_REG_176761_ADDR, v)
-#define VIDC_REG_176761_OUTM(m, v)               \
+#define VIDC_REG_1517_RMSK                           0x3
+#define VIDC_REG_1517_SHFT                             0
+#define VIDC_REG_1517_IN                      \
+	in_dword_masked(VIDC_REG_1517_ADDR,  \
+			VIDC_REG_1517_RMSK)
+#define VIDC_REG_1517_INM(m)                  \
+	in_dword_masked(VIDC_REG_1517_ADDR,  m)
+#define VIDC_REG_1517_OUT(v)                  \
+	out_dword(VIDC_REG_1517_ADDR, v)
+#define VIDC_REG_1517_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_176761_ADDR, m, v, \
-			VIDC_REG_176761_IN); \
+	out_dword_masked_ns(VIDC_REG_1517_ADDR, m, v, \
+			VIDC_REG_1517_IN); \
 } while (0)
-#define VIDC_REG_176761_MSLICE_SEL_BMSK                0x3
-#define VIDC_REG_176761_MSLICE_SEL_SHFT                  0
+#define VIDC_REG_1517_MSLICE_SEL_BMSK                0x3
+#define VIDC_REG_1517_MSLICE_SEL_SHFT                  0
 
-#define VIDC_REG_471408_ADDR                     \
+#define VIDC_REG_105335_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000324)
-#define VIDC_REG_471408_PHYS                     \
+#define VIDC_REG_105335_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000324)
-#define VIDC_REG_471408_RMSK                     0xffffffff
-#define VIDC_REG_471408_SHFT                              0
-#define VIDC_REG_471408_IN                       \
-	in_dword_masked(VIDC_REG_471408_ADDR,  VIDC_REG_471408_RMSK)
-#define VIDC_REG_471408_INM(m)                   \
-	in_dword_masked(VIDC_REG_471408_ADDR,  m)
-#define VIDC_REG_471408_OUT(v)                   \
-	out_dword(VIDC_REG_471408_ADDR, v)
-#define VIDC_REG_471408_OUTM(m, v)                \
+#define VIDC_REG_105335_RMSK                     0xffffffff
+#define VIDC_REG_105335_SHFT                              0
+#define VIDC_REG_105335_IN                       \
+	in_dword_masked(VIDC_REG_105335_ADDR,        \
+	VIDC_REG_105335_RMSK)
+#define VIDC_REG_105335_INM(m)                   \
+	in_dword_masked(VIDC_REG_105335_ADDR,  m)
+#define VIDC_REG_105335_OUT(v)                   \
+	out_dword(VIDC_REG_105335_ADDR, v)
+#define VIDC_REG_105335_OUTM(m, v)                \
 do { \
-	out_dword_masked_ns(VIDC_REG_471408_ADDR, m, v, \
-			VIDC_REG_471408_IN); \
+	out_dword_masked_ns(VIDC_REG_105335_ADDR, m, v, \
+			VIDC_REG_105335_IN); \
 } while (0)
-#define VIDC_REG_471408_MSLICE_MB_BMSK           0xffffffff
-#define VIDC_REG_471408_MSLICE_MB_SHFT                    0
+#define VIDC_REG_105335_MSLICE_MB_BMSK           0xffffffff
+#define VIDC_REG_105335_MSLICE_MB_SHFT                    0
 
-#define VIDC_REG_530212_ADDR                   \
+#define VIDC_REG_561679_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000328)
-#define VIDC_REG_530212_PHYS                   \
+#define VIDC_REG_561679_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000328)
-#define VIDC_REG_530212_RMSK                   0xffffffff
-#define VIDC_REG_530212_SHFT                            0
-#define VIDC_REG_530212_IN                     \
-	in_dword_masked(VIDC_REG_530212_ADDR,  \
-			VIDC_REG_530212_RMSK)
-#define VIDC_REG_530212_INM(m)                 \
-	in_dword_masked(VIDC_REG_530212_ADDR,  m)
-#define VIDC_REG_530212_OUT(v)                 \
-	out_dword(VIDC_REG_530212_ADDR, v)
-#define VIDC_REG_530212_OUTM(m, v)              \
+#define VIDC_REG_561679_RMSK                   0xffffffff
+#define VIDC_REG_561679_SHFT                            0
+#define VIDC_REG_561679_IN                     \
+	in_dword_masked(VIDC_REG_561679_ADDR,  \
+			VIDC_REG_561679_RMSK)
+#define VIDC_REG_561679_INM(m)                 \
+	in_dword_masked(VIDC_REG_561679_ADDR,  m)
+#define VIDC_REG_561679_OUT(v)                 \
+	out_dword(VIDC_REG_561679_ADDR, v)
+#define VIDC_REG_561679_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_530212_ADDR, m, v, \
-			VIDC_REG_530212_IN); \
+	out_dword_masked_ns(VIDC_REG_561679_ADDR, m, v, \
+			VIDC_REG_561679_IN); \
 } while (0)
-#define VIDC_REG_530212_MSLICE_BYTE_BMSK       0xffffffff
-#define VIDC_REG_530212_MSLICE_BYTE_SHFT                0
+#define VIDC_REG_561679_MSLICE_BYTE_BMSK       0xffffffff
+#define VIDC_REG_561679_MSLICE_BYTE_SHFT                0
 
-#define VIDC_REG_759828_ADDR                 \
+#define VIDC_REG_151345_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000400)
-#define VIDC_REG_759828_PHYS                 \
+#define VIDC_REG_151345_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000400)
-#define VIDC_REG_759828_RMSK                 0xffffffff
-#define VIDC_REG_759828_SHFT                          0
-#define VIDC_REG_759828_IN                   \
-	in_dword_masked(VIDC_REG_759828_ADDR,  \
-			VIDC_REG_759828_RMSK)
-#define VIDC_REG_759828_INM(m)               \
-	in_dword_masked(VIDC_REG_759828_ADDR,  m)
-#define VIDC_REG_759828_DISPLAY_Y_ADR_BMSK   0xffffffff
-#define VIDC_REG_759828_DISPLAY_Y_ADR_SHFT            0
+#define VIDC_REG_151345_RMSK                 0xffffffff
+#define VIDC_REG_151345_SHFT                          0
+#define VIDC_REG_151345_IN                   \
+	in_dword_masked(VIDC_REG_151345_ADDR,  \
+			VIDC_REG_151345_RMSK)
+#define VIDC_REG_151345_INM(m)               \
+	in_dword_masked(VIDC_REG_151345_ADDR,  m)
+#define VIDC_REG_151345_DISPLAY_Y_ADR_BMSK   0xffffffff
+#define VIDC_REG_151345_DISPLAY_Y_ADR_SHFT            0
 
-#define VIDC_REG_186653_ADDR                 \
+#define VIDC_REG_293983_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000404)
-#define VIDC_REG_186653_PHYS                 \
+#define VIDC_REG_293983_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000404)
-#define VIDC_REG_186653_RMSK                 0xffffffff
-#define VIDC_REG_186653_SHFT                          0
-#define VIDC_REG_186653_IN                   \
-	in_dword_masked(VIDC_REG_186653_ADDR,  \
-			VIDC_REG_186653_RMSK)
-#define VIDC_REG_186653_INM(m)               \
-	in_dword_masked(VIDC_REG_186653_ADDR,  m)
-#define VIDC_REG_186653_DISPLAY_C_ADR_BMSK   0xffffffff
-#define VIDC_REG_186653_DISPLAY_C_ADR_SHFT            0
+#define VIDC_REG_293983_RMSK                 0xffffffff
+#define VIDC_REG_293983_SHFT                          0
+#define VIDC_REG_293983_IN                   \
+	in_dword_masked(VIDC_REG_293983_ADDR,  \
+			VIDC_REG_293983_RMSK)
+#define VIDC_REG_293983_INM(m)               \
+	in_dword_masked(VIDC_REG_293983_ADDR,  m)
+#define VIDC_REG_293983_DISPLAY_C_ADR_BMSK   0xffffffff
+#define VIDC_REG_293983_DISPLAY_C_ADR_SHFT            0
 
-#define VIDC_REG_380424_ADDR                \
+#define VIDC_REG_612715_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000408)
-#define VIDC_REG_380424_PHYS                \
+#define VIDC_REG_612715_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000408)
-#define VIDC_REG_380424_RMSK                      0x3f
-#define VIDC_REG_380424_SHFT                         0
-#define VIDC_REG_380424_IN                  \
-	in_dword_masked(VIDC_REG_380424_ADDR,  \
-			VIDC_REG_380424_RMSK)
-#define VIDC_REG_380424_INM(m)              \
-	in_dword_masked(VIDC_REG_380424_ADDR,  m)
-#define VIDC_REG_380424_DISPLAY_STATUS_BMSK       0x3f
-#define VIDC_REG_380424_DISPLAY_STATUS_SHFT          0
+#define VIDC_REG_612715_RMSK                      0x3f
+#define VIDC_REG_612715_SHFT                         0
+#define VIDC_REG_612715_IN                  \
+	in_dword_masked(VIDC_REG_612715_ADDR,  \
+			VIDC_REG_612715_RMSK)
+#define VIDC_REG_612715_INM(m)              \
+	in_dword_masked(VIDC_REG_612715_ADDR,  m)
+#define VIDC_REG_612715_DISPLAY_STATUS_BMSK       0x3f
+#define VIDC_REG_612715_DISPLAY_STATUS_SHFT          0
 
-#define VIDC_REG_828425_ADDR                   \
+#define VIDC_REG_209364_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000040c)
-#define VIDC_REG_828425_PHYS                   \
+#define VIDC_REG_209364_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000040c)
-#define VIDC_REG_828425_RMSK                          0x1
-#define VIDC_REG_828425_SHFT                            0
-#define VIDC_REG_828425_IN                     \
-	in_dword_masked(VIDC_REG_828425_ADDR,  \
-			VIDC_REG_828425_RMSK)
-#define VIDC_REG_828425_INM(m)                 \
-	in_dword_masked(VIDC_REG_828425_ADDR,  m)
-#define VIDC_REG_828425_HEADER_DONE_BMSK              0x1
-#define VIDC_REG_828425_HEADER_DONE_SHFT                0
+#define VIDC_REG_209364_RMSK                          0x1
+#define VIDC_REG_209364_SHFT                            0
+#define VIDC_REG_209364_IN                     \
+	in_dword_masked(VIDC_REG_209364_ADDR,  \
+			VIDC_REG_209364_RMSK)
+#define VIDC_REG_209364_INM(m)                 \
+	in_dword_masked(VIDC_REG_209364_ADDR,  m)
+#define VIDC_REG_209364_HEADER_DONE_BMSK              0x1
+#define VIDC_REG_209364_HEADER_DONE_SHFT                0
 
-#define VIDC_REG_218030_ADDR                     \
+#define VIDC_REG_757835_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000410)
-#define VIDC_REG_218030_PHYS                     \
+#define VIDC_REG_757835_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000410)
-#define VIDC_REG_218030_RMSK                     0xffffffff
-#define VIDC_REG_218030_SHFT                              0
-#define VIDC_REG_218030_IN                       \
-	in_dword_masked(VIDC_REG_218030_ADDR,  VIDC_REG_218030_RMSK)
-#define VIDC_REG_218030_INM(m)                   \
-	in_dword_masked(VIDC_REG_218030_ADDR,  m)
-#define VIDC_REG_218030_FRAME_NUM_BMSK           0xffffffff
-#define VIDC_REG_218030_FRAME_NUM_SHFT                    0
+#define VIDC_REG_757835_RMSK                     0xffffffff
+#define VIDC_REG_757835_SHFT                              0
+#define VIDC_REG_757835_IN                       \
+	in_dword_masked(VIDC_REG_757835_ADDR,        \
+	VIDC_REG_757835_RMSK)
+#define VIDC_REG_757835_INM(m)                   \
+	in_dword_masked(VIDC_REG_757835_ADDR,  m)
+#define VIDC_REG_757835_FRAME_NUM_BMSK           0xffffffff
+#define VIDC_REG_757835_FRAME_NUM_SHFT                    0
 
-#define VIDC_REG_551104_ADDR              \
+#define VIDC_REG_352831_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000414)
-#define VIDC_REG_551104_PHYS              \
+#define VIDC_REG_352831_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000414)
-#define VIDC_REG_551104_RMSK              0xffffffff
-#define VIDC_REG_551104_SHFT                       0
-#define VIDC_REG_551104_IN                \
-	in_dword_masked(VIDC_REG_551104_ADDR,  \
-			VIDC_REG_551104_RMSK)
-#define VIDC_REG_551104_INM(m)            \
-	in_dword_masked(VIDC_REG_551104_ADDR,  m)
-#define VIDC_REG_551104_DBG_INFO_OUTPUT0_BMSK 0xffffffff
-#define VIDC_REG_551104_DBG_INFO_OUTPUT0_SHFT          0
+#define VIDC_REG_352831_RMSK              0xffffffff
+#define VIDC_REG_352831_SHFT                       0
+#define VIDC_REG_352831_IN                \
+	in_dword_masked(VIDC_REG_352831_ADDR,  \
+			VIDC_REG_352831_RMSK)
+#define VIDC_REG_352831_INM(m)            \
+	in_dword_masked(VIDC_REG_352831_ADDR,  m)
+#define VIDC_REG_352831_DBG_INFO_OUTPUT0_BMSK 0xffffffff
+#define VIDC_REG_352831_DBG_INFO_OUTPUT0_SHFT          0
 
-#define VIDC_REG_929721_ADDR              \
+#define VIDC_REG_668634_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000418)
-#define VIDC_REG_929721_PHYS              \
+#define VIDC_REG_668634_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000418)
-#define VIDC_REG_929721_RMSK              0xffffffff
-#define VIDC_REG_929721_SHFT                       0
-#define VIDC_REG_929721_IN                \
-	in_dword_masked(VIDC_REG_929721_ADDR,  \
-			VIDC_REG_929721_RMSK)
-#define VIDC_REG_929721_INM(m)            \
-	in_dword_masked(VIDC_REG_929721_ADDR,  m)
-#define VIDC_REG_929721_DBG_INFO_OUTPUT1_BMSK 0xffffffff
-#define VIDC_REG_929721_DBG_INFO_OUTPUT1_SHFT          0
+#define VIDC_REG_668634_RMSK              0xffffffff
+#define VIDC_REG_668634_SHFT                       0
+#define VIDC_REG_668634_IN                \
+	in_dword_masked(VIDC_REG_668634_ADDR,  \
+			VIDC_REG_668634_RMSK)
+#define VIDC_REG_668634_INM(m)            \
+	in_dword_masked(VIDC_REG_668634_ADDR,  m)
+#define VIDC_REG_668634_DBG_INFO_OUTPUT1_BMSK 0xffffffff
+#define VIDC_REG_668634_DBG_INFO_OUTPUT1_SHFT          0
 
-#define VIDC_REG_749215_ADDR                       \
+#define VIDC_REG_609676_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000500)
-#define VIDC_REG_749215_PHYS                       \
+#define VIDC_REG_609676_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000500)
-#define VIDC_REG_749215_RMSK                              0x1
-#define VIDC_REG_749215_SHFT                                0
-#define VIDC_REG_749215_IN                         \
-	in_dword_masked(VIDC_REG_749215_ADDR,  VIDC_REG_749215_RMSK)
-#define VIDC_REG_749215_INM(m)                     \
-	in_dword_masked(VIDC_REG_749215_ADDR,  m)
-#define VIDC_REG_749215_OUT(v)                     \
-	out_dword(VIDC_REG_749215_ADDR, v)
-#define VIDC_REG_749215_OUTM(m, v)                  \
+#define VIDC_REG_609676_RMSK                              0x1
+#define VIDC_REG_609676_SHFT                                0
+#define VIDC_REG_609676_IN                         \
+	in_dword_masked(VIDC_REG_609676_ADDR,  VIDC_REG_609676_RMSK)
+#define VIDC_REG_609676_INM(m)                     \
+	in_dword_masked(VIDC_REG_609676_ADDR,  m)
+#define VIDC_REG_609676_OUT(v)                     \
+	out_dword(VIDC_REG_609676_ADDR, v)
+#define VIDC_REG_609676_OUTM(m, v)                  \
 do { \
-	out_dword_masked_ns(VIDC_REG_749215_ADDR, m, v, \
-			VIDC_REG_749215_IN); \
+	out_dword_masked_ns(VIDC_REG_609676_ADDR, m, v, \
+			VIDC_REG_609676_IN); \
 } while (0)
-#define VIDC_REG_749215_INT_OFF_BMSK                      0x1
-#define VIDC_REG_749215_INT_OFF_SHFT                        0
+#define VIDC_REG_609676_INT_OFF_BMSK                      0x1
+#define VIDC_REG_609676_INT_OFF_SHFT                        0
 
-#define VIDC_REG_170047_ADDR                 \
+#define VIDC_REG_491082_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000504)
-#define VIDC_REG_170047_PHYS                 \
+#define VIDC_REG_491082_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000504)
-#define VIDC_REG_170047_RMSK                        0x1
-#define VIDC_REG_170047_SHFT                          0
-#define VIDC_REG_170047_IN                   \
-	in_dword_masked(VIDC_REG_170047_ADDR,  \
-			VIDC_REG_170047_RMSK)
-#define VIDC_REG_170047_INM(m)               \
-	in_dword_masked(VIDC_REG_170047_ADDR,  m)
-#define VIDC_REG_170047_OUT(v)               \
-	out_dword(VIDC_REG_170047_ADDR, v)
-#define VIDC_REG_170047_OUTM(m, v)            \
+#define VIDC_REG_491082_RMSK                        0x1
+#define VIDC_REG_491082_SHFT                          0
+#define VIDC_REG_491082_IN                   \
+	in_dword_masked(VIDC_REG_491082_ADDR,  \
+			VIDC_REG_491082_RMSK)
+#define VIDC_REG_491082_INM(m)               \
+	in_dword_masked(VIDC_REG_491082_ADDR,  m)
+#define VIDC_REG_491082_OUT(v)               \
+	out_dword(VIDC_REG_491082_ADDR, v)
+#define VIDC_REG_491082_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_170047_ADDR, m, v, \
-			VIDC_REG_170047_IN); \
+	out_dword_masked_ns(VIDC_REG_491082_ADDR, m, v, \
+			VIDC_REG_491082_IN); \
 } while (0)
-#define VIDC_REG_170047_INT_PULSE_SEL_BMSK          0x1
-#define VIDC_REG_170047_INT_PULSE_SEL_SHFT            0
+#define VIDC_REG_491082_INT_PULSE_SEL_BMSK          0x1
+#define VIDC_REG_491082_INT_PULSE_SEL_SHFT            0
 
-#define VIDC_REG_908806_ADDR                \
+#define VIDC_REG_614776_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000508)
-#define VIDC_REG_908806_PHYS                \
+#define VIDC_REG_614776_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000508)
-#define VIDC_REG_908806_RMSK                       0x1
-#define VIDC_REG_908806_SHFT                         0
-#define VIDC_REG_908806_IN                  \
-	in_dword_masked(VIDC_REG_908806_ADDR,  \
-			VIDC_REG_908806_RMSK)
-#define VIDC_REG_908806_INM(m)              \
-	in_dword_masked(VIDC_REG_908806_ADDR,  m)
-#define VIDC_REG_908806_OUT(v)              \
-	out_dword(VIDC_REG_908806_ADDR, v)
-#define VIDC_REG_908806_OUTM(m, v)           \
+#define VIDC_REG_614776_RMSK                       0x1
+#define VIDC_REG_614776_SHFT                         0
+#define VIDC_REG_614776_IN                  \
+	in_dword_masked(VIDC_REG_614776_ADDR,  \
+			VIDC_REG_614776_RMSK)
+#define VIDC_REG_614776_INM(m)              \
+	in_dword_masked(VIDC_REG_614776_ADDR,  m)
+#define VIDC_REG_614776_OUT(v)              \
+	out_dword(VIDC_REG_614776_ADDR, v)
+#define VIDC_REG_614776_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_908806_ADDR, m, v, \
-			VIDC_REG_908806_IN); \
+	out_dword_masked_ns(VIDC_REG_614776_ADDR, m, v, \
+			VIDC_REG_614776_IN); \
 } while (0)
-#define VIDC_REG_908806_INT_DONE_CLEAR_BMSK        0x1
-#define VIDC_REG_908806_INT_DONE_CLEAR_SHFT          0
+#define VIDC_REG_614776_INT_DONE_CLEAR_BMSK        0x1
+#define VIDC_REG_614776_INT_DONE_CLEAR_SHFT          0
 
-#define VIDC_REG_818037_ADDR                \
+#define VIDC_REG_982553_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000050c)
-#define VIDC_REG_818037_PHYS                \
+#define VIDC_REG_982553_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000050c)
-#define VIDC_REG_818037_RMSK                       0x1
-#define VIDC_REG_818037_SHFT                         0
-#define VIDC_REG_818037_IN                  \
-	in_dword_masked(VIDC_REG_818037_ADDR,  \
-			VIDC_REG_818037_RMSK)
-#define VIDC_REG_818037_INM(m)              \
-	in_dword_masked(VIDC_REG_818037_ADDR,  m)
-#define VIDC_REG_818037_OPERATION_DONE_BMSK        0x1
-#define VIDC_REG_818037_OPERATION_DONE_SHFT          0
+#define VIDC_REG_982553_RMSK                       0x1
+#define VIDC_REG_982553_SHFT                         0
+#define VIDC_REG_982553_IN                  \
+	in_dword_masked(VIDC_REG_982553_ADDR,  \
+			VIDC_REG_982553_RMSK)
+#define VIDC_REG_982553_INM(m)              \
+	in_dword_masked(VIDC_REG_982553_ADDR,  m)
+#define VIDC_REG_982553_OPERATION_DONE_BMSK        0x1
+#define VIDC_REG_982553_OPERATION_DONE_SHFT          0
 
-#define VIDC_REG_50416_ADDR                       \
+#define VIDC_REG_259967_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000510)
-#define VIDC_REG_50416_PHYS                       \
+#define VIDC_REG_259967_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000510)
-#define VIDC_REG_50416_RMSK                              0x1
-#define VIDC_REG_50416_SHFT                                0
-#define VIDC_REG_50416_IN                         \
-	in_dword_masked(VIDC_REG_50416_ADDR,  VIDC_REG_50416_RMSK)
-#define VIDC_REG_50416_INM(m)                     \
-	in_dword_masked(VIDC_REG_50416_ADDR,  m)
-#define VIDC_REG_50416_FW_DONE_BMSK                      0x1
-#define VIDC_REG_50416_FW_DONE_SHFT                        0
+#define VIDC_REG_259967_RMSK                              0x1
+#define VIDC_REG_259967_SHFT                                0
+#define VIDC_REG_259967_IN                         \
+	in_dword_masked(VIDC_REG_259967_ADDR,  VIDC_REG_259967_RMSK)
+#define VIDC_REG_259967_INM(m)                     \
+	in_dword_masked(VIDC_REG_259967_ADDR,  m)
+#define VIDC_REG_259967_FW_DONE_BMSK                      0x1
+#define VIDC_REG_259967_FW_DONE_SHFT                        0
 
-#define VIDC_REG_202377_ADDR                    \
+#define VIDC_REG_512143_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000514)
-#define VIDC_REG_202377_PHYS                    \
+#define VIDC_REG_512143_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000514)
-#define VIDC_REG_202377_RMSK                         0x1f8
-#define VIDC_REG_202377_SHFT                             0
-#define VIDC_REG_202377_IN                      \
-	in_dword_masked(VIDC_REG_202377_ADDR,  \
-			VIDC_REG_202377_RMSK)
-#define VIDC_REG_202377_INM(m)                  \
-	in_dword_masked(VIDC_REG_202377_ADDR,  m)
-#define VIDC_REG_202377_FRAME_DONE_STAT_BMSK         0x100
-#define VIDC_REG_202377_FRAME_DONE_STAT_SHFT           0x8
-#define VIDC_REG_202377_DMA_DONE_STAT_BMSK            0x80
-#define VIDC_REG_202377_DMA_DONE_STAT_SHFT             0x7
-#define VIDC_REG_202377_HEADER_DONE_STAT_BMSK         0x40
-#define VIDC_REG_202377_HEADER_DONE_STAT_SHFT          0x6
-#define VIDC_REG_202377_FW_DONE_STAT_BMSK             0x20
-#define VIDC_REG_202377_FW_DONE_STAT_SHFT              0x5
-#define VIDC_REG_202377_OPERATION_FAILED_BMSK         0x10
-#define VIDC_REG_202377_OPERATION_FAILED_SHFT          0x4
-#define VIDC_REG_202377_STREAM_HDR_CHANGED_BMSK        0x8
-#define VIDC_REG_202377_STREAM_HDR_CHANGED_SHFT        0x3
+#define VIDC_REG_512143_RMSK                         0x1f8
+#define VIDC_REG_512143_SHFT                             0
+#define VIDC_REG_512143_IN                      \
+	in_dword_masked(VIDC_REG_512143_ADDR,  \
+			VIDC_REG_512143_RMSK)
+#define VIDC_REG_512143_INM(m)                  \
+	in_dword_masked(VIDC_REG_512143_ADDR,  m)
+#define VIDC_REG_512143_FRAME_DONE_STAT_BMSK         0x100
+#define VIDC_REG_512143_FRAME_DONE_STAT_SHFT           0x8
+#define VIDC_REG_512143_DMA_DONE_STAT_BMSK            0x80
+#define VIDC_REG_512143_DMA_DONE_STAT_SHFT             0x7
+#define VIDC_REG_512143_HEADER_DONE_STAT_BMSK         0x40
+#define VIDC_REG_512143_HEADER_DONE_STAT_SHFT          0x6
+#define VIDC_REG_512143_FW_DONE_STAT_BMSK             0x20
+#define VIDC_REG_512143_FW_DONE_STAT_SHFT              0x5
+#define VIDC_REG_512143_OPERATION_FAILED_BMSK         0x10
+#define VIDC_REG_512143_OPERATION_FAILED_SHFT          0x4
+#define VIDC_REG_512143_STREAM_HDR_CHANGED_BMSK        0x8
+#define VIDC_REG_512143_STREAM_HDR_CHANGED_SHFT        0x3
 
-#define VIDC_REG_787282_ADDR                \
+#define VIDC_REG_418173_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000518)
-#define VIDC_REG_787282_PHYS                \
+#define VIDC_REG_418173_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000518)
-#define VIDC_REG_787282_RMSK                     0x1fa
-#define VIDC_REG_787282_SHFT                         0
-#define VIDC_REG_787282_IN                  \
-	in_dword_masked(VIDC_REG_787282_ADDR,  \
-			VIDC_REG_787282_RMSK)
-#define VIDC_REG_787282_INM(m)              \
-	in_dword_masked(VIDC_REG_787282_ADDR,  m)
-#define VIDC_REG_787282_OUT(v)              \
-	out_dword(VIDC_REG_787282_ADDR, v)
-#define VIDC_REG_787282_OUTM(m, v)           \
+#define VIDC_REG_418173_RMSK                     0x1fa
+#define VIDC_REG_418173_SHFT                         0
+#define VIDC_REG_418173_IN                  \
+	in_dword_masked(VIDC_REG_418173_ADDR,  \
+			VIDC_REG_418173_RMSK)
+#define VIDC_REG_418173_INM(m)              \
+	in_dword_masked(VIDC_REG_418173_ADDR,  m)
+#define VIDC_REG_418173_OUT(v)              \
+	out_dword(VIDC_REG_418173_ADDR, v)
+#define VIDC_REG_418173_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_787282_ADDR, m, v, \
-			VIDC_REG_787282_IN); \
+	out_dword_masked_ns(VIDC_REG_418173_ADDR, m, v, \
+			VIDC_REG_418173_IN); \
 } while (0)
-#define VIDC_REG_787282_FRAME_DONE_ENABLE_BMSK      0x100
-#define VIDC_REG_787282_FRAME_DONE_ENABLE_SHFT        0x8
-#define VIDC_REG_787282_DMA_DONE_ENABLE_BMSK       0x80
-#define VIDC_REG_787282_DMA_DONE_ENABLE_SHFT        0x7
-#define VIDC_REG_787282_HEADER_DONE_ENABLE_BMSK       0x40
-#define VIDC_REG_787282_HEADER_DONE_ENABLE_SHFT        0x6
-#define VIDC_REG_787282_FW_DONE_ENABLE_BMSK       0x20
-#define VIDC_REG_787282_FW_DONE_ENABLE_SHFT        0x5
-#define VIDC_REG_787282_OPERATION_FAILED_ENABLE_BMSK       0x10
-#define VIDC_REG_787282_OPERATION_FAILED_ENABLE_SHFT        0x4
-#define VIDC_REG_787282_STREAM_HDR_CHANGED_ENABLE_BMSK        0x8
-#define VIDC_REG_787282_STREAM_HDR_CHANGED_ENABLE_SHFT        0x3
-#define VIDC_REG_787282_BUFFER_FULL_ENABLE_BMSK        0x2
-#define VIDC_REG_787282_BUFFER_FULL_ENABLE_SHFT        0x1
+#define VIDC_REG_418173_FRAME_DONE_ENABLE_BMSK      0x100
+#define VIDC_REG_418173_FRAME_DONE_ENABLE_SHFT        0x8
+#define VIDC_REG_418173_DMA_DONE_ENABLE_BMSK       0x80
+#define VIDC_REG_418173_DMA_DONE_ENABLE_SHFT        0x7
+#define VIDC_REG_418173_HEADER_DONE_ENABLE_BMSK       0x40
+#define VIDC_REG_418173_HEADER_DONE_ENABLE_SHFT        0x6
+#define VIDC_REG_418173_FW_DONE_ENABLE_BMSK       0x20
+#define VIDC_REG_418173_FW_DONE_ENABLE_SHFT        0x5
+#define VIDC_REG_418173_OPERATION_FAILED_ENABLE_BMSK       0x10
+#define VIDC_REG_418173_OPERATION_FAILED_ENABLE_SHFT        0x4
+#define VIDC_REG_418173_STREAM_HDR_CHANGED_ENABLE_BMSK        0x8
+#define VIDC_REG_418173_STREAM_HDR_CHANGED_ENABLE_SHFT        0x3
+#define VIDC_REG_418173_BUFFER_FULL_ENABLE_BMSK        0x2
+#define VIDC_REG_418173_BUFFER_FULL_ENABLE_SHFT        0x1
 
-#define VIDC_REG_137224_ADDR                \
+#define VIDC_REG_841539_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000600)
-#define VIDC_REG_137224_PHYS                \
+#define VIDC_REG_841539_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000600)
-#define VIDC_REG_137224_RMSK                       0x3
-#define VIDC_REG_137224_SHFT                         0
-#define VIDC_REG_137224_IN                  \
-	in_dword_masked(VIDC_REG_137224_ADDR,  \
-			VIDC_REG_137224_RMSK)
-#define VIDC_REG_137224_INM(m)              \
-	in_dword_masked(VIDC_REG_137224_ADDR,  m)
-#define VIDC_REG_137224_OUT(v)              \
-	out_dword(VIDC_REG_137224_ADDR, v)
-#define VIDC_REG_137224_OUTM(m, v)           \
+#define VIDC_REG_841539_RMSK                       0x3
+#define VIDC_REG_841539_SHFT                         0
+#define VIDC_REG_841539_IN                  \
+	in_dword_masked(VIDC_REG_841539_ADDR,  \
+			VIDC_REG_841539_RMSK)
+#define VIDC_REG_841539_INM(m)              \
+	in_dword_masked(VIDC_REG_841539_ADDR,  m)
+#define VIDC_REG_841539_OUT(v)              \
+	out_dword(VIDC_REG_841539_ADDR, v)
+#define VIDC_REG_841539_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_137224_ADDR, m, v, \
-			VIDC_REG_137224_IN); \
+	out_dword_masked_ns(VIDC_REG_841539_ADDR, m, v, \
+			VIDC_REG_841539_IN); \
 } while (0)
-#define VIDC_REG_137224_TILE_MODE_BMSK             0x3
-#define VIDC_REG_137224_TILE_MODE_SHFT               0
+#define VIDC_REG_841539_TILE_MODE_BMSK             0x3
+#define VIDC_REG_841539_TILE_MODE_SHFT               0
 
-#define VIDC_REG_813721_ADDR                \
+#define VIDC_REG_99105_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000800)
-#define VIDC_REG_813721_PHYS                \
+#define VIDC_REG_99105_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000800)
-#define VIDC_REG_813721_RMSK                0xffffffff
-#define VIDC_REG_813721_SHFT                         0
-#define VIDC_REG_813721_IN                  \
-	in_dword_masked(VIDC_REG_813721_ADDR,  \
-			VIDC_REG_813721_RMSK)
-#define VIDC_REG_813721_INM(m)              \
-	in_dword_masked(VIDC_REG_813721_ADDR,  m)
-#define VIDC_REG_813721_OUT(v)              \
-	out_dword(VIDC_REG_813721_ADDR, v)
-#define VIDC_REG_813721_OUTM(m, v)           \
+#define VIDC_REG_99105_RMSK                0xffffffff
+#define VIDC_REG_99105_SHFT                         0
+#define VIDC_REG_99105_IN                  \
+	in_dword_masked(VIDC_REG_99105_ADDR,  \
+			VIDC_REG_99105_RMSK)
+#define VIDC_REG_99105_INM(m)              \
+	in_dword_masked(VIDC_REG_99105_ADDR,  m)
+#define VIDC_REG_99105_OUT(v)              \
+	out_dword(VIDC_REG_99105_ADDR, v)
+#define VIDC_REG_99105_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_813721_ADDR, m, v, \
-			VIDC_REG_813721_IN); \
+	out_dword_masked_ns(VIDC_REG_99105_ADDR, m, v, \
+			VIDC_REG_99105_IN); \
 } while (0)
-#define VIDC_REG_813721_ENC_CUR_Y_ADDR_BMSK 0xffffffff
-#define VIDC_REG_813721_ENC_CUR_Y_ADDR_SHFT          0
+#define VIDC_REG_99105_ENC_CUR_Y_ADDR_BMSK 0xffffffff
+#define VIDC_REG_99105_ENC_CUR_Y_ADDR_SHFT          0
 
-#define VIDC_REG_327840_ADDR_ADDR                \
+#define VIDC_REG_777113_ADDR_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000804)
-#define VIDC_REG_327840_ADDR_PHYS                \
+#define VIDC_REG_777113_ADDR_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000804)
-#define VIDC_REG_327840_ADDR_RMSK                0xffffffff
-#define VIDC_REG_327840_ADDR_SHFT                         0
-#define VIDC_REG_327840_ADDR_IN                  \
-	in_dword_masked(VIDC_REG_327840_ADDR_ADDR,  \
-			VIDC_REG_327840_ADDR_RMSK)
-#define VIDC_REG_327840_ADDR_INM(m)              \
-	in_dword_masked(VIDC_REG_327840_ADDR_ADDR,  m)
-#define VIDC_REG_327840_ADDR_OUT(v)              \
-	out_dword(VIDC_REG_327840_ADDR_ADDR, v)
-#define VIDC_REG_327840_ADDR_OUTM(m, v)           \
+#define VIDC_REG_777113_ADDR_RMSK                0xffffffff
+#define VIDC_REG_777113_ADDR_SHFT                         0
+#define VIDC_REG_777113_ADDR_IN                  \
+	in_dword_masked(VIDC_REG_777113_ADDR_ADDR,  \
+			VIDC_REG_777113_ADDR_RMSK)
+#define VIDC_REG_777113_ADDR_INM(m)              \
+	in_dword_masked(VIDC_REG_777113_ADDR_ADDR,  m)
+#define VIDC_REG_777113_ADDR_OUT(v)              \
+	out_dword(VIDC_REG_777113_ADDR_ADDR, v)
+#define VIDC_REG_777113_ADDR_OUTM(m, v)           \
 do { \
-	out_dword_masked_ns(VIDC_REG_327840_ADDR_ADDR, m, v, \
-			VIDC_REG_327840_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_777113_ADDR_ADDR, m, v, \
+			VIDC_REG_777113_ADDR_IN); \
 } while (0)
-#define VIDC_REG_327840_ADDR_ENC_CUR_C_ADDR_BMSK 0xffffffff
-#define VIDC_REG_327840_ADDR_ENC_CUR_C_ADDR_SHFT          0
+#define VIDC_REG_777113_ADDR_ENC_CUR_C_ADDR_BMSK 0xffffffff
+#define VIDC_REG_777113_ADDR_ENC_CUR_C_ADDR_SHFT          0
 
-#define VIDC_REG_578009_ADDR_ADDR                  \
+#define VIDC_REG_341928_ADDR_ADDR                  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000080c)
-#define VIDC_REG_578009_ADDR_PHYS                  \
+#define VIDC_REG_341928_ADDR_PHYS                  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000080c)
-#define VIDC_REG_578009_ADDR_RMSK                  0xffffffff
-#define VIDC_REG_578009_ADDR_SHFT                           0
-#define VIDC_REG_578009_ADDR_IN                    \
-	in_dword_masked(VIDC_REG_578009_ADDR_ADDR,  \
-			VIDC_REG_578009_ADDR_RMSK)
-#define VIDC_REG_578009_ADDR_INM(m)                \
-	in_dword_masked(VIDC_REG_578009_ADDR_ADDR,  m)
-#define VIDC_REG_578009_ADDR_OUT(v)                \
-	out_dword(VIDC_REG_578009_ADDR_ADDR, v)
-#define VIDC_REG_578009_ADDR_OUTM(m, v)             \
+#define VIDC_REG_341928_ADDR_RMSK                  0xffffffff
+#define VIDC_REG_341928_ADDR_SHFT                           0
+#define VIDC_REG_341928_ADDR_IN                    \
+	in_dword_masked(VIDC_REG_341928_ADDR_ADDR,  \
+			VIDC_REG_341928_ADDR_RMSK)
+#define VIDC_REG_341928_ADDR_INM(m)                \
+	in_dword_masked(VIDC_REG_341928_ADDR_ADDR,  m)
+#define VIDC_REG_341928_ADDR_OUT(v)                \
+	out_dword(VIDC_REG_341928_ADDR_ADDR, v)
+#define VIDC_REG_341928_ADDR_OUTM(m, v)             \
 do { \
-	out_dword_masked_ns(VIDC_REG_578009_ADDR_ADDR, m, v, \
-			VIDC_REG_578009_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_341928_ADDR_ADDR, m, v, \
+			VIDC_REG_341928_ADDR_IN); \
 } while (0)
-#define VIDC_REG_578009_ADDR_ENC_DPB_ADR_BMSK      0xffffffff
-#define VIDC_REG_578009_ADDR_ENC_DPB_ADR_SHFT               0
+#define VIDC_REG_341928_ADDR_ENC_DPB_ADR_BMSK      0xffffffff
+#define VIDC_REG_341928_ADDR_ENC_DPB_ADR_SHFT               0
 
-#define VIDC_REG_658259_ADDR                    \
+#define VIDC_REG_857491_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000810)
-#define VIDC_REG_658259_PHYS                    \
+#define VIDC_REG_857491_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000810)
-#define VIDC_REG_658259_RMSK                         0xfff
-#define VIDC_REG_658259_SHFT                             0
-#define VIDC_REG_658259_IN                      \
-	in_dword_masked(VIDC_REG_658259_ADDR,  \
-			VIDC_REG_658259_RMSK)
-#define VIDC_REG_658259_INM(m)                  \
-	in_dword_masked(VIDC_REG_658259_ADDR,  m)
-#define VIDC_REG_658259_OUT(v)                  \
-	out_dword(VIDC_REG_658259_ADDR, v)
-#define VIDC_REG_658259_OUTM(m, v)               \
+#define VIDC_REG_857491_RMSK                         0xfff
+#define VIDC_REG_857491_SHFT                             0
+#define VIDC_REG_857491_IN                      \
+	in_dword_masked(VIDC_REG_857491_ADDR,  \
+			VIDC_REG_857491_RMSK)
+#define VIDC_REG_857491_INM(m)                  \
+	in_dword_masked(VIDC_REG_857491_ADDR,  m)
+#define VIDC_REG_857491_OUT(v)                  \
+	out_dword(VIDC_REG_857491_ADDR, v)
+#define VIDC_REG_857491_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_658259_ADDR, m, v, \
-			VIDC_REG_658259_IN); \
+	out_dword_masked_ns(VIDC_REG_857491_ADDR, m, v, \
+			VIDC_REG_857491_IN); \
 } while (0)
-#define VIDC_REG_658259_CIR_MB_NUM_BMSK              0xfff
-#define VIDC_REG_658259_CIR_MB_NUM_SHFT                  0
+#define VIDC_REG_857491_CIR_MB_NUM_BMSK              0xfff
+#define VIDC_REG_857491_CIR_MB_NUM_SHFT                  0
 
-#define VIDC_REG_774590_ADDR                  \
+#define VIDC_REG_518133_ADDR                  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000900)
-#define VIDC_REG_774590_PHYS                  \
+#define VIDC_REG_518133_PHYS                  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000900)
-#define VIDC_REG_774590_RMSK                  0xffffffff
-#define VIDC_REG_774590_SHFT                           0
-#define VIDC_REG_774590_IN                    \
-	in_dword_masked(VIDC_REG_774590_ADDR,  \
-			VIDC_REG_774590_RMSK)
-#define VIDC_REG_774590_INM(m)                \
-	in_dword_masked(VIDC_REG_774590_ADDR,  m)
-#define VIDC_REG_774590_OUT(v)                \
-	out_dword(VIDC_REG_774590_ADDR, v)
-#define VIDC_REG_774590_OUTM(m, v)             \
+#define VIDC_REG_518133_RMSK                  0xffffffff
+#define VIDC_REG_518133_SHFT                           0
+#define VIDC_REG_518133_IN                    \
+	in_dword_masked(VIDC_REG_518133_ADDR,  \
+			VIDC_REG_518133_RMSK)
+#define VIDC_REG_518133_INM(m)                \
+	in_dword_masked(VIDC_REG_518133_ADDR,  m)
+#define VIDC_REG_518133_OUT(v)                \
+	out_dword(VIDC_REG_518133_ADDR, v)
+#define VIDC_REG_518133_OUTM(m, v)             \
 do { \
-	out_dword_masked_ns(VIDC_REG_774590_ADDR, m, v, \
-			VIDC_REG_774590_IN); \
+	out_dword_masked_ns(VIDC_REG_518133_ADDR, m, v, \
+			VIDC_REG_518133_IN); \
 } while (0)
-#define VIDC_REG_774590_DEC_DPB_ADDR_BMSK     0xffffffff
-#define VIDC_REG_774590_DEC_DPB_ADDR_SHFT              0
+#define VIDC_REG_518133_DEC_DPB_ADDR_BMSK     0xffffffff
+#define VIDC_REG_518133_DEC_DPB_ADDR_SHFT              0
 
-#define VIDC_REG_223538_ADDR_ADDR                 \
+#define VIDC_REG_456376_ADDR_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000904)
-#define VIDC_REG_223538_ADDR_PHYS                 \
+#define VIDC_REG_456376_ADDR_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000904)
-#define VIDC_REG_223538_ADDR_RMSK                 0xffffffff
-#define VIDC_REG_223538_ADDR_SHFT                          0
-#define VIDC_REG_223538_ADDR_IN                   \
-	in_dword_masked(VIDC_REG_223538_ADDR_ADDR,  \
-			VIDC_REG_223538_ADDR_RMSK)
-#define VIDC_REG_223538_ADDR_INM(m)               \
-	in_dword_masked(VIDC_REG_223538_ADDR_ADDR,  m)
-#define VIDC_REG_223538_ADDR_OUT(v)               \
-	out_dword(VIDC_REG_223538_ADDR_ADDR, v)
-#define VIDC_REG_223538_ADDR_OUTM(m, v)            \
+#define VIDC_REG_456376_ADDR_RMSK                 0xffffffff
+#define VIDC_REG_456376_ADDR_SHFT                          0
+#define VIDC_REG_456376_ADDR_IN                   \
+	in_dword_masked(VIDC_REG_456376_ADDR_ADDR,  \
+			VIDC_REG_456376_ADDR_RMSK)
+#define VIDC_REG_456376_ADDR_INM(m)               \
+	in_dword_masked(VIDC_REG_456376_ADDR_ADDR,  m)
+#define VIDC_REG_456376_ADDR_OUT(v)               \
+	out_dword(VIDC_REG_456376_ADDR_ADDR, v)
+#define VIDC_REG_456376_ADDR_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_223538_ADDR_ADDR, m, v, \
-			VIDC_REG_223538_ADDR_IN); \
+	out_dword_masked_ns(VIDC_REG_456376_ADDR_ADDR, m, v, \
+			VIDC_REG_456376_ADDR_IN); \
 } while (0)
-#define VIDC_REG_223538_ADDR_DPB_COMV_ADDR_BMSK   0xffffffff
-#define VIDC_REG_223538_ADDR_DPB_COMV_ADDR_SHFT            0
+#define VIDC_REG_456376_ADDR_DPB_COMV_ADDR_BMSK   0xffffffff
+#define VIDC_REG_456376_ADDR_DPB_COMV_ADDR_SHFT            0
 
-#define VIDC_REG_46962_ADDR                 \
+#define VIDC_REG_267567_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000908)
-#define VIDC_REG_46962_PHYS                 \
+#define VIDC_REG_267567_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000908)
-#define VIDC_REG_46962_RMSK                 0xffffffff
-#define VIDC_REG_46962_SHFT                          0
-#define VIDC_REG_46962_IN                   \
-	in_dword_masked(VIDC_REG_46962_ADDR,  \
-			VIDC_REG_46962_RMSK)
-#define VIDC_REG_46962_INM(m)               \
-	in_dword_masked(VIDC_REG_46962_ADDR,  m)
-#define VIDC_REG_46962_OUT(v)               \
-	out_dword(VIDC_REG_46962_ADDR, v)
-#define VIDC_REG_46962_OUTM(m, v)            \
+#define VIDC_REG_267567_RMSK                 0xffffffff
+#define VIDC_REG_267567_SHFT                          0
+#define VIDC_REG_267567_IN                   \
+	in_dword_masked(VIDC_REG_267567_ADDR,  \
+			VIDC_REG_267567_RMSK)
+#define VIDC_REG_267567_INM(m)               \
+	in_dword_masked(VIDC_REG_267567_ADDR,  m)
+#define VIDC_REG_267567_OUT(v)               \
+	out_dword(VIDC_REG_267567_ADDR, v)
+#define VIDC_REG_267567_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_46962_ADDR, m, v, \
-			VIDC_REG_46962_IN); \
+	out_dword_masked_ns(VIDC_REG_267567_ADDR, m, v, \
+			VIDC_REG_267567_IN); \
 } while (0)
-#define VIDC_REG_344745_ADDR_BMSK   0xffffffff
-#define VIDC_REG_344745_ADDR_SHFT            0
+#define VIDC_REG_798486_ADDR_BMSK   0xffffffff
+#define VIDC_REG_798486_ADDR_SHFT            0
 
-#define VIDC_REG_104358_ADDR                      \
+#define VIDC_REG_105770_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x0000090c)
-#define VIDC_REG_104358_PHYS                      \
+#define VIDC_REG_105770_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x0000090c)
-#define VIDC_REG_104358_RMSK                            0xff
-#define VIDC_REG_104358_SHFT                               0
-#define VIDC_REG_104358_IN                        \
-	in_dword_masked(VIDC_REG_104358_ADDR,  VIDC_REG_104358_RMSK)
-#define VIDC_REG_104358_INM(m)                    \
-	in_dword_masked(VIDC_REG_104358_ADDR,  m)
-#define VIDC_REG_104358_DPB_SIZE_BMSK                   0xff
-#define VIDC_REG_104358_DPB_SIZE_SHFT                      0
+#define VIDC_REG_105770_RMSK                            0xff
+#define VIDC_REG_105770_SHFT                               0
+#define VIDC_REG_105770_IN                        \
+	in_dword_masked(VIDC_REG_105770_ADDR,         \
+	VIDC_REG_105770_RMSK)
+#define VIDC_REG_105770_INM(m)                    \
+	in_dword_masked(VIDC_REG_105770_ADDR,  m)
+#define VIDC_REG_105770_DPB_SIZE_BMSK                   0xff
+#define VIDC_REG_105770_DPB_SIZE_SHFT                      0
 
-#define VIDC_REG_934552_ADDR                 \
+#define VIDC_REG_58211_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a00)
-#define VIDC_REG_934552_PHYS                 \
+#define VIDC_REG_58211_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a00)
-#define VIDC_REG_934552_RMSK                      0x33f
-#define VIDC_REG_934552_SHFT                          0
-#define VIDC_REG_934552_IN                   \
-	in_dword_masked(VIDC_REG_934552_ADDR,  \
-			VIDC_REG_934552_RMSK)
-#define VIDC_REG_934552_INM(m)               \
-	in_dword_masked(VIDC_REG_934552_ADDR,  m)
-#define VIDC_REG_934552_OUT(v)               \
-	out_dword(VIDC_REG_934552_ADDR, v)
-#define VIDC_REG_934552_OUTM(m, v)            \
+#define VIDC_REG_58211_RMSK                      0x33f
+#define VIDC_REG_58211_SHFT                          0
+#define VIDC_REG_58211_IN                   \
+	in_dword_masked(VIDC_REG_58211_ADDR,  \
+			VIDC_REG_58211_RMSK)
+#define VIDC_REG_58211_INM(m)               \
+	in_dword_masked(VIDC_REG_58211_ADDR,  m)
+#define VIDC_REG_58211_OUT(v)               \
+	out_dword(VIDC_REG_58211_ADDR, v)
+#define VIDC_REG_58211_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_934552_ADDR, m, v, \
-			VIDC_REG_934552_IN); \
+	out_dword_masked_ns(VIDC_REG_58211_ADDR, m, v, \
+			VIDC_REG_58211_IN); \
 } while (0)
-#define VIDC_REG_934552_FR_RC_EN_BMSK             0x200
-#define VIDC_REG_934552_FR_RC_EN_SHFT               0x9
-#define VIDC_REG_934552_MB_RC_EN_BMSK             0x100
-#define VIDC_REG_934552_MB_RC_EN_SHFT               0x8
-#define VIDC_REG_934552_FRAME_QP_BMSK              0x3f
-#define VIDC_REG_934552_FRAME_QP_SHFT                 0
+#define VIDC_REG_58211_FR_RC_EN_BMSK             0x200
+#define VIDC_REG_58211_FR_RC_EN_SHFT               0x9
+#define VIDC_REG_58211_MB_RC_EN_BMSK             0x100
+#define VIDC_REG_58211_MB_RC_EN_SHFT               0x8
+#define VIDC_REG_58211_FRAME_QP_BMSK              0x3f
+#define VIDC_REG_58211_FRAME_QP_SHFT                 0
 
-#define VIDC_REG_627555_ADDR                    \
+#define VIDC_REG_548359_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a04)
-#define VIDC_REG_627555_PHYS                    \
+#define VIDC_REG_548359_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a04)
-#define VIDC_REG_627555_RMSK                          0x3f
-#define VIDC_REG_627555_SHFT                             0
-#define VIDC_REG_627555_IN                      \
-	in_dword_masked(VIDC_REG_627555_ADDR,  \
-			VIDC_REG_627555_RMSK)
-#define VIDC_REG_627555_INM(m)                  \
-	in_dword_masked(VIDC_REG_627555_ADDR,  m)
-#define VIDC_REG_627555_OUT(v)                  \
-	out_dword(VIDC_REG_627555_ADDR, v)
-#define VIDC_REG_627555_OUTM(m, v)               \
+#define VIDC_REG_548359_RMSK                          0x3f
+#define VIDC_REG_548359_SHFT                             0
+#define VIDC_REG_548359_IN                      \
+	in_dword_masked(VIDC_REG_548359_ADDR,  \
+			VIDC_REG_548359_RMSK)
+#define VIDC_REG_548359_INM(m)                  \
+	in_dword_masked(VIDC_REG_548359_ADDR,  m)
+#define VIDC_REG_548359_OUT(v)                  \
+	out_dword(VIDC_REG_548359_ADDR, v)
+#define VIDC_REG_548359_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_627555_ADDR, m, v, \
-			VIDC_REG_627555_IN); \
+	out_dword_masked_ns(VIDC_REG_548359_ADDR, m, v, \
+			VIDC_REG_548359_IN); \
 } while (0)
-#define VIDC_REG_627555_P_FRAME_QP_BMSK               0x3f
-#define VIDC_REG_627555_P_FRAME_QP_SHFT                  0
+#define VIDC_REG_548359_P_FRAME_QP_BMSK               0x3f
+#define VIDC_REG_548359_P_FRAME_QP_SHFT                  0
 
-#define VIDC_REG_576121_ADDR                   \
+#define VIDC_REG_174150_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a08)
-#define VIDC_REG_576121_PHYS                   \
+#define VIDC_REG_174150_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a08)
-#define VIDC_REG_576121_RMSK                   0xffffffff
-#define VIDC_REG_576121_SHFT                            0
-#define VIDC_REG_576121_IN                     \
-	in_dword_masked(VIDC_REG_576121_ADDR,  \
-			VIDC_REG_576121_RMSK)
-#define VIDC_REG_576121_INM(m)                 \
-	in_dword_masked(VIDC_REG_576121_ADDR,  m)
-#define VIDC_REG_576121_OUT(v)                 \
-	out_dword(VIDC_REG_576121_ADDR, v)
-#define VIDC_REG_576121_OUTM(m, v)              \
+#define VIDC_REG_174150_RMSK                   0xffffffff
+#define VIDC_REG_174150_SHFT                            0
+#define VIDC_REG_174150_IN                     \
+	in_dword_masked(VIDC_REG_174150_ADDR,  \
+			VIDC_REG_174150_RMSK)
+#define VIDC_REG_174150_INM(m)                 \
+	in_dword_masked(VIDC_REG_174150_ADDR,  m)
+#define VIDC_REG_174150_OUT(v)                 \
+	out_dword(VIDC_REG_174150_ADDR, v)
+#define VIDC_REG_174150_OUTM(m, v)              \
 do { \
-	out_dword_masked_ns(VIDC_REG_576121_ADDR, m, v, \
-			VIDC_REG_576121_IN); \
+	out_dword_masked_ns(VIDC_REG_174150_ADDR, m, v, \
+			VIDC_REG_174150_IN); \
 } while (0)
-#define VIDC_REG_576121_BIT_RATE_BMSK          0xffffffff
-#define VIDC_REG_576121_BIT_RATE_SHFT                   0
+#define VIDC_REG_174150_BIT_RATE_BMSK          0xffffffff
+#define VIDC_REG_174150_BIT_RATE_SHFT                   0
 
-#define VIDC_REG_880537_ADDR                     \
+#define VIDC_REG_734318_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a0c)
-#define VIDC_REG_880537_PHYS                     \
+#define VIDC_REG_734318_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a0c)
-#define VIDC_REG_880537_RMSK                         0x3f3f
-#define VIDC_REG_880537_SHFT                              0
-#define VIDC_REG_880537_IN                       \
-	in_dword_masked(VIDC_REG_880537_ADDR,  VIDC_REG_880537_RMSK)
-#define VIDC_REG_880537_INM(m)                   \
-	in_dword_masked(VIDC_REG_880537_ADDR,  m)
-#define VIDC_REG_880537_OUT(v)                   \
-	out_dword(VIDC_REG_880537_ADDR, v)
-#define VIDC_REG_880537_OUTM(m, v)                \
+#define VIDC_REG_734318_RMSK                         0x3f3f
+#define VIDC_REG_734318_SHFT                              0
+#define VIDC_REG_734318_IN                       \
+	in_dword_masked(VIDC_REG_734318_ADDR,        \
+	VIDC_REG_734318_RMSK)
+#define VIDC_REG_734318_INM(m)                   \
+	in_dword_masked(VIDC_REG_734318_ADDR,  m)
+#define VIDC_REG_734318_OUT(v)                   \
+	out_dword(VIDC_REG_734318_ADDR, v)
+#define VIDC_REG_734318_OUTM(m, v)                \
 do { \
-	out_dword_masked_ns(VIDC_REG_880537_ADDR, m, v, \
-			VIDC_REG_880537_IN); \
+	out_dword_masked_ns(VIDC_REG_734318_ADDR, m, v, \
+			VIDC_REG_734318_IN); \
 } while (0)
-#define VIDC_REG_880537_MAX_QP_BMSK                  0x3f00
-#define VIDC_REG_880537_MAX_QP_SHFT                     0x8
-#define VIDC_REG_880537_MIN_QP_BMSK                    0x3f
-#define VIDC_REG_880537_MIN_QP_SHFT                       0
+#define VIDC_REG_734318_MAX_QP_BMSK                  0x3f00
+#define VIDC_REG_734318_MAX_QP_SHFT                     0x8
+#define VIDC_REG_734318_MIN_QP_BMSK                    0x3f
+#define VIDC_REG_734318_MIN_QP_SHFT                       0
 
-#define VIDC_REG_708001_ADDR                      \
+#define VIDC_REG_677784_ADDR                      \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a10)
-#define VIDC_REG_708001_PHYS                      \
+#define VIDC_REG_677784_PHYS                      \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a10)
-#define VIDC_REG_708001_RMSK                          0xffff
-#define VIDC_REG_708001_SHFT                               0
-#define VIDC_REG_708001_IN                        \
-	in_dword_masked(VIDC_REG_708001_ADDR,  VIDC_REG_708001_RMSK)
-#define VIDC_REG_708001_INM(m)                    \
-	in_dword_masked(VIDC_REG_708001_ADDR,  m)
-#define VIDC_REG_708001_OUT(v)                    \
-	out_dword(VIDC_REG_708001_ADDR, v)
-#define VIDC_REG_708001_OUTM(m, v)                 \
+#define VIDC_REG_677784_RMSK                          0xffff
+#define VIDC_REG_677784_SHFT                               0
+#define VIDC_REG_677784_IN                        \
+	in_dword_masked(VIDC_REG_677784_ADDR,         \
+	VIDC_REG_677784_RMSK)
+#define VIDC_REG_677784_INM(m)                    \
+	in_dword_masked(VIDC_REG_677784_ADDR,  m)
+#define VIDC_REG_677784_OUT(v)                    \
+	out_dword(VIDC_REG_677784_ADDR, v)
+#define VIDC_REG_677784_OUTM(m, v)                 \
 do { \
-	out_dword_masked_ns(VIDC_REG_708001_ADDR, m, v, \
-			VIDC_REG_708001_IN); \
+	out_dword_masked_ns(VIDC_REG_677784_ADDR, m, v, \
+			VIDC_REG_677784_IN); \
 } while (0)
-#define VIDC_REG_708001_REACT_PARA_BMSK               0xffff
-#define VIDC_REG_708001_REACT_PARA_SHFT                    0
+#define VIDC_REG_677784_REACT_PARA_BMSK               0xffff
+#define VIDC_REG_677784_REACT_PARA_SHFT                    0
 
-#define VIDC_REG_594627_ADDR                    \
+#define VIDC_REG_995041_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a14)
-#define VIDC_REG_594627_PHYS                    \
+#define VIDC_REG_995041_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a14)
-#define VIDC_REG_594627_RMSK                           0xf
-#define VIDC_REG_594627_SHFT                             0
-#define VIDC_REG_594627_IN                      \
-	in_dword_masked(VIDC_REG_594627_ADDR,  \
-			VIDC_REG_594627_RMSK)
-#define VIDC_REG_594627_INM(m)                  \
-	in_dword_masked(VIDC_REG_594627_ADDR,  m)
-#define VIDC_REG_594627_OUT(v)                  \
-	out_dword(VIDC_REG_594627_ADDR, v)
-#define VIDC_REG_594627_OUTM(m, v)               \
+#define VIDC_REG_995041_RMSK                           0xf
+#define VIDC_REG_995041_SHFT                             0
+#define VIDC_REG_995041_IN                      \
+	in_dword_masked(VIDC_REG_995041_ADDR,  \
+			VIDC_REG_995041_RMSK)
+#define VIDC_REG_995041_INM(m)                  \
+	in_dword_masked(VIDC_REG_995041_ADDR,  m)
+#define VIDC_REG_995041_OUT(v)                  \
+	out_dword(VIDC_REG_995041_ADDR, v)
+#define VIDC_REG_995041_OUTM(m, v)               \
 do { \
-	out_dword_masked_ns(VIDC_REG_594627_ADDR, m, v, \
-			VIDC_REG_594627_IN); \
+	out_dword_masked_ns(VIDC_REG_995041_ADDR, m, v, \
+			VIDC_REG_995041_IN); \
 } while (0)
-#define VIDC_REG_594627_DARK_DISABLE_BMSK              0x8
-#define VIDC_REG_594627_DARK_DISABLE_SHFT              0x3
-#define VIDC_REG_594627_SMOOTH_DISABLE_BMSK            0x4
-#define VIDC_REG_594627_SMOOTH_DISABLE_SHFT            0x2
-#define VIDC_REG_594627_STATIC_DISABLE_BMSK            0x2
-#define VIDC_REG_594627_STATIC_DISABLE_SHFT            0x1
-#define VIDC_REG_594627_ACT_DISABLE_BMSK               0x1
-#define VIDC_REG_594627_ACT_DISABLE_SHFT                 0
+#define VIDC_REG_995041_DARK_DISABLE_BMSK              0x8
+#define VIDC_REG_995041_DARK_DISABLE_SHFT              0x3
+#define VIDC_REG_995041_SMOOTH_DISABLE_BMSK            0x4
+#define VIDC_REG_995041_SMOOTH_DISABLE_SHFT            0x2
+#define VIDC_REG_995041_STATIC_DISABLE_BMSK            0x2
+#define VIDC_REG_995041_STATIC_DISABLE_SHFT            0x1
+#define VIDC_REG_995041_ACT_DISABLE_BMSK               0x1
+#define VIDC_REG_995041_ACT_DISABLE_SHFT                 0
 
-#define VIDC_REG_121939_ADDR                       \
+#define VIDC_REG_273649_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000a18)
-#define VIDC_REG_121939_PHYS                       \
+#define VIDC_REG_273649_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000a18)
-#define VIDC_REG_121939_RMSK                             0x3f
-#define VIDC_REG_121939_SHFT                                0
-#define VIDC_REG_121939_IN                         \
-	in_dword_masked(VIDC_REG_121939_ADDR,  VIDC_REG_121939_RMSK)
-#define VIDC_REG_121939_INM(m)                     \
-	in_dword_masked(VIDC_REG_121939_ADDR,  m)
-#define VIDC_REG_121939_QP_OUT_BMSK                      0x3f
-#define VIDC_REG_121939_QP_OUT_SHFT                         0
+#define VIDC_REG_273649_RMSK                             0x3f
+#define VIDC_REG_273649_SHFT                                0
+#define VIDC_REG_273649_IN                         \
+	in_dword_masked(VIDC_REG_273649_ADDR,  VIDC_REG_273649_RMSK)
+#define VIDC_REG_273649_INM(m)                     \
+	in_dword_masked(VIDC_REG_273649_ADDR,  m)
+#define VIDC_REG_273649_QP_OUT_BMSK                      0x3f
+#define VIDC_REG_273649_QP_OUT_SHFT                         0
 
-#define VIDC_REG_558246_ADDR                   \
+#define VIDC_REG_548823_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000b00)
-#define VIDC_REG_558246_PHYS                   \
+#define VIDC_REG_548823_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000b00)
-#define VIDC_REG_558246_RMSK                   0xffffffff
-#define VIDC_REG_558246_SHFT                            0
-#define VIDC_REG_558246_IN                     \
-	in_dword_masked(VIDC_REG_558246_ADDR,  \
-			VIDC_REG_558246_RMSK)
-#define VIDC_REG_558246_INM(m)                 \
-	in_dword_masked(VIDC_REG_558246_ADDR,  m)
-#define VIDC_REG_558246_720P_VERSION_BMSK       0xffffffff
-#define VIDC_REG_558246_720P_VERSION_SHFT                0
+#define VIDC_REG_548823_RMSK                   0xffffffff
+#define VIDC_REG_548823_SHFT                            0
+#define VIDC_REG_548823_IN                     \
+	in_dword_masked(VIDC_REG_548823_ADDR,  \
+			VIDC_REG_548823_RMSK)
+#define VIDC_REG_548823_INM(m)                 \
+	in_dword_masked(VIDC_REG_548823_ADDR,  m)
+#define VIDC_REG_548823_720P_VERSION_BMSK       0xffffffff
+#define VIDC_REG_548823_720P_VERSION_SHFT                0
 
-#define VIDC_REG_904540_ADDR                     \
+#define VIDC_REG_881638_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000c00)
-#define VIDC_REG_904540_PHYS                     \
+#define VIDC_REG_881638_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c00)
-#define VIDC_REG_904540_RMSK                     0xffffffff
-#define VIDC_REG_904540_SHFT                              0
-#define VIDC_REG_904540_IN                       \
-	in_dword_masked(VIDC_REG_904540_ADDR,  VIDC_REG_904540_RMSK)
-#define VIDC_REG_904540_INM(m)                   \
-	in_dword_masked(VIDC_REG_904540_ADDR,  m)
-#define VIDC_REG_904540_CROP_RIGHT_OFFSET_BMSK   0xffff0000
-#define VIDC_REG_904540_CROP_RIGHT_OFFSET_SHFT         0x10
-#define VIDC_REG_904540_CROP_LEFT_OFFSET_BMSK        0xffff
-#define VIDC_REG_904540_CROP_LEFT_OFFSET_SHFT             0
+#define VIDC_REG_881638_RMSK                     0xffffffff
+#define VIDC_REG_881638_SHFT                              0
+#define VIDC_REG_881638_IN                       \
+	in_dword_masked(VIDC_REG_881638_ADDR,        \
+	VIDC_REG_881638_RMSK)
+#define VIDC_REG_881638_INM(m)                   \
+	in_dword_masked(VIDC_REG_881638_ADDR,  m)
+#define VIDC_REG_881638_CROP_RIGHT_OFFSET_BMSK   0xffff0000
+#define VIDC_REG_881638_CROP_RIGHT_OFFSET_SHFT         0x10
+#define VIDC_REG_881638_CROP_LEFT_OFFSET_BMSK        0xffff
+#define VIDC_REG_881638_CROP_LEFT_OFFSET_SHFT             0
 
-#define VIDC_REG_663308_ADDR                     \
+#define VIDC_REG_161486_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000c04)
-#define VIDC_REG_663308_PHYS                     \
+#define VIDC_REG_161486_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c04)
-#define VIDC_REG_663308_RMSK                     0xffffffff
-#define VIDC_REG_663308_SHFT                              0
-#define VIDC_REG_663308_IN                       \
-	in_dword_masked(VIDC_REG_663308_ADDR,  VIDC_REG_663308_RMSK)
-#define VIDC_REG_663308_INM(m)                   \
-	in_dword_masked(VIDC_REG_663308_ADDR,  m)
-#define VIDC_REG_663308_CROP_BOTTOM_OFFSET_BMSK  0xffff0000
-#define VIDC_REG_663308_CROP_BOTTOM_OFFSET_SHFT        0x10
-#define VIDC_REG_663308_CROP_TOP_OFFSET_BMSK         0xffff
-#define VIDC_REG_663308_CROP_TOP_OFFSET_SHFT              0
+#define VIDC_REG_161486_RMSK                     0xffffffff
+#define VIDC_REG_161486_SHFT                              0
+#define VIDC_REG_161486_IN                       \
+	in_dword_masked(VIDC_REG_161486_ADDR,        \
+	VIDC_REG_161486_RMSK)
+#define VIDC_REG_161486_INM(m)                   \
+	in_dword_masked(VIDC_REG_161486_ADDR,  m)
+#define VIDC_REG_161486_CROP_BOTTOM_OFFSET_BMSK  0xffff0000
+#define VIDC_REG_161486_CROP_BOTTOM_OFFSET_SHFT        0x10
+#define VIDC_REG_161486_CROP_TOP_OFFSET_BMSK         0xffff
+#define VIDC_REG_161486_CROP_TOP_OFFSET_SHFT              0
 
-#define VIDC_REG_177025_ADDR              \
+#define VIDC_REG_580603_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000c08)
-#define VIDC_REG_177025_PHYS              \
+#define VIDC_REG_580603_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c08)
-#define VIDC_REG_177025_RMSK              0xffffffff
-#define VIDC_REG_177025_SHFT                       0
-#define VIDC_REG_177025_IN                \
-	in_dword_masked(VIDC_REG_177025_ADDR,  \
-			VIDC_REG_177025_RMSK)
-#define VIDC_REG_177025_INM(m)            \
-	in_dword_masked(VIDC_REG_177025_ADDR,  m)
-#define VIDC_REG_177025_720P_DEC_FRM_SIZE_BMSK 0xffffffff
-#define VIDC_REG_177025_720P_DEC_FRM_SIZE_SHFT          0
+#define VIDC_REG_580603_RMSK              0xffffffff
+#define VIDC_REG_580603_SHFT                       0
+#define VIDC_REG_580603_IN                \
+	in_dword_masked(VIDC_REG_580603_ADDR,  \
+			VIDC_REG_580603_RMSK)
+#define VIDC_REG_580603_INM(m)            \
+	in_dword_masked(VIDC_REG_580603_ADDR,  m)
+#define VIDC_REG_580603_720P_DEC_FRM_SIZE_BMSK 0xffffffff
+#define VIDC_REG_580603_720P_DEC_FRM_SIZE_SHFT          0
 
 
-#define VIDC_REG_469881_ADDR \
+#define VIDC_REG_606447_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000c0c)
-#define VIDC_REG_469881_PHYS \
+#define VIDC_REG_606447_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c0c)
-#define VIDC_REG_469881_RMSK  0xff1f
-#define VIDC_REG_469881_SHFT  0
-#define VIDC_REG_469881_IN                         \
-		in_dword_masked(VIDC_REG_469881_ADDR, \
-		VIDC_REG_469881_RMSK)
-#define VIDC_REG_469881_INM(m)                     \
-		in_dword_masked(VIDC_REG_469881_ADDR, m)
-#define VIDC_REG_469881_OUT(v)                     \
-		out_dword(VIDC_REG_469881_ADDR, v)
-#define VIDC_REG_469881_OUTM(m, v)                  \
-		out_dword_masked_ns(VIDC_REG_469881_ADDR,\
-		m, v, VIDC_REG_469881_IN); \
+#define VIDC_REG_606447_RMSK  0xff1f
+#define VIDC_REG_606447_SHFT  0
+#define VIDC_REG_606447_IN                         \
+		in_dword_masked(VIDC_REG_606447_ADDR, \
+		VIDC_REG_606447_RMSK)
+#define VIDC_REG_606447_INM(m)                     \
+		in_dword_masked(VIDC_REG_606447_ADDR, m)
+#define VIDC_REG_606447_OUT(v)                     \
+		out_dword(VIDC_REG_606447_ADDR, v)
+#define VIDC_REG_606447_OUTM(m, v)                  \
+		out_dword_masked_ns(VIDC_REG_606447_ADDR, \
+		m, v, VIDC_REG_606447_IN); \
 
-#define VIDC_REG_469881_DIS_PIC_LEVEL_BMSK 0xff00
-#define VIDC_REG_469881_DIS_PIC_LEVEL_SHFT 0x8
-#define VIDC_REG_469881_DISP_PIC_PROFILE_BMSK 0x1f
-#define VIDC_REG_469881_DISP_PIC_PROFILE_SHFT 0
+#define VIDC_REG_606447_DIS_PIC_LEVEL_BMSK 0xff00
+#define VIDC_REG_606447_DIS_PIC_LEVEL_SHFT 0x8
+#define VIDC_REG_606447_DISP_PIC_PROFILE_BMSK 0x1f
+#define VIDC_REG_606447_DISP_PIC_PROFILE_SHFT 0
 
-#define VIDC_REG_81455_ADDR \
+#define VIDC_REG_854281_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE      + 0x00000c10)
-#define VIDC_REG_81455_PHYS \
+#define VIDC_REG_854281_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c10)
-#define VIDC_REG_81455_RMSK 0xffffffff
-#define VIDC_REG_81455_SHFT 0
-#define VIDC_REG_81455_IN \
-		in_dword_masked(VIDC_REG_81455_ADDR,\
-		VIDC_REG_81455_RMSK)
-#define VIDC_REG_81455_INM(m) \
-		in_dword_masked(VIDC_REG_81455_ADDR, m)
-#define VIDC_REG_81455_MIN_DPB_SIZE_BMSK 0xffffffff
-#define VIDC_REG_81455_MIN_DPB_SIZE_SHFT 0
+#define VIDC_REG_854281_RMSK 0xffffffff
+#define VIDC_REG_854281_SHFT 0
+#define VIDC_REG_854281_IN \
+		in_dword_masked(VIDC_REG_854281_ADDR, \
+		VIDC_REG_854281_RMSK)
+#define VIDC_REG_854281_INM(m) \
+		in_dword_masked(VIDC_REG_854281_ADDR, m)
+#define VIDC_REG_854281_MIN_DPB_SIZE_BMSK 0xffffffff
+#define VIDC_REG_854281_MIN_DPB_SIZE_SHFT 0
 
 
-#define VIDC_REG_659013_ADDR \
+#define VIDC_REG_381535_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000c14)
-#define VIDC_REG_659013_PHYS \
+#define VIDC_REG_381535_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c14)
-#define VIDC_REG_659013_RMSK 0xffffffff
-#define VIDC_REG_659013_SHFT 0
-#define VIDC_REG_659013_IN \
-		in_dword_masked(VIDC_REG_659013_ADDR,\
-		VIDC_REG_659013_RMSK)
-#define VIDC_REG_659013_INM(m) \
-		in_dword_masked(VIDC_REG_659013_ADDR, m)
-#define VIDC_REG_659013_720P_FW_STATUS_BMSK 0xffffffff
-#define VIDC_REG_659013_720P_FW_STATUS_SHFT 0
+#define VIDC_REG_381535_RMSK 0xffffffff
+#define VIDC_REG_381535_SHFT 0
+#define VIDC_REG_381535_IN \
+		in_dword_masked(VIDC_REG_381535_ADDR, \
+		VIDC_REG_381535_RMSK)
+#define VIDC_REG_381535_INM(m) \
+		in_dword_masked(VIDC_REG_381535_ADDR, m)
+#define VIDC_REG_381535_720P_FW_STATUS_BMSK 0xffffffff
+#define VIDC_REG_381535_720P_FW_STATUS_SHFT 0
 
 
-#define VIDC_REG_444141_ADDR \
+#define VIDC_REG_347105_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000c18)
-#define VIDC_REG_444141_PHYS \
+#define VIDC_REG_347105_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000c18)
-#define VIDC_REG_444141_RMSK 0xffffffff
-#define VIDC_REG_444141_SHFT 0
-#define VIDC_REG_444141_IN \
-		in_dword_masked(VIDC_REG_444141_ADDR,\
-		VIDC_REG_444141_RMSK)
-#define VIDC_REG_444141_INM(m) \
-		in_dword_masked(VIDC_REG_444141_ADDR, m)
-#define VIDC_REG_444141_FREE_LUMA_DPB_BMSK 0xffffffff
-#define VIDC_REG_444141_FREE_LUMA_DPB_SHFT 0
+#define VIDC_REG_347105_RMSK 0xffffffff
+#define VIDC_REG_347105_SHFT 0
+#define VIDC_REG_347105_IN \
+		in_dword_masked(VIDC_REG_347105_ADDR, \
+		VIDC_REG_347105_RMSK)
+#define VIDC_REG_347105_INM(m) \
+		in_dword_masked(VIDC_REG_347105_ADDR, m)
+#define VIDC_REG_347105_FREE_LUMA_DPB_BMSK 0xffffffff
+#define VIDC_REG_347105_FREE_LUMA_DPB_SHFT 0
 
 
-#define VIDC_REG_826219_ADDR              \
+#define VIDC_REG_62325_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000d00)
-#define VIDC_REG_826219_PHYS              \
+#define VIDC_REG_62325_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d00)
-#define VIDC_REG_826219_RMSK                     0xf
-#define VIDC_REG_826219_SHFT                       0
-#define VIDC_REG_826219_IN                \
-		in_dword_masked(VIDC_REG_826219_ADDR,  \
-		VIDC_REG_826219_RMSK)
-#define VIDC_REG_826219_INM(m)            \
-	in_dword_masked(VIDC_REG_826219_ADDR,  m)
-#define VIDC_REG_826219_OUT(v)            \
-	out_dword(VIDC_REG_826219_ADDR, v)
-#define VIDC_REG_826219_OUTM(m, v)         \
+#define VIDC_REG_62325_RMSK                     0xf
+#define VIDC_REG_62325_SHFT                       0
+#define VIDC_REG_62325_IN                \
+		in_dword_masked(VIDC_REG_62325_ADDR,  \
+		VIDC_REG_62325_RMSK)
+#define VIDC_REG_62325_INM(m)            \
+	in_dword_masked(VIDC_REG_62325_ADDR,  m)
+#define VIDC_REG_62325_OUT(v)            \
+	out_dword(VIDC_REG_62325_ADDR, v)
+#define VIDC_REG_62325_OUTM(m, v)         \
 do { \
-	out_dword_masked_ns(VIDC_REG_826219_ADDR, m, v, \
-			VIDC_REG_826219_IN); \
+	out_dword_masked_ns(VIDC_REG_62325_ADDR, m, v, \
+			VIDC_REG_62325_IN); \
 } while (0)
-#define VIDC_REG_826219_COMMAND_TYPE_BMSK        0xf
-#define VIDC_REG_826219_COMMAND_TYPE_SHFT          0
+#define VIDC_REG_62325_COMMAND_TYPE_BMSK        0xf
+#define VIDC_REG_62325_COMMAND_TYPE_SHFT          0
 
-#define VIDC_REG_767703_ADDR  \
+#define VIDC_REG_101184_ADDR  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000d04)
-#define VIDC_REG_767703_PHYS  \
+#define VIDC_REG_101184_PHYS  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d04)
-#define VIDC_REG_767703_RMSK                       0xffffffff
-#define VIDC_REG_767703_SHFT                                0
-#define VIDC_REG_767703_OUT(v)                     \
-	out_dword(VIDC_REG_767703_ADDR, v)
-#define VIDC_REG_767703_OUTM(m, v)                  \
-	out_dword_masked(VIDC_REG_767703_ADDR, m, v, \
-			VID_C_REG_767703_SHADOW)
-#define VIDC_REG_767703_ALLOCATED_DB_BUF_SIZE_BMSK 0xffffffff
-#define VIDC_REG_767703_ALLOCATED_DB_BUF_SIZE_SHFT          0
+#define VIDC_REG_101184_RMSK                0xffffffff
+#define VIDC_REG_101184_SHFT                0
+#define VIDC_REG_101184_OUT(v)                     \
+	out_dword(VIDC_REG_101184_ADDR, v)
+#define VIDC_REG_101184_OUTM(m, v)                  \
+	out_dword_masked(VIDC_REG_101184_ADDR, m, v, \
+			VID_C_REG_101184_SHADOW)
+#define VIDC_REG_101184_ALLOCATED_DB_BUF_SIZE_BMSK \
+		0xffffffff
+#define VIDC_REG_101184_ALLOCATED_DB_BUF_SIZE_SHFT \
+		0
 
-#define VIDC_REG_703273_ADDR  \
+#define VIDC_REG_490443_ADDR  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000d08)
-#define VIDC_REG_703273_PHYS  \
+#define VIDC_REG_490443_PHYS  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d08)
-#define VIDC_REG_703273_RMSK                       \
+#define VIDC_REG_490443_RMSK                       \
 	0xffffffff
 #define \
 	\
-VIDC_REG_703273_SHFT                                0
-#define VIDC_REG_703273_OUT(v)                     \
-	out_dword(VIDC_REG_703273_ADDR, v)
-#define VIDC_REG_703273_OUTM(m, v)                  \
-	out_dword_masked(VIDC_REG_703273_ADDR, m, v, \
-			VID_C_REG_703273_SHADOW)
-#define VIDC_REG_703273_ALLOCATED_COMV_BUF_SIZE_BMSK \
+VIDC_REG_490443_SHFT                                0
+#define VIDC_REG_490443_OUT(v)                     \
+	out_dword(VIDC_REG_490443_ADDR, v)
+#define VIDC_REG_490443_OUTM(m, v)                  \
+	out_dword_masked(VIDC_REG_490443_ADDR, m, v, \
+			VID_C_REG_490443_SHADOW)
+#define VIDC_REG_490443_ALLOCATED_COMV_BUF_SIZE_BMSK \
 	0xffffffff
 #define \
 	\
-VIDC_REG_703273_ALLOCATED_COMV_BUF_SIZE_SHFT          0
+VIDC_REG_490443_ALLOCATED_COMV_BUF_SIZE_SHFT          0
 
-#define VIDC_REG_571213_ADDR                 \
+#define VIDC_REG_625444_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000d14)
-#define VIDC_REG_571213_PHYS                 \
+#define VIDC_REG_625444_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d14)
-#define VIDC_REG_571213_RMSK                 0xffffffff
-#define VIDC_REG_571213_SHFT                          0
-#define VIDC_REG_571213_IN                   \
-	in_dword_masked(VIDC_REG_571213_ADDR,  \
-			VIDC_REG_571213_RMSK)
-#define VIDC_REG_571213_INM(m)               \
-	in_dword_masked(VIDC_REG_571213_ADDR,  m)
-#define VIDC_REG_571213_OUT(v)               \
-	out_dword(VIDC_REG_571213_ADDR, v)
-#define VIDC_REG_571213_OUTM(m, v)            \
+#define VIDC_REG_625444_RMSK                 0xffffffff
+#define VIDC_REG_625444_SHFT                          0
+#define VIDC_REG_625444_IN                   \
+	in_dword_masked(VIDC_REG_625444_ADDR,  \
+			VIDC_REG_625444_RMSK)
+#define VIDC_REG_625444_INM(m)               \
+	in_dword_masked(VIDC_REG_625444_ADDR,  m)
+#define VIDC_REG_625444_OUT(v)               \
+	out_dword(VIDC_REG_625444_ADDR, v)
+#define VIDC_REG_625444_OUTM(m, v)            \
 do { \
-	out_dword_masked_ns(VIDC_REG_571213_ADDR, m, v, \
-			VIDC_REG_571213_IN); \
+	out_dword_masked_ns(VIDC_REG_625444_ADDR, m, v, \
+			VIDC_REG_625444_IN); \
 } while (0)
-#define VIDC_REG_571213_FRAME_RATE_BMSK      0xffffffff
-#define VIDC_REG_571213_FRAME_RATE_SHFT               0
+#define VIDC_REG_625444_FRAME_RATE_BMSK      0xffffffff
+#define VIDC_REG_625444_FRAME_RATE_SHFT               0
 
-#define VIDC_REG_688165_ADDR                    \
+#define VIDC_REG_64895_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e00)
-#define VIDC_REG_688165_PHYS                    \
+#define VIDC_REG_64895_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e00)
-#define VIDC_REG_688165_RMSK                    0xffffffff
-#define VIDC_REG_688165_SHFT                             0
-#define VIDC_REG_688165_OUT(v)                  \
-	out_dword(VIDC_REG_688165_ADDR, v)
-#define VIDC_REG_688165_OUTM(m, v)               \
-	out_dword_masked(VIDC_REG_688165_ADDR, m, v, \
-			VID_C_REG_688165_SHADOW)
-#define VIDC_REG_688165_VOP_TIMING_ENABLE_BMSK  0x80000000
-#define VIDC_REG_688165_VOP_TIMING_ENABLE_SHFT        0x1f
-#define VIDC_REG_688165_VOP_TIME_RESOLUTION_BMSK 0x7fff0000
-#define VIDC_REG_688165_VOP_TIME_RESOLUTION_SHFT       0x10
-#define VIDC_REG_688165_FRAME_DELTA_BMSK            0xffff
-#define VIDC_REG_688165_FRAME_DELTA_SHFT                 0
+#define VIDC_REG_64895_RMSK                    0xffffffff
+#define VIDC_REG_64895_SHFT                             0
+#define VIDC_REG_64895_OUT(v)                  \
+	out_dword(VIDC_REG_64895_ADDR, v)
+#define VIDC_REG_64895_OUTM(m, v)               \
+	out_dword_masked(VIDC_REG_64895_ADDR, m, v, \
+			VID_C_REG_64895_SHADOW)
+#define VIDC_REG_64895_VOP_TIMING_ENABLE_BMSK  0x80000000
+#define VIDC_REG_64895_VOP_TIMING_ENABLE_SHFT        0x1f
+#define VIDC_REG_64895_VOP_TIME_RESOLUTION_BMSK 0x7fff0000
+#define VIDC_REG_64895_VOP_TIME_RESOLUTION_SHFT       0x10
+#define VIDC_REG_64895_FRAME_DELTA_BMSK            0xffff
+#define VIDC_REG_64895_FRAME_DELTA_SHFT                 0
 
-#define VIDC_REG_684964_ADDR \
+#define VIDC_REG_965480_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000e04)
-#define VIDC_REG_684964_PHYS \
+#define VIDC_REG_965480_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e04)
-#define VIDC_REG_684964_RMSK 0x7f
-#define VIDC_REG_684964_SHFT 0
-#define VIDC_REG_684964_OUT(v) \
-		out_dword(VIDC_REG_684964_ADDR, v)
-#define VIDC_REG_684964_OUTM(m, v) \
-		out_dword_masked(VIDC_REG_684964_ADDR, m, v, \
-		VID_C_REG_684964_SHADOW)
-#define VIDC_REG_684964_OUTPUT_ORDER_SETTING_BMSK 0x1
-#define VIDC_REG_684964_OUTPUT_ORDER_SETTING_SHFT 0
+#define VIDC_REG_965480_RMSK 0x7f
+#define VIDC_REG_965480_SHFT 0
+#define VIDC_REG_965480_OUT(v) \
+		out_dword(VIDC_REG_965480_ADDR, v)
+#define VIDC_REG_965480_OUTM(m, v) \
+		out_dword_masked(VIDC_REG_965480_ADDR, m, \
+		v, VID_C_REG_965480_SHADOW)
+#define VIDC_REG_965480_OUTPUT_ORDER_SETTING_BMSK 0x1
+#define VIDC_REG_965480_OUTPUT_ORDER_SETTING_SHFT 0
 
 
-#define VIDC_REG_842480_ADDR              \
+#define VIDC_REG_804959_ADDR              \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e08)
-#define VIDC_REG_842480_PHYS              \
+#define VIDC_REG_804959_PHYS              \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e08)
-#define VIDC_REG_842480_RMSK                     0x7
-#define VIDC_REG_842480_SHFT                       0
-#define VIDC_REG_842480_OUT(v)            \
-	out_dword(VIDC_REG_842480_ADDR, v)
-#define VIDC_REG_842480_OUTM(m, v)         \
-	out_dword_masked(VIDC_REG_842480_ADDR, m, v, \
-			VID_C_REG_842480_SHADOW)
-#define VIDC_REG_842480_RC_BIT_RATE_CHANGE_BMSK        0x4
-#define VIDC_REG_842480_RC_BIT_RATE_CHANGE_SHFT        0x2
-#define VIDC_REG_842480_RC_FRAME_RATE_CHANGE_BMSK        0x2
-#define VIDC_REG_842480_RC_FRAME_RATE_CHANGE_SHFT        0x1
-#define VIDC_REG_842480_I_PERIOD_CHANGE_BMSK        0x1
-#define VIDC_REG_842480_I_PERIOD_CHANGE_SHFT          0
+#define VIDC_REG_804959_RMSK                     0x7
+#define VIDC_REG_804959_SHFT                       0
+#define VIDC_REG_804959_OUT(v)            \
+	out_dword(VIDC_REG_804959_ADDR, v)
+#define VIDC_REG_804959_OUTM(m, v)         \
+	out_dword_masked(VIDC_REG_804959_ADDR, m, v, \
+			VID_C_REG_804959_SHADOW)
+#define VIDC_REG_804959_RC_BIT_RATE_CHANGE_BMSK        0x4
+#define VIDC_REG_804959_RC_BIT_RATE_CHANGE_SHFT        0x2
+#define VIDC_REG_804959_RC_FRAME_RATE_CHANGE_BMSK        0x2
+#define VIDC_REG_804959_RC_FRAME_RATE_CHANGE_SHFT        0x1
+#define VIDC_REG_804959_I_PERIOD_CHANGE_BMSK        0x1
+#define VIDC_REG_804959_I_PERIOD_CHANGE_SHFT          0
 
-#define VIDC_REG_221996_ADDR                   \
+#define VIDC_REG_257463_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e10)
-#define VIDC_REG_221996_PHYS                   \
+#define VIDC_REG_257463_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e10)
-#define VIDC_REG_221996_RMSK                   0xffffffff
-#define VIDC_REG_221996_SHFT                            0
-#define VIDC_REG_221996_IN                     \
-	in_dword_masked(VIDC_REG_221996_ADDR,  \
-			VIDC_REG_221996_RMSK)
-#define VIDC_REG_221996_INM(m)                 \
-	in_dword_masked(VIDC_REG_221996_ADDR,  m)
-#define VIDC_REG_221996_MIN_NUM_DPB_BMSK       0xffffffff
-#define VIDC_REG_221996_MIN_NUM_DPB_SHFT                0
+#define VIDC_REG_257463_RMSK                   0xffffffff
+#define VIDC_REG_257463_SHFT                            0
+#define VIDC_REG_257463_IN                     \
+	in_dword_masked(VIDC_REG_257463_ADDR,  \
+			VIDC_REG_257463_RMSK)
+#define VIDC_REG_257463_INM(m)                 \
+	in_dword_masked(VIDC_REG_257463_ADDR,  m)
+#define VIDC_REG_257463_MIN_NUM_DPB_BMSK       0xffffffff
+#define VIDC_REG_257463_MIN_NUM_DPB_SHFT                0
 
-#define VIDC_REG_830933_ADDR                       \
+#define VIDC_REG_883500_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e14)
-#define VIDC_REG_830933_PHYS                       \
+#define VIDC_REG_883500_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e14)
-#define VIDC_REG_830933_RMSK                       0xffffffff
-#define VIDC_REG_830933_SHFT                                0
-#define VIDC_REG_830933_OUT(v)                     \
-	out_dword(VIDC_REG_830933_ADDR, v)
-#define VIDC_REG_830933_OUTM(m, v)                  \
-	out_dword_masked(VIDC_REG_830933_ADDR, m, v, \
-			VID_C_REG_830933_SHADOW)
-#define VIDC_REG_830933_NUM_DPB_BMSK               0xffffffff
-#define VIDC_REG_830933_NUM_DPB_SHFT                        0
+#define VIDC_REG_883500_RMSK                       0xffffffff
+#define VIDC_REG_883500_SHFT                                0
+#define VIDC_REG_883500_OUT(v)                     \
+	out_dword(VIDC_REG_883500_ADDR, v)
+#define VIDC_REG_883500_OUTM(m, v)                  \
+	out_dword_masked(VIDC_REG_883500_ADDR, m, v, \
+			VID_C_REG_883500_SHADOW)
+#define VIDC_REG_883500_NUM_DPB_BMSK               0xffffffff
+#define VIDC_REG_883500_NUM_DPB_SHFT                        0
 
-#define VIDC_REG_396763_ADDR(n)               \
+#define VIDC_REG_615716_ADDR(n)               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e18 + 4 * (n))
-#define VIDC_REG_396763_PHYS(n)               \
+#define VIDC_REG_615716_PHYS(n)               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e18 + 4 * (n))
-#define VIDC_REG_396763_RMSK                  0xffffffff
-#define VIDC_REG_396763_SHFT                           0
-#define VIDC_REG_396763_OUTI(n, v) \
-	out_dword(VIDC_REG_396763_ADDR(n), v)
-#define VIDC_REG_396763_OUTMI(n, mask, v) \
-	out_dword_masked(VIDC_REG_396763_ADDR(n), mask, v, \
-			VID_C_REG_396763_SHADOW[n])
-#define VIDC_REG_396763_DEC_DPB_BUF_BMSK      0xffffffff
-#define VIDC_REG_396763_DEC_DPB_BUF_SHFT               0
+#define VIDC_REG_615716_RMSK                  0xffffffff
+#define VIDC_REG_615716_SHFT                           0
+#define VIDC_REG_615716_OUTI(n, v) \
+	out_dword(VIDC_REG_615716_ADDR(n), v)
+#define VIDC_REG_615716_OUTMI(n, mask, v) \
+	out_dword_masked(VIDC_REG_615716_ADDR(n), mask, v, \
+			VID_C_REG_615716_SHADOW[n])
+#define VIDC_REG_615716_DEC_DPB_BUF_BMSK      0xffffffff
+#define VIDC_REG_615716_DEC_DPB_BUF_SHFT               0
 
-#define VIDC_REG_492691_ADDR                \
+#define VIDC_REG_603032_ADDR                \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e98)
-#define VIDC_REG_492691_PHYS                \
+#define VIDC_REG_603032_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e98)
-#define VIDC_REG_492691_RMSK                0xffffffff
-#define VIDC_REG_492691_SHFT                         0
-#define VIDC_REG_492691_OUT(v)              \
-	out_dword(VIDC_REG_492691_ADDR, v)
-#define VIDC_REG_492691_OUTM(m, v)           \
-	out_dword_masked(VIDC_REG_492691_ADDR, m, v, \
-			VID_C_REG_492691_SHADOW)
-#define VIDC_REG_492691_RELEASE_BUFFER_BMSK 0xffffffff
-#define VIDC_REG_492691_RELEASE_BUFFER_SHFT          0
+#define VIDC_REG_603032_RMSK                0xffffffff
+#define VIDC_REG_603032_SHFT                         0
+#define VIDC_REG_603032_OUT(v)              \
+	out_dword(VIDC_REG_603032_ADDR, v)
+#define VIDC_REG_603032_OUTM(m, v)           \
+	out_dword_masked(VIDC_REG_603032_ADDR, m, v, \
+			VID_C_REG_603032_SHADOW)
+#define VIDC_REG_603032_RELEASE_BUFFER_BMSK 0xffffffff
+#define VIDC_REG_603032_RELEASE_BUFFER_SHFT          0
 
-#define VIDC_REG_71403_ADDR                  \
+#define VIDC_REG_300310_ADDR                  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000e9c)
-#define VIDC_REG_71403_PHYS                  \
+#define VIDC_REG_300310_PHYS                  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000e9c)
-#define VIDC_REG_71403_RMSK                  0xffffffff
-#define VIDC_REG_71403_SHFT                           0
-#define VIDC_REG_71403_IN                    \
-	in_dword_masked(VIDC_REG_71403_ADDR,  \
-			VIDC_REG_71403_RMSK)
-#define VIDC_REG_71403_INM(m)                \
-	in_dword_masked(VIDC_REG_71403_ADDR,  m)
-#define VIDC_REG_71403_ERROR_STATUS_BMSK     0xffffffff
-#define VIDC_REG_71403_ERROR_STATUS_SHFT              0
+#define VIDC_REG_300310_RMSK                  0xffffffff
+#define VIDC_REG_300310_SHFT                           0
+#define VIDC_REG_300310_IN                    \
+	in_dword_masked(VIDC_REG_300310_ADDR,  \
+			VIDC_REG_300310_RMSK)
+#define VIDC_REG_300310_INM(m)                \
+	in_dword_masked(VIDC_REG_300310_ADDR,  m)
+#define VIDC_REG_300310_ERROR_STATUS_BMSK     0xffffffff
+#define VIDC_REG_300310_ERROR_STATUS_SHFT              0
 
-#define VIDC_REG_586901_ADDR        \
+#define VIDC_REG_792026_ADDR        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ea0)
-#define VIDC_REG_586901_PHYS        \
+#define VIDC_REG_792026_PHYS        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ea0)
-#define VIDC_REG_586901_RMSK        0xffffffff
-#define VIDC_REG_586901_SHFT                 0
-#define VIDC_REG_586901_OUT(v)      \
-	out_dword(VIDC_REG_586901_ADDR, v)
-#define VIDC_REG_586901_OUTM(m, v)   \
-	out_dword_masked(VIDC_REG_586901_ADDR, m, v, \
-			VID_C_REG_586901_SHADOW)
-#define VIDC_REG_586901_UPPER_UNALIGNED_BACKUP_BMSK \
+#define VIDC_REG_792026_RMSK        0xffffffff
+#define VIDC_REG_792026_SHFT                 0
+#define VIDC_REG_792026_OUT(v)      \
+	out_dword(VIDC_REG_792026_ADDR, v)
+#define VIDC_REG_792026_OUTM(m, v)   \
+	out_dword_masked(VIDC_REG_792026_ADDR, m, v, \
+			VID_C_REG_792026_SHADOW)
+#define VIDC_REG_792026_UPPER_UNALIGNED_BACKUP_BMSK \
 	0xffffffff
 #define \
 	\
-VIDC_REG_586901_UPPER_UNALIGNED_BACKUP_SHFT          \
+VIDC_REG_792026_UPPER_UNALIGNED_BACKUP_SHFT          \
 0
 
-#define VIDC_REG_37680_ADDR        \
+#define VIDC_REG_844152_ADDR        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ea4)
-#define VIDC_REG_37680_PHYS        \
+#define VIDC_REG_844152_PHYS        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ea4)
-#define VIDC_REG_37680_RMSK        0xffffffff
-#define VIDC_REG_37680_SHFT                 0
-#define VIDC_REG_37680_OUT(v)      \
-	out_dword(VIDC_REG_37680_ADDR, v)
-#define VIDC_REG_37680_OUTM(m, v)   \
-	out_dword_masked(VIDC_REG_37680_ADDR, m, v, \
-			VID_C_REG_37680_SHADOW)
-#define VIDC_REG_37680_LOWER_UNALIGNED_BACKUP_BMSK \
+#define VIDC_REG_844152_RMSK        0xffffffff
+#define VIDC_REG_844152_SHFT                 0
+#define VIDC_REG_844152_OUT(v)      \
+	out_dword(VIDC_REG_844152_ADDR, v)
+#define VIDC_REG_844152_OUTM(m, v)   \
+	out_dword_masked(VIDC_REG_844152_ADDR, m, v, \
+			VID_C_REG_844152_SHADOW)
+#define VIDC_REG_844152_LOWER_UNALIGNED_BACKUP_BMSK \
 	0xffffffff
 #define \
 	\
-VIDC_REG_37680_LOWER_UNALIGNED_BACKUP_SHFT          0
+VIDC_REG_844152_LOWER_UNALIGNED_BACKUP_SHFT          0
 
-#define VIDC_REG_30219_ADDR            \
+#define VIDC_REG_370409_ADDR            \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ea8)
-#define VIDC_REG_30219_PHYS                \
+#define VIDC_REG_370409_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ea8)
-#define VIDC_REG_30219_RMSK                0xffffffff
-#define VIDC_REG_30219_SHFT                         0
-#define VIDC_REG_30219_IN                  \
-	in_dword_masked(VIDC_REG_30219_ADDR,  \
-			VIDC_REG_30219_RMSK)
-#define VIDC_REG_30219_INM(m)              \
-	in_dword_masked(VIDC_REG_30219_ADDR,  m)
-#define VIDC_REG_30219_GET_FRAME_TAG_TOP_BMSK 0xffffffff
-#define VIDC_REG_30219_GET_FRAME_TAG_TOP_SHFT          0
+#define VIDC_REG_370409_RMSK                0xffffffff
+#define VIDC_REG_370409_SHFT                         0
+#define VIDC_REG_370409_IN                  \
+	in_dword_masked(VIDC_REG_370409_ADDR,  \
+			VIDC_REG_370409_RMSK)
+#define VIDC_REG_370409_INM(m)              \
+	in_dword_masked(VIDC_REG_370409_ADDR,  m)
+#define VIDC_REG_370409_GET_FRAME_TAG_TOP_BMSK 0xffffffff
+#define VIDC_REG_370409_GET_FRAME_TAG_TOP_SHFT          0
 
-#define VIDC_REG_797110_ADDR               \
+#define VIDC_REG_147682_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000eac)
-#define VIDC_REG_797110_PHYS               \
+#define VIDC_REG_147682_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000eac)
-#define VIDC_REG_797110_RMSK                        0x1
-#define VIDC_REG_797110_SHFT                        0
-#define VIDC_REG_797110_OUT(v)             \
-	out_dword(VIDC_REG_797110_ADDR, v)
-#define VIDC_REG_797110_OUTM(m, v)          \
-	out_dword_masked(VIDC_REG_797110_ADDR, m, v, \
-			VID_C_REG_797110_SHADOW)
-#define VIDC_REG_797110_PUT_EXTRADATA_BMSK         0x1
-#define VIDC_REG_797110_PUT_EXTRADATA_SHFT            0
+#define VIDC_REG_147682_RMSK                        0x1
+#define VIDC_REG_147682_SHFT                        0
+#define VIDC_REG_147682_OUT(v)             \
+	out_dword(VIDC_REG_147682_ADDR, v)
+#define VIDC_REG_147682_OUTM(m, v)          \
+	out_dword_masked(VIDC_REG_147682_ADDR, m, v, \
+			VID_C_REG_147682_SHADOW)
+#define VIDC_REG_147682_PUT_EXTRADATA_BMSK         0x1
+#define VIDC_REG_147682_PUT_EXTRADATA_SHFT            0
 
-#define VIDC_REG_928824_ADDR                    \
+#define VIDC_REG_407718_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000eb0)
-#define VIDC_REG_928824_PHYS                    \
+#define VIDC_REG_407718_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000eb0)
-#define VIDC_REG_928824_RMSK                    0xffffffff
-#define VIDC_REG_928824_SHFT                             0
-#define VIDC_REG_928824_OUT(v)                  \
-	out_dword(VIDC_REG_928824_ADDR, v)
-#define VIDC_REG_928824_OUTM(m, v)               \
-	out_dword_masked(VIDC_REG_928824_ADDR, m, v, \
-			VID_C_REG_928824_SHADOW)
-#define VIDC_REG_928824_HEC_PERIOD_BMSK         \
+#define VIDC_REG_407718_RMSK                    0xffffffff
+#define VIDC_REG_407718_SHFT                             0
+#define VIDC_REG_407718_OUT(v)                  \
+	out_dword(VIDC_REG_407718_ADDR, v)
+#define VIDC_REG_407718_OUTM(m, v)               \
+	out_dword_masked(VIDC_REG_407718_ADDR, m, v, \
+			VID_C_REG_407718_SHADOW)
+#define VIDC_REG_407718_HEC_PERIOD_BMSK         \
 	0xffffffff
-#define VIDC_REG_928824_HEC_PERIOD_SHFT                  0
+#define VIDC_REG_407718_HEC_PERIOD_SHFT                  0
 
-#define VIDC_REG_457489_ADDR \
+#define VIDC_REG_697961_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000eb4)
-#define VIDC_REG_457489_PHYS \
+#define VIDC_REG_697961_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000eb4)
-#define VIDC_REG_457489_RMSK 0x3
-#define VIDC_REG_457489_SHFT 0
-#define VIDC_REG_457489_IN \
-		in_dword_masked(VIDC_REG_457489_ADDR,\
-		VIDC_REG_457489_RMSK)
-#define VIDC_REG_457489_INM(m) \
-		in_dword_masked(VIDC_REG_457489_ADDR, m)
-#define VIDC_REG_457489_FRAME_TYPE_BMSK 0x3
-#define VIDC_REG_457489_FRAME_TYPE_SHFT 0
+#define VIDC_REG_697961_RMSK 0x3
+#define VIDC_REG_697961_SHFT 0
+#define VIDC_REG_697961_IN \
+		in_dword_masked(VIDC_REG_697961_ADDR, \
+		VIDC_REG_697961_RMSK)
+#define VIDC_REG_697961_INM(m) \
+		in_dword_masked(VIDC_REG_697961_ADDR, m)
+#define VIDC_REG_697961_FRAME_TYPE_BMSK 0x3
+#define VIDC_REG_697961_FRAME_TYPE_SHFT 0
 
 
-#define VIDC_REG_389650_ADDR               \
+#define VIDC_REG_613254_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000eb8)
-#define VIDC_REG_389650_PHYS               \
+#define VIDC_REG_613254_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000eb8)
-#define VIDC_REG_389650_RMSK                      0x1
-#define VIDC_REG_389650_SHFT                        0
-#define VIDC_REG_389650_IN                 \
-	in_dword_masked(VIDC_REG_389650_ADDR,  \
-			VIDC_REG_389650_RMSK)
-#define VIDC_REG_389650_INM(m)             \
-	in_dword_masked(VIDC_REG_389650_ADDR,  m)
-#define VIDC_REG_389650_METADATA_STATUS_BMSK        0x1
-#define VIDC_REG_389650_METADATA_STATUS_SHFT          0
-#define VIDC_REG_974642_ADDR                    \
+#define VIDC_REG_613254_RMSK                      0x1
+#define VIDC_REG_613254_SHFT                        0
+#define VIDC_REG_613254_IN                 \
+	in_dword_masked(VIDC_REG_613254_ADDR,  \
+			VIDC_REG_613254_RMSK)
+#define VIDC_REG_613254_INM(m)             \
+	in_dword_masked(VIDC_REG_613254_ADDR,  m)
+#define VIDC_REG_613254_METADATA_STATUS_BMSK        0x1
+#define VIDC_REG_613254_METADATA_STATUS_SHFT          0
+#define VIDC_REG_441270_ADDR                    \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ebc)
-#define VIDC_REG_974642_PHYS                    \
+#define VIDC_REG_441270_PHYS                    \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ebc)
-#define VIDC_REG_974642_RMSK                           0x7
-#define VIDC_REG_974642_SHFT                             0
-#define VIDC_REG_974642_IN                      \
-	in_dword_masked(VIDC_REG_974642_ADDR,  \
-			VIDC_REG_974642_RMSK)
-#define VIDC_REG_974642_INM(m)                  \
-	in_dword_masked(VIDC_REG_974642_ADDR,  m)
-#define VIDC_REG_974642_FRAME_TYPE_BMSK                0x7
-#define VIDC_REG_974642_FRAME_TYPE_SHFT                  0
+#define VIDC_REG_441270_RMSK                           0xf
+#define VIDC_REG_441270_SHFT                             0
+#define VIDC_REG_441270_IN                      \
+	in_dword_masked(VIDC_REG_441270_ADDR,  \
+			VIDC_REG_441270_RMSK)
+#define VIDC_REG_441270_INM(m)                  \
+	in_dword_masked(VIDC_REG_441270_ADDR,  m)
+#define VIDC_REG_441270_DATA_PARTITIONED_BMSK 0x8
+#define VIDC_REG_441270_DATA_PARTITIONED_SHFT 0x3
 
-#define VIDC_REG_595068_ADDR        \
+#define VIDC_REG_441270_FRAME_TYPE_BMSK                0x7
+#define VIDC_REG_441270_FRAME_TYPE_SHFT                  0
+
+#define VIDC_REG_724381_ADDR        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ec0)
-#define VIDC_REG_595068_PHYS        \
+#define VIDC_REG_724381_PHYS        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ec0)
-#define VIDC_REG_595068_RMSK               0x3
-#define VIDC_REG_595068_SHFT                 0
-#define VIDC_REG_595068_IN          \
-	in_dword_masked(VIDC_REG_595068_ADDR,  \
-			VIDC_REG_595068_RMSK)
-#define VIDC_REG_595068_INM(m)      \
-	in_dword_masked(VIDC_REG_595068_ADDR,  m)
-#define VIDC_REG_595068_OPERATION_FAILED_BMSK        0x2
-#define VIDC_REG_595068_OPERATION_FAILED_SHFT        0x1
-#define VIDC_REG_595068_RESOLUTION_CHANGE_BMSK        0x1
-#define VIDC_REG_595068_RESOLUTION_CHANGE_SHFT          0
+#define VIDC_REG_724381_RMSK               0x3
+#define VIDC_REG_724381_SHFT                 0
+#define VIDC_REG_724381_IN          \
+	in_dword_masked(VIDC_REG_724381_ADDR,  \
+			VIDC_REG_724381_RMSK)
+#define VIDC_REG_724381_INM(m)      \
+	in_dword_masked(VIDC_REG_724381_ADDR,  m)
+#define VIDC_REG_724381_OPERATION_FAILED_BMSK        0x2
+#define VIDC_REG_724381_OPERATION_FAILED_SHFT        0x1
+#define VIDC_REG_724381_RESOLUTION_CHANGE_BMSK        0x1
+#define VIDC_REG_724381_RESOLUTION_CHANGE_SHFT          0
 
-#define VIDC_REG_4084_ADDR               \
+#define VIDC_REG_854681_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ec4)
-#define VIDC_REG_4084_PHYS               \
+#define VIDC_REG_854681_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ec4)
-#define VIDC_REG_4084_RMSK                     0x7f
-#define VIDC_REG_4084_SHFT                        0
-#define VIDC_REG_4084_OUT(v)             \
-	out_dword(VIDC_REG_4084_ADDR, v)
-#define VIDC_REG_4084_OUTM(m, v)          \
-	out_dword_masked(VIDC_REG_4084_ADDR, m, v, \
-			VID_C_REG_4084_SHADOW)
-#define VIDC_REG_4084_EXTRADATA_ENABLE_BMSK       0x40
-#define VIDC_REG_4084_EXTRADATA_ENABLE_SHFT        0x6
-#define VIDC_REG_4084_ENC_SLICE_SIZE_ENABLE_BMSK       0x20
-#define VIDC_REG_4084_ENC_SLICE_SIZE_ENABLE_SHFT        0x5
-#define VIDC_REG_4084_VUI_ENABLE_BMSK          0x10
-#define VIDC_REG_4084_VUI_ENABLE_SHFT           0x4
-#define VIDC_REG_4084_SEI_NAL_ENABLE_BMSK        0x8
-#define VIDC_REG_4084_SEI_NAL_ENABLE_SHFT        0x3
-#define VIDC_REG_4084_VC1_PARAM_ENABLE_BMSK        0x4
-#define VIDC_REG_4084_VC1_PARAM_ENABLE_SHFT        0x2
-#define VIDC_REG_4084_CONCEALED_MB_ENABLE_BMSK        0x2
-#define VIDC_REG_4084_CONCEALED_MB_ENABLE_SHFT        0x1
-#define VIDC_REG_4084_QP_ENABLE_BMSK            0x1
-#define VIDC_REG_4084_QP_ENABLE_SHFT              0
-#define VIDC_REG_623236_ADDR               \
+#define VIDC_REG_854681_RMSK                     0x7f
+#define VIDC_REG_854681_SHFT                        0
+#define VIDC_REG_854681_OUT(v)             \
+	out_dword(VIDC_REG_854681_ADDR, v)
+#define VIDC_REG_854681_OUTM(m, v)          \
+	out_dword_masked(VIDC_REG_854681_ADDR, m, v, \
+			VID_C_REG_854681_SHADOW)
+#define VIDC_REG_854681_EXTRADATA_ENABLE_BMSK       0x40
+#define VIDC_REG_854681_EXTRADATA_ENABLE_SHFT        0x6
+#define VIDC_REG_854681_ENC_SLICE_SIZE_ENABLE_BMSK       0x20
+#define VIDC_REG_854681_ENC_SLICE_SIZE_ENABLE_SHFT        0x5
+#define VIDC_REG_854681_VUI_ENABLE_BMSK          0x10
+#define VIDC_REG_854681_VUI_ENABLE_SHFT           0x4
+#define VIDC_REG_854681_SEI_NAL_ENABLE_BMSK        0x8
+#define VIDC_REG_854681_SEI_NAL_ENABLE_SHFT        0x3
+#define VIDC_REG_854681_VC1_PARAM_ENABLE_BMSK        0x4
+#define VIDC_REG_854681_VC1_PARAM_ENABLE_SHFT        0x2
+#define VIDC_REG_854681_CONCEALED_MB_ENABLE_BMSK        0x2
+#define VIDC_REG_854681_CONCEALED_MB_ENABLE_SHFT        0x1
+#define VIDC_REG_854681_QP_ENABLE_BMSK            0x1
+#define VIDC_REG_854681_QP_ENABLE_SHFT              0
+#define VIDC_REG_128234_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ec8)
-#define VIDC_REG_623236_PHYS               \
+#define VIDC_REG_128234_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ec8)
-#define VIDC_REG_623236_RMSK               0xffff000f
-#define VIDC_REG_623236_SHFT                        0
-#define VIDC_REG_623236_OUT(v)             \
-	out_dword(VIDC_REG_623236_ADDR, v)
-#define VIDC_REG_623236_OUTM(m, v)          \
-	out_dword_masked(VIDC_REG_623236_ADDR, m, v, \
-			VID_C_REG_623236_SHADOW)
-#define VIDC_REG_623236_VBV_BUFFER_SIZE_BMSK 0xffff0000
-#define VIDC_REG_623236_VBV_BUFFER_SIZE_SHFT       0x10
-#define VIDC_REG_623236_FRAME_SKIP_ENABLE_BMSK        0xc
-#define VIDC_REG_623236_FRAME_SKIP_ENABLE_SHFT        0x2
-#define VIDC_REG_623236_HEC_ENABLE_BMSK           0x2
-#define VIDC_REG_623236_HEC_ENABLE_SHFT           0x1
-#define VIDC_REG_623236_INSERT_I_FRAME_BMSK        0x1
-#define VIDC_REG_623236_INSERT_I_FRAME_SHFT          0
+#define VIDC_REG_128234_RMSK               0xffff000f
+#define VIDC_REG_128234_SHFT                        0
+#define VIDC_REG_128234_OUT(v)             \
+	out_dword(VIDC_REG_128234_ADDR, v)
+#define VIDC_REG_128234_OUTM(m, v)          \
+	out_dword_masked(VIDC_REG_128234_ADDR, m, v, \
+			VID_C_REG_128234_SHADOW)
+#define VIDC_REG_128234_VBV_BUFFER_SIZE_BMSK 0xffff0000
+#define VIDC_REG_128234_VBV_BUFFER_SIZE_SHFT       0x10
+#define VIDC_REG_128234_FRAME_SKIP_ENABLE_BMSK        0xc
+#define VIDC_REG_128234_FRAME_SKIP_ENABLE_SHFT        0x2
+#define VIDC_REG_128234_HEC_ENABLE_BMSK           0x2
+#define VIDC_REG_128234_HEC_ENABLE_SHFT           0x1
+#define VIDC_REG_128234_INSERT_I_FRAME_BMSK        0x1
+#define VIDC_REG_128234_INSERT_I_FRAME_SHFT          0
 
-#define VIDC_REG_917177_ADDR        \
+#define VIDC_REG_1137_ADDR        \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ecc)
-#define VIDC_REG_917177_PHYS        \
+#define VIDC_REG_1137_PHYS        \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ecc)
-#define VIDC_REG_917177_RMSK        0xffffffff
-#define VIDC_REG_917177_SHFT                 0
-#define VIDC_REG_917177_IN          \
-	in_dword_masked(VIDC_REG_917177_ADDR,  \
-			VIDC_REG_917177_RMSK)
-#define VIDC_REG_917177_INM(m)      \
-	in_dword_masked(VIDC_REG_917177_ADDR,  m)
-#define VIDC_REG_917177_METADATA_DISPLAY_INDEX_BMSK \
+#define VIDC_REG_1137_RMSK        0xffffffff
+#define VIDC_REG_1137_SHFT                 0
+#define VIDC_REG_1137_IN          \
+	in_dword_masked(VIDC_REG_1137_ADDR,  \
+			VIDC_REG_1137_RMSK)
+#define VIDC_REG_1137_INM(m)      \
+	in_dword_masked(VIDC_REG_1137_ADDR,  m)
+#define VIDC_REG_1137_METADATA_DISPLAY_INDEX_BMSK \
 	0xffffffff
 #define \
 	\
-VIDC_REG_917177_METADATA_DISPLAY_INDEX_SHFT          0
+VIDC_REG_1137_METADATA_DISPLAY_INDEX_SHFT          0
 
-#define VIDC_REG_967981_ADDR       \
+#define VIDC_REG_988552_ADDR       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ed0)
-#define VIDC_REG_967981_PHYS       \
+#define VIDC_REG_988552_PHYS       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ed0)
-#define VIDC_REG_967981_RMSK       0xffffffff
-#define VIDC_REG_967981_SHFT                0
-#define VIDC_REG_967981_OUT(v)     \
-	out_dword(VIDC_REG_967981_ADDR, v)
-#define VIDC_REG_967981_OUTM(m, v)  \
-	out_dword_masked(VIDC_REG_967981_ADDR, m, v, \
-			VID_C_REG_967981_SHADOW)
-#define VIDC_REG_967981_EXT_METADATA_START_ADDR_BMSK \
+#define VIDC_REG_988552_RMSK       0xffffffff
+#define VIDC_REG_988552_SHFT                0
+#define VIDC_REG_988552_OUT(v)     \
+	out_dword(VIDC_REG_988552_ADDR, v)
+#define VIDC_REG_988552_OUTM(m, v)  \
+	out_dword_masked(VIDC_REG_988552_ADDR, m, v, \
+			VID_C_REG_988552_SHADOW)
+#define VIDC_REG_988552_EXT_METADATA_START_ADDR_BMSK \
 	0xffffffff
 #define \
 	\
-VIDC_REG_967981_EXT_METADATA_START_ADDR_SHFT          0
+VIDC_REG_988552_EXT_METADATA_START_ADDR_SHFT          0
 
-#define VIDC_REG_817468_ADDR  \
+#define VIDC_REG_319934_ADDR  \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ed4)
-#define VIDC_REG_817468_PHYS  \
+#define VIDC_REG_319934_PHYS  \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ed4)
-#define VIDC_REG_817468_RMSK                       0xffffffff
-#define VIDC_REG_817468_SHFT                                0
-#define VIDC_REG_817468_OUT(v)                     \
-	out_dword(VIDC_REG_817468_ADDR, v)
-#define VIDC_REG_817468_OUTM(m, v)                  \
-	out_dword_masked(VIDC_REG_817468_ADDR, m, v, \
-			VID_C_REG_817468_SHADOW)
-#define VIDC_REG_817468_ALLOCATED_DPB_SIZE_BMSK               \
+#define VIDC_REG_319934_RMSK                       0xffffffff
+#define VIDC_REG_319934_SHFT                   0
+#define VIDC_REG_319934_OUT(v)                     \
+	out_dword(VIDC_REG_319934_ADDR, v)
+#define VIDC_REG_319934_OUTM(m, v)                  \
+	out_dword_masked(VIDC_REG_319934_ADDR, m, v, \
+			VID_C_REG_319934_SHADOW)
+#define VIDC_REG_319934_ALLOCATED_DPB_SIZE_BMSK               \
 	0xffffffff
 #define \
 	\
-VIDC_REG_817468_ALLOCATED_DPB_SIZE_SHFT                        0
+VIDC_REG_319934_ALLOCATED_DPB_SIZE_SHFT         0
 
-#define VIDC_REG_528414_ADDR                   \
+#define VIDC_REG_679165_ADDR                   \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ed8)
-#define VIDC_REG_528414_PHYS                   \
+#define VIDC_REG_679165_PHYS                   \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ed8)
-#define VIDC_REG_528414_RMSK                   0xffffffff
-#define VIDC_REG_528414_SHFT                            0
-#define VIDC_REG_528414_IN                     \
-	in_dword_masked(VIDC_REG_528414_ADDR,  \
-			VIDC_REG_528414_RMSK)
-#define VIDC_REG_528414_INM(m)                 \
-	in_dword_masked(VIDC_REG_528414_ADDR,  m)
-#define VIDC_REG_528414_PIC_TIME_TOP_BMSK       0xffffffff
-#define VIDC_REG_528414_PIC_TIME_TOP_SHFT                0
+#define VIDC_REG_679165_RMSK                   0xffffffff
+#define VIDC_REG_679165_SHFT                            0
+#define VIDC_REG_679165_IN                     \
+	in_dword_masked(VIDC_REG_679165_ADDR,  \
+			VIDC_REG_679165_RMSK)
+#define VIDC_REG_679165_INM(m)                 \
+	in_dword_masked(VIDC_REG_679165_ADDR,  m)
+#define VIDC_REG_679165_PIC_TIME_TOP_BMSK       0xffffffff
+#define VIDC_REG_679165_PIC_TIME_TOP_SHFT                0
 
-#define VIDC_REG_1642_ADDR                     \
+#define VIDC_REG_374150_ADDR                     \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000edc)
-#define VIDC_REG_1642_PHYS                     \
+#define VIDC_REG_374150_PHYS                     \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000edc)
-#define VIDC_REG_1642_RMSK                     0xffffffff
-#define VIDC_REG_1642_SHFT                              0
-#define VIDC_REG_1642_IN                       \
-	in_dword_masked(VIDC_REG_1642_ADDR,  \
-			VIDC_REG_1642_RMSK)
-#define VIDC_REG_1642_INM(m)                   \
-	in_dword_masked(VIDC_REG_1642_ADDR,  m)
-#define VIDC_REG_1642_PIC_TIME_BOTTOM_BMSK           0xffffffff
-#define VIDC_REG_1642_PIC_TIME_BOTTOM_SHFT                    0
+#define VIDC_REG_374150_RMSK                     0xffffffff
+#define VIDC_REG_374150_SHFT                              0
+#define VIDC_REG_374150_IN                       \
+	in_dword_masked(VIDC_REG_374150_ADDR,  \
+			VIDC_REG_374150_RMSK)
+#define VIDC_REG_374150_INM(m)                   \
+	in_dword_masked(VIDC_REG_374150_ADDR,  m)
+#define VIDC_REG_374150_PIC_TIME_BOTTOM_BMSK           0xffffffff
+#define VIDC_REG_374150_PIC_TIME_BOTTOM_SHFT                    0
 
-#define VIDC_REG_754370_ADDR                 \
+#define VIDC_REG_94750_ADDR                 \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ee0)
-#define VIDC_REG_754370_PHYS                 \
+#define VIDC_REG_94750_PHYS                 \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ee0)
-#define VIDC_REG_754370_RMSK                 0xffffffff
-#define VIDC_REG_754370_SHFT                          0
-#define VIDC_REG_754370_OUT(v)               \
-	out_dword(VIDC_REG_754370_ADDR, v)
-#define VIDC_REG_754370_OUTM(m, v)            \
-	out_dword_masked(VIDC_REG_754370_ADDR, m, v, \
-			VID_C_REG_754370_SHADOW)
-#define VIDC_REG_754370_SET_FRAME_TAG_BMSK   0xffffffff
-#define VIDC_REG_754370_SET_FRAME_TAG_SHFT            0
+#define VIDC_REG_94750_RMSK                 0xffffffff
+#define VIDC_REG_94750_SHFT                          0
+#define VIDC_REG_94750_OUT(v)               \
+	out_dword(VIDC_REG_94750_ADDR, v)
+#define VIDC_REG_94750_OUTM(m, v)            \
+	out_dword_masked(VIDC_REG_94750_ADDR, m, v, \
+			VID_C_REG_94750_SHADOW)
+#define VIDC_REG_94750_SET_FRAME_TAG_BMSK   0xffffffff
+#define VIDC_REG_94750_SET_FRAME_TAG_SHFT            0
 
-#define VIDC_REG_822104_ADDR          \
+#define VIDC_REG_438677_ADDR          \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ee4)
-#define VIDC_REG_822104_PHYS                \
+#define VIDC_REG_438677_PHYS                \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ee4)
-#define VIDC_REG_822104_RMSK                0xffffffff
-#define VIDC_REG_822104_SHFT                         0
-#define VIDC_REG_822104_IN                  \
-	in_dword_masked(VIDC_REG_822104_ADDR,  \
-			VIDC_REG_822104_RMSK)
-#define VIDC_REG_822104_INM(m)              \
-	in_dword_masked(VIDC_REG_822104_ADDR,  m)
-#define VIDC_REG_822104_GET_FRAME_TAG_BOTTOM_BMSK 0xffffffff
-#define VIDC_REG_822104_GET_FRAME_TAG_BOTTOM_SHFT          0
+#define VIDC_REG_438677_RMSK                0xffffffff
+#define VIDC_REG_438677_SHFT                         0
+#define VIDC_REG_438677_IN                  \
+	in_dword_masked(VIDC_REG_438677_ADDR,  \
+			VIDC_REG_438677_RMSK)
+#define VIDC_REG_438677_INM(m)              \
+	in_dword_masked(VIDC_REG_438677_ADDR,  m)
+#define VIDC_REG_438677_GET_FRAME_TAG_BOTTOM_BMSK 0xffffffff
+#define VIDC_REG_438677_GET_FRAME_TAG_BOTTOM_SHFT          0
 
-#define VIDC_REG_934882_ADDR               \
+#define VIDC_REG_76706_ADDR               \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00000ee8)
-#define VIDC_REG_934882_PHYS               \
+#define VIDC_REG_76706_PHYS               \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000ee8)
-#define VIDC_REG_934882_RMSK                      0x1
-#define VIDC_REG_934882_SHFT                        0
-#define VIDC_REG_934882_OUT(v)             \
-	out_dword(VIDC_REG_934882_ADDR, v)
-#define VIDC_REG_934882_OUTM(m, v)          \
-	out_dword_masked(VIDC_REG_934882_ADDR, m, v, \
-			VID_C_REG_934882_SHADOW)
-#define VIDC_REG_934882_DPB_FLUSH_BMSK            0x1
-#define VIDC_REG_934882_DPB_FLUSH_SHFT              0
+#define VIDC_REG_76706_RMSK                      0x1
+#define VIDC_REG_76706_SHFT                        0
+#define VIDC_REG_76706_OUT(v)             \
+	out_dword(VIDC_REG_76706_ADDR, v)
+#define VIDC_REG_76706_OUTM(m, v)          \
+	out_dword_masked(VIDC_REG_76706_ADDR, m, v, \
+			VID_C_REG_76706_SHADOW)
+#define VIDC_REG_76706_DPB_FLUSH_BMSK            0x1
+#define VIDC_REG_76706_DPB_FLUSH_SHFT              0
 
-#define VIDC_REG_645833_ADDR                       \
+#define VIDC_REG_809984_ADDR                       \
 	(VIDC_720P_WRAPPER_REG_BASE      + 0x00001000)
-#define VIDC_REG_645833_PHYS                       \
+#define VIDC_REG_809984_PHYS                       \
 	(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00001000)
-#define VIDC_REG_645833_RMSK                       0xffff0007
-#define VIDC_REG_645833_SHFT                                0
-#define VIDC_REG_645833_IN                         \
-	in_dword_masked(VIDC_REG_645833_ADDR,  VIDC_REG_645833_RMSK)
-#define VIDC_REG_645833_INM(m)                     \
-	in_dword_masked(VIDC_REG_645833_ADDR,  m)
-#define VIDC_REG_645833_720PV_720P_WRAPPER_VERSION_BMSK 0xffff0000
-#define VIDC_REG_645833_720PV_720P_WRAPPER_VERSION_SHFT       0x10
-#define VIDC_REG_645833_TEST_MUX_SEL_BMSK                 0x7
-#define VIDC_REG_645833_TEST_MUX_SEL_SHFT                   0
+#define VIDC_REG_809984_RMSK                       0xffff0007
+#define VIDC_REG_809984_SHFT                                0
+#define VIDC_REG_809984_IN                         \
+	in_dword_masked(VIDC_REG_809984_ADDR,  VIDC_REG_809984_RMSK)
+#define VIDC_REG_809984_INM(m)                     \
+	in_dword_masked(VIDC_REG_809984_ADDR,  m)
+#define VIDC_REG_809984_720PV_720P_WRAPPER_VERSION_BMSK 0xffff0000
+#define VIDC_REG_809984_720PV_720P_WRAPPER_VERSION_SHFT       0x10
+#define VIDC_REG_809984_TEST_MUX_SEL_BMSK                 0x7
+#define VIDC_REG_809984_TEST_MUX_SEL_SHFT                   0
 
 
-#define VIDC_REG_360816_ADDR \
+#define VIDC_REG_699747_ADDR \
        (VIDC_720P_WRAPPER_REG_BASE + 0x00000d0c)
-#define VIDC_REG_360816_PHYS \
+#define VIDC_REG_699747_PHYS \
        (VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d0c)
-#define VIDC_REG_360816_RMSK 0xffffffff
-#define VIDC_REG_360816_SHFT 0
-#define VIDC_REG_360816_OUT(v)                  \
-		out_dword(VIDC_REG_360816_ADDR, v)
+#define VIDC_REG_699747_RMSK 0xffffffff
+#define VIDC_REG_699747_SHFT 0
+#define VIDC_REG_699747_OUT(v)                  \
+		out_dword(VIDC_REG_699747_ADDR, v)
 
-#define VIDC_REG_360816_OUTM(m, v)               \
-		out_dword_masked(VIDC_REG_360816_ADDR, m, v, \
-		VID_C_REG_360816_SHADOW)
-#define VIDC_REG_360816_ALLOCATED_MEM_SIZE_BMSK  0xffff0000
-#define VIDC_REG_360816_ALLOCATED_MEM_SIZE_SHFT      0x10
-#define VIDC_REG_360816_SET_MEMORY_DUMP_TYPE_BMSK     0x6
-#define VIDC_REG_360816_SET_MEMORY_DUMP_TYPE_SHFT     0x1
-#define VIDC_REG_360816_ENABLE_FW_DEBUG_INFO_BMSK     0x1
-#define VIDC_REG_360816_ENABLE_FW_DEBUG_INFO_SHFT     0x0
+#define VIDC_REG_699747_OUTM(m, v)               \
+		out_dword_masked(VIDC_REG_699747_ADDR, m, v, \
+		VID_C_REG_699747_SHADOW)
+#define VIDC_REG_699747_ALLOCATED_MEM_SIZE_BMSK  0xffff0000
+#define VIDC_REG_699747_ALLOCATED_MEM_SIZE_SHFT      0x10
+#define VIDC_REG_699747_SET_MEMORY_DUMP_TYPE_BMSK     0x6
+#define VIDC_REG_699747_SET_MEMORY_DUMP_TYPE_SHFT     0x1
+#define VIDC_REG_699747_ENABLE_FW_DEBUG_INFO_BMSK     0x1
+#define VIDC_REG_699747_ENABLE_FW_DEBUG_INFO_SHFT     0x0
 
-#define VIDC_REG_812777_ADDR \
+#define VIDC_REG_166247_ADDR \
        (VIDC_720P_WRAPPER_REG_BASE + 0x00000d10)
-#define VIDC_REG_812777_PHYS \
+#define VIDC_REG_166247_PHYS \
        (VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d10)
-#define VIDC_REG_812777_RMSK 0xffffffff
-#define VIDC_REG_812777_SHFT 0
-#define VIDC_REG_812777_OUT(v)               \
-		out_dword(VIDC_REG_812777_ADDR, v)
-#define VIDC_REG_812777_OUTM(m, v)            \
-		out_dword_masked(VIDC_REG_812777_ADDR,\
-		m, v, VID_C_REG_812777_SHADOW)
-#define VIDC_REG_812777_DBG_INFO_INPUT1_BMSK 0xffffffff
-#define VIDC_REG_812777_DBG_INFO_INPUT1_SHFT 0
+#define VIDC_REG_166247_RMSK 0xffffffff
+#define VIDC_REG_166247_SHFT 0
+#define VIDC_REG_166247_OUT(v)               \
+		out_dword(VIDC_REG_166247_ADDR, v)
+#define VIDC_REG_166247_OUTM(m, v)            \
+		out_dword_masked(VIDC_REG_166247_ADDR, \
+		m, v, VID_C_REG_166247_SHADOW)
+#define VIDC_REG_166247_DBG_INFO_INPUT1_BMSK 0xffffffff
+#define VIDC_REG_166247_DBG_INFO_INPUT1_SHFT 0
 
-#define VIDC_REG_354189_ADDR \
+#define VIDC_REG_486169_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000d18)
-#define VIDC_REG_354189_PHYS \
+#define VIDC_REG_486169_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d18)
-#define VIDC_REG_354189_RMSK 0xffffffff
-#define VIDC_REG_354189_SHFT 0
-#define VIDC_REG_354189_OUT(v) \
-		out_dword(VIDC_REG_354189_ADDR, v)
-#define VIDC_REG_354189_OUTM(m, v)\
-		out_dword_masked(VIDC_REG_354189_ADDR,\
-		m, v, VID_C_REG_354189_SHADOW)
-#define VIDC_REG_354189_EXTRADATA_ADDR_BMSK   0xffffffff
-#define VIDC_REG_354189_EXTRADATA_ADDR_SHFT            0
+#define VIDC_REG_486169_RMSK 0xffffffff
+#define VIDC_REG_486169_SHFT 0
+#define VIDC_REG_486169_OUT(v) \
+		out_dword(VIDC_REG_486169_ADDR, v)
+#define VIDC_REG_486169_OUTM(m, v)\
+		out_dword_masked(VIDC_REG_486169_ADDR, \
+		m, v, VID_C_REG_486169_SHADOW)
+#define VIDC_REG_486169_EXTRADATA_ADDR_BMSK   0xffffffff
+#define VIDC_REG_486169_EXTRADATA_ADDR_SHFT            0
 
 
-#define VIDC_REG_990962_ADDR \
+#define VIDC_REG_926519_ADDR \
 		(VIDC_720P_WRAPPER_REG_BASE + 0x00000d1c)
-#define VIDC_REG_990962_PHYS \
+#define VIDC_REG_926519_PHYS \
 		(VIDC_720P_WRAPPER_REG_BASE_PHYS + 0x00000d1c)
-#define VIDC_REG_990962_RMSK 0xffffffff
-#define VIDC_REG_990962_SHFT 0
-#define VIDC_REG_990962_OUT(v) \
-		out_dword(VIDC_REG_990962_ADDR, v)
-#define VIDC_REG_990962_OUTM(m, v) \
-		out_dword_masked(VIDC_REG_990962_ADDR, m, v,\
-		VID_C_REG_990962_SHADOW)
-#define VIDC_REG_990962_CMD_START_BMSK   0xffffffff
-#define VIDC_REG_990962_CMD_START_SHFT            0
+#define VIDC_REG_926519_RMSK 0xffffffff
+#define VIDC_REG_926519_SHFT 0
+#define VIDC_REG_926519_OUT(v) \
+		out_dword(VIDC_REG_926519_ADDR, v)
+#define VIDC_REG_926519_OUTM(m, v) \
+		out_dword_masked(VIDC_REG_926519_ADDR, m, v, \
+		VID_C_REG_926519_SHADOW)
+#define VIDC_REG_926519_CMD_START_BMSK   0xffffffff
+#define VIDC_REG_926519_CMD_START_SHFT            0
 
 
 
@@ -2386,12 +2405,26 @@ VIDC_REG_817468_ALLOCATED_DPB_SIZE_SHFT                        0
 #define VIDC_720P_H263_LEVEL60    60
 #define VIDC_720P_H263_LEVEL70    70
 
+#define VIDC_720P_VC1_LEVEL_LOW    0
+#define VIDC_720P_VC1_LEVEL_MED    2
+#define VIDC_720P_VC1_LEVEL_HIGH   4
+#define VIDC_720P_VC1_LEVEL0       0
+#define VIDC_720P_VC1_LEVEL1       1
+#define VIDC_720P_VC1_LEVEL2       2
+#define VIDC_720P_VC1_LEVEL3       3
+#define VIDC_720P_VC1_LEVEL4       4
+
+#define VIDCL_720P_MPEG2_LEVEL_LOW 10
+#define VIDCL_720P_MPEG2_LEVEL_MAIN 8
+#define VIDCL_720P_MPEG2_LEVEL_HIGH14 6
+
 #define VIDC_720P_CMD_CHSET               0x0
 #define VIDC_720P_CMD_CHEND               0x2
 #define VIDC_720P_CMD_INITCODEC           0x3
 #define VIDC_720P_CMD_FRAMERUN            0x4
 #define VIDC_720P_CMD_INITBUFFERS         0x5
 #define VIDC_720P_CMD_FRAMERUN_REALLOCATE 0x6
+#define VIDC_720P_CMD_MFC_ENGINE_RESET 0x7
 
 enum vidc_720p_endian_type {
 	VIDC_720P_BIG_ENDIAN = 0x0,
@@ -2523,6 +2556,7 @@ struct vidc_720p_seq_hdr_info_type {
 	u32 n_profile;
 	u32 n_level;
 	u32 n_progressive;
+	u32 n_data_partitioned;
 };
 
 struct vidc_720p_enc_frame_info_type {
@@ -2537,7 +2571,7 @@ void vidc_720p_init(char **ppsz_version, u32 i_firmware_size,
 	u32 *pi_firmware_address, enum vidc_720p_endian_type e_dma_endian,
 	u32 b_interrupt_off,
 	enum vidc_720p_interrupt_level_selection_type	e_interrupt_sel,
-	u32 Interrupt_mask);
+	u32 interrupt_mask);
 
 u32 vidc_720p_do_sw_reset(void);
 
@@ -2547,7 +2581,7 @@ void vidc_720p_start_cpu(enum vidc_720p_endian_type e_dma_endian,
 		u32 *p_icontext_bufferstart, u32 *p_debug_core_dump_addr,
 		u32  debug_buffer_size);
 
-void vidc_720p_fw_status(u32 *fw_status);
+u32 vidc_720p_cpu_start(void);
 
 void vidc_720p_stop_fw(void);
 
@@ -2563,6 +2597,12 @@ void vidc_720p_submit_command(u32 ch_id, u32 n_cmd_id);
 void vidc_720p_set_channel(u32 i_ch_id,
 	enum vidc_720p_enc_dec_selection_type e_enc_dec_sel,
 	enum vidc_720p_codec_type e_codec, u32 *pi_fw, u32 i_firmware_size);
+
+u32 vidc_720p_engine_reset(u32 n_ch_id,
+   enum vidc_720p_endian_type e_dma_endian,
+   enum vidc_720p_interrupt_level_selection_type e_interrupt_sel,
+   u32 interrupt_mask
+);
 
 void vidc_720p_encode_set_profile(u32 i_profile, u32 i_level);
 
@@ -2758,11 +2798,11 @@ extern unsigned int vidclog_index;
 
 #define VIDC_DEBUG_REGISTER_LOG \
 { u32 val; unsigned int len; \
-	val = VIDC_720P_IN(REG_904540); \
+	val = VIDC_720P_IN(REG_881638); \
 	VIDC_REGLOG_CHECK_BUFINDEX(VIDC_REGLOG_MAX_PRINT_SIZE); \
 	len = snprintf(&vidclog[vidclog_index], 50,  "[dbg1=%x]" , val); \
 	vidclog_index += len; \
-	val = VIDC_720P_IN(REG_663308); \
+	val = VIDC_720P_IN(REG_161486); \
 	VIDC_REGLOG_CHECK_BUFINDEX(VIDC_REGLOG_MAX_PRINT_SIZE); \
 	len = snprintf(&vidclog[vidclog_index], 50,  "[dbg2=%x]" , val); \
 	vidclog_index += len; }

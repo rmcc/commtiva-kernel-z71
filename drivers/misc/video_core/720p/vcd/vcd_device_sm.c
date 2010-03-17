@@ -123,6 +123,23 @@ void vcd_do_device_state_transition(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 		p_state_ctxt->p_state_table->pf_entry(p_drv_ctxt, n_ev_code);
 }
 
+void vcd_hw_timeout_handler(void *p_user_data)
+{
+	struct vcd_drv_ctxt_type_t *p_drv_ctxt;
+
+	VCD_MSG_HIGH("vcd_hw_timeout_handler:");
+	p_user_data = NULL;
+	p_drv_ctxt = vcd_get_drv_context();
+	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
+	if (p_drv_ctxt->dev_state.p_state_table->ev_hdlr.pf_timeout)
+		p_drv_ctxt->dev_state.p_state_table->ev_hdlr.
+			pf_timeout(p_drv_ctxt, p_user_data);
+	else
+		VCD_MSG_ERROR("hw_timeout unsupported in device state %d",
+			p_drv_ctxt->dev_state.e_state);
+	vcd_critical_section_leave(p_drv_ctxt->dev_cs);
+}
+
 void vcd_ddl_callback(u32 event, u32 status, void *p_payload,
 	u32 n_size, u32 *ddl_handle, void *const p_client_data)
 {
@@ -141,6 +158,7 @@ void vcd_ddl_callback(u32 event, u32 status, void *p_payload,
 	p_dev_state = &p_drv_ctxt->dev_state;
 
 	p_dev_ctxt->b_continue = TRUE;
+	vcd_device_timer_stop(p_dev_ctxt);
 
 	switch (p_dev_state->e_state) {
 	case VCD_DEVICE_STATE_NULL:
@@ -260,6 +278,7 @@ u32 vcd_init_device_context(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 		(void)vcd_power_event(p_dev_ctxt, NULL,
 					  VCD_EVT_PWR_DEV_INIT_FAIL);
 	} else {
+		vcd_device_timer_start(p_dev_ctxt);
 		vcd_do_device_state_transition(p_drv_ctxt,
 						   VCD_DEVICE_STATE_INITING,
 						   n_ev_code);
@@ -343,10 +362,12 @@ void vcd_term_driver_context(struct vcd_drv_ctxt_type_t *p_drv_ctxt)
 	if (p_dev_ctxt->config.pf_deregister_isr)
 		p_dev_ctxt->config.pf_deregister_isr();
 
-
 	if (p_dev_ctxt->config.pf_un_map_dev_base_addr)
 		p_dev_ctxt->config.pf_un_map_dev_base_addr();
 
+	if (p_dev_ctxt->config.pf_timer_release)
+		p_dev_ctxt->config.pf_timer_release(
+			p_dev_ctxt->p_hw_timer_handle);
 
 	vcd_free(p_dev_ctxt->a_trans_tbl);
 
@@ -541,27 +562,6 @@ static u32 vcd_init_cmn
 	struct vcd_dev_ctxt_type *p_dev_ctxt = &p_drv_ctxt->dev_ctxt;
 	s32 driver_id;
 
-	if (0 == p_dev_ctxt->n_refs) {
-		VCD_MSG_HIGH("First vcd_init");
-
-		p_dev_ctxt->config = *p_config;
-
-		p_dev_ctxt->p_device_base_addr =
-			(u8 *)p_config->pf_map_dev_base_addr(
-				p_dev_ctxt->config.p_device_name);
-
-		if (p_config->pf_register_isr) {
-			p_config->pf_register_isr(p_dev_ctxt->config.
-						  p_device_name);
-		}
-	}
-
-	if (NULL == p_dev_ctxt->p_device_base_addr) {
-		VCD_MSG_ERROR("NULL Device_base_addr");
-
-		return VCD_ERR_FAIL;
-	}
-
 	if (p_dev_ctxt->config.pf_interrupt_clr !=
 		p_config->pf_interrupt_clr
 		|| p_dev_ctxt->config.pf_register_isr !=
@@ -605,8 +605,35 @@ static u32 vcd_init_in_null
 	(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 	 struct vcd_init_config_type *p_config, s32 *p_driver_handle) {
 	u32 rc;
-
+	struct vcd_dev_ctxt_type *p_dev_ctxt = &p_drv_ctxt->dev_ctxt;
 	VCD_MSG_LOW("vcd_init_in_dev_null:");
+
+
+	p_dev_ctxt->config = *p_config;
+
+	p_dev_ctxt->p_device_base_addr =
+		(u8 *)p_config->pf_map_dev_base_addr(
+			p_dev_ctxt->config.p_device_name);
+
+	if (NULL == p_dev_ctxt->p_device_base_addr) {
+		VCD_MSG_ERROR("NULL Device_base_addr");
+
+		return VCD_ERR_FAIL;
+	}
+
+	if (p_config->pf_register_isr) {
+		p_config->pf_register_isr(p_dev_ctxt->config.
+			p_device_name);
+	}
+
+	if (p_config->pf_timer_create &&
+		FALSE == p_config->pf_timer_create(
+			vcd_hw_timeout_handler,	NULL,
+			&p_dev_ctxt->p_hw_timer_handle)) {
+		VCD_MSG_ERROR("Timer_create failed");
+		return VCD_ERR_FAIL ;
+	}
+
 
 	rc = vcd_init_cmn(p_drv_ctxt, p_config, p_driver_handle);
 
@@ -1061,6 +1088,29 @@ static void vcd_dev_cb_in_initing
 	}
 }
 
+static void  vcd_hw_timeout_cmn(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
+							  void *p_user_data)
+{
+	u32 rc;
+	struct vcd_dev_ctxt_type *p_dev_ctxt = &p_drv_ctxt->dev_ctxt;
+	VCD_MSG_LOW("vcd_hw_timeout_cmn:");
+	vcd_device_timer_stop(p_dev_ctxt);
+
+	/*
+	** Issue HW timeout power event.
+	*/
+	rc = vcd_power_event(p_dev_ctxt, NULL, VCD_EVT_PWR_DEV_HWTIMEOUT);
+
+	if (VCD_FAILED(rc))
+		VCD_MSG_ERROR("VCD_EVT_PWR_DEV_HWTIMEOUT failed");
+
+	vcd_handle_device_err_fatal(p_dev_ctxt, NULL);
+
+	/* Reset HW. */
+	(void) vcd_reset_device_context(p_drv_ctxt,
+		DEVICE_STATE_EVENT_NUMBER(pf_timeout));
+}
+
 static void vcd_dev_enter_null
 	(struct vcd_drv_ctxt_type_t *p_drv_ctxt, s32 n_state_event_type) {
 	VCD_MSG_MED("Entering DEVICE_STATE_NULL on api %d", n_state_event_type);
@@ -1161,7 +1211,7 @@ static const struct vcd_dev_state_table_type_t vcd_dev_table_initing = {
 	 NULL,
 	 NULL,
 	 vcd_dev_cb_in_initing,
-	 NULL,
+	 vcd_hw_timeout_cmn,
 	 },
 	vcd_dev_enter_initing,
 	vcd_dev_exit_initing
@@ -1176,7 +1226,7 @@ static const struct vcd_dev_state_table_type_t vcd_dev_table_ready = {
 	 vcd_resume_in_ready,
 	 vcd_set_dev_pwr_in_ready,
 	 NULL,
-	 NULL,
+	 vcd_hw_timeout_cmn,
 	 },
 	vcd_dev_enter_ready,
 	vcd_dev_exit_ready
