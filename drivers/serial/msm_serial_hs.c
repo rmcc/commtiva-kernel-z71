@@ -1451,8 +1451,8 @@ static void msm_hs_shutdown(struct uart_port *uport)
 
 	BUG_ON(msm_uport->rx.flush < FLUSH_STOP);
 	tasklet_kill(&msm_uport->tx.tlet);
-	tasklet_kill(&msm_uport->rx.tlet);
 	wait_event(msm_uport->rx.wait, msm_uport->rx.flush == FLUSH_SHUTDOWN);
+	tasklet_kill(&msm_uport->rx.tlet);
 
 	spin_lock_irqsave(&uport->lock, flags);
 	clk_enable(msm_uport->clk);
