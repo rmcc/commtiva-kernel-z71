@@ -594,23 +594,21 @@ fail_cb_setup:
 	return rc;
 }
 
-
-static unsigned long msmrtc_get_seconds(void)
-{
-	struct rtc_time tm;
-	unsigned long now;
-
-	msmrtc_timeremote_read_time(NULL, &tm);
-	rtc_tm_to_time(&tm, &now);
-	return now;
-}
-
 static int
 msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 {
+	int rc, diff;
+	struct rtc_time tm;
+	unsigned long now;
+
 	if (rtcalarm_time) {
-		unsigned long now = msmrtc_get_seconds();
-		int diff = rtcalarm_time - now;
+		rc = msmrtc_timeremote_read_time(NULL, &tm);
+		if (rc) {
+			pr_err("%s: Unable to read from RTC\n", __func__);
+			return rc;
+		}
+		rtc_tm_to_time(&tm, &now);
+		diff = rtcalarm_time - now;
 		if (diff <= 0) {
 			msmrtc_alarmtimer_expired(1);
 			msm_pm_set_max_sleep_time(0);
@@ -625,9 +623,18 @@ msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 static int
 msmrtc_resume(struct platform_device *dev)
 {
+	int rc, diff;
+	struct rtc_time tm;
+	unsigned long now;
+
 	if (rtcalarm_time) {
-		unsigned long now = msmrtc_get_seconds();
-		int diff = rtcalarm_time - now;
+		rc = msmrtc_timeremote_read_time(NULL, &tm);
+		if (rc) {
+			pr_err("%s: Unable to read from RTC\n", __func__);
+			return rc;
+		}
+		rtc_tm_to_time(&tm, &now);
+		diff = rtcalarm_time - now;
 		if (diff <= 0)
 			msmrtc_alarmtimer_expired(2);
 	}
