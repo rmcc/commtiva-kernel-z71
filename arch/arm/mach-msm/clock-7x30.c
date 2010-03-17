@@ -168,6 +168,7 @@ static struct clk_freq_tbl clk_tbl_mdh[] = {
 	F_BASIC(245760000, SRC_PLL3, 3),
 	F_BASIC(368640000, SRC_PLL3, 2),
 	F_BASIC(384000000, SRC_PLL1, 2),
+	F_BASIC(445500000, SRC_PLL4, 2),
 	F_END,
 };
 
@@ -313,7 +314,6 @@ static struct clk_freq_tbl clk_tbl_vpe[] = {
 	F_MND8(122880000, 22, 15, SRC_PLL3, 3,   1,   2),
 	F_MND8(147000000, 22, 15, SRC_PLL3, 1,   1,   5),
 	F_MND8(153600000, 22, 15, SRC_PLL1, 1,   1,   5),
-	F_MND8(170667000, 22, 15, SRC_PLL1, 1,   2,   9),
 	F_END,
 };
 
@@ -449,7 +449,7 @@ static uint32_t chld_mfc[] = 		{C(MFC_DIV2), C(NONE)};
 static uint32_t chld_mi2s_codec_rx[] =	{C(MI2S_CODEC_RX_S), C(NONE)};
 static uint32_t chld_mi2s_codec_tx[] =	{C(MI2S_CODEC_TX_S), C(NONE)};
 static uint32_t chld_mi2s[] = 		{C(MI2S_S), C(NONE)};
-static uint32_t chld_sdac_m[] = 	{C(SDAC), C(NONE)};
+static uint32_t chld_sdac[] = 		{C(SDAC_M), C(NONE)};
 static uint32_t chld_tv[] = 		{C(TV_DAC), C(TV_ENC), C(TSIF_REF),
 					 C(HDMI), C(NONE)};
 static uint32_t chld_usb_src[] = 	{C(USB_HS), C(USB_HS_CORE),
@@ -512,9 +512,9 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_SLAVE(VFE_CAMIF, CAM_VFE_NS, B(15), VFE),
 	CLK_SLAVE(CSI0_VFE, CSI_NS, B(15), VFE),
 
-	CLK_MND16(SDAC_M, SDAC_NS, B(12), B(11), clk_tbl_sdac,
-							NONE, chld_sdac_m),
-	CLK_SLAVE(SDAC, SDAC_NS, B(9), SDAC_M),
+	CLK_MND16(SDAC, SDAC_NS, B(9), B(11), clk_tbl_sdac,
+							NONE, chld_sdac),
+	CLK_SLAVE(SDAC_M, SDAC_NS, B(12), SDAC),
 
 	CLK_MND16(MDP_LCDC_PCLK, MDP_LCDC_NS, B(9), B(11), clk_tbl_mdp_lcdc,
 							NONE, chld_mdp_lcdc_p),
@@ -1052,6 +1052,7 @@ static struct clk_local_ownership {
 	[C(UART2DM_P)]			= { O(SH2_OWN_ROW2), B(8) },
 	[C(USB_HS)]			= { O(SH2_OWN_ROW2), B(11) },
 	[C(USB_HS_CORE)]		= { O(SH2_OWN_ROW2), B(11) },
+	[C(USB_HS_SRC)]			= { O(SH2_OWN_ROW2), B(11) },
 	[C(USB_HS_P)]			= { O(SH2_OWN_ROW2), B(11) },
 
 	[C(CAM_M)]			= { O(SH2_OWN_APPS3), B(6) },
@@ -1127,6 +1128,11 @@ __init int clk_7x30_init(void)
 	uint32_t val;
 
 	cache_ownership();
+
+	/* When we have no local clock control, the rest of the code in this
+	 * function is a NOP since writes to shadow regions that we don't own
+	 * are ignored. */
+
 	/* Disable all the child clocks of USB_HS_SRC. This needs to be done
 	 * before the register init loop since it changes the source of the
 	 * USB HS core clocks. */
@@ -1149,7 +1155,7 @@ __init int clk_7x30_init(void)
 	set_1rate(I2C_2);
 	set_1rate(QUP_I2C);
 	set_1rate(UART1);
-	set_1rate(UART3);
+	set_1rate(UART2);
 	set_1rate(MI2S_CODEC_RX_M);
 
 	return 0;
