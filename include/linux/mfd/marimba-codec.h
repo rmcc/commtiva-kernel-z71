@@ -57,4 +57,6 @@ int adie_codec_proceed_stage(struct adie_codec_path *path_ptr, u32 state);
 int adie_codec_close(struct adie_codec_path *path_ptr);
 u32 adie_codec_freq_supported(struct adie_codec_dev_profile *profile,
 							u32 requested_freq);
+int adie_codec_enable_sidetone(struct adie_codec_path *rx_path_ptr, u32 enable);
+
 #endif
