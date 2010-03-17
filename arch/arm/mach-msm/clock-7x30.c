@@ -768,11 +768,6 @@ static void soc_clk_disable(unsigned id)
 	return;
 }
 
-static int soc_clk_reset(unsigned id, enum clk_reset_action action)
-{
-	return -EPERM;
-}
-
 static long soc_clk_round_rate(unsigned id, unsigned rate)
 {
 	struct clk_local *t = &clk_local_tbl[id];
@@ -968,7 +963,7 @@ static unsigned soc_clk_is_enabled(unsigned id)
 struct clk_ops clk_ops_7x30 = {
 	.enable = soc_clk_enable,
 	.disable = soc_clk_disable,
-	.reset = soc_clk_reset,
+	.reset = NULL, /* Uses proc_comm */
 	.set_rate = soc_clk_set_rate,
 	.set_min_rate = soc_clk_set_min_rate,
 	.set_max_rate = soc_clk_set_max_rate,
