@@ -446,6 +446,7 @@ static void diag_process_hdlc(void *data, unsigned len)
 
 int diagfwd_connect(void)
 {
+	printk(KERN_DEBUG "diag: USB connected\n");
 	diag_open(driver->poolsize + 3); /* 2 for A9 ; 1 for q6*/
 
 	driver->usb_connected = 1;
@@ -464,6 +465,7 @@ int diagfwd_connect(void)
 
 int diagfwd_disconnect(void)
 {
+	printk(KERN_DEBUG "diag: USB disconnected\n");
 	driver->usb_connected = 0;
 	driver->in_busy = 1;
 	driver->in_busy_qdsp = 1;
