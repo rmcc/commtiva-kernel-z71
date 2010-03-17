@@ -731,7 +731,7 @@ static void vfe_proc_ops(enum VFE_MESSAGE_ID id, void *data)
 	rp = ctrl->resp->vfe_alloc(sizeof(*rp) +
 					(vfe_funcs[id].fn ? sizeof(*msg) : 0),
 					ctrl->syncdata,
-					GFP_KERNEL);
+					GFP_ATOMIC);
 	if (!rp) {
 		pr_err("%s: out of memory\n", __func__);
 		return;
