@@ -966,6 +966,7 @@ voc_events:
 					dev_info->set_sample_rate ?
 					dev_info->set_sample_rate :
 					dev_info->sample_rate;
+				evt_payload->voc_devinfo.dev_id = dev_id;
 				if (dev_info->capability & SNDDEV_CAP_RX) {
 					evt_payload->voc_devinfo.max_rx_vol =
 						dev_info->max_voc_rx_vol;

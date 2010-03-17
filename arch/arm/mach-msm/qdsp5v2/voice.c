@@ -171,6 +171,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 			v->dev_tx.enabled = VOICE_DEV_DISABLED;
 			v->dev_state = DEV_CHANGE;
 			if (v->voc_state == VOICE_ACQUIRE) {
+				msm_snddev_enable_sidetone(v->dev_rx.dev_id,
+				0);
 				/* send device change to modem */
 				voice_cmd_change();
 				/* block to wait for CHANGE_START */
@@ -194,6 +196,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 					evt_payload->voc_devinfo.acdb_dev_id;
 				v->dev_rx.sample =
 					evt_payload->voc_devinfo.dev_sample;
+				v->dev_rx.dev_id =
+				evt_payload->voc_devinfo.dev_id;
 				v->dev_rx.enabled = VOICE_DEV_ENABLED;
 				v->max_rx_vol =
 					evt_payload->voc_devinfo.max_rx_vol;
@@ -205,6 +209,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 				v->dev_tx.sample =
 					evt_payload->voc_devinfo.dev_sample;
 				v->dev_tx.enabled = VOICE_DEV_ENABLED;
+				v->dev_tx.dev_id =
+				evt_payload->voc_devinfo.dev_id;
 			}
 			if ((v->dev_rx.enabled == VOICE_DEV_ENABLED) &&
 				(v->dev_tx.enabled == VOICE_DEV_ENABLED)) {
@@ -221,6 +227,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 					evt_payload->voc_devinfo.acdb_dev_id;
 				v->dev_rx.sample =
 					evt_payload->voc_devinfo.dev_sample;
+				v->dev_rx.dev_id =
+				evt_payload->voc_devinfo.dev_id;
 				v->dev_rx.enabled = VOICE_DEV_ENABLED;
 				v->max_rx_vol =
 					evt_payload->voc_devinfo.max_rx_vol;
@@ -231,6 +239,8 @@ static void voice_auddev_cb_function(u32 evt_id,
 					evt_payload->voc_devinfo.acdb_dev_id;
 				v->dev_tx.sample =
 					evt_payload->voc_devinfo.dev_sample;
+				v->dev_tx.dev_id =
+				evt_payload->voc_devinfo.dev_id;
 				v->dev_tx.enabled = VOICE_DEV_ENABLED;
 			}
 			if ((v->dev_rx.enabled == VOICE_DEV_ENABLED) &&
@@ -320,6 +330,10 @@ static void voice_auddev_cb_function(u32 evt_id,
 		/* recover the tx mute and rx volume to the default values */
 		v->dev_tx.mute = v->default_mute_val;
 		v->dev_rx.volume = v->default_vol_val;
+
+		if (v->dev_rx.enabled == VOICE_DEV_ENABLED)
+			msm_snddev_enable_sidetone(v->dev_rx.dev_id, 0);
+
 		if ((v->dev_state == DEV_READY) ||
 			(v->dev_state == DEV_CHANGE)) {
 			if (atomic_read(&v->rel_start_flag)) {
@@ -472,6 +486,9 @@ static int voice_cmd_acquire_done(struct voice_data *v)
 
 	MM_INFO("%s()\n", __func__);
 
+	/* Enable HW sidetone if device supports it  */
+	msm_snddev_enable_sidetone(v->dev_rx.dev_id, 1);
+
 	err = dalrpc_fcn_5(VOICE_DALRPC_CMD, v->handle, &hdr,
 			 sizeof(struct voice_header));
 
@@ -599,7 +616,7 @@ static int voice_thread(void *data)
 		case VOICE_CHANGE_START:
 			if (v->voc_state == VOICE_ACQUIRE)
 				v->voc_state = VOICE_CHANGE;
-			 else
+			else
 				MM_ERR("Get this event at the wrong state\n");
 			wake_up(&v->voc_wait);
 			break;
@@ -618,6 +635,8 @@ static int voice_thread(void *data)
 		switch (v->dev_event) {
 		case DEV_CHANGE_READY:
 			if (v->voc_state == VOICE_CHANGE) {
+				msm_snddev_enable_sidetone(v->dev_rx.dev_id,
+				1);
 				/* send device info to modem */
 				voice_cmd_device_info(v);
 				/* update voice state */

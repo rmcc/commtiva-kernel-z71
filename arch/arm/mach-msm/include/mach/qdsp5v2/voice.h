@@ -126,6 +126,7 @@ struct device_data {
 	uint32_t mute;
 	uint32_t sample;
 	uint32_t enabled;
+	uint32_t dev_id;
 };
 
 #endif
