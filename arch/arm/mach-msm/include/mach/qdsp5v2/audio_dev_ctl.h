@@ -43,6 +43,7 @@ struct msm_snddev_info {
 		int (*open)(struct msm_snddev_info *);
 		int (*close)(struct msm_snddev_info *);
 		int (*set_freq)(struct msm_snddev_info *, u32);
+		int (*enable_sidetone)(struct msm_snddev_info *, u32);
 	} dev_ops;
 	u8 opened;
 	void *private_data;
@@ -73,6 +74,8 @@ int msm_snddev_is_set(int popp_id, int copp_id);
 int msm_get_voc_route(u32 *rx_id, u32 *tx_id);
 int msm_set_voc_route(struct msm_snddev_info *dev_info, int stream_type,
 			int dev_id);
+int msm_snddev_enable_sidetone(u32 dev_id, u32 enable);
+
 struct msm_snddev_info *audio_dev_ctrl_find_dev(u32 dev_id);
 
 void msm_release_voc_thread(void);

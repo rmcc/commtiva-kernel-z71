@@ -593,6 +593,27 @@ int msm_snddev_request_freq(int *freq, u32 session_id,
 }
 EXPORT_SYMBOL(msm_snddev_request_freq);
 
+int msm_snddev_enable_sidetone(u32 dev_id, u32 enable)
+{
+	int rc;
+	struct msm_snddev_info *dev_info;
+
+	MM_DBG("dev_id %d enable %d\n", dev_id, enable);
+
+	dev_info = audio_dev_ctrl_find_dev(dev_id);
+
+	if (IS_ERR(dev_info)) {
+		MM_ERR("bad dev_id %d\n", dev_id);
+		rc = -EINVAL;
+	} else if (!dev_info->dev_ops.enable_sidetone) {
+		MM_DBG("dev %d no sidetone support\n", dev_id);
+		rc = -EPERM;
+	} else
+		rc = dev_info->dev_ops.enable_sidetone(dev_info, enable);
+
+	return rc;
+}
+EXPORT_SYMBOL(msm_snddev_enable_sidetone);
 
 static int audio_dev_ctrl_ioctl(struct inode *inode, struct file *file,
 	unsigned int cmd, unsigned long arg)
