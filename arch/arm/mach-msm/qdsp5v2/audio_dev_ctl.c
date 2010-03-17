@@ -94,7 +94,6 @@ struct session_freq {
 };
 
 struct audio_routing_info {
-	int running;
 	unsigned short mixer_mask[MAX_DEC_SESSIONS];
 	unsigned short audrec_mixer_mask[MAX_ENC_SESSIONS];
 	struct session_freq dec_freq[MAX_DEC_SESSIONS];
@@ -197,8 +196,6 @@ int msm_snddev_set_dec(int popp_id, int copp_id, int set)
 	else
 		routing_info.mixer_mask[popp_id] &= ~(0x1 << copp_id);
 
-	if (routing_info.running & (0x1 << popp_id))
-		audpp_route_stream(popp_id, routing_info.mixer_mask[popp_id]);
 	return 0;
 }
 EXPORT_SYMBOL(msm_snddev_set_dec);
@@ -439,6 +436,9 @@ EXPORT_SYMBOL(auddev_register_evt_listner);
 int auddev_unregister_evt_listner(u32 clnt_type, u32 clnt_id)
 {
 	struct msm_snd_evt_listner *callback = event.cb;
+	struct msm_snddev_info *info;
+	u32 session_mask = 0;
+	int i = 0;
 
 	while (callback != NULL) {
 		if ((callback->clnt_type == clnt_type)
@@ -461,6 +461,12 @@ int auddev_unregister_evt_listner(u32 clnt_type, u32 clnt_id)
 		callback->cb_next->cb_prev = callback->cb_prev;
 	}
 	kfree(callback);
+
+	session_mask = (0x1 << (clnt_id)) << (8 * ((int)clnt_type-1));
+	for (i = 0; i < audio_dev_ctrl.num_dev; i++) {
+		info = audio_dev_ctrl.devs[i];
+		info->sessions &= ~session_mask;
+	}
 	return 0;
 }
 EXPORT_SYMBOL(auddev_unregister_evt_listner);
