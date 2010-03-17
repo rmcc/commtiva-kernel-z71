@@ -86,13 +86,13 @@
 #define MSM_SHARED_RAM_BASE   IOMEM(0xE0100000)
 #define MSM_SHARED_RAM_SIZE   SZ_1M
 
-#define MSM_UART1_PHYS        0xA9A00000
+#define MSM_UART1_PHYS        0xACA00000
 #define MSM_UART1_SIZE        SZ_4K
 
-#define MSM_UART2_PHYS        0xA9B00000
+#define MSM_UART2_PHYS        0xACB00000
 #define MSM_UART2_SIZE        SZ_4K
 
-#define MSM_UART3_PHYS        0xA9C00000
+#define MSM_UART3_PHYS        0xACC00000
 #define MSM_UART3_SIZE        SZ_4K
 
 #ifdef CONFIG_MSM_DEBUG_UART
