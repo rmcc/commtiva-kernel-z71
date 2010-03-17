@@ -990,6 +990,16 @@ static void __init cache_ownership(void)
 	ownership_regs[SH2_OWN_APPS3] = readl(REG_BASE(SH2_OWN_APPS3_REG));
 }
 
+static void __init print_ownership(void)
+{
+	pr_info("Clock ownership\n");
+	pr_info("  GLBL  : %08x\n", ownership_regs[SH2_OWN_GLBL]);
+	pr_info("  APPS  : %08x %08x %08x\n", ownership_regs[SH2_OWN_APPS1],
+		ownership_regs[SH2_OWN_APPS2], ownership_regs[SH2_OWN_APPS3]);
+	pr_info("  ROW   : %08x %08x\n", ownership_regs[SH2_OWN_ROW1],
+		ownership_regs[SH2_OWN_ROW2]);
+}
+
 /*
  * This is a many-to-one mapping since we don't know how the remote clock code
  * has decided to handle the dependencies between clocks for a particular
@@ -1142,6 +1152,7 @@ __init int clk_7x30_init(void)
 	uint32_t val;
 
 	cache_ownership();
+	print_ownership();
 
 	/* When we have no local clock control, the rest of the code in this
 	 * function is a NOP since writes to shadow regions that we don't own

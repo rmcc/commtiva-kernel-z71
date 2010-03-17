@@ -272,12 +272,15 @@ int msm_clock_get_name(uint32_t id, char *name, uint32_t size)
 	return ret;
 }
 
+static unsigned __initdata local_count;
+
 static void __init set_clock_ops(struct clk *clk)
 {
 	if (!clk->ops) {
 		struct clk_ops *ops = clk_7x30_is_local(clk->id);
 		if (ops) {
 			clk->ops = ops;
+			local_count++;
 		} else {
 			clk->ops = &clk_ops_pcom;
 			clk->id = clk->remote_id;
@@ -300,6 +303,9 @@ void __init msm_clock_init(struct clk *clock_tbl, unsigned num_clocks)
 		list_add_tail(&msm_clocks[n].list, &clocks);
 	}
 	mutex_unlock(&clocks_mutex);
+	if (local_count)
+		pr_info("%u clock%s locally owned\n", local_count,
+			local_count > 1 ? "s are" : " is");
 
 	ebi1_clk = clk_get(NULL, "ebi1_clk");
 	BUG_ON(ebi1_clk == NULL);
