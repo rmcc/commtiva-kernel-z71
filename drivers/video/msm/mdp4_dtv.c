@@ -99,13 +99,10 @@ static int dtv_on(struct platform_device *pdev);
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
 
+static struct clk *tv_src_clk;
 static struct clk *tv_enc_clk;
 static struct clk *tv_dac_clk;
 static struct clk *hdmi_clk;
-
-static int tv_dac_clk_rate;
-static int tv_enc_clk_rate;
-static int hdmi_clk_rate;
 
 static struct platform_driver dtv_driver = {
 	.probe = dtv_probe,
@@ -171,12 +168,7 @@ static int dtv_on(struct platform_device *pdev)
 	if (dtv_pdata && dtv_pdata->lcdc_gpio_config)
 		ret = dtv_pdata->lcdc_gpio_config(1);
 
-	clk_set_rate(tv_enc_clk, mfd->fbi->var.pixclock);
-	clk_set_rate(tv_dac_clk, mfd->fbi->var.pixclock);
-	clk_set_rate(hdmi_clk, mfd->fbi->var.pixclock);
-	tv_enc_clk_rate = clk_get_rate(tv_enc_clk);
-	tv_dac_clk_rate = clk_get_rate(tv_dac_clk);
-	hdmi_clk_rate = clk_get_rate(hdmi_clk);
+	clk_set_rate(tv_src_clk, mfd->fbi->var.pixclock);
 
 	ret = panel_next_on(pdev);
 	return ret;
@@ -295,6 +287,10 @@ static int __init dtv_driver_init(void)
 		printk(KERN_ERR "error: can't get tv_dac_clk!\n");
 		return IS_ERR(tv_dac_clk);
 	}
+
+	tv_src_clk = clk_get(NULL, "tv_src_clk");
+	if (IS_ERR(tv_src_clk))
+		tv_src_clk = tv_dac_clk; /* Fallback to slave */
 
 	hdmi_clk = clk_get(NULL, "hdmi_clk");
 	if (IS_ERR(hdmi_clk)) {
