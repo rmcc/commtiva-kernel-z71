@@ -836,11 +836,12 @@ static int soc_clk_set_rate(unsigned id, unsigned rate)
 			writel(reg_val, REG(ch->ns_reg));
 		}
 	}
-	if (t->count)
-		_soc_clk_disable(id);
 
-	/* Turn on PLL of the new freq. */
-	src_enable(nf->src);
+	if (t->count) {
+		_soc_clk_disable(id);
+		/* Turn on PLL of the new freq. */
+		src_enable(nf->src);
+	}
 
 	/* Some clocks share the same register, so must be careful when
 	 * assuming a register doesn't need to be re-read. */
@@ -864,8 +865,10 @@ static int soc_clk_set_rate(unsigned id, unsigned rate)
 		writel(reg_val, ns_reg);
 	}
 
-	/* Turn off PLL of the old freq. */
-	src_disable(cf->src);
+	if (t->count) {
+		/* Turn off PLL of the old freq. */
+		src_disable(cf->src);
+	}
 
 	/* Current freq must be updated before _soc_clk_enable() is called to
 	 * make sure the MNCNTR_E bit is set correctly. */
