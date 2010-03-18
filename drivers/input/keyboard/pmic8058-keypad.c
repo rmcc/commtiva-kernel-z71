@@ -486,17 +486,21 @@ static int pmic8058_kpd_init(struct pmic8058_kp *kp)
 #ifdef CONFIG_PM
 static int pmic8058_kp_suspend(struct platform_device *pdev, pm_message_t msg)
 {
-	/* FIXME: Add enable_irq_wake support for key_sense_irq once pmic
-	 *  core driver adds sub-device APIs.
-	 */
+	struct pmic8058_kp *kp = platform_get_drvdata(pdev);
+
+	if (device_may_wakeup(&pdev->dev))
+		enable_irq_wake(kp->key_sense_irq);
+
 	return 0;
 }
 
 static int pmic8058_kp_resume(struct platform_device *pdev)
 {
-	/* FIXME: Add disable_irq_wake support for key_sense_irq once pmic
-	 *  core driver adds sub-device APIs.
-	 */
+	struct pmic8058_kp *kp = platform_get_drvdata(pdev);
+
+	if (device_may_wakeup(&pdev->dev))
+		disable_irq_wake(kp->key_sense_irq);
+
 	return 0;
 }
 #else
@@ -702,8 +706,6 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	__dump_kp_regs(kp, "probe");
 
 	device_init_wakeup(&pdev->dev, pdata->wakeup);
-	if (device_may_wakeup(&pdev->dev))
-		enable_irq_wake(kp->key_sense_irq);
 
 	return 0;
 
