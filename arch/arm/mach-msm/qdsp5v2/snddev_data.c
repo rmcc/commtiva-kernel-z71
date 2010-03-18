@@ -1103,6 +1103,62 @@ static struct platform_device msm_imic_ffa_device = {
 	.dev = { .platform_data = &snddev_imic_ffa_data },
 };
 
+
+static struct adie_codec_action_unit
+	ihs_stereo_speaker_stereo_rx_48KHz_osr256_actions[] =
+	HEADSET_STEREO_SPEAKER_STEREO_RX_CAPLESS_48000_OSR_256;
+
+
+static struct adie_codec_hwsetting_entry
+	ihs_stereo_speaker_stereo_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ihs_stereo_speaker_stereo_rx_48KHz_osr256_actions,
+		.action_sz =
+		ARRAY_SIZE(ihs_stereo_speaker_stereo_rx_48KHz_osr256_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ihs_stereo_speaker_stereo_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ihs_stereo_speaker_stereo_rx_settings,
+	.setting_sz = ARRAY_SIZE(ihs_stereo_speaker_stereo_rx_settings),
+};
+
+
+static void msm_snddev_hsed_speaker_pamp_on(void)
+{
+	msm_snddev_hsed_pamp_on();
+	msm_snddev_poweramp_on();
+}
+static void msm_snddev_hsed_speaker_pamp_off(void)
+{
+	msm_snddev_poweramp_off();
+	msm_snddev_hsed_pamp_off();
+}
+
+static struct snddev_icodec_data snddev_ihs_stereo_speaker_stereo_rx_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "headset_stereo_speaker_stereo_rx",
+	.copp_id = 0,
+	.acdb_id = 0x14,
+	.profile = &ihs_stereo_speaker_stereo_rx_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_hsed_speaker_pamp_on,
+	.pamp_off = msm_snddev_hsed_speaker_pamp_off,
+	.max_voice_rx_vol = -500,
+	.min_voice_rx_vol = -2000,
+};
+
+static struct platform_device msm_ihs_stereo_speaker_stereo_rx_device = {
+	.name = "snddev_icodec",
+	.id = 21,
+	.dev = { .platform_data = &snddev_ihs_stereo_speaker_stereo_rx_data },
+};
+
+
 static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_iearpiece_ffa_device,
 	&msm_imic_ffa_device,
@@ -1122,6 +1178,7 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_itty_hs_mono_tx_device,
 	&msm_itty_hs_mono_rx_device,
 	&msm_ispeaker_tx_device,
+	&msm_ihs_stereo_speaker_stereo_rx_device,
 };
 
 static struct platform_device *snd_devices_surf[] __initdata = {
@@ -1139,6 +1196,7 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_itty_hs_mono_tx_device,
 	&msm_itty_hs_mono_rx_device,
 	&msm_ispeaker_tx_device,
+	&msm_ihs_stereo_speaker_stereo_rx_device,
 };
 
 static struct platform_device *snd_devices_fluid[] __initdata = {
