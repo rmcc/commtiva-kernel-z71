@@ -53,28 +53,28 @@ struct q6_hw_info {
 
 static struct q6_hw_info q6_audio_hw[Q6_HW_COUNT] = {
 	[Q6_HW_HANDSET] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -903,
+		.max_gain = 602,
 	},
 	[Q6_HW_HEADSET] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -903,
+		.max_gain = 602,
 	},
 	[Q6_HW_SPEAKER] = {
-		.min_gain = -1500,
-		.max_gain = 0,
+		.min_gain = -903,
+		.max_gain = 602,
 	},
 	[Q6_HW_TTY] = {
 		.min_gain = -2000,
 		.max_gain = 0,
 	},
 	[Q6_HW_BT_SCO] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -903,
+		.max_gain = 602,
 	},
 	[Q6_HW_BT_A2DP] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -903,
+		.max_gain = 602,
 	},
 };
 
