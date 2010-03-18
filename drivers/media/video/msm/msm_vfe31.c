@@ -869,6 +869,7 @@ static int vfe31_stop_recording(void){
 static int vfe31_capture(uint32_t num_frames_capture)
 {
 	uint32_t irq_comp_mask = 0;
+	uint32_t temp;
 	/* capture command is valid for both idle and active state. */
 	vfe31_ctrl->outpath.out1.capture_cnt = num_frames_capture;
 	if (vfe31_ctrl->operation_mode == 1) {
@@ -892,14 +893,22 @@ static int vfe31_capture(uint32_t num_frames_capture)
 		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_PT) {
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out0.ch0));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out0.ch0));
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out0.ch1));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				 20 + 24 * (vfe31_ctrl->outpath.out0.ch1));
 		}
 		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_S) {
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out1.ch0));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out1.ch0));
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out1.ch1));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out1.ch1));
 		}
 	} else {  /* this is raw snapshot mode. */
 		CDBG("config the comp imask for raw snapshot mode. \n");
@@ -908,6 +917,8 @@ static int vfe31_capture(uint32_t num_frames_capture)
 			(0x1 << (vfe31_ctrl->outpath.out1.ch0 + 8));
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out1.ch0));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out1.ch0));
 		}
 	}
 	msm_io_w(irq_comp_mask, vfe31_ctrl->vfebase + VFE_IRQ_COMP_MASK);
@@ -923,6 +934,7 @@ static int vfe31_capture(uint32_t num_frames_capture)
 static int vfe31_start(void)
 {
 	uint32_t irq_comp_mask = 0;
+	uint32_t temp;
 	/* start command now is only good for continuous mode. */
 	if (vfe31_ctrl->operation_mode & 1)
 		return 0;
@@ -945,8 +957,11 @@ static int vfe31_start(void)
 	if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_PT) {
 		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 			24 * (vfe31_ctrl->outpath.out0.ch0));
-
+		temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+			20 + 24 * (vfe31_ctrl->outpath.out0.ch0));
 		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
+			24 * (vfe31_ctrl->outpath.out0.ch1));
+		temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 			24 * (vfe31_ctrl->outpath.out0.ch1));
 	}
 	vfe31_start_common();
@@ -1760,8 +1775,12 @@ static void vfe31_process_reg_update_irq(void)
 		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out2.ch0));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out2.ch0));
 			msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out2.ch1));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out2.ch1));
 		}
 		vfe31_ctrl->req_start_video_rec =  FALSE;
 		CDBG("start video triggered .\n");
@@ -1769,8 +1788,12 @@ static void vfe31_process_reg_update_irq(void)
 		if (vfe31_ctrl->outpath.output_mode & VFE31_OUTPUT_MODE_V) {
 			msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out2.ch0));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out2.ch0));
 			msm_io_w(0, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 				24 * (vfe31_ctrl->outpath.out2.ch1));
+			temp = msm_io_r(vfe31_ctrl->vfebase + V31_AXI_OUT_OFF +
+				20 + 24 * (vfe31_ctrl->outpath.out2.ch1));
 		}
 		vfe31_ctrl->req_stop_video_rec =  FALSE;
 		CDBG("stop video triggered .\n");
@@ -1804,7 +1827,13 @@ static void vfe31_process_reg_update_irq(void)
 				msm_io_w(0, vfe31_ctrl->vfebase +
 					V31_AXI_OUT_OFF + 20 + 24 *
 					(vfe31_ctrl->outpath.out0.ch0));
+				temp = msm_io_r(vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out0.ch0));
 				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out0.ch1));
+				temp = msm_io_r(vfe31_ctrl->vfebase +
 					V31_AXI_OUT_OFF + 20 + 24 *
 					(vfe31_ctrl->outpath.out0.ch1));
 			}
@@ -1813,7 +1842,13 @@ static void vfe31_process_reg_update_irq(void)
 				msm_io_w(0, vfe31_ctrl->vfebase +
 					V31_AXI_OUT_OFF + 20 + 24 *
 					(vfe31_ctrl->outpath.out1.ch0));
+				temp = msm_io_r(vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out1.ch0));
 				msm_io_w(0, vfe31_ctrl->vfebase +
+					V31_AXI_OUT_OFF + 20 + 24 *
+					(vfe31_ctrl->outpath.out1.ch1));
+				temp = msm_io_r(vfe31_ctrl->vfebase +
 					V31_AXI_OUT_OFF + 20 + 24 *
 					(vfe31_ctrl->outpath.out1.ch1));
 			}
