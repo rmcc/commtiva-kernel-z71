@@ -299,17 +299,20 @@ u32 vcd_power_event
     (struct vcd_dev_ctxt_type *p_dev_ctxt,
      struct vcd_clnt_ctxt_type_t *p_cctxt, u32 event);
 
-u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event);
+u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event,
+	struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 u32 vcd_client_power_event
     (struct vcd_dev_ctxt_type *p_dev_ctxt,
      struct vcd_clnt_ctxt_type_t *p_cctxt, u32 event);
 
-u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt);
+u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt,
+	struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 u32 vcd_disable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt);
 
-u32 vcd_set_perf_level(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 n_perf_lvl);
+u32 vcd_set_perf_level(struct vcd_dev_ctxt_type *p_dev_ctxt,
+	u32 n_perf_lvl, struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 u32 vcd_update_clnt_perf_lvl
     (struct vcd_clnt_ctxt_type_t *p_cctxt,

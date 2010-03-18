@@ -42,6 +42,7 @@ struct vid_c_dev {
 	struct clk *pclk;
 	unsigned long hclk_rate;
 	unsigned int clock_enabled;
+	unsigned int rail_enabled;
 	unsigned int ref_count;
 	unsigned int firmware_refcount;
 	unsigned int get_firmware;
