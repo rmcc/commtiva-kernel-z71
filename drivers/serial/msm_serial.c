@@ -34,8 +34,9 @@
 #include <linux/nmi.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
-
+#include <mach/msm_serial_pdata.h>
 #include "msm_serial.h"
+
 
 #ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
 enum msm_clk_states_e {
@@ -43,6 +44,18 @@ enum msm_clk_states_e {
 	MSM_CLK_OFF,          /* clock enabled */
 	MSM_CLK_REQUEST_OFF,  /* disable after TX flushed */
 	MSM_CLK_ON,           /* clock disabled */
+};
+#endif
+
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+/* optional low power wakeup, typically on a GPIO RX irq */
+struct msm_wakeup {
+	int irq;  /* < 0 indicates low power wakeup disabled */
+	unsigned char ignore;  /* bool */
+
+	/* bool: inject char into rx tty on wakeup */
+	unsigned char inject_rx;
+	char rx_to_inject;
 };
 #endif
 
@@ -56,11 +69,15 @@ struct msm_port {
 	struct hrtimer		clk_off_timer;
 	ktime_t			clk_off_delay;
 #endif
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+	struct msm_wakeup wakeup;
+#endif
 };
 
 #define UART_TO_MSM(uart_port)	((struct msm_port *) uart_port)
 #define is_console(port)	((port)->cons && \
 				(port)->cons->index == (port)->line)
+
 
 static inline void msm_write(struct uart_port *port, unsigned int val,
 			     unsigned int off)
@@ -72,6 +89,13 @@ static inline unsigned int msm_read(struct uart_port *port, unsigned int off)
 {
 	return __raw_readl(port->membase + off);
 }
+
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+static inline unsigned int use_low_power_wakeup(struct msm_port *msm_port)
+{
+	return (msm_port->wakeup.irq >= 0);
+}
+#endif
 
 static void msm_stop_tx(struct uart_port *port)
 {
@@ -138,6 +162,12 @@ static enum hrtimer_restart msm_serial_clock_off(struct hrtimer *timer) {
 			struct msm_port *msm_port = UART_TO_MSM(port);
 			clk_disable(msm_port->clk);
 			msm_port->clk_state = MSM_CLK_OFF;
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+			if (use_low_power_wakeup(msm_port)) {
+				msm_port->wakeup.ignore = 1;
+				enable_irq(msm_port->wakeup.irq);
+			}
+#endif
 		} else {
 			hrtimer_forward_now(timer, msm_port->clk_off_delay);
 			ret = HRTIMER_RESTART;
@@ -179,6 +209,10 @@ void msm_serial_clock_on(struct uart_port *port, int force) {
 	switch (msm_port->clk_state) {
 	case MSM_CLK_OFF:
 		clk_enable(msm_port->clk);
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+		if (use_low_power_wakeup(msm_port))
+			disable_irq(msm_port->wakeup.irq);
+#endif
 		force = 1;
 	case MSM_CLK_REQUEST_OFF:
 		if (force) {
@@ -195,7 +229,6 @@ void msm_serial_clock_on(struct uart_port *port, int force) {
 #endif
 
 #ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
-#define WAKE_UP_IND	0x32
 static irqreturn_t msm_rx_irq(int irq, void *dev_id)
 {
 	struct uart_port *port = dev_id;
@@ -204,8 +237,14 @@ static irqreturn_t msm_rx_irq(int irq, void *dev_id)
 
 	spin_lock(&port->lock);
 
-	if (msm_port->clk_state == MSM_CLK_OFF)
-		inject_wakeup = 1;
+	if (msm_port->clk_state == MSM_CLK_OFF) {
+		/* ignore the first irq - it is a pending irq that occured
+		 * before enable_irq() */
+		if (msm_port->wakeup.ignore)
+			msm_port->wakeup.ignore = 0;
+		else
+			inject_wakeup = 1;
+	}
 
 	msm_serial_clock_on(port, 0);
 
@@ -213,7 +252,8 @@ static irqreturn_t msm_rx_irq(int irq, void *dev_id)
 	 */
 	if (inject_wakeup) {
 		struct tty_struct *tty = port->info->port.tty;
-		tty_insert_flip_char(tty, WAKE_UP_IND, TTY_NORMAL);
+		tty_insert_flip_char(tty, msm_port->wakeup.rx_to_inject,
+				     TTY_NORMAL);
 		tty_flip_buffer_push(tty);
 	}
 
@@ -561,13 +601,16 @@ static int msm_startup(struct uart_port *port)
 	msm_write(port, msm_port->imr, UART_IMR);
 
 #ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
-	/* Apply the RX GPIO wake irq workaround to the bluetooth uart */
-	if (port->line == 0) {  /* BT is serial device 0 */
-		ret = request_irq(MSM_GPIO_TO_INT(45), msm_rx_irq,
-				  IRQF_TRIGGER_FALLING, "msm_serial0_rx",
-				  port);
+	if (use_low_power_wakeup(msm_port)) {
+		ret = set_irq_wake(msm_port->wakeup.irq, 1);
 		if (unlikely(ret))
 			return ret;
+		ret = request_irq(msm_port->wakeup.irq, msm_rx_irq,
+				  IRQF_TRIGGER_FALLING,
+				  "msm_serial_wakeup", msm_port);
+		if (unlikely(ret))
+			return ret;
+		disable_irq(msm_port->wakeup.irq);
 	}
 #endif
 
@@ -588,8 +631,10 @@ static void msm_shutdown(struct uart_port *port)
 	free_irq(port->irq, port);
 
 #ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
-	if (port->line == 0)
-		free_irq(MSM_GPIO_TO_INT(45), port);
+	if (use_low_power_wakeup(msm_port)) {
+		set_irq_wake(msm_port->wakeup.irq, 0);
+		free_irq(msm_port->wakeup.irq, msm_port);
+	}
 #endif
 	msm_deinit_clock(port);
 
@@ -951,6 +996,9 @@ static int __init msm_serial_probe(struct platform_device *pdev)
 	struct msm_port *msm_port;
 	struct resource *resource;
 	struct uart_port *port;
+#ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
+	struct msm_serial_platform_data *pdata = pdev->dev.platform_data;
+#endif
 
 	if (unlikely(pdev->id < 0 || pdev->id >= UART_NR))
 		return -ENXIO;
@@ -981,9 +1029,17 @@ static int __init msm_serial_probe(struct platform_device *pdev)
 		return -ENXIO;
 
 #ifdef CONFIG_SERIAL_MSM_RX_WAKEUP
-	if (port->line == 0)  /* BT is serial device 0 */
-		if (unlikely(set_irq_wake(MSM_GPIO_TO_INT(45), 1)))
-			return -ENXIO;
+	if (pdata == NULL)
+		msm_port->wakeup.irq = -1;
+	else {
+		msm_port->wakeup.irq = pdata->wakeup_irq;
+		msm_port->wakeup.ignore = 1;
+		msm_port->wakeup.inject_rx = pdata->inject_rx_on_wakeup;
+		msm_port->wakeup.rx_to_inject = pdata->rx_to_inject;
+
+		if (unlikely(msm_port->wakeup.irq <= 0))
+			return -EINVAL;
+	}
 #endif
 
 #ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
