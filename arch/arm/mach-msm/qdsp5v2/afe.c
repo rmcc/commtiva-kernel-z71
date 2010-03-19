@@ -66,6 +66,7 @@
 
 #define AFE_MAX_TIMEOUT 500 /* 500 ms */
 #define AFE_MAX_CLNT 6 /* 6 HW path defined so far */
+#define GETDEVICEID(x) ((x) - 1)
 
 struct msm_afe_state {
 	struct msm_adsp_module *mod;
@@ -97,9 +98,9 @@ static void afe_dsp_event(void *data, unsigned id, size_t len,
 		MM_INFO("%s: device_id: %d device activity: %d\n", __func__,
 		afe_ack.device_id, afe_ack.device_activity);
 		if (afe_ack.device_activity == AFE_MSG_CODEC_CONFIG_DISABLED)
-			afe->codec_config[afe_ack.device_id] = 0;
+			afe->codec_config[GETDEVICEID(afe_ack.device_id)] = 0;
 		else
-			afe->codec_config[afe_ack.device_id] =
+			afe->codec_config[GETDEVICEID(afe_ack.device_id)] =
 			afe_ack.device_activity;
 
 		wake_up(&afe->wait);
@@ -154,7 +155,7 @@ int afe_enable(u8 path_id, struct msm_afe_config *config)
 	/* Issue codec config command */
 	afe_dsp_codec_config(afe, path_id, 1, config);
 	rc = wait_event_timeout(afe->wait,
-		afe->codec_config[path_id],
+		afe->codec_config[GETDEVICEID(path_id)],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
 		MM_ERR("AFE failed to respond within %d ms\n", AFE_MAX_TIMEOUT);
@@ -237,10 +238,10 @@ int afe_disable(u8 path_id)
 
 	BUG_ON(!afe->in_use);
 	MM_INFO("%s() path_id:%d codec state:%d\n", __func__, path_id,
-	afe->codec_config[path_id]);
+	afe->codec_config[GETDEVICEID(path_id)]);
 	afe_dsp_codec_config(afe, path_id, 0, NULL);
 	rc = wait_event_timeout(afe->wait,
-		!afe->codec_config[path_id],
+		!afe->codec_config[GETDEVICEID(path_id)],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
 		MM_ERR("AFE failed to respond within %d ms\n", AFE_MAX_TIMEOUT);
