@@ -573,6 +573,8 @@ static int audio_amrnb_open(struct audio_client *ac, uint32_t bufsz,
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
+
+
 static int audio_close(struct audio_client *ac)
 {
 	TRACE("%p: close\n", ac);
@@ -1444,6 +1446,38 @@ int q6audio_set_route(const char *name)
 done:
 	mutex_unlock(&audio_path_lock);
 	return 0;
+}
+
+static int audio_stream_equalizer(struct audio_client *ac, void *eq_config)
+{
+	int i;
+	struct adsp_set_equalizer_command rpc;
+	struct adsp_audio_eq_stream_config *eq_cfg;
+	eq_cfg = (struct adsp_audio_eq_stream_config *) eq_config;
+
+	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_SET_SESSION_EQ_CONFIG;
+	rpc.enable = eq_cfg->enable;
+	rpc.num_bands = eq_cfg->num_bands;
+	for (i = 0; i < eq_cfg->num_bands; i++) {
+		rpc.eq_bands[i].band_idx = eq_cfg->eq_bands[i].band_idx;
+		rpc.eq_bands[i].filter_type = eq_cfg->eq_bands[i].filter_type;
+		rpc.eq_bands[i].center_freq_hz =
+					eq_cfg->eq_bands[i].center_freq_hz;
+		rpc.eq_bands[i].filter_gain = eq_cfg->eq_bands[i].filter_gain;
+		rpc.eq_bands[i].q_factor = eq_cfg->eq_bands[i].q_factor;
+	}
+	return audio_ioctl(ac, &rpc, sizeof(rpc));
+}
+
+int q6audio_set_stream_eq_pcm(struct audio_client *ac, void *eq_config)
+{
+	int rc = 0;
+	mutex_lock(&audio_path_lock);
+	rc = audio_stream_equalizer(ac, eq_config);
+	mutex_unlock(&audio_path_lock);
+	return rc;
 }
 
 struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
