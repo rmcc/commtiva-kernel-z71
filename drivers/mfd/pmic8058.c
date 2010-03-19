@@ -175,6 +175,7 @@ struct pm8058_chip {
 	u8	revision;
 
 	u8	gpio_bank1[PM8058_GPIOS];
+	spinlock_t	pm_lock;
 };
 
 static struct pm8058_chip *pmic_chip;
@@ -316,11 +317,11 @@ int pm8058_gpio_config_h(struct pm8058_chip *chip, int gpio,
 		((5 << PM8058_GPIO_BANK_SHIFT) & PM8058_GPIO_BANK_MASK) |
 		(param->inv_int_pol ? 0 : PM8058_GPIO_NON_INT_POL_INV);
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&chip->pm_lock, irqsave);
 	/* Remember bank1 for later use */
 	chip->gpio_bank1[gpio] = bank[1];
 	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), bank, 6);
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 	if (rc)
 		pr_err("%s: Failed on ssbi_write(): rc=%d (GPIO config)\n",
@@ -420,10 +421,10 @@ int pm8058_gpio_set_direction(struct pm8058_chip *chip,
 		/* Carry over the old value */
 		bank1 |= chip->gpio_bank1[gpio] & PM8058_GPIO_OUT_INVERT;
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&chip->pm_lock, irqsave);
 	chip->gpio_bank1[gpio] = bank1;
 	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 	if (rc)
 		pr_err("%s: Failed on ssbi_write(): rc=%d (GPIO config)\n",
@@ -446,10 +447,10 @@ int pm8058_gpio_set(struct pm8058_chip *chip, unsigned gpio, int value)
 	if (value)
 		bank1 |= PM8058_GPIO_OUT_INVERT;
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&chip->pm_lock, irqsave);
 	chip->gpio_bank1[gpio] = bank1;
 	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_GPIO(gpio), &bank1, 1);
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 	if (rc)
 		pr_err("%s: FAIL ssbi_write(): rc=%d. "
@@ -467,7 +468,7 @@ int pm8058_gpio_get(struct pm8058_chip *chip, unsigned gpio)
 	if (gpio >= PM8058_GPIOS || chip == NULL)
 		return -EINVAL;
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&chip->pm_lock, irqsave);
 
 	/* Get gpio value from config bank 1 if output gpio.
 	   Get gpio value from IRQ RT status register for all other gpio modes.
@@ -501,7 +502,7 @@ int pm8058_gpio_get(struct pm8058_chip *chip, unsigned gpio)
 	}
 
 bail_out:
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 	return rc;
 }
@@ -518,7 +519,7 @@ int pm8058_mpp_get(struct pm8058_chip *chip, unsigned mpp)
 	block = FIRST_MPP_IRQ_BLOCK + mpp / 8;
 	bit = mpp % 8;
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&chip->pm_lock, irqsave);
 
 	rc = ssbi_write(chip->dev, SSBI_REG_ADDR_IRQ_BLK_SEL, &block, 1);
 	if (rc) {
@@ -537,7 +538,7 @@ int pm8058_mpp_get(struct pm8058_chip *chip, unsigned mpp)
 	rc = (bits & (1 << bit)) ? 1 : 0;
 
 bail_out:
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 	return rc;
 }
@@ -892,6 +893,7 @@ static int pm8058_ist(void *data)
 {
 	unsigned int irq = (unsigned int)data;
 	struct pm8058_chip *chip = get_irq_data(irq);
+	unsigned long	irqsave;
 
 	if (!chip) {
 		pr_err("%s: Invalid chip data: IRQ=%d\n", __func__, irq);
@@ -910,9 +912,9 @@ static int pm8058_ist(void *data)
 			continue;
 		}
 
-		local_irq_disable();
+		spin_lock_irqsave(&chip->pm_lock, irqsave);
 		pm8058_handle_isr(chip);
-		local_irq_enable();
+		spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 
 		enable_irq(irq);
 	}
@@ -1033,6 +1035,7 @@ static int pm8058_probe(struct i2c_client *client,
 
 	chip->pm_max_blocks = chip->pm_max_irq / 8 + 1;
 	chip->pm_max_masters = chip->pm_max_blocks / 8 + 1;
+	spin_lock_init(&chip->pm_lock);
 
 	/* Register for all reserved IRQs */
 	for (i = PM8058_FIRST_IRQ; i < (PM8058_FIRST_IRQ + PM8058_IRQS); i++) {
@@ -1106,13 +1109,13 @@ static int pm8058_suspend(struct i2c_client *client, pm_message_t mesg)
 	chip = i2c_get_clientdata(client);
 
 	for (i = 0; i < PM8058_IRQS; i++) {
-		local_irq_save(irqsave);
+		spin_lock_irqsave(&chip->pm_lock, irqsave);
 		if (chip->config[i] && !chip->wake_enable[i]) {
 			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
 			      == PM8058_IRQF_MASK_ALL))
 				pm8058_irq_mask(i + PM8058_FIRST_IRQ);
 		}
-		local_irq_restore(irqsave);
+		spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 	}
 
 	if (!chip->count_wakeable)
@@ -1130,13 +1133,13 @@ static int pm8058_resume(struct i2c_client *client)
 	chip = i2c_get_clientdata(client);
 
 	for (i = 0; i < PM8058_IRQS; i++) {
-		local_irq_save(irqsave);
+		spin_lock_irqsave(&chip->pm_lock, irqsave);
 		if (chip->config[i] && !chip->wake_enable[i]) {
 			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
 			      == PM8058_IRQF_MASK_ALL))
 				pm8058_irq_unmask(i + PM8058_FIRST_IRQ);
 		}
-		local_irq_restore(irqsave);
+		spin_unlock_irqrestore(&chip->pm_lock, irqsave);
 	}
 
 	if (!chip->count_wakeable)
@@ -1187,7 +1190,7 @@ static int debug_read_gpio_bank(int gpio, int bank, u8 *data)
 	int rc;
 	unsigned long irqsave;
 
-	local_irq_save(irqsave);
+	spin_lock_irqsave(&pmic_chip->pm_lock, irqsave);
 
 	*data = bank << PM8058_GPIO_BANK_SHIFT;
 	rc = pm8058_write(pmic_chip, SSBI_REG_ADDR_GPIO(gpio), data, 1);
@@ -1198,7 +1201,7 @@ static int debug_read_gpio_bank(int gpio, int bank, u8 *data)
 	rc = pm8058_read(pmic_chip, SSBI_REG_ADDR_GPIO(gpio), data, 1);
 
 bail_out:
-	local_irq_restore(irqsave);
+	spin_unlock_irqrestore(&pmic_chip->pm_lock, irqsave);
 
 	return rc;
 }
