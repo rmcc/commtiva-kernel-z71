@@ -512,12 +512,6 @@ static void usb_ept_start(struct msm_endpoint *ept)
 	ept->head->next = req->item_dma;
 	ept->head->info = 0;
 
-	/* flush buffers before priming ept */
-	dma_coherent_pre_ops();
-
-	/* start the endpoint */
-	writel(1 << ept->bit, USB_ENDPTPRIME);
-
 	/* mark this chain of requests as live */
 	while (req) {
 		req->live = 1;
@@ -525,6 +519,13 @@ static void usb_ept_start(struct msm_endpoint *ept)
 			break;
 		req = req->next;
 	}
+
+	/* flush buffers before priming ept */
+	dma_coherent_pre_ops();
+
+	/* start the endpoint */
+	writel(1 << ept->bit, USB_ENDPTPRIME);
+
 }
 
 int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
