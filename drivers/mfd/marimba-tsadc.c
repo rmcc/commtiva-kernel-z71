@@ -1,7 +1,7 @@
 /*
  * Marimba TSADC driver.
  *
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -282,9 +282,16 @@ static int marimba_tsadc_configure(struct marimba_tsadc *tsadc)
 
 int marimba_tsadc_start(struct marimba_tsadc_client *client)
 {
-	if (!tsadc_dev)
+	if (!client) {
+		pr_err("%s: Not a valid client\n", __func__);
+		return -ENODEV;
+	}
+
+	if (!tsadc_dev) {
 		dev_err(&client->pdev->dev,
-			"%s no tsadc device available\n", __func__);
+			"%s: No tsadc device available\n", __func__);
+		return -ENODEV;
+	}
 
 	/* REVISIT - add locks */
 	if (client->is_ts) {
@@ -301,12 +308,20 @@ marimba_tsadc_register(struct platform_device *pdev, unsigned int is_ts)
 {
 	struct marimba_tsadc_client *client;
 
-	if (!pdev)
+	if (!pdev) {
 		pr_err("%s: valid platform device pointer please\n", __func__);
+		return ERR_PTR(-EINVAL);
+	}
 
 	if (!is_ts) {
 		dev_err(&pdev->dev, "%s: only TS right now\n", __func__);
 		return ERR_PTR(-EINVAL);
+	}
+
+	if (!tsadc_dev) {
+		dev_err(&pdev->dev,
+			"%s: No tsadc device available\n", __func__);
+		return ERR_PTR(-ENODEV);
 	}
 
 	client = kzalloc(sizeof *client, GFP_KERNEL);
