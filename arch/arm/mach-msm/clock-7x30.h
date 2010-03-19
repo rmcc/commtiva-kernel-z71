@@ -148,6 +148,8 @@ static inline int clk_7x30_init(void) { return 0; }
 void pll_enable(uint32_t pll);
 void pll_disable(uint32_t pll);
 
+extern int internal_pwr_rail_ctl_auto(unsigned rail_id, bool enable);
+
 #define CLK_7X30(clk_name, clk_id, clk_dev, clk_flags) {	\
 	.name = clk_name, \
 	.id = L_7X30_##clk_id, \
