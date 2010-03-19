@@ -47,14 +47,29 @@ EXPORT_SYMBOL(msm_vol_ctl);
 static struct snd_kcontrol_new snd_msm_controls[];
 
 char snddev_name[AUDIO_DEV_CTL_MAX_DEV][44];
-#define NUMID_DEVICES   8
-#define SIMP_CONTROLS   (NUMID_DEVICES - 1)
 #define MSM_MAX_VOLUME 0x3FFF
 #define MSM_VOLUME_STEP ((MSM_MAX_VOLUME+17)/100) /* 17 added to avoid
 						      more deviation */
+static int device_index; /* Count of Device controls */
+static int simple_control; /* Count of simple controls*/
+
+static int msm_scontrol_count_info(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_info *uinfo)
+{
+	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+	uinfo->count = 1;
+	return 0;
+}
+
+static int msm_scontrol_count_get(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	ucontrol->value.integer.value[0] = simple_control;
+	return 0;
+}
 
 static int msm_v_call_info(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_info *uinfo)
+			struct snd_ctl_elem_info *uinfo)
 {
 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
 	uinfo->count = 1;
@@ -279,7 +294,7 @@ static int msm_device_put(struct snd_kcontrol *kcontrol,
 	u32 set_freq = 0;
 
 	set = ucontrol->value.integer.value[0];
-	route_cfg.dev_id = ucontrol->id.numid - NUMID_DEVICES;
+	route_cfg.dev_id = ucontrol->id.numid - device_index;
 	dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 	if (IS_ERR(dev_info)) {
 		MM_ERR("pass invalid dev_id\n");
@@ -344,7 +359,7 @@ static int msm_device_get(struct snd_kcontrol *kcontrol,
 	struct msm_audio_route_config route_cfg;
 	struct msm_snddev_info *dev_info;
 
-	route_cfg.dev_id = ucontrol->id.numid - NUMID_DEVICES;
+	route_cfg.dev_id = ucontrol->id.numid - device_index;
 	dev_info = audio_dev_ctrl_find_dev(route_cfg.dev_id);
 
 	if (IS_ERR(dev_info)) {
@@ -391,7 +406,7 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 	u32 session_mask = 0;
 	route_cfg.dev_id = ucontrol->value.integer.value[1];
 
-	if (ucontrol->id.numid == 1)
+	if (ucontrol->id.numid == 2)
 		route_cfg.stream_type =	AUDIO_ROUTE_STREAM_PLAYBACK;
 	else
 		route_cfg.stream_type =	AUDIO_ROUTE_STREAM_REC;
@@ -465,7 +480,6 @@ static int msm_route_put(struct snd_kcontrol *kcontrol,
 }
 
 static struct snd_kcontrol_new snd_dev_controls[AUDIO_DEV_CTL_MAX_DEV];
-#define CIMP_CONTROLS	ARRAY_SIZE(snd_msm_controls)
 
 static int snd_dev_ctl_index(int idx)
 {
@@ -501,19 +515,21 @@ static int snd_dev_ctl_index(int idx)
 }
 
 static struct snd_kcontrol_new snd_msm_controls[] = {
-	MSM_EXT("Stream", 1, msm_route_info, msm_route_get, \
+	MSM_EXT("Count", 1, msm_scontrol_count_info, msm_scontrol_count_get, \
+						NULL, 0),
+	MSM_EXT("Stream", 2, msm_route_info, msm_route_get, \
 						 msm_route_put, 0),
-	MSM_EXT("Record", 2, msm_route_info, msm_route_get, \
+	MSM_EXT("Record", 3, msm_route_info, msm_route_get, \
 						 msm_route_put, 0),
-	MSM_EXT("Voice", 3, msm_voice_info, msm_voice_get, \
+	MSM_EXT("Voice", 4, msm_voice_info, msm_voice_get, \
 						 msm_voice_put, 0),
-	MSM_EXT("Volume", 4, msm_volume_info, msm_volume_get, \
+	MSM_EXT("Volume", 5, msm_volume_info, msm_volume_get, \
 						 msm_volume_put, 0),
-	MSM_EXT("VoiceVolume", 5, msm_v_volume_info, msm_v_volume_get, \
+	MSM_EXT("VoiceVolume", 6, msm_v_volume_info, msm_v_volume_get, \
 						 msm_v_volume_put, 0),
-	MSM_EXT("VoiceMute", 6, msm_v_mute_info, msm_v_mute_get, \
+	MSM_EXT("VoiceMute", 7, msm_v_mute_info, msm_v_mute_get, \
 						 msm_v_mute_put, 0),
-	MSM_EXT("Voice Call", 7, msm_v_call_info, msm_v_call_get, \
+	MSM_EXT("Voice Call", 8, msm_v_call_info, msm_v_call_get, \
 						msm_v_call_put, 0),
 };
 
@@ -541,6 +557,8 @@ static int msm_new_mixer(struct snd_card *card)
 		} else
 			return 0;
 	}
+	simple_control = ARRAY_SIZE(snd_msm_controls);
+	device_index = simple_control + 1;
 	return 0;
 }
 
