@@ -379,6 +379,7 @@ static int snddev_ecodec_probe(struct platform_device *pdev)
 	dev_info->dev_ops.open = snddev_ecodec_open;
 	dev_info->dev_ops.close = snddev_ecodec_close;
 	dev_info->dev_ops.set_freq = snddev_ecodec_set_freq;
+	dev_info->dev_ops.enable_sidetone = NULL;
 	dev_info->capability = pdata->capability;
 	dev_info->opened = 0;
 
