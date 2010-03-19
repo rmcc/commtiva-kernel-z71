@@ -86,6 +86,7 @@ enum {
 	QUP_ERROR_FLAGS_EN      = 0x20,
 	QUP_MX_READ_CNT         = 0x208,
 	QUP_MX_INPUT_CNT        = 0x200,
+	QUP_MX_WR_CNT           = 0x100,
 	QUP_OUT_DEBUG           = 0x108,
 	QUP_OUT_FIFO_CNT        = 0x10C,
 	QUP_OUT_FIFO_BASE       = 0x110,
@@ -125,8 +126,8 @@ enum {
 
 /* Packing Unpacking words in FIFOs , and IO modes*/
 enum {
-	QUP_FIFO_MODE = 0,
-	QUP_BLK_MODE  = 1U << 12,
+	QUP_WR_BLK_MODE  = 1U << 10,
+	QUP_RD_BLK_MODE  = 1U << 12,
 	QUP_UNPACK_EN = 1U << 14,
 	QUP_PACK_EN = 1U << 15,
 };
@@ -146,6 +147,7 @@ enum {
 /* Status, Error flags */
 enum {
 	I2C_STATUS_WR_BUFFER_FULL  = 1U << 0,
+	I2C_STATUS_BUS_ACTIVE      = 1U << 8,
 	I2C_STATUS_ERROR_MASK      = 0x38000FC,
 	QUP_IN_NOT_EMPTY           = 1U << 5,
 	QUP_STATUS_ERROR_FLAGS     = 0x7C,
@@ -169,10 +171,12 @@ struct qup_i2c_dev {
 	int                          err;
 	int                          mode;
 	int                          clk_ctl;
+	int                          one_bit_t;
 	int                          out_fifo_sz;
 	int                          in_fifo_sz;
 	int                          out_blk_sz;
 	int                          in_blk_sz;
+	int                          wr_sz;
 	struct msm_i2c_platform_data *pdata;
 	void                         *complete;
 };
@@ -258,8 +262,12 @@ qup_i2c_poll_writeready(struct qup_i2c_dev *dev)
 	while (retries != 2000) {
 		uint32_t status = readl(dev->base + QUP_I2C_STATUS);
 
-		if (!(status & I2C_STATUS_WR_BUFFER_FULL))
-			return 0;
+		if (!(status & I2C_STATUS_WR_BUFFER_FULL)) {
+			if (!(status & I2C_STATUS_BUS_ACTIVE))
+				return 0;
+			else /* 1-bit delay before we check for bus busy */
+				udelay(dev->one_bit_t);
+		}
 		if (retries++ == 1000)
 			udelay(100);
 	}
@@ -340,12 +348,11 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 			int *idx, uint32_t *carry_over)
 {
 	int entries = dev->cnt;
+	int empty_sl = dev->wr_sz - ((*idx) >> 1);
 	int i = 0;
 	uint32_t val = 0;
 	uint32_t last_entry = 0;
 	uint16_t addr = msg->addr << 1;
-	if (dev->pos == 0)
-		entries++;
 
 	if (dev->pos == 0) {
 		if (*idx % 4) {
@@ -359,10 +366,19 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 			val = QUP_OUT_START | addr;
 		*idx += 2;
 		i++;
-	} else if (*idx % 4) {
+		entries++;
+	} else {
+		/* Avoid setp time issue by adding 1 NOP when number of bytes
+		 * are more than FIFO/BLOCK size. setup time issue can't appear
+		 * otherwise since next byte to be written will always be ready
+		 */
 		val = (QUP_OUT_NOP | 1);
+		*idx += 2;
 		i++;
+		entries++;
 	}
+	if (entries > empty_sl)
+		entries = empty_sl;
 
 	for (; i < (entries - 1); i++) {
 		if (*idx % 4) {
@@ -378,7 +394,7 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 		(*idx) += 2;
 		dev->pos++;
 	}
-	if (dev->pos < (dev->cnt - 1))
+	if (dev->pos < (msg->len - 1))
 		last_entry = QUP_OUT_DATA;
 	else if (rem > 1) /* not last array entry */
 		last_entry = QUP_OUT_DATA;
@@ -394,7 +410,7 @@ qup_issue_write(struct qup_i2c_dev *dev, struct i2c_msg *msg, int rem,
 		if (rem > 1) {
 			struct i2c_msg *next = msg + 1;
 			if (next->addr == msg->addr && (next->flags | I2C_M_RD)
-				&& *idx == ((dev->out_fifo_sz*2) - 4)) {
+				&& *idx == ((dev->wr_sz*2) - 4)) {
 				writel(((last_entry | msg->buf[dev->pos]) |
 					((1 | QUP_OUT_NOP) << 16)), dev->base +
 					QUP_OUT_FIFO_BASE);/* + (*idx) - 2); */
@@ -437,20 +453,56 @@ qup_update_state(struct qup_i2c_dev *dev, uint32_t state)
 static int
 qup_set_read_mode(struct qup_i2c_dev *dev, int rd_len)
 {
+	uint32_t wr_mode = (dev->wr_sz < dev->out_fifo_sz) ?
+				QUP_WR_BLK_MODE : 0;
 	if (rd_len > 256) {
 		dev_err(dev->dev, "HW doesn't support READs > 256 bytes\n");
 		return -EPROTONOSUPPORT;
 	}
 	if (rd_len <= dev->in_fifo_sz) {
-		writel(QUP_FIFO_MODE | QUP_PACK_EN | QUP_UNPACK_EN,
+		writel(wr_mode | QUP_PACK_EN | QUP_UNPACK_EN,
 			dev->base + QUP_IO_MODE);
 		writel(rd_len, dev->base + QUP_MX_READ_CNT);
 	} else {
-		writel(QUP_BLK_MODE | QUP_PACK_EN | QUP_UNPACK_EN,
-			dev->base + QUP_IO_MODE);
+		writel(wr_mode | QUP_RD_BLK_MODE |
+			QUP_PACK_EN | QUP_UNPACK_EN, dev->base + QUP_IO_MODE);
 		writel(rd_len, dev->base + QUP_MX_INPUT_CNT);
 	}
 	return 0;
+}
+
+static int
+qup_set_wr_mode(struct qup_i2c_dev *dev, int rem)
+{
+	int total_len = 0;
+	int ret = 0;
+	if (dev->msg->len >= (dev->out_fifo_sz - 1)) {
+		total_len = dev->msg->len + 1 +
+				(dev->msg->len/(dev->out_blk_sz-1));
+		writel(QUP_WR_BLK_MODE | QUP_PACK_EN | QUP_UNPACK_EN,
+			dev->base + QUP_IO_MODE);
+		dev->wr_sz = dev->out_blk_sz;
+	} else
+		writel(QUP_PACK_EN | QUP_UNPACK_EN,
+			dev->base + QUP_IO_MODE);
+
+	if (rem > 1) {
+		struct i2c_msg *next = dev->msg + 1;
+		if (next->addr == dev->msg->addr &&
+			next->flags == I2C_M_RD) {
+			ret = qup_set_read_mode(dev, next->len);
+			/* make sure read start & read command are in 1 blk */
+			if ((total_len % dev->out_blk_sz) ==
+				(dev->out_blk_sz - 1))
+				total_len += 3;
+			else
+				total_len += 2;
+		}
+	}
+	/* WRITE COUNT register valid/used only in block mode */
+	if (dev->wr_sz == dev->out_blk_sz)
+		writel(total_len, dev->base + QUP_MX_WR_CNT);
+	return ret;
 }
 
 static int
@@ -517,7 +569,6 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	writel(QUP_OPERATIONAL_RESET, dev->base + QUP_OPERATIONAL);
 	writel(QUP_STATUS_ERROR_FLAGS, dev->base + QUP_ERROR_FLAGS_EN);
 
-	writel(QUP_PACK_EN | QUP_UNPACK_EN, dev->base + QUP_IO_MODE);
 	writel(I2C_MINI_CORE | I2C_N_VAL, dev->base + QUP_CONFIG);
 
 	/* Initialize I2C mini core registers */
@@ -530,14 +581,7 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	while (rem) {
 		bool filled = false;
 
-		/* Wait for WR buffer not full */
-		ret = qup_i2c_poll_writeready(dev);
-		if (ret) {
-			dev_err(dev->dev,
-				"Error waiting for write ready before addr\n");
-			goto out_err;
-		}
-
+		dev->wr_sz = dev->out_fifo_sz;
 		dev->err = 0;
 		dev->complete = &complete;
 
@@ -547,24 +591,18 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		}
 
 		qup_print_status(dev);
-		/* HW limits Read upto 256 bytes in 1 read without stop
-		 * only FIFO mode supported right now, so read size of
-		 * in_fifo supported in 1 read
-		 */
+		/* HW limits Read upto 256 bytes in 1 read without stop */
 		if (dev->msg->flags & I2C_M_RD) {
 			ret = qup_set_read_mode(dev, dev->cnt);
 			if (ret != 0)
 				goto out_err;
 		} else {
-			if (rem > 1) {
-				struct i2c_msg *next = msgs + 1;
-				if (next->addr == msgs->addr &&
-					next->flags == I2C_M_RD) {
-					ret = qup_set_read_mode(dev, next->len);
-					if (ret != 0)
-						goto out_err;
-				}
-			}
+			ret = qup_set_wr_mode(dev, rem);
+			if (ret != 0)
+				goto out_err;
+			/* Don't fill block till we get interrupt */
+			if (dev->wr_sz == dev->out_blk_sz)
+				filled = true;
 		}
 
 		err = qup_update_state(dev, QUP_RUN_STATE);
@@ -599,7 +637,7 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				else if (!(msgs->flags & I2C_M_RD))
 					qup_issue_write(dev, msgs, rem, &idx,
 							&carry_over);
-				if (idx >= dev->out_fifo_sz)
+				if (idx >= (dev->wr_sz << 1))
 					filled = true;
 				/* Start new message */
 				if (filled == false) {
@@ -610,7 +648,8 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 						 * same address
 						 */
 						struct i2c_msg *next = msgs + 1;
-						if (next->addr != msgs->addr)
+						if (next->addr != msgs->addr ||
+							next->flags == 0)
 							filled = true;
 						else {
 							rem--;
@@ -680,6 +719,13 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 				dev->cnt = msgs->len;
 				dev->msg = msgs;
 			}
+		}
+		/* Wait for I2C bus to be idle */
+		ret = qup_i2c_poll_writeready(dev);
+		if (ret) {
+			dev_err(dev->dev,
+				"Error waiting for write ready\n");
+			goto out_err;
 		}
 	}
 
@@ -841,6 +887,8 @@ qup_i2c_probe(struct platform_device *pdev)
 	clk_enable(clk);
 	if (pclk)
 		clk_enable(pclk);
+
+	dev->one_bit_t = USEC_PER_SEC/pdata->clk_freq;
 	dev->pdata = pdata;
 	dev->clk_ctl = 0;
 
