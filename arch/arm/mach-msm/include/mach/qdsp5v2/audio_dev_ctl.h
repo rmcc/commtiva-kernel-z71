@@ -83,11 +83,12 @@ void msm_release_voc_thread(void);
 int snddev_voice_set_volume(int vol, int path);
 
 struct auddev_evt_voc_devinfo {
-	u32 dev_type;
-	u32 acdb_dev_id;
-	u32 dev_sample;
+	u32 dev_type;           /* Rx or Tx */
+	u32 acdb_dev_id;        /* acdb id of device */
+	u32 dev_sample;         /* Sample rate of device */
 	s32 max_rx_vol; 	/* unit is mb (milibel */
 	s32 min_rx_vol;		/* unit is mb */
+	u32 dev_id;             /* registered device id */
 };
 
 struct auddev_evt_audcal_info {
