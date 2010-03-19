@@ -118,10 +118,20 @@ static long pcm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		}
 		break;
 	}
+	case AUDIO_SET_EQ: {
+		struct msm_audio_eq_stream_config eq_config;
+		if (copy_from_user(&eq_config, (void *) arg,
+						sizeof(eq_config))) {
+			rc = -EFAULT;
+			break;
+		}
+		rc = q6audio_set_stream_eq_pcm(pcm->ac, (void *) &eq_config);
+		break;
+	}
 	default:
 		rc = -EINVAL;
 	}
-		mutex_unlock(&pcm->lock);
+	mutex_unlock(&pcm->lock);
 	return rc;
 }
 
