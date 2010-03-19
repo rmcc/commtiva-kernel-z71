@@ -251,7 +251,7 @@ static void tavarua_rds_read(struct tavarua_device *radio)
 	for (blocknum = 0; blocknum < 4; blocknum++) {
 		/* Fill the V4L2 RDS buffer */
 		put_unaligned(cpu_to_le16(radio->registers[RAW_RDS +
-			blocknum*RDS_BLOCK]), (unsigned short *) &tmp);
+			blocknum*RDS_BLOCK]), (unsigned short *) tmp);
 		tmp[2] = blocknum;		/* offset name */
 		tmp[2] |= blocknum << 3;	/* received offset */
 		tmp[2] |= 0x40; /* corrected error(s) */
@@ -1066,8 +1066,8 @@ static int tavarua_fops_open(struct file *file)
 			(radio->registers[XFRCTRL+7]);
 
 	printk(KERN_WARNING DRIVER_NAME ": Chip ID %x\n", radio->chipID);
-	if (radio->chipID == 0x01000000) {
-		printk(KERN_WARNING DRIVER_NAME ": Unsupported hardware%x\n",
+	if (radio->chipID == MARIMBA_A0) {
+		printk(KERN_WARNING DRIVER_NAME ": Unsupported hardware: %x\n",
 						radio->chipID);
 		retval = -1;
 		goto open_err_all;

@@ -51,6 +51,7 @@
   #define FMDBG(fmt, args...)
 #endif
 
+#define MARIMBA_A0 0x01010013
 #define MARIMBA_2_1 0x02010204
 #define WAIT_TIMEOUT 2000
 #define RADIO_INIT_TIME 15
