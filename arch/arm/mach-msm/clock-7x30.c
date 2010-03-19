@@ -401,7 +401,6 @@ static struct clk_freq_tbl dummy_freq = F_END;
 #define PMDH_NS			0x008C
 #define UART_NS			0x00E0
 #define UART2_NS		0x0464
-#define UART3_NS		0x0468
 #define USBH_MD			0x02BC
 #define USBH_NS			0x02C0
 #define USBH2_NS		0x046C
@@ -468,7 +467,6 @@ static struct clk_local clk_local_tbl[] = {
 	CLK_1RATE(QUP_I2C,	0x04F0, B(0), B(2),	clk_tbl_tcxo),
 	CLK_1RATE(UART1,	UART_NS, B(5), B(4),	clk_tbl_tcxo),
 	CLK_1RATE(UART2,	UART2_NS, B(5), B(4),	clk_tbl_tcxo),
-	CLK_1RATE(UART3,	UART3_NS, B(5), B(4),	clk_tbl_tcxo),
 
 	CLK_BASIC(EMDH,	EMDH_NS,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
 	CLK_BASIC(PMDH,	PMDH_NS,    0, B(11),	clk_tbl_mdh, AXI_LI_ADSP_A),
@@ -1052,7 +1050,6 @@ static struct clk_local_ownership {
 	[C(SDC4)]			= { O(SH2_OWN_ROW1), B(29) },
 	[C(SDC4_P)]			= { O(SH2_OWN_ROW1), B(29) },
 	[C(UART2)]			= { O(SH2_OWN_ROW1), B(0) },
-	[C(UART3)]			= { O(SH2_OWN_ROW1), B(1) },
 	[C(USB_HS2)]			= { O(SH2_OWN_ROW1), B(2) },
 	[C(USB_HS2_CORE)]		= { O(SH2_OWN_ROW1), B(2) },
 	[C(USB_HS2_P)]			= { O(SH2_OWN_ROW1), B(2) },
@@ -1126,7 +1123,6 @@ static struct reg_init {
 	{REG(SDAC_NS), BM(15, 14), 0x0}, /* SDAC div = div-1. */
 	/* Disable sources TCXO/5 & TCXO/6. UART1 src = TCXO*/
 	{REG(UART_NS), BM(26, 25) | BM(2, 0), 0x0},
-	{REG(UART3_NS), 0x7, 0x0}, /* UART3 src = TCXO. */
 	{REG(MDP_VSYNC_REG), 0xC, 0x4}, /* MDP VSYNC src = LPXO. */
 	/* HDMI div = div-1, non-inverted. tv_enc_src = tv_clk_src */
 	{REG(HDMI_NS), 0x7, 0x0},
