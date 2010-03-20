@@ -56,6 +56,7 @@ struct video_client_ctx {
 	struct completion event;
 	u32 event_status;
 	u32 seq_header_set;
+	u32 stop_msg;
 };
 
 void __iomem *vid_c_get_ioaddr(void);

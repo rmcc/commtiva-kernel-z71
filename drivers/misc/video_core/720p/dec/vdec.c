@@ -968,6 +968,10 @@ static u32 vid_dec_msg_pending(struct video_client_ctx *client_ctx)
 	else
 		DBG("%s(): vid_dec msg queue Not empty \n", __func__);
 
+	if (islist_empty && client_ctx->stop_msg == 1) {
+		DBG("%s(): List empty and Stop Msg set \n", __func__);
+		return client_ctx->stop_msg;
+	}
 	return !islist_empty;
 }
 
@@ -982,9 +986,10 @@ static u32 vid_dec_get_next_msg(struct video_client_ctx *client_ctx,
 
 	rc = wait_event_interruptible(client_ctx->msg_wait,
 				      vid_dec_msg_pending(client_ctx));
-
-	if (rc < 0)
+	if (rc < 0 || client_ctx->stop_msg == 1) {
+		DBG("rc = %d, stop_msg = %u \n", rc, client_ctx->stop_msg);
 		return FALSE;
+	}
 
 	mutex_lock(&client_ctx->msg_queue_lock);
 	if (!list_empty(&client_ctx->msg_queue)) {
@@ -1280,6 +1285,11 @@ static int vid_dec_ioctl(struct inode *inode, struct file *file,
 				 &vdec_msg_info, sizeof(vdec_msg_info)))
 			return -EFAULT;
 		break;
+	case VDEC_IOCTL_STOP_NEXT_MSG:
+		DBG("VDEC_IOCTL_STOP_NEXT_MSG\n");
+		client_ctx->stop_msg = 1;
+		wake_up(&client_ctx->msg_wait);
+		break;
 	case VDEC_IOCTL_SET_SEQUENCE_HEADER:
 		DBG("VDEC_IOCTL_SET_SEQUENCE_HEADER\n");
 		if (copy_from_user(&vdec_msg, (void __user *)arg,
@@ -1412,6 +1422,7 @@ static int vid_dec_open(struct inode *inode, struct file *file)
 	mutex_init(&client_ctx->msg_queue_lock);
 	INIT_LIST_HEAD(&client_ctx->msg_queue);
 	init_waitqueue_head(&client_ctx->msg_wait);
+	client_ctx->stop_msg = 0;
 
 	vcd_status = vcd_open(vid_dec_device_p->device_handle, TRUE,
 			      vid_dec_vcd_cb, client_ctx);
