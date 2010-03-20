@@ -107,6 +107,7 @@
 
 #define ERR(x...) printk(KERN_ERR x)
 
+#define USE_RES_TRACKER
 static struct vid_c_dev *vid_c_device_p;
 static dev_t vid_c_dev_num;
 static struct class *vid_c_class;
@@ -307,6 +308,206 @@ void __iomem *vid_c_get_ioaddr(void)
 	return (u8 *)vid_c_device_p->virt_base;
 }
 EXPORT_SYMBOL(vid_c_get_ioaddr);
+#ifdef USE_RES_TRACKER
+
+u32 vid_c_enable_pwr_rail(void)
+{
+	int rc = -1;
+	mutex_lock(&vid_c_device_p->lock);
+
+	if (vid_c_device_p->rail_enabled == 0) {
+		rc = internal_pwr_rail_mode(PWR_RAIL_MFC_CLK,
+			PWR_RAIL_CTL_MANUAL);
+		if (rc) {
+			DBG("%s(): internal_pwr_rail_mode failed %d \n",
+				__func__, rc);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+		DBG("%s(): internal_pwr_rail_mode Success %d \n",
+			__func__, rc);
+
+		vid_c_device_p->pclk = clk_get(vid_c_device_p->device,
+			"mfc_pclk");
+
+		if (IS_ERR(vid_c_device_p->pclk)) {
+			DBG("%s(): mfc_pclk get failed \n", __func__);
+
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+
+		vid_c_device_p->hclk = clk_get(vid_c_device_p->device,
+			"mfc_clk");
+
+		if (IS_ERR(vid_c_device_p->hclk)) {
+			DBG("%s(): mfc_clk get failed \n", __func__);
+
+			clk_put(vid_c_device_p->pclk);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+
+		vid_c_device_p->hclk_div2 =
+			clk_get(vid_c_device_p->device, "mfc_div2_clk");
+
+		if (IS_ERR(vid_c_device_p->pclk)) {
+			DBG("%s(): mfc_div2_clk get failed \n", __func__);
+
+			clk_put(vid_c_device_p->pclk);
+			clk_put(vid_c_device_p->hclk);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+
+		rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 1);
+		if (rc) {
+			DBG("\n internal_pwr_rail_ctl failed %d\n", rc);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+		DBG("%s(): internal_pwr_rail_ctl Success %d \n", __func__, rc);
+		msleep(20);
+
+		rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_DEASSERT);
+		if (rc) {
+			DBG("\n clk_reset failed %d\n", rc);
+			return FALSE;
+		}
+		msleep(20);
+	}
+	vid_c_device_p->rail_enabled = 1;
+	mutex_unlock(&vid_c_device_p->lock);
+	return TRUE;
+}
+EXPORT_SYMBOL(vid_c_enable_pwr_rail);
+
+u32 vid_c_disable_pwr_rail(void)
+{
+	int rc = -1;
+	mutex_lock(&vid_c_device_p->lock);
+
+	if (vid_c_device_p->clock_enabled != 0) {
+		mutex_unlock(&vid_c_device_p->lock);
+		DBG("\n Calling CLK disable in Power Down \n");
+		vid_c_disable_clk();
+		mutex_lock(&vid_c_device_p->lock);
+	}
+
+	if (vid_c_device_p->rail_enabled == 0) {
+		mutex_unlock(&vid_c_device_p->lock);
+		return FALSE;
+	}
+
+	vid_c_device_p->rail_enabled = 0;
+	rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_ASSERT);
+	if (rc) {
+		DBG("\n clk_reset failed %d\n", rc);
+		mutex_unlock(&vid_c_device_p->lock);
+		return FALSE;
+	}
+	msleep(20);
+
+	rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 0);
+	if (rc) {
+		DBG("\n clk_reset failed %d\n", rc);
+		mutex_unlock(&vid_c_device_p->lock);
+		return FALSE;
+	}
+
+	clk_put(vid_c_device_p->hclk_div2);
+	clk_put(vid_c_device_p->hclk);
+	clk_put(vid_c_device_p->pclk);
+
+	mutex_unlock(&vid_c_device_p->lock);
+
+	return TRUE;
+}
+EXPORT_SYMBOL(vid_c_disable_pwr_rail);
+
+u32 vid_c_enable_clk(void)
+{
+	mutex_lock(&vid_c_device_p->lock);
+
+	if (vid_c_device_p->clock_enabled == 0) {
+		DBG("Enabling IRQ in %s()\n", __func__);
+		enable_irq(vid_c_device_p->irq);
+
+		DBG("%s(): Enabling the clocks ...\n", __func__);
+
+		if (clk_enable(vid_c_device_p->pclk) != 0) {
+			DBG("vidc pclk Enable failed \n");
+
+			clk_put(vid_c_device_p->hclk);
+			clk_put(vid_c_device_p->hclk_div2);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+
+		if (clk_enable(vid_c_device_p->hclk) != 0) {
+			DBG("vidc  hclk Enable failed \n");
+			clk_put(vid_c_device_p->pclk);
+			clk_put(vid_c_device_p->hclk_div2);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+
+		if (clk_enable(vid_c_device_p->hclk_div2) != 0) {
+			DBG("vidc  hclk Enable failed \n");
+			clk_put(vid_c_device_p->hclk);
+			clk_put(vid_c_device_p->pclk);
+			mutex_unlock(&vid_c_device_p->lock);
+			return FALSE;
+		}
+		msleep(20);
+	}
+
+	vid_c_device_p->clock_enabled = 1;
+	mutex_unlock(&vid_c_device_p->lock);
+	return TRUE;
+}
+EXPORT_SYMBOL(vid_c_enable_clk);
+
+u32 vid_c_sel_clk_rate(unsigned long hclk_rate)
+{
+	mutex_lock(&vid_c_device_p->lock);
+	if (clk_set_rate(vid_c_device_p->hclk,
+		hclk_rate)) {
+		DBG("vidc hclk set rate failed \n");
+		mutex_unlock(&vid_c_device_p->lock);
+		return FALSE;
+	}
+	vid_c_device_p->hclk_rate = hclk_rate;
+	mutex_unlock(&vid_c_device_p->lock);
+	return TRUE;
+}
+EXPORT_SYMBOL(vid_c_sel_clk_rate);
+
+u32 vid_c_disable_clk(void)
+{
+	mutex_lock(&vid_c_device_p->lock);
+
+	if (vid_c_device_p->clock_enabled == 0) {
+		mutex_unlock(&vid_c_device_p->lock);
+		return FALSE;
+	}
+
+	DBG("Disabling IRQ in %s()\n", __func__);
+	disable_irq_nosync(vid_c_device_p->irq);
+	DBG("%s(): Disabling the clocks ...\n", __func__);
+
+	vid_c_device_p->clock_enabled = 0;
+	clk_disable(vid_c_device_p->hclk);
+	clk_disable(vid_c_device_p->hclk_div2);
+	clk_disable(vid_c_device_p->pclk);
+
+	mutex_unlock(&vid_c_device_p->lock);
+
+	return TRUE;
+}
+EXPORT_SYMBOL(vid_c_disable_clk);
+
+#else
 
 u32 vid_c_enable_clk(unsigned long hclk_rate)
 {
@@ -463,6 +664,7 @@ u32 vid_c_disable_clk(void)
 }
 EXPORT_SYMBOL(vid_c_disable_clk);
 
+#endif
 unsigned char *vid_c_command_control_fw;
 u32 vid_c_command_control_fw_size;
 

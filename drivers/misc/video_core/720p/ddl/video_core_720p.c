@@ -191,7 +191,7 @@ u32 vidc_720p_reset_is_success()
 	if (0xe5 != n_stagecounter) {
 		DBG("\n vidc-CPU_RESET-FAILS!");
 		VIDC_IO_OUT(REG_224135, 0);
-		mdelay(10);
+		msleep(10);
 		return FALSE;
 	}
 	return TRUE;

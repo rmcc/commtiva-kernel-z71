@@ -105,6 +105,7 @@
 
 #define ERR(x...) printk(KERN_ERR x)
 
+#define USE_RES_TRACKER
 static struct vid_enc_dev *vid_enc_device_p;
 static dev_t vid_enc_dev_num;
 static struct class *vid_enc_class;
@@ -546,11 +547,14 @@ static int vid_enc_open(struct inode *inode, struct file *file)
 		return -ENODEV;
 	}
 
+#ifndef USE_RES_TRACKER
+	DBG("Resource Tracker not in use");
 	if (vid_c_enable_clk(VID_C_HCLK_RATE) == FALSE) {
 		ERR("ERROR : vid_enc_open()	clock enabled failed\n");
 		mutex_unlock(&vid_enc_device_p->lock);
 		return -ENODEV;
 	}
+#endif
 
 	DBG(" Virtual Address of ioremap is %p\n", vid_enc_device_p->virt_base);
 	if (vid_enc_device_p->num_clients == 0) {
@@ -589,7 +593,9 @@ static int vid_enc_release(struct inode *inode, struct file *file)
 	DBG("%s\n", __func__);
 	vid_enc_close_client(client_ctx);
 	vid_c_release_firmware();
+#ifndef USE_RES_TRACKER
 	vid_c_disable_clk();
+#endif
 	return 0;
 }
 
@@ -624,7 +630,6 @@ static int vid_enc_vcd_init(void)
 	u32 i;
 
 	DBG("enter vid_enc_vcd_init()");
-
 	vid_enc_device_p->num_clients = 0;
 
 	for (i = 0; i < VID_ENC_MAX_ENCODER_CLIENTS; i++) {

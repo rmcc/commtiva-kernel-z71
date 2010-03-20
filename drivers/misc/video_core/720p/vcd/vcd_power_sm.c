@@ -96,7 +96,8 @@ u32 vcd_power_event(
 	case VCD_EVT_PWR_DEV_SET_PERFLVL:
 	case VCD_EVT_PWR_DEV_HWTIMEOUT:
 		{
-			rc = vcd_device_power_event(p_dev_ctxt, event);
+			rc = vcd_device_power_event(p_dev_ctxt, event,
+				p_cctxt);
 			break;
 		}
 
@@ -123,7 +124,8 @@ u32 vcd_power_event(
 
 }
 
-u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event)
+u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event,
+	struct vcd_clnt_ctxt_type_t *p_cctxt)
 {
 	u32 rc = VCD_ERR_FAIL;
 	u32 n_set_perf_lvl;
@@ -144,7 +146,8 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event)
 						res_trk_get_max_perf_level();
 					p_dev_ctxt->b_set_perf_lvl_pending =
 						FALSE;
-					rc = vcd_enable_clock(p_dev_ctxt);
+					rc = vcd_enable_clock(p_dev_ctxt,
+						p_cctxt);
 				}
 			}
 
@@ -183,7 +186,7 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event)
 	case VCD_EVT_PWR_DEV_TERM_BEGIN:
 	case VCD_EVT_PWR_DEV_SLEEP_END:
 		{
-			rc = vcd_enable_clock(p_dev_ctxt);
+			rc = vcd_enable_clock(p_dev_ctxt, p_cctxt);
 
 			break;
 		}
@@ -195,7 +198,8 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event)
 			    0 ? p_dev_ctxt->
 			    n_reqd_perf_lvl : VCD_MIN_PERF_LEVEL;
 
-			rc = vcd_set_perf_level(p_dev_ctxt, n_set_perf_lvl);
+			rc = vcd_set_perf_level(p_dev_ctxt, n_set_perf_lvl,
+				p_cctxt);
 
 			break;
 		}
@@ -213,7 +217,8 @@ u32 vcd_client_power_event(
 
 	case VCD_EVT_PWR_CLNT_CMD_BEGIN:
 		{
-			rc = vcd_enable_clock(p_dev_ctxt);
+			rc = vcd_enable_clock(p_dev_ctxt,
+				p_cctxt);
 
 			break;
 		}
@@ -239,8 +244,8 @@ u32 vcd_client_power_event(
 				if (!VCD_FAILED(rc)
 				    && 0 != p_dev_ctxt->n_reqd_perf_lvl) {
 					rc = vcd_set_perf_level(p_dev_ctxt,
-							p_dev_ctxt->
-							n_reqd_perf_lvl);
+						p_dev_ctxt->n_reqd_perf_lvl,
+						p_cctxt);
 				}
 			}
 
@@ -255,7 +260,8 @@ u32 vcd_client_power_event(
 				    p_cctxt->n_reqd_perf_lvl;
 				p_cctxt->status.b_req_perf_lvl = TRUE;
 
-				rc = vcd_enable_clock(p_dev_ctxt);
+				rc = vcd_enable_clock(p_dev_ctxt,
+					p_cctxt);
 
 				if (VCD_PWRCLK_STATE_ON_CLOCKED !=
 				    p_dev_ctxt->e_pwr_clk_state) {
@@ -266,8 +272,8 @@ u32 vcd_client_power_event(
 					   p_dev_ctxt->n_curr_perf_lvl <
 					   p_dev_ctxt->n_reqd_perf_lvl) {
 					rc = vcd_set_perf_level(p_dev_ctxt,
-							p_dev_ctxt->
-							n_reqd_perf_lvl);
+						p_dev_ctxt->n_reqd_perf_lvl,
+						p_cctxt);
 				}
 			}
 
@@ -283,7 +289,8 @@ u32 vcd_client_power_event(
 				if (!VCD_FAILED(rc) && 0 !=
 					p_dev_ctxt->n_reqd_perf_lvl) {
 					rc = vcd_set_perf_level(p_dev_ctxt,
-						p_dev_ctxt->n_reqd_perf_lvl);
+						p_dev_ctxt->n_reqd_perf_lvl,
+						p_cctxt);
 				}
 			}
 			break;
@@ -293,7 +300,8 @@ u32 vcd_client_power_event(
 	return rc;
 }
 
-u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt)
+u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt,
+	struct vcd_clnt_ctxt_type_t *p_cctxt)
 {
 	u32 rc = VCD_S_SUCCESS;
 	u32 n_set_perf_lvl;
@@ -309,7 +317,8 @@ u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt)
 				0 ? p_dev_ctxt->
 				n_reqd_perf_lvl : VCD_MIN_PERF_LEVEL;
 
-		rc = vcd_set_perf_level(p_dev_ctxt, n_set_perf_lvl);
+		rc = vcd_set_perf_level(p_dev_ctxt, n_set_perf_lvl,
+			p_cctxt);
 
 		if (!VCD_FAILED(rc)) {
 			if (TRUE == res_trk_enable_clock()) {
@@ -342,7 +351,6 @@ u32 vcd_disable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt)
 			if (FALSE == res_trk_disable_clock())
 				rc = VCD_ERR_FAIL;
 
-
 			p_dev_ctxt->e_pwr_clk_state =
 			    VCD_PWRCLK_STATE_ON_NOTCLOCKED;
 			p_dev_ctxt->n_curr_perf_lvl = 0;
@@ -352,14 +360,16 @@ u32 vcd_disable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt)
 	return rc;
 }
 
-u32 vcd_set_perf_level(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 n_perf_lvl)
+u32 vcd_set_perf_level(struct vcd_dev_ctxt_type *p_dev_ctxt,
+	u32 n_perf_lvl, struct vcd_clnt_ctxt_type_t *p_cctxt)
 {
 	u32 rc = VCD_S_SUCCESS;
 
 	if (FALSE == vcd_core_is_busy(p_dev_ctxt)) {
 		if (TRUE ==
 		    res_trk_set_perf_level(n_perf_lvl,
-					   &p_dev_ctxt->n_curr_perf_lvl)) {
+					   &p_dev_ctxt->n_curr_perf_lvl,
+					   p_cctxt)) {
 			p_dev_ctxt->b_set_perf_lvl_pending = FALSE;
 		} else {
 			rc = VCD_ERR_FAIL;
@@ -391,7 +401,7 @@ u32 vcd_update_clnt_perf_lvl(
 		    n_new_perf_lvl;
 
 		rc = vcd_set_perf_level(p_cctxt->p_dev_ctxt,
-					p_dev_ctxt->n_reqd_perf_lvl);
+			p_dev_ctxt->n_reqd_perf_lvl, p_cctxt);
 	}
 
 	p_cctxt->n_reqd_perf_lvl = n_new_perf_lvl;

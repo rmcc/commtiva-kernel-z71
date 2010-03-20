@@ -107,6 +107,7 @@
 
 #define ERR(x...) printk(KERN_ERR x)
 
+#define USE_RES_TRACKER
 #define VID_DEC_NAME   		"msm_vidc_dec"
 
 static struct vid_dec_dev *vid_dec_device_p;
@@ -1399,11 +1400,14 @@ static int vid_dec_open(struct inode *inode, struct file *file)
 		return -ENODEV;
 	}
 
+#ifndef USE_RES_TRACKER
+	DBG("Resource Tracker not in use");
   if (vid_c_enable_clk(VID_C_HCLK_RATE) == FALSE) {
 		ERR("ERROR : vid_dec_open()	clock enabled failed\n");
 		mutex_unlock(&vid_dec_device_p->lock);
     return -ENODEV;
 	}
+#endif
 
 	DBG(" Virtual Address of ioremap is %p\n", vid_dec_device_p->virt_base);
 	if (vid_dec_device_p->num_clients == 0) {
@@ -1440,7 +1444,9 @@ static int vid_dec_release(struct inode *inode, struct file *file)
 	DBG("%s\n", __func__);
 	vid_dec_close_client(client_ctx);
 	vid_c_release_firmware();
+#ifndef USE_RES_TRACKER
 	vid_c_disable_clk();
+#endif
 	return 0;
 }
 
