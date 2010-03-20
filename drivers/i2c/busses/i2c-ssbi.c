@@ -422,8 +422,8 @@ static struct platform_driver i2c_ssbi_driver = {
 		.name	= "i2c_ssbi",
 		.owner	= THIS_MODULE,
 	},
-	.suspend        = i2c_ssbi_suspend,
-	.resume         = i2c_ssbi_resume,
+	.suspend_late	= i2c_ssbi_suspend,
+	.resume_early	= i2c_ssbi_resume,
 	.remove		= __exit_p(i2c_ssbi_remove),
 };
 
