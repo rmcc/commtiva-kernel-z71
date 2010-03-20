@@ -127,9 +127,8 @@ struct vcd_property_target_bitrate_type {
 
 enum vcd_yuv_buffer_format_type {
 	VCD_BUFFER_FORMAT_NV12      = 0x1,
-	VCD_BUFFER_FORMAT_TILE_1x1    = 0x2,
-	VCD_BUFFER_FORMAT_TILE_4x2    = 0x3,
-	VCD_BUFFER_FORMAT_NV12_16M2KA = 0x4
+	VCD_BUFFER_FORMAT_TILE_4x2    = 0x2,
+	VCD_BUFFER_FORMAT_NV12_16M2KA = 0x3
 };
 
 struct vcd_property_buffer_format_type {

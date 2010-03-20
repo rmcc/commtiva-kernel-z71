@@ -94,6 +94,7 @@ u32 vcd_power_event(
 	case VCD_EVT_PWR_DEV_SLEEP_BEGIN:
 	case VCD_EVT_PWR_DEV_SLEEP_END:
 	case VCD_EVT_PWR_DEV_SET_PERFLVL:
+	case VCD_EVT_PWR_DEV_HWTIMEOUT:
 		{
 			rc = vcd_device_power_event(p_dev_ctxt, event);
 			break;
@@ -153,6 +154,7 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event)
 	case VCD_EVT_PWR_DEV_INIT_END:
 	case VCD_EVT_PWR_DEV_TERM_FAIL:
 	case VCD_EVT_PWR_DEV_SLEEP_BEGIN:
+	case VCD_EVT_PWR_DEV_HWTIMEOUT:
 		{
 			rc = vcd_disable_clock(p_dev_ctxt);
 

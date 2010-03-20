@@ -167,23 +167,14 @@ u32 ddl_get_property(u32 *ddl_handle,
 			    (struct ddl_property_capability_type *)
 			    p_property_value;
 			p_ddl_capability->n_max_num_client = VCD_MAX_NO_CLIENT;
-			vcd_status = VCD_S_SUCCESS;
-		}
-		return vcd_status;
-	}
-	if (DDL_I_COMMAND_DEPTH == p_property_hdr->prop_id) {
-		if (sizeof(struct ddl_property_command_depth_type) ==
-		    p_property_hdr->n_size) {
-			struct ddl_property_command_depth_type
-			    *p_ddl_command_depth =
-			    (struct ddl_property_command_depth_type *)
-			    p_property_value;
-			p_ddl_command_depth->b_exclusive =
-			    VCD_COMMAND_EXCLUSIVE;
-			p_ddl_command_depth->n_frame_command_depth =
-			    VCD_FRAME_COMMAND_DEPTH;
-			p_ddl_command_depth->n_general_command_depth =
-			    VCD_GENERAL_COMMAND_DEPTH;
+			p_ddl_capability->b_exclusive =
+				VCD_COMMAND_EXCLUSIVE;
+			p_ddl_capability->n_frame_command_depth =
+				VCD_FRAME_COMMAND_DEPTH;
+			p_ddl_capability->n_general_command_depth =
+				VCD_GENERAL_COMMAND_DEPTH;
+			p_ddl_capability->n_ddl_time_out_in_ms =
+				DDL_HW_TIMEOUT_IN_MS;
 			vcd_status = VCD_S_SUCCESS;
 		}
 		return vcd_status;
@@ -1565,12 +1556,7 @@ static void ddl_set_default_enc_property(struct ddl_client_context_type *p_ddl)
 	p_encoder->intra_refresh.n_cir_mb_number = 0;
 	ddl_set_default_enc_vop_timing(p_encoder);
 
-	if (VCD_CODEC_H263 == p_encoder->codec_type.e_codec) {
-		p_encoder->multi_slice.e_m_slice_sel = VCD_MSLICE_BY_GOB;
-	} else {
-		p_encoder->multi_slice.e_m_slice_sel = VCD_MSLICE_BY_MB_COUNT;
-		p_encoder->multi_slice.n_m_slice_size = 0x21;
-	}
+	p_encoder->multi_slice.n_m_slice_size = VCD_MSLICE_OFF;
 	p_encoder->short_header.b_short_header = FALSE;
 
 	p_encoder->entropy_control.e_entropy_sel = VCD_ENTROPY_SEL_CAVLC;
@@ -1675,20 +1661,22 @@ static void ddl_set_default_enc_rc_params(
 	case VCD_RATE_CONTROL_VBR_VFR:
 		{
 			p_encoder->n_r_cframe_skip = 1;
-			p_encoder->frame_level_rc.n_reaction_coeff = 0xc8;
+			p_encoder->frame_level_rc.n_reaction_coeff = 0x1f4;
 			break;
 		}
 	case VCD_RATE_CONTROL_VBR_CFR:
 		{
 			p_encoder->n_r_cframe_skip = 0;
-			p_encoder->frame_level_rc.n_reaction_coeff = 0xc8;
+			p_encoder->frame_level_rc.n_reaction_coeff = 0x1f4;
 			break;
 		}
 	case VCD_RATE_CONTROL_CBR_VFR:
 		{
 			p_encoder->n_r_cframe_skip = 1;
-			if (VCD_CODEC_H264 != e_codec)
+			if (VCD_CODEC_H264 != e_codec) {
 				p_encoder->session_qp.n_i_frame_qp = 0xf;
+				p_encoder->session_qp.n_p_frame_qp = 0xf;
+			}
 
 			p_encoder->frame_level_rc.n_reaction_coeff = 0x6;
 			break;
@@ -1960,6 +1948,8 @@ static u32 ddl_set_dec_buffers
 		    p_dpb->a_dec_pic_buffers[n_loopc];
 	}
 	p_decoder->dpb_mask.n_client_mask = 0;
+	p_decoder->dpb_mask.n_hw_mask = 0;
+	p_decoder->n_dynamic_prop_change = 0;
 	return VCD_S_SUCCESS;
 }
 
@@ -1980,7 +1970,7 @@ void ddl_set_initial_default_values(struct ddl_client_context_type *p_ddl)
 		p_encoder->target_bit_rate.n_target_bitrate = 64000;
 		p_encoder->frame_size.n_width = 176;
 		p_encoder->frame_size.n_height = 144;
-		p_encoder->frame_rate.n_fps_numerator = 15;
+		p_encoder->frame_rate.n_fps_numerator = 30;
 		p_encoder->frame_rate.n_fps_denominator = 1;
 		ddl_set_default_enc_property(p_ddl);
 	}

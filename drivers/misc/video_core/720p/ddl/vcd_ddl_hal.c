@@ -923,17 +923,55 @@ void ddl_decode_frame_run(struct ddl_client_context_type *p_ddl)
 
 void  ddl_decode_eos_run(struct ddl_client_context_type *p_ddl)
 {
-   struct ddl_decoder_data_type *p_decoder = &p_ddl->codec_data.decoder;
+	struct ddl_decoder_data_type *p_decoder = &p_ddl->codec_data.decoder;
 
-   ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_EOS_DONE);
+	ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_EOS_DONE);
 
-   ddl_decode_dynamic_property(p_ddl, TRUE);
+	ddl_decode_dynamic_property(p_ddl, TRUE);
 
-   ddl_decoder_dpb_transact(p_decoder, NULL, DDL_DPB_OP_SET_MASK);
+	ddl_decoder_dpb_transact(p_decoder, NULL, DDL_DPB_OP_SET_MASK);
 
-   p_decoder->b_dynmic_prop_change_req = TRUE;
+	p_decoder->b_dynmic_prop_change_req = TRUE;
 
-   ddl_move_command_state(p_ddl->p_ddl_context, DDL_CMD_EOS);
+	ddl_move_command_state(p_ddl->p_ddl_context, DDL_CMD_EOS);
 
-   vidc_720p_issue_eos(p_ddl->n_channel_id);
+	vidc_720p_issue_eos(p_ddl->n_channel_id);
+}
+
+u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context)
+{
+	u32 b_eng_reset;
+	u32 n_channel_id = 0;
+	u32 fw_endianness;
+	enum vidc_720p_endian_type e_dma_endian;
+	enum vidc_720p_interrupt_level_selection_type e_interrupt_sel;
+	u32 intr_mask = 0x0;
+
+	if (NULL != p_ddl_context->p_current_ddl)
+		n_channel_id = p_ddl_context->p_current_ddl->n_channel_id;
+
+	e_interrupt_sel = VIDC_720P_INTERRUPT_LEVEL_SEL;
+	/* Enable all the supported interrupt */
+	intr_mask |= VIDC_720P_INTR_BUFFER_FULL;
+	intr_mask |= VIDC_720P_INTR_FW_DONE;
+	intr_mask |= VIDC_720P_INTR_DMA_DONE;
+	intr_mask |= VIDC_720P_INTR_FRAME_DONE;
+
+	vcd_get_fw_property(VCD_FW_ENDIAN, &fw_endianness);
+	/* Reverse the endianness settings after boot code download */
+	if (VCD_FW_BIG_ENDIAN == fw_endianness)
+		e_dma_endian = VIDC_720P_LITTLE_ENDIAN;
+	else
+		e_dma_endian = VIDC_720P_BIG_ENDIAN;
+
+	/* Need to reset MFC silently */
+	b_eng_reset = vidc_720p_engine_reset(
+		p_ddl_context->p_current_ddl->n_channel_id,
+		e_dma_endian, e_interrupt_sel,
+		intr_mask);
+	if (FALSE == b_eng_reset) {
+		/* call the hw fatal callback if engine reset fails */
+		ddl_hw_fatal_cb(p_ddl_context);
+	}
+	return b_eng_reset ;
 }

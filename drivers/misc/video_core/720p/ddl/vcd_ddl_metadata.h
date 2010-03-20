@@ -54,16 +54,16 @@
 #define DDL_METADATA_TOTAL_INPUTBUFSIZE \
 	(DDL_METADATA_CLIENT_INPUTBUFSIZE * VCD_MAX_NO_CLIENT)
 
-#define DDL_METADATA_CLIENT_INPUTBUF(p_main_buffer, p_client_buffer,\
+#define DDL_METADATA_CLIENT_INPUTBUF(p_main_buffer, p_client_buffer, \
 		n_channel_id) \
 { \
   (p_client_buffer)->p_align_physical_addr = (u32 *)\
 	((u8 *)(p_main_buffer)->p_align_physical_addr + \
-	(DDL_METADATA_CLIENT_INPUTBUFSIZE * n_channel_id) \
+	(DDL_METADATA_CLIENT_INPUTBUFSIZE * (n_channel_id)) \
 	); \
   (p_client_buffer)->p_align_virtual_addr = (u32 *)\
 	((u8 *)(p_main_buffer)->p_align_virtual_addr + \
-	(DDL_METADATA_CLIENT_INPUTBUFSIZE * n_channel_id) \
+	(DDL_METADATA_CLIENT_INPUTBUFSIZE * (n_channel_id)) \
 	); \
   (p_client_buffer)->p_virtual_base_addr = 0; \
 }
@@ -75,7 +75,7 @@
 
 void ddl_set_default_meta_data_hdr(struct ddl_client_context_type *p_ddl);
 u32 ddl_get_metadata_params(struct ddl_client_context_type	*p_ddl,
-	struct vcd_property_hdr_type *p_property_hdr, void *pPropertyValue);
+	struct vcd_property_hdr_type *p_property_hdr, void *p_property_value);
 u32 ddl_set_metadata_params(struct ddl_client_context_type *p_ddl,
 			    struct vcd_property_hdr_type *p_property_hdr,
 			    void *p_property_value);

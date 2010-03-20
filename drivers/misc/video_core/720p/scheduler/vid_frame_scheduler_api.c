@@ -380,7 +380,7 @@ enum sched_status_type sched_de_queue_frame(
 
 	if (NULL == p_sched_ctx || NULL == pp_frm_data
 		|| NULL == pp_client_data) {
-		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d,"
+		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d, "
 				"pp_frm_data=%d, pp_client_data=%d",
 				p_sched_ctx, pp_frm_data,
 					pp_client_data);
@@ -407,7 +407,7 @@ enum sched_status_type sched_get_client_param(
 
 	if (NULL == p_sched_ctx || NULL == p_clnt_node ||
 			NULL == p_param_value) {
-		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d,"
+		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d, "
 				"p_clnt_node=%d, p_param_value=%d",
 				p_sched_ctx, p_clnt_node,
 				p_param_value);
@@ -437,7 +437,7 @@ enum sched_status_type sched_set_client_param(
 	if (NULL == p_sched_ctx || NULL == p_clnt_node ||
 			NULL == p_param_value) {
 		SCHED_MSG_ERR("Bad input parameters: "
-				"p_sched_ctx=%d, p_clnt_node=%d,"
+				"p_sched_ctx=%d, p_clnt_node=%d, "
 				"p_param_value=%d", p_sched_ctx, p_clnt_node,
 				p_param_value);
 		return SCHED_S_EBADPARM;

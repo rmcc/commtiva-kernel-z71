@@ -41,7 +41,7 @@
 					xx_fmt, ## __VA_ARGS__)
 #define SCHED_MSG_HIGH(xx_fmt, ...)	printk(KERN_WARNING "\n" \
 					xx_fmt, ## __VA_ARGS__)
-#define SCHED_MSG_ERR(xx_fmt, ...)	printk(KERN_ERR "\n_err: " \
+#define SCHED_MSG_ERR(xx_fmt, ...)	printk(KERN_ERR "\n err: " \
 					xx_fmt, ## __VA_ARGS__)
 #define SCHED_MSG_FATAL(xx_fmt, ...)	printk(KERN_ERR "\n<FATAL> " \
 					xx_fmt, ## __VA_ARGS__)

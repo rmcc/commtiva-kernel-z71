@@ -73,6 +73,10 @@ void vcd_release_multiple_frame_channels(struct vcd_dev_ctxt_type *p_dev_ctxt,
 void vcd_release_interim_frame_channels(struct vcd_dev_ctxt_type *p_dev_ctxt);
 u32 vcd_core_is_busy(struct vcd_dev_ctxt_type *p_dev_ctxt);
 
+void vcd_device_timer_start(struct vcd_dev_ctxt_type *p_dev_ctxt);
+void vcd_device_timer_stop(struct vcd_dev_ctxt_type *p_dev_ctxt);
+
+
 u32 vcd_init_device_context
     (struct vcd_drv_ctxt_type_t *p_drv_ctxt, u32 n_ev_code);
 
@@ -193,6 +197,8 @@ u32 vcd_process_cmd_sess_start(struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 
 u32 vcd_setup_with_ddl_capabilities(struct vcd_dev_ctxt_type *p_dev_ctxt);
+void vcd_handle_submit_frame_failed(struct vcd_dev_ctxt_type *p_dev_ctxt,
+	struct vcd_transc_type *p_transc);
 
 struct vcd_transc_type *vcd_get_free_trans_tbl_entry
     (struct vcd_dev_ctxt_type *p_dev_ctxt);
@@ -237,10 +243,10 @@ u32 vcd_handle_first_encode_frame_done
 u32 vcd_handle_output_required(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	void *p_payload, u32 status);
 
-u32 VCD_handle_output_required_in_flushing(struct vcd_clnt_ctxt_type_t *p_cctxt,
+u32 vcd_handle_output_required_in_flushing(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	void *p_payload);
 
-u32 VCD_handle_output_req_tran_end_in_eos(struct vcd_clnt_ctxt_type_t *p_cctxt);
+u32 vcd_handle_output_req_tran_end_in_eos(struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 u32 vcd_validate_io_done_pyld(void *p_payload, u32 status);
 
@@ -253,7 +259,7 @@ void vcd_handle_eos_done
 
 void vcd_send_frame_done_in_eos
     (struct vcd_clnt_ctxt_type_t *p_cctxt,
-     struct vcd_frame_data_type *p_input_frame);
+     struct vcd_frame_data_type *p_input_frame, u32 valid_opbuf);
 
 void vcd_send_frame_done_in_eos_for_dec
     (struct vcd_clnt_ctxt_type_t *p_cctxt,
@@ -311,7 +317,7 @@ u32 vcd_update_clnt_perf_lvl
 void vcd_handle_err_fatal(struct vcd_clnt_ctxt_type_t *p_cctxt,
 		u32 event, u32 status);
 
-void vcd_handle_device_err_fatal(struct vcd_dev_ctxt_type *pDevCtxt,
+void vcd_handle_device_err_fatal(struct vcd_dev_ctxt_type *p_dev_ctxt,
 		struct vcd_clnt_ctxt_type_t *p_cctxt);
 
 void vcd_clnt_handle_device_err_fatal(struct vcd_clnt_ctxt_type_t *p_cctxt,

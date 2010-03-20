@@ -141,7 +141,8 @@ struct vcd_dev_ctxt_type {
 	u32 b_driver_ids[VCD_DRIVER_INSTANCE_MAX];
 	u32 n_refs;
 	u8 *p_device_base_addr;
-
+	void *p_hw_timer_handle;
+	u32               n_hw_time_out;
 	struct vcd_clnt_ctxt_type_t *p_cctxt_list_head;
 
 	enum vcd_command_type e_pending_cmd;

@@ -201,7 +201,7 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 
 void ddl_pmem_free(struct ddl_buf_addr_type buff_addr)
 {
-	DBG("\n %s(): ddl_pmem_free vAddress %p pAddress %p",
+	DBG("\n %s(): ddl_pmem_free v_address %p p_address %p",
 			__func__, buff_addr.p_physical_base_addr,
 			buff_addr.p_virtual_base_addr);
 
@@ -268,12 +268,12 @@ void ddl_calc_core_time(u8 codec_type)
 void ddl_reset_time_variables(u8 codec_type)
 {
 	if (codec_type == 0) {
-		DBG("\nReset Decoder time variables");
+		DBG("\n reset Decoder time variables");
 		g_ddl_dec_t1 = 0;
 		g_ddl_dec_tavg = 0;
 		g_ddl_dec_count = 0;
 	} else if (codec_type == 1) {
-		DBG("\nReset Encoder time variables ");
+		DBG("\n reset Encoder time variables ");
 		g_ddl_enc_t1 = 0;
 		g_ddl_enc_tavg = 0;
 		g_ddl_enc_count = 0;

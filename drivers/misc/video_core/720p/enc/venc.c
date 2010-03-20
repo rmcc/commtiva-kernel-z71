@@ -623,7 +623,7 @@ static int vid_enc_vcd_init(void)
 	struct vcd_init_config_type vcd_init_config;
 	u32 i;
 
-	DBG("enter ss_dec_init()");
+	DBG("enter vid_enc_vcd_init()");
 
 	vid_enc_device_p->num_clients = 0;
 
@@ -654,7 +654,7 @@ static int vid_enc_vcd_init(void)
 		&vid_enc_device_p->device_handle);
 
 	if (rc != VCD_S_SUCCESS) {
-		DBG(KERN_ERR "%s() : VCD_Init failed\n",
+		DBG(KERN_ERR "%s() : vcd_init failed\n",
 			__func__);
 		return -ENODEV;
 	}

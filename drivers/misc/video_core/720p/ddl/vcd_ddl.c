@@ -143,7 +143,7 @@ u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 		if (p_ddl_context->data_partition_tempbuf.p_virtual_base_addr \
 			== NULL) {
 			VIDC_LOGERR_STRING
-				("ddlDevInit:DataPartitionBufAllocFail");
+				("ddl_dev_init:Data_partition_buf_alloc_fail");
 			status = VCD_ERR_ALLOC_FAIL;
 		}
    }
@@ -167,7 +167,7 @@ u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 					   DDL_LINEAR_BUFFER_ALIGN_BYTES);
 		if (NULL == p_ddl_context->dbg_core_dump.p_virtual_base_addr) {
 			VIDC_LOGERR_STRING
-				("ddlDevInit:dbg_core_dumpAllocFailed");
+				("ddl_dev_init:dbg_core_dump_alloc_failed");
 			status = VCD_ERR_ALLOC_FAIL;
 		}
 		p_ddl_context->enable_dbg_core_dump = 0;
@@ -212,7 +212,7 @@ u32 ddl_device_release(void *p_client_data)
 	}
 	DDL_BUSY(p_ddl_context);
 
-	p_ddl_context->nDeviceState = DDL_DEVICE_NOTINIT;
+	p_ddl_context->n_device_state = DDL_DEVICE_NOTINIT;
 	p_ddl_context->p_client_data = p_client_data;
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
 	vidc_720p_stop_fw();
@@ -561,7 +561,7 @@ u32 ddl_encode_frame(u32 *ddl_handle,
 	     p_output_bit->vcd_frm.n_offset) >
 	    p_output_bit->vcd_frm.n_alloc_len) {
 		VIDC_LOGERR_STRING
-		    ("ddl_enc_frame:n_offset_large,Exceeds_min_buf_size");
+		    ("ddl_enc_frame:n_offset_large, Exceeds_min_buf_size");
 	}
 	if (!DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME)) {
 		VIDC_LOGERR_STRING("ddl_enc_frame:Wrong_state");
@@ -674,7 +674,7 @@ u32 ddl_reset_hw(u32 n_mode)
 	if (NULL != p_ddl_context->p_core_virtual_base_addr)
 		vidc_720p_do_sw_reset();
 
-	p_ddl_context->nDeviceState = DDL_DEVICE_NOTINIT;
+	p_ddl_context->n_device_state = DDL_DEVICE_NOTINIT;
 	for (i_client_num = 0; i_client_num < VCD_MAX_NO_CLIENT;
 			++i_client_num) {
 		p_ddl = p_ddl_context->a_ddl_clients[i_client_num];
