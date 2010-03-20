@@ -330,11 +330,6 @@ static int32_t mt9p012_set_lc(void)
 {
 	int32_t rc;
 
-	rc = mt9p012_i2c_write_w_table(mt9p012_regs.lctbl,
-				       mt9p012_regs.lctbl_size);
-	if (rc < 0)
-		return rc;
-
 	rc = mt9p012_i2c_write_w_table(mt9p012_regs.rftbl,
 				       mt9p012_regs.rftbl_size);
 
