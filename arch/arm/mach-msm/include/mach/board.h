@@ -60,6 +60,36 @@ struct msm_camera_legacy_device_platform_data {
 #define MSM_CAMERA_FLASH_NONE 0
 #define MSM_CAMERA_FLASH_LED  1
 
+#define MSM_CAMERA_FLASH_SRC_PMIC (0x00000001<<0)
+#define MSM_CAMERA_FLASH_SRC_PWM  (0x00000001<<1)
+
+struct msm_camera_sensor_flash_pmic {
+	uint32_t low_current;
+	uint32_t high_current;
+};
+
+struct msm_camera_sensor_flash_pwm {
+	uint32_t freq;
+	uint32_t max_load;
+	uint32_t low_load;
+	uint32_t high_load;
+	uint32_t channel;
+};
+
+struct msm_camera_sensor_flash_src {
+	int flash_sr_type;
+
+	union {
+		struct msm_camera_sensor_flash_pmic pmic_src;
+		struct msm_camera_sensor_flash_pwm pwm_src;
+	} _fsrc;
+};
+
+struct msm_camera_sensor_flash_data {
+	int flash_type;
+	struct msm_camera_sensor_flash_src *flash_src;
+};
+
 struct msm_camera_sensor_info {
 	const char *sensor_name;
 	int sensor_reset;
@@ -67,10 +97,10 @@ struct msm_camera_sensor_info {
 	int vcm_pwd;
 	int vcm_enable;
 	int mclk;
-	int flash_type;
 	struct msm_camera_device_platform_data *pdata;
 	struct resource *resource;
 	uint8_t num_resources;
+	struct msm_camera_sensor_flash_data *flash_data;
 };
 
 struct clk;
