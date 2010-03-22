@@ -62,6 +62,7 @@
 #include <mach/board.h>
 #include <mach/camera.h>
 #include <mach/vreg.h>
+#include <mach/clk.h>
 
 #define CAMIF_CFG_RMSK             0x1fffff
 #define CAM_SEL_BMSK               0x2
