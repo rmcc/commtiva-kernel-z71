@@ -485,7 +485,6 @@ static void diag_write_complete(struct usb_ep *ep ,
 		if ((req->length >= ep->maxpacket) &&
 				((req->length % ep->maxpacket) == 0)) {
 			req->length = 0;
-			req->device = ctxt;
 			d_req->actual = req->actual;
 			d_req->status = req->status;
 			/* Queue zero length packet */
