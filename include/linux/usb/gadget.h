@@ -86,7 +86,6 @@ struct usb_request {
 	void			(*complete)(struct usb_ep *ep,
 					struct usb_request *req);
 	void			*context;
-	void			*device;
 	struct list_head	list;
 
 	int			status;
