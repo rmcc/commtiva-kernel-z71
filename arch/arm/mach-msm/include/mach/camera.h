@@ -155,6 +155,7 @@ struct msm_sync {
 	 * interrupt context, and by the control thread.
 	 */
 	struct msm_device_queue pict_q;
+	int get_pic_abort;
 
 	struct msm_camera_sensor_info *sdata;
 	struct msm_camvfe_fn vfefn;

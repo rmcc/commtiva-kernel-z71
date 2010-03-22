@@ -41,6 +41,7 @@ DEFINE_MUTEX(pp_prev_lock);
 DEFINE_MUTEX(pp_snap_lock);
 
 #define MSM_MAX_CAMERA_SENSORS 5
+#define CAMERA_STOP_SNAPSHOT 42
 
 #define ERR_USER_COPY(to) pr_err("%s(%d): copy %s user\n", \
 				__func__, __LINE__, ((to) ? "to" : "from"))
@@ -642,6 +643,8 @@ static int msm_control(struct msm_control_device *ctrl_pmsm,
 
 	uptr = udata.value;
 	udata.value = data;
+	if (udata.type == CAMERA_STOP_SNAPSHOT)
+		sync->get_pic_abort = 1;
 
 	qcmd.on_heap = 0;
 	qcmd.type = MSM_CAM_Q_CTRL;
@@ -1529,8 +1532,14 @@ static int __msm_get_pic(struct msm_sync *sync, struct msm_ctrl_cmd *ctrl)
 
 	rc = wait_event_interruptible_timeout(
 			sync->pict_q.wait,
-			!list_empty_careful(&sync->pict_q.list),
+			!list_empty_careful(
+				&sync->pict_q.list) || sync->get_pic_abort,
 			msecs_to_jiffies(tm));
+
+	if (sync->get_pic_abort == 1) {
+		sync->get_pic_abort = 0;
+		return -ENODATA;
+	}
 	if (list_empty_careful(&sync->pict_q.list)) {
 		if (rc == 0)
 			return -ETIMEDOUT;
@@ -2183,6 +2192,7 @@ static int __msm_open(struct msm_sync *sync, const char *const apps_id)
 
 		msm_camvfe_fn_init(&sync->vfefn, sync);
 		if (sync->vfefn.vfe_init) {
+			sync->get_pic_abort = 0;
 			rc = sync->vfefn.vfe_init(&msm_vfe_s,
 				sync->pdev);
 			if (rc < 0) {
