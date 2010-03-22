@@ -283,7 +283,7 @@ socinfo_show_raw_id(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 2) {
+	if (socinfo->v1.format < 2) {
 		pr_err("%s: Raw ID not available!\n", __func__);
 		return 0;
 	}
@@ -300,7 +300,7 @@ socinfo_show_raw_version(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 2) {
+	if (socinfo->v1.format < 2) {
 		pr_err("%s: Raw version not available!\n", __func__);
 		return 0;
 	}
@@ -319,7 +319,7 @@ socinfo_show_platform_type(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 3) {
+	if (socinfo->v1.format < 3) {
 		pr_err("%s: platform type not available!\n", __func__);
 		return 0;
 	}
@@ -344,7 +344,7 @@ socinfo_show_platform_version(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 4) {
+	if (socinfo->v1.format < 4) {
 		pr_err("%s: platform version not available!\n", __func__);
 		return 0;
 	}
