@@ -1921,7 +1921,6 @@ static int __msm_release(struct msm_sync *sync)
 		msm_queue_drain(&sync->pict_q, list_pict);
 
 		wake_unlock(&sync->wake_lock);
-		msm_disable_io_gpio_clk(sync->pdev);
 		sync->apps_id = NULL;
 		CDBG("%s: completed\n", __func__);
 	}

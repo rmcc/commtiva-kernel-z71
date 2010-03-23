@@ -432,6 +432,11 @@ static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
 		I2C_BOARD_INFO("mt9p012", 0x6C >> 1),
 	},
 #endif
+#ifdef CONFIG_VX6953
+	{
+		I2C_BOARD_INFO("vx6953", 0x20),
+	},
+#endif
 #if defined(CONFIG_MT9T013) || defined(CONFIG_SENSORS_MT9T013)
 	{
 		I2C_BOARD_INFO("mt9t013", 0x6C),
@@ -521,12 +526,11 @@ struct resource msm_camera_resources[] = {
 struct msm_camera_device_platform_data msm_camera_device_data = {
 	.camera_gpio_on  = config_camera_on_gpios,
 	.camera_gpio_off = config_camera_off_gpios,
-	.ioext.mdcphy = MSM_MDC_PHYS,
-	.ioext.mdcsz  = MSM_MDC_SIZE,
-	.ioext.appphy = MSM_CLK_CTL_PHYS,
-	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 	.ioext.camifpadphy = 0xAB000000,
 	.ioext.camifpadsz  = 0x00000400,
+	.ioext.csiphy = 0xA6100000,
+	.ioext.csisz  = 0x00000400,
+	.ioext.csiirq = INT_CSI
 };
 
 static struct msm_camera_sensor_flash_src msm_flash_src = {
@@ -553,7 +557,8 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.pdata          = &msm_camera_device_data,
 	.resource       = msm_camera_resources,
 	.num_resources  = ARRAY_SIZE(msm_camera_resources),
-	.flash_data     = &flash_mt9d112
+	.flash_data     = &flash_mt9d112,
+	.csi_if         = 0
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -579,7 +584,8 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.pdata          = &msm_camera_device_data,
 	.resource       = msm_camera_resources,
 	.num_resources  = ARRAY_SIZE(msm_camera_resources),
-	.flash_data     = &flash_s5k3e2fx
+	.flash_data     = &flash_s5k3e2fx,
+	.csi_if         = 0
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -605,7 +611,8 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.pdata          = &msm_camera_device_data,
 	.resource       = msm_camera_resources,
 	.num_resources  = ARRAY_SIZE(msm_camera_resources),
-	.flash_data     = &flash_mt9p012
+	.flash_data     = &flash_mt9p012,
+	.csi_if         = 0
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -615,7 +622,30 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 	},
 };
 #endif
-
+#ifdef CONFIG_VX6953
+static struct msm_camera_sensor_flash_data flash_vx6953 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+static struct msm_camera_sensor_info msm_camera_sensor_vx6953_data = {
+	.sensor_name    = "vx6953",
+	.sensor_reset   = 0,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 1,
+	.vcm_enable		= 0,
+	.pdata          = &msm_camera_device_data,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_vx6953,
+	.csi_if         = 1
+};
+static struct platform_device msm_camera_sensor_vx6953 = {
+	.name  	= "msm_camera_vx6953",
+	.dev   	= {
+		.platform_data = &msm_camera_sensor_vx6953_data,
+	},
+};
+#endif
 #ifdef CONFIG_MT9T013
 static struct msm_camera_sensor_flash_data flash_mt9t013 = {
 	.flash_type = MSM_CAMERA_FLASH_LED,
@@ -631,7 +661,8 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.pdata          = &msm_camera_device_data,
 	.resource       = msm_camera_resources,
 	.num_resources  = ARRAY_SIZE(msm_camera_resources),
-	.flash_data     = &flash_mt9t013
+	.flash_data     = &flash_mt9t013,
+	.csi_if         = 1
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {
@@ -3089,6 +3120,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_MT9P012
 	&msm_camera_sensor_mt9p012,
+#endif
+#ifdef CONFIG_VX6953
+	&msm_camera_sensor_vx6953,
 #endif
 	&msm_device_vidc_720p,
 #ifdef CONFIG_MSM_GEMINI

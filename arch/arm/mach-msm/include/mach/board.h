@@ -39,12 +39,27 @@ struct msm_camera_io_ext {
 	uint32_t appsz;
 	uint32_t camifpadphy;
 	uint32_t camifpadsz;
+	uint32_t csiphy;
+	uint32_t csisz;
+	uint32_t csiirq;
 };
 
 struct msm_camera_device_platform_data {
 	void (*camera_gpio_on) (void);
 	void (*camera_gpio_off)(void);
 	struct msm_camera_io_ext ioext;
+};
+enum msm_camera_csi_data_format {
+	CSI_8BIT,
+	CSI_10BIT,
+	CSI_12BIT,
+};
+struct msm_camera_csi_params {
+	enum msm_camera_csi_data_format data_format;
+	uint8_t lane_cnt;
+	uint8_t lane_assign;
+	uint8_t settle_cnt;
+	uint8_t dpcm_scheme;
 };
 
 #ifdef CONFIG_SENSORS_MT9T013
@@ -101,6 +116,8 @@ struct msm_camera_sensor_info {
 	struct resource *resource;
 	uint8_t num_resources;
 	struct msm_camera_sensor_flash_data *flash_data;
+	int csi_if;
+	struct msm_camera_csi_params csi_params;
 };
 
 struct clk;

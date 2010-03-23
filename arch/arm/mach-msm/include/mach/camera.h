@@ -269,7 +269,9 @@ enum msm_camio_clk_type {
 	CAMIO_VFE_PBDG_CLK,
 	CAMIO_CAM_MCLK_CLK,
 	CAMIO_CAMIF_PAD_PBDG_CLK,
-
+	CAMIO_CSI_CLK,
+	CAMIO_CSI_VFE_CLK,
+	CAMIO_CSI_PCLK,
 	CAMIO_MAX_CLK
 };
 
@@ -327,7 +329,7 @@ void msm_camio_clk_sel(enum msm_camio_clk_src_type);
 void msm_camio_disable(struct platform_device *);
 int msm_camio_probe_on(struct platform_device *);
 int msm_camio_probe_off(struct platform_device *);
-
+int msm_camio_csi_config(struct msm_camera_csi_params *csi_params);
 int request_axi_qos(uint32_t freq);
 int update_axi_qos(uint32_t freq);
 void release_axi_qos(void);

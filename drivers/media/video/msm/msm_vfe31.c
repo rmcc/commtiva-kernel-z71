@@ -443,9 +443,7 @@ static int vfe31_disable(struct camera_enable_cmd *enable,
 	struct platform_device *dev)
 {
 	vfe_stop();
-
 	msm_camio_disable(dev);
-	msm_disable_io_gpio_clk(dev);
 	return 0;
 }
 
