@@ -62,8 +62,10 @@
 #include <linux/bitops.h>
 #include <linux/io.h>
 #include <linux/spinlock.h>
+
 #include <mach/msm_iomap.h>
 #include <mach/clk.h>
+#include <mach/internal_power_rail.h>
 
 #include "clock.h"
 #include "clock-7x30.h"
@@ -814,10 +816,43 @@ static void soc_clk_disable_nolock(unsigned id)
 	return;
 }
 
+static int update_pwr_rail(unsigned id, int enable)
+{
+	int pwr_id = 0;
+	switch (id) {
+	case C(AXI_ROTATOR):
+		pwr_id = PWR_RAIL_ROTATOR_CLK;
+		break;
+	case C(GRP_2D):
+		pwr_id = PWR_RAIL_GRP_2D_CLK;
+		break;
+	case C(GRP_3D):
+		pwr_id = PWR_RAIL_GRP_CLK;
+		break;
+	case C(MFC):
+		pwr_id = PWR_RAIL_MFC_CLK;
+		break;
+	case C(VFE):
+		pwr_id = PWR_RAIL_VFE_CLK;
+		break;
+	case C(VPE):
+		pwr_id = PWR_RAIL_VPE_CLK;
+		break;
+	default:
+		return 0;
+	}
+
+	return internal_pwr_rail_ctl_auto(pwr_id, enable);
+}
+
 static int soc_clk_enable(unsigned id)
 {
 	int ret = 0;
 	unsigned long flags;
+
+	ret = update_pwr_rail(id, 1);
+	if (ret)
+		return ret;
 
 	spin_lock_irqsave(&clock_reg_lock, flags);
 	ret = soc_clk_enable_nolock(id);
@@ -834,7 +869,7 @@ static void soc_clk_disable(unsigned id)
 	soc_clk_disable_nolock(id);
 	spin_unlock_irqrestore(&clock_reg_lock, flags);
 
-	return;
+	update_pwr_rail(id, 0);
 }
 
 static long soc_clk_round_rate(unsigned id, unsigned rate)
