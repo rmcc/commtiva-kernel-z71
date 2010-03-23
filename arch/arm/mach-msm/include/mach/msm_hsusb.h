@@ -71,6 +71,7 @@ struct msm_hsusb_gadget_platform_data {
 	void (*phy_reset)(void);
 
 	u32 swfi_latency;
+	int self_powered;
 };
 
 struct msm_hsusb_platform_data {

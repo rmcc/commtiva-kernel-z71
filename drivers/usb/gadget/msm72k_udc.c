@@ -201,6 +201,7 @@ struct usb_info {
 	u16 test_mode;
 
 	u8 remote_wakeup;
+	int self_powered;
 	struct delayed_work rw_work;
 
 	struct otg_transceiver *xceiv;
@@ -768,7 +769,8 @@ static void handle_setup(struct usb_info *ui)
 			{
 				u16 temp = 0;
 
-				temp = 1 << USB_DEVICE_SELF_POWERED;
+				temp = (ui->self_powered <<
+						USB_DEVICE_SELF_POWERED);
 				temp |= (ui->remote_wakeup <<
 						USB_DEVICE_REMOTE_WAKEUP);
 				memcpy(req->buf, &temp, 2);
@@ -1933,12 +1935,37 @@ static int msm72k_udc_vbus_draw(struct usb_gadget *_gadget, unsigned mA)
 	return 0;
 }
 
+static int msm72k_set_selfpowered(struct usb_gadget *_gadget, int set)
+{
+	struct usb_info *ui = container_of(_gadget, struct usb_info, gadget);
+	struct msm_hsusb_gadget_platform_data *pdata =
+				ui->pdev->dev.platform_data;
+	unsigned long flags;
+	int ret = 0;
+
+	spin_lock_irqsave(&ui->lock, flags);
+	if (set) {
+		if (pdata && pdata->self_powered)
+			ui->self_powered = 1;
+		else
+			ret = -EOPNOTSUPP;
+	} else {
+		/* We can always work as a bus powered device */
+		ui->self_powered = 0;
+	}
+	spin_unlock_irqrestore(&ui->lock, flags);
+
+	return ret;
+
+}
+
 static const struct usb_gadget_ops msm72k_ops = {
 	.get_frame	= msm72k_get_frame,
 	.vbus_session	= msm72k_udc_vbus_session,
 	.vbus_draw	= msm72k_udc_vbus_draw,
 	.pullup		= msm72k_pullup,
 	.wakeup		= msm72k_wakeup,
+	.set_selfpowered = msm72k_set_selfpowered,
 };
 
 static void usb_do_remote_wakeup(struct work_struct *w)
