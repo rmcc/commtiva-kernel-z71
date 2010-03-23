@@ -337,6 +337,9 @@ static void __init acpuclk_init(void)
 		return;
 	}
 
+	/* Set initial ACPU VDD. */
+	acpuclk_set_acpu_vdd(s);
+
 	drv_state.current_speed = s;
 
 	/* Initialize current PLL's reference count. */
