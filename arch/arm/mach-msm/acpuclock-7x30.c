@@ -44,7 +44,7 @@
 	cpufreq_debug_printk(CPUFREQ_DEBUG_DRIVER, "cpufreq-msm", msg)
 
 #define VREF_SEL_SHIFT	5
-#define VREF_SEL_VAL	1
+#define VREF_SEL_VAL	7
 
 /* mv = (750mV + (raw*25mV))*(2-VREF_SEL_VAL)) */
 #define VDD_RAW(_mv) ((((_mv) - 750) / 25) | (VREF_SEL_VAL << VREF_SEL_SHIFT))
