@@ -37,6 +37,8 @@
 #include <media/msm_camera.h>
 #include <mach/camera.h>
 DEFINE_MUTEX(hlist_mut);
+DEFINE_MUTEX(pp_prev_lock);
+DEFINE_MUTEX(pp_snap_lock);
 
 #define MSM_MAX_CAMERA_SENSORS 5
 
@@ -1674,15 +1676,18 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 	if (sync->pp_mask & PP_PREV) {
 
 		if (mask & PP_PREV) {
+			mutex_lock(&pp_prev_lock);
 			if (!sync->pp_prev) {
 				pr_err("%s: no preview frame to deliver!\n",
 					__func__);
+				mutex_unlock(&pp_prev_lock);
 				return -EINVAL;
 			}
 			pr_info("%s: delivering pp_prev\n", __func__);
 
 			msm_enqueue(&sync->frame_q, &sync->pp_prev->list_frame);
 			sync->pp_prev = NULL;
+			mutex_unlock(&pp_prev_lock);
 		} else if (!(mask & PP_PREV)) {
 			sync->pp_mask &= ~PP_PREV;
 		}
@@ -1691,14 +1696,16 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 
 	if (((mask & PP_SNAP) && (sync->pp_mask & PP_SNAP)) ||
 		((mask & PP_RAW_SNAP) && (sync->pp_mask & PP_RAW_SNAP))) {
-
+		mutex_lock(&pp_snap_lock);
 		if (!sync->pp_snap) {
 			pr_err("%s: no snapshot to deliver!\n", __func__);
+			mutex_unlock(&pp_snap_lock);
 			return -EINVAL;
 		}
 		pr_info("%s: delivering pp_snap\n", __func__);
 		msm_enqueue(&sync->pict_q, &sync->pp_snap->list_pict);
 		sync->pp_snap = NULL;
+		mutex_unlock(&pp_snap_lock);
 		sync->pp_mask &=
 			(mask & PP_SNAP) ? ~PP_SNAP : ~PP_RAW_SNAP;
 	}
@@ -2066,11 +2073,13 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 				__func__,
 				vdata->phy.y_phy,
 				vdata->phy.cbcr_phy);
+			mutex_lock(&pp_prev_lock);
 			if (sync->pp_prev)
 				pr_warning("%s: overwriting pp_prev!\n",
 					__func__);
 			pr_info("%s: sending preview to config\n", __func__);
 			sync->pp_prev = qcmd;
+			mutex_unlock(&pp_prev_lock);
 				break;
 			}
 		CDBG("%s: msm_enqueue frame_q\n", __func__);
@@ -2090,11 +2099,13 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 		if (sync->pp_mask & (PP_SNAP | PP_RAW_SNAP)) {
 			CDBG("%s: PP_SNAP in progress: pp_mask %x\n",
 				__func__, sync->pp_mask);
+			mutex_lock(&pp_snap_lock);
 			if (sync->pp_snap)
 				pr_warning("%s: overwriting pp_snap!\n",
 					__func__);
 			pr_info("%s: sending snapshot to config\n", __func__);
 			sync->pp_snap = qcmd;
+			mutex_unlock(&pp_snap_lock);
 				break;
 			}
 
