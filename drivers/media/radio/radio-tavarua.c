@@ -126,6 +126,8 @@ struct tavarua_device {
 	int pending_xfrs[TAVARUA_XFR_MAX];
 	int xfr_bytes_left;
 	int xfr_in_progress;
+	/* Transmit data */
+	enum tavarua_xfr_ctrl_t tx_mode;
 	/* synchrnous xfr data */
 	unsigned char sync_xfr_regs[XFR_REG_NUM];
 	struct completion sync_xfr_start;
@@ -446,6 +448,15 @@ static void read_int_stat(struct work_struct *work)
 	if (radio->registers[STATUS_REG1] & TUNE) {
 		complete(&radio->sync_req_done);
 		tavarua_q_event(radio, TAVARUA_EVT_TUNE_SUCC);
+		if (radio->srch_params.get_list) {
+			if (radio->xfr_in_progress)
+				radio->pending_xfrs[TAVARUA_XFR_SRCH_LIST] = 1;
+			else{
+				radio->xfr_in_progress = 1;
+				request_read_xfr(radio,	RX_STATIONS_0);
+			}
+		}
+		radio->srch_params.get_list = 0;
 		radio->xfr_in_progress = 0;
 		radio->xfr_bytes_left = 0;
 		for (i = 0; i < TAVARUA_BUF_MAX; i++) {
@@ -456,16 +467,7 @@ static void read_int_stat(struct work_struct *work)
 			if (i >= TAVARUA_XFR_RT_RDS)
 				radio->pending_xfrs[i] = 0;
 		}
-		if (radio->srch_params.get_list) {
-			radio->srch_params.get_list = 0;
-			if (radio->xfr_in_progress)
-				radio->pending_xfrs[TAVARUA_XFR_SRCH_LIST] = 1;
-			else{
-				radio->xfr_in_progress = 1;
-				request_read_xfr(radio,	RX_STATIONS_0);
-			}
-		}
-		retval = tavarua_read_registers(radio, FREQ, 2);
+		retval = tavarua_read_registers(radio, TUNECTRL, 1);
 		if (retval > -1) {
 			if (!(radio->registers[TUNECTRL] & SIGSTATE))
 				tavarua_q_event(radio, TAVARUA_EVT_BELOW_TH);
@@ -493,7 +495,7 @@ static void read_int_stat(struct work_struct *work)
 
 	/* Signal indicator change (read SIGSTATE) */
 	if (radio->registers[STATUS_REG1] & SIGNAL) {
-		retval = tavarua_read_registers(radio, FREQ, 2);
+		retval = tavarua_read_registers(radio, TUNECTRL, 1);
 		if (retval > -1) {
 			if (!(radio->registers[TUNECTRL] & SIGSTATE))
 				tavarua_q_event(radio, TAVARUA_EVT_BELOW_TH);
@@ -504,7 +506,7 @@ static void read_int_stat(struct work_struct *work)
 
 	/* RDS synchronization state change (read RDSSYNC) */
 	if (radio->registers[STATUS_REG1] & SYNC) {
-		retval = tavarua_read_registers(radio, FREQ, 2);
+		retval = tavarua_read_registers(radio, TUNECTRL, 1);
 		if (retval > -1) {
 			if ((radio->registers[TUNECTRL] & RDSSYNC))
 				tavarua_q_event(radio, TAVARUA_EVT_RDS_AVAIL);
@@ -657,7 +659,7 @@ static void read_int_stat(struct work_struct *work)
 				copy_from_xfr(radio, TAVARUA_BUF_SRCH_LIST,
 							XFR_REG_NUM);
 				request_read_xfr(radio,	RX_STATIONS_1);
-			} else {
+			} else if (radio->xfr_bytes_left) {
 				copy_from_xfr(radio, TAVARUA_BUF_SRCH_LIST,
 						radio->xfr_bytes_left+1);
 				tavarua_q_event(radio,
@@ -785,6 +787,7 @@ static int tavarua_search(struct tavarua_device *radio, int on, int dir)
 		radio->registers[SRCHCTRL] |= SRCH_ON;
 	} else {
 		radio->registers[SRCHCTRL] &= ~SRCH_ON;
+		radio->srch_params.get_list = 0;
 	}
 	radio->registers[SRCHCTRL] = (dir << 3) |
 				(radio->registers[SRCHCTRL] & 0xF7);
@@ -940,7 +943,8 @@ static int tavarua_get_freq(struct tavarua_device *radio,
 
 	/* Frequency (MHz) = 100 (kHz) x Channel + Bottom of Band (MHz) */
 	freq->frequency = spacing * chan + band_bottom;
-
+	if (radio->registers[TUNECTRL] & ADD_OFFSET)
+		freq->frequency += 800;
 	return retval;
 }
 
@@ -950,15 +954,19 @@ static int tavarua_set_freq(struct tavarua_device *radio, unsigned int freq)
 
 	unsigned int band_bottom;
 	unsigned char chan;
-	unsigned char cmd[2];
+	unsigned char cmd[] = {0x00, 0x00};
 	unsigned int spacing;
 	band_bottom = radio->region_params.band_low;;
 	spacing  = 0.100 * FREQ_MUL;
+	if ((freq % 1600) == 800) {
+		cmd[1] = ADD_OFFSET;
+		freq -= 800;
+	}
 	/* Chan = [ Freq (Mhz) - Bottom of Band (MHz) ] / 100 (kHz) */
 	chan = (freq - band_bottom) / spacing;
 
 	cmd[0] = chan;
-	cmd[1] = TUNE_STATION;
+	cmd[1] |= TUNE_STATION;
 	return tavarua_write_registers(radio, FREQ, cmd, 2);
 }
 
@@ -994,6 +1002,80 @@ static ssize_t tavarua_fops_read(struct file *file, char __user *buf,
 
 	/* copy RDS block out of internal buffer and to user buffer */
 	return kfifo_get(rds_buf, buf, count*3);
+}
+
+/*
+** tavarua_fops_write - write RDS data to host
+*/
+static ssize_t tavarua_fops_write(struct file *file, const char __user *data,
+			size_t count, loff_t *ppos)
+{
+	struct tavarua_device *radio = video_get_drvdata(video_devdata(file));
+	int retval = 0;
+	int bytes_to_copy;
+	int bytes_copied = 0;
+	int bytes_left;
+	int chunk_index = 0;
+	unsigned char tx_data[XFR_REG_NUM];
+	/* Disable TX of this type first */
+	switch (radio->tx_mode) {
+	case TAVARUA_TX_RT:
+		bytes_left = min((int)count, 64);
+		tx_data[1] = 0;
+		break;
+	case TAVARUA_TX_PS:
+		bytes_left = min((int)count, 96);
+		tx_data[4] = 0;
+		break;
+	default:
+		FMDBG("%s: Unknown TX mode\n", __func__);
+		return -1;
+	}
+	retval = sync_write_xfr(radio, radio->tx_mode, tx_data);
+	if (retval < 0)
+		return retval;
+
+	/* send payload to FM hardware */
+	while (bytes_left) {
+		chunk_index++;
+		bytes_to_copy = min(bytes_left, 16);
+		if (copy_from_user(tx_data, data + bytes_copied, bytes_to_copy))
+			return -EFAULT;
+		retval = sync_write_xfr(radio, radio->tx_mode +
+						chunk_index, tx_data);
+		if (retval < 0)
+			return retval;
+
+		bytes_copied += bytes_to_copy;
+		bytes_left -= bytes_to_copy;
+	}
+
+	/* send the header */
+	switch (radio->tx_mode) {
+	case TAVARUA_TX_RT:
+		FMDBG("Writing RT header\n");
+		tx_data[0] = bytes_copied;
+		tx_data[1] = TX_ON | 0x03; /* on | PTY */
+		tx_data[2] = 0x12; /* PI high */
+		tx_data[3] = 0x34; /* PI low */
+		break;
+	case TAVARUA_TX_PS:
+		FMDBG("Writing PS header\n");
+		tx_data[0] = chunk_index;
+		tx_data[1] = 0x03; /* PTY */
+		tx_data[2] = 0x12; /* PI high */
+		tx_data[3] = 0x34; /* PI low */
+		tx_data[4] = TX_ON | 0x01;
+		break;
+	default:
+		FMDBG("%s: Unknown TX mode\n", __func__);
+		return -1;
+	}
+	retval = sync_write_xfr(radio, radio->tx_mode, tx_data);
+	if (retval < 0)
+		return retval;
+	FMDBG("done writing: %d\n", retval);
+	return bytes_copied;
 }
 
 /*
@@ -1134,6 +1216,7 @@ static int tavarua_fops_release(struct file *file)
 static const struct v4l2_file_operations tavarua_fops = {
 	.owner = THIS_MODULE,
 	.read = tavarua_fops_read,
+	.write = tavarua_fops_write,
 	.ioctl = video_ioctl2,
 	.open  = tavarua_fops_open,
 	.release = tavarua_fops_release,
@@ -1696,10 +1779,9 @@ static int tavarua_vidioc_s_tuner(struct file *file, void *priv,
 	if (tuner->audmode == V4L2_TUNER_MODE_MONO)
 		/* Mono */
 		audmode = (radio->registers[IOCTRL] | IOC_MON_STR);
-	else
+	 else
 		/* Stereo */
 		audmode = (radio->registers[IOCTRL] & ~IOC_MON_STR);
-
 	retval = tavarua_write_register(radio, IOCTRL, audmode);
 	if (retval < 0)
 		printk(KERN_WARNING DRIVER_NAME
@@ -1978,6 +2060,8 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	for (i = 0; i < TAVARUA_XFR_MAX; i++)
 		radio->pending_xfrs[i] = 0;
 
+	/* init transmit data */
+	radio->tx_mode = TAVARUA_TX_RT;
 	/* init search params */
 	radio->srch_params.srch_pty = 0;
 	radio->srch_params.srch_pi = 0;

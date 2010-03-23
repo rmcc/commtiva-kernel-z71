@@ -118,6 +118,12 @@ enum tavarua_xfr_t {
 #define XFR_REG_NUM     16
 #define STATUS_REG_NUM 	3
 
+/* TX constants */
+#define HEADER_SIZE	4
+#define TX_ON		0x80
+#define TAVARUA_TX_RT	RDS_RT_0
+#define TAVARUA_TX_PS	RDS_PS_0
+
 enum register_t {
 	STATUS_REG1 = 0,
 	STATUS_REG2,
@@ -152,6 +158,7 @@ enum register_t {
 
 /* Tune Control */
 #define TUNE_STATION	0x01
+#define ADD_OFFSET	(1 << 1)
 #define SIGSTATE	(1 << 5)
 #define MOSTSTATE	(1 << 6)
 #define RDSSYNC		(1 << 7)
