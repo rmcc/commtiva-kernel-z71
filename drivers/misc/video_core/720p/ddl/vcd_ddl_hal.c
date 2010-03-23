@@ -966,7 +966,7 @@ u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context)
 
 	/* Need to reset MFC silently */
 	b_eng_reset = vidc_720p_engine_reset(
-		p_ddl_context->p_current_ddl->n_channel_id,
+		n_channel_id,
 		e_dma_endian, e_interrupt_sel,
 		intr_mask);
 	if (FALSE == b_eng_reset) {

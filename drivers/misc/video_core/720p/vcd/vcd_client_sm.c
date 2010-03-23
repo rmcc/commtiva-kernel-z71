@@ -817,6 +817,7 @@ static u32 vcd_fill_output_buffer_cmn
 
 				p_buf_entry->b_in_use = FALSE;
 			} else {
+				p_cctxt->out_buf_pool.n_in_use++;
 				p_buf_entry->b_in_use = TRUE;
 			}
 		}

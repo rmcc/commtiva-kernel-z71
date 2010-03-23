@@ -344,7 +344,7 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 	struct ddl_client_context_type  *p_ddl = p_ddl_context->p_current_ddl;
 	u32   vcd_status = VCD_S_SUCCESS;
 	u32   vcd_event = VCD_EVT_RESP_INPUT_DONE;
-	u32   eos = FALSE;
+	u32   eos = FALSE, pending_display = 0, release_mask = 0;
 
 	if (DDL_CMD_DECODE_FRAME != p_ddl_context->e_cmd_state &&
 		DDL_CMD_ENCODE_FRAME != p_ddl_context->e_cmd_state) {
@@ -358,6 +358,23 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 		}
 	case NO_BUFFER_RELEASED_FROM_HOST:
 		{
+			/* lets check sanity of this error */
+			release_mask =
+				p_ddl->codec_data.decoder.dpb_mask.n_hw_mask;
+			while (release_mask > 0) {
+				if (0 != (release_mask & 0x1))
+					pending_display += 1;
+				release_mask >>= 1;
+			}
+
+			if (pending_display >=
+				p_ddl->codec_data.decoder.\
+				dp_buf.n_no_of_dec_pic_buf) {
+				DBG("FWISSUE-REQBUF!!");
+				/* callback to client for client fatal error */
+				ddl_client_fatal_cb(p_ddl_context);
+				return TRUE ;
+			}
 		vcd_event = VCD_EVT_RESP_OUTPUT_REQ;
 		break;
 		}
