@@ -75,7 +75,7 @@ static bool inuse;
 
 struct marimba marimba_modules[MARIMBA_NUM_CHILD + 1];
 
-#define MARIMBA_VERSION_REG		11
+#define MARIMBA_VERSION_REG		0x11
 
 #ifdef CONFIG_I2C_SSBI
 #define NUM_ADD	MARIMBA_NUM_CHILD
