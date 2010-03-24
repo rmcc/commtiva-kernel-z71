@@ -199,21 +199,21 @@ char *socinfo_get_build_id(void)
 uint32_t socinfo_get_raw_id(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 2 ? socinfo->v2.raw_id : 0)
+		(socinfo->v1.format >= 2 ? socinfo->v2.raw_id : 0)
 		: 0;
 }
 
 uint32_t socinfo_get_raw_version(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 2 ? socinfo->v2.raw_version : 0)
+		(socinfo->v1.format >= 2 ? socinfo->v2.raw_version : 0)
 		: 0;
 }
 
 uint32_t socinfo_get_platform_type(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 3 ? socinfo->v3.hw_platform : 0)
+		(socinfo->v1.format >= 3 ? socinfo->v3.hw_platform : 0)
 		: 0;
 }
 
@@ -221,7 +221,7 @@ uint32_t socinfo_get_platform_type(void)
 uint32_t socinfo_get_platform_version(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 4 ? socinfo->v4.platform_version : 0)
+		(socinfo->v1.format >= 4 ? socinfo->v4.platform_version : 0)
 		: 0;
 }
 
