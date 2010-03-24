@@ -263,11 +263,12 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	}
 
 	ts_client = marimba_tsadc_register(pdev, 1);
-	err = PTR_ERR(ts_client);
-	if (err < 0) {
+	if (IS_ERR(ts_client)) {
+		err = -ENODEV;
 		pr_err("%s: Unable to register with TSADC\n", __func__);
 		goto err_tsadc_register;
 	}
+
 	ts->ts_client = ts_client;
 
 	err = marimba_tsadc_start(ts_client);
