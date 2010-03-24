@@ -1022,7 +1022,7 @@ static long kgsl_ioctl_drawctxt_destroy(struct kgsl_file_private *private,
 		kgsl_g12_check_open();
 		if (param.drawctxt_id >= KGSL_CONTEXT_MAX
 				|| (private->g12_ctxt_id_mask & 1 <<
-				param.drawctxt_id) == 0) {
+				(param.drawctxt_id-1)) == 0) {
 			result = -EINVAL;
 			goto done;
 		}
@@ -1030,7 +1030,8 @@ static long kgsl_ioctl_drawctxt_destroy(struct kgsl_file_private *private,
 		result = kgsl_g12_drawctxt_destroy(&kgsl_driver.g12_device,
 					param.drawctxt_id);
 		if (result == 0)
-			private->g12_ctxt_id_mask &= ~(1 << param.drawctxt_id);
+			private->g12_ctxt_id_mask &= ~(1 <<
+						(param.drawctxt_id-1));
 
 		kgsl_runpending(&kgsl_driver.g12_device);
 	} else {
