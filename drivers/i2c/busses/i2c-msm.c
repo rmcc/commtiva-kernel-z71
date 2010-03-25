@@ -19,6 +19,7 @@
 #include <linux/init.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <linux/irq.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -383,8 +384,14 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	/* Don't allow power collapse until we release remote spinlock */
 	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
 					dev->pdata->pm_lat);
-	if (dev->pdata->rmutex)
+	if (dev->pdata->rmutex) {
 		remote_mutex_lock(&dev->r_lock);
+		/* If other processor did some transactions, we may have
+		 * interrupt pending. Clear it
+		 */
+		get_irq_chip(dev->irq)->ack(dev->irq);
+	}
+
 	if (adap == &dev->adap_pri)
 		writel(0, dev->base + I2C_INTERFACE_SELECT);
 	else
