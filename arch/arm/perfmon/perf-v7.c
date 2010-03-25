@@ -1050,3 +1050,10 @@ void pm_free_irq(void)
 {
 	free_irq(irqid, 0);
 }
+
+void pm_deinitialize(void)
+{
+  unsigned long enables = 0;
+  RCP15_PMCR(enables);
+  WCP15_PMCR(enables & ~PM_GLOBAL_ENABLE);
+}

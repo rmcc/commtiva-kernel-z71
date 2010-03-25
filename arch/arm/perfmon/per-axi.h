@@ -83,11 +83,6 @@ struct perf_mon_axi_data{
 extern struct perf_mon_axi_data pm_axi_info;
 extern struct perf_mon_axi_cnts axi_cnts;
 
-extern unsigned long axi_cycle_overflows;
-extern unsigned long axi_evt0_overflows;
-extern unsigned long axi_evt1_overflows;
-extern unsigned long axi_ten_total_overflows;
-
 void pm_axi_set_proc_entry(char *name, unsigned long *var,
 	struct proc_dir_entry *d, int hex);
 void pm_axi_get_cnt_proc_entry(char *name, struct perf_mon_axi_cnts *var,
