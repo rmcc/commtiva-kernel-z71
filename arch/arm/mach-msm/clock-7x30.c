@@ -348,10 +348,10 @@ static struct clk_freq_tbl clk_tbl_spi[] = {
 };
 
 static struct clk_freq_tbl clk_tbl_lpa_codec[] = {
-	F_RAW(1, SRC_MAX, 0,  0,  0, NOMINAL), /* src = MI2S_CODEC_RX */
-	F_RAW(2, SRC_MAX, 0,  1,  0, NOMINAL), /* src = ECODEC_CIF */
-	F_RAW(3, SRC_MAX, 0,  2,  0, NOMINAL), /* src = MI2S */
-	F_RAW(4, SRC_MAX, 0,  3,  0, NOMINAL), /* src = SDAC */
+	F_RAW(1, SRC_MAX, 0,  0,  0, MSMC1_END), /* src = MI2S_CODEC_RX */
+	F_RAW(2, SRC_MAX, 0,  1,  0, MSMC1_END), /* src = ECODEC_CIF */
+	F_RAW(3, SRC_MAX, 0,  2,  0, MSMC1_END), /* src = MI2S */
+	F_RAW(4, SRC_MAX, 0,  3,  0, MSMC1_END), /* src = SDAC */
 	F_END,
 };
 
@@ -1303,7 +1303,7 @@ __init int clk_7x30_init(void)
 	set_1rate(QUP_I2C);
 	set_1rate(UART1);
 	set_1rate(UART2);
-	set_1rate(MI2S_CODEC_RX_M);
+	set_1rate(LPA_CODEC);
 
 	return 0;
 }
