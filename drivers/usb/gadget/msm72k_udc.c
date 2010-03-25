@@ -1669,6 +1669,7 @@ static int msm72k_disable(struct usb_ep *_ep)
 	struct msm_endpoint *ept = to_msm_endpoint(_ep);
 
 	usb_ept_enable(ept, 0, 0);
+	flush_endpoint(ept);
 	return 0;
 }
 
