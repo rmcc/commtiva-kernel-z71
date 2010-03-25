@@ -262,7 +262,14 @@ static u32 ddl_header_done_callback(struct ddl_context_type *p_ddl_context)
 	p_decoder = &(p_ddl->codec_data.decoder);
 	p_decoder->frame_size.n_width = seq_hdr_info.n_img_size_x;
 	p_decoder->frame_size.n_height = seq_hdr_info.n_img_size_y;
-	p_decoder->n_min_dpb_num = seq_hdr_info.n_min_num_dpb;
+	if (p_decoder->codec_type.e_codec == VCD_CODEC_H264)
+		p_decoder->n_min_dpb_num =
+		(seq_hdr_info.n_min_num_dpb - 2) << 1;
+	else
+		p_decoder->n_min_dpb_num =
+		seq_hdr_info.n_min_num_dpb + 4;
+	if (p_decoder->n_min_dpb_num < 10)
+		p_decoder->n_min_dpb_num = 10;
 	p_decoder->n_y_cb_cr_size = seq_hdr_info.n_min_dpb_size;
 	p_decoder->n_progressive_only = 1 - seq_hdr_info.n_progressive;
 	ddl_getdec_profilelevel(p_decoder, seq_hdr_info.n_profile,
@@ -422,8 +429,7 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 	struct vidc_720p_dec_disp_info_type *p_dec_disp_info =
 	    &(p_decoder->dec_disp_info);
 	u32 b_callback_end = FALSE;
-	u32 n_last_transact = 2;
-	u32 status = TRUE;
+	u32 status = TRUE, eos_present = FALSE;;
 
 	if (!DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME_DONE)) {
 		VIDC_LOG_STRING("STATE-CRITICAL-DECFRMRUN");
@@ -443,69 +449,47 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 		VIDC_LOGERR_STRING
 			("ddl_dec_frm_done:Dec_reconfig_no_tsupported");
 	}
-	switch (p_dec_disp_info->e_disp_status) {
-	case VIDC_720p_DECODE_ONLY:
-		{
-			n_last_transact = 1;
-			break;
-		}
-	default:
-	case VIDC_720p_DECODE_AND_DISPLAY:
-		{
-			n_last_transact = 2;
-			break;
-		}
-	case VIDC_720p_DISPLAY_ONLY:
-		{
-			n_last_transact = 3;
-			break;
-		}
-	case VIDC_720p_EMPTY_BUFFER:
-		{
-			n_last_transact = 3;
-			break;
-		}
+
+	if ((VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags) != 0) {
+		b_callback_end = FALSE;
+		eos_present = TRUE;
 	}
 
-	if ((0 != (VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags))
-		&& n_last_transact != 3) {
-		n_last_transact = 0;
-	}
 
 	if (VIDC_720p_DECODE_ONLY == p_dec_disp_info->e_disp_status ||
 		VIDC_720p_DECODE_AND_DISPLAY ==
 		p_dec_disp_info->e_disp_status) {
-		b_callback_end = (1 == n_last_transact) ? TRUE : FALSE;
-		ddl_decoder_input_done_callback(p_ddl, b_callback_end);
+		if (eos_present == FALSE)
+			b_callback_end = (VIDC_720p_DECODE_ONLY
+				== p_dec_disp_info->e_disp_status);
+
+	  ddl_decoder_input_done_callback(p_ddl, b_callback_end);
 	}
 
 	if (VIDC_720p_DECODE_AND_DISPLAY == p_dec_disp_info->e_disp_status
 		|| VIDC_720p_DISPLAY_ONLY == p_dec_disp_info->e_disp_status) {
-		b_callback_end = (2 == n_last_transact)
-			? TRUE : FALSE;
+		if (eos_present == FALSE)
+			b_callback_end =
+			(VIDC_720p_DECODE_AND_DISPLAY
+			 == p_dec_disp_info->e_disp_status);
+
 		ddl_decoder_ouput_done_callback(p_ddl, b_callback_end);
 	}
 
-	if (3 == n_last_transact) {
-		p_ddl->input_frame.b_frm_trans_end =
-			(3 == n_last_transact) ? TRUE : FALSE;
-		p_ddl_context->ddl_callback
-		(
-			VCD_EVT_RESP_OUTPUT_REQ,
-			VCD_S_SUCCESS,
-			&p_ddl->input_frame,
-			sizeof(struct ddl_frame_data_type_tag),
-			(void *)p_ddl,
-			p_ddl_context->p_client_data
-		);
-	}
-
-	if (0 != n_last_transact) {
-		ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME);
-		DDL_IDLE(p_ddl_context);
+	if (p_dec_disp_info->e_disp_status ==  VIDC_720p_DISPLAY_ONLY) {
+		/* send the same input once again for decoding */
+		ddl_decode_frame_run(p_ddl);
+		/* client need to ignore the interrupt */
+		status = FALSE;
+	} else if (eos_present == TRUE) {
+		/* send EOS command to HW */
+		ddl_decode_eos_run(p_ddl);
+		/* client need to ignore the interrupt */
+		status = FALSE;
 	} else {
-		 ddl_decode_eos_run(p_ddl);
-		 status = FALSE;
+		ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME);
+		/* move to Idle */
+		DDL_IDLE(p_ddl_context);
 	}
 	return status;
 }
@@ -969,6 +953,12 @@ static void ddl_geth264_declevel(enum vcd_codec_level_type *p_level,
 			*p_level = VCD_LEVEL_H264_3p1;
 			break;
 		}
+	case VIDC_720P_H264_LEVEL3p2:
+	{
+		*p_level = VCD_LEVEL_H264_3p2;
+		break;
+	}
+
 	}
 }
 

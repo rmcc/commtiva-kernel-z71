@@ -220,7 +220,7 @@ u32 res_trk_set_perf_level(u32 n_req_perf_lvl, u32 *pn_set_perf_lvl,
 				axi_freq = axi_clk_freq_table[1];
 			} else {
 				mfc_freq = mfc_clk_freq_table[0];
-				axi_freq = axi_clk_freq_table[1];
+				axi_freq = axi_clk_freq_table[0];
 			}
 			VCDRES_MSG_HIGH("\n DECODER: axi_enc_freq = %u"
 				", mfc_freq = %u, calc_mfc_freq = %u,"

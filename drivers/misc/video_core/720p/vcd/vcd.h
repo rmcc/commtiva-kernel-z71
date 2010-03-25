@@ -222,6 +222,9 @@ void vcd_handle_input_done_failed
 void vcd_handle_input_done_for_interlacing
     (struct vcd_clnt_ctxt_type_t *p_cctxt);
 
+void vcd_handle_input_done_with_trans_end
+    (struct vcd_clnt_ctxt_type_t *p_cctxt);
+
 u32 vcd_handle_frame_done
     (struct vcd_clnt_ctxt_type_t *p_cctxt,
      void *p_payload, u32 event, u32 status);

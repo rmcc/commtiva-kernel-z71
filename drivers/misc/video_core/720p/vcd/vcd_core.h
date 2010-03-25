@@ -101,6 +101,7 @@ struct vcd_buffer_pool_type {
 	struct vcd_buffer_requirement_type buf_req;
 	u32 n_validated;
 	u32 n_allocated;
+	u32 n_in_use;
 	struct vcd_buffer_entry_type **a_queue;
 	u16 n_q_len;
 	u16 n_q_head;
@@ -227,5 +228,13 @@ struct vcd_clnt_ctxt_type_t {
 
 	struct vcd_clnt_ctxt_type_t *p_next;
 };
+
+#define VCD_BUFFERPOOL_INUSE_DECREMENT(val) \
+do { \
+	if ((val) > 0) \
+		val--; \
+	else \
+		vcd_assert(); \
+} while (0)
 
 #endif

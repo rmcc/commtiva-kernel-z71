@@ -695,6 +695,7 @@ u32 vcd_alloc_buffer_pool_entries(
 
 	p_buf_pool->n_validated = 0;
 	p_buf_pool->n_allocated = 0;
+	p_buf_pool->n_in_use = 0;
 
 	return VCD_S_SUCCESS;
 }
@@ -726,6 +727,8 @@ void vcd_flush_in_use_buffer_pool_entries(struct vcd_clnt_ctxt_type_t *p_cctxt,
 					sizeof(struct vcd_frame_data_type),
 					p_cctxt, p_cctxt->p_client_data);
 				p_buf_pool->a_entries[i].b_in_use = FALSE;
+				VCD_BUFFERPOOL_INUSE_DECREMENT(
+					p_buf_pool->n_in_use);
 		 }
 		}
 	}
@@ -749,6 +752,7 @@ void vcd_reset_buffer_pool_for_reuse(struct vcd_buffer_pool_type *p_buf_pool)
 
 	p_buf_pool->n_validated = 0;
 	p_buf_pool->n_allocated = 0;
+	p_buf_pool->n_in_use = 0;
 
 }
 
@@ -865,6 +869,7 @@ void vcd_flush_output_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 		p_buf_entry = vcd_buffer_pool_entry_de_q(p_buf_pool);
 	}
+	p_buf_pool->n_in_use = 0;
 
 	if (p_cctxt->b_sched_clnt_valid && n_count > 0) {
 		VCD_MSG_LOW("Updating scheduler O tkns = %u", n_count);
@@ -923,7 +928,8 @@ u32 vcd_flush_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt, u32 n_mode)
 			}
 
 			p_buf_entry->b_in_use = FALSE;
-
+			VCD_BUFFERPOOL_INUSE_DECREMENT(
+				p_cctxt->in_buf_pool.n_in_use);
 			p_buf_entry = NULL;
 			rc = vcd_map_sched_status(sched_flush_client_buffer
 						  (p_dev_ctxt->sched_hdl,
@@ -1364,7 +1370,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 			rc = VCD_ERR_FAIL;
 		} else {
 			p_op_buf_entry->b_in_use = TRUE;
-
+			p_cctxt->out_buf_pool.n_in_use++;
 			ddl_ip_frm.vcd_frm = *p_ip_frm_entry;
 			ddl_ip_frm.n_frm_delta =
 				vcd_calculate_frame_delta(p_cctxt,
@@ -1526,6 +1532,7 @@ void vcd_send_frame_done_in_eos_for_dec(
 				  p_cctxt, p_cctxt->p_client_data);
 
 		p_buf_entry->b_in_use = FALSE;
+		VCD_BUFFERPOOL_INUSE_DECREMENT(p_cctxt->out_buf_pool.n_in_use);
 	}
 }
 
@@ -1952,6 +1959,7 @@ u32 vcd_handle_input_done(
 	p_transc->e_frame_type = p_frame->vcd_frm.e_frame_type;
 
 	p_transc->p_ip_buf_entry->b_in_use = FALSE;
+	VCD_BUFFERPOOL_INUSE_DECREMENT(p_cctxt->in_buf_pool.n_in_use);
 	p_transc->p_ip_buf_entry = NULL;
 	p_transc->b_input_done = TRUE;
 
@@ -1969,8 +1977,12 @@ u32 vcd_handle_input_done(
 		p_cctxt->status.n_frame_delayed--;
 
 	if (!VCD_FAILED(status) &&
-		p_cctxt->b_decoding && p_frame->vcd_frm.b_interlaced)
-		vcd_handle_input_done_for_interlacing(p_cctxt);
+		p_cctxt->b_decoding) {
+		if (p_frame->vcd_frm.b_interlaced)
+			vcd_handle_input_done_for_interlacing(p_cctxt);
+		if (p_frame->b_frm_trans_end)
+			vcd_handle_input_done_with_trans_end(p_cctxt);
+	}
 
 	return VCD_S_SUCCESS;
 }
@@ -2054,6 +2066,40 @@ void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt_type_t *p_cctxt)
 	} else if (VCD_DEC_NUM_INTERLACED_FIELDS
 			   == p_cctxt->status.n_int_field_cnt)
 		p_cctxt->status.n_int_field_cnt = 0;
+}
+
+void vcd_handle_input_done_with_trans_end(
+	struct vcd_clnt_ctxt_type_t *p_cctxt)
+{
+	u32 rc;
+	union sched_value_type sched_val;
+	if (!p_cctxt->b_decoding)
+		return;
+
+	if (p_cctxt->out_buf_pool.n_in_use != p_cctxt->out_buf_pool.n_count)
+		return;
+
+	rc = vcd_map_sched_status(sched_get_client_param(
+		p_cctxt->p_dev_ctxt->sched_hdl, p_cctxt->sched_clnt_hdl,
+		SCHED_I_CLNT_OTKNCURRENT, &sched_val));
+
+	if (VCD_FAILED(rc)) {
+		VCD_MSG_ERROR("sched_get_client_param:OTKNCURRENT failed");
+		return;
+	}
+
+	if (sched_val.un_value == 0) {
+		VCD_MSG_MED("All output buffers with core are pending display");
+
+		rc = vcd_map_sched_status(sched_update_client_o_tkn(
+			p_cctxt->p_dev_ctxt->sched_hdl,
+			p_cctxt->sched_clnt_hdl,
+			TRUE,
+			p_cctxt->n_sched_o_tkn_per_ip_frm));
+
+		if (VCD_FAILED(rc))
+			VCD_MSG_ERROR("sched_update_client_o_tkn failed");
+	}
 }
 
 u32 vcd_handle_output_required(struct vcd_clnt_ctxt_type_t
@@ -2180,18 +2226,21 @@ u32 vcd_handle_frame_done(
 			vcd_assert();
 			VCD_MSG_ERROR("Invalid output buffer returned"
 				"from DDL");
-			return VCD_ERR_BAD_POINTER;
-		}
-
-		if (!p_op_buf_entry->b_in_use) {
+			rc = VCD_ERR_BAD_POINTER;
+		} else if (!p_op_buf_entry->b_in_use) {
 			VCD_MSG_ERROR("Bad output buffer 0x%p recvd from DDL",
 					  p_op_buf_entry->frame.p_virtual);
-
 			vcd_assert();
+			rc = VCD_ERR_BAD_POINTER;
+		} else {
+			p_op_buf_entry->b_in_use = FALSE;
+			VCD_BUFFERPOOL_INUSE_DECREMENT(
+				p_cctxt->out_buf_pool.n_in_use);
+			VCD_MSG_LOW("outBufPool.InUse = %d",
+						p_cctxt->out_buf_pool.n_in_use);
 		}
-		p_op_buf_entry->b_in_use = FALSE;
 	}
-
+	VCD_FAILED_RETURN(rc, "Bad output buffer pointer");
 	p_op_frm->vcd_frm.time_stamp = p_transc->time_stamp;
 	p_op_frm->vcd_frm.n_ip_frm_tag = p_transc->n_ip_frm_tag;
 	p_op_frm->vcd_frm.e_frame_type = p_transc->e_frame_type;
@@ -2463,6 +2512,7 @@ void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 					  p_cctxt, p_cctxt->p_client_data);
 		}
 		p_transc->p_ip_buf_entry->b_in_use = FALSE;
+		VCD_BUFFERPOOL_INUSE_DECREMENT(p_cctxt->in_buf_pool.n_in_use);
 		p_transc->p_ip_buf_entry = NULL;
 		p_cctxt->status.n_frame_submitted--;
 	}
@@ -2726,7 +2776,7 @@ u32 vcd_handle_input_frame(
 	VCD_FAILED_RETURN(rc, "Failed: sched_queue_frame");
 
 	p_buf_entry->b_in_use = TRUE;
-
+	p_cctxt->in_buf_pool.n_in_use++;
 	if (p_input_frame->n_flags & VCD_FRAME_FLAG_EOS) {
 		rc = vcd_map_sched_status(sched_mark_client_eof
 					  (p_cctxt->p_dev_ctxt->sched_hdl,

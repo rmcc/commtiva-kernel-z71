@@ -1877,12 +1877,12 @@ static u32 ddl_decoder_min_num_dpb(struct ddl_decoder_data_type *p_decoder)
 	case VCD_CODEC_DIVX_6:
 	case VCD_CODEC_XVID:
 		{
-			n_min_dpb = 3;
+			n_min_dpb = 10;
 			break;
 		}
 	case VCD_CODEC_H263:
 		{
-			n_min_dpb = 2;
+			n_min_dpb = 10;
 			break;
 		}
 	case VCD_CODEC_VC1:
@@ -1900,7 +1900,9 @@ static u32 ddl_decoder_min_num_dpb(struct ddl_decoder_data_type *p_decoder)
 			if (n_min_dpb > 16)
 				n_min_dpb = 16;
 
-			n_min_dpb += 2;
+			n_min_dpb *= 2;
+			if (n_min_dpb < 10)
+				n_min_dpb = 10;
 			break;
 		}
 	}
