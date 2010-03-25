@@ -997,63 +997,63 @@ static struct marimba_fm_platform_data marimba_fm_pdata = {
 #define MARIMBA_SLAVE_ID_CDC_ADDR	0x77
 #define MARIMBA_SLAVE_ID_QMEMBIST_ADDR	0X66
 
+#define TSADC_VOTER_ID "MADC"
+static const char *vregs_tsadc_name[] = {
+	"gp12",
+	"s2",
+};
+static struct vreg *vregs_tsadc[ARRAY_SIZE(vregs_tsadc_name)];
+
 static int msm_marimba_tsadc_power(int vreg_on)
 {
-	struct vreg *vreg_tsadc_gp12, *vreg_tsadc_s2;
-	int rc = 0;
+	int i, rc = 0;
 
-	vreg_tsadc_gp12 = vreg_get(NULL, "gp12");
-	/* LDO18 */
-	if (IS_ERR(vreg_tsadc_gp12)) {
-		printk(KERN_ERR "%s: vreg_get() failed (%ld)\n",
-				__func__, PTR_ERR(vreg_tsadc_gp12));
-		rc = PTR_ERR(vreg_tsadc_gp12);
-		goto vreg_gp12_fail;
+	for (i = 0; i < ARRAY_SIZE(vregs_tsadc_name); i++) {
+		if (!vregs_tsadc[i]) {
+			printk(KERN_ERR "%s: vreg_get %s failed (%d)\n",
+				__func__, vregs_tsadc_name[i], rc);
+			goto vreg_fail;
+		}
+
+		rc = vreg_on ? vreg_enable(vregs_tsadc[i]) :
+			  vreg_disable(vregs_tsadc[i]);
+		if (rc < 0) {
+			printk(KERN_ERR "%s: vreg %s %s failed (%d)\n",
+				__func__, vregs_tsadc_name[i],
+			       vreg_on ? "enable" : "disable", rc);
+			goto vreg_fail;
+		}
 	}
-
-	if (vreg_on) {
-		rc = vreg_enable(vreg_tsadc_gp12);
-		if (rc)
-			printk(KERN_ERR "%s: vreg_enable() = %d \n",
-					__func__, rc);
-		goto vreg_gp12_fail;
-	} else {
-		rc = vreg_disable(vreg_tsadc_gp12);
-		if (rc)
-			printk(KERN_ERR "%s: vreg_disable() = %d \n",
-					__func__, rc);
-		goto vreg_gp12_fail;
+	/* vote for D0 buffer */
+	rc = pmapp_clock_vote(TSADC_VOTER_ID, PMAPP_CLOCK_ID_DO,
+		vreg_on ? PMAPP_CLOCK_VOTE_ON : PMAPP_CLOCK_VOTE_OFF);
+	if (rc)	{
+		printk(KERN_ERR "%s: unable to %svote for d0 clk\n",
+			__func__, vreg_on ? "" : "de-");
+		goto do_vote_fail;
 	}
+	return 0;
 
-	/* Enable s2/RF1 for B0 */
-	vreg_tsadc_s2 = vreg_get(NULL, "s2");
-	if (IS_ERR(vreg_tsadc_s2)) {
-		printk(KERN_ERR "%s: vreg_get() failed (%ld)\n",
-				__func__, PTR_ERR(vreg_tsadc_s2));
-		rc = PTR_ERR(vreg_tsadc_s2);
-		goto vreg_s2_fail;
-	}
-
-	if (vreg_on) {
-		rc = vreg_enable(vreg_tsadc_s2);
-		if (rc)
-			printk(KERN_ERR "%s: vreg_enable() = %d \n",
-					__func__, rc);
-		goto vreg_s2_fail;
-	} else {
-		rc = vreg_disable(vreg_tsadc_s2);
-		if (rc)
-			printk(KERN_ERR "%s: vreg_disable() = %d \n",
-					__func__, rc);
-		goto vreg_s2_fail;
-	}
-
+do_vote_fail:
+vreg_fail:
+	while (i)
+		vreg_disable(vregs_tsadc[--i]);
 	return rc;
+}
 
-vreg_s2_fail:
-	vreg_disable(vreg_tsadc_gp12);
-vreg_gp12_fail:
-	return rc;
+static void __init tsadc_power_init(void)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(vregs_tsadc_name); i++) {
+		vregs_tsadc[i] = vreg_get(NULL, vregs_tsadc_name[i]);
+		if (IS_ERR(vregs_tsadc[i])) {
+			printk(KERN_ERR "%s: vreg get %s failed (%ld)\n",
+			       __func__, vregs_tsadc_name[i],
+			       PTR_ERR(vregs_tsadc[i]));
+			return;
+		}
+	}
 }
 
 static struct marimba_tsadc_platform_data marimba_tsadc_pdata = {
@@ -3670,6 +3670,7 @@ static void __init msm7x30_init(void)
 				ARRAY_SIZE(msm_camera_boardinfo));
 
 	bt_power_init();
+	tsadc_power_init();
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	msm7x30_init_uart2();
 #endif
