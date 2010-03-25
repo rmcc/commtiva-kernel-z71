@@ -107,8 +107,10 @@ struct kgsl_shadowprop {
 struct kgsl_platform_data {
 	unsigned int max_axi_freq;
 	unsigned int max_grp2d_freq;
+	unsigned int min_grp2d_freq;
 	int (*set_grp2d_async)(void);
 	unsigned int max_grp3d_freq;
+	unsigned int min_grp3d_freq;
 	int (*set_grp3d_async)(void);
 };
 
