@@ -357,8 +357,14 @@ static int __devinit marimba_tsadc_probe(struct platform_device *pdev)
 	tsadc->dev	= &pdev->dev;
 	tsadc->pdata = pdev->dev.platform_data;
 
-	if (tsadc->pdata->marimba_tsadc_power)
+	if (tsadc->pdata->marimba_tsadc_power) {
 		rc = tsadc->pdata->marimba_tsadc_power(1);
+		if (rc) {
+			pr_err("%s: Unable to power up TSADC \n", __func__);
+			kfree(tsadc);
+			return rc;
+		}
+	}
 
 	platform_set_drvdata(pdev, tsadc);
 
@@ -379,6 +385,50 @@ static int __devexit marimba_tsadc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_PM
+static int
+marimba_tsadc_suspend(struct platform_device *pdev, pm_message_t msg)
+{
+	int rc = 0;
+	struct marimba_tsadc *tsadc = platform_get_drvdata(pdev);
+
+	if (tsadc->pdata->marimba_tsadc_power)
+		rc = tsadc->pdata->marimba_tsadc_power(0);
+
+	return rc;
+}
+
+static int marimba_tsadc_resume(struct platform_device *pdev)
+{
+	int rc = 0;
+	struct marimba_tsadc *tsadc = platform_get_drvdata(pdev);
+
+	if (tsadc->pdata->marimba_tsadc_power) {
+		rc = tsadc->pdata->marimba_tsadc_power(1);
+		if (rc) {
+			pr_err("%s: Unable to power on TSADC \n", __func__);
+			return rc;
+		}
+	}
+
+	marimba_tsadc_startup(tsadc_dev);
+	marimba_tsadc_configure(tsadc_dev);
+
+	return rc;
+}
+#else
+static int
+marimba_tsadc_suspend(struct platform_device *pdev, pm_message_t msg)
+{
+	return 0;
+}
+
+static int marimba_tsadc_resume(struct platform_device *pd)
+{
+	return 0;
+}
+#endif
+
 static struct platform_driver tsadc_driver = {
 	.probe	= marimba_tsadc_probe,
 	.remove	= __devexit_p(marimba_tsadc_remove),
@@ -386,6 +436,8 @@ static struct platform_driver tsadc_driver = {
 		.name = "marimba_tsadc",
 		.owner = THIS_MODULE,
 	},
+	.resume = marimba_tsadc_resume,
+	.suspend = marimba_tsadc_suspend,
 };
 
 static int __init marimba_tsadc_init(void)
