@@ -51,6 +51,15 @@
 #define KGSL_CACHE_USER_ADDR	0x00000010
 #define KGSL_CACHE_VMALLOC_ADDR	0x00000020
 
+enum kgsl_clk_freq {
+	KGSL_AXI_MAX_FREQ = 0,
+	KGSL_2D_MIN_FREQ = 1,
+	KGSL_2D_MAX_FREQ = 2,
+	KGSL_3D_MIN_FREQ = 3,
+	KGSL_3D_MAX_FREQ = 4,
+	KGSL_NUM_FREQ
+};
+
 struct kgsl_driver {
 	struct miscdevice misc;
 	struct platform_device *pdev;
@@ -67,10 +76,11 @@ struct kgsl_driver {
 	struct clk *g12_grp_clk;
 	struct clk *yamato_grp_pclk;
 	struct clk *yamato_grp_clk;
+	struct clk *yamato_grp_src_clk;
 	struct clk *imem_clk;
 	unsigned int power_flags;
 	unsigned int is_suspended;
-	unsigned int max_axi_freq;
+	unsigned int clk_freq[KGSL_NUM_FREQ];
 
 	struct kgsl_devconfig g12_config;
 	struct kgsl_devconfig yamato_config;

@@ -250,6 +250,9 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 
 			clk_disable(kgsl_driver.yamato_grp_clk);
 			clk_disable(kgsl_driver.imem_clk);
+			if (kgsl_driver.clk_freq[KGSL_3D_MIN_FREQ])
+				clk_set_min_rate(kgsl_driver.yamato_grp_src_clk,
+					kgsl_driver.clk_freq[KGSL_3D_MIN_FREQ]);
 			if ((kgsl_driver.g12_device.hwaccess_blocked ==
 				KGSL_TRUE) ||
 				(kgsl_driver.power_flags &
@@ -264,11 +267,14 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 		return KGSL_SUCCESS;
 	case KGSL_PWRFLAGS_YAMATO_CLK_ON:
 		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_YAMATO_CLK_OFF) {
-			if (kgsl_driver.max_axi_freq) {
+			if (kgsl_driver.clk_freq[KGSL_AXI_MAX_FREQ]) {
 				pm_qos_update_requirement(
 					PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-					kgsl_driver.max_axi_freq);
+				kgsl_driver.clk_freq[KGSL_AXI_MAX_FREQ]);
 			}
+			if (kgsl_driver.clk_freq[KGSL_3D_MAX_FREQ])
+				clk_set_min_rate(kgsl_driver.yamato_grp_src_clk,
+					kgsl_driver.clk_freq[KGSL_3D_MAX_FREQ]);
 			if (kgsl_driver.yamato_grp_pclk)
 				clk_enable(kgsl_driver.yamato_grp_pclk);
 			clk_enable(kgsl_driver.yamato_grp_clk);
@@ -283,8 +289,13 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_G12_CLK_ON) {
 			if (kgsl_driver.g12_grp_pclk)
 				clk_disable(kgsl_driver.g12_grp_pclk);
-			if (kgsl_driver.g12_grp_clk)
+			if (kgsl_driver.g12_grp_clk != NULL) {
 				clk_disable(kgsl_driver.g12_grp_clk);
+				if (kgsl_driver.clk_freq[KGSL_2D_MIN_FREQ])
+					clk_set_min_rate(
+					kgsl_driver.g12_grp_clk,
+					kgsl_driver.clk_freq[KGSL_2D_MIN_FREQ]);
+			}
 			if (kgsl_driver.power_flags &
 					KGSL_PWRFLAGS_YAMATO_CLK_OFF)
 				pm_qos_update_requirement(
@@ -296,15 +307,20 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 		return KGSL_SUCCESS;
 	case KGSL_PWRFLAGS_G12_CLK_ON:
 		if (kgsl_driver.power_flags & KGSL_PWRFLAGS_G12_CLK_OFF) {
-			if (kgsl_driver.max_axi_freq) {
+			if (kgsl_driver.clk_freq[KGSL_AXI_MAX_FREQ]) {
 				pm_qos_update_requirement(
 					PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
-					kgsl_driver.max_axi_freq);
+				kgsl_driver.clk_freq[KGSL_AXI_MAX_FREQ]);
 			}
 			if (kgsl_driver.g12_grp_pclk)
 				clk_enable(kgsl_driver.g12_grp_pclk);
-			if (kgsl_driver.g12_grp_clk)
+			if (kgsl_driver.g12_grp_clk != NULL) {
+				if (kgsl_driver.clk_freq[KGSL_2D_MAX_FREQ])
+					clk_set_min_rate(
+					kgsl_driver.g12_grp_clk,
+					kgsl_driver.clk_freq[KGSL_2D_MAX_FREQ]);
 				clk_enable(kgsl_driver.g12_grp_clk);
+			}
 
 			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_G12_CLK_OFF);
 			kgsl_driver.power_flags |= KGSL_PWRFLAGS_G12_CLK_ON;
@@ -1672,6 +1688,8 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(clk)) {
 		clk = grp_clk; /* Fallback to slave */
 	}
+	kgsl_driver.yamato_grp_src_clk = clk;
+
 
 	/* put the AXI bus into asynchronous mode with the graphics cores */
 	if (pdata != NULL) {
@@ -1712,8 +1730,13 @@ static int __devinit kgsl_platform_probe(struct platform_device *pdev)
 	pm_qos_add_requirement(PM_QOS_SYSTEM_BUS_FREQ, DRIVER_NAME,
 				PM_QOS_DEFAULT_VALUE);
 
-	if (pdata)
-		kgsl_driver.max_axi_freq = pdata->max_axi_freq;
+	if (pdata) {
+		kgsl_driver.clk_freq[KGSL_AXI_MAX_FREQ] = pdata->max_axi_freq;
+		kgsl_driver.clk_freq[KGSL_2D_MIN_FREQ] = pdata->min_grp2d_freq;
+		kgsl_driver.clk_freq[KGSL_2D_MAX_FREQ] = pdata->max_grp2d_freq;
+		kgsl_driver.clk_freq[KGSL_3D_MIN_FREQ] = pdata->min_grp3d_freq;
+		kgsl_driver.clk_freq[KGSL_3D_MAX_FREQ] = pdata->max_grp3d_freq;
+	}
 
 	/*acquire yamato interrupt */
 	kgsl_driver.yamato_interrupt_num =
