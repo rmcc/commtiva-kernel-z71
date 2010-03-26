@@ -66,6 +66,7 @@ extern  void pm_set_local_su(unsigned long events);
 extern  void pm_set_local_l2(unsigned long events);
 extern  void pm_set_local_vu(unsigned long events);
 extern void pm_initialize(void);
+extern void pm_deinitialize(void);
 extern void pm_free_irq(void);
 
 extern int per_process_perf_init(void);
