@@ -3048,12 +3048,12 @@ static struct platform_device msm_device_pmic_leds = {
 };
 
 static struct msm_ts_platform_data msm_ts_data = {
-	.min_x          = 296,
-	.max_x          = 3800,
-	.min_y          = 296,
-	.max_y          = 3800,
+	.min_x          = 0,
+	.max_x          = 4096,
+	.min_y          = 0,
+	.max_y          = 4096,
 	.min_press      = 0,
-	.max_press      = 256,
+	.max_press      = 255,
 	.inv_x          = 4096,
 	.inv_y          = 4096,
 };
