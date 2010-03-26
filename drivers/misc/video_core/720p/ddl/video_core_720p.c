@@ -75,8 +75,6 @@
 #include "video_core_type.h"
 #include "video_core_720p.h"
 
-#define DEBUG 0
-
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
 #else
@@ -127,7 +125,7 @@ void vidc_720p_init(char **ppsz_version, u32 i_firmware_size,
 		     enum vidc_720p_interrupt_level_selection_type
 		     e_interrupt_sel, u32 interrupt_mask)
 {
-	if (ppsz_version != NULL)
+	if (ppsz_version)
 		*ppsz_version = VIDC_720P_VERSION_STRING;
 
 	if (e_interrupt_sel == VIDC_720P_INTERRUPT_LEVEL_SEL)
@@ -176,7 +174,7 @@ u32 vidc_720p_do_sw_reset(void)
 	VIDC_BUSY_WAIT(5);
 	VIDC_IO_IN(REG_193553, &n_fw_start);
 
-	if (0 == n_fw_start) {
+	if (!n_fw_start) {
 		DBG("\n VIDC-SW-RESET-FAILS!");
 		return FALSE;
 	}
@@ -188,8 +186,8 @@ u32 vidc_720p_reset_is_success()
 	u32 n_stagecounter = 0;
 	VIDC_IO_IN(REG_352831, &n_stagecounter);
 	n_stagecounter &= 0xff;
-	if (0xe5 != n_stagecounter) {
-		DBG("\n vidc-CPU_RESET-FAILS!");
+	if (n_stagecounter != 0xe5) {
+		DBG("\n VIDC-CPU_RESET-FAILS!");
 		VIDC_IO_OUT(REG_224135, 0);
 		msleep(10);
 		return FALSE;
@@ -206,7 +204,7 @@ void vidc_720p_start_cpu(enum vidc_720p_endian_type e_dma_endian,
 	VIDC_IO_OUT(REG_958768, p_icontext_bufferstart);
 	VIDC_IO_OUT(REG_736316, e_dma_endian);
 	VIDC_IO_OUT(REG_699747, 0x1);
-	if (0 != debug_buffer_size) {
+	if (debug_buffer_size) {
 		VIDC_IO_OUTF(REG_699747, ALLOCATED_MEM_SIZE, \
 					 debug_buffer_size);
 		VIDC_IO_OUTF(REG_699747,
@@ -277,9 +275,9 @@ u32 vidc_720p_engine_reset(u32 n_ch_id,
 		VIDC_BUSY_WAIT(20);
 		VIDC_IO_IN(REG_982553, &n_op_done);
 		n_counter++;
-	} while (0x0 == n_op_done && n_counter < 10);
+	} while (!n_op_done && n_counter < 10);
 
-	if (0x0 == n_op_done) {
+	if (!n_op_done) {
 		/* Reset fails */
 		return  FALSE ;
 	}
@@ -293,7 +291,7 @@ u32 vidc_720p_engine_reset(u32 n_ch_id,
 	else
 		VIDC_IO_OUT(REG_491082, 1);
 
-	if (0 == interrupt_mask) {
+	if (!interrupt_mask) {
 		/* Disable interrupt */
 		VIDC_IO_OUT(REG_609676, 1);
 	} else {
@@ -404,7 +402,7 @@ void vidc_720p_encode_set_short_header(u32 i_short_header)
 void vidc_720p_encode_set_vop_time(u32 n_vop_time_resolution,
 				    u32 n_vop_time_increment)
 {
-	if (n_vop_time_resolution == 0) {
+	if (!n_vop_time_resolution) {
 		VIDC_IO_OUT(REG_64895, 0x0);
 	} else {
 		VIDC_IO_OUTF(REG_64895, VOP_TIMING_ENABLE, 0x1);
@@ -417,7 +415,7 @@ void vidc_720p_encode_set_vop_time(u32 n_vop_time_resolution,
 
 void vidc_720p_encode_hdr_ext_control(u32 n_header_extension)
 {
-	if (0 != n_header_extension) {
+	if (n_header_extension) {
 		VIDC_IO_OUTF(REG_128234, HEC_ENABLE, 0x1);
 		VIDC_IO_OUT(REG_407718, n_header_extension);
 	} else {
@@ -759,7 +757,7 @@ void vidc_720p_decode_set_dpb_details(u32 n_num_dpb, u32 n_alloc_len,
 
 void vidc_720p_decode_set_mpeg4Post_filter(u32 b_enable_post_filter)
 {
-	if (b_enable_post_filter == TRUE)
+	if (b_enable_post_filter)
 		VIDC_IO_OUT(REG_443811, 0x1);
 	else
 		VIDC_IO_OUT(REG_443811, 0x0);
@@ -767,7 +765,7 @@ void vidc_720p_decode_set_mpeg4Post_filter(u32 b_enable_post_filter)
 
 void vidc_720p_decode_set_error_control(u32 b_enable_error_control)
 {
-	if (b_enable_error_control == TRUE)
+	if (b_enable_error_control)
 		VIDC_IO_OUT(REG_846346, 0);
 	else
 		VIDC_IO_OUT(REG_846346, 1);
@@ -913,13 +911,13 @@ void vidc_720p_decode_setpassthrough_start(u32 n_pass_startaddr)
 
 void vidc_720p_RCFrame_skip(u32 n_op, u32 n_vbv_size)
 {
-	if (0 == n_op) {
+	if (!n_op) {
 		VIDC_IO_OUTF(REG_128234, FRAME_SKIP_ENABLE,
 			      n_op);
 		return;
 	}
 	VIDC_IO_OUTF(REG_128234, FRAME_SKIP_ENABLE, n_op);
-	if (2 == n_op) {
+	if (n_op == 2) {
 		VIDC_IO_OUTF(REG_128234, VBV_BUFFER_SIZE,
 			      n_vbv_size);
 	}

@@ -25,6 +25,8 @@
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef VIDEO_CORE_TYPE_H
+#define VIDEO_CORE_TYPE_H
 
 #include <linux/types.h>
 #include <linux/kernel.h>
@@ -38,3 +40,12 @@
 
 #define TRUE 	1
 #define FALSE	0
+
+#define DEBUG   0
+
+#define USE_RES_TRACKER
+#define AXI_CLK_SCALING
+
+#undef CORE_TIMING_INFO
+
+#endif

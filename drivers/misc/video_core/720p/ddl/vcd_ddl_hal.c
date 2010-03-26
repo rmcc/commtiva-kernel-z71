@@ -75,8 +75,6 @@
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl_metadata.h"
 
-#define DEBUG 0
-
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
 #else
@@ -95,7 +93,7 @@ void ddl_core_init(struct ddl_context_type *p_ddl_context)
 
 	vcd_get_fw_property(VCD_FW_BOOTCODE, &fw_details);
 	vcd_get_fw_property(VCD_FW_ENDIAN, &fw_endianness);
-	if (VCD_FW_BIG_ENDIAN == fw_endianness)
+	if (fw_endianness == VCD_FW_BIG_ENDIAN)
 		e_dma_endian = VIDC_720P_BIG_ENDIAN;
 	else
 		e_dma_endian = VIDC_720P_LITTLE_ENDIAN;
@@ -125,7 +123,7 @@ void ddl_core_start_cpu(struct ddl_context_type *p_ddl_context)
 	u32 dbg_core_dump_buf_size = 0;
 
 	vcd_get_fw_property(VCD_FW_ENDIAN, &fw_endianness);
-	if (VCD_FW_BIG_ENDIAN == fw_endianness)
+	if (fw_endianness == VCD_FW_BIG_ENDIAN)
 		e_dma_endian = VIDC_720P_LITTLE_ENDIAN;
 	else
 		e_dma_endian = VIDC_720P_BIG_ENDIAN;
@@ -134,7 +132,7 @@ void ddl_core_start_cpu(struct ddl_context_type *p_ddl_context)
 
 	DBG("VSP_BUF_ADDR_SIZE %d",
 		p_ddl_context->context_buf_addr.n_buffer_size);
-	if (0 != p_ddl_context->enable_dbg_core_dump) {
+	if (p_ddl_context->enable_dbg_core_dump) {
 		dbg_core_dump_buf_size = p_ddl_context->dbg_core_dump.
 			n_buffer_size;
 	}
@@ -240,7 +238,7 @@ void ddl_decode_init_codec(struct ddl_client_context_type *p_ddl)
 
 	vidc_720p_decode_set_mpeg4Post_filter(p_decoder->post_filter.
 					       b_post_filter);
-	if (VCD_CODEC_VC1_RCV == p_decoder->codec_type.e_codec) {
+	if (p_decoder->codec_type.e_codec == VCD_CODEC_VC1_RCV) {
 		vidc_720p_set_frame_size(p_decoder->client_frame_size.n_width,
 			p_decoder->client_frame_size.n_height);
 	} else {
@@ -288,23 +286,22 @@ void ddl_decode_dynamic_property(struct ddl_client_context_type *p_ddl,
 	struct vcd_frame_data_type *p_bit_stream =
 	    &(p_ddl->input_frame.vcd_frm);
 
-	if (FALSE == b_enable) {
-		if (p_decoder->b_dynmic_prop_change_req == TRUE) {
+	if (!b_enable) {
+		if (p_decoder->b_dynmic_prop_change_req) {
 			p_decoder->b_dynmic_prop_change_req = FALSE;
 			vidc_720p_decode_dynamic_req_reset();
 		}
 		return;
 	}
-	if (0 != (p_decoder->n_dynamic_prop_change &
+	if ((p_decoder->n_dynamic_prop_change &
 				DDL_DEC_REQ_OUTPUT_FLUSH)) {
 		p_decoder->b_dynmic_prop_change_req = TRUE;
 		p_decoder->n_dynamic_prop_change &= ~(DDL_DEC_REQ_OUTPUT_FLUSH);
 		p_decoder->dpb_mask.n_hw_mask = 0;
 		vidc_720p_decode_dynamic_req_set(VIDC_720p_FLUSH_REQ);
 	}
-	if ((0 !=
-	     (p_decoder->n_meta_data_enable_flag & VCD_METADATA_PASSTHROUGH))
-	    && (0 != (VCD_FRAME_FLAG_EXTRADATA & p_bit_stream->n_flags))
+	if (((p_decoder->n_meta_data_enable_flag & VCD_METADATA_PASSTHROUGH))
+	    && ((VCD_FRAME_FLAG_EXTRADATA & p_bit_stream->n_flags))
 	    ) {
 
 		p_temp = ((uint8_t *)p_bit_stream->p_physical +
@@ -325,30 +322,30 @@ void ddl_encode_dynamic_property(struct ddl_client_context_type *p_ddl,
 {
 	struct ddl_encoder_data_type *p_encoder = &(p_ddl->codec_data.encoder);
 
-	if (FALSE == b_enable) {
-		if (p_encoder->b_dynmic_prop_change_req == TRUE) {
+	if (!b_enable) {
+		if (p_encoder->b_dynmic_prop_change_req) {
 			p_encoder->b_dynmic_prop_change_req = FALSE;
 			vidc_720p_encode_dynamic_req_reset();
 		}
 		return;
 	}
-	if (0 != (p_encoder->n_dynamic_prop_change & DDL_ENC_REQ_IFRAME)) {
+	if ((p_encoder->n_dynamic_prop_change & DDL_ENC_REQ_IFRAME)) {
 		u32 n_dummy = 0;
 		vidc_720p_encode_dynamic_req_set(VIDC_720p_ENC_IFRAME_REQ,
 						  n_dummy);
 		p_encoder->n_dynamic_prop_change &= ~(DDL_ENC_REQ_IFRAME);
 	}
-	if (0 != (p_encoder->n_dynamic_prop_change & DDL_ENC_CHANGE_BITRATE)) {
+	if ((p_encoder->n_dynamic_prop_change & DDL_ENC_CHANGE_BITRATE)) {
 		vidc_720p_encode_dynamic_req_set(VIDC_720p_ENC_BITRATE_CHANGE,
 			p_encoder->target_bit_rate.n_target_bitrate);
 		p_encoder->n_dynamic_prop_change &= ~(DDL_ENC_CHANGE_BITRATE);
 	}
-	if (0 != (p_encoder->n_dynamic_prop_change & DDL_ENC_CHANGE_IPERIOD)) {
+	if ((p_encoder->n_dynamic_prop_change & DDL_ENC_CHANGE_IPERIOD)) {
 		vidc_720p_encode_dynamic_req_set(VIDC_720p_ENC_IPERIOD_CHANGE,
 			p_encoder->i_period.n_p_frames);
 		p_encoder->n_dynamic_prop_change &= ~(DDL_ENC_CHANGE_IPERIOD);
 	}
-	if (0 != (p_encoder->n_dynamic_prop_change &
+	if ((p_encoder->n_dynamic_prop_change &
 				DDL_ENC_CHANGE_FRAMERATE)) {
 		vidc_720p_encode_dynamic_req_set
 		    (VIDC_720p_ENC_FRAMERATE_CHANGE,
@@ -583,13 +580,13 @@ void ddl_encode_init_codec(struct ddl_client_context_type *p_ddl)
 		     p_encoder->adaptive_rc.b_static_region_as_flag,
 		     p_encoder->adaptive_rc.b_activity_region_flag);
 	}
-	if (VCD_CODEC_MPEG4 == p_encoder->codec_type.e_codec) {
+	if (p_encoder->codec_type.e_codec == VCD_CODEC_MPEG4) {
 		vidc_720p_encode_set_short_header
 		    (p_encoder->short_header.b_short_header);
 
 		vidc_720p_encode_hdr_ext_control(p_encoder->n_hdr_ext_control);
 	}
-	if (VCD_CODEC_H264 == p_encoder->codec_type.e_codec) {
+	if (p_encoder->codec_type.e_codec == VCD_CODEC_H264) {
 		enum vidc_720p_entropy_sel_type e_entropy_sel;
 		enum vidc_720p_cabac_model_type e_cabac_model_number;
 		switch (p_encoder->entropy_control.e_entropy_sel) {
@@ -692,7 +689,7 @@ void ddl_encode_init_codec(struct ddl_client_context_type *p_ddl)
 
 	ddl_metadata_enable(p_ddl);
 
-	if (0 != p_encoder->seq_header.p_virtual_base_addr) {
+	if (p_encoder->seq_header.p_virtual_base_addr) {
 		u32 n_ext_buffer_start, n_ext_buffer_end, n_start_byte_num;
 		n_ext_buffer_start =
 		    (u32) p_encoder->seq_header.p_align_physical_addr;
@@ -709,12 +706,11 @@ void ddl_encode_init_codec(struct ddl_client_context_type *p_ddl)
 							n_start_byte_num);
 	}
 
-	if (VCD_BUFFER_FORMAT_NV12 ==
-	    p_encoder->re_con_buf_format.e_buffer_format) {
+	if (p_encoder->re_con_buf_format.e_buffer_format ==
+		VCD_BUFFER_FORMAT_NV12)
 		mem_access_method = VIDC_720P_TILE_LINEAR;
-	} else {
+	else
 		mem_access_method = VIDC_720P_TILE_16x16;
-	}
 
 	ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_INITCODECDONE);
 	ddl_move_command_state(p_ddl->p_ddl_context, DDL_CMD_INIT_CODEC);
@@ -744,7 +740,7 @@ void ddl_encode_frame_run(struct ddl_client_context_type *p_ddl)
 	n_ext_buffer_end = ddl_encode_set_metadata_output_buf(p_ddl);
 	n_start_byte_number =
 	    (n_ext_buffer_start & DDL_STREAMBUF_ALIGN_GUARD_BYTES);
-	if (0 != n_start_byte_number) {
+	if (n_start_byte_number) {
 		u32 n_upper_data, n_lower_data;
 		u32 *p_align_virtual_addr;
 		n_ext_buffer_start &= ~(DDL_STREAMBUF_ALIGN_GUARD_BYTES);
@@ -764,7 +760,7 @@ void ddl_encode_frame_run(struct ddl_client_context_type *p_ddl)
 	ddl_move_client_state(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME_DONE);
 	ddl_move_command_state(p_ddl->p_ddl_context, DDL_CMD_ENCODE_FRAME);
 
-	if (0 != p_encoder->n_dynamic_prop_change) {
+	if (p_encoder->n_dynamic_prop_change) {
 		p_encoder->b_dynmic_prop_change_req = TRUE;
 		ddl_encode_dynamic_property(p_ddl, TRUE);
 	}
@@ -824,7 +820,7 @@ u32 ddl_decode_set_buffers(struct ddl_client_context_type *p_ddl)
 		}
 	}
 
-	if (0 != n_comv_buf_no) {
+	if (n_comv_buf_no) {
 		n_comv_buf_size *= (n_comv_buf_no *
 				    (((p_decoder->client_frame_size.
 				     n_width + 15) >> 4)) *
@@ -832,7 +828,7 @@ u32 ddl_decode_set_buffers(struct ddl_client_context_type *p_ddl)
 				      n_height + 15) >> 4) + 1));
 		ddl_pmem_alloc(&p_decoder->dpb_comv_buffer, n_comv_buf_size,
 			       DDL_LINEAR_BUFFER_ALIGN_BYTES);
-		if (NULL == p_decoder->dpb_comv_buffer.p_virtual_base_addr) {
+		if (!p_decoder->dpb_comv_buffer.p_virtual_base_addr) {
 			VIDC_LOGERR_STRING
 			    ("Dec_set_buf:Comv_buf_alloc_failed");
 			return VCD_ERR_ALLOC_FAIL;
@@ -843,21 +839,20 @@ u32 ddl_decode_set_buffers(struct ddl_client_context_type *p_ddl)
 						  n_buffer_size);
 	}
 	p_decoder->ref_buffer.p_align_physical_addr = NULL;
-	if (n_ref_buf_no != 0) {
+	if (n_ref_buf_no) {
 		u32 n_size, n_yuv_size, n_align_bytes;
 		n_yuv_size = ddl_get_yuv_buffer_size(&p_decoder->
 			client_frame_size, &p_decoder->buf_format,
-			(0 == p_decoder->n_progressive_only));
+			(!p_decoder->n_progressive_only));
 		n_size = n_yuv_size * n_ref_buf_no;
-		if (VCD_BUFFER_FORMAT_NV12 ==
-		    p_decoder->buf_format.e_buffer_format) {
+		if (p_decoder->buf_format.e_buffer_format ==
+			VCD_BUFFER_FORMAT_NV12)
 			n_align_bytes = DDL_LINEAR_BUFFER_ALIGN_BYTES;
-		} else {
+		else
 			n_align_bytes = DDL_TILE_BUFFER_ALIGN_BYTES;
-		}
 
 		ddl_pmem_alloc(&p_decoder->ref_buffer, n_size, n_align_bytes);
-		if (NULL == p_decoder->ref_buffer.p_virtual_base_addr) {
+		if (!p_decoder->ref_buffer.p_virtual_base_addr) {
 			ddl_pmem_free(p_decoder->dpb_comv_buffer);
 			VIDC_LOGERR_STRING
 			    ("Dec_set_buf:mpeg_ref_buf_alloc_failed");
@@ -868,7 +863,7 @@ u32 ddl_decode_set_buffers(struct ddl_client_context_type *p_ddl)
 
 	ddl_decoder_dpb_transact(p_decoder, NULL, DDL_DPB_OP_INIT);
 
-	if (VCD_CODEC_H264 == p_decoder->codec_type.e_codec) {
+	if (p_decoder->codec_type.e_codec == VCD_CODEC_H264) {
 		vidc_720p_decode_setH264VSPBuffer(p_decoder->
 						   h264Vsp_temp_buffer.
 						   p_align_physical_addr);
@@ -892,8 +887,8 @@ void ddl_decode_frame_run(struct ddl_client_context_type *p_ddl)
 	struct vcd_frame_data_type *p_bit_stream =
 	    &(p_ddl->input_frame.vcd_frm);
 
-	if (0 == p_bit_stream->n_data_len ||
-		0 == p_bit_stream->p_physical) {
+	if (!p_bit_stream->n_data_len ||
+		!p_bit_stream->p_physical) {
 		ddl_decode_eos_run(p_ddl);
 		return;
 	}
@@ -947,7 +942,7 @@ u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context)
 	enum vidc_720p_interrupt_level_selection_type e_interrupt_sel;
 	u32 intr_mask = 0x0;
 
-	if (NULL != p_ddl_context->p_current_ddl)
+	if (p_ddl_context->p_current_ddl)
 		n_channel_id = p_ddl_context->p_current_ddl->n_channel_id;
 
 	e_interrupt_sel = VIDC_720P_INTERRUPT_LEVEL_SEL;
@@ -959,7 +954,7 @@ u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context)
 
 	vcd_get_fw_property(VCD_FW_ENDIAN, &fw_endianness);
 	/* Reverse the endianness settings after boot code download */
-	if (VCD_FW_BIG_ENDIAN == fw_endianness)
+	if (fw_endianness == VCD_FW_BIG_ENDIAN)
 		e_dma_endian = VIDC_720P_LITTLE_ENDIAN;
 	else
 		e_dma_endian = VIDC_720P_BIG_ENDIAN;
@@ -969,7 +964,7 @@ u32 ddl_hal_engine_reset(struct ddl_context_type *p_ddl_context)
 		n_channel_id,
 		e_dma_endian, e_interrupt_sel,
 		intr_mask);
-	if (FALSE == b_eng_reset) {
+	if (!b_eng_reset) {
 		/* call the hw fatal callback if engine reset fails */
 		ddl_hw_fatal_cb(p_ddl_context);
 	}

@@ -82,15 +82,15 @@ enum sched_status_type sched_create(
 
 	SCHED_MSG_HIGH("sched_create API");
 
-	if (NULL == p_handle || NULL == p_init_param) {
+	if (!p_handle || !p_init_param) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_handle=%d, p_init_param=%d",
+		("Bad input parameters: p_handle=%p, p_init_param=%p",
 		p_handle, p_init_param);
 		return SCHED_S_EBADPARM;
 	}
 
-	if (0 == p_init_param->n_perf_lvl) {
-		SCHED_MSG_ERR("Invalid Perf level=%d",
+	if (!p_init_param->n_perf_lvl) {
+		SCHED_MSG_ERR("Invalid Perf level=%u",
 			p_init_param->n_perf_lvl);
 		return SCHED_S_EBADPARM;
 	}
@@ -99,7 +99,7 @@ enum sched_status_type sched_create(
 		(struct sched_ctx_type *)
 		SCHED_MALLOC(sizeof(struct sched_ctx_type));
 
-	if (NULL == p_sched_ctx) {
+	if (!p_sched_ctx) {
 		SCHED_MSG_ERR("Could not allocate sched ctx. Out of memory");
 		return SCHED_S_ENOMEM;
 	}
@@ -126,7 +126,7 @@ enum sched_status_type sched_destroy(void *handle)
 
 	SCHED_MSG_HIGH("sched_destroy API");
 
-	if (NULL == p_sched_ctx) {
+	if (!p_sched_ctx) {
 		SCHED_MSG_ERR("Bad input parameters");
 		return SCHED_S_EBADPARM;
 	}
@@ -152,9 +152,9 @@ enum sched_status_type sched_get_param(
 
 	SCHED_MSG_HIGH("sched_get_param API");
 
-	if (NULL == p_sched_ctx || NULL == p_param_value) {
+	if (!p_sched_ctx || !p_param_value) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_param_value=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_param_value=%p",
 		p_sched_ctx, p_param_value);
 
 		return SCHED_S_EBADPARM;
@@ -180,9 +180,9 @@ enum sched_status_type sched_set_param(
 
 	SCHED_MSG_HIGH("sched_set_param API");
 
-	if (NULL == p_sched_ctx || NULL == p_param_value) {
+	if (!p_sched_ctx || !p_param_value) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_param_value=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_param_value=%p",
 		p_sched_ctx, p_param_value);
 		return SCHED_S_EBADPARM;
 	}
@@ -205,8 +205,8 @@ enum sched_status_type sched_add_client(
 
 	SCHED_MSG_HIGH("sched_add_client API");
 
-	if (NULL == p_sched_ctx || NULL == p_init_param ||
-			NULL == p_client_hdl) {
+	if (!p_sched_ctx || !p_init_param ||
+			!p_client_hdl) {
 		SCHED_MSG_ERR("Bad input parameters");
 
 		return SCHED_S_EBADPARM;
@@ -214,7 +214,7 @@ enum sched_status_type sched_add_client(
 
 	p_new_clnt = (struct _sched_clnt_list_node_type *)
 	SCHED_MALLOC(sizeof(struct _sched_clnt_list_node_type));
-	if (NULL == p_new_clnt) {
+	if (!p_new_clnt) {
 		SCHED_MSG_ERR("Could not allocate client ctx. Out of memory");
 		return SCHED_S_ENOMEM;
 	}
@@ -241,9 +241,9 @@ enum sched_status_type sched_remove_client(void *handle, void *client_hdl)
 	enum sched_status_type status = SCHED_S_OK;
 
 	SCHED_MSG_HIGH("sched_remove_client API");
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -264,9 +264,9 @@ enum sched_status_type sched_flush_client_buffer(
 	enum sched_status_type status = SCHED_S_OK;
 
 	SCHED_MSG_HIGH("sched_flush_client_buffer API");
-	if (NULL == p_sched_ctx || NULL == p_clnt_node || NULL == pp_frm_data) {
+	if (!p_sched_ctx || !p_clnt_node || !pp_frm_data) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -287,9 +287,9 @@ enum sched_status_type sched_mark_client_eof(void *handle, void *client_hdl)
 	enum sched_status_type status = SCHED_S_OK;
 
 	SCHED_MSG_HIGH("sched_mark_client_eof API");
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -311,9 +311,9 @@ enum sched_status_type sched_update_client_o_tkn(
 
 	SCHED_MSG_HIGH("sched_restore_client_o_tkn API");
 
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -335,9 +335,9 @@ enum sched_status_type sched_queue_frame(
 	enum sched_status_type status = SCHED_S_OK;
 
 	SCHED_MSG_HIGH("sched_queue_frame API");
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -357,9 +357,9 @@ void *handle, void *client_hdl, void *p_frm_data)
 	enum sched_status_type status = SCHED_S_OK;
 
 	SCHED_MSG_HIGH("\n sched_re_queue_frame API");
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR("Bad input parameters:"
-		"p_sched_ctx=%d, p_clnt_node=%d",
+		"p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}
@@ -378,10 +378,10 @@ enum sched_status_type sched_de_queue_frame(
 
 	SCHED_MSG_HIGH("sched_de_queue_frame API");
 
-	if (NULL == p_sched_ctx || NULL == pp_frm_data
-		|| NULL == pp_client_data) {
-		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d, "
-				"pp_frm_data=%d, pp_client_data=%d",
+	if (!p_sched_ctx || !pp_frm_data
+		|| !pp_client_data) {
+		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%p, "
+				"pp_frm_data=%p, pp_client_data=%p",
 				p_sched_ctx, pp_frm_data,
 					pp_client_data);
 		return SCHED_S_EBADPARM;
@@ -405,10 +405,10 @@ enum sched_status_type sched_get_client_param(
 
 	SCHED_MSG_HIGH("sched_get_client_param API");
 
-	if (NULL == p_sched_ctx || NULL == p_clnt_node ||
-			NULL == p_param_value) {
-		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%d, "
-				"p_clnt_node=%d, p_param_value=%d",
+	if (!p_sched_ctx || !p_clnt_node ||
+			!p_param_value) {
+		SCHED_MSG_ERR("Bad input parameters: p_sched_ctx=%p, "
+				"p_clnt_node=%p, p_param_value=%p",
 				p_sched_ctx, p_clnt_node,
 				p_param_value);
 
@@ -434,11 +434,11 @@ enum sched_status_type sched_set_client_param(
 
 	SCHED_MSG_HIGH("sched_set_client_param API");
 
-	if (NULL == p_sched_ctx || NULL == p_clnt_node ||
-			NULL == p_param_value) {
+	if (!p_sched_ctx || !p_clnt_node ||
+			!p_param_value) {
 		SCHED_MSG_ERR("Bad input parameters: "
-				"p_sched_ctx=%d, p_clnt_node=%d, "
-				"p_param_value=%d", p_sched_ctx, p_clnt_node,
+				"p_sched_ctx=%p, p_clnt_node=%p, "
+				"p_param_value=%p", p_sched_ctx, p_clnt_node,
 				p_param_value);
 		return SCHED_S_EBADPARM;
 	}
@@ -464,9 +464,9 @@ enum sched_status_type sched_suspend_resume_client(
 
 	SCHED_MSG_HIGH("sched_client_suspend_resume API");
 
-	if (NULL == p_sched_ctx || NULL == p_clnt_node) {
+	if (!p_sched_ctx || !p_clnt_node) {
 		SCHED_MSG_ERR
-		("Bad input parameters: p_sched_ctx=%d, p_clnt_node=%d",
+		("Bad input parameters: p_sched_ctx=%p, p_clnt_node=%p",
 		p_sched_ctx, p_clnt_node);
 		return SCHED_S_EBADPARM;
 	}

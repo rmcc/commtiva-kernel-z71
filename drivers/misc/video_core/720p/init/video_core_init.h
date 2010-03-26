@@ -29,9 +29,9 @@
 #ifndef VIDEO_CORE_INIT_H
 #define VIDEO_CORE_INIT_H
 
-#define MAX_VIDEO_NUM_OF_BUFF 100
+#include "video_core_type.h"
 
-#define USE_RES_TRACKER
+#define MAX_VIDEO_NUM_OF_BUFF 100
 
 enum buffer_dir {
 	BUFFER_TYPE_INPUT,
@@ -62,6 +62,7 @@ struct video_client_ctx {
 };
 
 void __iomem *vid_c_get_ioaddr(void);
+
 #ifdef USE_RES_TRACKER
 
 u32 vid_c_sel_clk_rate(unsigned long hclk_rate);
@@ -71,9 +72,12 @@ u32 vid_c_enable_pwr_rail(void);
 u32 vid_c_disable_pwr_rail(void);
 
 #else
+
 u32 vid_c_enable_clk(unsigned long hclk_rate);
 u32 vid_c_disable_clk(void);
+
 #endif
+
 int vid_c_load_firmware(void);
 void vid_c_release_firmware(void);
 u32 vid_c_lookup_addr_table(struct video_client_ctx *client_ctx,

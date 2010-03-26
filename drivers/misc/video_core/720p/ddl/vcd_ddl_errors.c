@@ -74,13 +74,13 @@
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl.h"
 
-#define DEBUG 0
-
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
 #else
 #define DBG(x...)
 #endif
+
+#define ERR(x...) printk(KERN_ERR x)
 
 #define INVALID_CHANNEL_NUMBER  1
 #define INVALID_COMMAND_ID 2
@@ -242,6 +242,7 @@ static u32 ddl_handle_hw_fatal_errors(struct ddl_context_type
 
 	case VSP_NOT_READY:
 	case BUFFER_FULL_STATE:
+		ERR("HW FATAL ERROR");
 		ddl_hw_fatal_cb(p_ddl_context);
 		b_status = TRUE;
 		break;
@@ -254,9 +255,9 @@ void ddl_client_fatal_cb(struct ddl_context_type *p_ddl_context)
 	struct ddl_client_context_type  *p_ddl =
 		p_ddl_context->p_current_ddl;
 
-	if (DDL_CMD_DECODE_FRAME == p_ddl_context->e_cmd_state)
+	if (p_ddl_context->e_cmd_state == DDL_CMD_DECODE_FRAME)
 		ddl_decode_dynamic_property(p_ddl, FALSE);
-	else if (DDL_CMD_ENCODE_FRAME == p_ddl_context->e_cmd_state)
+	else if (p_ddl_context->e_cmd_state == DDL_CMD_ENCODE_FRAME)
 		ddl_encode_dynamic_property(p_ddl, FALSE);
 
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
@@ -310,8 +311,8 @@ static u32 ddl_handle_client_fatal_errors(struct ddl_context_type
 		}
 	}
 
-	if (FALSE == b_status)
-		DBG("UNKNOWN-OP-FAILED");
+	if (!b_status)
+		ERR("UNKNOWN-OP-FAILED");
 
 	ddl_client_fatal_cb(p_ddl_context);
 
@@ -325,7 +326,7 @@ static void ddl_input_failed_cb(struct ddl_context_type *p_ddl_context,
 
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
 
-	if (TRUE == p_ddl->b_decoding)
+	if (p_ddl->b_decoding)
 		ddl_decode_dynamic_property(p_ddl, FALSE);
 	else
 		ddl_encode_dynamic_property(p_ddl, FALSE);
@@ -344,10 +345,10 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 	struct ddl_client_context_type  *p_ddl = p_ddl_context->p_current_ddl;
 	u32   vcd_status = VCD_S_SUCCESS;
 	u32   vcd_event = VCD_EVT_RESP_INPUT_DONE;
-	u32   eos = FALSE, pending_display = 0, release_mask = 0;
+	u32   b_eos = FALSE, pending_display = 0, release_mask = 0;
 
-	if (DDL_CMD_DECODE_FRAME != p_ddl_context->e_cmd_state &&
-		DDL_CMD_ENCODE_FRAME != p_ddl_context->e_cmd_state) {
+	if (p_ddl_context->e_cmd_state != DDL_CMD_DECODE_FRAME &&
+		p_ddl_context->e_cmd_state != DDL_CMD_ENCODE_FRAME) {
 		return FALSE;
 	}
 	switch (p_ddl_context->n_cmd_err_status) {
@@ -362,7 +363,7 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 			release_mask =
 				p_ddl->codec_data.decoder.dpb_mask.n_hw_mask;
 			while (release_mask > 0) {
-				if (0 != (release_mask & 0x1))
+				if ((release_mask & 0x1))
 					pending_display += 1;
 				release_mask >>= 1;
 			}
@@ -388,7 +389,7 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 			u32 b_reset_core;
 			/* need to reset the internal core hw engine */
 			b_reset_core = ddl_hal_engine_reset(p_ddl_context);
-			if (FALSE == b_reset_core)
+			if (!b_reset_core)
 				return TRUE;
 			/* fall through to process bitstream error handling */
 		}
@@ -416,32 +417,30 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 		}
 	}
 
-	if (VCD_S_SUCCESS == vcd_status && VCD_EVT_RESP_INPUT_DONE ==
-		vcd_event) {
+	if (!vcd_status && vcd_event == VCD_EVT_RESP_INPUT_DONE)
 		return FALSE;
-	}
 
 	p_ddl->input_frame.b_frm_trans_end = TRUE;
 
-	eos = ((VCD_EVT_RESP_INPUT_DONE == vcd_event) &&
-		(0 != (VCD_FRAME_FLAG_EOS & p_ddl->input_frame.
+	b_eos = ((vcd_event == VCD_EVT_RESP_INPUT_DONE) &&
+		((VCD_FRAME_FLAG_EOS & p_ddl->input_frame.
 				vcd_frm.n_flags)));
 
-	if ((TRUE == p_ddl->b_decoding && TRUE == eos) ||
-		(FALSE == p_ddl->b_decoding))
+	if ((p_ddl->b_decoding && b_eos) ||
+		(!p_ddl->b_decoding))
 		p_ddl->input_frame.b_frm_trans_end = FALSE;
 
-	if (VCD_EVT_RESP_INPUT_DONE == vcd_event &&
-		TRUE == p_ddl->b_decoding &&
-		FALSE == p_ddl->codec_data.decoder.b_header_in_start &&
-		0 == p_ddl->codec_data.decoder.dec_disp_info.n_img_size_x &&
-		0 == p_ddl->codec_data.decoder.dec_disp_info.n_img_size_y
+	if (vcd_event == VCD_EVT_RESP_INPUT_DONE &&
+		p_ddl->b_decoding &&
+		!p_ddl->codec_data.decoder.b_header_in_start &&
+		!p_ddl->codec_data.decoder.dec_disp_info.n_img_size_x &&
+		!p_ddl->codec_data.decoder.dec_disp_info.n_img_size_y
 		) {
 		/* this is first frame seq. header only case */
 		vcd_status = VCD_S_SUCCESS;
 		p_ddl->input_frame.vcd_frm.n_flags |=
 			VCD_FRAME_FLAG_CODECCONFIG;
-		p_ddl->input_frame.b_frm_trans_end = !eos;
+		p_ddl->input_frame.b_frm_trans_end = !b_eos;
 		/* put just some non - zero value */
 		p_ddl->codec_data.decoder.dec_disp_info.n_img_size_x = 0xff;
 	}
@@ -449,9 +448,9 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 	ddl_input_failed_cb(p_ddl_context, vcd_event, vcd_status);
 
 	/* for Encoder case, we need to send output done also */
-	if (FALSE == p_ddl->b_decoding) {
+	if (!p_ddl->b_decoding) {
 		/* transaction is complete after this callback */
-		p_ddl->output_frame.b_frm_trans_end = !eos;
+		p_ddl->output_frame.b_frm_trans_end = !b_eos;
 		/* error case: NO data present */
 		p_ddl->output_frame.vcd_frm.n_data_len = 0;
 		/* call back to client for output frame done */
@@ -460,7 +459,7 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 			sizeof(struct ddl_frame_data_type_tag),
 			(void *)p_ddl, p_ddl_context->p_client_data);
 
-		if (TRUE == eos) {
+		if (b_eos) {
 			DBG("ENC-EOS_DONE");
 			/* send client EOS DONE callback */
 			p_ddl_context->ddl_callback(VCD_EVT_RESP_EOS_DONE,
@@ -470,7 +469,7 @@ static u32 ddl_handle_core_recoverable_errors(struct ddl_context_type \
 	}
 
 	/* if it is decoder EOS case */
-	if (TRUE == p_ddl->b_decoding && TRUE == eos)
+	if (p_ddl->b_decoding && b_eos)
 		ddl_decode_eos_run(p_ddl);
 	else
 		DDL_IDLE(p_ddl_context);
@@ -531,12 +530,12 @@ u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context)
 		!p_ddl_context->n_disp_pic_err_status)
 		return FALSE;
 
-	if (DDL_CMD_INVALID == p_ddl_context->e_cmd_state) {
+	if (p_ddl_context->e_cmd_state == DDL_CMD_INVALID) {
 		DBG("SPURIOUS_INTERRUPT_ERROR");
 		return TRUE;
 	}
 
-	if (0x0 == p_ddl_context->n_op_failed) {
+	if (!p_ddl_context->n_op_failed) {
 		u32 b_disp_status;
 		b_status = ddl_handle_core_warnings(p_ddl_context->
 			n_cmd_err_status);
@@ -548,7 +547,10 @@ u32 ddl_handle_core_errors(struct ddl_context_type *p_ddl_context)
 		return FALSE;
 	}
 
-	DBG("OPFAILED!!");
+	ERR("\n %s(): OPFAILED!!", __func__);
+	ERR("\n CMD_ERROR_STATUS = %u, DISP_ERR_STATUS = %u",
+		p_ddl_context->n_cmd_err_status,
+		p_ddl_context->n_disp_pic_err_status);
 
 	b_status = ddl_handle_hw_fatal_errors(p_ddl_context);
 

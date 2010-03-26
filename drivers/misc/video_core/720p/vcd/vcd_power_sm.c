@@ -134,9 +134,9 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event,
 
 	case VCD_EVT_PWR_DEV_INIT_BEGIN:
 		{
-			if (VCD_PWRCLK_STATE_OFF ==
-					p_dev_ctxt->e_pwr_clk_state) {
-				if (TRUE == res_trk_power_up()) {
+			if (p_dev_ctxt->e_pwr_clk_state ==
+				VCD_PWRCLK_STATE_OFF) {
+				if (res_trk_power_up()) {
 					p_dev_ctxt->e_pwr_clk_state =
 					    VCD_PWRCLK_STATE_ON_NOTCLOCKED;
 					p_dev_ctxt->n_curr_perf_lvl = 0;
@@ -167,8 +167,8 @@ u32 vcd_device_power_event(struct vcd_dev_ctxt_type *p_dev_ctxt, u32 event,
 	case VCD_EVT_PWR_DEV_INIT_FAIL:
 	case VCD_EVT_PWR_DEV_TERM_END:
 		{
-			if (VCD_PWRCLK_STATE_OFF !=
-					p_dev_ctxt->e_pwr_clk_state) {
+			if (p_dev_ctxt->e_pwr_clk_state !=
+				VCD_PWRCLK_STATE_OFF) {
 				(void)res_trk_power_down();
 
 				p_dev_ctxt->e_pwr_clk_state =
@@ -242,7 +242,7 @@ u32 vcd_client_power_event(
 				rc = vcd_disable_clock(p_dev_ctxt);
 
 				if (!VCD_FAILED(rc)
-				    && 0 != p_dev_ctxt->n_reqd_perf_lvl) {
+				    && p_dev_ctxt->n_reqd_perf_lvl) {
 					rc = vcd_set_perf_level(p_dev_ctxt,
 						p_dev_ctxt->n_reqd_perf_lvl,
 						p_cctxt);
@@ -263,8 +263,8 @@ u32 vcd_client_power_event(
 				rc = vcd_enable_clock(p_dev_ctxt,
 					p_cctxt);
 
-				if (VCD_PWRCLK_STATE_ON_CLOCKED !=
-				    p_dev_ctxt->e_pwr_clk_state) {
+				if (p_dev_ctxt->e_pwr_clk_state !=
+					VCD_PWRCLK_STATE_ON_CLOCKED) {
 					p_dev_ctxt->n_reqd_perf_lvl -=
 					    p_cctxt->n_reqd_perf_lvl;
 					p_cctxt->status.b_req_perf_lvl = FALSE;
@@ -286,7 +286,7 @@ u32 vcd_client_power_event(
 				p_dev_ctxt->n_reqd_perf_lvl -=
 					p_cctxt->n_reqd_perf_lvl;
 				p_cctxt->status.b_req_perf_lvl = FALSE;
-				if (!VCD_FAILED(rc) && 0 !=
+				if (!VCD_FAILED(rc) &&
 					p_dev_ctxt->n_reqd_perf_lvl) {
 					rc = vcd_set_perf_level(p_dev_ctxt,
 						p_dev_ctxt->n_reqd_perf_lvl,
@@ -306,11 +306,11 @@ u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	u32 rc = VCD_S_SUCCESS;
 	u32 n_set_perf_lvl;
 
-	if (VCD_PWRCLK_STATE_OFF == p_dev_ctxt->e_pwr_clk_state) {
+	if (p_dev_ctxt->e_pwr_clk_state == VCD_PWRCLK_STATE_OFF) {
 		vcd_assert();
 		rc = VCD_ERR_FAIL;
-	} else if (VCD_PWRCLK_STATE_ON_NOTCLOCKED ==
-		   p_dev_ctxt->e_pwr_clk_state) {
+	} else if (p_dev_ctxt->e_pwr_clk_state ==
+		VCD_PWRCLK_STATE_ON_NOTCLOCKED) {
 
 		n_set_perf_lvl =
 				p_dev_ctxt->n_reqd_perf_lvl >
@@ -321,7 +321,7 @@ u32 vcd_enable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt,
 			p_cctxt);
 
 		if (!VCD_FAILED(rc)) {
-			if (TRUE == res_trk_enable_clock()) {
+			if (res_trk_enable_clock()) {
 				p_dev_ctxt->e_pwr_clk_state =
 					VCD_PWRCLK_STATE_ON_CLOCKED;
 			}
@@ -341,14 +341,14 @@ u32 vcd_disable_clock(struct vcd_dev_ctxt_type *p_dev_ctxt)
 {
 	u32 rc = VCD_S_SUCCESS;
 
-	if (VCD_PWRCLK_STATE_OFF == p_dev_ctxt->e_pwr_clk_state) {
+	if (p_dev_ctxt->e_pwr_clk_state == VCD_PWRCLK_STATE_OFF) {
 		vcd_assert();
 		rc = VCD_ERR_FAIL;
-	} else if (VCD_PWRCLK_STATE_ON_CLOCKED == p_dev_ctxt->e_pwr_clk_state) {
+	} else if (p_dev_ctxt->e_pwr_clk_state == VCD_PWRCLK_STATE_ON_CLOCKED) {
 		p_dev_ctxt->n_active_clnts--;
 
-		if (0 == p_dev_ctxt->n_active_clnts) {
-			if (FALSE == res_trk_disable_clock())
+		if (!p_dev_ctxt->n_active_clnts) {
+			if (!res_trk_disable_clock())
 				rc = VCD_ERR_FAIL;
 
 			p_dev_ctxt->e_pwr_clk_state =
@@ -365,9 +365,8 @@ u32 vcd_set_perf_level(struct vcd_dev_ctxt_type *p_dev_ctxt,
 {
 	u32 rc = VCD_S_SUCCESS;
 
-	if (FALSE == vcd_core_is_busy(p_dev_ctxt)) {
-		if (TRUE ==
-		    res_trk_set_perf_level(n_perf_lvl,
+	if (!vcd_core_is_busy(p_dev_ctxt)) {
+		if (res_trk_set_perf_level(n_perf_lvl,
 					   &p_dev_ctxt->n_curr_perf_lvl,
 					   p_cctxt)) {
 			p_dev_ctxt->b_set_perf_lvl_pending = FALSE;

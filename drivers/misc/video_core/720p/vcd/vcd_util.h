@@ -30,25 +30,22 @@
 
 #include "vcd_api.h"
 
-#define DEBUG 0
-
 #if DEBUG
 
 #define VCD_MSG_LOW(xx_fmt...)		printk(KERN_INFO "\n\t* " xx_fmt)
 #define VCD_MSG_MED(xx_fmt...)		printk(KERN_INFO "\n  * " xx_fmt)
 #define VCD_MSG_HIGH(xx_fmt...)		printk(KERN_WARNING "\n" xx_fmt)
-#define VCD_MSG_ERROR(xx_fmt...)	printk(KERN_ERR "\n err: " xx_fmt)
-#define VCD_MSG_FATAL(xx_fmt...)	printk(KERN_ERR "\n<FATAL> " xx_fmt)
 
 #else
 
 #define VCD_MSG_LOW(xx_fmt...)
 #define VCD_MSG_MED(xx_fmt...)
 #define VCD_MSG_HIGH(xx_fmt...)
-#define VCD_MSG_ERROR(xx_fmt...)
-#define VCD_MSG_FATAL(xx_fmt...)
 
 #endif
+
+#define VCD_MSG_ERROR(xx_fmt...)	printk(KERN_ERR "\n err: " xx_fmt)
+#define VCD_MSG_FATAL(xx_fmt...)	printk(KERN_ERR "\n<FATAL> " xx_fmt)
 
 #define VCD_FAILED_RETURN(rc, xx_fmt...)		\
 	do {						\
@@ -59,9 +56,9 @@
 	} while	(0)
 
 #define VCD_FAILED_DEVICE_FATAL(rc) \
-	(VCD_ERR_HW_FATAL == rc ? TRUE : FALSE)
+	(rc == VCD_ERR_HW_FATAL ? TRUE : FALSE)
 #define VCD_FAILED_CLIENT_FATAL(rc) \
-	(VCD_ERR_CLIENT_FATAL == rc ? TRUE : FALSE)
+	(rc == VCD_ERR_CLIENT_FATAL ? TRUE : FALSE)
 
 #define VCD_FAILED_FATAL(rc)  \
 	((VCD_FAILED_DEVICE_FATAL(rc) || VCD_FAILED_CLIENT_FATAL(rc)) \

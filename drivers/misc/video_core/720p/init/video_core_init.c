@@ -93,9 +93,6 @@
 #include "vcd_api.h"
 #include "video_core_init_internal.h"
 #include "video_core_init.h"
-#include "video_core_type.h"
-
-#define DEBUG 0
 
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
@@ -107,7 +104,6 @@
 
 #define ERR(x...) printk(KERN_ERR x)
 
-#define USE_RES_TRACKER
 static struct vid_c_dev *vid_c_device_p;
 static dev_t vid_c_dev_num;
 static struct class *vid_c_class;
@@ -147,20 +143,20 @@ static int __init vid_c_720p_probe(struct platform_device *pdev)
 	struct resource *resource;
 	DBG("Enter %s()\n", __func__);
 
-	if (pdev->id != 0) {
-		DBG(KERN_ERR "Invalid plaform device ID = %d\n", pdev->id);
+	if (pdev->id) {
+		ERR("Invalid plaform device ID = %d\n", pdev->id);
 		return -EINVAL;
 	}
 	vid_c_device_p->irq = platform_get_irq(pdev, 0);
 	if (unlikely(vid_c_device_p->irq < 0)) {
-		DBG(KERN_ERR "%s(): Invalid irq = %d\n", __func__,
+		ERR("%s(): Invalid irq = %d\n", __func__,
 					 vid_c_device_p->irq);
 		return -ENXIO;
 	}
 
 	resource = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (unlikely(!resource)) {
-		DBG(KERN_ERR "%s(): Invalid resource \n", __func__);
+		ERR("%s(): Invalid resource \n", __func__);
 		return -ENXIO;
 	}
 
@@ -178,7 +174,7 @@ static int __init vid_c_720p_probe(struct platform_device *pdev)
 
 	vid_c_wq = create_singlethread_workqueue("vid_c_worker_queue");
 	if (!vid_c_wq) {
-		DBG(KERN_ERR "%s: create workque failed \n", __func__);
+		ERR("%s: create workque failed \n", __func__);
 		return -ENOMEM;
 	}
 	return 0;
@@ -186,8 +182,8 @@ static int __init vid_c_720p_probe(struct platform_device *pdev)
 
 static int __devexit vid_c_720p_remove(struct platform_device *pdev)
 {
-	if (pdev->id != 0) {
-		DBG(KERN_ERR "Invalid plaform device ID = %d\n", pdev->id);
+	if (pdev->id) {
+		ERR("Invalid plaform device ID = %d\n", pdev->id);
 		return -EINVAL;
 	}
 	return 0;
@@ -222,16 +218,14 @@ static int __init vid_c_init(void)
 
 	vid_c_device_p = kzalloc(sizeof(struct vid_c_dev), GFP_KERNEL);
 	if (!vid_c_device_p) {
-		DBG(KERN_ERR
-			"%s Unable to allocate memory for vid_c_dev\n",
+		ERR("%s Unable to allocate memory for vid_c_dev\n",
 			__func__);
 		return -ENOMEM;
 	}
 
 	rc = alloc_chrdev_region(&vid_c_dev_num, 0, 1, VID_C_NAME);
 	if (rc < 0) {
-		DBG(KERN_ERR
-			"%s: alloc_chrdev_region Failed rc = %d\n",
+		ERR("%s: alloc_chrdev_region Failed rc = %d\n",
 			__func__, rc);
 		goto error_vid_c_alloc_chrdev_region;
 	}
@@ -239,8 +233,7 @@ static int __init vid_c_init(void)
 	vid_c_class = class_create(THIS_MODULE, VID_C_NAME);
 	if (IS_ERR(vid_c_class)) {
 		rc = PTR_ERR(vid_c_class);
-		DBG(KERN_ERR
-		"%s: couldn't create vid_c_class rc = %d\n",
+		ERR("%s: couldn't create vid_c_class rc = %d\n",
 		__func__, rc);
 
 		goto error_vid_c_class_create;
@@ -251,7 +244,7 @@ static int __init vid_c_init(void)
 
 	if (IS_ERR(class_devp)) {
 		rc = PTR_ERR(class_devp);
-		DBG(KERN_ERR "%s: class device_create failed %d\n",
+		ERR("%s: class device_create failed %d\n",
 			__func__, rc);
 		goto error_vid_c_class_device_create;
 	}
@@ -261,13 +254,13 @@ static int __init vid_c_init(void)
 	rc = cdev_add(&(vid_c_device_p->cdev), vid_c_dev_num, 1);
 
 	if (rc < 0) {
-		DBG(KERN_ERR "%s: cdev_add failed %d\n", __func__, rc);
+		ERR("%s: cdev_add failed %d\n", __func__, rc);
 		goto error_vid_c_cdev_add;
 	}
 
 	rc = platform_driver_register(&msm_vid_c_720p_platform_driver);
 	if (rc) {
-		DBG(KERN_ERR "%s failed to load\n", __func__);
+		ERR("%s failed to load\n", __func__);
 		goto error_vid_c_platfom_register;
 	}
 
@@ -275,7 +268,7 @@ static int __init vid_c_init(void)
 			 "vid_c", vid_c_device_p->device);
 
 	if (unlikely(rc)) {
-		DBG(KERN_ERR "%s() :request_irq failed\n", __func__);
+		ERR("%s() :request_irq failed\n", __func__);
 		return rc;
 	}
 
@@ -315,11 +308,11 @@ u32 vid_c_enable_pwr_rail(void)
 	int rc = -1;
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->rail_enabled == 0) {
+	if (!vid_c_device_p->rail_enabled) {
 		rc = internal_pwr_rail_mode(PWR_RAIL_MFC_CLK,
 			PWR_RAIL_CTL_MANUAL);
 		if (rc) {
-			DBG("%s(): internal_pwr_rail_mode failed %d \n",
+			ERR("%s(): internal_pwr_rail_mode failed %d \n",
 				__func__, rc);
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
@@ -331,7 +324,7 @@ u32 vid_c_enable_pwr_rail(void)
 			"mfc_pclk");
 
 		if (IS_ERR(vid_c_device_p->pclk)) {
-			DBG("%s(): mfc_pclk get failed \n", __func__);
+			ERR("%s(): mfc_pclk get failed \n", __func__);
 
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
@@ -341,7 +334,7 @@ u32 vid_c_enable_pwr_rail(void)
 			"mfc_clk");
 
 		if (IS_ERR(vid_c_device_p->hclk)) {
-			DBG("%s(): mfc_clk get failed \n", __func__);
+			ERR("%s(): mfc_clk get failed \n", __func__);
 
 			clk_put(vid_c_device_p->pclk);
 			mutex_unlock(&vid_c_device_p->lock);
@@ -352,7 +345,7 @@ u32 vid_c_enable_pwr_rail(void)
 			clk_get(vid_c_device_p->device, "mfc_div2_clk");
 
 		if (IS_ERR(vid_c_device_p->pclk)) {
-			DBG("%s(): mfc_div2_clk get failed \n", __func__);
+			ERR("%s(): mfc_div2_clk get failed \n", __func__);
 
 			clk_put(vid_c_device_p->pclk);
 			clk_put(vid_c_device_p->hclk);
@@ -362,7 +355,7 @@ u32 vid_c_enable_pwr_rail(void)
 
 		rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 1);
 		if (rc) {
-			DBG("\n internal_pwr_rail_ctl failed %d\n", rc);
+			ERR("\n internal_pwr_rail_ctl failed %d\n", rc);
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
 		}
@@ -371,7 +364,7 @@ u32 vid_c_enable_pwr_rail(void)
 
 		rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_DEASSERT);
 		if (rc) {
-			DBG("\n clk_reset failed %d\n", rc);
+			ERR("\n clk_reset failed %d\n", rc);
 			return FALSE;
 		}
 		msleep(20);
@@ -387,14 +380,14 @@ u32 vid_c_disable_pwr_rail(void)
 	int rc = -1;
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->clock_enabled != 0) {
+	if (vid_c_device_p->clock_enabled) {
 		mutex_unlock(&vid_c_device_p->lock);
 		DBG("\n Calling CLK disable in Power Down \n");
 		vid_c_disable_clk();
 		mutex_lock(&vid_c_device_p->lock);
 	}
 
-	if (vid_c_device_p->rail_enabled == 0) {
+	if (!vid_c_device_p->rail_enabled) {
 		mutex_unlock(&vid_c_device_p->lock);
 		return FALSE;
 	}
@@ -402,7 +395,7 @@ u32 vid_c_disable_pwr_rail(void)
 	vid_c_device_p->rail_enabled = 0;
 	rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_ASSERT);
 	if (rc) {
-		DBG("\n clk_reset failed %d\n", rc);
+		ERR("\n clk_reset failed %d\n", rc);
 		mutex_unlock(&vid_c_device_p->lock);
 		return FALSE;
 	}
@@ -410,7 +403,7 @@ u32 vid_c_disable_pwr_rail(void)
 
 	rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 0);
 	if (rc) {
-		DBG("\n clk_reset failed %d\n", rc);
+		ERR("\n clk_reset failed %d\n", rc);
 		mutex_unlock(&vid_c_device_p->lock);
 		return FALSE;
 	}
@@ -429,14 +422,14 @@ u32 vid_c_enable_clk(void)
 {
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->clock_enabled == 0) {
+	if (!vid_c_device_p->clock_enabled) {
 		DBG("Enabling IRQ in %s()\n", __func__);
 		enable_irq(vid_c_device_p->irq);
 
 		DBG("%s(): Enabling the clocks ...\n", __func__);
 
-		if (clk_enable(vid_c_device_p->pclk) != 0) {
-			DBG("vidc pclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->pclk)) {
+			ERR("vidc pclk Enable failed \n");
 
 			clk_put(vid_c_device_p->hclk);
 			clk_put(vid_c_device_p->hclk_div2);
@@ -444,16 +437,16 @@ u32 vid_c_enable_clk(void)
 			return FALSE;
 		}
 
-		if (clk_enable(vid_c_device_p->hclk) != 0) {
-			DBG("vidc  hclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->hclk)) {
+			ERR("vidc  hclk Enable failed \n");
 			clk_put(vid_c_device_p->pclk);
 			clk_put(vid_c_device_p->hclk_div2);
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
 		}
 
-		if (clk_enable(vid_c_device_p->hclk_div2) != 0) {
-			DBG("vidc  hclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->hclk_div2)) {
+			ERR("vidc  hclk Enable failed \n");
 			clk_put(vid_c_device_p->hclk);
 			clk_put(vid_c_device_p->pclk);
 			mutex_unlock(&vid_c_device_p->lock);
@@ -473,7 +466,7 @@ u32 vid_c_sel_clk_rate(unsigned long hclk_rate)
 	mutex_lock(&vid_c_device_p->lock);
 	if (clk_set_rate(vid_c_device_p->hclk,
 		hclk_rate)) {
-		DBG("vidc hclk set rate failed \n");
+		ERR("vidc hclk set rate failed \n");
 		mutex_unlock(&vid_c_device_p->lock);
 		return FALSE;
 	}
@@ -487,7 +480,7 @@ u32 vid_c_disable_clk(void)
 {
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->clock_enabled == 0) {
+	if (!vid_c_device_p->clock_enabled) {
 		mutex_unlock(&vid_c_device_p->lock);
 		return FALSE;
 	}
@@ -515,14 +508,14 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 	mutex_lock(&vid_c_device_p->lock);
 	vid_c_device_p->ref_count++;
 
-	if (vid_c_device_p->clock_enabled == 0) {
+	if (!vid_c_device_p->clock_enabled) {
 		DBG("Enabling IRQ in %s()\n", __func__);
 		enable_irq(vid_c_device_p->irq);
 
 		rc = internal_pwr_rail_mode
 			(PWR_RAIL_MFC_CLK, PWR_RAIL_CTL_MANUAL);
 		if (rc) {
-			DBG("%s(): internal_pwr_rail_mode failed %d \n",
+			ERR("%s(): internal_pwr_rail_mode failed %d \n",
 			__func__, rc);
 			return FALSE;
 		}
@@ -533,7 +526,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 			clk_get(vid_c_device_p->device, "mfc_pclk");
 
 		if (IS_ERR(vid_c_device_p->pclk)) {
-			DBG("%s(): mfc_pclk get failed \n", __func__);
+			ERR("%s(): mfc_pclk get failed \n", __func__);
 
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
@@ -543,7 +536,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 			clk_get(vid_c_device_p->device, "mfc_clk");
 
 		if (IS_ERR(vid_c_device_p->hclk)) {
-			DBG("%s(): mfc_clk get failed \n", __func__);
+			ERR("%s(): mfc_clk get failed \n", __func__);
 
 			clk_put(vid_c_device_p->pclk);
 			mutex_unlock(&vid_c_device_p->lock);
@@ -554,7 +547,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 			clk_get(vid_c_device_p->device, "mfc_div2_clk");
 
 		if (IS_ERR(vid_c_device_p->pclk)) {
-			DBG("%s(): mfc_div2_clk get failed \n", __func__);
+			ERR("%s(): mfc_div2_clk get failed \n", __func__);
 
 			clk_put(vid_c_device_p->pclk);
 			clk_put(vid_c_device_p->hclk);
@@ -566,7 +559,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 
 		if (clk_set_rate(vid_c_device_p->hclk,
 			vid_c_device_p->hclk_rate)) {
-			DBG("vid_c hclk set rate failed \n");
+			ERR("vid_c hclk set rate failed \n");
 			clk_put(vid_c_device_p->pclk);
 			clk_put(vid_c_device_p->hclk);
 			clk_put(vid_c_device_p->hclk_div2);
@@ -574,8 +567,8 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 			return FALSE;
 		}
 
-		if (clk_enable(vid_c_device_p->pclk) != 0) {
-			DBG("vid_c pclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->pclk)) {
+			ERR("vid_c pclk Enable failed \n");
 
 			clk_put(vid_c_device_p->hclk);
 			clk_put(vid_c_device_p->hclk_div2);
@@ -583,16 +576,16 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 			return FALSE;
 		}
 
-		if (clk_enable(vid_c_device_p->hclk) != 0) {
-			DBG("vid_c  hclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->hclk)) {
+			ERR("vid_c  hclk Enable failed \n");
 			clk_put(vid_c_device_p->pclk);
 			clk_put(vid_c_device_p->hclk_div2);
 			mutex_unlock(&vid_c_device_p->lock);
 			return FALSE;
 		}
 
-		if (clk_enable(vid_c_device_p->hclk_div2) != 0) {
-			DBG("vid_c  hclk Enable failed \n");
+		if (clk_enable(vid_c_device_p->hclk_div2)) {
+			ERR("vid_c  hclk Enable failed \n");
 			clk_put(vid_c_device_p->hclk);
 			clk_put(vid_c_device_p->pclk);
 			mutex_unlock(&vid_c_device_p->lock);
@@ -601,7 +594,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 		msleep(20);
 		rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 1);
 		if (rc) {
-			DBG("\n internal_pwr_rail_ctl failed %d\n", rc);
+			ERR("\n internal_pwr_rail_ctl failed %d\n", rc);
 			return FALSE;
 		}
 		DBG("%s(): internal_pwr_rail_ctl Success %d \n",
@@ -609,7 +602,7 @@ u32 vid_c_enable_clk(unsigned long hclk_rate)
 		msleep(20);
 		rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_DEASSERT);
 		if (rc) {
-			DBG("\n clk_reset failed %d\n", rc);
+			ERR("\n clk_reset failed %d\n", rc);
 			return FALSE;
 		}
 		msleep(20);
@@ -625,27 +618,27 @@ u32 vid_c_disable_clk(void)
 	int rc = -1;
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->ref_count == 0 ||
-		vid_c_device_p->clock_enabled == 0) {
+	if (!vid_c_device_p->ref_count ||
+		!vid_c_device_p->clock_enabled) {
 		return FALSE;
 	}
 
 	if (vid_c_device_p->ref_count > 0)
 		vid_c_device_p->ref_count--;
 
-	if (vid_c_device_p->ref_count == 0) {
+	if (!vid_c_device_p->ref_count) {
 		DBG("Disabling IRQ in %s()\n", __func__);
 		disable_irq_nosync(vid_c_device_p->irq);
 		rc = clk_reset(vid_c_device_p->pclk, CLK_RESET_ASSERT);
 		if (rc) {
-			DBG("\n clk_reset failed %d\n", rc);
+			ERR("\n clk_reset failed %d\n", rc);
 			return FALSE;
 		}
 		msleep(20);
 
 		rc = internal_pwr_rail_ctl(PWR_RAIL_MFC_CLK, 0);
 		if (rc) {
-			DBG("\n clk_reset failed %d\n", rc);
+			ERR("\n internal_pwr_rail_ctl failed %d\n", rc);
 			return FALSE;
 		}
 
@@ -699,10 +692,10 @@ int vid_c_load_firmware(void)
 
 	mutex_lock(&vid_c_device_p->lock);
 
-	if (vid_c_device_p->get_firmware == 0) {
+	if (!vid_c_device_p->get_firmware) {
 		rc = request_firmware(&fw_boot,
 			VIDC_BOOT_FW, vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			mutex_unlock(&vid_c_device_p->lock);
@@ -713,7 +706,7 @@ int vid_c_load_firmware(void)
 
 		rc = request_firmware(&fw_mpg4_dec, VIDC_MPG4_DEC_FW,
 			vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			status = FALSE;
@@ -725,7 +718,7 @@ int vid_c_load_firmware(void)
 
 		rc = request_firmware(&fw_h263_dec, VIDC_H263_DEC_FW,
 			vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			status = FALSE;
@@ -736,7 +729,7 @@ int vid_c_load_firmware(void)
 
 		rc = request_firmware(&fw_h264_dec, VIDC_H264_DEC_FW,
 			vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			status = FALSE;
@@ -747,7 +740,7 @@ int vid_c_load_firmware(void)
 
 		rc = request_firmware(&fw_mpg4_enc, VIDC_MPG4_ENC_FW,
 			vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			status = FALSE;
@@ -758,7 +751,7 @@ int vid_c_load_firmware(void)
 
 		rc = request_firmware(&fw_h264_enc, VIDC_H264_ENC_FW,
 			vid_c_device_p->device);
-		if (rc != 0) {
+		if (rc) {
 			ERR("request_firmware for %s failed with error %d\n",
 					VIDC_BOOT_FW, rc);
 			status = FALSE;
@@ -829,7 +822,7 @@ u32 vid_c_lookup_addr_table(struct video_client_ctx *client_ctx,
 	}
 
 	for (i = 0; i < num_of_buffers; ++i) {
-		if (search_with_user_vaddr == TRUE) {
+		if (search_with_user_vaddr) {
 			if (*user_vaddr == buf_addr_table[i].user_vaddr) {
 				*kernel_vaddr = buf_addr_table[i].kernel_vaddr;
 				found = TRUE;
@@ -856,7 +849,7 @@ u32 vid_c_lookup_addr_table(struct video_client_ctx *client_ctx,
 		*file = buf_addr_table[i].file;
 		*buffer_index = i;
 
-		if (search_with_user_vaddr == TRUE)
+		if (search_with_user_vaddr)
 			DBG("kernel_vaddr = 0x%08lx, phy_addr = 0x%08lx "
 			" pmem_fd = %d, struct *file	= %p "
 			"buffer_index = %d \n", *kernel_vaddr,
@@ -868,7 +861,7 @@ u32 vid_c_lookup_addr_table(struct video_client_ctx *client_ctx,
 			*pmem_fd, *file, *buffer_index);
 		return TRUE;
 	} else {
-		if (search_with_user_vaddr == TRUE)
+		if (search_with_user_vaddr)
 			DBG("%s() : client_ctx = %p user_virt_addr = 0x%08lx"
 			" Not Found.\n", __func__, client_ctx, *user_vaddr);
 		else

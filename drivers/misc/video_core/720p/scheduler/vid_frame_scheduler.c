@@ -84,7 +84,7 @@ SCHED_INLINE u32 SCHED_SUCCEEDED(enum sched_status_type status)
 {
 	SCHED_MSG_LOW("SCHED_SUCCEEDED check: status = %d", status);
 
-	if (SCHED_S_OK == status)
+	if (status == SCHED_S_OK)
 		return TRUE;
 	else
 		return FALSE;
@@ -95,7 +95,7 @@ SCHED_INLINE u32 SCHED_FAILED(enum sched_status_type status)
 {
 	SCHED_MSG_LOW("SCHED_FAILED check: status = %d", status);
 
-	if (SCHED_S_EFAIL <= status)
+	if (status >= SCHED_S_EFAIL)
 		return TRUE;
 	else
 		return FALSE;
@@ -104,7 +104,7 @@ SCHED_INLINE u32 SCHED_FAILED(enum sched_status_type status)
 
 static void sched_clear_clnt_ctx(struct sched_clnt_ctx_type *p_ctx)
 {
-	if (NULL != p_ctx->a_clnt_frm_q)
+	if (p_ctx->a_clnt_frm_q)
 		SCHED_FREE(p_ctx->a_clnt_frm_q);
 	(void)SCHED_CRITSEC_RELEASE(p_ctx->clnt_cs);
 }
@@ -121,7 +121,7 @@ enum sched_status_type sched_clear_clnt_list(
 	struct _sched_clnt_list_node_type *p_clnt_lst) {
 	struct _sched_clnt_list_node_type *p_clnt_node;
 
-	while (NULL != p_clnt_lst) {
+	while (p_clnt_lst) {
 		(void)SCHED_CRITSEC_ENTER(p_clnt_lst->data.clnt_cs);
 		p_clnt_node = p_clnt_lst;
 		p_clnt_lst = p_clnt_lst->p_next;
@@ -137,7 +137,7 @@ static SCHED_INLINE enum sched_status_type sched_alloc_frm_q(
 		SCHED_MALLOC(sizeof(struct sched_clnt_q_elem) *
 			 p_ctx->n_max_queue_len);
 
-	if (NULL == p_ctx->a_clnt_frm_q) {
+	if (!p_ctx->a_clnt_frm_q) {
 		SCHED_MSG_ERR("Could not allocate clnt frm Q. Out of memory");
 		return SCHED_S_ENOMEM;
 	}
@@ -256,7 +256,7 @@ static struct sched_clnt_ctx_type *sched_elect_cnfmnt
 
 	/*If there is no provisional elect client then the new candidate
 	becomes the first one.*/
-	if (NULL == p_prov_elect)
+	if (!p_prov_elect)
 		return p_new_cand;
 
 
@@ -284,7 +284,7 @@ static struct sched_clnt_ctx_type *sched_elect_non_cnfmnt
 
 	/*If there is no provisional elect client then the new candidate
 	becomes the first one.*/
-	if (NULL == p_prov_elect)
+	if (!p_prov_elect)
 		return p_new_cand;
 	/*Here we want to pick the client who is closest to attaining a single
 	frame conformance.
@@ -327,10 +327,10 @@ static struct sched_clnt_ctx_type *sched_elect_non_rt
 	and return its context.
 	We also need to skip the client if certain conditions (mentioned below)
 	are not met*/
-	if (NULL == p_sched_ctx->p_n_rt_last_sched)
+	if (!p_sched_ctx->p_n_rt_last_sched)
 		p_start_node = p_node = p_sched_ctx->p_n_rt_head;
 	else {
-		if (NULL == p_sched_ctx->p_n_rt_last_sched->p_next)
+		if (!p_sched_ctx->p_n_rt_last_sched->p_next)
 			p_start_node = p_sched_ctx->p_n_rt_head;
 		else
 			p_start_node = p_sched_ctx->p_n_rt_last_sched->p_next;
@@ -356,7 +356,7 @@ static struct sched_clnt_ctx_type *sched_elect_non_rt
 		if (!b_found)
 			(void)SCHED_CRITSEC_LEAVE(p_node->data.clnt_cs);
 
-		if (NULL == p_node->p_next)
+		if (!p_node->p_next)
 			p_node = p_sched_ctx->p_n_rt_head;
 		else
 			p_node = p_node->p_next;
@@ -426,7 +426,7 @@ static enum sched_status_type sched_process_add_rt_clnt(
 	struct _sched_clnt_list_node_type *p_tmp_node;
 
 	/*Validate real time client specific parameters.*/
-	if (0 == p_clnt_ctx->n_curr_p_tkn_rate)
+	if (!p_clnt_ctx->n_curr_p_tkn_rate)
 		SCHED_MSG_HIGH("Allocated token rate is zero");
 
 	/*Check if our performance level setting can sustain the new client*/
@@ -488,12 +488,12 @@ enum sched_status_type sched_process_add_clnt(
 	SCHED_MEMSET(p_clnt_node, 0, sizeof(struct _sched_clnt_list_node_type));
 
 	/*Validate all initialization parameters*/
-	if (0 == p_init_param->n_p_tkn_per_frm ||
-	    0 == p_init_param->frm_rate.n_numer ||
-	    0 == p_init_param->frm_rate.n_denom ||
-	    0 == p_init_param->n_max_queue_len ||
-	    0 == p_init_param->n_o_tkn_max ||
-	    0 == p_init_param->n_o_tkn_per_ip_frm ||
+	if (!p_init_param->n_p_tkn_per_frm ||
+	    !p_init_param->frm_rate.n_numer ||
+	    !p_init_param->frm_rate.n_denom ||
+	    !p_init_param->n_max_queue_len ||
+	    !p_init_param->n_o_tkn_max ||
+	    !p_init_param->n_o_tkn_per_ip_frm ||
 	    p_init_param->n_o_tkn_init > p_init_param->n_o_tkn_max ||
 	    p_init_param->n_o_tkn_per_ip_frm > p_init_param->n_o_tkn_max) {
 		SCHED_MSG_ERR("Bad initialization parameters");
@@ -523,10 +523,9 @@ enum sched_status_type sched_process_add_clnt(
 	SCHED_MSG_MED("Max O tokens = %d", p_clnt_node->data.n_o_tkn_max);
 	SCHED_MSG_MED("O tokens threshold = %d",
 		      p_clnt_node->data.n_o_tkn_per_ip_frm);
-	SCHED_MSG_MED("Initial O tokens = %d", p_clnt_node->data.n_o_tkn_init);
 	SCHED_MSG_MED("P tokens per frame = %d",
 		      p_clnt_node->data.n_p_tkn_per_frm);
-	SCHED_MSG_MED("Client data ptr = %d", p_clnt_node->data.p_client_data);
+	SCHED_MSG_MED("Client data ptr = %p", p_clnt_node->data.p_client_data);
 
 	if (SCHED_FAILED(SCHED_CRITSEC_CREATE(&p_clnt_node->data.clnt_cs)))
 		return SCHED_S_EFAIL;
@@ -568,7 +567,7 @@ enum sched_status_type sched_process_remove_clnt(
 	/*Handling if the client frame queue is not empty. Just return
 	and let Codec driver dequeue all frames for this client
 	before calling remove client*/
-	if (0 != p_clnt_node->data.n_q_len) {
+	if (p_clnt_node->data.n_q_len) {
 		SCHED_MSG_ERR("Cannot remove client. Queue is not empty");
 		return SCHED_S_EINVALST;
 	}
@@ -616,7 +615,7 @@ enum sched_status_type sched_process_remove_clnt(
 	SCHED_MSG_MED("Max O tokens = %d", p_clnt_node->data.n_o_tkn_max);
 	SCHED_MSG_MED("P tokens per frame = %d",
 		      p_clnt_node->data.n_p_tkn_per_frm);
-	SCHED_MSG_MED("Client data ptr = %d", p_clnt_node->data.p_client_data);
+	SCHED_MSG_MED("Client data ptr = %p", p_clnt_node->data.p_client_data);
 	sched_free_clnt_node(p_clnt_node);
 	return SCHED_S_OK;
 }
@@ -631,7 +630,7 @@ enum sched_status_type sched_process_flush_clnt_buff(
 	p_clnt_ctx = &p_clnt_node->data;
 
 	/*If the client queue is empty just return an QEMPTY status*/
-	if (0 == p_clnt_ctx->n_q_len) {
+	if (!p_clnt_ctx->n_q_len) {
 		status = SCHED_S_QEMPTY;
 	} else {
 		p_clnt_ctx->b_flushing = TRUE;
@@ -646,7 +645,7 @@ enum sched_status_type sched_process_flush_clnt_buff(
 	De_queue we reset the flushing and First_frame flags.
 	Token bucket contents are also emptied.Queue pointers are reset.
 	o_tkns are restored.*/
-	if (0 == p_clnt_ctx->n_q_len) {
+	if (!p_clnt_ctx->n_q_len) {
 		p_clnt_ctx->b_flushing = FALSE;
 		p_clnt_ctx->b_first_frm = FALSE;
 		p_clnt_ctx->n_bkt_curr_tkns = 0;
@@ -672,7 +671,7 @@ SCHED_INLINE enum sched_status_type sched_process_mark_clnt_eof(
 		struct sched_ctx_type *p_sched_ctx,
 	struct _sched_clnt_list_node_type *p_clnt_node) {
 
-	if (0 == p_clnt_node->data.n_q_len)
+	if (!p_clnt_node->data.n_q_len)
 		return SCHED_S_QEMPTY;
 
 
@@ -771,7 +770,7 @@ enum sched_status_type sched_process_en_q_frm(
 	frame is received.*/
 	if (!p_clnt_ctx->b_first_frm) {
 		SCHED_MSG_HIGH("Client first frame enqueued");
-		if (SCHED_CLNT_NONRT != p_clnt_ctx->client_ctgy) {
+		if (p_clnt_ctx->client_ctgy != SCHED_CLNT_NONRT) {
 			if (SCHED_SUCCEEDED
 			(SCHED_GET_CURRENT_TIME(&n_curr_time))) {
 				p_clnt_ctx->n_bkt_curr_tkns =
@@ -830,7 +829,7 @@ enum sched_status_type sched_process_re_en_q_frm(
 	p_clnt_ctx->a_clnt_frm_q[p_clnt_ctx->n_q_head].b_eof =
 		FALSE;
 
-	if (SCHED_CLNT_NONRT != p_clnt_ctx->client_ctgy) {
+	if (p_clnt_ctx->client_ctgy != SCHED_CLNT_NONRT) {
 		if (!p_clnt_ctx->b_first_frm) {
 			SCHED_MSG_HIGH("Client frame "
 						"re-enqueued as first frame");
@@ -851,7 +850,7 @@ enum sched_status_type sched_process_re_en_q_frm(
 
 
 	SCHED_MSG_LOW("Client frame re-enqueued. Queue fill status = %d / %d",
-	p_clnt_ctx->n_q_len, p_clnt_ctx->n_max_queue_len, 0);
+	p_clnt_ctx->n_q_len, p_clnt_ctx->n_max_queue_len);
 	SCHED_MSG_LOW("Client category = %d", p_clnt_ctx->client_ctgy);
 	SCHED_MSG_LOW("Client allocated P token rate (per sec) = %d",
 	p_clnt_ctx->n_curr_p_tkn_rate);
@@ -891,7 +890,7 @@ enum sched_status_type sched_process_de_q_frm_rt_clnt(
 	Also in this same pass, check if each client has a conformant
 	frame or not.*/
 	p_clnt_node = p_sched_ctx->p_rt_head;
-	while (NULL != p_clnt_node) {
+	while (p_clnt_node) {
 		p_clnt_ctx = &p_clnt_node->data;
 
 		(void)SCHED_CRITSEC_ENTER(p_clnt_ctx->clnt_cs);
@@ -903,12 +902,12 @@ enum sched_status_type sched_process_de_q_frm_rt_clnt(
 					sched_elect_cnfmnt(*pp_conf_elect_ctx,
 						p_clnt_ctx);
 			} else {
-				if (NULL == *pp_conf_elect_ctx) {
+				if (!*pp_conf_elect_ctx) {
 					*pp_non_conf_elect_ctx =
 					    sched_elect_non_cnfmnt
 					    (*pp_non_conf_elect_ctx,
 					     p_clnt_ctx);
-				} else if (NULL != *pp_non_conf_elect_ctx) {
+				} else if (*pp_non_conf_elect_ctx) {
 					(void)
 					    SCHED_CRITSEC_LEAVE(
 					    (*pp_non_conf_elect_ctx)->clnt_cs);
@@ -953,20 +952,20 @@ enum sched_status_type sched_process_de_q_frm(
 	a) client with conformant frame
 	b) client with non-conformant frame
 	c) non real-time client*/
-	if (NULL != p_conf_elect_ctx) {
+	if (p_conf_elect_ctx) {
 		SCHED_MSG_LOW("Conformant frame client selected");
 		sched_tkn_bkt_consume(p_conf_elect_ctx);
 		p_sched_clnt_ctx = p_conf_elect_ctx;
-	} else if (NULL != p_non_conf_elect_ctx) {
+	} else if (p_non_conf_elect_ctx) {
 		SCHED_MSG_LOW("Non-Conformant frame client selected");
 		sched_tkn_bkt_consume(p_non_conf_elect_ctx);
 		p_sched_clnt_ctx = p_non_conf_elect_ctx;
-	} else if (0 != p_sched_ctx->n_n_rt_clnts)
+	} else if (p_sched_ctx->n_n_rt_clnts)
 		p_sched_clnt_ctx = sched_elect_non_rt(p_sched_ctx);
 
 	/*If we have a client that we can schedule, then dequeue the frame
 	at the head of its queue.*/
-	if (NULL != p_sched_clnt_ctx) {
+	if (p_sched_clnt_ctx) {
 		*pp_client_data = p_sched_clnt_ctx->p_client_data;
 
 		sched_de_q_head_frm(p_sched_clnt_ctx, &q_elem);
@@ -1042,8 +1041,8 @@ enum sched_status_type sched_process_sched_lvl_set_param(
 {
 	enum sched_status_type status = SCHED_S_OK;
 
-	SCHED_MSG_HIGH("Set_sched_param index = %d, value = %d",
-		       param_index, *p_param_value);
+	SCHED_MSG_HIGH("Set_sched_param index = %u, value = %p",
+		       param_index, (void *)p_param_value);
 
 	switch (param_index) {
 	case SCHED_I_PERFLEVEL:
@@ -1137,8 +1136,8 @@ enum sched_status_type sched_process_clnt_lvl_set_param(
 {
 	enum sched_status_type status = SCHED_S_OK;
 
-	SCHED_MSG_HIGH("Set_clnt_param index = %d, value = %d",
-		       param_index, *p_param_value);
+	SCHED_MSG_HIGH("Set_clnt_param index = %u, value = %p",
+		       param_index, (void *)p_param_value);
 
 	switch (param_index) {
 	case SCHED_I_CLNT_CURRQLEN:
@@ -1258,8 +1257,8 @@ void sched_remove_node_from_list(
 	u32 b_found = FALSE;
 	struct _sched_clnt_list_node_type *p_curr = *pp_head;
 
-	if (NULL == *pp_head || NULL == p_node) {
-		SCHED_MSG_ERR("Bad params. p_head %d, p_node %d", *pp_head,
+	if (!*pp_head || !p_node) {
+		SCHED_MSG_ERR("Bad params. p_head %p, p_node %p", *pp_head,
 			      p_node);
 		return;
 	}
@@ -1269,7 +1268,7 @@ void sched_remove_node_from_list(
 		return;
 	}
 
-	while (!b_found && NULL != p_curr) {
+	while (!b_found && p_curr) {
 		if (p_node == p_curr->p_next) {
 			p_curr->p_next = p_node->p_next;
 			b_found = TRUE;
@@ -1283,10 +1282,10 @@ void sched_remove_node_from_list(
 SCHED_INLINE u32 sched_consider_clnt_for_sched(
 		struct sched_clnt_ctx_type *p_clnt_ctx)
 {
-	if (TRUE == p_clnt_ctx->b_first_frm &&
-	    TRUE == p_clnt_ctx->b_sched_state &&
-	    FALSE == p_clnt_ctx->b_flushing &&
-	    0 != p_clnt_ctx->n_q_len &&
+	if (p_clnt_ctx->b_first_frm &&
+	    p_clnt_ctx->b_sched_state &&
+	    !p_clnt_ctx->b_flushing &&
+	    p_clnt_ctx->n_q_len &&
 	    p_clnt_ctx->n_curr_o_tkns >= p_clnt_ctx->n_o_tkn_per_ip_frm) {
 		return TRUE;
 	} else {

@@ -93,7 +93,7 @@ void vcd_do_device_state_transition(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 {
 	struct vcd_dev_state_ctxt_type_t *p_state_ctxt;
 
-	if (NULL == p_drv_ctxt || e_to_state >= VCD_DEVICE_STATE_MAX) {
+	if (!p_drv_ctxt || e_to_state >= VCD_DEVICE_STATE_MAX) {
 		VCD_MSG_ERROR("Bad parameters. p_drv_ctxt=%p, e_to_state=%d",
 				  p_drv_ctxt, e_to_state);
 
@@ -191,8 +191,8 @@ void vcd_ddl_callback(u32 event, u32 status, void *p_payload,
 		{
 			p_transc = (struct vcd_transc_type *)p_client_data;
 
-			if (NULL == p_transc || !p_transc->b_in_use
-				|| NULL == p_transc->p_cctxt) {
+			if (!p_transc || !p_transc->b_in_use
+				|| !p_transc->p_cctxt) {
 				VCD_MSG_ERROR("Invalid clientdata "
 							  "received from DDL ");
 			} else {
@@ -296,7 +296,7 @@ void vcd_handle_device_init_failed(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 	VCD_MSG_ERROR("Device init failed. status = %d", status);
 
 	p_client = p_drv_ctxt->dev_ctxt.p_cctxt_list_head;
-	while (NULL != p_client) {
+	while (p_client) {
 		p_client->callback(VCD_EVT_RESP_OPEN,
 				   status, NULL, 0, 0, p_client->p_client_data);
 
@@ -305,13 +305,13 @@ void vcd_handle_device_init_failed(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 
 		vcd_destroy_client_context(p_tmp_client);
 	}
-	if (VCD_S_SUCCESS != ddl_device_release(NULL))
+	if (ddl_device_release(NULL))
 		VCD_MSG_ERROR("Failed: ddl_device_release");
 
 	(void)sched_destroy(p_drv_ctxt->dev_ctxt.sched_hdl);
 	p_drv_ctxt->dev_ctxt.sched_hdl = NULL;
 
-	if (VCD_S_SUCCESS != vcd_power_event(&p_drv_ctxt->dev_ctxt,
+	if (vcd_power_event(&p_drv_ctxt->dev_ctxt,
 		NULL, VCD_EVT_PWR_DEV_INIT_FAIL))
 		VCD_MSG_ERROR("VCD_EVT_PWR_DEV_INIT_FAIL failed");
 
@@ -405,7 +405,7 @@ void vcd_handle_device_err_fatal(struct vcd_dev_ctxt_type *p_dev_ctxt,
 {
 	struct vcd_clnt_ctxt_type_t *p_cctxt = p_dev_ctxt->p_cctxt_list_head;
 	VCD_MSG_LOW("vcd_handle_device_err_fatal:");
-	while (NULL != p_cctxt) {
+	while (p_cctxt) {
 		if (p_cctxt != p_trig_clnt) {
 			vcd_clnt_handle_device_err_fatal(p_cctxt,
 				VCD_EVT_IND_HWERRFATAL);
@@ -433,22 +433,21 @@ void vcd_continue(void)
 
 	p_dev_ctxt->b_continue = FALSE;
 
-	if (VCD_CMD_DEVICE_INIT == p_dev_ctxt->e_pending_cmd) {
+	if (p_dev_ctxt->e_pending_cmd == VCD_CMD_DEVICE_INIT) {
 		VCD_MSG_HIGH("VCD_CMD_DEVICE_INIT is pending");
 
 		p_dev_ctxt->e_pending_cmd = VCD_CMD_NONE;
 
 		(void)vcd_init_device_context(p_drv_ctxt,
 			DEVICE_STATE_EVENT_NUMBER(pf_open));
-	} else if (VCD_CMD_DEVICE_TERM == p_dev_ctxt->e_pending_cmd) {
+	} else if (p_dev_ctxt->e_pending_cmd == VCD_CMD_DEVICE_TERM) {
 		VCD_MSG_HIGH("VCD_CMD_DEVICE_TERM is pending");
 
 		p_dev_ctxt->e_pending_cmd = VCD_CMD_NONE;
 
 		(void)vcd_deinit_device_context(p_drv_ctxt,
 			DEVICE_STATE_EVENT_NUMBER(pf_close));
-	} else if (VCD_CMD_DEVICE_RESET ==
-		p_dev_ctxt->e_pending_cmd) {
+	} else if (p_dev_ctxt->e_pending_cmd == VCD_CMD_DEVICE_RESET) {
 		VCD_MSG_HIGH("VCD_CMD_DEVICE_RESET is pending");
 		p_dev_ctxt->e_pending_cmd = VCD_CMD_NONE;
 		(void)vcd_reset_device_context(p_drv_ctxt,
@@ -477,7 +476,7 @@ void vcd_continue(void)
 			if (vcd_get_command_channel_in_loop
 				(p_dev_ctxt, &p_transc)) {
 				if (vcd_submit_command_in_continue(p_dev_ctxt,
-					p_transc) == TRUE)
+					p_transc))
 					b_continue = TRUE;
 				else {
 					VCD_MSG_MED
@@ -497,8 +496,7 @@ void vcd_continue(void)
 
 			if (vcd_get_frame_channel_in_loop
 				(p_dev_ctxt, &p_transc)) {
-				if (vcd_submit_frame(p_dev_ctxt, p_transc) ==
-					TRUE) {
+				if (vcd_submit_frame(p_dev_ctxt, p_transc)) {
 					b_continue = TRUE;
 				} else {
 					VCD_MSG_MED("No more frames to submit");
@@ -522,7 +520,7 @@ static void vcd_pause_all_sessions(struct vcd_dev_ctxt_type *p_dev_ctxt)
 	struct vcd_clnt_ctxt_type_t *p_cctxt = p_dev_ctxt->p_cctxt_list_head;
 	u32 rc;
 
-	while (NULL != p_cctxt) {
+	while (p_cctxt) {
 		if (p_cctxt->clnt_state.p_state_table->ev_hdlr.pf_pause) {
 			rc = p_cctxt->clnt_state.p_state_table->ev_hdlr.
 				pf_pause(p_cctxt);
@@ -541,7 +539,7 @@ static void vcd_resume_all_sessions(struct vcd_dev_ctxt_type *p_dev_ctxt)
 	struct vcd_clnt_ctxt_type_t *p_cctxt = p_dev_ctxt->p_cctxt_list_head;
 	u32 rc;
 
-	while (NULL != p_cctxt) {
+	while (p_cctxt) {
 		if (p_cctxt->clnt_state.p_state_table->ev_hdlr.pf_resume) {
 			rc = p_cctxt->clnt_state.p_state_table->ev_hdlr.
 				pf_resume(p_cctxt);
@@ -580,7 +578,7 @@ static u32 vcd_init_cmn
 
 	driver_id = 0;
 	while (driver_id < VCD_DRIVER_INSTANCE_MAX &&
-		   TRUE == p_dev_ctxt->b_driver_ids[driver_id]) {
+		   p_dev_ctxt->b_driver_ids[driver_id]) {
 		++driver_id;
 	}
 
@@ -615,7 +613,7 @@ static u32 vcd_init_in_null
 		(u8 *)p_config->pf_map_dev_base_addr(
 			p_dev_ctxt->config.p_device_name);
 
-	if (NULL == p_dev_ctxt->p_device_base_addr) {
+	if (!p_dev_ctxt->p_device_base_addr) {
 		VCD_MSG_ERROR("NULL Device_base_addr");
 
 		return VCD_ERR_FAIL;
@@ -627,7 +625,7 @@ static u32 vcd_init_in_null
 	}
 
 	if (p_config->pf_timer_create &&
-		FALSE == p_config->pf_timer_create(
+		!p_config->pf_timer_create(
 			vcd_hw_timeout_handler,	NULL,
 			&p_dev_ctxt->p_hw_timer_handle)) {
 		VCD_MSG_ERROR("Timer_create failed");
@@ -683,13 +681,13 @@ static u32 vcd_term_cmn
 {
 	struct vcd_dev_ctxt_type *p_dev_ctxt = &p_drv_ctxt->dev_ctxt;
 
-	if (FALSE == vcd_validate_driver_handle(p_dev_ctxt, driver_handle)) {
+	if (!vcd_validate_driver_handle(p_dev_ctxt, driver_handle)) {
 		VCD_MSG_ERROR("Invalid driver handle = %d", driver_handle);
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (TRUE == vcd_check_for_client_context(p_dev_ctxt,
+	if (vcd_check_for_client_context(p_dev_ctxt,
 				driver_handle - 1)) {
 		VCD_MSG_ERROR("Driver has active client");
 
@@ -715,7 +713,7 @@ static u32 vcd_term_in_not_init
 
 	rc = vcd_term_cmn(p_drv_ctxt, driver_handle);
 
-	if (!VCD_FAILED(rc) && 0 == p_dev_ctxt->n_refs)
+	if (!VCD_FAILED(rc) && !p_dev_ctxt->n_refs)
 		vcd_term_driver_context(p_drv_ctxt);
 
 	return rc;
@@ -743,7 +741,7 @@ static u32  vcd_term_in_invalid(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 	u32 rc;
 	VCD_MSG_LOW("vcd_term_in_invalid:");
 	rc = vcd_term_cmn(p_drv_ctxt, driver_handle);
-	if (!VCD_FAILED(rc) && 0 == p_drv_ctxt->dev_ctxt.n_refs)
+	if (!VCD_FAILED(rc) && !p_drv_ctxt->dev_ctxt.n_refs)
 		vcd_term_driver_context(p_drv_ctxt);
 
 	return rc;
@@ -761,7 +759,7 @@ static u32 vcd_open_cmn
 	struct vcd_clnt_ctxt_type_t *p_cctxt;
 	struct vcd_clnt_ctxt_type_t *p_client;
 
-	if (FALSE == vcd_validate_driver_handle(p_dev_ctxt, driver_handle)) {
+	if (!vcd_validate_driver_handle(p_dev_ctxt, driver_handle)) {
 		VCD_MSG_ERROR("Invalid driver handle = %d", driver_handle);
 
 		return VCD_ERR_BAD_HANDLE;
@@ -770,7 +768,7 @@ static u32 vcd_open_cmn
 	p_cctxt =
 		(struct vcd_clnt_ctxt_type_t *)
 		vcd_malloc(sizeof(struct vcd_clnt_ctxt_type_t));
-	if (NULL == p_cctxt) {
+	if (!p_cctxt) {
 		VCD_MSG_ERROR("No memory for client ctxt");
 
 		return VCD_ERR_ALLOC_FAIL;
@@ -888,7 +886,7 @@ static u32 vcd_close_in_ready
 		rc = VCD_ERR_BAD_STATE;
 	}
 
-	if (!VCD_FAILED(rc) && NULL == p_drv_ctxt->dev_ctxt.p_cctxt_list_head) {
+	if (!VCD_FAILED(rc) && !p_drv_ctxt->dev_ctxt.p_cctxt_list_head) {
 		VCD_MSG_HIGH("All clients are closed");
 
 		(void)vcd_deinit_device_context(p_drv_ctxt,
@@ -912,7 +910,7 @@ static u32  vcd_close_in_dev_invalid(struct vcd_drv_ctxt_type_t *p_drv_ctxt,
 					  p_cctxt->clnt_state.e_state);
 		rc = VCD_ERR_BAD_STATE;
 	}
-	if (!VCD_FAILED(rc) && NULL == p_drv_ctxt->dev_ctxt.
+	if (!VCD_FAILED(rc) && !p_drv_ctxt->dev_ctxt.
 		p_cctxt_list_head) {
 		VCD_MSG_HIGH("All INVALID clients are closed");
 		vcd_do_device_state_transition(p_drv_ctxt,
@@ -963,7 +961,7 @@ static u32 vcd_set_dev_pwr_in_ready
 
 	case VCD_PWR_STATE_ON:
 		{
-			if (VCD_PWR_STATE_SLEEP == p_dev_ctxt->e_pwr_state)
+			if (p_dev_ctxt->e_pwr_state == VCD_PWR_STATE_SLEEP)
 				vcd_resume_all_sessions(p_dev_ctxt);
 
 
@@ -1000,7 +998,7 @@ static void vcd_dev_cb_in_initing
 
 	VCD_MSG_LOW("vcd_dev_cb_in_initing:");
 
-	if (VCD_EVT_RESP_DEVICE_INIT != event) {
+	if (event != VCD_EVT_RESP_DEVICE_INIT) {
 		VCD_MSG_ERROR("vcd_dev_cb_in_initing: Unexpected event %d",
 				  (int)event);
 		return;
@@ -1020,7 +1018,7 @@ static void vcd_dev_cb_in_initing
 					   VCD_DEVICE_STATE_READY,
 					   DEVICE_STATE_EVENT_NUMBER(pf_open));
 
-	if (NULL == p_dev_ctxt->p_cctxt_list_head) {
+	if (!p_dev_ctxt->p_cctxt_list_head) {
 		VCD_MSG_HIGH("All clients are closed");
 
 		p_dev_ctxt->e_pending_cmd = VCD_CMD_DEVICE_TERM;
@@ -1028,8 +1026,8 @@ static void vcd_dev_cb_in_initing
 		return;
 	}
 
-	if (0 == p_dev_ctxt->n_ddl_cmd_ch_depth
-		|| NULL == p_dev_ctxt->a_trans_tbl)
+	if (!p_dev_ctxt->n_ddl_cmd_ch_depth
+		|| !p_dev_ctxt->a_trans_tbl)
 		rc = vcd_setup_with_ddl_capabilities(p_dev_ctxt);
 
 
@@ -1042,7 +1040,7 @@ static void vcd_dev_cb_in_initing
 	}
 
 	p_client = p_dev_ctxt->p_cctxt_list_head;
-	while (NULL != p_client) {
+	while (p_client) {
 		if (!b_fail_all_open)
 			rc = vcd_init_client_context(p_client);
 
@@ -1080,8 +1078,7 @@ static void vcd_dev_cb_in_initing
 
 		p_dev_ctxt->e_pending_cmd = VCD_CMD_DEVICE_TERM;
 	} else {
-		if (VCD_S_SUCCESS !=
-				vcd_power_event(p_dev_ctxt, NULL,
+		if (vcd_power_event(p_dev_ctxt, NULL,
 					 VCD_EVT_PWR_DEV_INIT_END)) {
 			VCD_MSG_ERROR("VCD_EVT_PWR_DEV_INIT_END failed");
 		}

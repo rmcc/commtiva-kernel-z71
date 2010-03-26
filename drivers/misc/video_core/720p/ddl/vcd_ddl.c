@@ -74,16 +74,15 @@
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl_metadata.h"
 
-#define CORE_TIMING_INFO
 u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 		    void *p_client_data)
 {
 	struct ddl_context_type *p_ddl_context;
 	u32 status = VCD_S_SUCCESS;
 
-	if ((NULL == p_ddl_init_config) ||
-	    (NULL == p_ddl_init_config->ddl_callback) ||
-	    (NULL == p_ddl_init_config->p_core_virtual_base_addr)
+	if ((!p_ddl_init_config) ||
+	    (!p_ddl_init_config->ddl_callback) ||
+	    (!p_ddl_init_config->p_core_virtual_base_addr)
 	    ) {
 		VIDC_LOGERR_STRING("ddl_dev_init:Bad_argument");
 		return VCD_ERR_ILLEGAL_PARM;
@@ -122,21 +121,21 @@ u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 
 	ddl_pmem_alloc(&p_ddl_context->context_buf_addr,
 		       DDL_CONTEXT_MEMORY, DDL_LINEAR_BUFFER_ALIGN_BYTES);
-	if (p_ddl_context->context_buf_addr.p_virtual_base_addr == NULL) {
+	if (!p_ddl_context->context_buf_addr.p_virtual_base_addr) {
 		VIDC_LOGERR_STRING("ddl_dev_init:Context_alloc_fail");
 		status = VCD_ERR_ALLOC_FAIL;
 	}
-	if (status == VCD_S_SUCCESS) {
+	if (!status) {
 		ddl_pmem_alloc(&p_ddl_context->db_line_buffer,
 			       DDL_DB_LINE_BUF_SIZE,
 			       DDL_TILE_BUFFER_ALIGN_BYTES);
-		if (p_ddl_context->db_line_buffer.p_virtual_base_addr == NULL) {
+		if (!p_ddl_context->db_line_buffer.p_virtual_base_addr) {
 			VIDC_LOGERR_STRING("ddl_dev_init:Line_buf_alloc_fail");
 			status = VCD_ERR_ALLOC_FAIL;
 		}
 	}
 
-	if (VCD_S_SUCCESS == status) {
+	if (!status) {
 		ddl_pmem_alloc(&p_ddl_context->data_partition_tempbuf,
 					   DDL_MPEG4_DATA_PARTITION_BUF_SIZE,
 					   DDL_TILE_BUFFER_ALIGN_BYTES);
@@ -148,24 +147,23 @@ u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 		}
    }
 
-   if (VCD_S_SUCCESS == status) {
+   if (!status) {
 
 		ddl_pmem_alloc(&p_ddl_context->metadata_shared_input,
 					   DDL_METADATA_TOTAL_INPUTBUFSIZE,
 					   DDL_LINEAR_BUFFER_ALIGN_BYTES);
-		if (p_ddl_context->metadata_shared_input.p_virtual_base_addr ==
-			NULL) {
+		if (!p_ddl_context->metadata_shared_input.p_virtual_base_addr) {
 			VIDC_LOGERR_STRING
 			("ddl_dev_init:metadata_shared_input_alloc_fail");
 			status = VCD_ERR_ALLOC_FAIL;
 		}
 	 }
 
-	if (VCD_S_SUCCESS == status) {
+	if (!status) {
 		ddl_pmem_alloc(&p_ddl_context->dbg_core_dump, \
 					   DDL_DBG_CORE_DUMP_SIZE,  \
 					   DDL_LINEAR_BUFFER_ALIGN_BYTES);
-		if (NULL == p_ddl_context->dbg_core_dump.p_virtual_base_addr) {
+		if (!p_ddl_context->dbg_core_dump.p_virtual_base_addr) {
 			VIDC_LOGERR_STRING
 				("ddl_dev_init:dbg_core_dump_alloc_failed");
 			status = VCD_ERR_ALLOC_FAIL;
@@ -173,11 +171,11 @@ u32 ddl_device_init(struct ddl_init_config_type *p_ddl_init_config,
 		p_ddl_context->enable_dbg_core_dump = 0;
 	}
 
-	if (VCD_S_SUCCESS == status && TRUE != vcd_fw_init()) {
+	if (!status && !vcd_fw_init()) {
 		VIDC_LOGERR_STRING("ddl_dev_init:fw_init_failed");
 		status = VCD_ERR_ALLOC_FAIL;
 	}
-	if (VCD_S_SUCCESS != status) {
+	if (status) {
 		ddl_release_context_buffers(p_ddl_context);
 		DDL_IDLE(p_ddl_context);
 		return status;
@@ -206,7 +204,7 @@ u32 ddl_device_release(void *p_client_data)
 		return VCD_ERR_ILLEGAL_OP;
 	}
 
-	if (VCD_S_SUCCESS == ddl_client_transact(DDL_ACTIVE_CLIENT, NULL)) {
+	if (!ddl_client_transact(DDL_ACTIVE_CLIENT, NULL)) {
 		VIDC_LOGERR_STRING("ddl_dev_rel:Client_present_err");
 		return VCD_ERR_CLIENT_PRESENT;
 	}
@@ -231,7 +229,7 @@ u32 ddl_open(u32 **p_ddl_handle, u32 b_decoding)
 	struct ddl_client_context_type *p_ddl;
 	u32 status;
 
-	if (p_ddl_handle == NULL) {
+	if (!p_ddl_handle) {
 		VIDC_LOGERR_STRING("ddl_open:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -245,7 +243,7 @@ u32 ddl_open(u32 **p_ddl_handle, u32 b_decoding)
 
 	status = ddl_client_transact(DDL_GET_CLIENT, &p_ddl);
 
-	if (VCD_S_SUCCESS != status) {
+	if (status) {
 		VIDC_LOGERR_STRING("ddl_open:Client_trasac_failed");
 		return status;
 	}
@@ -269,7 +267,7 @@ u32 ddl_close(u32 **p_ddl_handle)
 	struct ddl_client_context_type **pp_ddl =
 	    (struct ddl_client_context_type **)p_ddl_handle;
 
-	if (NULL == pp_ddl || NULL == *pp_ddl) {
+	if (!pp_ddl || !*pp_ddl) {
 		VIDC_LOGERR_STRING("ddl_close:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -317,7 +315,7 @@ u32 ddl_encode_start(u32 *ddl_handle, void *p_client_data)
 		VIDC_LOGERR_STRING("ddl_enc_start:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || TRUE == p_ddl->b_decoding) {
+	if (!p_ddl || p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_enc_start:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -327,7 +325,7 @@ u32 ddl_encode_start(u32 *ddl_handle, void *p_client_data)
 		return VCD_ERR_ILLEGAL_OP;
 	}
 
-	if (FALSE == ddl_encoder_ready_to_start(p_ddl)) {
+	if (!ddl_encoder_ready_to_start(p_ddl)) {
 		VIDC_LOGERR_STRING("ddl_enc_start:Err_param_settings");
 		return VCD_ERR_ILLEGAL_OP;
 	}
@@ -340,18 +338,18 @@ u32 ddl_encode_start(u32 *ddl_handle, void *p_client_data)
 	n_dpb_size *= DDL_ENC_NUM_DPB_BUFFERS;
 	ddl_pmem_alloc(&p_encoder->enc_dpb_addr,
 		       n_dpb_size, DDL_TILE_BUFFER_ALIGN_BYTES);
-	if (NULL == p_encoder->enc_dpb_addr.p_virtual_base_addr) {
+	if (!p_encoder->enc_dpb_addr.p_virtual_base_addr) {
 		VIDC_LOGERR_STRING("ddl_enc_start:Dpb_alloc_failed");
 		return VCD_ERR_ALLOC_FAIL;
 	}
 
-	if ((VCD_CODEC_MPEG4 == p_encoder->codec_type.e_codec &&
-	     FALSE == p_encoder->short_header.b_short_header) ||
-	    VCD_CODEC_H264 == p_encoder->codec_type.e_codec) {
+	if ((p_encoder->codec_type.e_codec == VCD_CODEC_MPEG4 &&
+	     !p_encoder->short_header.b_short_header) ||
+	    p_encoder->codec_type.e_codec == VCD_CODEC_H264) {
 		ddl_pmem_alloc(&p_encoder->seq_header,
 			       DDL_ENC_SEQHEADER_SIZE,
 			       DDL_LINEAR_BUFFER_ALIGN_BYTES);
-		if (NULL == p_encoder->seq_header.p_virtual_base_addr) {
+		if (!p_encoder->seq_header.p_virtual_base_addr) {
 			ddl_pmem_free(p_encoder->enc_dpb_addr);
 			VIDC_LOGERR_STRING
 			    ("ddl_enc_start:Seq_hdr_alloc_failed");
@@ -388,7 +386,7 @@ u32 ddl_decode_start(u32 *ddl_handle,
 		VIDC_LOGERR_STRING("ddl_dec_start:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || FALSE == p_ddl->b_decoding) {
+	if (!p_ddl || !p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_dec_start:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -397,16 +395,16 @@ u32 ddl_decode_start(u32 *ddl_handle,
 		return VCD_ERR_ILLEGAL_OP;
 	}
 
-	if ((NULL != p_header) &&
-	    ((0 == p_header->n_sequence_header_len) ||
-	     (NULL == p_header->p_sequence_header)
+	if ((p_header) &&
+	    ((!p_header->n_sequence_header_len) ||
+	     (!p_header->p_sequence_header)
 	    )
 	    ) {
 		VIDC_LOGERR_STRING("ddl_dec_start:Bad_param_seq_header");
 		return VCD_ERR_ILLEGAL_PARM;
 	}
 
-	if (FALSE == ddl_decoder_ready_to_start(p_ddl, p_header)) {
+	if (!ddl_decoder_ready_to_start(p_ddl, p_header)) {
 		VIDC_LOGERR_STRING("ddl_dec_start:Err_param_settings");
 		return VCD_ERR_ILLEGAL_OP;
 	}
@@ -426,8 +424,7 @@ u32 ddl_decode_start(u32 *ddl_handle,
 		ddl_pmem_alloc(&p_decoder->h264Vsp_temp_buffer,
 			       DDL_DECODE_H264_VSPTEMP_BUFSIZE,
 			       DDL_LINEAR_BUFFER_ALIGN_BYTES);
-		if (p_decoder->h264Vsp_temp_buffer.p_virtual_base_addr
-				== NULL) {
+		if (!p_decoder->h264Vsp_temp_buffer.p_virtual_base_addr) {
 			DDL_IDLE(p_ddl_context);
 			VIDC_LOGERR_STRING
 			    ("ddl_dec_start:H264Sps_alloc_failed");
@@ -462,14 +459,14 @@ u32 ddl_decode_frame(u32 *ddl_handle,
 		VIDC_LOGERR_STRING("ddl_dec_frame:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || FALSE == p_ddl->b_decoding) {
+	if (!p_ddl || !p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_dec_frame:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
-	if (NULL == p_input_bits ||
-	    ((0 == p_input_bits->vcd_frm.p_physical ||
-	      0 == p_input_bits->vcd_frm.n_data_len) &&
-	     (0 == (VCD_FRAME_FLAG_EOS & p_input_bits->vcd_frm.n_flags))
+	if (!p_input_bits ||
+	    ((!p_input_bits->vcd_frm.p_physical ||
+	      !p_input_bits->vcd_frm.n_data_len) &&
+	     (!(VCD_FRAME_FLAG_EOS & p_input_bits->vcd_frm.n_flags))
 	    )
 	    ) {
 		VIDC_LOGERR_STRING("ddl_dec_frame:Bad_input_param");
@@ -486,7 +483,7 @@ u32 ddl_decode_frame(u32 *ddl_handle,
 	if (DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_FRAME)) {
 		ddl_decode_frame_run(p_ddl);
 	} else {
-		if (0 == p_ddl->codec_data.decoder.dp_buf.n_no_of_dec_pic_buf) {
+		if (!p_ddl->codec_data.decoder.dp_buf.n_no_of_dec_pic_buf) {
 			VIDC_LOGERR_STRING("ddl_dec_frame:Dpbs_requied");
 			vcd_status = VCD_ERR_ILLEGAL_OP;
 		} else if (DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_DPB)) {
@@ -505,7 +502,7 @@ u32 ddl_decode_frame(u32 *ddl_handle,
 			VIDC_LOGERR_STRING("Dec_frame:Wrong_state");
 			vcd_status = VCD_ERR_ILLEGAL_OP;
 		}
-		if (VCD_S_SUCCESS != vcd_status)
+		if (vcd_status)
 			DDL_IDLE(p_ddl_context);
 	}
 	return vcd_status;
@@ -531,18 +528,18 @@ u32 ddl_encode_frame(u32 *ddl_handle,
 		VIDC_LOGERR_STRING("ddl_enc_frame:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || TRUE == p_ddl->b_decoding) {
+	if (!p_ddl || p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_enc_frame:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
-	if (NULL == p_input_frame ||
-	    NULL == p_input_frame->vcd_frm.p_physical ||
+	if (!p_input_frame ||
+	    !p_input_frame->vcd_frm.p_physical ||
 	    p_ddl->codec_data.encoder.input_buf_req.n_size !=
 	    p_input_frame->vcd_frm.n_data_len) {
 		VIDC_LOGERR_STRING("ddl_enc_frame:Bad_input_params");
 		return VCD_ERR_ILLEGAL_PARM;
 	}
-	if (0 != (((u32) p_input_frame->vcd_frm.p_physical +
+	if ((((u32) p_input_frame->vcd_frm.p_physical +
 		   p_input_frame->vcd_frm.n_offset) &
 		  (DDL_STREAMBUF_ALIGN_GUARD_BYTES)
 	    )
@@ -551,9 +548,9 @@ u32 ddl_encode_frame(u32 *ddl_handle,
 		    ("ddl_enc_frame:Un_aligned_yuv_start_address");
 		return VCD_ERR_ILLEGAL_PARM;
 	}
-	if (NULL == p_output_bit ||
-	    NULL == p_output_bit->vcd_frm.p_physical ||
-	    0 == p_output_bit->vcd_frm.n_alloc_len) {
+	if (!p_output_bit ||
+	    !p_output_bit->vcd_frm.p_physical ||
+	    !p_output_bit->vcd_frm.n_alloc_len) {
 		VIDC_LOGERR_STRING("ddl_enc_frame:Bad_output_params");
 		return VCD_ERR_ILLEGAL_PARM;
 	}
@@ -600,7 +597,7 @@ u32 ddl_decode_end(u32 *ddl_handle, void *p_client_data)
 		VIDC_LOGERR_STRING("ddl_dec_end:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || FALSE == p_ddl->b_decoding) {
+	if (!p_ddl || !p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_dec_end:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -641,7 +638,7 @@ u32 ddl_encode_end(u32 *ddl_handle, void *p_client_data)
 		VIDC_LOGERR_STRING("ddl_enc_end:Ddl_busy");
 		return VCD_ERR_BUSY;
 	}
-	if (NULL == p_ddl || TRUE == p_ddl->b_decoding) {
+	if (!p_ddl || p_ddl->b_decoding) {
 		VIDC_LOGERR_STRING("ddl_enc_end:Bad_handle");
 		return VCD_ERR_BAD_HANDLE;
 	}
@@ -671,7 +668,7 @@ u32 ddl_reset_hw(u32 n_mode)
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
 	DDL_BUSY(p_ddl_context);
 
-	if (NULL != p_ddl_context->p_core_virtual_base_addr)
+	if (p_ddl_context->p_core_virtual_base_addr)
 		vidc_720p_do_sw_reset();
 
 	p_ddl_context->n_device_state = DDL_DEVICE_NOTINIT;
