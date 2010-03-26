@@ -314,7 +314,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 	case CAMIO_VFE_CLK:
 		camio_vfe_clk =
 		clk = clk_get(NULL, "vfe_clk");
-		msm_camio_clk_rate_set_2(clk, 134000000);
+		msm_camio_clk_rate_set_2(clk, 122880000);
 		break;
 
 	case CAMIO_VFE_CAMIF_CLK:
