@@ -2198,7 +2198,7 @@ config FB_MSM_OVERLAY
 	default n
 
 config FB_MSM_DTV
-	depends on FB_MSM_OVERALY
+	depends on FB_MSM_OVERLAY
 	bool
 	default n
 
