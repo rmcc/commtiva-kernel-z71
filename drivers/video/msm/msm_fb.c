@@ -866,9 +866,19 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		return ret;
 	}
 
-	fix->smem_len =
-	    panel_info->xres * panel_info->yres * bpp * mfd->fb_page;
-	fix->line_length = panel_info->xres * bpp;
+	/* The adreno GPU hardware requires that the pitch be aligned to
+	   32 pixels for color buffers, so for the cases where the GPU
+	   is writing directly to fb0, the framebuffer pitch
+	   also needs to be 32 pixel aligned */
+
+	if (mfd->index == 0)
+		fix->line_length = ALIGN(panel_info->xres, 32) * bpp;
+	else
+		fix->line_length = panel_info->xres * bpp;
+
+	fix->smem_len = fix->line_length * panel_info->yres * mfd->fb_page;
+
+
 
 	mfd->var_xres = panel_info->xres;
 	mfd->var_yres = panel_info->yres;
