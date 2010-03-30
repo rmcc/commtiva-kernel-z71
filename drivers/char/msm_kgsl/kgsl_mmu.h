@@ -50,7 +50,7 @@
 #define GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS     (sizeof(unsigned char) * 8)
 #define GSL_TLBFLUSH_FILTER_GET(superpte)			     \
 	      (*((unsigned char *)				    \
-	      (((unsigned int)mmu->tlbflushfilter.base)	       \
+	      (((unsigned int)pagetable->tlbflushfilter.base)    \
 	      + (superpte / GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS))))
 #define GSL_TLBFLUSH_FILTER_SETDIRTY(superpte)				\
 	      (GSL_TLBFLUSH_FILTER_GET((superpte)) |= 1 <<	    \
@@ -58,8 +58,8 @@
 #define GSL_TLBFLUSH_FILTER_ISDIRTY(superpte)			 \
 	      (GSL_TLBFLUSH_FILTER_GET((superpte)) &		  \
 	      (1 << (superpte % GSL_TLBFLUSH_FILTER_ENTRY_NUMBITS)))
-#define GSL_TLBFLUSH_FILTER_RESET()   memset(mmu->tlbflushfilter.base,\
-				      0, mmu->tlbflushfilter.size)
+#define GSL_TLBFLUSH_FILTER_RESET() memset(pagetable->tlbflushfilter.base,\
+				      0, pagetable->tlbflushfilter.size)
 
 
 #ifdef CONFIG_MSM_KGSL_MMU
@@ -90,9 +90,13 @@ struct kgsl_ptstats {
 	int64_t  tlbflushes[KGSL_DEVICE_MAX];
 };
 
+struct kgsl_tlbflushfilter {
+	unsigned int *base;
+	unsigned int size;
+};
+
 struct kgsl_pagetable {
 	unsigned int   refcnt;
-	struct kgsl_mmu *mmu;
 	struct kgsl_memdesc  base;
 	uint32_t      va_base;
 	unsigned int   va_range;
@@ -101,6 +105,8 @@ struct kgsl_pagetable {
 	struct gen_pool *pool;
 	struct list_head list;
 	unsigned int name;
+	/* Maintain filter to manage tlb flushing */
+	struct kgsl_tlbflushfilter tlbflushfilter;
 };
 
 struct kgsl_mmu_reg {
@@ -118,11 +124,6 @@ struct kgsl_mmu_reg {
 	uint32_t interrupt_clear;
 };
 
-struct kgsl_tlbflushfilter {
-	unsigned int *base;
-	unsigned int size;
-};
-
 struct kgsl_mmu {
 	unsigned int     refcnt;
 	uint32_t      flags;
@@ -136,14 +137,6 @@ struct kgsl_mmu {
 	/* current page table object being used by device mmu */
 	struct kgsl_pagetable  *defaultpagetable;
 	struct kgsl_pagetable  *hwpagetable;
-	/* Maintain filetr to manage tlb flushing */
-	struct kgsl_tlbflushfilter tlbflushfilter;
-
-	/* List of pagetables atatched to this mmu */
-	struct list_head pagetable_list;
-
-	/* Mutex for accessing the pagetable list */
-	struct mutex pt_mutex;
 };
 
 

@@ -92,6 +92,11 @@ struct kgsl_driver {
 	struct kgsl_device g12_device;
 
 	struct list_head client_list;
+
+	/* Global list of pagetables */
+	struct list_head pagetable_list;
+	/* Mutex for accessing the pagetable list */
+	struct mutex pt_mutex;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -137,6 +142,12 @@ while (1) { \
 
 #define KGSL_POST_HWACCESS() \
 	mutex_unlock(&kgsl_driver.mutex)
+
+#ifdef CONFIG_MSM_KGSL_MMU_PAGE_FAULT
+#define MMU_CONFIG 2
+#else
+#define MMU_CONFIG 1
+#endif
 
 void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry, bool preserve);
 

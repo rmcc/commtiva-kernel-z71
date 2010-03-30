@@ -98,12 +98,6 @@
 #define FIRST_TIMEOUT (HZ / 2)
 #define INTERVAL_TIMEOUT (HZ / 5)
 
-#ifdef CONFIG_MSM_KGSL_MMU_PAGE_FAULT
-#define MMU_CONFIG 2
-#else
-#define MMU_CONFIG 1
-#endif
-
 static struct timer_list idle_timer;
 static struct work_struct idle_check;
 
