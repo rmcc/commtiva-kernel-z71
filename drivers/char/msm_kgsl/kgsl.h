@@ -120,10 +120,19 @@ enum kgsl_status {
 #define KGSL_TRUE 1
 #define KGSL_FALSE 0
 
-/* TODO: Until idle detection is implemented, suspend/resume won't work.
- *       Fill these in once that support is added
- */
-#define KGSL_G12_PRE_HWACCESS() mutex_lock(&kgsl_driver.mutex)
+#define KGSL_G12_PRE_HWACCESS() \
+while (1) { \
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) { \
+		break; \
+	} \
+	if (kgsl_driver.is_suspended != KGSL_TRUE) { \
+		kgsl_g12_wake(&kgsl_driver.g12_device); \
+		break; \
+	} \
+	mutex_unlock(&kgsl_driver.mutex); \
+	wait_for_completion(&kgsl_driver.g12_device.hwaccess_gate); \
+	mutex_lock(&kgsl_driver.mutex); \
+}
 #define KGSL_G12_POST_HWACCESS() mutex_unlock(&kgsl_driver.mutex)
 
 #define KGSL_PRE_HWACCESS() \
