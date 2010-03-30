@@ -243,10 +243,10 @@ static u32 ddl_supported_metadata_flag(struct ddl_client_context_type *p_ddl)
 
 		n_flag |= (VCD_METADATA_CONCEALMB |
 			   VCD_METADATA_PASSTHROUGH | VCD_METADATA_QPARRAY);
-		if (VCD_CODEC_H264 == e_codec) {
+		if (e_codec == VCD_CODEC_H264) {
 			n_flag |= (VCD_METADATA_SEI | VCD_METADATA_VUI);
-		} else if (VCD_CODEC_VC1 == e_codec ||
-			   VCD_CODEC_VC1_RCV == e_codec) {
+		} else if (e_codec == VCD_CODEC_VC1 ||
+			   e_codec == VCD_CODEC_VC1_RCV) {
 			n_flag |= VCD_METADATA_VC1;
 		}
 	} else {
@@ -273,7 +273,7 @@ void ddl_set_default_decoder_metadata_buffer_size(
 	u32 n_suffix = 0;
 	u32 n_size = 0;
 
-	if (0 == n_flag) {
+	if (!n_flag) {
 		p_decoder->n_suffix = 0;
 		return;
 	}
@@ -337,7 +337,7 @@ void ddl_set_default_encoder_metadata_buffer_size(struct ddl_encoder_data_type
 	u32 n_suffix = 0;
 	u32 n_size = 0;
 
-	if (0 == n_flag) {
+	if (!n_flag) {
 		p_encoder->n_suffix = 0;
 		return;
 	}
@@ -370,7 +370,7 @@ u32 ddl_set_metadata_params(struct ddl_client_context_type *p_ddl,
 			    void *p_property_value)
 {
 	u32 vcd_status = VCD_ERR_ILLEGAL_PARM;
-	if (VCD_I_METADATA_ENABLE == p_property_hdr->prop_id) {
+	if (p_property_hdr->prop_id == VCD_I_METADATA_ENABLE) {
 		struct vcd_property_meta_data_enable_type *p_meta_data_enable =
 		    (struct vcd_property_meta_data_enable_type *)
 		    p_property_value;
@@ -390,8 +390,8 @@ u32 ddl_set_metadata_params(struct ddl_client_context_type *p_ddl,
 		if (sizeof(struct vcd_property_meta_data_enable_type) ==
 		    p_property_hdr->n_size &&
 		    DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_OPEN) &&
-					0 != e_codec) {
-			if (0 == p_meta_data_enable->n_meta_data_enable_flag) {
+					e_codec) {
+			if (!p_meta_data_enable->n_meta_data_enable_flag) {
 				*p_meta_data_enable_flag = 0;
 				if (p_ddl->b_decoding) {
 					ddl_set_default_decoder_buffer_req
@@ -428,7 +428,7 @@ u32 ddl_set_metadata_params(struct ddl_client_context_type *p_ddl,
 			}
 			vcd_status = VCD_S_SUCCESS;
 		}
-	} else if (VCD_I_METADATA_HEADER == p_property_hdr->prop_id) {
+	} else if (p_property_hdr->prop_id == VCD_I_METADATA_HEADER) {
 		struct vcd_property_metadata_hdr_type *p_hdr =
 		    (struct vcd_property_metadata_hdr_type *)p_property_value;
 		if (sizeof(struct vcd_property_metadata_hdr_type) ==
@@ -436,7 +436,7 @@ u32 ddl_set_metadata_params(struct ddl_client_context_type *p_ddl,
 			u32 n_flag = ddl_supported_metadata_flag(p_ddl);
 			n_flag |= DDL_METADATA_MANDATORY;
 			n_flag &= p_hdr->n_meta_data_id_type;
-			if (0 == (n_flag & (n_flag - 1))) {
+			if (!(n_flag & (n_flag - 1))) {
 				u32 *p_hdr_entry =
 				    ddl_metadata_hdr_entry(p_ddl, n_flag);
 				p_hdr_entry[DDL_METADATA_HDR_VERSION_INDEX] =
@@ -457,7 +457,7 @@ u32 ddl_get_metadata_params(struct ddl_client_context_type *p_ddl,
 	void	*p_property_value)
 {
 	u32 vcd_status = VCD_ERR_ILLEGAL_PARM ;
-	if (VCD_I_METADATA_ENABLE == p_property_hdr->prop_id &&
+	if (p_property_hdr->prop_id == VCD_I_METADATA_ENABLE &&
 		sizeof(struct vcd_property_meta_data_enable_type)
 		== p_property_hdr->n_size) {
 		struct vcd_property_meta_data_enable_type *p_meta_data_enable =
@@ -468,7 +468,7 @@ u32 ddl_get_metadata_params(struct ddl_client_context_type *p_ddl,
 			(p_ddl->codec_data.decoder.n_meta_data_enable_flag)
 			: (p_ddl->codec_data.encoder.n_meta_data_enable_flag));
 		vcd_status = VCD_S_SUCCESS;
-	} else if (VCD_I_METADATA_HEADER == p_property_hdr->prop_id &&
+	} else if (p_property_hdr->prop_id == VCD_I_METADATA_HEADER &&
 		sizeof(struct vcd_property_metadata_hdr_type) ==
 		p_property_hdr->n_size) {
 		struct vcd_property_metadata_hdr_type *p_hdr =
@@ -477,7 +477,7 @@ u32 ddl_get_metadata_params(struct ddl_client_context_type *p_ddl,
 		u32 n_flag = ddl_supported_metadata_flag(p_ddl);
 		n_flag |= DDL_METADATA_MANDATORY;
 		n_flag &= p_hdr->n_meta_data_id_type;
-		if (0 == (n_flag & (n_flag - 1))) {
+		if (!(n_flag & (n_flag - 1))) {
 			u32 *p_hdr_entry = ddl_metadata_hdr_entry(p_ddl,
 				n_flag);
 			p_hdr->n_version =
@@ -507,7 +507,7 @@ void ddl_metadata_enable(struct ddl_client_context_type *p_ddl)
 		    p_ddl->codec_data.encoder.meta_data_input.
 		    p_align_physical_addr;
 	}
-	if (0 != n_flag) {
+	if (n_flag) {
 		if (n_flag & VCD_METADATA_QPARRAY)
 			n_hal_flag |= VIDC_720p_METADATA_ENABLE_QP;
 		if (n_flag & VCD_METADATA_CONCEALMB)
@@ -536,7 +536,7 @@ u32 ddl_encode_set_metadata_output_buf(struct ddl_client_context_type *p_ddl)
 	u32 n_ext_buffer_end, n_hw_metadata_start;
 
 	n_ext_buffer_end = (u32) p_stream->p_physical + p_stream->n_alloc_len;
-	if (0 == p_encoder->n_meta_data_enable_flag) {
+	if (!p_encoder->n_meta_data_enable_flag) {
 		n_ext_buffer_end &= ~(DDL_STREAMBUF_ALIGN_GUARD_BYTES);
 		return n_ext_buffer_end;
 	}
@@ -563,14 +563,14 @@ void ddl_decode_set_metadata_output(struct ddl_decoder_data_type *p_decoder)
 	u32 *p_buffer;
 	u32 n_loopc;
 
-	if (0 == p_decoder->n_meta_data_enable_flag) {
+	if (!p_decoder->n_meta_data_enable_flag) {
 		p_decoder->n_meta_data_offset = 0;
 		return;
 	}
 
 	p_decoder->n_meta_data_offset = ddl_get_yuv_buffer_size(
 		&p_decoder->client_frame_size, &p_decoder->buf_format,
-		(0 == p_decoder->n_progressive_only));
+		(!p_decoder->n_progressive_only));
 
 	p_buffer = p_decoder->meta_data_input.p_align_virtual_addr;
 
@@ -593,12 +593,12 @@ void ddl_process_encoder_metadata(struct ddl_client_context_type *p_ddl)
 	u32 *p_qfiller_hdr, *p_qfiller, n_start_addr;
 	u32 n_qfiller_size;
 
-	if (0 == p_encoder->n_meta_data_enable_flag) {
+	if (!p_encoder->n_meta_data_enable_flag) {
 		p_out_frame->n_flags &= ~(VCD_FRAME_FLAG_EXTRADATA);
 		return;
 	}
 
-	if (0x0 == p_encoder->enc_frame_info.n_metadata_exists) {
+	if (!p_encoder->enc_frame_info.n_metadata_exists) {
 		p_out_frame->n_flags &= ~(VCD_FRAME_FLAG_EXTRADATA);
 		return;
 	}
@@ -629,12 +629,12 @@ void ddl_process_decoder_metadata(struct ddl_client_context_type *p_ddl)
 	u32 *p_qfiller_hdr, *p_qfiller;
 	u32 n_qfiller_size;
 
-	if (0 == p_decoder->n_meta_data_enable_flag) {
+	if (!p_decoder->n_meta_data_enable_flag) {
 		p_output_frame->n_flags &= ~(VCD_FRAME_FLAG_EXTRADATA);
 		return;
 	}
 
-	if (0x0 == p_decoder->dec_disp_info.n_metadata_exists) {
+	if (!p_decoder->dec_disp_info.n_metadata_exists) {
 		p_output_frame->n_flags &= ~(VCD_FRAME_FLAG_EXTRADATA);
 		return;
 	}

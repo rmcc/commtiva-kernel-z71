@@ -32,18 +32,13 @@
 
 #define SCHED_INLINE
 
-#define DEBUG 0
-
 #if DEBUG
+
 #define SCHED_MSG_LOW(xx_fmt, ...)	printk(KERN_INFO "\n " \
 					xx_fmt, ## __VA_ARGS__)
 #define SCHED_MSG_MED(xx_fmt, ...)	printk(KERN_INFO "\n" \
 					xx_fmt, ## __VA_ARGS__)
 #define SCHED_MSG_HIGH(xx_fmt, ...)	printk(KERN_WARNING "\n" \
-					xx_fmt, ## __VA_ARGS__)
-#define SCHED_MSG_ERR(xx_fmt, ...)	printk(KERN_ERR "\n err: " \
-					xx_fmt, ## __VA_ARGS__)
-#define SCHED_MSG_FATAL(xx_fmt, ...)	printk(KERN_ERR "\n<FATAL> " \
 					xx_fmt, ## __VA_ARGS__)
 
 #else
@@ -51,10 +46,13 @@
 #define SCHED_MSG_LOW(xx_fmt...)
 #define SCHED_MSG_MED(xx_fmt...)
 #define SCHED_MSG_HIGH(xx_fmt...)
-#define SCHED_MSG_ERR(xx_fmt...)
-#define SCHED_MSG_FATAL(xx_fmt...)
+
 #endif
 
+#define SCHED_MSG_ERR(xx_fmt, ...)	printk(KERN_ERR "\n err: " \
+					xx_fmt, ## __VA_ARGS__)
+#define SCHED_MSG_FATAL(xx_fmt, ...)	printk(KERN_ERR "\n<FATAL> " \
+					xx_fmt, ## __VA_ARGS__)
 
 SCHED_INLINE void SCHED_ASSERT(int val);
 

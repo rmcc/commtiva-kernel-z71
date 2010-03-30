@@ -76,7 +76,7 @@
 u32 vcd_critical_section_create(u32 **p_cs)
 {
 	struct mutex *lock;
-	if (p_cs == NULL) {
+	if (!p_cs) {
 		VCD_MSG_ERROR("Bad critical section ptr");
 		return VCD_ERR_BAD_POINTER;
 	} else {
@@ -94,7 +94,7 @@ u32 vcd_critical_section_create(u32 **p_cs)
 u32 vcd_critical_section_release(u32 *cs)
 {
 	struct mutex *lock = (struct mutex *)cs;
-	if (lock == NULL) {
+	if (!lock) {
 		VCD_MSG_ERROR("Bad critical section object");
 		return VCD_ERR_BAD_POINTER;
 	}
@@ -107,7 +107,7 @@ u32 vcd_critical_section_release(u32 *cs)
 u32 vcd_critical_section_enter(u32 *cs)
 {
 	struct mutex *lock = (struct mutex *)cs;
-	if (lock == NULL) {
+	if (!lock) {
 		VCD_MSG_ERROR("Bad critical section object");
 		return VCD_ERR_BAD_POINTER;
 	} else
@@ -120,7 +120,7 @@ u32 vcd_critical_section_leave(u32 *cs)
 {
 	struct mutex *lock = (struct mutex *)cs;
 
-	if (lock == NULL) {
+	if (!lock) {
 		VCD_MSG_ERROR("Bad critical section object");
 
 		return VCD_ERR_BAD_POINTER;
@@ -139,7 +139,7 @@ int vcd_pmem_alloc(u32 size, u8 **kernel_vaddr, u8 **phy_addr)
 
 		*kernel_vaddr = ioremap((unsigned long)*phy_addr, size);
 
-		if (*kernel_vaddr == NULL) {
+		if (!*kernel_vaddr) {
 			pr_err("%s: could not ioremap in kernel pmem buffers\n",
 			       __func__);
 			pmem_kfree((s32) *phy_addr);

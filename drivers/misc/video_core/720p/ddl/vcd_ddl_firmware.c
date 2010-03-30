@@ -119,7 +119,7 @@ static u32 vcd_fw_prepare(struct ddl_buf_addr_type *fw_details,
 
 	ddl_pmem_alloc(fw_details, fw_array_size,
 		       DDL_LINEAR_BUFFER_ALIGN_BYTES);
-	if (fw_details->p_virtual_base_addr == NULL)
+	if (!fw_details->p_virtual_base_addr)
 		return FALSE;
 
 	fw_details->n_buffer_size = fw_array_size / 4;
@@ -127,50 +127,50 @@ static u32 vcd_fw_prepare(struct ddl_buf_addr_type *fw_details,
 	buffer = fw_details->p_align_virtual_addr;
 
 	memcpy(buffer, fw_array, fw_array_size);
-	if (change_endian == TRUE)
+	if (change_endian)
 		vcd_fw_change_endian((unsigned char *)buffer, fw_array_size);
 	return TRUE;
 }
 
 u32 vcd_fw_init(void)
 {
-	u32 status = FALSE;
+	u32 b_status = FALSE;
 
-	status = vcd_fw_prepare(&vcd_firmware.boot_code,
+	b_status = vcd_fw_prepare(&vcd_firmware.boot_code,
 				vid_c_command_control_fw,
 				vid_c_command_control_fw_size, FALSE);
 
-	if (status == TRUE) {
-		status = vcd_fw_prepare(&vcd_firmware.dec_mpeg4,
+	if (b_status) {
+		b_status = vcd_fw_prepare(&vcd_firmware.dec_mpeg4,
 					vid_c_mpg4_dec_fw,
 					vid_c_mpg4_dec_fw_size, TRUE);
 	}
 
-	if (status == TRUE) {
-		status = vcd_fw_prepare(&vcd_firmware.decH264,
+	if (b_status) {
+		b_status = vcd_fw_prepare(&vcd_firmware.decH264,
 					vid_c_h264_dec_fw,
 					vid_c_h264_dec_fw_size, TRUE);
 	}
 
-	if (status == TRUE) {
-		status = vcd_fw_prepare(&vcd_firmware.decH263,
+	if (b_status) {
+		b_status = vcd_fw_prepare(&vcd_firmware.decH263,
 					vid_c_h263_dec_fw,
 					vid_c_h263_dec_fw_size, TRUE);
 	}
 
-	if (status == TRUE) {
-		status = vcd_fw_prepare(&vcd_firmware.enc_mpeg4,
+	if (b_status) {
+		b_status = vcd_fw_prepare(&vcd_firmware.enc_mpeg4,
 					vid_c_mpg4_enc_fw,
 					vid_c_mpg4_enc_fw_size, TRUE);
 	}
 
-	if (status == TRUE) {
-		status = vcd_fw_prepare(&vcd_firmware.encH264,
+	if (b_status) {
+		b_status = vcd_fw_prepare(&vcd_firmware.encH264,
 					vid_c_h264_enc_fw,
 					vid_c_h264_enc_fw_size, TRUE);
 	}
 
-	return status;
+	return b_status;
 }
 
 
@@ -310,7 +310,7 @@ u32 vcd_fw_transact(u32 b_add, u32 b_decoding, enum vcd_codec_type e_codec)
 	u32 b_return = TRUE;
 	u32 n_index = 0, n_active_fw = 0, n_loop_count;
 
-	if (TRUE == b_decoding) {
+	if (b_decoding) {
 		switch (e_codec) {
 		case VCD_CODEC_DIVX_4:
 		case VCD_CODEC_DIVX_5:
@@ -369,11 +369,11 @@ u32 vcd_fw_transact(u32 b_add, u32 b_decoding, enum vcd_codec_type e_codec)
 		}
 	}
 
-	if (FALSE == b_return)
+	if (!b_return)
 		return b_return;
 
-	if (FALSE == b_add &&
-	    0 != vcd_firmware.a_active_fw_img[n_index]
+	if (!b_add &&
+	    vcd_firmware.a_active_fw_img[n_index]
 	    ) {
 		--vcd_firmware.a_active_fw_img[n_index];
 		return b_return;
@@ -381,7 +381,7 @@ u32 vcd_fw_transact(u32 b_add, u32 b_decoding, enum vcd_codec_type e_codec)
 
 	for (n_loop_count = 0; n_loop_count < VCDFW_TOTALNUM_IMAGE;
 	     ++n_loop_count) {
-		if (0 != vcd_firmware.a_active_fw_img[n_loop_count])
+		if (vcd_firmware.a_active_fw_img[n_loop_count])
 			++n_active_fw;
 	}
 

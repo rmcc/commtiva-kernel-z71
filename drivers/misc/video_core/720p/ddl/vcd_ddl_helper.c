@@ -103,7 +103,7 @@ u32 ddl_client_transact(u32 operation,
 	switch (operation) {
 	case DDL_FREE_CLIENT:
 		{
-			if (NULL != pddl_client && NULL != *pddl_client) {
+			if (pddl_client && *pddl_client) {
 				u32 n_channel_id;
 				n_channel_id = (*pddl_client)->n_channel_id;
 				if (n_channel_id < VCD_MAX_NO_CLIENT) {
@@ -122,14 +122,13 @@ u32 ddl_client_transact(u32 operation,
 			ret_status = VCD_ERR_MAX_CLIENT;
 			for (n_counter = 0; n_counter < VCD_MAX_NO_CLIENT &&
 			     ret_status == VCD_ERR_MAX_CLIENT; ++n_counter) {
-				if (NULL ==
-				    p_ddl_context->a_ddl_clients[n_counter]) {
+				if (!p_ddl_context->a_ddl_clients[n_counter]) {
 					*pddl_client =
 					    (struct ddl_client_context_type *)
 					    DDL_MALLOC(sizeof
 					       (struct ddl_client_context_type)
 					       );
-					if (NULL == *pddl_client) {
+					if (!*pddl_client) {
 						ret_status = VCD_ERR_ALLOC_FAIL;
 					} else {
 						DDL_MEMSET(*pddl_client, 0,
@@ -161,8 +160,7 @@ u32 ddl_client_transact(u32 operation,
 		{
 			for (n_counter = 0; n_counter < VCD_MAX_NO_CLIENT;
 			     ++n_counter) {
-				if (NULL !=
-				    p_ddl_context->a_ddl_clients[n_counter]) {
+				if (p_ddl_context->a_ddl_clients[n_counter]) {
 					ret_status = VCD_S_SUCCESS;
 					break;
 				}
@@ -191,7 +189,7 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 	case DDL_DPB_OP_MARK_BUSY:
 	case DDL_DPB_OP_MARK_FREE:
 		{
-			for (n_loopc = 0; NULL == p_found_frame &&
+			for (n_loopc = 0; !p_found_frame &&
 			     n_loopc < p_decoder->dp_buf.n_no_of_dec_pic_buf;
 			     ++n_loopc) {
 				if (p_in_out_frame->vcd_frm.p_physical ==
@@ -205,13 +203,13 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 				}
 			}
 
-			if (NULL != p_found_frame) {
-				if (DDL_DPB_OP_MARK_BUSY == n_operation) {
+			if (p_found_frame) {
+				if (n_operation == DDL_DPB_OP_MARK_BUSY) {
 					p_dpb_mask->n_hw_mask &=
 					    (~(0x1 << n_loopc));
 					*p_in_out_frame = *p_found_frame;
-				} else if (DDL_DPB_OP_MARK_FREE ==
-						n_operation) {
+				} else if (n_operation ==
+					DDL_DPB_OP_MARK_FREE) {
 					p_dpb_mask->n_client_mask |=
 					    (0x1 << n_loopc);
 					*p_found_frame = *p_in_out_frame;
@@ -234,7 +232,7 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 	case DDL_DPB_OP_INIT:
 		{
 			u32 n_dpb_size;
-			n_dpb_size = (0 == p_decoder->n_meta_data_offset) ?
+			n_dpb_size = (!p_decoder->n_meta_data_offset) ?
 			    p_decoder->dp_buf.a_dec_pic_buffers[0].vcd_frm.
 			    n_alloc_len : p_decoder->n_meta_data_offset;
 			vidc_720p_decode_set_dpb_details(p_decoder->dp_buf.
@@ -263,12 +261,12 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 	case DDL_DPB_OP_RETRIEVE:
 		{
 			u32 n_position;
-			if (0 != p_dpb_mask->n_client_mask) {
+			if (p_dpb_mask->n_client_mask) {
 				n_position = 0x1;
 				for (n_loopc = 0;
 				     n_loopc <
 				     p_decoder->dp_buf.n_no_of_dec_pic_buf
-				     && p_found_frame == NULL; ++n_loopc) {
+				     && !p_found_frame; ++n_loopc) {
 					if (p_dpb_mask->
 					    n_client_mask & n_position) {
 						p_found_frame =
@@ -279,12 +277,12 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 					}
 					n_position <<= 1;
 				}
-			} else if (0 != p_dpb_mask->n_hw_mask) {
+			} else if (p_dpb_mask->n_hw_mask) {
 				n_position = 0x1;
 				for (n_loopc = 0;
 				     n_loopc <
 				     p_decoder->dp_buf.n_no_of_dec_pic_buf
-				     && p_found_frame == NULL; ++n_loopc) {
+				     && !p_found_frame; ++n_loopc) {
 					if (p_dpb_mask->n_hw_mask
 							& n_position) {
 						p_found_frame =
@@ -296,7 +294,7 @@ u32 ddl_decoder_dpb_transact(struct ddl_decoder_data_type *p_decoder,
 					n_position <<= 1;
 				}
 			}
-			if (NULL != p_found_frame)
+			if (p_found_frame)
 				*p_in_out_frame = *p_found_frame;
 			else
 				p_in_out_frame->vcd_frm.p_physical = NULL;

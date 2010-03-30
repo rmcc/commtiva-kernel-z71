@@ -75,15 +75,11 @@
 #include "vcd_ddl_utils.h"
 #include "vcd_ddl_metadata.h"
 
-#define DEBUG 0
-
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
 #else
 #define DBG(x...)
 #endif
-
-#define CORE_TIMING_INFO
 
 static void ddl_decoder_input_done_callback(
 	struct	ddl_client_context_type *p_ddl, u32 b_frame_transact_end);
@@ -112,7 +108,7 @@ static void ddl_cpu_started_callback(struct ddl_context_type *p_ddl_context)
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
 	VIDC_LOG_STRING("CPU-STARTED");
 
-	if (vidc_720p_cpu_start() == FALSE) {
+	if (!vidc_720p_cpu_start()) {
 		ddl_hw_fatal_cb(p_ddl_context);
 		return;
 	}
@@ -138,8 +134,8 @@ static void ddl_eos_done_callback(struct ddl_context_type *p_ddl_context)
 		return;
 	}
 
-	if (NULL == p_ddl ||
-	    FALSE == p_ddl->b_decoding ||
+	if (!p_ddl ||
+	    !p_ddl->b_decoding ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_EOS_DONE)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-EOSDONE");
@@ -171,7 +167,7 @@ static u32 ddl_channel_set_callback(struct ddl_context_type *p_ddl_context)
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
 	VIDC_DEBUG_REGISTER_LOG;
 
-	if (NULL == p_ddl ||
+	if (!p_ddl ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_CHDONE)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-CHSET");
@@ -205,8 +201,8 @@ static void ddl_init_codec_done_callback(struct ddl_context_type *p_ddl_context)
 	struct ddl_client_context_type *p_ddl = p_ddl_context->p_current_ddl;
 	struct ddl_encoder_data_type *p_encoder;
 
-	if (NULL == p_ddl ||
-	    TRUE == p_ddl->b_decoding ||
+	if (!p_ddl ||
+	    p_ddl->b_decoding ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_INITCODECDONE)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-INITCODEC");
@@ -218,7 +214,7 @@ static void ddl_init_codec_done_callback(struct ddl_context_type *p_ddl_context)
 	VIDC_LOG_STRING("INIT_CODEC_DONE");
 
 	p_encoder = &p_ddl->codec_data.encoder;
-	if (0 != p_encoder->seq_header.p_virtual_base_addr) {
+	if (p_encoder->seq_header.p_virtual_base_addr) {
 		vidc_720p_encode_get_header(&p_encoder->seq_header.
 					     n_buffer_size);
 	}
@@ -244,8 +240,8 @@ static u32 ddl_header_done_callback(struct ddl_context_type *p_ddl_context)
 		return TRUE;
 	}
 
-	if (NULL == p_ddl ||
-	    FALSE == p_ddl->b_decoding ||
+	if (!p_ddl ||
+	    !p_ddl->b_decoding ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_INITCODECDONE)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-HDDONE");
@@ -277,9 +273,9 @@ static u32 ddl_header_done_callback(struct ddl_context_type *p_ddl_context)
 
 	ddl_set_default_decoder_buffer_req(p_decoder, FALSE);
 	if (seq_hdr_info.n_data_partitioned == 0x1 &&
-		VCD_CODEC_MPEG4 == p_decoder->codec_type.e_codec &&
-		DDL_MAX_DP_FRAME_WIDTH < seq_hdr_info.n_img_size_x &&
-		DDL_MAX_DP_FRAME_HEIGHT < seq_hdr_info.n_img_size_y)	{
+		p_decoder->codec_type.e_codec == VCD_CODEC_MPEG4 &&
+		seq_hdr_info.n_img_size_x > DDL_MAX_DP_FRAME_WIDTH &&
+		seq_hdr_info.n_img_size_y > DDL_MAX_DP_FRAME_HEIGHT)	{
 		ddl_client_fatal_cb(p_ddl_context);
 		return TRUE;
 	}
@@ -316,7 +312,7 @@ static u32 ddl_header_done_callback(struct ddl_context_type *p_ddl_context)
 		    && p_decoder->n_min_dpb_num <=
 		    p_decoder->client_output_buf_req.n_actual_count) {
 			vcd_status = ddl_decode_set_buffers(p_ddl);
-			if (VCD_S_SUCCESS == vcd_status)
+			if (!vcd_status)
 				b_req_cb = FALSE;
 			else{
 				ddl_client_fatal_cb(p_ddl_context);
@@ -334,7 +330,7 @@ static u32 ddl_header_done_callback(struct ddl_context_type *p_ddl_context)
 		}
 	}
 
-	if (TRUE == b_req_cb) {
+	if (b_req_cb) {
 		p_ddl_context->ddl_callback(vcd_event, vcd_status,
 			NULL, 0, (u32 *) p_ddl,	p_ddl_context->p_client_data);
 
@@ -349,7 +345,7 @@ static u32 ddl_dpb_buffers_set_done_callback(struct ddl_context_type
 	struct ddl_client_context_type *p_ddl = p_ddl_context->p_current_ddl;
 
 	ddl_move_command_state(p_ddl_context, DDL_CMD_INVALID);
-	if (NULL == p_ddl ||
+	if (!p_ddl ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_DPBDONE)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-DPBDONE");
@@ -403,7 +399,7 @@ static void ddl_encoder_frame_run_callback(struct ddl_context_type
 #endif
 	/* check the presence of EOS */
    b_eos_present =
-      (0 != (VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags));
+      ((VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags));
 
 	p_ddl->output_frame.b_frm_trans_end = !b_eos_present;
 	p_ddl_context->ddl_callback(VCD_EVT_RESP_OUTPUT_DONE, VCD_S_SUCCESS,
@@ -445,12 +441,12 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 
 	ddl_decode_dynamic_property(p_ddl, FALSE);
 
-	if (0x0 != p_dec_disp_info->n_resl_change) {
+	if (p_dec_disp_info->n_resl_change) {
 		VIDC_LOGERR_STRING
 			("ddl_dec_frm_done:Dec_reconfig_no_tsupported");
 	}
 
-	if ((VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags) != 0) {
+	if ((VCD_FRAME_FLAG_EOS & p_ddl->input_frame.vcd_frm.n_flags)) {
 		b_callback_end = FALSE;
 		eos_present = TRUE;
 	}
@@ -459,7 +455,7 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 	if (VIDC_720p_DECODE_ONLY == p_dec_disp_info->e_disp_status ||
 		VIDC_720p_DECODE_AND_DISPLAY ==
 		p_dec_disp_info->e_disp_status) {
-		if (eos_present == FALSE)
+		if (!eos_present)
 			b_callback_end = (VIDC_720p_DECODE_ONLY
 				== p_dec_disp_info->e_disp_status);
 
@@ -468,7 +464,7 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 
 	if (VIDC_720p_DECODE_AND_DISPLAY == p_dec_disp_info->e_disp_status
 		|| VIDC_720p_DISPLAY_ONLY == p_dec_disp_info->e_disp_status) {
-		if (eos_present == FALSE)
+		if (!eos_present)
 			b_callback_end =
 			(VIDC_720p_DECODE_AND_DISPLAY
 			 == p_dec_disp_info->e_disp_status);
@@ -481,7 +477,7 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_context_type
 		ddl_decode_frame_run(p_ddl);
 		/* client need to ignore the interrupt */
 		status = FALSE;
-	} else if (eos_present == TRUE) {
+	} else if (eos_present) {
 		/* send EOS command to HW */
 		ddl_decode_eos_run(p_ddl);
 		/* client need to ignore the interrupt */
@@ -514,9 +510,9 @@ static u32 ddl_eos_frame_done_callback(struct ddl_context_type *p_ddl_context)
 
 	ddl_decode_dynamic_property(p_ddl, FALSE);
 
-	if (0x1 == p_ddl_context->n_op_failed)
+	if (p_ddl_context->n_op_failed == 0x1)
 		VIDC_LOGERR_STRING("ddl_eos_frm_done:OPFAILED!!");
-	else if (0x0 != p_dec_disp_info->n_resl_change)
+	else if (p_dec_disp_info->n_resl_change)
 		VIDC_LOGERR_STRING("ddl_eos_frm_done:Dec_reconfig!!");
 
 	if (VIDC_720p_DISPLAY_ONLY == p_dec_disp_info->e_disp_status)
@@ -539,7 +535,7 @@ static void ddl_channel_end_callback(struct ddl_context_type *p_ddl_context)
 	VIDC_LOG_STRING("CH_END_DONE");
 
 	p_ddl = p_ddl_context->p_current_ddl;
-	if (NULL == p_ddl ||
+	if (!p_ddl ||
 	    !DDLCLIENT_STATE_IS(p_ddl, DDL_CLIENT_WAIT_FOR_CHEND)
 	    ) {
 		VIDC_LOG_STRING("STATE-CRITICAL-CHEND");
@@ -659,7 +655,7 @@ void ddl_read_and_clear_interrupt(void)
 	struct ddl_context_type *p_ddl_context;
 
 	p_ddl_context = ddl_get_context();
-	if (NULL == p_ddl_context->p_core_virtual_base_addr) {
+	if (!p_ddl_context->p_core_virtual_base_addr) {
 		VIDC_LOGERR_STRING("SPURIOUS_INTERRUPT");
 		return;
 	}
@@ -679,16 +675,16 @@ u32 ddl_process_core_response(void)
 	u32 b_return_status = TRUE;
 
 	p_ddl_context = ddl_get_context();
-	if (p_ddl_context->p_core_virtual_base_addr == NULL) {
+	if (!p_ddl_context->p_core_virtual_base_addr) {
 		VIDC_LOGERR_STRING("UNKWN_INTR");
 		return FALSE;
 	}
-	if (DDL_INVALID_INTR_STATUS == p_ddl_context->intr_status) {
+	if (p_ddl_context->intr_status == DDL_INVALID_INTR_STATUS) {
 		VIDC_LOGERR_STRING("INTERRUPT_NOT_READ");
 		return FALSE;
 	}
 
-	if (FALSE == ddl_handle_core_errors(p_ddl_context)) {
+	if (!ddl_handle_core_errors(p_ddl_context)) {
 		b_return_status = ddl_process_intr_status(p_ddl_context,
 			p_ddl_context->intr_status);
 	}
@@ -710,7 +706,7 @@ static void ddl_decoder_input_done_callback(
 	ddl_get_frame_type(p_input_vcd_frm, p_dec_disp_info->
 		n_input_frame_type);
 
-	p_input_vcd_frm->b_interlaced = (0 != p_dec_disp_info->
+	p_input_vcd_frm->b_interlaced = (p_dec_disp_info->
 		n_input_is_interlace);
 
 	p_input_vcd_frm->n_offset += p_dec_disp_info->n_input_bytes_consumed;
@@ -742,11 +738,11 @@ static void ddl_decoder_ouput_done_callback(
 
 	p_output_vcd_frm->p_physical = (u8 *)p_dec_disp_info->n_y_addr;
 
-	if (VCD_CODEC_MPEG4 == p_decoder->codec_type.e_codec ||
-		VCD_CODEC_VC1 == p_decoder->codec_type.e_codec ||
-		VCD_CODEC_VC1_RCV == p_decoder->codec_type.e_codec){
+	if (p_decoder->codec_type.e_codec == VCD_CODEC_MPEG4 ||
+		p_decoder->codec_type.e_codec == VCD_CODEC_VC1 ||
+		p_decoder->codec_type.e_codec == VCD_CODEC_VC1_RCV){
 		vidc_720p_decode_skip_frm_details(&n_free_luma_dpb);
-		if (0 != n_free_luma_dpb)
+		if (n_free_luma_dpb)
 			p_output_vcd_frm->p_physical = (u8 *) n_free_luma_dpb;
 	}
 
@@ -758,7 +754,7 @@ static void ddl_decoder_ouput_done_callback(
 
 
 	p_output_vcd_frm->n_ip_frm_tag =  p_dec_disp_info->n_tag_top;
-	if (0x1 == p_dec_disp_info->n_crop_exists) {
+	if (p_dec_disp_info->n_crop_exists == 0x1) {
 		p_output_vcd_frm->dec_op_prop.disp_frm.n_left =
 			p_dec_disp_info->n_crop_left_offset;
 		p_output_vcd_frm->dec_op_prop.disp_frm.n_top =
@@ -775,7 +771,7 @@ static void ddl_decoder_ouput_done_callback(
 		p_output_vcd_frm->dec_op_prop.disp_frm.n_bottom =
 			p_dec_disp_info->n_img_size_y;
 	}
-	if (0x0 == p_dec_disp_info->n_disp_is_interlace) {
+	if (!p_dec_disp_info->n_disp_is_interlace) {
 		p_output_vcd_frm->b_interlaced = FALSE;
 		p_output_frame->n_intrlcd_ip_frm_tag = VCD_FRAMETAG_INVALID;
 	} else {
@@ -787,12 +783,12 @@ static void ddl_decoder_ouput_done_callback(
 	p_output_vcd_frm->n_offset = 0;
 	p_output_vcd_frm->n_data_len = p_decoder->n_y_cb_cr_size;
 
-	if (0 != n_free_luma_dpb)
+	if (n_free_luma_dpb)
 		p_output_vcd_frm->n_data_len = 0;
 
 	p_output_vcd_frm->n_flags |= VCD_FRAME_FLAG_ENDOFFRAME;
 
-	if (VCD_S_SUCCESS == vcd_status)
+	if (!vcd_status)
 		ddl_process_decoder_metadata(p_ddl);
 	p_output_frame->b_frm_trans_end = b_frame_transact_end;
 
@@ -966,7 +962,7 @@ static void ddl_get_vc1_dec_level(
 	enum vcd_codec_level_type *p_level, u32 level,
 	enum vcd_codec_profile_type vc1_profile)
 {
-	if (VCD_PROFILE_VC1_ADVANCE == vc1_profile)	{
+	if (vc1_profile == VCD_PROFILE_VC1_ADVANCE)	{
 		switch (level) {
 		case VIDC_720P_VC1_LEVEL0:
 			{

@@ -135,7 +135,7 @@ u32 vcd_get_command_channel(
 	if (b_result) {
 		*pp_transc = vcd_get_free_trans_tbl_entry(p_dev_ctxt);
 
-		if (NULL == *pp_transc) {
+		if (!*pp_transc) {
 			b_result = FALSE;
 
 			vcd_release_command_channel(p_dev_ctxt, *pp_transc);
@@ -167,10 +167,10 @@ u32 vcd_get_command_channel_in_loop(
 		b_result = vcd_get_command_channel(p_dev_ctxt, pp_transc);
 	}
 
-	if (b_result && NULL == *pp_transc) {
+	if (b_result && !*pp_transc) {
 		*pp_transc = vcd_get_free_trans_tbl_entry(p_dev_ctxt);
 
-		if (NULL == *pp_transc) {
+		if (!*pp_transc) {
 			b_result = FALSE;
 
 			++p_dev_ctxt->n_ddl_cmd_ch_interim;
@@ -253,7 +253,7 @@ u32 vcd_get_frame_channel(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	if (b_result) {
 		*pp_transc = vcd_get_free_trans_tbl_entry(p_dev_ctxt);
 
-		if (NULL == *pp_transc) {
+		if (!*pp_transc) {
 			b_result = FALSE;
 
 			vcd_release_frame_channel(p_dev_ctxt, *pp_transc);
@@ -288,10 +288,10 @@ u32 vcd_get_frame_channel_in_loop(
 		b_result = vcd_get_frame_channel(p_dev_ctxt, pp_transc);
 	}
 
-	if (b_result && NULL == *pp_transc) {
+	if (b_result && !*pp_transc) {
 		*pp_transc = vcd_get_free_trans_tbl_entry(p_dev_ctxt);
 
-		if (NULL == *pp_transc) {
+		if (!*pp_transc) {
 			b_result = FALSE;
 			VCD_MSG_FATAL("\n%s: All transactions are busy;"
 				"Couldnt find free one\n", __func__);
@@ -400,10 +400,10 @@ u32 vcd_common_allocate_set_buffer(
 	struct vcd_property_hdr_type Prop_hdr;
 	struct vcd_buffer_pool_type *p_buf_pool;
 
-	if (VCD_BUFFER_INPUT == e_buffer) {
+	if (e_buffer == VCD_BUFFER_INPUT) {
 		Prop_hdr.prop_id = DDL_I_INPUT_BUF_REQ;
 		p_buf_pool = &p_cctxt->in_buf_pool;
-	} else if (VCD_BUFFER_OUTPUT == e_buffer) {
+	} else if (e_buffer == VCD_BUFFER_OUTPUT) {
 		Prop_hdr.prop_id = DDL_I_OUTPUT_BUF_REQ;
 		p_buf_pool = &p_cctxt->out_buf_pool;
 	} else {
@@ -414,14 +414,14 @@ u32 vcd_common_allocate_set_buffer(
 
 	*pp_buf_pool = p_buf_pool;
 
-	if (0 < p_buf_pool->n_count &&
+	if (p_buf_pool->n_count > 0 &&
 		p_buf_pool->n_validated == p_buf_pool->n_count) {
 		VCD_MSG_ERROR("Buffer pool is full");
 
 		return VCD_ERR_FAIL;
 	}
 
-	if (NULL == p_buf_pool->a_entries) {
+	if (!p_buf_pool->a_entries) {
 		Prop_hdr.n_size = sizeof(Buf_req);
 		rc = ddl_get_property(p_cctxt->ddl_handle, &Prop_hdr, &Buf_req);
 
@@ -456,20 +456,20 @@ u32 vcd_set_buffer_internal(
 	struct vcd_buffer_entry_type *p_buf_entry;
 
 	p_buf_entry = vcd_find_buffer_pool_entry(p_buf_pool, p_buffer);
-	if (NULL != p_buf_entry) {
+	if (p_buf_entry) {
 		VCD_MSG_ERROR("This buffer address already exists");
 
 		return VCD_ERR_ILLEGAL_OP;
 	}
 
-	if (0 != ((u32) p_buffer % p_buf_pool->buf_req.n_align)) {
+	if (((u32) p_buffer % p_buf_pool->buf_req.n_align)) {
 		VCD_MSG_ERROR("Provided addr is not aligned");
 
 		return VCD_ERR_BAD_POINTER;
 	}
 
 	p_buf_entry = vcd_get_free_buffer_pool_entry(p_buf_pool);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Can't allocate buffer pool is full");
 
 		return VCD_ERR_FAIL;
@@ -481,14 +481,14 @@ u32 vcd_set_buffer_internal(
 		(u8 *) vcd_pmem_get_physical(p_cctxt->p_client_data,
 					 (unsigned long)p_buffer);
 
-	if (NULL == p_buf_entry->p_physical) {
+	if (!p_buf_entry->p_physical) {
 		VCD_MSG_ERROR("Couldn't get physical address");
 
 		return VCD_ERR_BAD_POINTER;
 	}
 
 	if (((u32)p_buf_entry->p_physical %
-		p_buf_pool->buf_req.n_align) != 0) {
+		p_buf_pool->buf_req.n_align)) {
 		VCD_MSG_ERROR("Physical addr is not aligned");
 		return VCD_ERR_BAD_POINTER ;
 	}
@@ -517,7 +517,7 @@ u32 vcd_allocate_buffer_internal(
 	int rc = 0;
 
 	p_buf_entry = vcd_get_free_buffer_pool_entry(p_buf_pool);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Can't allocate buffer pool is full");
 
 		return VCD_ERR_FAIL;
@@ -539,7 +539,7 @@ u32 vcd_allocate_buffer_internal(
 	p_buf_entry->n_size = n_buf_size;
 	p_buf_entry->frame.n_alloc_len = n_buf_size;
 
-	if (NULL == p_buf_entry->p_physical) {
+	if (!p_buf_entry->p_physical) {
 		VCD_MSG_ERROR("Couldn't get physical address");
 
 		return VCD_ERR_BAD_POINTER;
@@ -583,9 +583,9 @@ u32 vcd_free_one_buffer_internal(
 	u32 rc = VCD_S_SUCCESS;
 	struct vcd_buffer_entry_type *p_buf_entry;
 
-	if (VCD_BUFFER_INPUT == e_buffer)
+	if (e_buffer == VCD_BUFFER_INPUT)
 		p_buf_pool = &p_cctxt->in_buf_pool;
-	else if (VCD_BUFFER_OUTPUT == e_buffer)
+	else if (e_buffer == VCD_BUFFER_OUTPUT)
 		p_buf_pool = &p_cctxt->out_buf_pool;
 	else
 		rc = VCD_ERR_ILLEGAL_PARM;
@@ -593,7 +593,7 @@ u32 vcd_free_one_buffer_internal(
 	VCD_FAILED_RETURN(rc, "Invalid buffer type provided");
 
 	p_buf_entry = vcd_find_buffer_pool_entry(p_buf_pool, p_buffer);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Buffer addr %p not found. Can't free buffer",
 				  p_buffer);
 
@@ -630,7 +630,7 @@ u32 vcd_free_buffers_internal(
 
 	VCD_MSG_LOW("vcd_free_buffers_internal:");
 
-	if (NULL != p_buf_pool->a_entries) {
+	if (p_buf_pool->a_entries) {
 		for (i = 1; i <= p_buf_pool->n_count; i++) {
 			if (p_buf_pool->a_entries[i].b_valid &&
 				p_buf_pool->a_entries[i].b_allocated) {
@@ -661,7 +661,7 @@ u32 vcd_alloc_buffer_pool_entries(
 		vcd_malloc(sizeof(struct vcd_buffer_entry_type) *
 			   (p_buf_pool->n_count + 1));
 
-	if (NULL == p_buf_pool->a_entries) {
+	if (!p_buf_pool->a_entries) {
 		VCD_MSG_ERROR("Buf_pool entries alloc failed");
 
 		return VCD_ERR_ALLOC_FAIL;
@@ -671,7 +671,7 @@ u32 vcd_alloc_buffer_pool_entries(
 		vcd_malloc(sizeof(struct vcd_buffer_entry_type *) *
 			   p_buf_pool->n_count);
 
-	if (NULL == p_buf_pool->a_queue) {
+	if (!p_buf_pool->a_queue) {
 		VCD_MSG_ERROR("Buf_pool queue alloc failed");
 
 		vcd_free(p_buf_pool->a_entries);
@@ -704,7 +704,7 @@ void vcd_free_buffer_pool_entries(struct vcd_buffer_pool_type *p_buf_pool)
 {
 	VCD_MSG_LOW("vcd_free_buffer_pool_entries:");
 
-	if (NULL != p_buf_pool->a_entries) {
+	if (p_buf_pool->a_entries) {
 		vcd_free(p_buf_pool->a_entries);
 		vcd_free(p_buf_pool->a_queue);
 	}
@@ -718,9 +718,9 @@ void vcd_flush_in_use_buffer_pool_entries(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	u32 i;
 	VCD_MSG_LOW("vcd_flush_buffer_pool_entries: event=0x%x", event);
 
-	if (NULL != p_buf_pool->a_entries) {
+	if (p_buf_pool->a_entries) {
 		for (i = 0; i <= p_buf_pool->n_count; i++) {
-			if (NULL != p_buf_pool->a_entries[i].p_virtual &&
+			if (p_buf_pool->a_entries[i].p_virtual &&
 				p_buf_pool->a_entries[i].b_in_use) {
 				p_cctxt->callback(event, VCD_S_SUCCESS,
 					&p_buf_pool->a_entries[i].frame,
@@ -812,9 +812,9 @@ u32 vcd_buffer_pool_entry_en_q(
 	}
 
 	if (b_found) {
-		VCD_MSG_ERROR("\n this output buffer is already present"
+		VCD_MSG_HIGH("\n this output buffer is already present"
 			" in queue");
-		VCD_MSG_ERROR("\n Vir Addr %p Phys Addr %p",
+		VCD_MSG_HIGH("\n Vir Addr %p Phys Addr %p",
 			p_entry->p_virtual, p_entry->p_physical);
 		return FALSE;
 	}
@@ -830,7 +830,7 @@ struct vcd_buffer_entry_type *vcd_buffer_pool_entry_de_q
 	(struct vcd_buffer_pool_type *p_pool) {
 	struct vcd_buffer_entry_type *p_entry;
 
-	if (!p_pool || 0 == p_pool->n_q_len)
+	if (!p_pool || !p_pool->n_q_len)
 		return NULL;
 
 	p_entry = p_pool->a_queue[p_pool->n_q_head];
@@ -852,7 +852,7 @@ void vcd_flush_output_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt)
 	p_buf_pool = &p_cctxt->out_buf_pool;
 
 	p_buf_entry = vcd_buffer_pool_entry_de_q(p_buf_pool);
-	while (NULL != p_buf_entry) {
+	while (p_buf_entry) {
 		if (!p_cctxt->b_decoding || p_buf_entry->b_in_use) {
 			p_buf_entry->frame.n_data_len = 0;
 
@@ -900,7 +900,7 @@ u32 vcd_flush_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt, u32 n_mode)
 
 	VCD_MSG_LOW("vcd_flush_buffers:");
 
-	if (VCD_FLUSH_ALL < n_mode || !(n_mode & VCD_FLUSH_ALL)) {
+	if (n_mode > VCD_FLUSH_ALL || !(n_mode & VCD_FLUSH_ALL)) {
 		VCD_MSG_ERROR("Invalid flush mode %d", n_mode);
 
 		return VCD_ERR_ILLEGAL_PARM;
@@ -915,8 +915,8 @@ u32 vcd_flush_buffers(struct vcd_clnt_ctxt_type_t *p_cctxt, u32 n_mode)
 					   (void **)&p_buf_entry));
 
 		while (!VCD_FAILED(rc) &&
-			   VCD_S_SCHED_QEMPTY != rc && NULL != p_buf_entry) {
-			if (NULL != p_buf_entry->p_virtual) {
+			   rc != VCD_S_SCHED_QEMPTY && p_buf_entry) {
+			if (p_buf_entry->p_virtual) {
 				p_cctxt->callback(VCD_EVT_RESP_INPUT_FLUSHED,
 						  VCD_S_SUCCESS,
 						  &p_buf_entry->frame,
@@ -1008,13 +1008,13 @@ void vcd_destroy_client_context(struct vcd_clnt_ctxt_type_t *p_cctxt)
 		p_dev_ctxt->p_cctxt_list_head = p_cctxt->p_next;
 	} else {
 		p_client = p_dev_ctxt->p_cctxt_list_head;
-		while (NULL != p_client && p_cctxt != p_client->p_next)
+		while (p_client && p_cctxt != p_client->p_next)
 			p_client = p_client->p_next;
 
-		if (NULL != p_client)
+		if (p_client)
 			p_client->p_next = p_cctxt->p_next;
 
-		if (NULL == p_client) {
+		if (!p_client) {
 			rc = VCD_ERR_FAIL;
 
 			VCD_MSG_ERROR("Client not found in client list");
@@ -1026,7 +1026,7 @@ void vcd_destroy_client_context(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 	if (p_cctxt->b_sched_clnt_valid) {
 		rc = VCD_S_SUCCESS;
-		while (!VCD_FAILED(rc) && VCD_S_SCHED_QEMPTY != rc) {
+		while (!VCD_FAILED(rc) && rc != VCD_S_SCHED_QEMPTY) {
 
 			rc = vcd_map_sched_status(sched_flush_client_buffer
 						  (p_dev_ctxt->sched_hdl,
@@ -1046,7 +1046,7 @@ void vcd_destroy_client_context(struct vcd_clnt_ctxt_type_t *p_cctxt)
 		p_cctxt->b_sched_clnt_valid = FALSE;
 	}
 
-	if (NULL != p_cctxt->seq_hdr.p_sequence_header) {
+	if (p_cctxt->seq_hdr.p_sequence_header) {
 		vcd_pmem_free(p_cctxt->seq_hdr.p_sequence_header,
 				  p_cctxt->p_seq_hdr_phy_addr);
 		p_cctxt->seq_hdr.p_sequence_header = NULL;
@@ -1070,10 +1070,10 @@ u32 vcd_check_for_client_context(
 	struct vcd_clnt_ctxt_type_t *p_client;
 
 	p_client = p_dev_ctxt->p_cctxt_list_head;
-	while (p_client != NULL && p_client->driver_id != driver_id)
+	while (p_client && p_client->driver_id != driver_id)
 		p_client = p_client->p_next;
 
-	if (NULL == p_client)
+	if (!p_client)
 		return FALSE;
 	else
 		return TRUE;
@@ -1086,7 +1086,7 @@ u32 vcd_validate_driver_handle(
 
 	if (driver_handle < 0 ||
 		driver_handle >= VCD_DRIVER_INSTANCE_MAX ||
-		FALSE == p_dev_ctxt->b_driver_ids[driver_handle]) {
+		!p_dev_ctxt->b_driver_ids[driver_handle]) {
 		return FALSE;
 	} else {
 		return TRUE;
@@ -1098,7 +1098,7 @@ u32 vcd_client_cmd_en_q(
 {
 	u32 b_result;
 
-	if (VCD_CMD_NONE == p_cctxt->cmd_q.e_pending_cmd) {
+	if (p_cctxt->cmd_q.e_pending_cmd == VCD_CMD_NONE) {
 		p_cctxt->cmd_q.e_pending_cmd = command;
 		b_result = TRUE;
 	} else {
@@ -1117,7 +1117,7 @@ void vcd_client_cmd_flush_and_en_q(
 u32 vcd_client_cmd_de_q(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	enum vcd_command_type *p_command)
 {
-	if (VCD_CMD_NONE == p_cctxt->cmd_q.e_pending_cmd)
+	if (p_cctxt->cmd_q.e_pending_cmd == VCD_CMD_NONE)
 		return FALSE;
 
 	*p_command = p_cctxt->cmd_q.e_pending_cmd;
@@ -1132,7 +1132,7 @@ u32 vcd_get_next_queued_client_cmd(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	struct vcd_clnt_ctxt_type_t *p_client = p_dev_ctxt->p_cctxt_list_head;
 	u32 b_result = FALSE;
 
-	while (NULL != p_client && FALSE == b_result) {
+	while (p_client && !b_result) {
 		*p_cctxt = p_client;
 		b_result = vcd_client_cmd_de_q(p_client, p_command);
 		p_client = p_client->p_next;
@@ -1179,7 +1179,7 @@ u32 vcd_submit_cmd_sess_start(struct vcd_transc_type *p_transc)
 
 	if (p_transc->p_cctxt->b_decoding) {
 
-		if (NULL != p_transc->p_cctxt->seq_hdr.p_sequence_header) {
+		if (p_transc->p_cctxt->seq_hdr.p_sequence_header) {
 			Seq_hdr.n_sequence_header_len =
 				p_transc->p_cctxt->seq_hdr.
 				n_sequence_header_len;
@@ -1249,7 +1249,7 @@ u32 vcd_submit_command_in_continue(struct vcd_dev_ctxt_type
 		b_result = vcd_get_next_queued_client_cmd(p_dev_ctxt,
 			&p_client, &cmd);
 
-		if (FALSE == b_result)
+		if (!b_result)
 			b_break = TRUE;
 		else {
 			p_transc->e_type = cmd;
@@ -1323,7 +1323,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	struct ddl_frame_data_type_tag ddl_op_frm;
 
 	VCD_MSG_LOW("vcd_submit_frame:");
-	if (NULL == p_dev_ctxt->p_cctxt_list_head) {
+	if (!p_dev_ctxt->p_cctxt_list_head) {
 		VCD_MSG_HIGH("Client list empty");
 		return FALSE;
 	}
@@ -1335,17 +1335,17 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 		return FALSE;
 	}
 
-	if (VCD_S_SCHED_QEMPTY == rc) {
+	if (rc == VCD_S_SCHED_QEMPTY) {
 		VCD_MSG_HIGH("No frame available. Sched queues are empty");
 		return FALSE;
 	}
-	if (NULL == p_cctxt || NULL == p_ip_buf_entry) {
+	if (!p_cctxt || !p_ip_buf_entry) {
 		VCD_MSG_FATAL("Sched returned invalid values."
 			"ctxt=%p, ipbuf=%p", p_cctxt, p_ip_buf_entry);
 		return FALSE;
 	}
 	p_ip_frm_entry = &p_ip_buf_entry->frame;
-	if (VCD_S_SCHED_EOS == rc)
+	if (rc == VCD_S_SCHED_EOS)
 		p_ip_frm_entry->n_flags |= VCD_FRAME_FLAG_EOS;
 
 	p_transc->p_cctxt = p_cctxt;
@@ -1364,7 +1364,7 @@ u32 vcd_submit_frame(struct vcd_dev_ctxt_type *p_dev_ctxt,
 	} else {
 		p_op_buf_entry = vcd_buffer_pool_entry_de_q(
 			&p_cctxt->out_buf_pool);
-		if (NULL == p_op_buf_entry) {
+		if (!p_op_buf_entry) {
 			VCD_MSG_ERROR("Sched provided frame when no"
 				"op buffer was present");
 			rc = VCD_ERR_FAIL;
@@ -1450,7 +1450,7 @@ void vcd_send_frame_done_in_eos(struct vcd_clnt_ctxt_type_t *p_cctxt,
 {
 	VCD_MSG_LOW("vcd_send_frame_done_in_eos:");
 
-	if (NULL == p_input_frame->p_virtual && valid_opbuf == FALSE) {
+	if (!p_input_frame->p_virtual && !valid_opbuf) {
 		VCD_MSG_MED("Sending NULL output with EOS");
 
 		p_cctxt->out_buf_pool.a_entries[0].frame.n_flags =
@@ -1469,7 +1469,7 @@ void vcd_send_frame_done_in_eos(struct vcd_clnt_ctxt_type_t *p_cctxt,
 
 		memset(&p_cctxt->out_buf_pool.a_entries[0].frame,
 			   0, sizeof(struct vcd_frame_data_type));
-	} else if (0 == p_input_frame->n_data_len) {
+	} else if (!p_input_frame->n_data_len) {
 		if (p_cctxt->b_decoding) {
 			vcd_send_frame_done_in_eos_for_dec(p_cctxt,
 							   p_input_frame);
@@ -1495,7 +1495,7 @@ void vcd_send_frame_done_in_eos_for_dec(
 	memset(&ddl_frm, 0, sizeof(ddl_frm));
 	rc = ddl_get_property(p_cctxt->ddl_handle, &prop_hdr, &ddl_frm);
 
-	if (VCD_FAILED(rc) || NULL == ddl_frm.vcd_frm.p_virtual) {
+	if (VCD_FAILED(rc) || !ddl_frm.vcd_frm.p_virtual) {
 		p_cctxt->status.eos_trig_ip_frm = *p_input_frame;
 
 		p_cctxt->status.b_eos_wait_for_op_buf = TRUE;
@@ -1505,7 +1505,7 @@ void vcd_send_frame_done_in_eos_for_dec(
 
 	p_buf_entry = vcd_find_buffer_pool_entry(&p_cctxt->out_buf_pool,
 		ddl_frm.vcd_frm.p_virtual);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Unrecognized buffer address provided = %p",
 				  ddl_frm.vcd_frm.p_virtual);
 
@@ -1542,7 +1542,7 @@ void vcd_send_frame_done_in_eos_for_enc(
 {
 	struct vcd_buffer_entry_type *p_op_buf_entry;
 
-	if (0 == p_cctxt->out_buf_pool.n_q_len) {
+	if (!p_cctxt->out_buf_pool.n_q_len) {
 		p_cctxt->status.eos_trig_ip_frm = *p_input_frame;
 
 		p_cctxt->status.b_eos_wait_for_op_buf = TRUE;
@@ -1551,7 +1551,7 @@ void vcd_send_frame_done_in_eos_for_enc(
 	}
 
 	p_op_buf_entry = vcd_buffer_pool_entry_de_q(&p_cctxt->out_buf_pool);
-	if (NULL == p_op_buf_entry) {
+	if (!p_op_buf_entry) {
 		vcd_assert();
 	} else {
 		(void)
@@ -1587,8 +1587,8 @@ u32 vcd_handle_recvd_eos(
 
 	*pb_eos_handled = FALSE;
 
-	if (NULL != p_input_frame->p_virtual &&
-			0 != p_input_frame->n_data_len)
+	if (p_input_frame->p_virtual &&
+			p_input_frame->n_data_len)
 		return VCD_S_SUCCESS;
 
 	p_input_frame->n_data_len = 0;
@@ -1612,7 +1612,7 @@ u32 vcd_handle_recvd_eos(
 				"sched_mark_client_eof", rc);
 		}
 
-	} else if (p_cctxt->b_decoding && NULL == p_input_frame->p_virtual) {
+	} else if (p_cctxt->b_decoding && !p_input_frame->p_virtual) {
 		rc = vcd_map_sched_status(sched_update_client_o_tkn
 					  (p_cctxt->p_dev_ctxt->sched_hdl,
 					   p_cctxt->sched_clnt_hdl, TRUE,
@@ -1632,9 +1632,9 @@ u32 vcd_handle_recvd_eos(
 
 	}
 
-	if (TRUE == *pb_eos_handled &&
-		NULL != p_input_frame->p_virtual &&
-		0 == p_input_frame->n_data_len) {
+	if (*pb_eos_handled &&
+		p_input_frame->p_virtual &&
+		!p_input_frame->n_data_len) {
 		p_cctxt->callback(VCD_EVT_RESP_INPUT_DONE,
 				  VCD_S_SUCCESS,
 				  p_input_frame,
@@ -1657,8 +1657,8 @@ u32 vcd_handle_first_decode_frame(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 	VCD_MSG_LOW("vcd_handle_first_decode_frame:");
 
-	if (NULL == p_cctxt->in_buf_pool.a_entries ||
-		NULL == p_cctxt->out_buf_pool.a_entries ||
+	if (!p_cctxt->in_buf_pool.a_entries ||
+		!p_cctxt->out_buf_pool.a_entries ||
 		p_cctxt->in_buf_pool.n_validated !=
 		p_cctxt->in_buf_pool.n_count ||
 		p_cctxt->out_buf_pool.n_validated !=
@@ -1681,7 +1681,7 @@ u32 vcd_handle_first_decode_frame(struct vcd_clnt_ctxt_type_t *p_cctxt)
 		(struct ddl_frame_data_type_tag *)
 		vcd_malloc(sizeof(struct ddl_frame_data_type_tag) *
 						   p_out_buf_pool->n_count);
-	if (NULL == p_frm_entry) {
+	if (!p_frm_entry) {
 		VCD_MSG_ERROR("Memory allocation failure");
 
 		return VCD_ERR_ALLOC_FAIL;
@@ -1748,7 +1748,7 @@ u32 vcd_setup_with_ddl_capabilities(struct vcd_dev_ctxt_type *p_dev_ctxt)
 
 	VCD_MSG_LOW("vcd_setup_with_ddl_capabilities:");
 
-	if (0 == p_dev_ctxt->n_ddl_cmd_ch_depth) {
+	if (!p_dev_ctxt->n_ddl_cmd_ch_depth) {
 		Prop_hdr.prop_id = DDL_I_CAPABILITY;
 		Prop_hdr.n_size = sizeof(capability);
 
@@ -1771,7 +1771,7 @@ u32 vcd_setup_with_ddl_capabilities(struct vcd_dev_ctxt_type *p_dev_ctxt)
 				vcd_malloc(sizeof(struct vcd_transc_type) *
 				p_dev_ctxt->n_trans_tbl_size);
 
-			if (NULL == p_dev_ctxt->a_trans_tbl) {
+			if (!p_dev_ctxt->a_trans_tbl) {
 				VCD_MSG_ERROR("Transaction table alloc failed");
 
 				rc = VCD_ERR_ALLOC_FAIL;
@@ -1805,12 +1805,12 @@ struct vcd_transc_type *vcd_get_free_trans_tbl_entry
 	(struct vcd_dev_ctxt_type *p_dev_ctxt) {
 	u8 i;
 
-	if (NULL == p_dev_ctxt->a_trans_tbl)
+	if (!p_dev_ctxt->a_trans_tbl)
 		return NULL;
 
 	i = 0;
 	while (i < p_dev_ctxt->n_trans_tbl_size &&
-		   TRUE == p_dev_ctxt->a_trans_tbl[i].b_in_use)
+		   p_dev_ctxt->a_trans_tbl[i].b_in_use)
 		i++;
 
 	if (i == p_dev_ctxt->n_trans_tbl_size) {
@@ -1827,7 +1827,7 @@ struct vcd_transc_type *vcd_get_free_trans_tbl_entry
 
 void vcd_release_trans_tbl_entry(struct vcd_transc_type *p_trans_entry)
 {
-	if (NULL != p_trans_entry)
+	if (p_trans_entry)
 		p_trans_entry->b_in_use = FALSE;
 }
 
@@ -1867,7 +1867,7 @@ u32 vcd_add_client_to_sched(struct vcd_clnt_ctxt_type_t *p_cctxt)
 		rc = ddl_get_property(p_cctxt->ddl_handle, &prop_hdr,
 							   &seqhdr_present);
 		if (!VCD_FAILED(rc)) {
-			if (0x1 == seqhdr_present) {
+			if (seqhdr_present == 0x1) {
 				VCD_MSG_MED("Sequence hdr present");
 				sched_input_init.n_o_tkn_per_ip_frm++;
 			}
@@ -1926,8 +1926,8 @@ u32 vcd_handle_input_done(
 		(struct ddl_frame_data_type_tag *) p_payload;
 	u32 rc;
 
-	if (0 == p_cctxt->status.n_frame_submitted &&
-		0 == p_cctxt->status.n_frame_delayed) {
+	if (!p_cctxt->status.n_frame_submitted &&
+		!p_cctxt->status.n_frame_delayed) {
 		VCD_MSG_ERROR("Input done was not expected");
 
 		vcd_assert();
@@ -2014,7 +2014,7 @@ u32 vcd_validate_io_done_pyld(void *p_payload, u32 status)
 	struct ddl_frame_data_type_tag *p_frame =
 		(struct ddl_frame_data_type_tag *) p_payload;
 
-	if (NULL == p_frame) {
+	if (!p_frame) {
 		VCD_MSG_ERROR("Bad payload from DDL");
 
 		vcd_assert();
@@ -2022,15 +2022,15 @@ u32 vcd_validate_io_done_pyld(void *p_payload, u32 status)
 		return VCD_ERR_BAD_POINTER;
 	}
 
-	if (0 == p_frame->vcd_frm.n_ip_frm_tag ||
-		VCD_FRAMETAG_INVALID == p_frame->vcd_frm.n_ip_frm_tag) {
+	if (!p_frame->vcd_frm.n_ip_frm_tag ||
+		p_frame->vcd_frm.n_ip_frm_tag == VCD_FRAMETAG_INVALID) {
 		VCD_MSG_ERROR("bad input frame tag");
 		vcd_assert();
 		return VCD_ERR_BAD_POINTER;
 	}
 
-	if (NULL == p_frame->vcd_frm.p_virtual &&
-		VCD_ERR_INTRLCD_FIELD_DROP != status)
+	if (!p_frame->vcd_frm.p_virtual &&
+		status != VCD_ERR_INTRLCD_FIELD_DROP)
 		return VCD_ERR_BAD_POINTER;
 
 	return VCD_S_SUCCESS;
@@ -2055,7 +2055,7 @@ void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 	p_cctxt->status.n_int_field_cnt++;
 
-	if (1 == p_cctxt->status.n_int_field_cnt) {
+	if (p_cctxt->status.n_int_field_cnt == 1) {
 		rc = vcd_map_sched_status(sched_update_client_o_tkn
 					  (p_cctxt->p_dev_ctxt->sched_hdl,
 					   p_cctxt->sched_clnt_hdl, TRUE,
@@ -2063,8 +2063,8 @@ void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt_type_t *p_cctxt)
 
 		if (VCD_FAILED(rc))
 			VCD_MSG_ERROR("sched_update_client_o_tkn failed");
-	} else if (VCD_DEC_NUM_INTERLACED_FIELDS
-			   == p_cctxt->status.n_int_field_cnt)
+	} else if (p_cctxt->status.n_int_field_cnt ==
+		VCD_DEC_NUM_INTERLACED_FIELDS)
 		p_cctxt->status.n_int_field_cnt = 0;
 }
 
@@ -2088,7 +2088,7 @@ void vcd_handle_input_done_with_trans_end(
 		return;
 	}
 
-	if (sched_val.un_value == 0) {
+	if (!sched_val.un_value) {
 		VCD_MSG_MED("All output buffers with core are pending display");
 
 		rc = vcd_map_sched_status(sched_update_client_o_tkn(
@@ -2110,8 +2110,8 @@ u32 vcd_handle_output_required(struct vcd_clnt_ctxt_type_t
 		(struct ddl_frame_data_type_tag *)p_payload;
 	u32 rc;
 
-	if (0 == p_cctxt->status.n_frame_submitted &&
-		0 == p_cctxt->status.n_frame_delayed) {
+	if (!p_cctxt->status.n_frame_submitted &&
+		!p_cctxt->status.n_frame_delayed) {
 		VCD_MSG_ERROR("\n Input done was not expected");
 		return VCD_ERR_BAD_STATE;
 	}
@@ -2210,9 +2210,9 @@ u32 vcd_handle_frame_done(
 
 	p_transc = (struct vcd_transc_type *)p_op_frm->vcd_frm.n_ip_frm_tag;
 
-	if (NULL != p_op_frm->vcd_frm.p_virtual) {
+	if (p_op_frm->vcd_frm.p_virtual) {
 
-		if (NULL == p_transc->p_op_buf_entry) {
+		if (!p_transc->p_op_buf_entry) {
 			p_op_buf_entry =
 				vcd_find_buffer_pool_entry(
 					&p_cctxt->out_buf_pool,
@@ -2222,7 +2222,7 @@ u32 vcd_handle_frame_done(
 			p_op_buf_entry = p_transc->p_op_buf_entry;
 		}
 
-		if (NULL == p_op_buf_entry) {
+		if (!p_op_buf_entry) {
 			vcd_assert();
 			VCD_MSG_ERROR("Invalid output buffer returned"
 				"from DDL");
@@ -2250,14 +2250,14 @@ u32 vcd_handle_frame_done(
 	if (p_transc->b_input_done && p_transc->b_frame_done)
 		p_transc->b_in_use = FALSE;
 
-	if (VCD_ERR_INTRLCD_FIELD_DROP == status ||
-		(VCD_FRAMETAG_INVALID != p_op_frm->n_intrlcd_ip_frm_tag &&
-		 0 != p_op_frm->n_intrlcd_ip_frm_tag)) {
+	if (status == VCD_ERR_INTRLCD_FIELD_DROP ||
+		(p_op_frm->n_intrlcd_ip_frm_tag != VCD_FRAMETAG_INVALID &&
+		 p_op_frm->n_intrlcd_ip_frm_tag)) {
 		vcd_handle_frame_done_for_interlacing(p_cctxt, p_transc,
 							  p_op_frm, status);
 	}
 
-	if (VCD_ERR_INTRLCD_FIELD_DROP != status) {
+	if (status != VCD_ERR_INTRLCD_FIELD_DROP) {
 		p_cctxt->callback(event,
 				  status,
 				  &p_op_frm->vcd_frm,
@@ -2298,7 +2298,7 @@ void vcd_handle_frame_done_for_interlacing(
 	struct vcd_transc_type *p_transc_ip2 =
 		(struct vcd_transc_type *)p_op_frm->n_intrlcd_ip_frm_tag;
 
-	if (VCD_ERR_INTRLCD_FIELD_DROP == status) {
+	if (status == VCD_ERR_INTRLCD_FIELD_DROP) {
 		p_cctxt->status.n_int_field_cnt = 0;
 		return;
 	}
@@ -2310,8 +2310,8 @@ void vcd_handle_frame_done_for_interlacing(
 	if (p_transc_ip2->b_input_done && p_transc_ip2->b_frame_done)
 		p_transc_ip2->b_in_use = FALSE;
 
-	if (0 == p_transc_ip1->e_frame_type ||
-			0 == p_transc_ip2->e_frame_type) {
+	if (!p_transc_ip1->e_frame_type ||
+			!p_transc_ip2->e_frame_type) {
 		VCD_MSG_ERROR("DDL didn't provided frame type");
 
 		return;
@@ -2353,12 +2353,12 @@ u32 vcd_handle_first_encode_frame_done(
 	rc = ddl_get_property(p_cctxt->ddl_handle, &prop_hdr,
 		&seqhdr_present);
 	VCD_FAILED_RETURN(rc, "Failed: DDL_I_SEQHDR_PRESENT");
-	if (0 == seqhdr_present)
+	if (!seqhdr_present)
 		return VCD_S_SUCCESS;
 
 	p_buf_entry = vcd_buffer_pool_entry_de_q(&p_cctxt->out_buf_pool);
 
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Sched provided frame when 2nd op buffer "
 			"was unavailable");
 
@@ -2453,7 +2453,7 @@ void vcd_handle_eos_trans_end(struct vcd_clnt_ctxt_type_t *p_cctxt)
 		p_cctxt->status.b_eos_prev_valid = FALSE;
 	}
 
-	if (0 != p_cctxt->status.n_flush_mode)
+	if (p_cctxt->status.n_flush_mode)
 		vcd_process_pending_flush_in_eos(p_cctxt);
 
 	if (p_cctxt->status.b_stop_pending)
@@ -2486,7 +2486,7 @@ void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 
 		p_cctxt->status.b_eos_prev_valid = FALSE;
 	} else {
-		if (NULL != p_transc->p_ip_buf_entry) {
+		if (p_transc->p_ip_buf_entry) {
 			p_transc->p_ip_buf_entry->frame.n_ip_frm_tag =
 				p_transc->n_ip_frm_tag;
 
@@ -2500,8 +2500,8 @@ void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 			vcd_send_frame_done_in_eos(p_cctxt, &vcd_frm, TRUE);
 		}
 	}
-	if (NULL != p_transc->p_ip_buf_entry) {
-		if (NULL != p_transc->p_ip_buf_entry->frame.p_virtual) {
+	if (p_transc->p_ip_buf_entry) {
+		if (p_transc->p_ip_buf_entry->frame.p_virtual) {
 			p_transc->p_ip_buf_entry->frame.n_ip_frm_tag =
 				p_transc->n_ip_frm_tag;
 
@@ -2519,7 +2519,7 @@ void vcd_handle_eos_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 
 	p_transc->b_in_use = FALSE;
 	vcd_mark_frame_channel(p_cctxt->p_dev_ctxt);
-	if (0 != p_cctxt->status.n_flush_mode)
+	if (p_cctxt->status.n_flush_mode)
 		vcd_process_pending_flush_in_eos(p_cctxt);
 
 	if (p_cctxt->status.b_stop_pending) {
@@ -2577,7 +2577,7 @@ void vcd_handle_stop_done(struct vcd_clnt_ctxt_type_t *p_cctxt,
 				&prop_hdr, &seq_hdrpresent);
 
 		if (!VCD_FAILED(rc)) {
-			if (0x1 == seq_hdrpresent) {
+			if (seq_hdrpresent == 0x1) {
 				sched_val.un_value =
 					VCD_SCHEDULER_ENC_DFLT_OTKN_PERFRM
 					+ 1;
@@ -2656,14 +2656,14 @@ void vcd_handle_stop_done_in_invalid(struct vcd_clnt_ctxt_type_t
 	VCD_MSG_LOW("vcd_handle_stop_done_in_invalid:");
 	if (!VCD_FAILED(status)) {
 		vcd_client_cmd_flush_and_en_q(p_cctxt, VCD_CMD_CLIENT_CLOSE);
-		if (0 != p_cctxt->status.n_frame_submitted) {
+		if (p_cctxt->status.n_frame_submitted) {
 			vcd_release_multiple_frame_channels(p_cctxt->p_dev_ctxt,
 			p_cctxt->status.n_frame_submitted);
 
 			p_cctxt->status.n_frame_submitted = 0;
 			p_cctxt->status.n_frame_delayed = 0;
 		}
-		if (0 != p_cctxt->status.n_cmd_submitted) {
+		if (p_cctxt->status.n_cmd_submitted) {
 			vcd_release_multiple_command_channels(
 				p_cctxt->p_dev_ctxt,
 				p_cctxt->status.n_cmd_submitted);
@@ -2708,7 +2708,7 @@ u32 vcd_handle_input_frame(
 			p_input_frame->p_virtual, p_input_frame->n_alloc_len,
 			p_input_frame->n_data_len);
 
-	if ((NULL == p_input_frame->p_virtual || 0 == p_input_frame->n_data_len)
+	if ((!p_input_frame->p_virtual || !p_input_frame->n_data_len)
 		&& !(p_input_frame->n_flags & VCD_FRAME_FLAG_EOS)) {
 		VCD_MSG_ERROR("Bad frame ptr/len/EOS combination");
 
@@ -2734,7 +2734,7 @@ u32 vcd_handle_input_frame(
 
 	p_buf_entry = vcd_find_buffer_pool_entry(&p_cctxt->in_buf_pool,
 						 p_input_frame->p_virtual);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Bad buffer addr: %p", p_input_frame->p_virtual);
 		return VCD_ERR_FAIL;
 	}
@@ -2786,7 +2786,7 @@ u32 vcd_handle_input_frame(
 	VCD_FAILED_RETURN(rc, "Failed: sched_mark_client_eof");
 
 	if (vcd_get_frame_channel(p_dev_ctxt, &p_transc)) {
-		if (vcd_submit_frame(p_dev_ctxt, p_transc) == FALSE)
+		if (!vcd_submit_frame(p_dev_ctxt, p_transc))
 			vcd_release_frame_channel(p_dev_ctxt, p_transc);
 	}
 
@@ -2803,8 +2803,8 @@ void vcd_release_all_clnt_frm_transc(struct vcd_clnt_ctxt_type_t *p_cctxt)
 	for (i = 0; i < p_dev_ctxt->n_trans_tbl_size; i++) {
 		if (p_dev_ctxt->a_trans_tbl[i].b_in_use &&
 			p_cctxt == p_dev_ctxt->a_trans_tbl[i].p_cctxt &&
-			VCD_CMD_CODE_FRAME == p_dev_ctxt->a_trans_tbl[i].
-			e_type) {
+			p_dev_ctxt->a_trans_tbl[i].
+			e_type == VCD_CMD_CODE_FRAME) {
 			vcd_release_trans_tbl_entry(&p_dev_ctxt->
 							a_trans_tbl[i]);
 		}
@@ -2857,14 +2857,14 @@ u32 vcd_store_seq_hdr(
 	u32 n_addr;
 	int ret = 0;
 
-	if (0 == p_seq_hdr->n_sequence_header_len
-		|| NULL == p_seq_hdr->p_sequence_header) {
+	if (!p_seq_hdr->n_sequence_header_len
+		|| !p_seq_hdr->p_sequence_header) {
 		VCD_MSG_ERROR("Bad seq hdr");
 
 		return VCD_ERR_BAD_POINTER;
 	}
 
-	if (NULL != p_cctxt->seq_hdr.p_sequence_header) {
+	if (p_cctxt->seq_hdr.p_sequence_header) {
 		VCD_MSG_HIGH("Old seq hdr detected");
 
 		vcd_pmem_free(p_cctxt->seq_hdr.p_sequence_header,
@@ -2896,7 +2896,7 @@ u32 vcd_store_seq_hdr(
 		return VCD_ERR_ALLOC_FAIL;
 	}
 
-	if (NULL == p_cctxt->p_seq_hdr_phy_addr) {
+	if (!p_cctxt->p_seq_hdr_phy_addr) {
 		VCD_MSG_ERROR("Couldn't get physical address");
 
 		return VCD_ERR_BAD_POINTER;
@@ -3088,20 +3088,20 @@ struct vcd_buffer_entry_type *vcd_check_fill_output_buffer
 	struct vcd_buffer_pool_type *p_buf_pool = &p_cctxt->out_buf_pool;
 	struct vcd_buffer_entry_type *p_buf_entry;
 
-	if (NULL == p_buf_pool->a_entries) {
+	if (!p_buf_pool->a_entries) {
 		VCD_MSG_ERROR("Buffers not set or allocated yet");
 
 		return NULL;
 	}
 
-	if (NULL == p_buffer->p_virtual) {
+	if (!p_buffer->p_virtual) {
 		VCD_MSG_ERROR("NULL buffer address provided");
 		return NULL;
 	}
 
 	p_buf_entry =
 		vcd_find_buffer_pool_entry(p_buf_pool, p_buffer->p_virtual);
-	if (NULL == p_buf_entry) {
+	if (!p_buf_entry) {
 		VCD_MSG_ERROR("Unrecognized buffer address provided = %p",
 				  p_buffer->p_virtual);
 		return NULL;
@@ -3129,7 +3129,7 @@ struct vcd_buffer_entry_type *vcd_check_fill_output_buffer
 void vcd_handle_ind_hw_err_fatal(struct vcd_clnt_ctxt_type_t *p_cctxt,
 	u32 event, u32 status)
 {
-	if (0 != p_cctxt->status.n_frame_submitted) {
+	if (p_cctxt->status.n_frame_submitted) {
 		p_cctxt->status.n_frame_submitted--;
 		vcd_mark_frame_channel(p_cctxt->p_dev_ctxt);
 	}
@@ -3190,7 +3190,7 @@ void vcd_handle_err_in_starting(struct vcd_clnt_ctxt_type_t *p_cctxt,
 
 void vcd_handle_trans_pending(struct vcd_clnt_ctxt_type_t *p_cctxt)
 {
-	if (0 == p_cctxt->status.n_frame_submitted) {
+	if (!p_cctxt->status.n_frame_submitted) {
 		VCD_MSG_ERROR("Transaction pending response was not expected");
 		vcd_assert();
 		return;

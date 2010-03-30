@@ -73,17 +73,16 @@
 #include "video_core_type.h"
 #include "vcd_ddl_utils.h"
 
-#define DEBUG 0
-
 #if DEBUG
 #define DBG(x...) printk(KERN_DEBUG x)
 #else
 #define DBG(x...)
 #endif
 
+#define ERR(x...) printk(KERN_ERR x)
 
 static unsigned int g_ddl_dec_t1, g_ddl_enc_t1;
-static unsigned int g_ddl_dec_tavg, g_ddl_enc_tavg;
+static unsigned int g_ddl_dec_ttotal, g_ddl_enc_ttotal;
 static unsigned int g_ddl_dec_count, g_ddl_enc_count;
 
 #ifdef NO_IN_KERNEL_PMEM
@@ -94,7 +93,7 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 	u32 n_physical_addr, n_align_offset;
 	dma_addr_t phy_addr;
 
-	if (DDL_LINEAR_BUFFER_ALIGN_BYTES == align) {
+	if (align == DDL_LINEAR_BUFFER_ALIGN_BYTES) {
 
 		n_guard_bytes = 31;
 		n_align_mask = 0xFFFFFFE0U;
@@ -108,11 +107,10 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 	buff_addr->p_virtual_base_addr =
 		kmalloc((size + n_guard_bytes), GFP_KERNEL);
 
-	if (buff_addr->p_virtual_base_addr == NULL) {
-
-		DBG(KERN_ERR "ERROR %s:%u kamlloc failes to allocate"
-		       " size + n_guard_bytes = %u\n", __func__, __LINE__,
-		       (size + n_guard_bytes));
+	if (!buff_addr->p_virtual_base_addr) {
+		ERR("\n ERROR %s:%u kamlloc fails to allocate"
+			" size + n_guard_bytes = %u\n", __func__, __LINE__,
+			(size + n_guard_bytes));
 		return;
 	}
 
@@ -132,7 +130,7 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 
 void ddl_pmem_free(struct ddl_buf_addr_type buff_addr)
 {
-	if (buff_addr.p_virtual_base_addr != 0) {
+	if (buff_addr.p_virtual_base_addr != NULL) {
 		kfree(buff_addr.p_virtual_base_addr);
 		buff_addr.n_buffer_size = 0;
 		buff_addr.p_virtual_base_addr = NULL;
@@ -147,7 +145,7 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 	s32 n_physical_addr;
 	u32 n_align_offset;
 
-	if (DDL_LINEAR_BUFFER_ALIGN_BYTES == align) {
+	if (align == DDL_LINEAR_BUFFER_ALIGN_BYTES) {
 
 		n_guard_bytes = 31;
 		n_align_mask = 0xFFFFFFE0U;
@@ -172,7 +170,7 @@ void ddl_pmem_alloc(struct ddl_buf_addr_type *buff_addr, u32 size, u32 align)
 	    (u32 *) ioremap((unsigned long)n_physical_addr,
 			    size + n_guard_bytes);
 	memset(buff_addr->p_virtual_base_addr, 0 , size + n_guard_bytes);
-	if (buff_addr->p_virtual_base_addr == NULL) {
+	if (!buff_addr->p_virtual_base_addr) {
 
 		pr_err("%s: could not ioremap in kernel pmem buffers\n",
 		       __func__);
@@ -208,9 +206,9 @@ void ddl_pmem_free(struct ddl_buf_addr_type buff_addr)
 	if (buff_addr.p_virtual_base_addr)
 		iounmap((void *)buff_addr.p_virtual_base_addr);
 
-	if ((buff_addr.p_physical_base_addr != NULL) &&
+	if ((buff_addr.p_physical_base_addr) &&
 		pmem_kfree((s32) buff_addr.p_physical_base_addr)) {
-		DBG("\n %s(): Error in Freeing ddl_pmem_free "
+		ERR("\n %s(): Error in Freeing ddl_pmem_free "
 		"Physical Address %p", __func__,
 		buff_addr.p_physical_base_addr);
 	}
@@ -223,12 +221,12 @@ void ddl_pmem_free(struct ddl_buf_addr_type buff_addr)
 void ddl_get_core_start_time(u8 codec_type)
 {
 	u32 *p_ddl_t1 = NULL;
-	if (codec_type == 0)
+	if (!codec_type)
 		p_ddl_t1 = &g_ddl_dec_t1;
 	else if (codec_type == 1)
 		p_ddl_t1 = &g_ddl_enc_t1;
 
-	if (*p_ddl_t1 == 0) {
+	if (!*p_ddl_t1) {
 		struct timeval ddl_tv;
 		do_gettimeofday(&ddl_tv);
 		*p_ddl_t1 = (ddl_tv.tv_sec * 1000) + (ddl_tv.tv_usec / 1000);
@@ -237,17 +235,17 @@ void ddl_get_core_start_time(u8 codec_type)
 
 void ddl_calc_core_time(u8 codec_type)
 {
-	u32 *p_ddl_t1 = NULL, *p_ddl_tavg = NULL,
+	u32 *p_ddl_t1 = NULL, *p_ddl_ttotal = NULL,
 		*p_ddl_count = NULL;
-	if (codec_type == 0) {
+	if (!codec_type) {
 		DBG("\n720p Core Decode ");
 		p_ddl_t1 = &g_ddl_dec_t1;
-		p_ddl_tavg = &g_ddl_dec_tavg;
+		p_ddl_ttotal = &g_ddl_dec_ttotal;
 		p_ddl_count = &g_ddl_dec_count;
 	} else if (codec_type == 1) {
 		DBG("\n720p Core Encode ");
 		p_ddl_t1 = &g_ddl_enc_t1;
-		p_ddl_tavg = &g_ddl_enc_tavg;
+		p_ddl_ttotal = &g_ddl_enc_ttotal;
 		p_ddl_count = &g_ddl_enc_count;
 	}
 
@@ -256,26 +254,26 @@ void ddl_calc_core_time(u8 codec_type)
 		struct timeval ddl_tv;
 		do_gettimeofday(&ddl_tv);
 		ddl_t2 = (ddl_tv.tv_sec * 1000) + (ddl_tv.tv_usec / 1000);
-		*p_ddl_tavg = ((ddl_t2 - *p_ddl_t1) + *p_ddl_tavg *
-					 *p_ddl_count) / (*p_ddl_count + 1);
+		*p_ddl_ttotal += (ddl_t2 - *p_ddl_t1);
 		*p_ddl_count = *p_ddl_count + 1;
 		DBG("time %u, average time %u, count %u",
-			ddl_t2 - *p_ddl_t1, *p_ddl_tavg, *p_ddl_count);
+			ddl_t2 - *p_ddl_t1, (*p_ddl_ttotal)/(*p_ddl_count),
+			*p_ddl_count);
 		*p_ddl_t1 = 0;
 	}
 }
 
 void ddl_reset_time_variables(u8 codec_type)
 {
-	if (codec_type == 0) {
-		DBG("\n reset Decoder time variables");
+	if (!codec_type) {
+		DBG("\n Reset Decoder time variables");
 		g_ddl_dec_t1 = 0;
-		g_ddl_dec_tavg = 0;
+		g_ddl_dec_ttotal = 0;
 		g_ddl_dec_count = 0;
 	} else if (codec_type == 1) {
-		DBG("\n reset Encoder time variables ");
+		DBG("\n Reset Encoder time variables ");
 		g_ddl_enc_t1 = 0;
-		g_ddl_enc_tavg = 0;
+		g_ddl_enc_ttotal = 0;
 		g_ddl_enc_count = 0;
 	}
 }

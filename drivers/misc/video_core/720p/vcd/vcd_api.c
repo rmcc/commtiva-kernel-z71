@@ -80,8 +80,8 @@ u32 vcd_init(struct vcd_init_config_type *p_config, s32 *p_driver_handle)
 
 	VCD_MSG_MED("vcd_init:");
 
-	if (NULL == p_config ||
-	    NULL == p_driver_handle || NULL == p_config->pf_map_dev_base_addr) {
+	if (!p_config ||
+	    !p_driver_handle || !p_config->pf_map_dev_base_addr) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_ILLEGAL_PARM;
@@ -89,7 +89,7 @@ u32 vcd_init(struct vcd_init_config_type *p_config, s32 *p_driver_handle)
 
 	p_drv_ctxt = vcd_get_drv_context();
 
-	if (NULL == p_drv_ctxt->dev_cs)
+	if (!p_drv_ctxt->dev_cs)
 		vcd_critical_section_create(&p_drv_ctxt->dev_cs);
 
 	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
@@ -120,7 +120,7 @@ u32 vcd_term(s32 driver_handle)
 
 	p_drv_ctxt = vcd_get_drv_context();
 
-	if (NULL == p_drv_ctxt->dev_cs) {
+	if (!p_drv_ctxt->dev_cs) {
 		VCD_MSG_ERROR("No critical section object");
 
 		return VCD_ERR_BAD_STATE;
@@ -140,7 +140,7 @@ u32 vcd_term(s32 driver_handle)
 
 	vcd_critical_section_leave(p_drv_ctxt->dev_cs);
 
-	if (VCD_DEVICE_STATE_NULL == p_drv_ctxt->dev_state.e_state) {
+	if (p_drv_ctxt->dev_state.e_state == VCD_DEVICE_STATE_NULL) {
 		VCD_MSG_HIGH
 		    ("Device in NULL state. Releasing critical section");
 
@@ -163,7 +163,7 @@ u32 vcd_open(s32 driver_handle, u32 b_decoding,
 
 	VCD_MSG_MED("vcd_open:");
 
-	if (NULL == callback) {
+	if (!callback) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_ILLEGAL_PARM;
@@ -171,7 +171,7 @@ u32 vcd_open(s32 driver_handle, u32 b_decoding,
 
 	p_drv_ctxt = vcd_get_drv_context();
 
-	if (NULL == p_drv_ctxt->dev_cs) {
+	if (!p_drv_ctxt->dev_cs) {
 		VCD_MSG_ERROR("No critical section object");
 
 		return VCD_ERR_BAD_STATE;
@@ -206,7 +206,7 @@ u32 vcd_close(void *handle)
 
 	VCD_MSG_MED("vcd_close:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -238,7 +238,7 @@ u32 vcd_encode_start(void *handle)
 
 	VCD_MSG_MED("vcd_encode_start:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -249,7 +249,7 @@ u32 vcd_encode_start(void *handle)
 	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
 
 	if (p_cctxt->clnt_state.p_state_table->ev_hdlr.pf_encode_start &&
-	    VCD_PWR_STATE_SLEEP != p_drv_ctxt->dev_ctxt.e_pwr_state) {
+	    p_drv_ctxt->dev_ctxt.e_pwr_state != VCD_PWR_STATE_SLEEP) {
 		rc = p_cctxt->clnt_state.p_state_table->ev_hdlr.
 		    pf_encode_start(p_cctxt);
 	} else {
@@ -277,13 +277,13 @@ u32 vcd_encode_frame(void *handle, struct vcd_frame_data_type *p_input_frame)
 
 	VCD_MSG_MED("vcd_encode_frame:");
 
-	if (NULL == p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_input_frame) {
+	if (!p_input_frame) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -319,7 +319,7 @@ u32 vcd_decode_start(void *handle, struct vcd_sequence_hdr_type *p_seq_hdr)
 
 	VCD_MSG_MED("vcd_decode_start:");
 
-	if (NULL == p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -330,7 +330,7 @@ u32 vcd_decode_start(void *handle, struct vcd_sequence_hdr_type *p_seq_hdr)
 	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
 
 	if (p_cctxt->clnt_state.p_state_table->ev_hdlr.pf_decode_start &&
-	    VCD_PWR_STATE_SLEEP != p_drv_ctxt->dev_ctxt.e_pwr_state) {
+	    p_drv_ctxt->dev_ctxt.e_pwr_state != VCD_PWR_STATE_SLEEP) {
 		rc = p_cctxt->clnt_state.p_state_table->ev_hdlr.
 		    pf_decode_start(p_cctxt, p_seq_hdr);
 	} else {
@@ -358,13 +358,13 @@ u32 vcd_decode_frame(void *handle, struct vcd_frame_data_type *p_input_frame)
 
 	VCD_MSG_MED("vcd_decode_frame:");
 
-	if (NULL == p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_input_frame) {
+	if (!p_input_frame) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -400,7 +400,7 @@ u32 vcd_pause(void *handle)
 
 	VCD_MSG_MED("vcd_pause:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -436,7 +436,7 @@ u32 vcd_resume(void *handle)
 
 	VCD_MSG_MED("vcd_resume:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -447,7 +447,7 @@ u32 vcd_resume(void *handle)
 	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
 
 	if (p_drv_ctxt->dev_state.p_state_table->ev_hdlr.pf_resume &&
-	    VCD_PWR_STATE_SLEEP != p_drv_ctxt->dev_ctxt.e_pwr_state) {
+	    p_drv_ctxt->dev_ctxt.e_pwr_state != VCD_PWR_STATE_SLEEP) {
 		rc = p_drv_ctxt->dev_state.p_state_table->ev_hdlr.
 		    pf_resume(p_drv_ctxt, p_cctxt);
 	} else {
@@ -475,7 +475,7 @@ u32 vcd_flush(void *handle, u32 n_mode)
 
 	VCD_MSG_MED("vcd_flush:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -511,7 +511,7 @@ u32 vcd_stop(void *handle)
 
 	VCD_MSG_MED("vcd_stop:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -522,7 +522,7 @@ u32 vcd_stop(void *handle)
 	vcd_critical_section_enter(p_drv_ctxt->dev_cs);
 
 	if (p_cctxt->clnt_state.p_state_table->ev_hdlr.pf_stop &&
-	    VCD_PWR_STATE_SLEEP != p_drv_ctxt->dev_ctxt.e_pwr_state) {
+	    p_drv_ctxt->dev_ctxt.e_pwr_state != VCD_PWR_STATE_SLEEP) {
 		rc = p_cctxt->clnt_state.p_state_table->ev_hdlr.
 		    pf_stop(p_cctxt);
 	} else {
@@ -551,13 +551,13 @@ u32 vcd_set_property(void *handle,
 
 	VCD_MSG_MED("vcd_set_property:");
 
-	if (NULL == p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_prop_hdr || NULL == p_prop_val) {
+	if (!p_prop_hdr || !p_prop_val) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -594,13 +594,13 @@ u32 vcd_get_property(void *handle,
 
 	VCD_MSG_MED("vcd_get_property:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_prop_hdr || NULL == p_prop_val) {
+	if (!p_prop_hdr || !p_prop_val) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -638,13 +638,13 @@ u32 vcd_set_buffer_requirements(void *handle,
 
 	VCD_MSG_MED("vcd_set_buffer_requirements:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_buffer_req) {
+	if (!p_buffer_req) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -683,13 +683,13 @@ u32 vcd_get_buffer_requirements(void *handle,
 
 	VCD_MSG_MED("vcd_get_buffer_requirements:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_buffer_req) {
+	if (!p_buffer_req) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -727,13 +727,13 @@ u32 vcd_set_buffer(void *handle,
 
 	VCD_MSG_MED("vcd_set_buffer:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_buffer || 0 == n_buf_size) {
+	if (!p_buffer || !n_buf_size) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -771,14 +771,14 @@ u32 vcd_allocate_buffer(void *handle,
 
 	VCD_MSG_MED("vcd_allocate_buffer:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == pp_vir_buf_addr || NULL == pp_phy_buf_addr
-	    || 0 == n_buf_size) {
+	if (!pp_vir_buf_addr || !pp_phy_buf_addr
+	    || !n_buf_size) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -815,7 +815,7 @@ u32 vcd_free_buffer(void *handle, enum vcd_buffer_type e_buffer, u8 *p_buffer)
 
 	VCD_MSG_MED("vcd_free_buffer:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
@@ -851,13 +851,13 @@ u32 vcd_fill_output_buffer(void *handle, struct vcd_frame_data_type *p_buffer)
 
 	VCD_MSG_MED("vcd_fill_output_buffer:");
 
-	if (NULL == p_cctxt || VCD_SIGNATURE != p_cctxt->n_signature) {
+	if (!p_cctxt || p_cctxt->n_signature != VCD_SIGNATURE) {
 		VCD_MSG_ERROR("Bad client handle");
 
 		return VCD_ERR_BAD_HANDLE;
 	}
 
-	if (NULL == p_buffer) {
+	if (!p_buffer) {
 		VCD_MSG_ERROR("Bad parameters");
 
 		return VCD_ERR_BAD_POINTER;
@@ -894,7 +894,7 @@ u32 vcd_set_device_power(s32 driver_handle,
 
 	p_drv_ctxt = vcd_get_drv_context();
 
-	if (NULL == p_drv_ctxt->dev_cs) {
+	if (!p_drv_ctxt->dev_cs) {
 		VCD_MSG_ERROR("No critical section object");
 
 		return VCD_ERR_BAD_STATE;
@@ -935,7 +935,7 @@ void vcd_response_handler(void)
 
   vcd_critical_section_enter(p_drv_ctxt->dev_cs);
 
-	if (FALSE == ddl_process_core_response()) {
+	if (!ddl_process_core_response()) {
 		VCD_MSG_HIGH
 		    ("ddl_process_core_response indicated no further"
 		     "processing");

@@ -54,6 +54,6 @@ void ddl_reset_time_variables(u8 codec_type);
 #define DDL_MEMCPY(dest, src, len)  memcpy((dest), (src), (len))
 
 #define DDL_ADDR_IS_ALIGNED(addr, align_bytes) \
-(0 == ((u32)(addr) & ((align_bytes) - 1)))
+(!((u32)(addr) & ((align_bytes) - 1)))
 
 #endif

@@ -2726,8 +2726,7 @@ void vidc_720p_RCFrame_skip(u32 n_op, u32 n_vbv_size);
 #define VIDC_BUSY_WAIT(n) udelay(n)
 
 #undef VIDC_REGISTER_LOG_MSG
-
-#define  VIDC_REGISTER_LOG_INTO_BUFFER
+#undef VIDC_REGISTER_LOG_INTO_BUFFER
 
 #ifdef VIDC_REGISTER_LOG_MSG
 #define VIDC_MSG1(msg_format, a) printk(KERN_INFO msg_format, a)
