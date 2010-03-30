@@ -31,6 +31,8 @@
 #define TRUE  1
 #define FALSE 0
 
+static DEFINE_SPINLOCK(dev_lock);
+
 static struct usb_interface_descriptor intf_desc = {
 	.bLength            =	sizeof intf_desc,
 	.bDescriptorType    =	USB_DT_INTERFACE,
@@ -100,7 +102,6 @@ struct diag_context {
 	struct usb_ep *in;
 	struct usb_endpoint_descriptor  *in_desc;
 	struct usb_endpoint_descriptor  *out_desc;
-	spinlock_t dev_lock;
 	/* linked list of read requets*/
 	struct list_head dev_read_req_list;
 	/* linked list of write requets*/
@@ -221,9 +222,9 @@ static int diag_function_set_alt(struct usb_function *f,
 	dev->product_id   = cdev->desc.idProduct;
 	schedule_work(&dev->diag_work);
 
-	spin_lock_irqsave(&dev->dev_lock , flags);
+	spin_lock_irqsave(&dev_lock , flags);
 	dev->diag_configured = 1;
-	spin_unlock_irqrestore(&dev->dev_lock , flags);
+	spin_unlock_irqrestore(&dev_lock , flags);
 
 	return 0;
 }
@@ -234,9 +235,9 @@ static void diag_function_disable(struct usb_function *f)
 
 	printk(KERN_INFO "diag_function_disable\n");
 
-	spin_lock_irqsave(&dev->dev_lock , flags);
+	spin_lock_irqsave(&dev_lock , flags);
 	dev->diag_configured = 0;
-	spin_unlock_irqrestore(&dev->dev_lock , flags);
+	spin_unlock_irqrestore(&dev_lock , flags);
 
 	if (dev->in) {
 		usb_ep_fifo_flush(dev->in);
@@ -264,9 +265,9 @@ int diag_usb_register(struct diag_operations *func)
 		return -1;
 	}
 	ctxt->operations = func;
-	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	spin_lock_irqsave(&dev_lock , flags);
 	connected = ctxt->diag_configured;
-	spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+	spin_unlock_irqrestore(&dev_lock , flags);
 
 	if (connected)
 		if ((ctxt->operations) &&
@@ -392,9 +393,9 @@ int diag_read(struct diag_request *d_req)
 	struct diag_context *ctxt = &_context;
 
 
-	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	spin_lock_irqsave(&dev_lock , flags);
 	if (!ctxt->diag_configured) {
-		spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+		spin_unlock_irqrestore(&dev_lock , flags);
 		return -EIO;
 	}
 	if (!list_empty(&ctxt->dev_read_req_list)) {
@@ -404,16 +405,16 @@ int diag_read(struct diag_request *d_req)
 		req = req_entry->usb_req;
 		list_del(&req_entry->re_entry);
 	}
-	spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+	spin_unlock_irqrestore(&dev_lock , flags);
 	if (req) {
 		req->buf = d_req->buf;
 		req->length = d_req->length;
 		if (usb_ep_queue(ctxt->out, req, GFP_ATOMIC)) {
 			/* If error add the link to the linked list again. */
-			spin_lock_irqsave(&ctxt->dev_lock , flags);
+			spin_lock_irqsave(&dev_lock , flags);
 			list_add_tail(&req_entry->re_entry ,
 					&ctxt->dev_read_req_list);
-			spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+			spin_unlock_irqrestore(&dev_lock , flags);
 			printk(KERN_ERR "%s:can't queue request\n", __func__);
 			return -EIO;
 		}
@@ -433,9 +434,9 @@ int diag_write(struct diag_request *d_req)
 	struct diag_req_entry *req_entry = NULL;
 	struct diag_context *ctxt = &_context;
 
-	spin_lock_irqsave(&ctxt->dev_lock , flags);
+	spin_lock_irqsave(&dev_lock , flags);
 	if (!ctxt->diag_configured) {
-		spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+		spin_unlock_irqrestore(&dev_lock , flags);
 		return -EIO;
 	}
 	if (!list_empty(&ctxt->dev_write_req_list)) {
@@ -445,16 +446,16 @@ int diag_write(struct diag_request *d_req)
 		req = req_entry->usb_req;
 		list_del(&req_entry->re_entry);
 	}
-	spin_unlock_irqrestore(&ctxt->dev_lock, flags);
+	spin_unlock_irqrestore(&dev_lock, flags);
 	if (req) {
 		req->buf = d_req->buf;
 		req->length = d_req->length;
 		if (usb_ep_queue(ctxt->in, req, GFP_ATOMIC)) {
 			/* If error add the link to linked list again*/
-			spin_lock_irqsave(&ctxt->dev_lock, flags);
+			spin_lock_irqsave(&dev_lock, flags);
 			list_add_tail(&req_entry->re_entry ,
 					&ctxt->dev_write_req_list);
-			spin_unlock_irqrestore(&ctxt->dev_lock, flags);
+			spin_unlock_irqrestore(&dev_lock, flags);
 			printk(KERN_ERR "%s: cannot queue"
 					" read request\n", __func__);
 			return -EIO;
@@ -492,14 +493,14 @@ static void diag_write_complete(struct usb_ep *ep ,
 			return;
 		}
 	}
-	spin_lock_irqsave(&ctxt->dev_lock, flags);
+	spin_lock_irqsave(&dev_lock, flags);
 	list_add_tail(&diag_req->re_entry ,
 			&ctxt->dev_write_req_list);
 	if (req->length != 0) {
 		d_req->actual = req->actual;
 		d_req->status = req->status;
 	}
-	spin_unlock_irqrestore(&ctxt->dev_lock , flags);
+	spin_unlock_irqrestore(&dev_lock , flags);
 	if ((ctxt->operations) &&
 		(ctxt->operations->diag_char_write_complete))
 			ctxt->operations->diag_char_write_complete(
@@ -519,12 +520,12 @@ static void diag_read_complete(struct usb_ep *ep ,
 				"NULL device pointer\n", __func__);
 		return;
 	}
-	spin_lock_irqsave(&ctxt->dev_lock, flags);
+	spin_lock_irqsave(&dev_lock, flags);
 	list_add_tail(&diag_req->re_entry ,
 			&ctxt->dev_read_req_list);
 	d_req->actual = req->actual;
 	d_req->status = req->status;
-	spin_unlock_irqrestore(&ctxt->dev_lock, flags);
+	spin_unlock_irqrestore(&dev_lock, flags);
 	if ((ctxt->operations) &&
 		(ctxt->operations->diag_char_read_complete))
 			ctxt->operations->diag_char_read_complete(
@@ -537,7 +538,6 @@ int diag_function_add(struct usb_configuration *c,
 	int ret;
 
 	printk(KERN_INFO "%s\n", __func__);
-	spin_lock_init(&_context.dev_lock);
 	dev->function.name = "diag";
 	dev->function.descriptors = fs_diag_desc;
 	dev->function.hs_descriptors = hs_diag_desc;
