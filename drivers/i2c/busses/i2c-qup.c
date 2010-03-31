@@ -69,6 +69,8 @@
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/io.h>
+#include <linux/mutex.h>
+#include <linux/timer.h>
 #include <mach/board.h>
 
 MODULE_LICENSE("Dual BSD/GPL");
@@ -178,6 +180,10 @@ struct qup_i2c_dev {
 	int                          in_blk_sz;
 	int                          wr_sz;
 	struct msm_i2c_platform_data *pdata;
+	int                          suspended;
+	int                          clk_state;
+	struct timer_list            pwr_timer;
+	struct mutex                 mlock;
 	void                         *complete;
 };
 
@@ -252,6 +258,30 @@ intr_done:
 	dev->err = err;
 	complete(dev->complete);
 	return IRQ_HANDLED;
+}
+
+static void
+qup_i2c_pwr_mgmt(struct qup_i2c_dev *dev, unsigned int state)
+{
+	dev->clk_state = state;
+	if (state != 0) {
+		clk_enable(dev->clk);
+		if (dev->pclk)
+			clk_enable(dev->pclk);
+	} else {
+		clk_disable(dev->clk);
+		if (dev->pclk)
+			clk_disable(dev->pclk);
+	}
+}
+
+static void
+qup_i2c_pwr_timer(unsigned long data)
+{
+	struct qup_i2c_dev *dev = (struct qup_i2c_dev *) data;
+	dev_dbg(dev->dev, "QUP_Power: Inactivity based power management\n");
+	if (dev->clk_state == 1)
+		qup_i2c_pwr_mgmt(dev, 0);
 }
 
 static int
@@ -515,6 +545,16 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	long timeout;
 	int err;
 
+	del_timer_sync(&dev->pwr_timer);
+	mutex_lock(&dev->mlock);
+
+	if (dev->suspended) {
+		mutex_unlock(&dev->mlock);
+		return -EIO;
+	}
+
+	if (dev->clk_state == 0)
+		qup_i2c_pwr_mgmt(dev, 1);
 	/* Initialize QUP registers during first transfer */
 	if (dev->clk_ctl == 0) {
 		int fs_div;
@@ -741,6 +781,9 @@ qup_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		disable_irq(dev->in_irq);
 		disable_irq(dev->out_irq);
 	}
+	dev->pwr_timer.expires = jiffies + 3*HZ;
+	add_timer(&dev->pwr_timer);
+	mutex_unlock(&dev->mlock);
 	return ret;
 }
 
@@ -884,10 +927,6 @@ qup_i2c_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dev);
 
-	clk_enable(clk);
-	if (pclk)
-		clk_enable(pclk);
-
 	dev->one_bit_t = USEC_PER_SEC/pdata->clk_freq;
 	dev->pdata = pdata;
 	dev->clk_ctl = 0;
@@ -953,14 +992,15 @@ qup_i2c_probe(struct platform_device *pdev)
 	}
 	pdata->msm_i2c_config_gpio(dev->adapter.nr, 1);
 
+	dev->suspended = 0;
+	mutex_init(&dev->mlock);
+	dev->clk_state = 0;
+	setup_timer(&dev->pwr_timer, qup_i2c_pwr_timer, (unsigned long) dev);
 	return 0;
 
 err_request_irq_failed:
 	i2c_del_adapter(&dev->adapter);
 err_i2c_add_adapter_failed:
-	clk_disable(clk);
-	if (pclk)
-		clk_disable(pclk);
 	iounmap(dev->gsbi);
 err_gsbi_failed:
 	iounmap(dev->base);
@@ -983,6 +1023,14 @@ qup_i2c_remove(struct platform_device *pdev)
 	struct qup_i2c_dev	*dev = platform_get_drvdata(pdev);
 	struct resource		*qup_mem, *gsbi_mem;
 
+	/* Grab mutex to ensure ongoing transaction is over */
+	mutex_lock(&dev->mlock);
+	dev->suspended = 1;
+	mutex_unlock(&dev->mlock);
+	mutex_destroy(&dev->mlock);
+	del_timer_sync(&dev->pwr_timer);
+	if (dev->clk_state != 0)
+		qup_i2c_pwr_mgmt(dev, 0);
 	platform_set_drvdata(pdev, NULL);
 	if (dev->num_irqs == 3) {
 		free_irq(dev->out_irq, dev);
@@ -990,12 +1038,9 @@ qup_i2c_remove(struct platform_device *pdev)
 	}
 	free_irq(dev->err_irq, dev);
 	i2c_del_adapter(&dev->adapter);
-	clk_disable(dev->clk);
 	clk_put(dev->clk);
-	if (dev->pclk) {
-		clk_disable(dev->pclk);
+	if (dev->pclk)
 		clk_put(dev->pclk);
-	}
 	iounmap(dev->gsbi);
 	iounmap(dev->base);
 	kfree(dev);
@@ -1013,19 +1058,20 @@ static int qup_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct qup_i2c_dev *dev = platform_get_drvdata(pdev);
 
-	clk_disable(dev->clk);
-	if (dev->pclk)
-		clk_disable(dev->pclk);
+	/* Grab mutex to ensure ongoing transaction is over */
+	mutex_lock(&dev->mlock);
+	dev->suspended = 1;
+	mutex_unlock(&dev->mlock);
+	del_timer_sync(&dev->pwr_timer);
+	if (dev->clk_state != 0)
+		qup_i2c_pwr_mgmt(dev, 0);
 	return 0;
 }
 
 static int qup_i2c_resume(struct platform_device *pdev)
 {
 	struct qup_i2c_dev *dev = platform_get_drvdata(pdev);
-
-	clk_enable(dev->clk);
-	if (dev->pclk)
-		clk_enable(dev->pclk);
+	dev->suspended = 0;
 	return 0;
 }
 #else
