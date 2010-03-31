@@ -808,7 +808,7 @@ void mdp4_overlayproc_cfg(struct mdp4_overlay_pipe *pipe)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
-int mdp4_overlay_active(int mixer)
+int mdp4_overlay_pipe_staged(int mixer)
 {
 	uint32 data, mask, i;
 	int p1, p2;
@@ -1466,11 +1466,7 @@ int mdp4_overlay_play(struct fb_info *info, struct msmfb_overlay_data *req,
 			return 0;
 		}
 	} else { 	/* MDDI mode */
-#ifdef MDP4_NONBLOCKING
-		if (mfd->panel_power_on)
-#else
 		if (!mfd->dma->busy && mfd->panel_power_on)
-#endif
 			mdp4_mddi_overlay_kickoff(mfd, pipe);
 	}
 
