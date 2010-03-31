@@ -401,4 +401,9 @@ union reg_cp_rb_cntl {
 #define REG_SQ_CONSTANT_0                0x4000
 #define REG_SQ_FETCH_0                   0x4800
 
+#define REG_MH_AXI_ERROR		 0xA45
+#define REG_COHER_BASE_PM4		 0xA2A
+#define REG_COHER_STATUS_PM4		 0xA2B
+#define REG_COHER_SIZE_PM4		 0xA29
+
 #endif /* _YAMATO_REG_H */
