@@ -1242,6 +1242,8 @@ struct clk msm_clocks_7x30[] = {
 	CLK_PCOM("camif_pad_pclk",	CAMIF_PAD_P_CLK,	NULL, OFF),
 	CLK_PCOM("ebi1_clk",	EBI1_CLK,	NULL, CLK_MIN),
 	CLK_PCOM("ecodec_clk",	ECODEC_CLK,	NULL, 0),
+	CLK_PCOM("emdh_clk",	EMDH_CLK,	NULL, OFF | CLK_MINMAX),
+	CLK_PCOM("emdh_pclk",	EMDH_P_CLK,	NULL, OFF),
 	CLK_PCOM("gp_clk",	GP_CLK,		NULL, 0),
 	CLK_PCOM("grp_2d_clk",	GRP_2D_CLK,	NULL, 0),
 	CLK_PCOM("grp_2d_pclk",	GRP_2D_P_CLK,	NULL, 0),

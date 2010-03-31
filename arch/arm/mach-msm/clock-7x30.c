@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -348,10 +348,10 @@ static struct clk_freq_tbl clk_tbl_spi[] = {
 };
 
 static struct clk_freq_tbl clk_tbl_lpa_codec[] = {
-	F_RAW(1, SRC_MAX, 0,  0,  0, NOMINAL), /* src = MI2S_CODEC_RX */
-	F_RAW(2, SRC_MAX, 0,  1,  0, NOMINAL), /* src = ECODEC_CIF */
-	F_RAW(3, SRC_MAX, 0,  2,  0, NOMINAL), /* src = MI2S */
-	F_RAW(4, SRC_MAX, 0,  3,  0, NOMINAL), /* src = SDAC */
+	F_RAW(1, SRC_MAX, 0,  0,  0, MSMC1_END), /* src = MI2S_CODEC_RX */
+	F_RAW(2, SRC_MAX, 0,  1,  0, MSMC1_END), /* src = ECODEC_CIF */
+	F_RAW(3, SRC_MAX, 0,  2,  0, MSMC1_END), /* src = MI2S */
+	F_RAW(4, SRC_MAX, 0,  3,  0, MSMC1_END), /* src = SDAC */
 	F_END,
 };
 
@@ -872,6 +872,15 @@ static void soc_clk_disable(unsigned id)
 	update_pwr_rail(id, 0);
 }
 
+static void soc_clk_auto_off(unsigned id)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&clock_reg_lock, flags);
+	_soc_clk_disable(id);
+	spin_unlock_irqrestore(&clock_reg_lock, flags);
+}
+
 static long soc_clk_round_rate(unsigned id, unsigned rate)
 {
 	struct clk_local *t = &clk_local_tbl[id];
@@ -1071,6 +1080,7 @@ static unsigned soc_clk_is_enabled(unsigned id)
 struct clk_ops clk_ops_7x30 = {
 	.enable = soc_clk_enable,
 	.disable = soc_clk_disable,
+	.auto_off = soc_clk_auto_off,
 	.reset = NULL, /* Uses proc_comm */
 	.set_rate = soc_clk_set_rate,
 	.set_min_rate = soc_clk_set_min_rate,
@@ -1293,7 +1303,7 @@ __init int clk_7x30_init(void)
 	set_1rate(QUP_I2C);
 	set_1rate(UART1);
 	set_1rate(UART2);
-	set_1rate(MI2S_CODEC_RX_M);
+	set_1rate(LPA_CODEC);
 
 	return 0;
 }

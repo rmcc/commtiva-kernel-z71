@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/clock.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -36,6 +36,7 @@
 struct clk_ops {
 	int (*enable)(unsigned id);
 	void (*disable)(unsigned id);
+	void (*auto_off)(unsigned id);
 	int (*reset)(unsigned id, enum clk_reset_action action);
 	int (*set_rate)(unsigned id, unsigned rate);
 	int (*set_min_rate)(unsigned id, unsigned rate);
