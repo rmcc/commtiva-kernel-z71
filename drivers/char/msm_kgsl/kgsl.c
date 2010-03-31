@@ -331,6 +331,13 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 			internal_pwr_rail_ctl(PWR_RAIL_GRP_CLK, KGSL_FALSE);
 			internal_pwr_rail_mode(PWR_RAIL_GRP_CLK,
 					PWR_RAIL_CTL_AUTO);
+			if (kgsl_driver.g12_device.hwaccess_blocked
+				== KGSL_FALSE) {
+				internal_pwr_rail_ctl(PWR_RAIL_GRP_2D_CLK,
+					KGSL_FALSE);
+				internal_pwr_rail_mode(PWR_RAIL_GRP_2D_CLK,
+					PWR_RAIL_CTL_AUTO);
+			}
 			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_POWER_ON);
 			kgsl_driver.power_flags |= KGSL_PWRFLAGS_POWER_OFF;
 		}
@@ -340,6 +347,13 @@ int kgsl_pwrctrl(unsigned int pwrflag)
 			internal_pwr_rail_mode(PWR_RAIL_GRP_CLK,
 					PWR_RAIL_CTL_MANUAL);
 			internal_pwr_rail_ctl(PWR_RAIL_GRP_CLK, KGSL_TRUE);
+			if (kgsl_driver.g12_device.hwaccess_blocked
+				== KGSL_FALSE) {
+				internal_pwr_rail_mode(PWR_RAIL_GRP_2D_CLK,
+					PWR_RAIL_CTL_MANUAL);
+				internal_pwr_rail_ctl(PWR_RAIL_GRP_2D_CLK,
+					KGSL_TRUE);
+			}
 			kgsl_driver.power_flags &= ~(KGSL_PWRFLAGS_POWER_OFF);
 			kgsl_driver.power_flags |= KGSL_PWRFLAGS_POWER_ON;
 		}
@@ -751,7 +765,9 @@ static long kgsl_ioctl_device_waittimestamp(struct kgsl_file_private *private,
 
 		kgsl_runpending(&kgsl_driver.yamato_device);
 	} else if (param.device_id == KGSL_DEVICE_G12) {
+		mutex_lock(&kgsl_driver.mutex);
 		kgsl_g12_check_open();
+		mutex_unlock(&kgsl_driver.mutex);
 		result = kgsl_g12_waittimestamp(&kgsl_driver.g12_device,
 				     param.timestamp,
 				     param.timeout);

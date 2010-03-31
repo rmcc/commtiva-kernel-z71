@@ -111,7 +111,7 @@
 		| (1 << MH_ARBITER_CONFIG__PA_CLNT_ENABLE__SHIFT))
 
 #define FIRST_TIMEOUT (HZ / 2)
-#define INTERVAL_TIMEOUT (HZ / 5)
+#define INTERVAL_TIMEOUT (HZ / 10)
 
 #define KGSL_G12_TIMESTAMP_EPSILON 20000
 #define KGSL_G12_IDLE_COUNT_MAX 1000000
@@ -131,17 +131,15 @@ void kgsl_g12_check_open(void)
 {
 	if (atomic_inc_return(&kgsl_driver.g12_open_count) == 1)
 		kgsl_g12_first_open_locked();
+	KGSL_G12_PRE_HWACCESS();
 }
 
 int kgsl_g12_last_release_locked(void)
 {
 	KGSL_DRV_INFO("kgsl_g12_last_release_locked()\n");
 
-	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE)
-		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_OFF);
-
-	/* close g12 */
 	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
+		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_OFF);
 		kgsl_g12_close(&kgsl_driver.g12_device);
 		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_OFF);
 	}
@@ -155,11 +153,9 @@ int kgsl_g12_first_open_locked(void)
 
 	KGSL_DRV_INFO("kgsl_g12_first_open()\n");
 
-	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE)
+	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
 		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_ON);
 
-	/* init g12 */
-	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
 		result = kgsl_g12_init(&kgsl_driver.g12_device,
 			&kgsl_driver.g12_config);
 		if (result != 0)
@@ -244,7 +240,7 @@ irqreturn_t kgsl_g12_isr(int irq, void *data)
 
 	}
 
-	/* TODO: When idle detection is enabled, update idle timer here. */
+	mod_timer(&idle_timer, jiffies + INTERVAL_TIMEOUT);
 
 	return result;
 }
@@ -432,6 +428,7 @@ int kgsl_g12_start(struct kgsl_device *device, uint32_t flags)
 	init_timer(&idle_timer);
 	idle_timer.function = kgsl_g12_timer;
 	idle_timer.expires = jiffies + FIRST_TIMEOUT;
+	add_timer(&idle_timer);
 	INIT_WORK(&idle_check, kgsl_g12_idle_check);
 
 	INIT_LIST_HEAD(&device->ringbuffer.memqueue);
@@ -442,6 +439,7 @@ int kgsl_g12_start(struct kgsl_device *device, uint32_t flags)
 
 int kgsl_g12_stop(struct kgsl_device *device)
 {
+	del_timer(&idle_timer);
 	if (device->flags & KGSL_FLAGS_STARTED) {
 		kgsl_g12_idle(device, KGSL_TIMEOUT_DEFAULT);
 		device->flags &= ~KGSL_FLAGS_STARTED;
@@ -553,6 +551,10 @@ done:
 static unsigned int kgsl_g12_isidle(struct kgsl_device *device)
 {
 	int status = 0;
+	int timestamp = device->timestamp;
+
+	if (timestamp == device->current_timestamp)
+		status = KGSL_TRUE;
 
 	return status;
 }
@@ -569,7 +571,8 @@ int kgsl_g12_sleep(struct kgsl_device *device, const int idle)
 	if (device->hwaccess_blocked == KGSL_FALSE) {
 		/* See if the device is idle. If it is, we can shut down */
 		/* the core clock until the next attempt to access the HW. */
-		if (idle && kgsl_g12_isidle(device)) {
+		if (idle || kgsl_g12_isidle(device)) {
+			kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_OFF);
 			/* Turn off the core clocks */
 			status = kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_OFF);
 
@@ -596,6 +599,7 @@ int kgsl_g12_wake(struct kgsl_device *device)
 	/* Re-enable HW access */
 	device->hwaccess_blocked = KGSL_FALSE;
 	complete_all(&device->hwaccess_gate);
+	mod_timer(&idle_timer, jiffies + FIRST_TIMEOUT);
 
 	KGSL_DRV_VDBG("<-- kgsl_g12_wake(). Return value %d\n", status);
 
@@ -615,6 +619,7 @@ int kgsl_g12_suspend(struct kgsl_device *device)
 		/* Put the device to sleep. */
 		status = kgsl_g12_sleep(device, true);
 		/* Don't let the timer wake us during suspended sleep. */
+		del_timer(&idle_timer);
 		/* Get the completion ready to be waited upon. */
 		INIT_COMPLETION(device->hwaccess_gate);
 	}
