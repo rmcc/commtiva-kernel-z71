@@ -850,12 +850,19 @@ static int soc_clk_enable(unsigned id)
 	int ret = 0;
 	unsigned long flags;
 
-	ret = update_pwr_rail(id, 1);
-	if (ret)
-		return ret;
-
 	spin_lock_irqsave(&clock_reg_lock, flags);
 	ret = soc_clk_enable_nolock(id);
+	if (ret)
+		goto unlock;
+	/*
+	 * The modem might modify the register bits for the clock branch when
+	 * the rail is enabled/disabled, so enable the rail inside the lock
+	 * instead of outside it.
+	 */
+	ret = update_pwr_rail(id, 1);
+	if (ret)
+		soc_clk_disable_nolock(id);
+unlock:
 	spin_unlock_irqrestore(&clock_reg_lock, flags);
 
 	return ret;
@@ -866,10 +873,9 @@ static void soc_clk_disable(unsigned id)
 	unsigned long flags;
 
 	spin_lock_irqsave(&clock_reg_lock, flags);
+	update_pwr_rail(id, 0);
 	soc_clk_disable_nolock(id);
 	spin_unlock_irqrestore(&clock_reg_lock, flags);
-
-	update_pwr_rail(id, 0);
 }
 
 static void soc_clk_auto_off(unsigned id)
