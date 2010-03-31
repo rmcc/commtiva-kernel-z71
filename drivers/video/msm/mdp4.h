@@ -39,8 +39,6 @@ extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 
 
-#define MDP4_NONBLOCKING	/* enable non blocking ioctl */
-
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
 
