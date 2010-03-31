@@ -221,7 +221,10 @@ static int lcdc_probe(struct platform_device *pdev)
 	mfd->panel_info = pdata->panel_info;
 
 #ifdef MSMFB_FRAMEBUF_32
-	mfd->fb_imgType = MDP_RGBA_8888;
+	if (mfd->index == 0)
+		mfd->fb_imgType = MDP_RGBA_8888; /* primary */
+	else
+		mfd->fb_imgType = MDP_RGB_565;	/* secondary */
 #else
 	mfd->fb_imgType = MDP_RGB_565;
 #endif
