@@ -278,8 +278,6 @@ static struct usb_configuration android_config_driver = {
 	.label		= "android",
 	.bind		= android_bind_config,
 	.bConfigurationValue = 1,
-	.bmAttributes	= (USB_CONFIG_ATT_ONE | USB_CONFIG_ATT_SELFPOWER |
-				USB_CONFIG_ATT_WAKEUP),
 	.bMaxPower	= 0xFA, /* 500ma */
 };
 
@@ -328,7 +326,8 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	device_desc.idProduct = __constant_cpu_to_le16(product_id);
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
-
+	if (dev->pdata->self_powered && !usb_gadget_set_selfpowered(gadget))
+		android_config_driver.bmAttributes |= USB_CONFIG_ATT_SELFPOWER;
 	dev->cdev = cdev;
 	dev->gadget = gadget;
 	/* register our configuration */
@@ -354,7 +353,6 @@ static int  android_bind(struct usb_composite_dev *cdev)
 		device_desc.bcdDevice = __constant_cpu_to_le16(0x9999);
 	}
 
-	usb_gadget_set_selfpowered(gadget);
 	num_ports = acm_func_cnt + gser_func_cnt;
 	if (acm_func_cnt || gser_func_cnt) {
 		ret = gserial_setup(cdev->gadget, num_ports);

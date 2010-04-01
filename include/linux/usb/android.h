@@ -40,6 +40,7 @@ struct android_usb_platform_data {
 
 	/* number of LUNS for mass storage function */
 	int nluns;
+	int self_powered;
 };
 /* composition support structure */
 struct usb_composition {
