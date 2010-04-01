@@ -417,17 +417,12 @@ static void tavarua_q_event(struct tavarua_device *radio,
 		wake_up_interruptible(&radio->event_queue);
 }
 
-/**************************************************************************
- * Scheduled event handler
- *************************************************************************/
-static void read_int_stat(struct work_struct *work)
+
+static void handle_interrupts(struct tavarua_device *radio)
 {
 	int i;
 	int retval;
 	enum tavarua_xfr_ctrl_t xfr_status;
-	struct tavarua_device *radio = container_of(work,
-					struct tavarua_device, work.work);
-
 	if (!radio->handle_irq) {
 		FMDBG("IRQ happend, but I wont handle it\n");
 		return;
@@ -698,9 +693,19 @@ static void read_int_stat(struct work_struct *work)
 
 }
 
-/*************************************************************************
+/*
+ * Scheduled event handler
+ */
+static void read_int_stat(struct work_struct *work)
+{
+	struct tavarua_device *radio = container_of(work,
+					struct tavarua_device, work.work);
+	handle_interrupts(radio);
+}
+
+/*
  * irq helper functions
- ************************************************************************/
+ */
 
 /*
  * tavarua_request_irq
@@ -1926,7 +1931,7 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 
 	/* use xfr for interrupt setup */
 	if (radio->chipID == MARIMBA_2_1) {
-		retval = write_to_xfr(radio, INT_CTRL, int_ctrl, XFR_REG_NUM);
+		retval =  sync_write_xfr(radio, INT_CTRL, int_ctrl);
 		if (retval < 0)
 			return retval;
 	/* use register write to setup interrupts */
