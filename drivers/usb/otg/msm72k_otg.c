@@ -543,7 +543,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto rpc_fail;
 	}
 	dev->pclk = clk_get(&pdev->dev, "usb_hs_pclk");
-	if (IS_ERR(dev->clk)) {
+	if (IS_ERR(dev->pclk)) {
 		pr_err("%s: failed to get usb_hs_pclk\n", __func__);
 		ret = PTR_ERR(dev->pclk);
 		goto put_clk;
