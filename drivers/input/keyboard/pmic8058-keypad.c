@@ -590,8 +590,7 @@ static int __devinit pmic8058_kp_probe(struct platform_device *pdev)
 	kp->keycodes	= keycodes;
 	kp->pm_chip	= pm_chip;
 
-	/* REVISIT: actual revision with the fix */
-	if (pm8058_rev_is_a0(pm_chip) || pm8058_rev_is_b0(pm_chip))
+	if (pm8058_rev_is_a0(pm_chip))
 		kp->flags |= KEYF_FIX_LAST_ROW;
 
 	kp->input = input_allocate_device();
