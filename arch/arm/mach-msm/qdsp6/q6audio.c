@@ -276,10 +276,14 @@ static void audio_client_free(struct audio_client *ac)
 {
 	session_free(ac->session, ac);
 
-	if (ac->buf[0].data)
+	if (ac->buf[0].data) {
+		iounmap(ac->buf[0].data);
 		pmem_kfree(ac->buf[0].phys);
-	if (ac->buf[1].data)
+	}
+	if (ac->buf[1].data) {
+		iounmap(ac->buf[1].data);
 		pmem_kfree(ac->buf[1].phys);
+	}
 	kfree(ac);
 }
 
