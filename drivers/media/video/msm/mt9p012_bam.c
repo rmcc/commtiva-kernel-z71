@@ -514,7 +514,7 @@ static int32_t mt9p012_write_exp_gain(uint16_t gain, uint32_t line)
 	}
 
 	/* Verify no overflow */
-	if (mt9p012_ctrl->sensormode != SENSOR_SNAPSHOT_MODE) {
+	if (mt9p012_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
 		line = (uint32_t) (line * mt9p012_ctrl->fps_divider /
 				   0x00000400);
 		setting = RES_PREVIEW;
