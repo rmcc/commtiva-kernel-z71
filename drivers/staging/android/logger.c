@@ -67,6 +67,7 @@ struct logger_reader {
 	struct logger_log *	log;	/* associated log */
 	struct list_head	list;	/* entry in logger_log's list */
 	size_t			r_off;	/* current read head offset */
+	int			fixed;	/* flag if read offset fixed*/
 };
 
 /*
@@ -189,6 +190,14 @@ static ssize_t do_read_log_to_user(struct logger_log *log,
 		return -ENOMEM;
 
 	spin_lock_irqsave(&log->bufflock, flags);
+
+	/*
+	 * Check if the r_off was already adjusted in fix_up_readers
+	 */
+	if (reader->fixed) {
+		reader->fixed = 0;
+		count = get_entry_len(log, reader->r_off);
+	}
 
 	len = min(count, log->size - reader->r_off);
 
@@ -352,6 +361,7 @@ static void fix_up_readers(struct logger_log * const log, const size_t len)
 		if (clock_interval(old, new, reader->r_off)) {
 			atomic_set(&log->was_overrun, 1);
 			reader->r_off = get_next_entry(log, reader->r_off, len);
+			reader->fixed = 1;
 		}
 }
 
