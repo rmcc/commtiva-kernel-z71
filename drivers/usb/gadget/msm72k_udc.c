@@ -904,7 +904,7 @@ static void handle_endpoint(struct usb_info *ui, unsigned bit)
 			/* XXX pass on more specific error code */
 			req->req.status = -EIO;
 			req->req.actual = 0;
-			INFO("msm72k_udc: ept %d %s error. info=%08x\n",
+			INFO("ept %d %s error. info=%08x\n",
 			       ept->num,
 			       (ept->flags & EPT_FLAG_IN) ? "in" : "out",
 			       info);
@@ -1010,15 +1010,15 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	if (n & STS_PCI) {
 		switch (readl(USB_PORTSC) & PORTSC_PSPD_MASK) {
 		case PORTSC_PSPD_FS:
-			INFO("msm72k_udc: portchange USB_SPEED_FULL\n");
+			INFO("portchange USB_SPEED_FULL\n");
 			ui->gadget.speed = USB_SPEED_FULL;
 			break;
 		case PORTSC_PSPD_LS:
-			INFO("msm72k_udc: portchange USB_SPEED_LOW\n");
+			INFO("portchange USB_SPEED_LOW\n");
 			ui->gadget.speed = USB_SPEED_LOW;
 			break;
 		case PORTSC_PSPD_HS:
-			INFO("msm72k_udc: portchange USB_SPEED_HIGH\n");
+			INFO("portchange USB_SPEED_HIGH\n");
 			ui->gadget.speed = USB_SPEED_HIGH;
 			break;
 		}
@@ -1034,7 +1034,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	}
 
 	if (n & STS_URI) {
-		INFO("msm72k_udc: reset\n");
+		INFO("reset\n");
 
 		ui->usb_state = USB_STATE_DEFAULT;
 		ui->remote_wakeup = 0;
@@ -1065,7 +1065,7 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 	}
 
 	if (n & STS_SLI) {
-		INFO("msm72k_udc: suspend\n");
+		INFO("suspend\n");
 		ui->usb_state = USB_STATE_SUSPENDED;
 		ui->driver->suspend(&ui->gadget);
 
@@ -1121,7 +1121,7 @@ static void usb_reset(struct usb_info *ui)
 	unsigned cfg_val;
 	struct msm_otg *otg = to_msm_otg(ui->xceiv);
 
-	INFO("msm72k_udc: reset controller\n");
+	INFO("reset controller\n");
 
 	if (otg->set_clk)
 		otg->set_clk(ui->xceiv, 1);
@@ -1480,12 +1480,12 @@ void usb_function_reenumerate(void)
 	struct usb_info *ui = the_usb_info;
 
 	/* disable and re-enable the D+ pullup */
-	INFO("msm72k_udc: disable pullup\n");
+	INFO("disable pullup\n");
 	writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
 
 	msleep(10);
 
-	INFO("msm72k_udc: enable pullup\n");
+	INFO("enable pullup\n");
 	writel(readl(USB_USBCMD) | USBCMD_RS, USB_USBCMD);
 }
 
@@ -2184,7 +2184,7 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	if (retval != 0)
 		INFO("failed to create sysfs entry: (usb_speed) error: (%d)\n",
 					retval);
-	INFO("msm72k_udc: registered gadget driver '%s'\n",
+	INFO("registered gadget driver '%s'\n",
 			driver->driver.name);
 
 	retval = device_create_file(&ui->gadget.dev, &dev_attr_chg_type);
