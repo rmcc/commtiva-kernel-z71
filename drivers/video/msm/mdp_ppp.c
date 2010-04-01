@@ -1266,8 +1266,7 @@ void put_img(struct file *p_src_file)
 }
 
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file)
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 {
 	unsigned long src_start, dst_start;
 	unsigned long src_len = 0;
@@ -1294,8 +1293,6 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		       "memory\n");
 		return -1;
 	}
-	*pp_src_file = p_src_file;
-	*pp_dst_file = p_dst_file;
 	if (mdp_ppp_verify_req(req)) {
 		printk(KERN_ERR "mdp_ppp: invalid image!\n");
 		put_img(p_src_file);

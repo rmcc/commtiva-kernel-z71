@@ -344,29 +344,31 @@ static void mdp_calc_scaleInitPhase_3p1(uint32 in_w,
 		/* decide whether to use FIR or M/N for scaling */
 
 		/* if down-scaling by a factor smaller than 1/4 */
-		if (src_ROI_width > (4 * dst_ROI_height))
-			scale_unit_sel_x = 1;	/* use M/N scalar */
+		if ((dst_ROI_height == 1 && src_ROI_width < 4) ||
+			(src_ROI_width < 4 * dst_ROI_height - 3))
+			scale_unit_sel_x = 0;/* use FIR scalar */
 		else
-			scale_unit_sel_x = 0;	/* use FIR scalar */
+			scale_unit_sel_x = 1;/* use M/N scalar */
 
 		/* if down-scaling by a factor smaller than 1/4 */
-		if (src_ROI_height > (4 * dst_ROI_width))
-			scale_unit_sel_y = 1;	/* use M/N scalar */
+		if ((dst_ROI_width == 1 && src_ROI_height < 4) ||
+			(src_ROI_height < 4 * dst_ROI_width - 3))
+			scale_unit_sel_y = 0;/* use FIR scalar */
 		else
-			scale_unit_sel_y = 0;	/* use FIR scalar */
+			scale_unit_sel_y = 1;/* use M/N scalar */
 	} else {
 		/* decide whether to use FIR or M/N for scaling */
-
-		if (src_ROI_width > (4 * dst_ROI_width))
-			scale_unit_sel_x = 1;	/* use M/N scalar */
+		if ((dst_ROI_width == 1 && src_ROI_width < 4) ||
+			(src_ROI_width < 4 * dst_ROI_width - 3))
+			scale_unit_sel_x = 0;/* use FIR scalar */
 		else
-			scale_unit_sel_x = 0;	/* use FIR scalar */
+			scale_unit_sel_x = 1;/* use M/N scalar */
 
-		if (src_ROI_height > (4 * dst_ROI_height))
-			scale_unit_sel_y = 1;	/* use M/N scalar */
+		if ((dst_ROI_height == 1 && src_ROI_height < 4) ||
+			(src_ROI_height < 4 * dst_ROI_height - 3))
+			scale_unit_sel_y = 0;/* use FIR scalar */
 		else
-			scale_unit_sel_y = 0;	/* use FIR scalar */
-
+			scale_unit_sel_y = 1;/* use M/N scalar */
 	}
 
 	/* if there is a 90 degree rotation */
@@ -628,8 +630,8 @@ void mdp_set_scale(MDPIBUF *iBuf,
 				}
 				ppp_scale_config |= (SCALE_D1_SET << 2);
 			} else
-			    if (((dst_roi_width_scale * 4) / iBuf->roi.width) >=
-				1) {
+			if ((dst_roi_width_scale == 1 && iBuf->roi.width < 4) ||
+			(iBuf->roi.width < 4 * dst_roi_width_scale - 3)) {
 				if ((use_pr)
 				    && (mdp_scale_0p2_to_0p4_mode !=
 					MDP_SCALE_PR)) {
@@ -741,9 +743,9 @@ void mdp_set_scale(MDPIBUF *iBuf,
 					     mdp_scale_0p4_to_0p6_C3);
 				}
 				ppp_scale_config |= (SCALE_D1_SET << 4);
-			} else
-			    if (((dst_roi_height_scale * 4) /
-				 iBuf->roi.height) >= 1) {
+			} else if ((dst_roi_height_scale == 1 &&
+			iBuf->roi.height < 4) ||
+			(iBuf->roi.height < 4 * dst_roi_height_scale - 3)) {
 				if ((use_pr)
 				    && (mdp_scale_0p2_to_0p4_mode !=
 					MDP_SCALE_PR)) {

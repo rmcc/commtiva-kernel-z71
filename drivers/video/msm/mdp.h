@@ -624,8 +624,7 @@ void mdp_set_dma_pan_info(struct fb_info *info, struct mdp_dirty_region *dirty,
 			  boolean sync);
 void mdp_dma_pan_update(struct fb_info *info);
 void mdp_refresh_screen(unsigned long data);
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-		struct file **pp_src, struct file **pp_dest);
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req);
 void mdp_lcd_update_workqueue_handler(struct work_struct *work);
 void mdp_vsync_resync_workqueue_handler(struct work_struct *work);
 void mdp_dma2_update(struct msm_fb_data_type *mfd);

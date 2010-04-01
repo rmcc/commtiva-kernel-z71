@@ -362,7 +362,6 @@ void mdp4_vg_qseed_init(int);
 int mdp4_debugfs_init(void);
 #endif
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file);
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req);
 
 #endif /* MDP_H */
