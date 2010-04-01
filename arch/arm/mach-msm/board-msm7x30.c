@@ -912,6 +912,8 @@ static int fm_radio_setup(struct marimba_fm_platform_data *pdata)
 {
 	int rc;
 	uint32_t irqcfg;
+	const char *id = "FMPW";
+
 	pdata->vreg_s2 = vreg_get(NULL, "s2");
 	if (IS_ERR(pdata->vreg_s2)) {
 		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
@@ -925,18 +927,12 @@ static int fm_radio_setup(struct marimba_fm_platform_data *pdata)
 		return rc;
 	}
 
-	pdata->vreg_xo_out = vreg_get(NULL, "xo_out");
-	if (IS_ERR(pdata->vreg_xo_out)) {
-		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-			__func__, PTR_ERR(pdata->vreg_xo_out));
-		rc = -1;
-		goto fm_xo_out_fail;
-	}
-	rc = vreg_enable(pdata->vreg_xo_out);
-	if (rc) {
-		printk(KERN_ERR "%s: vreg_enable() = %d \n",
-					__func__, rc);
-		goto fm_xo_out_fail;
+	rc = pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+					  PMAPP_CLOCK_VOTE_ON);
+	if (rc < 0) {
+		printk(KERN_ERR "%s: clock vote failed (%d)\n",
+			__func__, rc);
+		goto fm_clock_vote_fail;
 	}
 	irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_NO_PULL,
 					GPIO_2MA);
@@ -950,8 +946,9 @@ static int fm_radio_setup(struct marimba_fm_platform_data *pdata)
 	}
 	return 0;
 fm_gpio_config_fail:
-	vreg_disable(pdata->vreg_xo_out);
-fm_xo_out_fail:
+	pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+				  PMAPP_CLOCK_VOTE_OFF);
+fm_clock_vote_fail:
 	vreg_disable(pdata->vreg_s2);
 	return rc;
 
@@ -961,6 +958,7 @@ fm_xo_out_fail:
 static void fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
 {
 	int rc;
+	const char *id = "FMPW";
 	uint32_t irqcfg = GPIO_CFG(147, 0, GPIO_INPUT, GPIO_PULL_UP,
 					GPIO_2MA);
 	rc = gpio_tlmm_config(irqcfg, GPIO_ENABLE);
@@ -973,12 +971,12 @@ static void fm_radio_shutdown(struct marimba_fm_platform_data *pdata)
 		printk(KERN_ERR "%s: return val: %d \n",
 					__func__, rc);
 	}
-	rc = vreg_disable(pdata->vreg_xo_out);
-	if (rc) {
-		printk(KERN_ERR "%s: return val: %d \n",
-					__func__, rc);
-	}
-};
+	rc = pmapp_clock_vote(id, PMAPP_CLOCK_ID_DO,
+					  PMAPP_CLOCK_VOTE_OFF);
+	if (rc < 0)
+		printk(KERN_ERR "%s: clock_vote return val: %d \n",
+						__func__, rc);
+}
 
 static struct marimba_fm_platform_data marimba_fm_pdata = {
 	.fm_setup =  fm_radio_setup,
