@@ -212,6 +212,18 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	dprintk("Switching from ACPU rate %u KHz -> %u KHz\n",
 	       strt_s->acpu_clk_khz, tgt_s->acpu_clk_khz);
 
+	/* Increase the AXI bus frequency if needed. This must be done before
+	 * increasing the ACPU frequency, since voting for high AXI rates
+	 * implicitly takes care of increasing the MSMC1 voltage, as needed. */
+	if (tgt_s->axi_clk_khz > strt_s->axi_clk_khz) {
+		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+						tgt_s->axi_clk_khz * 1000);
+		if (rc < 0) {
+			pr_err("Setting AXI min rate failed (%d)\n", rc);
+			goto out;
+		}
+	}
+
 	/* Make sure target PLL is on. */
 	if (strt_s->src != tgt_s->src && tgt_s->src >= 0) {
 		dprintk("Enabling PLL %d\n", tgt_s->src);
@@ -227,18 +239,18 @@ int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 	if (reason == SETRATE_SWFI)
 		goto out;
 
-	/* Change the AXI bus frequency if we can. */
-	if (strt_s->axi_clk_khz != tgt_s->axi_clk_khz) {
-		res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
-						tgt_s->axi_clk_khz * 1000);
-		if (res < 0)
-			pr_warning("Setting AXI min rate failed (%d)\n", res);
-	}
-
 	/* Turn off previous PLL if not used. */
 	if (strt_s->src != tgt_s->src && strt_s->src >= 0) {
 		dprintk("Disabling PLL %d\n", strt_s->src);
 		pll_disable(strt_s->src);
+	}
+
+	/* Decrease the AXI bus frequency if we can. */
+	if (tgt_s->axi_clk_khz < strt_s->axi_clk_khz) {
+		res = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+						tgt_s->axi_clk_khz * 1000);
+		if (res < 0)
+			pr_warning("Setting AXI min rate failed (%d)\n", res);
 	}
 
 	/* Nothing else to do for power collapse. */
