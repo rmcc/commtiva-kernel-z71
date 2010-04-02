@@ -227,34 +227,15 @@ void mdp4_mddi_overlay_restore(void)
 void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
-#ifdef MDP4_NONBLOCKING
-	unsigned long flag;
+	if (pipe == mddi_pipe)  /* base layer */
+		if (mdp4_overlay_pipe_staged(pipe->mixer_num) > 1)
+			return;	/* let other pipe to kickoff */
 
-	spin_lock_irqsave(&mdp_spin_lock, flag);
-	if (mfd->dma->busy == TRUE) {
-		INIT_COMPLETION(pipe->comp);
-		pending_pipe = pipe;
-	}
-	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-
-	if (pending_pipe != NULL) {
-		/* wait until DMA finishes the current job */
-		wait_for_completion_killable(&pipe->comp);
-		pending_pipe = NULL;
-	}
-	down(&mfd->sem);
-	mdp_enable_irq(MDP_OVERLAY0_TERM);
-	mfd->dma->busy = TRUE;
-	/* start OVERLAY pipe */
-	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
-	up(&mfd->sem);
-#else
 	down(&mfd->sem);
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
 	INIT_COMPLETION(pipe->comp);
 	pending_pipe = pipe;
-
 	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
 	up(&mfd->sem);
@@ -262,7 +243,6 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 	/* wait until DMA finishes the current job */
 	wait_for_completion_killable(&pipe->comp);
 	mdp_disable_irq(MDP_OVERLAY0_TERM);
-#endif
 
 }
 
@@ -270,11 +250,7 @@ void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 {
 	mutex_lock(&mfd->dma->ov_mutex);
 
-#ifdef MDP4_NONBLOCKING
-	if (mfd && mfd->panel_power_on) {
-#else
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
-#endif
 		mdp4_overlay_update_lcd(mfd);
 
 		mdp4_mddi_overlay_kickoff(mfd, mddi_pipe);

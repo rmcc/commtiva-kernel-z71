@@ -38,7 +38,6 @@ extern boolean mdp_is_in_isr;
 extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 
-
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
 
@@ -342,7 +341,7 @@ void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_dmae_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmae_xy(struct mdp4_overlay_pipe *pipe);
-int mdp4_overlay_active(int mixer);
+int mdp4_overlay_pipe_staged(int mixer);
 void mdp4_overlay0_done_lcdc(void);
 void mdp4_overlay0_done_mddi(void);
 void mdp4_overlay1_done_dtv(void);
