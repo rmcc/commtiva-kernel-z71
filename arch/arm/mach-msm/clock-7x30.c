@@ -1209,6 +1209,7 @@ static struct clk_local_ownership {
 	[C(USB_HS_P)]			= { O(SH2_OWN_ROW2), B(11) },
 
 	[C(CAM_M)]			= { O(SH2_OWN_APPS3), B(6) },
+	[C(CAMIF_PAD_P)]		= { O(SH2_OWN_APPS3), B(6) },
 	[C(CSI0)]			= { O(SH2_OWN_APPS3), B(11) },
 	[C(CSI0_VFE)]			= { O(SH2_OWN_APPS3), B(11) },
 	[C(CSI0_P)]			= { O(SH2_OWN_APPS3), B(11) },
@@ -1220,7 +1221,6 @@ static struct clk_local_ownership {
 
 	[C(ADM)]			= { O(SH2_OWN_GLBL), B(8) },
 	[C(AXI_ROTATOR)]		= { O(SH2_OWN_GLBL), B(13) },
-	[C(CAMIF_PAD_P)]		= { O(SH2_OWN_GLBL), B(8) },
 	[C(ROTATOR_IMEM)]		= { O(SH2_OWN_GLBL), B(13) },
 	[C(ROTATOR_P)]			= { O(SH2_OWN_GLBL), B(13) },
 };
