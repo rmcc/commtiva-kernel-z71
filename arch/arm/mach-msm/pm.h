@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/pm.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -25,6 +25,7 @@ enum {
 	MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT,
 	MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT,
 	MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN,
+	MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE,
 	MSM_PM_SLEEP_MODE_NR
 };
 
