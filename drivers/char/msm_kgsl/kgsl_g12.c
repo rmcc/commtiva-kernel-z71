@@ -127,18 +127,12 @@ void kgsl_g12_timer(unsigned long data)
 	schedule_work(&idle_check);
 }
 
-void kgsl_g12_check_open(void)
-{
-	if (atomic_inc_return(&kgsl_driver.g12_open_count) == 1)
-		kgsl_g12_first_open_locked();
-	KGSL_G12_PRE_HWACCESS();
-}
-
 int kgsl_g12_last_release_locked(void)
 {
 	KGSL_DRV_INFO("kgsl_g12_last_release_locked()\n");
 
-	if (kgsl_driver.g12_device.hwaccess_blocked == KGSL_FALSE) {
+	if (kgsl_driver.g12_device.flags & KGSL_FLAGS_STARTED) {
+		kgsl_g12_stop(&kgsl_driver.g12_device);
 		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_IRQ_OFF);
 		kgsl_g12_close(&kgsl_driver.g12_device);
 		kgsl_pwrctrl(KGSL_PWRFLAGS_G12_CLK_OFF);
@@ -394,8 +388,6 @@ int kgsl_g12_close(struct kgsl_device *device)
 		release_mem_region(regspace->mmio_phys_base,
 					regspace->sizebytes);
 	}
-
-	kgsl_g12_idle(device, KGSL_TIMEOUT_DEFAULT);
 
 	KGSL_DRV_VDBG("return %d\n", 0);
 	device->flags &= ~KGSL_FLAGS_INITIALIZED;
