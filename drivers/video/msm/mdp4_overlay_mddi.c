@@ -81,8 +81,6 @@ static struct mdp4_overlay_pipe *mddi_pipe;
 static struct mdp4_overlay_pipe *pending_pipe;
 static struct msm_fb_data_type *mddi_mfd;
 
-static int vsync_start_y_adjust = 4;
-
 #define WHOLESCREEN
 
 void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
@@ -202,21 +200,6 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 	mdp4_overlay_dmap_xy(pipe);
 
 	mdp4_overlay_dmap_cfg(mfd, 0);
-
-	if ((mfd->use_mdp_vsync) && (mfd->ibuf.vsync_enable) &&
-				(mfd->panel_info.lcd.vsync_enable)) {
-		uint32 start_y;
-
-		if (vsync_start_y_adjust <= pipe->dst_y)
-			start_y = pipe->dst_y - vsync_start_y_adjust;
-		else
-			start_y = (mfd->total_lcd_lines - 1) -
-				(vsync_start_y_adjust - pipe->dst_y);
-		MDP_OUTP(MDP_BASE + 0x210, start_y);
-		MDP_OUTP(MDP_BASE + 0x20c, 1);  /* enable prim vsync */
-	} else {
-		MDP_OUTP(MDP_BASE + 0x20c, 0);  /* disable prim vsync */
-	}
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
