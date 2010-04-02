@@ -34,8 +34,8 @@
 #define AFE_HW_PATH_CODEC_TX    2
 #define AFE_HW_PATH_AUXPCM_RX   3
 #define AFE_HW_PATH_AUXPCM_TX   4
+#define AFE_HW_PATH_MI2S_RX     5
 #define AFE_HW_PATH_MI2S_TX     6
-#define AFE_HW_PATH_MI2S_RX     7
 
 #define AFE_VOLUME_UNITY 0x4000 /* Based on Q14 */
 
