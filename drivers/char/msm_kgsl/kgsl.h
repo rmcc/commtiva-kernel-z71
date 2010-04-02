@@ -64,7 +64,6 @@ struct kgsl_driver {
 	struct miscdevice misc;
 	struct platform_device *pdev;
 	atomic_t open_count;
-	atomic_t g12_open_count;
 	struct mutex mutex;
 
 	int yamato_interrupt_num;
@@ -162,7 +161,6 @@ void kgsl_remove_mem_entry(struct kgsl_mem_entry *entry, bool preserve);
 
 int kgsl_pwrctrl(unsigned int pwrflag);
 int kgsl_yamato_sleep(struct kgsl_device *device, const int idle);
-void kgsl_g12_check_open(void);
 int kgsl_g12_last_release_locked(void);
 int kgsl_g12_first_open_locked(void);
 int kgsl_g12_sleep(struct kgsl_device *device, const int idle);
