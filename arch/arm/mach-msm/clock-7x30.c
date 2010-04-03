@@ -247,7 +247,7 @@ static struct clk_freq_tbl clk_tbl_mdp_lcdc[] = {
 };
 
 static struct clk_freq_tbl clk_tbl_mdp_vsync[] = {
-	F_RAW(24576000, SRC_MAX, 0, 0, 0, NOMINAL), /* Initialized to LPXO. */
+	F_RAW(24576000, SRC_LPXO, 0, 0, 0, NOMINAL),
 	F_END,
 };
 
