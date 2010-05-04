@@ -80,10 +80,10 @@
 #ifdef CONFIG_ARCH_MSM7X27
 #define MSM_PMEM_MDP_SIZE	0x1700000
 #define MSM_PMEM_ADSP_SIZE	0xAE4000
-#define MSM_PMEM_AUDIO_SIZE	0x121000
+#define MSM_PMEM_AUDIO_SIZE	0x5B000
 #define MSM_FB_SIZE		0x177000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
-#define PMEM_KERNEL_EBI1_SIZE	0x64000
+#define PMEM_KERNEL_EBI1_SIZE	0x1C000
 #endif
 
 
@@ -371,11 +371,9 @@ static struct platform_device msm_device_snd = {
 	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
 	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
 #define DEC1_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
+	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP))
 #define DEC2_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
+	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP))
 
 #ifdef CONFIG_ARCH_MSM7X25
 #define DEC3_FORMAT 0
@@ -440,8 +438,8 @@ static unsigned int dec_concurrency_table[] = {
 
 static struct msm_adspdec_info dec_info_list[] = {
 	DEC_INFO("AUDPLAY0TASK", 13, 0, 11), /* AudPlay0BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY1TASK", 14, 1, 5),  /* AudPlay1BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY2TASK", 15, 2, 5),  /* AudPlay2BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY1TASK", 14, 1, 4),  /* AudPlay1BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY2TASK", 15, 2, 4),  /* AudPlay2BitStreamCtrlQueue */
 #ifdef CONFIG_ARCH_MSM7X25
 	DEC_INFO("AUDPLAY3TASK", 16, 3, 0),  /* AudPlay3BitStreamCtrlQueue */
 	DEC_INFO("AUDPLAY4TASK", 17, 4, 0),  /* AudPlay4BitStreamCtrlQueue */
