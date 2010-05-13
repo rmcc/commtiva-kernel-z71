@@ -427,6 +427,8 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			diagmem_free(driver, (unsigned char *)driver->
+				 usb_write_ptr_svc, POOL_TYPE_USB_STRUCT);
 			ret = -EIO;
 			goto fail_free_hdlc;
 		}
@@ -461,6 +463,8 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			diagmem_free(driver, (unsigned char *)driver->
+				 usb_write_ptr_svc, POOL_TYPE_USB_STRUCT);
 			ret = -EIO;
 			goto fail_free_hdlc;
 		}
@@ -492,6 +496,8 @@ static int diagchar_write(struct file *file, const char __user *buf,
 		if (err) {
 			/*Free the buffer right away if write failed */
 			diagmem_free(driver, buf_hdlc, POOL_TYPE_HDLC);
+			diagmem_free(driver, (unsigned char *)driver->
+				 usb_write_ptr_svc, POOL_TYPE_USB_STRUCT);
 			ret = -EIO;
 			goto fail_free_hdlc;
 		}
@@ -511,6 +517,7 @@ static int diagchar_write(struct file *file, const char __user *buf,
 	return 0;
 
 fail_free_hdlc:
+	buf_hdlc = NULL;
 	diagmem_free(driver, buf_copy, POOL_TYPE_COPY);
 	mutex_unlock(&driver->diagchar_mutex);
 	return ret;
