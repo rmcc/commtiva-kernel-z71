@@ -103,6 +103,7 @@
 #include "msm-keypad-devices.h"
 #include "pm.h"
 #include "proc_comm.h"
+#include "smd_private.h"
 #include <linux/msm_kgsl.h>
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android.h>
@@ -2529,7 +2530,7 @@ static void __init msm_device_i2c_init(void)
 	if (gpio_request(61, "i2c_sec_dat"))
 		pr_err("failed to request gpio i2c_sec_dat\n");
 
-	msm_i2c_pdata.rmutex = 1;
+	msm_i2c_pdata.rmutex = (uint32_t)smem_alloc(SMEM_I2C_MUTEX, 8);
 	msm_i2c_pdata.pm_lat =
 		msm_pm_data[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN]
 		.latency;
