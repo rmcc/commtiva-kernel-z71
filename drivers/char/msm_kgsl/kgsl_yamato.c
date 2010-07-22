@@ -539,35 +539,38 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 		KGSL_DRV_VDBG("return %d\n", 0);
 		return 0;
 	}
-	memset(device, 0, sizeof(*device));
 
 	init_waitqueue_head(&device->ib1_wq);
 
-	memcpy(regspace, &config->regspace, sizeof(device->regspace));
-	if (regspace->mmio_phys_base == 0 || regspace->sizebytes == 0) {
-		KGSL_DRV_ERR("dev %d invalid regspace\n", device->id);
-		goto error;
-	}
-	if (!request_mem_region(regspace->mmio_phys_base,
-				regspace->sizebytes, DRIVER_NAME)) {
-		KGSL_DRV_ERR("request_mem_region failed for register memory\n");
-		status = -ENODEV;
-		goto error;
-	}
-
-	regspace->mmio_virt_base = ioremap(regspace->mmio_phys_base,
-					   regspace->sizebytes);
-	KGSL_MEM_INFO("ioremap(regs) = %p\n", regspace->mmio_virt_base);
 	if (regspace->mmio_virt_base == NULL) {
-		KGSL_DRV_ERR("ioremap failed for register memory\n");
-		status = -ENODEV;
-		goto error_release_mem;
+		memcpy(regspace, &config->regspace, sizeof(device->regspace));
+		if (regspace->mmio_phys_base == 0 || regspace->sizebytes == 0) {
+			KGSL_DRV_ERR("dev %d invalid regspace\n", device->id);
+			goto error;
+		}
+		if (!request_mem_region(regspace->mmio_phys_base,
+					regspace->sizebytes, DRIVER_NAME)) {
+			KGSL_DRV_ERR("request_mem_region failed for memory\n");
+			status = -ENODEV;
+			goto error;
+		}
+
+		regspace->mmio_virt_base = ioremap(regspace->mmio_phys_base,
+				regspace->sizebytes);
+		KGSL_MEM_INFO("ioremap(regs) = %p\n", regspace->mmio_virt_base);
+		if (regspace->mmio_virt_base == NULL) {
+			KGSL_DRV_ERR("ioremap failed for register memory\n");
+			release_mem_region(regspace->mmio_phys_base,
+					   regspace->sizebytes);
+			memset(regspace, 0, sizeof(regspace));
+			status = -ENODEV;
+			goto error;
+		}
+
+		KGSL_DRV_INFO("dev %d regs phys 0x%08x size 0x%08x virt %p\n",
+				device->id, regspace->mmio_phys_base,
+				regspace->sizebytes, regspace->mmio_virt_base);
 	}
-
-	KGSL_DRV_INFO("dev %d regs phys 0x%08x size 0x%08x virt %p\n",
-			device->id, regspace->mmio_phys_base,
-			regspace->sizebytes, regspace->mmio_virt_base);
-
 
 	memcpy(&device->gmemspace, &config->gmemspace,
 			sizeof(device->gmemspace));
@@ -617,7 +620,7 @@ int kgsl_yamato_init(struct kgsl_device *device, struct kgsl_devconfig *config)
 	status = kgsl_mmu_init(device);
 	if (status != 0) {
 		status = -ENODEV;
-		goto error_iounmap;
+		goto error;
 	}
 
 	status = kgsl_cmdstream_init(device);
@@ -652,33 +655,18 @@ error_close_cmdstream:
 	kgsl_cmdstream_close(device);
 error_close_mmu:
 	kgsl_mmu_close(device);
-error_iounmap:
-	iounmap(regspace->mmio_virt_base);
-	regspace->mmio_virt_base = NULL;
-error_release_mem:
-	release_mem_region(regspace->mmio_phys_base, regspace->sizebytes);
 error:
 	return status;
 }
 
 int kgsl_yamato_close(struct kgsl_device *device)
 {
-	struct kgsl_memregion *regspace = &device->regspace;
-
 	if (device->memstore.hostptr)
 		kgsl_sharedmem_free(&device->memstore);
 
 	kgsl_mmu_close(device);
 
 	kgsl_cmdstream_close(device);
-
-	if (regspace->mmio_virt_base != NULL) {
-		KGSL_MEM_INFO("iounmap(regs) = %p\n", regspace->mmio_virt_base);
-		iounmap(regspace->mmio_virt_base);
-		regspace->mmio_virt_base = NULL;
-		release_mem_region(regspace->mmio_phys_base,
-					regspace->sizebytes);
-	}
 
 	KGSL_DRV_VDBG("return %d\n", 0);
 	device->flags &= ~KGSL_FLAGS_INITIALIZED;

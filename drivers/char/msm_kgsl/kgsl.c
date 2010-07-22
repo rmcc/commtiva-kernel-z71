@@ -1579,6 +1579,24 @@ struct kgsl_driver kgsl_driver = {
 static void kgsl_driver_cleanup(void)
 {
 
+	struct kgsl_memregion *regspace = &kgsl_driver.yamato_device.regspace;
+
+	regspace = &kgsl_driver.yamato_device.regspace;
+	if (regspace->mmio_virt_base) {
+		iounmap(regspace->mmio_virt_base);
+		release_mem_region(regspace->mmio_phys_base,
+				   regspace->sizebytes);
+		memset(&regspace, 0, sizeof(*regspace));
+	}
+
+	regspace = &kgsl_driver.g12_device.regspace;
+	if (regspace->mmio_virt_base) {
+		iounmap(regspace->mmio_virt_base);
+		release_mem_region(regspace->mmio_phys_base,
+				   regspace->sizebytes);
+		memset(&regspace, 0, sizeof(*regspace));
+	}
+
 	if (kgsl_driver.yamato_interrupt_num > 0) {
 		if (kgsl_driver.yamato_have_irq) {
 			free_irq(kgsl_driver.yamato_interrupt_num, NULL);
