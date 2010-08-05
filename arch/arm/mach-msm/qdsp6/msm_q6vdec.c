@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -80,6 +80,16 @@ enum {
 	VDEC_DALRPC_FLUSH,
 	VDEC_DALRPC_REUSEFRAMEBUFFER,
 	VDEC_DALRPC_GETDECATTRIBUTES,
+	VDEC_DALRPC_SUSPEND,
+	VDEC_DALRPC_RESUME,
+	VDEC_DALRPC_INITIALIZE_00,
+	VDEC_DALRPC_GETINTERNALBUFFERREQ,
+	VDEC_DALRPC_SETBUFFERS_00,
+	VDEC_DALRPC_FREEBUFFERS_00,
+	VDEC_DALRPC_GETPROPERTY,
+	VDEC_DALRPC_SETPROPERTY,
+	VDEC_DALRPC_GETDECATTRIBUTES_00,
+	VDEC_DALRPC_PERFORMANCE_CHANGE_REQUEST
 };
 
 enum {
@@ -249,7 +259,25 @@ static struct vdec_mem_list *vdec_get_mem_from_list(struct vdec_data *vd,
 		return NULL;
 
 }
+static int vdec_performance_change_request(struct vdec_data *vd, void* argp)
+{
+	u32 request_type;
+	int ret;
 
+	ret = copy_from_user(&request_type, argp, sizeof(request_type));
+	if (ret) {
+		pr_err("%s: copy_from_user failed\n", __func__);
+		return ret;
+	}
+	ret = dal_call_f0(vd->vdec_handle,
+			VDEC_DALRPC_PERFORMANCE_CHANGE_REQUEST,
+			request_type);
+	if (ret) {
+		pr_err("%s: remote function failed (%d)\n", __func__, ret);
+		return ret;
+	}
+	return ret;
+}
 static int vdec_initialize(struct vdec_data *vd, void *argp)
 {
 	struct vdec_config_sps vdec_cfg_sps;
@@ -693,6 +721,9 @@ static long vdec_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (ret)
 			pr_err("%s: remote function failed (%d)\n",
 				__func__, ret);
+		break;
+	case VDEC_IOCTL_PERFORMANCE_CHANGE_REQ:
+		ret = vdec_performance_change_request(vd, argp);
 		break;
 	default:
 		pr_err("%s: invalid ioctl!\n", __func__);
