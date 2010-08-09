@@ -674,6 +674,15 @@ static int mmc_blk_resume(struct mmc_card *card)
 	struct mmc_blk_data *md = mmc_get_drvdata(card);
 
 	if (md) {
+#ifdef CONFIG_MMC_AUTO_SUSPEND
+		/* There could be a chance where system suspend can
+		 * fail after card is suspended but before host is
+		 * suspended. But if the host is already suspended
+		 * due to auto-suspend functionality, then resume it
+		 * now.
+		 */
+		mmc_auto_suspend(card->host, 0);
+#endif
 #ifndef CONFIG_MMC_BLOCK_DEFERRED_RESUME
 		mmc_blk_set_blksize(md, card);
 #endif
