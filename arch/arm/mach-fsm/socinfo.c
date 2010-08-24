@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -196,6 +196,8 @@ enum msm_cpu socinfo_get_msm_cpu(void)
 #ifdef CONFIG_ARCH_MSM8X60
 	/* Hardcode CPU for 8x60, which doesn't support socinfo yet. */
 	return MSM_CPU_8X60;
+#elif defined(CONFIG_ARCH_FSM9XXX)
+	return FSM_CPU_9XXX;
 #else
 	return cur_cpu;
 #endif

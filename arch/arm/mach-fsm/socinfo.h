@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,6 +49,7 @@ enum msm_cpu {
 	MSM_CPU_7X30,
 	MSM_CPU_8X55,
 	MSM_CPU_8X60,
+	FSM_CPU_9XXX,
 };
 
 enum msm_cpu socinfo_get_msm_cpu(void);
@@ -115,4 +116,11 @@ static inline int cpu_is_msm7x30(void)
 	return cpu == MSM_CPU_7X30;
 }
 
+static inline int cpu_is_fsm9xxx(void)
+{
+	enum msm_cpu cpu = socinfo_get_msm_cpu();
+
+	BUG_ON(cpu == MSM_CPU_UNKNOWN);
+	return cpu == FSM_CPU_9XXX;
+}
 #endif
