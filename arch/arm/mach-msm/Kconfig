@@ -1,8 +1,11 @@
-if ARCH_MSM
+if ARCH_MSM || ARCH_FSM
 
 choice
 	prompt "MSM SoC Type"
-	default ARCH_MSM7X00A
+	default ARCH_MSM_NONE
+
+config ARCH_MSM_NONE
+	bool "MSM None"
 
 config ARCH_MSM7X01A
 	bool "MSM7x00A / MSM7x01A"

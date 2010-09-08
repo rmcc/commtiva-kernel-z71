@@ -577,6 +577,20 @@ config ARCH_MSM
 	  runs the baseband stack and controls some vital subsystems
 	  (clock and power control, etc).
 
+config ARCH_FSM
+	bool "Qualcomm FSM"
+	select ARCH_HAS_CPUFREQ
+	select GENERIC_GPIO
+	select GENERIC_TIME
+	select GENERIC_CLOCKEVENTS
+	select ARCH_WANT_OPTIONAL_GPIOLIB
+	help
+	  Support for Qualcomm FSM based systems.  This runs on the
+	  Scorpion apps processor of the FSM and depends on a
+	  shared memory interface to the ARM11 modem processor which
+	  controls some vital subsystems.
+
+
 config ARCH_RPC
 	bool "RiscPC"
 	select ARCH_ACORN
@@ -801,6 +815,8 @@ source "arch/arm/mach-ns9xxx/Kconfig"
 source "arch/arm/mach-davinci/Kconfig"
 
 source "arch/arm/mach-ks8695/Kconfig"
+
+source "arch/arm/mach-fsm/Kconfig"
 
 source "arch/arm/mach-msm/Kconfig"
 
@@ -1488,7 +1504,7 @@ endmenu
 
 config CPU_FREQ_MSM
         bool
-        depends on CPU_FREQ && ARCH_MSM
+        depends on CPU_FREQ && (ARCH_MSM || ARCH_FSM)
         default y
         help
           This enables the CPUFreq driver for Qualcomm CPUs.
