@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -162,6 +162,8 @@ static struct {
 static uint32_t msm_irq_idle_disable[VIC_NUM_REGS];
 
 #define SMSM_FAKE_IRQ (0xff)
+
+#if !defined(CONFIG_ARCH_FSM9XXX)
 static uint8_t msm_irq_to_smsm[NR_IRQS] = {
 	[INT_MDDI_EXT] = 1,
 	[INT_MDDI_PRI] = 2,
@@ -219,6 +221,17 @@ static uint8_t msm_irq_to_smsm[NR_IRQS] = {
 	[INT_SIRC_1] = SMSM_FAKE_IRQ,
 #endif
 };
+# else /* !defined CONFIG_ARCH_FSM9XXX */
+static uint8_t msm_irq_to_smsm[NR_IRQS] = {
+	[INT_UART1] = 11,
+	[INT_A9_M2A_0] = SMSM_FAKE_IRQ,
+	[INT_A9_M2A_1] = SMSM_FAKE_IRQ,
+	[INT_A9_M2A_5] = SMSM_FAKE_IRQ,
+	[INT_GP_TIMER_EXP] = SMSM_FAKE_IRQ,
+	[INT_DEBUG_TIMER_EXP] = SMSM_FAKE_IRQ,
+	[INT_SIRC_0] = 10,
+};
+#endif /* !defined CONFIG_ARCH_FSM9XXX */
 
 static inline void msm_irq_write_all_regs(void __iomem *base, unsigned int val)
 {

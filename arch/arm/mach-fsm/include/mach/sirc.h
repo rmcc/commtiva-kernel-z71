@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -56,6 +56,49 @@ void msm_sirc_exit_sleep(void);
  * Secondary interrupt controller interrupts
  */
 
+#if defined(CONFIG_ARCH_FSM9XXX)
+#define FIRST_SIRC_IRQ NR_MSM_IRQS
+
+#define INT_EBI2_WR_ER_DONE           (FIRST_SIRC_IRQ + 0)
+#define INT_EBI2_OP_DONE              (FIRST_SIRC_IRQ + 1)
+#define INT_SDCC_IRQ0                 (FIRST_SIRC_IRQ + 2)
+#define INT_SDCC_IRQ1                 (FIRST_SIRC_IRQ + 3)
+#define INT_UARTDM                    (FIRST_SIRC_IRQ + 4)
+#define INT_UART1                     (FIRST_SIRC_IRQ + 5)
+/*  RESERVED 6 */
+#define INT_CE_IRQ                    (FIRST_SIRC_IRQ + 7)
+#define INT_SYS_ENZO_IEQ              (FIRST_SIRC_IRQ + 8)
+#define INT_PERPH_ENZO_IRQ            (FIRST_SIRC_IRQ + 9)
+#define INT_MXBAR_ENZO_IRQ            (FIRST_SIRC_IRQ + 10)
+#define INT_AXIAGG_ENZO_IRQ           (FIRST_SIRC_IRQ + 11)
+#define INT_UART3_IRQ                 (FIRST_SIRC_IRQ + 12)
+#define INT_UART2_IRQ                 (FIRST_SIRC_IRQ + 13)
+#define INT_PORT0_SSBI2_IRQ           (FIRST_SIRC_IRQ + 14)
+#define INT_PORT1_SSBI2_IRQ           (FIRST_SIRC_IRQ + 15)
+#define INT_PORT2_SSBI2_IRQ           (FIRST_SIRC_IRQ + 16)
+#define INT_PORT3_SSBI2_IRQ           (FIRST_SIRC_IRQ + 17)
+#define INT_GSBI_QUP_INBUF_IRQ        (FIRST_SIRC_IRQ + 18)
+#define INT_GSBI_QUP_OUTBUF_IRQ       (FIRST_SIRC_IRQ + 19)
+#define INT_GSBI_QUP_ERROR_IRQ        (FIRST_SIRC_IRQ + 20)
+#define INT_SPB_DECODER_IRQ           (FIRST_SIRC_IRQ + 21)
+#define INT_FPB_DEC_IRQ               (FIRST_SIRC_IRQ + 22)
+#define INT_BPM_HW_IRQ                (FIRST_SIRC_IRQ + 23)
+#define INT_GPIO_144_IRQ              (FIRST_SIRC_IRQ + 24)
+
+#define NR_SIRC_IRQS                  25
+#define SIRC_MASK                     0x0FFFFFFF
+
+#define LAST_SIRC_IRQ                 (FIRST_SIRC_IRQ + NR_SIRC_IRQS - 1)
+
+#define SPSS_SIRC_INT_CLEAR           (MSM_SIRC_BASE + 0x00)
+#define SPSS_SIRC_INT_POLARITY        (MSM_SIRC_BASE + 0x5C)
+#define SPSS_SIRC_INT_SET             (MSM_SIRC_BASE + 0x18)
+#define SPSS_SIRC_INT_ENABLE          (MSM_SIRC_BASE + 0x20)
+#define SPSS_SIRC_IRQ_STATUS          (MSM_SIRC_BASE + 0x38)
+#define SPSS_SIRC_INT_TYPE            (MSM_SIRC_BASE + 0x30)
+#define SPSS_SIRC_VEC_INDEX_RD        (MSM_SIRC_BASE + 0x48)
+
+#else /* CONFIG_ARCH_FSM9XXX */
 #define FIRST_SIRC_IRQ (NR_MSM_IRQS + NR_GPIO_IRQS)
 
 #define INT_UART1                     (FIRST_SIRC_IRQ + 0)
@@ -110,6 +153,7 @@ void msm_sirc_exit_sleep(void);
 #define SPSS_SIRC_INT_CLEAR           (MSM_SIRC_BASE + 0x28)
 #define SPSS_SIRC_SOFT_INT            (MSM_SIRC_BASE + 0x2C)
 
+#endif /* CONFIG_ARCH_FSM9XXX */
 #endif
 
 #endif

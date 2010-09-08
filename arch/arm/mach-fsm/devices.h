@@ -1,7 +1,7 @@
 /* linux/arch/arm/mach-msm/devices.h
  *
  * Copyright (C) 2008 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -63,6 +63,7 @@ extern struct platform_device msm_rotator_device;
 
 extern struct platform_device msm_device_tsif;
 
+extern struct platform_device msm_device_ssbi0;
 extern struct platform_device msm_device_ssbi1;
 extern struct platform_device msm_device_ssbi2;
 extern struct platform_device msm_device_ssbi3;
@@ -90,6 +91,9 @@ extern unsigned msm_num_clocks_8x50;
 
 extern struct clk msm_clocks_8x60[];
 extern unsigned msm_num_clocks_8x60;
+
+extern struct clk msm_clocks_fsm9xxx[];
+extern unsigned msm_num_clocks_fsm9xxx;
 
 void __init msm_fb_register_device(char *name, void *data);
 void __init msm_camera_register_device(void *, uint32_t, void *);

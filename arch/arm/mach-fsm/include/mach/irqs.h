@@ -28,6 +28,9 @@
 #include "irqs-8x60.h"
 #elif defined(CONFIG_ARCH_MSM_ARM11)
 #include "irqs-7xxx.h"
+#elif defined(CONFIG_ARCH_FSM9XXX)
+#include "irqs-fsm9xxx.h"
+#include "sirc.h"
 #else
 #error "Unknown architecture specification"
 #endif

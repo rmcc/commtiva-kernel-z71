@@ -51,7 +51,9 @@ obj-$(CONFIG_MSM_SDIO_AL_TEST) += sdio_al_test.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o socinfo.o
 ifndef CONFIG_ARCH_MSM8X60
 	obj-$(CONFIG_MSM_SMD) += nand_partitions.o pmic.o
+ifndef CONFIG_ARCH_FSM9XXX
 	obj-$(CONFIG_MSM_ONCRPCROUTER) += rpc_hsusb.o rpc_pmapp.o rpc_fsusb.o
+endif
 	obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
 endif
 obj-$(CONFIG_MSM_SMD_TTY) += smd_tty.o
@@ -91,6 +93,7 @@ ifdef CONFIG_PM
 	obj-$(CONFIG_ARCH_MSM7X27) += pm2.o
 	obj-$(CONFIG_ARCH_MSM7X25) += pm.o
 	obj-$(CONFIG_ARCH_MSM7X01A) += pm.o
+	obj-$(CONFIG_ARCH_FSM9XXX) += pm.o
 else
 	obj-y += no-pm.o
 endif
@@ -129,6 +132,12 @@ obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o devices-msm7x27.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o
 obj-$(CONFIG_ARCH_MSM7X30) += clock-local.o clock-7x30.o acpuclock-7x30.o
 obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o devices-msm7x25.o
+
+obj-$(CONFIG_ARCH_FSM9XXX) += board-fsm9xxx.o devices-fsm9xxx.o
+obj-$(CONFIG_ARCH_FSM9XXX) += sirc-fsm9xxx.o
+ifdef CONFIG_ARCH_FSM9XXX
+	CFLAGS_REMOVE_irq-vic.o = -Werror
+endif
 
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
