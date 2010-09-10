@@ -9,7 +9,7 @@ config ARCH_FSM9XXX
 	select MSM_VIC
 	select CPU_V7
 	select MSM_REMOTE_SPINLOCK_DEKKERS
-	select MSM7200A_TLMM
+	select FSM9XXX_TLMM
 
 endchoice
 
@@ -29,3 +29,7 @@ config PHYS_OFFSET
 	hex
 	default "0x04800000" if ARCH_FSM9XXX && !MSM_STACKED_MEMORY
 endif
+
+
+config FSM9XXX_TLMM
+       bool

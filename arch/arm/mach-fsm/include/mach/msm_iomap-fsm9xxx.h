@@ -62,9 +62,9 @@
 #define MSM_DMOV_PHYS         0x94310000
 #define MSM_DMOV_SIZE         SZ_4K
 
-#define MSM_GPIO1_BASE        IOMEM(0xE0004000)
-#define MSM_GPIO1_PHYS        0x94040000
-#define MSM_GPIO1_SIZE        SZ_4K
+#define MSM_TLMM_BASE         IOMEM(0xE0004000)
+#define MSM_TLMM_PHYS         0x94040000
+#define MSM_TLMM_SIZE         SZ_4K
 
 #define MSM_CLK_CTL_BASE      IOMEM(0xE0005000)
 #define MSM_CLK_CTL_PHYS      0x94020000
@@ -86,11 +86,6 @@
 #define MSM_TCSR_BASE	      IOMEM(0xE0009000)
 #define MSM_TCSR_PHYS	      0x94030000
 #define MSM_TCSR_SIZE	      SZ_4K
-
-
-#define MSM_TLMM_BASE         IOMEM(0xE000A000)
-#define MSM_TLMM_PHYS         0x94040000
-#define MSM_TLMM_SIZE         SZ_4K
 
 #define MSM_SHARED_RAM_BASE   IOMEM(0xE0100000)
 #define MSM_SHARED_RAM_SIZE   SZ_1M

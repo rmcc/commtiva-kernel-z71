@@ -40,6 +40,8 @@
 #include <linux/mfd/pmic8058.h>
 #endif
 
+#include "tlmm-fsm9xxx.h"
+
 static struct resource resources_uart1[] = {
 	{
 		.start	= INT_UART1,
@@ -350,3 +352,47 @@ struct clk msm_clocks_fsm9xxx[] = {
 unsigned msm_num_clocks_fsm9xxx = ARRAY_SIZE(msm_clocks_fsm9xxx);
 #endif
 
+#ifdef CONFIG_GPIOLIB
+
+#define FSM9XXX_GPIO_PLATFORM_DATA(ix, begin, end, irq)			\
+	[ix] = {							\
+		.gpio_base	= begin,				\
+		.ngpio		= end - begin + 1,			\
+		.irq_base	= MSM_GPIO_TO_INT(begin),		\
+		.irq_summary	= irq,					\
+		.regs = {						\
+			.in		= GPIO_IN_ ## ix,		\
+			.out		= GPIO_OUT_ ## ix,		\
+			.oe		= GPIO_OE_ ## ix,		\
+		},							\
+	}
+
+
+#define FSM9XXX_GPIO_DEVICE(ix, pdata)			\
+	{						\
+		.name		= "fsm9xxx-gpio",	\
+		.id		= ix,			\
+		.num_resources	= 0,			\
+		.dev = {				\
+			.platform_data = &pdata[ix],	\
+		},					\
+	}
+
+static struct fsm9xxx_gpio_platform_data gpio_platform_data[] = {
+	FSM9XXX_GPIO_PLATFORM_DATA(0,   0,  31, INT_SIRC_0),
+	FSM9XXX_GPIO_PLATFORM_DATA(1,  32,  63, INT_SIRC_0),
+	FSM9XXX_GPIO_PLATFORM_DATA(2,  64,  95, INT_SIRC_0),
+	FSM9XXX_GPIO_PLATFORM_DATA(3,  96, 127, INT_SIRC_0),
+	FSM9XXX_GPIO_PLATFORM_DATA(4, 128, 159, INT_SIRC_0),
+	FSM9XXX_GPIO_PLATFORM_DATA(5, 160, 167, INT_SIRC_0),
+};
+
+struct platform_device msm_gpio_devices[] = {
+	FSM9XXX_GPIO_DEVICE(0, gpio_platform_data),
+	FSM9XXX_GPIO_DEVICE(1, gpio_platform_data),
+	FSM9XXX_GPIO_DEVICE(2, gpio_platform_data),
+	FSM9XXX_GPIO_DEVICE(3, gpio_platform_data),
+	FSM9XXX_GPIO_DEVICE(4, gpio_platform_data),
+	FSM9XXX_GPIO_DEVICE(5, gpio_platform_data),
+};
+#endif
