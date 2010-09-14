@@ -101,7 +101,8 @@ static inline int __init clock_debug_add(struct clk *clock) { return 0; }
 
 extern struct clk_ops clk_ops_remote;
 
-#if defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60)
+#if defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60) || \
+	defined(CONFIG_ARCH_FSM9XXX)
 void msm_clk_soc_init(void);
 void msm_clk_soc_set_ops(struct clk *clk);
 #else

@@ -296,8 +296,10 @@ void __init msm_clock_init(struct clk *clock_tbl, unsigned num_clocks)
 	}
 	mutex_unlock(&clocks_mutex);
 
-	ebi1_clk = clk_get(NULL, "ebi1_clk");
-	BUG_ON(IS_ERR(ebi1_clk));
+	if (!cpu_is_fsm9xxx()) {
+		ebi1_clk = clk_get(NULL, "ebi1_clk");
+		BUG_ON(IS_ERR(ebi1_clk));
+	}
 	if (cpu_is_msm7x30() || cpu_is_msm8x55()) {
 		pbus_clk = clk_get(NULL, "pbus_clk");
 		BUG_ON(IS_ERR(pbus_clk));

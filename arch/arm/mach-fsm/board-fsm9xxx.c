@@ -60,8 +60,6 @@
 
 #define FPGA_SDCC_STATUS       0x8E0001A8
 
-#define NOCLOCK 1
-
 #ifdef NOTNOW
 int pm8058_gpios_init(struct pm8058_chip *pm_chip)
 {
@@ -104,8 +102,8 @@ static int __init buses_init(void)
 {
 
 #ifdef NOTNOW
-	if (gpio_tlmm_config(GPIO_CFG(PMIC_GPIO_INT, 1, GPIO_INPUT,
-				  GPIO_NO_PULL, GPIO_2MA), GPIO_ENABLE))
+	if (gpio_tlmm_config(GPIO_CFG(PMIC_GPIO_INT, 1, GPIO_CFG_INPUT,
+				  GPIO_NO_PULL, GPIO_CFG_2MA), GPIO_ENABLE))
 		pr_err("%s: gpio_tlmm_config (gpio=%d) failed\n",
 		       __func__, PMIC_GPIO_INT);
 #endif /* NOTNOW */
@@ -179,13 +177,17 @@ static struct platform_device *devices[] __initdata = {
 
 #ifdef NOTNOW
 static struct msm_gpio msm_i2c_gpios_hw[] = {
-	{ GPIO_CFG(85, 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_scl" },
-	{ GPIO_CFG(86, 1, GPIO_INPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_sda" },
+	{ GPIO_CFG(85, 1, GPIO_CFG_INPUT, GPIO_NO_PULL, GPIO_16MA),
+		"i2c_scl" },
+	{ GPIO_CFG(86, 1, GPIO_CFG_INPUT, GPIO_NO_PULL, GPIO_16MA),
+		"i2c_sda" },
 };
 
 static struct msm_gpio msm_i2c_gpios_io[] = {
-	{ GPIO_CFG(85, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_scl" },
-	{ GPIO_CFG(86, 0, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_16MA), "i2c_sda" },
+	{ GPIO_CFG(85, 0, GPIO_CFG_OUTPUT, GPIO_NO_PULL, GPIO_16MA),
+		"i2c_scl" },
+	{ GPIO_CFG(86, 0, GPIO_CFG_OUTPUT, GPIO_NO_PULL, GPIO_16MA),
+		"i2c_sda" },
 };
 
 static void
@@ -234,6 +236,11 @@ static struct msm_ssbi_platform_data msm_i2c_ssbi1_pdata = {
 };
 #endif
 
+static struct msm_acpu_clock_platform_data fsm9xxx_clock_data = {
+	.acpu_switch_time_us = 50,
+	.vdd_switch_time_us = 62,
+};
+
 static void __init fsm9xxx_init_irq(void)
 {
 	msm_init_irq();
@@ -242,8 +249,10 @@ static void __init fsm9xxx_init_irq(void)
 
 #ifdef NOTNOW
 static struct msm_gpio msm_nand_ebi2_cfg_data[] = {
-	{GPIO_CFG(86, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "ebi2_cs1"},
-	{GPIO_CFG(115, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "ebi2_busy1"},
+	{GPIO_CFG(86, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"ebi2_cs1"},
+	{GPIO_CFG(115, 2, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"ebi2_busy1"},
 };
 
 struct vreg *vreg_mmc;
@@ -256,17 +265,24 @@ struct sdcc_gpio {
 };
 
 static struct msm_gpio sdc1_lvlshft_cfg_data[] = {
-	{GPIO_CFG(35, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), "sdc1_lvlshft"},
+	{GPIO_CFG(35, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_16MA),
+		"sdc1_lvlshft"},
 };
 
 
 static struct msm_gpio sdc1_cfg_data[] = {
-	{GPIO_CFG(83, 1, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_8MA), "sdc1_clk"},
-	{GPIO_CFG(82, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_cmd"},
-	{GPIO_CFG(78, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_3"},
-	{GPIO_CFG(79, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_2"},
-	{GPIO_CFG(80, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_1"},
-	{GPIO_CFG(81, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA), "sdc1_dat_0"},
+	{GPIO_CFG(83, 1, GPIO_CFG_OUTPUT, GPIO_NO_PULL, GPIO_8MA),
+		"sdc1_clk"},
+	{GPIO_CFG(82, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"sdc1_cmd"},
+	{GPIO_CFG(78, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"sdc1_dat_3"},
+	{GPIO_CFG(79, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"sdc1_dat_2"},
+	{GPIO_CFG(80, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"sdc1_dat_1"},
+	{GPIO_CFG(81, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_8MA),
+		"sdc1_dat_0"},
 };
 
 
@@ -428,8 +444,10 @@ static void __init fsm9xxx_init_nand(void)
 
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 static struct msm_gpio uart1_config_data[] = {
-	{ GPIO_CFG(138, 1, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA), "UART1_Rx"},
-	{ GPIO_CFG(139, 1, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), "UART1_Tx"},
+	{ GPIO_CFG(138, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
+		"UART1_Rx"},
+	{ GPIO_CFG(139, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
+		"UART1_Tx"},
 };
 
 static void fsm9xxx_init_uart1(void)
@@ -471,9 +489,7 @@ static void __init fsm9xxx_init(void)
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
-#ifndef NOCLOCK
 	msm_acpu_clock_init(&fsm9xxx_clock_data);
-#endif
 
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 
@@ -505,58 +521,12 @@ static void __init fsm9xxx_allocate_memory_regions(void)
 
 }
 
-#ifdef NOCLOCK
-/* FSM9_STUBS
- * These STUBS are needed till clocks are done for FSM9XXX */
-
-int acpuclk_set_rate(int cpu, unsigned long rate, int reason)
-{
-	return 0;
-}
-
-unsigned long clk_get_max_axi_khz(void)
-{
-	return 0;
-}
-
-unsigned long acpuclk_power_collapse(void)
-{
-	return 0;
-}
-
-unsigned long acpuclk_wait_for_irq(void)
-{
-	return 0;
-}
-
-unsigned long acpuclk_get_rate(int cpu)
-{
-	return 0;
-}
-
-uint32_t acpuclk_get_switch_time(void)
-{
-    return 0;
-}
-
-/* FSM9_STUBS end */
-#endif
-
-#ifndef NOCLOCK
-static struct msm_acpu_clock_platform_data fsm9xxx_clock_data = {
-	.acpu_switch_time_us = 50,
-	.vdd_switch_time_us = 62,
-};
-#endif
-
 static void __init fsm9xxx_map_io(void)
 {
 	msm_shared_ram_phys = 0x00100000;
 	msm_map_fsm9xxx_io();
 	fsm9xxx_allocate_memory_regions();
-#ifndef NOCLOCK
 	msm_clock_init(msm_clocks_fsm9xxx, msm_num_clocks_fsm9xxx);
-#endif
 }
 
 MACHINE_START(FSM9XXX_SURF, "QCT FSM9XXX SURF")

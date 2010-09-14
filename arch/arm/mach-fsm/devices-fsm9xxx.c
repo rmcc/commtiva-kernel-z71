@@ -26,12 +26,7 @@
 
 #include "devices.h"
 #include "smd_private.h"
-
-#define NOCLOCK 1
-
-#ifndef NOCLOCK
 #include "clock-fsm9xxx.h"
-#endif
 
 #include <asm/mach/flash.h>
 
@@ -336,7 +331,6 @@ static void __init msm_register_device(struct platform_device *pdev, void *data)
 
 #endif
 
-#ifndef NOCLOCK
 struct clk msm_clocks_fsm9xxx[] = {
 	CLK_FSM9XXX("adm_clk",	ADM_CLK,	NULL, 0),
 #ifdef NOTNOW
@@ -350,7 +344,6 @@ struct clk msm_clocks_fsm9xxx[] = {
 };
 
 unsigned msm_num_clocks_fsm9xxx = ARRAY_SIZE(msm_clocks_fsm9xxx);
-#endif
 
 #ifdef CONFIG_GPIOLIB
 

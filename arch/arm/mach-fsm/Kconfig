@@ -27,7 +27,7 @@ endmenu
 
 config PHYS_OFFSET
 	hex
-	default "0x04800000" if ARCH_FSM9XXX && !MSM_STACKED_MEMORY
+	default "0x10000000" if ARCH_FSM9XXX && !MSM_STACKED_MEMORY
 endif
 
 

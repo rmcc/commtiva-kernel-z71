@@ -41,16 +41,16 @@
  *
  */
 
-#define MSM_VIC_BASE          IOMEM(0xE0000000)
+#define MSM_VIC_BASE          IOMEM(0xF0000000)
 #define MSM_VIC_PHYS          0x9C080000
 #define MSM_VIC_SIZE          SZ_4K
 
 /* INT_CTL2_BASE */
-#define MSM_SIRC_BASE         IOMEM(0xE0001000)
+#define MSM_SIRC_BASE         IOMEM(0xF0001000)
 #define MSM_SIRC_PHYS         0x94190000
 #define MSM_SIRC_SIZE         SZ_4K
 
-#define MSM_CSR_BASE          IOMEM(0xE0002000)
+#define MSM_CSR_BASE          IOMEM(0xF0002000)
 #define MSM_CSR_PHYS          0x9C000000
 #define MSM_CSR_SIZE          SZ_4K
 
@@ -58,36 +58,49 @@
 #define MSM_TMR_BASE          MSM_CSR_BASE
 #define MSM_TMR_SIZE          SZ_4K
 
-#define MSM_DMOV_BASE         IOMEM(0xE0003000)
-#define MSM_DMOV_PHYS         0x94310000
-#define MSM_DMOV_SIZE         SZ_4K
-
-#define MSM_TLMM_BASE         IOMEM(0xE0004000)
+#define MSM_TLMM_BASE         IOMEM(0xF0004000)
 #define MSM_TLMM_PHYS         0x94040000
 #define MSM_TLMM_SIZE         SZ_4K
 
-#define MSM_CLK_CTL_BASE      IOMEM(0xE0005000)
+#define MSM_CLK_CTL_BASE      IOMEM(0xF0005000)
 #define MSM_CLK_CTL_PHYS      0x94020000
 #define MSM_CLK_CTL_SIZE      SZ_4K
 
-
-#define MSM_ACC_BASE          IOMEM(0xE0006000)
+#define MSM_ACC_BASE          IOMEM(0xF0006000)
 #define MSM_ACC_PHYS          0x9C001000
 #define MSM_ACC_SIZE          SZ_4K
 
-#define MSM_SAW_BASE          IOMEM(0xE0007000)
+#define MSM_SAW_BASE          IOMEM(0xF0007000)
 #define MSM_SAW_PHYS          0x9C002000
 #define MSM_SAW_SIZE          SZ_4K
 
-#define MSM_GCC_BASE	      IOMEM(0xE0008000)
+#define MSM_GCC_BASE	      IOMEM(0xF0008000)
 #define MSM_GCC_PHYS	      0x9C082000
 #define MSM_GCC_SIZE	      SZ_4K
 
-#define MSM_TCSR_BASE	      IOMEM(0xE0009000)
+#define MSM_TCSR_BASE	      IOMEM(0xF0009000)
 #define MSM_TCSR_PHYS	      0x94030000
 #define MSM_TCSR_SIZE	      SZ_4K
 
-#define MSM_SHARED_RAM_BASE   IOMEM(0xE0100000)
+#define MSM_DMOV_SD0_BASE     IOMEM(0xF000A000)
+#define MSM_DMOV_SD0_PHYS     0x94310000
+#define MSM_DMOV_SD0_SIZE     SZ_4K
+
+#define MSM_DMOV_SD1_BASE     IOMEM(0xF000B000)
+#define MSM_DMOV_SD1_PHYS     0x94410000
+#define MSM_DMOV_SD1_SIZE     SZ_4K
+
+#define MSM_DMOV_SD2_BASE     IOMEM(0xF000C000)
+#define MSM_DMOV_SD2_PHYS     0x94510000
+#define MSM_DMOV_SD2_SIZE     SZ_4K
+
+#define MSM_DMOV_SD3_BASE     IOMEM(0xF000D000)
+#define MSM_DMOV_SD3_PHYS     0x94610000
+#define MSM_DMOV_SD3_SIZE     SZ_4K
+
+#define MSM_DMOV_BASE		  MSM_DMOV_SD0_BASE
+
+#define MSM_SHARED_RAM_BASE   IOMEM(0xF0100000)
 #define MSM_SHARED_RAM_SIZE   SZ_1M
 
 #define MSM_UART1_PHYS        0x94000000
@@ -98,7 +111,7 @@
 
 
 #ifdef CONFIG_MSM_DEBUG_UART
-#define MSM_DEBUG_UART_BASE   0xE1000000
+#define MSM_DEBUG_UART_BASE   0xF1000000
 #if CONFIG_MSM_DEBUG_UART == 1
 #define MSM_DEBUG_UART_PHYS   MSM_UART1_PHYS
 #elif CONFIG_MSM_DEBUG_UART == 2

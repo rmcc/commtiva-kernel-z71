@@ -65,6 +65,12 @@ unsigned int msm_dmov_build_crci_mask(int n, ...);
 #define DMOV_SD_AARM 0
 #define DMOV_SD_MASTER_ADDR(off, ch) DMOV_ADDR(off, ch, DMOV_SD_MASTER)
 #define DMOV_SD_AARM_ADDR(off, ch) DMOV_ADDR(off, ch, DMOV_SD_AARM)
+#elif defined(CONFIG_ARCH_FSM9XXX)
+#define DMOV_SD_SIZE 0x1400
+#define DMOV_SD_MASTER 0
+#define DMOV_SD_AARM 3
+#define DMOV_SD_MASTER_ADDR(off, ch) DMOV_ADDR(off, ch, DMOV_SD_MASTER)
+#define DMOV_SD_AARM_ADDR(off, ch) DMOV_ADDR(off, ch, DMOV_SD_AARM)
 #else
 #define DMOV_SD_SIZE 0x400
 #define DMOV_SD_AARM 3

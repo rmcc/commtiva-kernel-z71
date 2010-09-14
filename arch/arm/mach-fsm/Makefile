@@ -135,6 +135,7 @@ obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o devices-msm7x25.o
 
 obj-$(CONFIG_ARCH_FSM9XXX) += board-fsm9xxx.o devices-fsm9xxx.o
 obj-$(CONFIG_ARCH_FSM9XXX) += sirc-fsm9xxx.o
+obj-$(CONFIG_ARCH_FSM9XXX) += clock-fsm9xxx.o acpuclock-fsm9xxx.o
 ifdef CONFIG_ARCH_FSM9XXX
 	CFLAGS_REMOVE_irq-vic.o = -Werror
 endif

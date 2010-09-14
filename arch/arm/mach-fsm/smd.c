@@ -38,7 +38,8 @@
 #include "proc_comm.h"
 #include "modem_notifier.h"
 
-#if defined(CONFIG_ARCH_QSD8X50) || defined(CONFIG_ARCH_MSM8X60)
+#if defined(CONFIG_ARCH_QSD8X50) || defined(CONFIG_ARCH_MSM8X60) || \
+	defined(CONFIG_ARCH_FSM9XXX)
 #define CONFIG_QDSP6 1
 #endif
 
@@ -122,6 +123,16 @@ static unsigned last_heap_free = 0xffffffff;
 #define MSM_TRIG_A2Q6_SMD_INT    (writel(1 << 8, MSM_GCC_BASE + 0x8))
 #define MSM_TRIG_A2M_SMSM_INT    (writel(1 << 5, MSM_GCC_BASE + 0x8))
 #define MSM_TRIG_A2Q6_SMSM_INT   (writel(1 << 8, MSM_GCC_BASE + 0x8))
+#define MSM_TRIG_A2DSPS_SMD_INT
+#elif defined(CONFIG_ARCH_FSM9XXX)
+#define MSM_TRIG_A2Q6_SMD_INT  (writel(1 << 10, MSM_GCC_BASE + 0x8))
+#define MSM_TRIG_A2Q6_SMSM_INT (writel(1 << 10, MSM_GCC_BASE + 0x8))
+/* Presently QDSP6 is proxing for modem. TODO uncomment when modem is ready
+#define MSM_TRIG_A2M_SMD_INT   (writel(1 << 0, MSM_GCC_BASE + 0x8))
+#define MSM_TRIG_A2M_SMSM_INT  (writel(1 << 5, MSM_GCC_BASE + 0x8))
+*/
+#define MSM_TRIG_A2M_SMD_INT   MSM_TRIG_A2Q6_SMD_INT
+#define MSM_TRIG_A2M_SMSM_INT  MSM_TRIG_A2Q6_SMSM_INT
 #define MSM_TRIG_A2DSPS_SMD_INT
 #elif defined(CONFIG_ARCH_MSM8X60)
 #define MSM_TRIG_A2M_SMD_INT     (writel(1 << 3, MSM_GCC_BASE + 0x8))
@@ -1504,9 +1515,15 @@ int smd_core_init(void)
 		       "enable_irq_wake failed for INT_A9_M2A_5\n");
 
 #if defined(CONFIG_QDSP6)
+#if defined(CONFIG_ARCH_FSM9XXX)
+	r = request_irq(INT_ADSP_A11, smd_modem_irq_handler,
+			IRQF_TRIGGER_RISING | IRQF_SHARED, "smd_dev",
+			smd_modem_irq_handler);
+#else
 	r = request_irq(INT_ADSP_A11, smd_dsp_irq_handler,
 			IRQF_TRIGGER_RISING | IRQF_SHARED, "smd_dev",
 			smd_dsp_irq_handler);
+#endif
 	if (r < 0) {
 		free_irq(INT_A9_M2A_0, 0);
 		free_irq(INT_A9_M2A_5, 0);
