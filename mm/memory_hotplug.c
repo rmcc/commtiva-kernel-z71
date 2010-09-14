@@ -927,13 +927,43 @@ out:
 	return ret;
 }
 
+#define MOVABLE_PAGE_PERCENT 60
+
+static int offline_pages_viable(void)
+{
+	pg_data_t *pgdat;
+	struct zone *zone;
+	unsigned int anon_movable_pages = 0;
+	unsigned int free_normal_pages = 0;
+	unsigned int low_wm_normal_pages = 0;
+
+	for_each_online_pgdat(pgdat) {
+		zone = &pgdat->node_zones[ZONE_MOVABLE];
+		anon_movable_pages += zone_page_state(zone, NR_ACTIVE_ANON) \
+			+ zone_page_state(zone, NR_INACTIVE_ANON);
+		zone = &pgdat->node_zones[ZONE_NORMAL];
+		free_normal_pages += zone_page_state(zone, NR_FREE_PAGES);
+		low_wm_normal_pages += low_wmark_pages(zone);
+	}
+	free_normal_pages = free_normal_pages - low_wm_normal_pages;
+
+	if (anon_movable_pages < \
+			free_normal_pages * MOVABLE_PAGE_PERCENT / 100)
+		return 1;
+	else
+		return 0;
+}
+
 int remove_memory(u64 start, u64 size)
 {
 	unsigned long start_pfn, end_pfn;
 
+	if (!offline_pages_viable())
+		return -EBUSY;
+
 	start_pfn = PFN_DOWN(start);
 	end_pfn = start_pfn + PFN_DOWN(size);
-	return offline_pages(start_pfn, end_pfn, 120 * HZ);
+	return offline_pages(start_pfn, end_pfn, 5 * HZ);
 }
 
 void reserve_hotplug_pages(unsigned long start_pfn, unsigned long nr_pages)
