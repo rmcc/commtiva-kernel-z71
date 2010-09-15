@@ -475,7 +475,7 @@ uint32_t flash_onfi_probe(struct msm_nand_chip *chip)
 	uint8_t *onfi_param_info_buf = NULL;
 
 	struct {
-		dmov_s cmd[11];
+		dmov_s cmd[12];
 		unsigned cmdptr;
 		struct {
 			uint32_t cmd;
@@ -491,6 +491,7 @@ uint32_t flash_onfi_probe(struct msm_nand_chip *chip)
 			uint32_t devcmdvld_mod;
 			uint32_t sflash_bcfg_orig;
 			uint32_t sflash_bcfg_mod;
+			uint32_t chipselect;
 		} data;
 	} *dma_buffer;
 	dmov_s *cmd;
@@ -551,12 +552,21 @@ uint32_t flash_onfi_probe(struct msm_nand_chip *chip)
 				data.devcmdvld_orig & 0xFFFFFFFE);
 		dma_buffer->data.exec = 1;
 		dma_buffer->data.flash_status = 0xeeeeeeee;
+		dma_buffer->data.chipselect = 0 | 4;
 
 		/* Put the Nand ctlr in Async mode and disable SFlash ctlr */
 		cmd->cmd = 0;
 		cmd->src = msm_virt_to_dma(chip,
 				&dma_buffer->data.sflash_bcfg_mod);
 		cmd->dst = MSM_NAND_SFLASHC_BURST_CFG;
+		cmd->len = 4;
+		cmd++;
+
+		/* Enable DMA */
+		cmd->cmd = 0;
+		cmd->src = msm_virt_to_dma(chip,
+				&dma_buffer->data.chipselect);
+		cmd->dst = MSM_NAND_FLASH_CHIP_SELECT;
 		cmd->len = 4;
 		cmd++;
 
@@ -640,7 +650,7 @@ uint32_t flash_onfi_probe(struct msm_nand_chip *chip)
 		cmd->len = 4;
 		cmd++;
 
-		BUILD_BUG_ON(11 != ARRAY_SIZE(dma_buffer->cmd));
+		BUILD_BUG_ON(12 != ARRAY_SIZE(dma_buffer->cmd));
 		BUG_ON(cmd - dma_buffer->cmd > ARRAY_SIZE(dma_buffer->cmd));
 		dma_buffer->cmd[0].cmd |= CMD_OCB;
 		cmd[-1].cmd |= CMD_OCU | CMD_LC;

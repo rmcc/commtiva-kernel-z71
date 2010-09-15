@@ -160,8 +160,8 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_device_smd,
 	&msm_device_dmov,
-#ifdef NOTNOW
 	&msm_device_nand,
+#ifdef NOTNOW
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi0,
 	&msm_device_ssbi1,
