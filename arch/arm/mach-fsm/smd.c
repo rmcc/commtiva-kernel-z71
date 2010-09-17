@@ -1569,6 +1569,7 @@ int smd_core_init(void)
 	 * state
 	 */
 	smsm_irq_handler(0, 0);
+	do_smd_probe();
 
 	SMD_INFO("smd_core_init() done\n");
 

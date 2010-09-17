@@ -149,6 +149,46 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT].residency = 0,
 };
 
+# define QFEC_MAC_IRQ           28
+# define QFEC_MAC_BASE          0x40000000
+# define QFEC_CLK_BASE          0x94020000
+
+# define QFEC_MAC_SIZE          0x2000
+# define QFEC_CLK_SIZE          0x18100
+
+# define QFEC_MAC_FUSE_BASE     0x80004210
+# define QFEC_MAC_FUSE_SIZE     16
+
+static struct resource qfec_resources[] = {
+	[0] = {
+		.start = QFEC_MAC_BASE,
+		.end   = QFEC_MAC_BASE + QFEC_MAC_SIZE,
+		.flags = IORESOURCE_MEM,
+	},
+	[1] = {
+		.start = QFEC_MAC_IRQ,
+		.end   = QFEC_MAC_IRQ,
+		.flags = IORESOURCE_IRQ,
+	},
+	[2] = {
+		.start = QFEC_CLK_BASE,
+		.end   = QFEC_CLK_BASE + QFEC_CLK_SIZE,
+		.flags = IORESOURCE_IO,
+	},
+	[3] = {
+		.start = QFEC_MAC_FUSE_BASE,
+		.end   = QFEC_MAC_FUSE_BASE + QFEC_MAC_FUSE_SIZE,
+		.flags = IORESOURCE_DMA,
+	},
+};
+
+static struct platform_device qfec_device = {
+	.name           = "qfec",
+	.id             = 0,
+	.num_resources  = ARRAY_SIZE(qfec_resources),
+	.resource       = qfec_resources,
+};
+
 static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_GPIOLIB
 	&msm_gpio_devices[0],
@@ -173,6 +213,7 @@ static struct platform_device *devices[] __initdata = {
 #if defined(CONFIG_SERIAL_MSM) || defined(CONFIG_MSM_SERIAL_DEBUGGER)
 	&msm_device_uart1,
 #endif
+	&qfec_device,
 };
 
 #ifdef NOTNOW

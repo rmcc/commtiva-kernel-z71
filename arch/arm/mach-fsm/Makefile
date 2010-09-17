@@ -48,13 +48,13 @@ obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MSM_SDIO_AL) += sdio_al.o
 obj-$(CONFIG_MSM_SDIO_AL_TEST) += sdio_al_test.o
+obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o socinfo.o
 ifndef CONFIG_ARCH_MSM8X60
 	obj-$(CONFIG_MSM_SMD) += nand_partitions.o pmic.o
 ifndef CONFIG_ARCH_FSM9XXX
 	obj-$(CONFIG_MSM_ONCRPCROUTER) += rpc_hsusb.o rpc_pmapp.o rpc_fsusb.o
 endif
-	obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
 endif
 obj-$(CONFIG_MSM_SMD_TTY) += smd_tty.o
 obj-$(CONFIG_MSM_SMD_QMI) += smd_qmi.o
