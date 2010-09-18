@@ -1329,7 +1329,7 @@ config SERIAL_SGI_IOC3
 
 config SERIAL_MSM
 	bool "MSM on-chip serial port support"
-	depends on ARM && ARCH_MSM
+	depends on ARM && (ARCH_MSM || ARCH_FSM)
 	select SERIAL_CORE
 
 config SERIAL_MSM_CONSOLE
