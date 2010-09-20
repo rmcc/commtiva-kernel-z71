@@ -1140,12 +1140,6 @@ static long kgsl_ioctl_sharedmem_from_vmalloc(struct kgsl_file_private *private,
 		goto error;
 	}
 
-	if ((private->vmalloc_size + len) > KGSL_GRAPHICS_MEMORY_LOW_WATERMARK
-	    && !param.force_no_low_watermark) {
-		result = -ENOMEM;
-		goto error;
-	}
-
 	list_for_each_entry_safe(entry, entry_tmp,
 				&private->preserve_entry_list, list) {
 		if (entry->memdesc.size == len) {
@@ -1175,7 +1169,9 @@ static long kgsl_ioctl_sharedmem_from_vmalloc(struct kgsl_file_private *private,
 		result =
 		    kgsl_mmu_map(private->pagetable,
 			(unsigned long)vmalloc_area, len,
-			GSL_PT_PAGE_RV | GSL_PT_PAGE_WV,
+			GSL_PT_PAGE_RV |
+			((param.flags & KGSL_MEMFLAGS_GPUREADONLY) ?
+			0 : GSL_PT_PAGE_WV),
 			&entry->memdesc.gpuaddr, KGSL_MEMFLAGS_ALIGN4K);
 		if (result != 0)
 			goto error_free_vmalloc;
