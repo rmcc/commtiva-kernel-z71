@@ -1153,6 +1153,7 @@ static void qfec_mem_dealloc(struct net_device *dev)
 	unsigned int        size = PAGE_SIZE;
 
 	dma_free_coherent(&dev->dev, size, priv->bd_base, priv->tbd_dma);
+	priv->bd_base = 0;
 }
 
 /* -------------------------------------------------------------------------

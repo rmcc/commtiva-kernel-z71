@@ -58,6 +58,8 @@
 #define PMIC_VREG_WLAN_LEVEL	2900
 #define PMIC_GPIO_SD_DET	165
 
+#define GPIO_MAC_RST_N		37
+
 #define FPGA_SDCC_STATUS       0x8E0001A8
 
 #ifdef NOTNOW
@@ -188,6 +190,21 @@ static struct platform_device qfec_device = {
 	.num_resources  = ARRAY_SIZE(qfec_resources),
 	.resource       = qfec_resources,
 };
+
+static struct msm_gpio phy_config_data[] = {
+	{ GPIO_CFG(GPIO_MAC_RST_N, 0, GPIO_CFG_OUTPUT,
+			GPIO_CFG_NO_PULL, GPIO_CFG_2MA), "MAC_RST_N"},
+};
+
+static int __init phy_init(void)
+{
+	msm_gpios_request_enable(phy_config_data, ARRAY_SIZE(phy_config_data));
+	gpio_direction_output(GPIO_MAC_RST_N, 0);
+	udelay(100);
+	gpio_set_value(GPIO_MAC_RST_N, 1);
+
+	return 0;
+}
 
 static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_GPIOLIB
@@ -547,6 +564,7 @@ static void __init fsm9xxx_init(void)
 	msm_device_i2c_init();
 	buses_init();
 #endif
+	phy_init();
 
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	fsm9xxx_init_uart1();
