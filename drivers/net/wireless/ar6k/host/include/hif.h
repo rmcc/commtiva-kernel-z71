@@ -400,6 +400,9 @@ void HIFMaskInterrupt(HIF_DEVICE *device);
 
 void HIFUnMaskInterrupt(HIF_DEVICE *device);
 
+int HIFDoDeviceSuspend(HIF_DEVICE *device);
+int HIFDoDeviceResume(HIF_DEVICE *device);
+
 /*
  * This set of functions are to be used by the bus driver to notify
  * the HIF module about various events.
