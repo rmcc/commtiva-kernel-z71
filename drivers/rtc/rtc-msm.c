@@ -607,17 +607,32 @@ static unsigned long msmrtc_get_seconds(void)
 static int
 msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 {
+	/* FIH, Michael Kao, 2009/06/08{ */
+	/* [FXX_CR], Add For Blink RED LED when battery low in suspend mode */
+	//if (rtcalarm_time) {
+	int RPC_wakeup_cycle_time=600;
+	/* FIH, Michael Kao, 2009/07/10{ */
+	/* [FXX_CR], Modify for FTM sleep current test */
 	if (rtcalarm_time) {
 		unsigned long now = msmrtc_get_seconds();
 		int diff = rtcalarm_time - now;
+
+        if(diff>RPC_wakeup_cycle_time)
+		    diff=RPC_wakeup_cycle_time;
+
 		if (diff <= 0) {
 			msmrtc_alarmtimer_expired(1);
 			msm_pm_set_max_sleep_time(0);
 			return 0;
 		}
 		msm_pm_set_max_sleep_time((int64_t) ((int64_t) diff * NSEC_PER_SEC));
-	} else
-		msm_pm_set_max_sleep_time(0);
+	}
+	else
+	{   
+		msm_pm_set_max_sleep_time((int64_t) ((int64_t) RPC_wakeup_cycle_time * NSEC_PER_SEC));
+	}
+	/* FIH, Michael Kao, 2009/07/10{ */
+	/* } FIH, Michael Kao, 2009/06/08 */
 	return 0;
 }
 
@@ -647,7 +662,6 @@ static int __init msmrtc_init(void)
 {
 	int rc;
 	rtcalarm_time = 0;
-
 	/*
 	 * For backward compatibility, register multiple platform
 	 * drivers with the RPC PROG_VERS to be supported.
@@ -658,8 +672,6 @@ static int __init msmrtc_init(void)
 	snprintf((char *)msmrtc_driver.driver.name,
 		 strlen(msmrtc_driver.driver.name)+1,
 		 "rs%08x", TIMEREMOTE_PROG_NUMBER);
-	printk(KERN_DEBUG "RTC Registering with %s\n",
-		msmrtc_driver.driver.name);
 
 	rc = platform_driver_register(&msmrtc_driver);
 	if (rc) {

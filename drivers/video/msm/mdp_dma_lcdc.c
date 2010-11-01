@@ -282,7 +282,11 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	vsync_polarity = 0;
 #endif
 	data_en_polarity = 0;
-
+/* { FIH, Chandler 6/19  */
+    hsync_polarity = 1;
+	vsync_polarity = 1;
+	data_en_polarity = 1;
+/*  FIH, Chandler 6/19  }*/
 	ctrl_polarity =
 	    (data_en_polarity << 2) | (vsync_polarity << 1) | (hsync_polarity);
 

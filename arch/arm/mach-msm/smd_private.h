@@ -16,6 +16,12 @@
 #ifndef _ARCH_ARM_MACH_MSM_MSM_SMD_PRIVATE_H_
 #define _ARCH_ARM_MACH_MSM_MSM_SMD_PRIVATE_H_
 
+/* FIH, Debbie Sun, 2009/06/18 { */
+/* get share memory command address dynamically */
+#ifdef CONFIG_FIH_FXX
+#include <mach/smd_private_fih.h>
+#else
+
 #include <linux/types.h>
 #include <linux/spinlock.h>
 
@@ -312,4 +318,6 @@ void *smem_find(unsigned id, unsigned size);
 void *smem_get_entry(unsigned id, unsigned *size);
 void smd_diag(void);
 
+#endif
+/* FIH, Debbie Sun, 2009/06/18 }*/
 #endif

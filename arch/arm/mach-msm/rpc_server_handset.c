@@ -20,7 +20,9 @@
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/switch.h>
-
+/* FIH, ChandlerKang, 2009/7/28, debounce key_power { */
+#include <linux/time.h> 
+/* FIH, ChandlerKang, 2009/7/28, debounce key_power } */
 #include <asm/mach-types.h>
 
 #include <mach/msm_rpcrouter.h>
@@ -53,6 +55,11 @@
 #define HS_REL_K		0xFF	/* key release */
 
 #define KEY(hs_key, input_key) ((hs_key << 24) | input_key)
+
+#if defined(CONFIG_SWITCH_GPIO) && defined(CONFIG_FIH_FXX)
+#define EXTERNAL_SWITCH_DEV
+#endif
+
 
 enum hs_event {
 	HS_EVNT_EXT_PWR = 0,	/* External Power status        */
@@ -150,8 +157,13 @@ struct hs_event_cb_recv {
 };
 
 static const uint32_t hs_key_map[] = {
+/* FIH, PeterKCTseng, @20090526 { */
+/* power key support              */
+//	KEY(HS_PWR_K, KEY_POWER),
+//	KEY(HS_END_K, KEY_END),
 	KEY(HS_PWR_K, KEY_POWER),
-	KEY(HS_END_K, KEY_END),
+	KEY(HS_END_K, KEY_POWER),
+/* } FIH, PeterKCTseng, @20090526 */
 	KEY(HS_STEREO_HEADSET_K, SW_HEADPHONE_INSERT),
 	KEY(HS_HEADSET_SWITCH_K, KEY_MEDIA),
 	0
@@ -167,8 +179,21 @@ struct msm_handset {
 	struct switch_dev sdev;
 };
 
+static struct input_dev *kpdev;
 static struct msm_rpc_client *rpc_client;
 static struct msm_handset *hs;
+/* FIH, ChandlerKang, 2009/7/28, debounce key_power { */
+static unsigned long time_last_key=0; 
+static unsigned long time_now_key=0; 
+static int flag_ignore_up=0;
+/* FIH, ChandlerKang, 2009/7/28, debounce key_power } */
+
+/* FIH, PeterKCTseng, @20090526 { */
+/* power key support              */
+//	KEY(HS_PWR_K, KEY_POWER),
+//	KEY(HS_END_K, KEY_END),
+extern struct input_dev *fih_msm_keypad_get_input_dev(void);
+/* } FIH, PeterKCTseng, @20090526 */
 
 static int hs_find_key(uint32_t hscode)
 {
@@ -186,10 +211,14 @@ static int hs_find_key(uint32_t hscode)
 static void
 report_headset_switch(struct input_dev *dev, int key, int value)
 {
+#ifndef EXTERNAL_SWITCH_DEV
 	struct msm_handset *hs = input_get_drvdata(dev);
+#endif
 
 	input_report_switch(dev, key, value);
+#ifndef EXTERNAL_SWITCH_DEV
 	switch_set_state(&hs->sdev, value);
+#endif
 }
 
 /*
@@ -220,18 +249,54 @@ static void report_hs_key(uint32_t key_code, uint32_t key_parm)
 	switch (key) {
 	case KEY_POWER:
 	case KEY_END:
+/* FIH, PeterKCTseng, @20090526 { */
+/* power key support              */
+//	KEY(HS_PWR_K, KEY_POWER),
+//	KEY(HS_END_K, KEY_END),
+	kpdev = fih_msm_keypad_get_input_dev();
+/* } FIH, PeterKCTseng, @20090526 */
+
+		if (!kpdev) {
+			printk(KERN_ERR "%s: No input device for reporting "
+					"pwr/end key press\n", __func__);
+			return;
+		}
+        /* FIH, ChandlerKang, 2009/7/28, debounce key_power { */
+        if(key==KEY_POWER && key_code != HS_REL_K){        
+            time_now_key=jiffies;            
+            //printk(KERN_INFO " %s(), time_now_key(%lu),time_last_key(%lu)\n", __func__, time_now_key, time_last_key);
+            if( time_last_key && time_before( time_now_key, time_last_key+ (HZ*1/10) ) ) {
+                //printk(KERN_INFO " %s(): ignore power key down, now(%lu), last(%lu) \n", __func__, time_now_key, time_last_key);
+                flag_ignore_up=1; 
+                return;
+            }
+            time_last_key=time_now_key;
+        }
+
+        /* Ignore the following key_power up */
+        if( key==KEY_POWER && key_code==HS_REL_K && flag_ignore_up==1 ){
+            //printk(KERN_INFO " %s(): ignore power key up !! \n", __func__);
+            flag_ignore_up=0;
+            return;
+        }
+        /* FIH, ChandlerKang, 2009/7/28, debounce key_power } */        
+		input_report_key(kpdev, key, (key_code != HS_REL_K));
+		input_sync(kpdev);
+		break;
 	case KEY_MEDIA:
 		input_report_key(hs->ipdev, key, (key_code != HS_REL_K));
+		input_sync(hs->ipdev);//FIH_Misty add
 		break;
 	case SW_HEADPHONE_INSERT:
 		report_headset_switch(hs->ipdev, key, (key_code != HS_REL_K));
+		input_sync(hs->ipdev);//FIH_Misty add
 		break;
 	case -1:
 		printk(KERN_ERR "%s: No mapping for remote handset event %d\n",
 				 __func__, temp_key_code);
 		return;
 	}
-	input_sync(hs->ipdev);
+//	input_sync(hs->ipdev);  FIH_Misty mark
 }
 
 static int handle_hs_rpc_call(struct msm_rpc_server *server,
@@ -242,6 +307,12 @@ static int handle_hs_rpc_call(struct msm_rpc_server *server,
 		uint32_t key_parm;
 	};
 
+/* FIH, PeterKCTseng, @20090526 { */
+/* power key support              */
+//	KEY(HS_PWR_K, KEY_POWER),
+//	KEY(HS_END_K, KEY_END),
+	//kpdev = fih_msm_keypad_get_input_dev();
+/* } FIH, PeterKCTseng, @20090526 */
 	switch (req->procedure) {
 	case RPC_KEYPAD_NULL_PROC:
 		return 0;
@@ -468,6 +539,7 @@ static void __devexit hs_rpc_deinit(void)
 		msm_rpc_unregister_client(rpc_client);
 }
 
+#ifndef EXTERNAL_SWITCH_DEV
 static ssize_t msm_headset_print_name(struct switch_dev *sdev, char *buf)
 {
 	switch (switch_get_state(&hs->sdev)) {
@@ -478,6 +550,7 @@ static ssize_t msm_headset_print_name(struct switch_dev *sdev, char *buf)
 	}
 	return -EINVAL;
 }
+#endif
 
 static int __devinit hs_probe(struct platform_device *pdev)
 {
@@ -488,12 +561,14 @@ static int __devinit hs_probe(struct platform_device *pdev)
 	if (!hs)
 		return -ENOMEM;
 
+#ifndef EXTERNAL_SWITCH_DEV
 	hs->sdev.name	= "h2w";
 	hs->sdev.print_name = msm_headset_print_name;
 
 	rc = switch_dev_register(&hs->sdev);
 	if (rc)
 		goto err_switch_dev_register;
+#endif
 
 	ipdev = input_allocate_device();
 	if (!ipdev) {
@@ -539,9 +614,11 @@ err_hs_rpc_init:
 err_reg_input_dev:
 	input_free_device(ipdev);
 err_alloc_input_dev:
+#ifndef EXTERNAL_SWITCH_DEV
 	switch_dev_unregister(&hs->sdev);
 err_switch_dev_register:
 	kfree(hs);
+#endif
 	return rc;
 }
 
@@ -550,7 +627,9 @@ static int __devexit hs_remove(struct platform_device *pdev)
 	struct msm_handset *hs = platform_get_drvdata(pdev);
 
 	input_unregister_device(hs->ipdev);
+#ifndef EXTERNAL_SWITCH_DEV
 	switch_dev_unregister(&hs->sdev);
+#endif
 	kfree(hs);
 	hs_rpc_deinit();
 	return 0;

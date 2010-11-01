@@ -51,6 +51,7 @@
 #include "timer.h"
 #include "pm.h"
 
+
 /******************************************************************************
  * Debug Definitions
  *****************************************************************************/
@@ -111,7 +112,10 @@ module_param_named(
 	int, S_IRUGO | S_IWUSR | S_IWGRP
 );
 
-static int msm_pm_idle_sleep_mode = CONFIG_MSM7X00A_IDLE_SLEEP_MODE;
+//static int msm_pm_idle_sleep_mode = CONFIG_MSM7X00A_IDLE_SLEEP_MODE;
+//static int msm_pm_idle_sleep_mode = MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT;
+static int msm_pm_idle_sleep_mode = MSM_PM_SLEEP_MODE_POWER_COLLAPSE;  //Added by Stanley
+//static int msm_pm_idle_sleep_mode = MSM_PM_SLEEP_MODE_APPS_SLEEP;
 module_param_named(
 	idle_sleep_mode, msm_pm_idle_sleep_mode,
 	int, S_IRUGO | S_IWUSR | S_IWGRP
@@ -374,6 +378,9 @@ static void msm_pm_config_hw_before_power_down(void)
 #if defined(CONFIG_ARCH_MSM7X30)
 	writel(1, APPS_PWRDOWN);
 	writel(4, APPS_SECOP);
+#elif defined(CONFIG_ARCH_MSM7X27)
+	writel(0x1f, APPS_CLK_SLEEP_EN);
+	writel(1, APPS_PWRDOWN);
 #else
 	writel(0x1f, APPS_CLK_SLEEP_EN);
 	writel(1, APPS_PWRDOWN);
@@ -1216,6 +1223,7 @@ static int msm_pm_swfi(bool ramp_acpu)
 	}
 
 	msm_pm_config_hw_before_swfi();
+
 	msm_arch_idle();
 
 	if (ramp_acpu) {
@@ -1435,6 +1443,7 @@ static int msm_pm_enter(suspend_state_t state)
 	int64_t time = 0;
 
 	time = msm_timer_get_sclk_time(&period);
+
 	ret = msm_clock_require_tcxo(clk_ids, NR_CLKS);
 #elif defined(CONFIG_CLOCK_BASED_SLEEP_LIMIT)
 	ret = msm_clock_require_tcxo(NULL, 0);
@@ -1513,6 +1522,7 @@ static int msm_pm_enter(suspend_state_t state)
 
 		if (time != 0) {
 			end_time = msm_timer_get_sclk_time(NULL);
+
 			if (end_time != 0) {
 				time = end_time - time;
 				if (time < 0)
@@ -1547,22 +1557,50 @@ static struct platform_suspend_ops msm_pm_ops = {
 /******************************************************************************
  * Restart Definitions
  *****************************************************************************/
-
+extern int fih_proc_pid_cmdline(struct task_struct *task, char * buffer);
 static uint32_t restart_reason = 0x776655AA;
 
 static void msm_pm_power_off(void)
 {
+    /* FIH, Paul Huang, 2009/08/12 { */
+	uint32_t oem_cmd = SMEM_PROC_COMM_OEM_POWER_OFF;
+    uint32_t smem_response = 0;
+    //uint32_t cmd_parameter = 0;
+
+    /* Paul Huang, 2010/02/10 { */
+    struct thread_info *thread = current_thread_info();
+    //struct file *gLog_filp = NULL;
+    char buffer[128];
+    char buf2[128];
+    memset(buffer, 0, sizeof(buffer));
+    memset(buf2, 0, sizeof(buf2));
+    fih_proc_pid_cmdline(thread->task, buffer);
+    snprintf(buf2, sizeof(buf2), "Caller process: %s cmdline: %s\n", thread->task->comm, buffer);
+    buf2[sizeof(buf2) - 1] = 0; //Add null ended.
+    //printk(KERN_EMERG "Caller process: %s cmdline: %s\n", thread->task->comm, buffer);
+    printk(KERN_EMERG "%s\n", buf2);
+    /* Paul Huang, 2010/02/10 } */
 	msm_rpcrouter_close();
-	msm_proc_comm(PCOM_POWER_DOWN, 0, 0);
+
+    oem_cmd = SMEM_PROC_COMM_OEM_POWER_OFF;
+    smem_response = 0;
+    //cmd_parameter = 0;
+	msm_proc_comm_oem(PCOM_CUSTOMER_CMD1, &oem_cmd, &smem_response, (unsigned *)buf2 );
+
+//	msm_proc_comm(PCOM_POWER_DOWN, 0, 0);
+    /* FIH, Paul Huang, 2009/08/12 } */
 	for (;;)
 		;
 }
-
 static void msm_pm_restart(char str)
 {
+#define FLUSH_CACHE_SIZE    0x40000 // 256KB
+    /* FIH, Paul Huang, 2009/08/12 { */
+	uint32_t oem_cmd = SMEM_PROC_COMM_OEM_RESET_CHIP_EBOOT;
 	msm_rpcrouter_close();
-	msm_proc_comm(PCOM_RESET_CHIP, &restart_reason, 0);
-
+	msm_proc_comm_oem(PCOM_CUSTOMER_CMD1, &oem_cmd, 0, &restart_reason);
+	//msm_proc_comm(PCOM_RESET_CHIP_IMM, &restart_reason, 0);
+    /* FIH, Paul Huang, 2009/08/12 } */
 	for (;;)
 		;
 }
@@ -1578,6 +1616,12 @@ static int msm_reboot_call
 			restart_reason = 0x77665502;
 		} else if (!strcmp(cmd, "eraseflash")) {
 			restart_reason = 0x776655EF;
+   		} else if (!strcmp(cmd, "reset_rtc")) {
+			restart_reason = 0x776655F0;
+		} else if (!strncmp(cmd, "SDL1", 4)) {
+			restart_reason = 0x53444C31;    //ASCII code of "SDL1"
+		} else if (!strncmp(cmd, "SDL2", 4)) {
+			restart_reason = 0x53444C32;    //ASCII code of "SDL2"
 		} else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned code = simple_strtoul(cmd + 4, 0, 16) & 0xff;
 			restart_reason = 0x6f656d00 | code;

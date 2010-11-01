@@ -136,13 +136,31 @@ static int sdio_irq_thread(void *_host)
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (host->caps & MMC_CAP_SDIO_IRQ)
 			host->ops->enable_sdio_irq(host, 1);
+/* ATHENV */
+		wake_unlock(&host->mmc_sdio_irq_wake_lock);
+/* ATHENV */
 		if (!kthread_should_stop())
 			schedule_timeout(period);
+/* ATHENV */
+		wake_lock(&host->mmc_sdio_irq_wake_lock);
+/* ATHENV */
 		set_current_state(TASK_RUNNING);
 	} while (!kthread_should_stop());
 
 	if (host->caps & MMC_CAP_SDIO_IRQ)
 		host->ops->enable_sdio_irq(host, 0);
+/* for FIH Test */
+/* ATHENV */
+  /* someone is trying to reclaim it? */
+  while (!kthread_should_stop()) {
+    printk("[%s]: [%d], wait for someone to reclaim\n", __func__, current->pid);
+    set_current_state(TASK_INTERRUPTIBLE);
+    schedule_timeout(HZ);
+    set_current_state(TASK_RUNNING);
+  }
+  wake_unlock(&host->mmc_sdio_irq_wake_lock);
+/* ATHENV */
+/* for FIH Test */
 
 	pr_debug("%s: IRQ thread exiting with code %d\n",
 		 mmc_hostname(host), ret);
@@ -158,6 +176,9 @@ static int sdio_card_irq_get(struct mmc_card *card)
 
 	if (!host->sdio_irqs++) {
 		atomic_set(&host->sdio_irq_thread_abort, 0);
+/* ATHENV */
+		wake_lock_init(&host->mmc_sdio_irq_wake_lock, WAKE_LOCK_SUSPEND, "mmc_sdio_irq");
+/* ATHENV */
 		host->sdio_irq_thread =
 			kthread_run(sdio_irq_thread, host, "ksdioirqd/%s",
 				mmc_hostname(host));
@@ -180,7 +201,20 @@ static int sdio_card_irq_put(struct mmc_card *card)
 
 	if (!--host->sdio_irqs) {
 		atomic_set(&host->sdio_irq_thread_abort, 1);
+/* ATHENV */
+#if 0
 		kthread_stop(host->sdio_irq_thread);
+#else
+		if (host->claimed) {
+			mmc_release_host(host);
+			kthread_stop(host->sdio_irq_thread);
+			mmc_claim_host(host);
+		} else {
+			kthread_stop(host->sdio_irq_thread);
+		}
+		wake_lock_destroy(&host->mmc_sdio_irq_wake_lock);
+#endif
+/* ATHENV */
 	}
 
 	return 0;
@@ -211,6 +245,13 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 		return -EBUSY;
 	}
 
+/* ATHENV */
+	func->irq_handler = handler;
+	ret = sdio_card_irq_get(func->card);
+	if (ret)
+		func->irq_handler = NULL;
+
+/* ATHENV */
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);
 	if (ret)
 		return ret;
@@ -223,11 +264,15 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 	if (ret)
 		return ret;
 
+/* ATHENV */
+#if 0
 	func->irq_handler = handler;
 	ret = sdio_card_irq_get(func->card);
 	if (ret)
 		func->irq_handler = NULL;
 
+#endif
+/* ATHENV */
 	return ret;
 }
 EXPORT_SYMBOL_GPL(sdio_claim_irq);
@@ -248,11 +293,15 @@ int sdio_release_irq(struct sdio_func *func)
 
 	pr_debug("SDIO: Disabling IRQ for %s...\n", sdio_func_id(func));
 
+/* ATHENV */
+#if 0
 	if (func->irq_handler) {
 		func->irq_handler = NULL;
 		sdio_card_irq_put(func->card);
 	}
 
+#endif
+/* ATHENV */
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);
 	if (ret)
 		return ret;
@@ -267,6 +316,13 @@ int sdio_release_irq(struct sdio_func *func)
 	if (ret)
 		return ret;
 
+/* ATHENV */
+	if (func->irq_handler) {
+		func->irq_handler = NULL;
+		sdio_card_irq_put(func->card);
+	}
+
+/* ATHENV */
 	return 0;
 }
 EXPORT_SYMBOL_GPL(sdio_release_irq);

@@ -24,6 +24,12 @@ struct mmc_platform_data {
 	unsigned int sdiowakeup_irq;
 	int (*register_status_notify)(void (*callback)(int card_present, void *dev_id), void *dev_id);
 	unsigned long irq_flags;
+/* FIH, JamesKCTung, 2009/07/03 */
+#ifdef CONFIG_FIH_FXX
+	int (*sdio_suspend)(int devId);
+	int (*sdio_resume)(int  devId);
+#endif
+/* FIH, JamesKCTung, 2009/07/03 */
 	unsigned long mmc_bus_width;
 	int (*wpswitch) (struct device *);
 	int dummy52_required;

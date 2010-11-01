@@ -627,7 +627,10 @@ static void rfcomm_session_close(struct rfcomm_session *s, int err)
 	struct list_head *p, *n;
 
 	BT_DBG("session %p state %ld err %d", s, s->state, err);
-
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+	if (s->state == BT_CLOSED)
+		return;
+//--misty
 	rfcomm_session_hold(s);
 
 	s->state = BT_CLOSED;
@@ -638,7 +641,12 @@ static void rfcomm_session_close(struct rfcomm_session *s, int err)
 		d->state = BT_CLOSED;
 		__rfcomm_dlc_close(d, err);
 	}
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+/* Drop reference for incoming sessions */
+	if (!s->initiator)
+		rfcomm_session_put(s);
 
+//--misty
 	rfcomm_session_put(s);
 }
 
@@ -1113,7 +1121,10 @@ static int rfcomm_recv_ua(struct rfcomm_session *s, u8 dlci)
 			break;
 
 		case BT_DISCONN:
-			rfcomm_session_put(s);
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+			//rfcomm_session_put(s);
+			rfcomm_session_close(s, 0);
+//--misty
 			break;
 		}
 	}
@@ -1143,8 +1154,9 @@ static int rfcomm_recv_dm(struct rfcomm_session *s, u8 dlci)
 			err = ECONNREFUSED;
 		else
 			err = ECONNRESET;
-
-		s->state = BT_CLOSED;
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+		//s->state = BT_CLOSED;
+//--misty
 		rfcomm_session_close(s, err);
 	}
 	return 0;
@@ -1178,8 +1190,9 @@ static int rfcomm_recv_disc(struct rfcomm_session *s, u8 dlci)
 			err = ECONNREFUSED;
 		else
 			err = ECONNRESET;
-
-		s->state = BT_CLOSED;
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+		//s->state = BT_CLOSED;
+//--misty
 		rfcomm_session_close(s, err);
 	}
 
@@ -1801,13 +1814,18 @@ static inline void rfcomm_process_rx(struct rfcomm_session *s)
 		skb_orphan(skb);
 		rfcomm_recv_frame(s, skb);
 	}
-
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+/*
 	if (sk->sk_state == BT_CLOSED) {
 		if (!s->initiator)
 			rfcomm_session_put(s);
 
 		rfcomm_session_close(s, sk->sk_err);
 	}
+*/
+	if (sk->sk_state == BT_CLOSED)
+ 		rfcomm_session_close(s, sk->sk_err);
+//--misty
 }
 
 static inline void rfcomm_accept_connection(struct rfcomm_session *s)
@@ -1861,7 +1879,9 @@ static inline void rfcomm_check_connection(struct rfcomm_session *s)
 		break;
 
 	case BT_CLOSED:
-		s->state = BT_CLOSED;
+//++misty GREE.B-174 [Stability][Bluetooth]DUT power cycle after receive the file completely via BT
+		//s->state = BT_CLOSED;
+//--misty
 		rfcomm_session_close(s, sk->sk_err);
 		break;
 	}

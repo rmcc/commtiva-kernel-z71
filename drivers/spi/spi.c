@@ -699,6 +699,67 @@ int spi_write_then_read(struct spi_device *spi,
 }
 EXPORT_SYMBOL_GPL(spi_write_then_read);
 
+/* { FIH, Chandler, lcm_innolux */
+#ifdef CONFIG_FIH_FXX
+int spi_write_9bits_then_read_8bits(struct spi_device *spi,
+		const u16 *txbuf, unsigned n_tx,
+		u8 *rxbuf, unsigned n_rx)
+{
+	static DEFINE_MUTEX(lock);
+
+	int			status;
+	u8 *local_buf;
+	struct spi_message	message;
+	struct spi_transfer	x[2];
+	x[0].bits_per_word=9;
+	x[1].bits_per_word=8;
+
+	/* Use preallocated DMA-safe buffer.  We can't avoid copying here,
+	 * (as a pure convenience thing), but we can keep heap costs
+	 * out of the hot path ...
+	 */
+	if ((n_tx + n_rx) > SPI_BUFSIZ)
+		return -EINVAL;
+
+	spi_message_init(&message);
+	memset(x, 0, sizeof x);
+	if (n_tx) {
+		x[0].len = n_tx;
+		spi_message_add_tail(&x[0], &message);
+	}
+	if (n_rx) {
+		x[1].len = n_rx;
+		spi_message_add_tail(&x[1], &message);
+	}
+
+	/* ... unless someone else is using the pre-allocated buffer */
+	if (!mutex_trylock(&lock)) {
+		local_buf = kmalloc(SPI_BUFSIZ, GFP_KERNEL);
+		if (!local_buf)
+			return -ENOMEM;
+	} else
+		local_buf = buf;
+
+	memcpy(local_buf, txbuf, n_tx);
+	x[0].tx_buf = local_buf;
+	x[1].rx_buf = local_buf + n_tx;
+
+	/* do the i/o */
+	status = spi_sync(spi, &message);
+	if (status == 0)
+		memcpy(rxbuf, x[1].rx_buf, n_rx);
+
+	if (x[0].tx_buf == buf)
+		mutex_unlock(&lock);
+	else
+		kfree(local_buf);
+
+	return status;
+}
+
+EXPORT_SYMBOL_GPL(spi_write_9bits_then_read_8bits);
+#endif
+/* } FIH, Chandler, lcm_innolux */
 /*-------------------------------------------------------------------------*/
 
 static int __init spi_init(void)

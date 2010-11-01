@@ -56,6 +56,9 @@ obj-$(CONFIG_DEBUG_FS) += smd_rpc_sym.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_servers.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_clients.o
 obj-$(CONFIG_MSM_ONCRPCROUTER) += smd_rpcrouter_xdr.o
+#FIH, Tiger, 2010/07/5 +++
+obj-$(CONFIG_MSM_ONCRPCROUTER) += rpcrouter_smd_xprt.o
+#FIH, Tiger, 2010/07/5 ---
 obj-$(CONFIG_MSM_RPC_PING) += ping_mdm_rpc_client.o
 obj-$(CONFIG_MSM_RPC_PROC_COMM_TEST) += proc_comm_test.o
 obj-$(CONFIG_MSM_RPC_OEM_RAPI) += oem_rapi_client.o
@@ -90,9 +93,12 @@ obj-$(CONFIG_MACH_QSD8X50A_FFA) += board-qsd8x50.o
 obj-$(CONFIG_TROUT_H2W) += board-trout-h2w.o
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
 obj-$(CONFIG_TROUT_PWRSINK) += htc_pwrsink.o
-obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o
+#obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o clock-7x30.o
 obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o
+#+++ FIH; Peter; 2009/6/4
+obj-$(CONFIG_FIH_F9xx_GPIO_KEYPAD) += 7x27_kybd.o
+#--- FIH; Peter; 2009/6/4
 
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
@@ -107,3 +113,4 @@ obj-$(CONFIG_MSM_RMT_STORAGE_SERVER) += rmt_storage_server.o
 obj-$(CONFIG_PMIC8058) += pmic8058-gpio.o pmic8058-mpp.o
 obj-$(CONFIG_NPA) += npa_resources.o
 obj-$(CONFIG_NPA_REMOTE_ONCRPC)	+= npa_remote_rpc_client.o
+obj-$(CONFIG_FIH_FXX) += board-fxx.o board-fxx-info.o msm_vibrator.o

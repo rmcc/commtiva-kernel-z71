@@ -19,6 +19,12 @@
 #include <linux/types.h>
 #endif
 
+/* FIH; Tiger; 2009/6/2 { */
+#ifdef CONFIG_FIH_FXX
+int input_jogball_exist(void);
+#endif
+/* } FIH; Tiger; 2009/6/2 */
+
 /*
  * The event structure itself
  */

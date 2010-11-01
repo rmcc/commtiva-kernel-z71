@@ -56,3 +56,5 @@ obj-$(CONFIG_ATH9K)	+= ath9k/
 
 obj-$(CONFIG_MAC80211_HWSIM)	+= mac80211_hwsim.o
 obj-$(CONFIG_LIBRA_SDIOIF)	+= libra/
+
+obj-$(CONFIG_AR6K)  += ar6k/host/os/linux/

@@ -31,6 +31,18 @@
 
 #include "msm_nand.h"
 
+/* FIH, Debbie Sun, 2010/05/24 { */
+/* get device name form share memory */
+#ifdef CONFIG_FIH_FXX
+#include <mach/msm_smd.h>
+#endif
+/* FIH, Debbie Sun, 2010/05/24 }*/
+
+/* +++ FIH, 2009/11/18, paul huang*/
+static int supported_flash_index = -1;
+/* --- FIH, 2009/11/18, paul huang*/
+
+
 unsigned long msm_nand_phys;
 unsigned long msm_nandc01_phys;
 unsigned long msm_nandc10_phys;
@@ -351,10 +363,6 @@ uint32_t flash_read_id(struct msm_nand_chip *chip)
 			(msm_virt_to_dma(chip, &dma_buffer->cmdptr)));
 	dsb();
 
-	pr_info("status: %x\n", dma_buffer->data[3]);
-	pr_info("nandid: %x maker %02x device %02x\n",
-	       dma_buffer->data[4], dma_buffer->data[4] & 0xff,
-	       (dma_buffer->data[4] >> 8) & 0xff);
 	rv = dma_buffer->data[4];
 	msm_nand_release_dma_buffer(chip, dma_buffer, sizeof(*dma_buffer));
 	return rv;
@@ -368,20 +376,23 @@ struct flash_identification {
 	uint32_t pagesize;
 	uint32_t blksize;
 	uint32_t oobsize;
+    char    *device_name;
 };
 
 static struct flash_identification supported_flash[] =
 {
 	/* Flash ID   ID Mask Density(MB)  Wid Pgsz   Blksz   oobsz    Manuf */
-	{0x00000000, 0xFFFFFFFF,         0, 0,    0,         0,  0, }, /*ONFI*/
-	{0x1500aaec, 0xFF00FFFF, (256<<20), 0, 2048, (2048<<6), 64, }, /*Sams*/
-	{0x5500baec, 0xFF00FFFF, (256<<20), 1, 2048, (2048<<6), 64, }, /*Sams*/
-	{0x6600bcec, 0xFF00FFFF, (512<<20), 1, 4096, (4096<<6), 128,}, /*Sams*/
-	{0x1500aa98, 0xFFFFFFFF, (256<<20), 0, 2048, (2048<<6), 64, }, /*Tosh*/
-	{0x5500ba98, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, }, /*Tosh*/
-	{0xd580b12c, 0xFFFFFFFF, (128<<20), 1, 2048, (2048<<6), 64, }, /*Micr*/
-	{0x5580baad, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, }, /*Hynx*/
-	{0x5510baad, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, }, /*Hynx*/
+	{0x00000000, 0xFFFFFFFF,         0, 0,    0,         0,  0, "ONFI"}, /*ONFI*/
+	{0x1500aaec, 0xFF00FFFF, (256<<20), 0, 2048, (2048<<6), 64, "Samsung"}, /*Sams*/
+	{0x5500baec, 0xFF00FFFF, (256<<20), 1, 2048, (2048<<6), 64, "Samsung"}, /*Sams*/
+	{0x6600bcec, 0xFF00FFFF, (512<<20), 1, 4096, (4096<<6), 128,"Samsung"}, /*Sams*/
+	{0x1500aa98, 0xFFFFFFFF, (256<<20), 0, 2048, (2048<<6), 64, "Toshiba"}, /*Tosh*/
+	{0x5500ba98, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, "Toshiba"}, /*Tosh*/
+	{0xd580b12c, 0xFFFFFFFF, (128<<20), 1, 2048, (2048<<6), 64, "Micron"}, /*Micr*/
+	{0x5580baad, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, "Hynix"}, /*Hynx*/
+	{0x5510baad, 0xFFFFFFFF, (256<<20), 1, 2048, (2048<<6), 64, "Hynix_H8BCS0SN0MCR(2G/2G)"}, /*Hynx*/
+    {0x5510bcad, 0x0000FFFF, (512<<20), 1, 2048, (2048<<6), 64, "Hynix_H8BCS0UN0MCR(4G/2G)"}, /*Hynx*/  //Debbie add, 2009/06/01 
+    {0x5500bcec, 0xFF00FFFF, (512<<20), 1, 2048, (2048<<6), 64, "SAMSUNG_K524G2GACB(4G/2G)"}, /*Sams*/  //Debbie add, 2009/06/10
 	/* Note: Width flag is 0 for 8 bit Flash and 1 for 16 bit flash      */
 	/* Note: The First row will be filled at runtime during ONFI probe   */
 };
@@ -6616,6 +6627,9 @@ int msm_nand_scan(struct mtd_info *mtd, int maxchips)
 	}
 
 	if (dev_found) {
+		/* +++ FIH, 2009/11/20, paul huang*/
+        supported_flash_index = index;
+		/* --- FIH, 2009/11/20, paul huang*/
 		(!interleave_enable) ? (i = 1) : (i = 2);
 		wide_bus       = supported_flash[index].widebus;
 		mtd->size      = supported_flash[index].density  * i;

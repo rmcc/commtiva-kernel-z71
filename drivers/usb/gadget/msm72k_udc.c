@@ -42,9 +42,43 @@
 #include <linux/device.h>
 #include <mach/msm_hsusb_hw.h>
 #include <mach/clk.h>
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+#include "../../../arch/arm/mach-msm/proc_comm.h"
+#include <mach/gpio.h>
+/* }FIH, WilsonWHLee, 2009/11/19 */
+/* FIH, Debbie Sun, 2009/06/18 { */
+/* get share memory command address dynamically */
+#ifdef CONFIG_FIH_FXX
+#include <mach/msm_smd.h>
+#endif
+/* FIH, Debbie Sun, 2009/06/18 }*/
 #include <mach/rpc_hsusb.h>
 #include <linux/uaccess.h>
 #include <linux/wakelock.h>
+/* [FXX_CR], porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+#include <linux/power_supply.h>
+#include <mach/msm_iomap.h>
+
+#define USBSET 123
+#define CHR_EN 33
+#define CHR_1A 26
+
+/* FIH, Michael Kao, 2010/06/21{ */
+/* [FXX_CR], Not update battery information when charger state changes*/
+extern bool over_temper;
+extern bool slight_over_temper;
+extern bool over_temper2;
+extern void Battery_update_state(int _device, int device_state);
+/* FIH, Michael Kao, 2010/06/21{ */
+extern bool battery_full_flag;
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+
 
 static const char driver_name[] = "msm72k_udc";
 
@@ -61,6 +95,23 @@ static const char driver_name[] = "msm72k_udc";
 #define SETUP_BUF_SIZE      4096
 
 
+/* FIH, WilsonWHLee, 2009/06/11 { */
+/* [FXX_CR], fix right charging status to android */
+#ifdef CONFIG_FIH_FXX
+int check_USB_type =0;
+#endif
+/* } FIH, WilsonWHLee, 2009/06/11 */
+int OS_Type=0;       ///0:No OS 1:plug-in USB first run SC_TEST_UNIT_READY 2:Mac OS 3:Microsoft OS
+bool Dynamic_switch=false;
+int Linux_Mass=0;
+bool is_switch=false;
+//static bool wakeflag = false;
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+#define NV_FIH_VERSION_I 8030
+/* }FIH, WilsonWHLee, 2009/11/19 */
+int fih_enable = 0;
+bool switch_enable=false;
 static const char *const ep_name[] = {
 	"ep0out", "ep1out", "ep2out", "ep3out",
 	"ep4out", "ep5out", "ep6out", "ep7out",
@@ -104,6 +155,52 @@ struct msm_request {
 #define to_msm_endpoint(r) container_of(r, struct msm_endpoint, ep)
 #define to_msm_otg(xceiv)  container_of(xceiv, struct msm_otg, otg)
 #define is_b_sess_vld()	((OTGSC_BSV & readl(USB_OTGSC)) ? 1 : 0)
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+struct goldfish_usb_data {
+	uint32_t reg_base;
+	int irq;
+	spinlock_t lock;
+	struct power_supply usb;
+	struct power_supply ac;
+};
+#if 0 //No necessary
+static struct goldfish_usb_data *usb_data;
+
+struct goldfish_ac_data {
+	uint32_t reg_base;
+	int irq;
+	spinlock_t lock;
+	
+};
+#endif
+static struct goldfish_usb_data *usb_data;
+
+
+
+static struct power_supply * g_ps_usb,* g_ps_ac;
+
+
+static enum power_supply_property fih_goldfish_power_props[] = {
+	POWER_SUPPLY_PROP_ONLINE,
+};
+
+int USB_Connect=0;
+int backup_USB_Connect=0;
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+//char *fih_version_buf;
+/* }FIH, WilsonWHLee, 2009/11/19 */
+//int first_boot;
+
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
 
 struct msm_endpoint {
 	struct usb_ep ep;
@@ -127,7 +224,12 @@ struct msm_endpoint {
 static void usb_do_work(struct work_struct *w);
 static void usb_do_remote_wakeup(struct work_struct *w);
 
-
+void cable_status(bool status);
+void usb_chg_pid(bool usb_switch);
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+//void msm_read_fih_version_from_nvitem(void);
+/* }FIH, WilsonWHLee, 2009/11/19 */
 #define USB_STATE_IDLE    0
 #define USB_STATE_ONLINE  1
 #define USB_STATE_OFFLINE 2
@@ -232,10 +334,67 @@ static ssize_t print_switch_state(struct switch_dev *sdev, char *buf)
 
 static inline enum chg_type usb_get_chg_type(struct usb_info *ui)
 {
+/* FIH, Michael Kao, 2009/08/25{ */
+	/* [FXX_CR], Not update battery information when charger state changes*/
+	Battery_update_state(0,ui->chg_type);
+/* FIH, Michael Kao, 2009/08/25{ */
 	if ((readl(USB_PORTSC) & PORTSC_LS) == PORTSC_LS)
+	{
+		pr_info("\n*********** Charger Type: WALL CHARGER\n\n");
+#ifdef CONFIG_FIH_FXX
+		pr_info("AC:Set the charging current to 1000mA\n");
+		/* FIH, Michael Kao, 2009/08/25{ */
+		/* [FXX_CR], if slight over temperature, not change charging current*/
+//		if(!slight_over_temper)
+//		{
+			gpio_set_value(USBSET,1);
+			gpio_set_value(CHR_1A,1);
+//		}
+		/* FIH, Michael Kao, 2009/08/25{ */
+		/* FIH, Michael Kao, 2010/06/21{ */
+		/* [FXX_CR], if over temperature, not enable charging*/
+		if(!over_temper&&!battery_full_flag&&!over_temper2)
+			gpio_set_value(CHR_EN,0);
+		/* FIH, Michael Kao, 2010/06/21{ */
+    	check_USB_type = 2;  //add for charging status    
+    	USB_Connect = 1;                
+    	power_supply_changed(g_ps_ac);
+    	//wake_lock(&ui->wlock); 
+    	//wakeflag = true;
+#endif
+///WilsonWHLee 2010/02/22 5110 porting +++++++++++++++++++
+ //       writel(readl(USB_USBCMD) & ~USBCMD_RS, USB_USBCMD);
+ //       wake_lock_timeout(&ui->wlock, 2 * HZ );
+///WilsonWHLee 2010/02/22 5110 porting -------------------
 		return USB_CHG_TYPE__WALLCHARGER;
+	}
 	else
+	{
+		pr_info("\n*********** Charger Type: HOST PC\n\n");
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+		pr_info("USB:Set the charging current to 500mA\n");
+		gpio_set_value(USBSET,1);
+		gpio_set_value(CHR_1A,0);
+		/* FIH, Michael Kao, 2010/06/21{ */
+		/* [FXX_CR], if over temperature, not enable charging*/
+		if(!over_temper&&!battery_full_flag&&!over_temper2)
+			gpio_set_value(CHR_EN,0);
+		/* FIH, Michael Kao, 2010/06/21{ */
+  		check_USB_type = 1;   //add for charging status 
+   		USB_Connect = 1;
+   		power_supply_changed(g_ps_usb);
+   
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+
 		return USB_CHG_TYPE__SDP;
+	}
 }
 
 #define USB_WALLCHARGER_CHG_CURRENT 1800
@@ -550,7 +709,16 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 
 	if (length > 0x4000)
 		return -EMSGSIZE;
+/* FIH, WilsonWHLee, 2009/11/30 { */
 
+/* [FXX_CR], fix kernel panic when remove cable*/
+    if (!ept || !ept->ui)
+    {
+    	printk(KERN_ERR "usb_ept_queue_xfer ept = %p\n", ept);
+    	printk(KERN_ERR "usb_ept_queue_xfer ept->ui = %p\n", ept->ui);
+		return -ENODEV;
+	}
+/* }FIH, WilsonWHLee, 2009/11/30 */
 	spin_lock_irqsave(&ui->lock, flags);
 
 	if (req->busy) {
@@ -1095,9 +1263,133 @@ static irqreturn_t usb_interrupt(int irq, void *data)
 			n = n & (~(1 << bit));
 		}
 	}
+#if 0 //unuseful
+///WilsonWHLee 2010/02/22 5110 +++++++++++++
+	n = readl(USB_OTGSC);
+	writel(n, USB_OTGSC);
+
+	if (n & OTGSC_BSVIS) {
+		/*Verify B Session Valid Bit to verify vbus status*/
+		if (B_SESSION_VALID & n)	{
+			printk("usb cable connected\n");
+//			ui->usb_state = USB_STATE_POWERED;
+//			ui->flags = USB_FLAG_VBUS_ONLINE;
+			/* Wait for 100ms to stabilize VBUS before initializing
+			 * USB and detecting charger type
+			 */
+//			queue_delayed_work(usb_work, &ui->work,
+//						DELAY_FOR_USB_VBUS_STABILIZE);
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+			//USB_Connect = 0;
+     		//power_supply_changed(g_ps_ac);    	
+		 	//pr_err("usb cable connected\n");
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+		} else {
+			//int i;
+           Dynamic_switch = false;
+           Linux_Mass = 0;
+           is_switch = false;
+
+			OS_Type = 0;            
+//			usb_disable_pullup(ui);
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+			gpio_set_value(USBSET,0);
+			gpio_set_value(CHR_1A,0);
+			gpio_set_value(CHR_EN,1);
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+			printk(KERN_INFO "usb cable disconnected\n");
+#if 0
+			ui->usb_state = USB_STATE_NOTATTACHED;
+			for (i = 0; i < ui->num_funcs; i++) {
+				struct usb_function_info *fi = ui->func[i];
+				if (!fi ||
+				!(ui->composition->functions & (1 << i)))
+					continue;
+				if (fi->func->disconnect)
+					fi->func->disconnect
+						(fi->func->context);
+			}
+			ui->flags = USB_FLAG_VBUS_OFFLINE;
+			queue_delayed_work(usb_work, &ui->work, 0);
+#endif
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+    		check_USB_type =0; //add for charging status
+
+			USB_Connect = 0;
+  			if (ui->chg_type == USB_CHG_TYPE__WALLCHARGER)
+    			power_supply_changed(g_ps_ac);
+  			else
+  				power_supply_changed(g_ps_usb);
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+		}
+	}
+///WilsonWHLee 2010/02/22 5110 ------------
+#endif
 	return IRQ_HANDLED;
 }
+void cable_status(bool status)
+{
+/* FIH, WilsonWHLee, 2010/06/21 { */
 
+/* [FXX_CR], cannot enter suspend after plug & out */	
+//	struct usb_info *ui = the_usb_info;
+/* } FIH, WilsonWHLee, 2010/06/21 */
+	if(status)
+	{
+	    printk("usb cable connected\n");
+
+	} else {
+			
+	    printk(KERN_INFO "usb cable disconnected\n");
+		Dynamic_switch = false;
+        Linux_Mass = 0;
+        is_switch = false;
+
+		OS_Type = 0;            
+
+
+		gpio_set_value(USBSET,0);
+		gpio_set_value(CHR_1A,0);
+		gpio_set_value(CHR_EN,1);
+
+
+    	check_USB_type =0; //add for charging status
+
+		USB_Connect = 0;
+/* FIH, WilsonWHLee, 2010/06/21 { */
+
+/* [FXX_CR], cannot enter suspend after plug & out */		
+  		//if (ui->chg_type == USB_CHG_TYPE__WALLCHARGER)
+    	//	power_supply_changed(g_ps_ac);
+  		//else
+  		//	power_supply_changed(g_ps_usb);
+/* } FIH, WilsonWHLee, 2010/06/21 */
+
+    }
+}
 static void usb_prepare(struct usb_info *ui)
 {
 	spin_lock_init(&ui->lock);
@@ -1375,6 +1667,15 @@ static void usb_do_work(struct work_struct *w)
 				usb_do_work_check_vbus(ui);
 				msm72k_pm_qos_update(0);
 				wake_unlock(&ui->wlock);
+/* FIH, WilsonWHLee, 2010/06/21 { */
+
+/* [FXX_CR], cannot enter suspend after plug & out */		
+  		        if (ui->chg_type == USB_CHG_TYPE__WALLCHARGER)
+    		        power_supply_changed(g_ps_ac);
+  		        else
+  			        power_supply_changed(g_ps_usb);
+/* } FIH, WilsonWHLee, 2010/06/21 */
+
 				break;
 			}
 			if (flags & USB_FLAG_SUSPEND) {
@@ -1657,6 +1958,59 @@ static void usb_debugfs_init(struct usb_info *ui)
 #else
 static void usb_debugfs_init(struct usb_info *ui) {}
 #endif
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+static int goldfish_power_get_property(struct power_supply *psy,
+				 enum power_supply_property psp,
+				 union power_supply_propval *val)
+{
+	//struct usb_info *ui = the_usb_info;
+	int ret = 0;
+
+	switch (psp) {
+	case POWER_SUPPLY_PROP_ONLINE:
+		//printk(KERN_INFO "Power supply USB_Connect=%d,check_USB_type=%d\n",USB_Connect,check_USB_type);
+        if(switch_enable){     
+             val->intval = USB_Connect;
+             USB_Connect = backup_USB_Connect;
+        }
+        else if (psy->type == POWER_SUPPLY_TYPE_MAINS){
+			 if(check_USB_type == 2)
+             val->intval = 1;
+       else if(check_USB_type == 1)            
+       	     val->intval = 0;
+       else	 
+             val->intval = 0;    
+    }
+    else if (psy->type == POWER_SUPPLY_TYPE_USB){
+			 if(check_USB_type == 2)
+             val->intval = 0;
+       else if(check_USB_type == 1)            
+       	     val->intval = USB_Connect;
+       else	 
+             val->intval = 0;    
+    }
+
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	//if(wakeflag)
+	//{
+	//  wake_lock_timeout(&ui->wlock, HZ );
+	//  wakeflag = false;
+	//}
+	return ret;
+}
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
 
 static int
 msm72k_enable(struct usb_ep *_ep, const struct usb_endpoint_descriptor *desc)
@@ -1950,6 +2304,74 @@ static const struct usb_gadget_ops msm72k_ops = {
 	.wakeup		= msm72k_wakeup,
 };
 
+/* FIH, WilsonWHLee, 2009/09/021 { */
+/* [FXX_CR], enable USB port dynamically */
+
+static ssize_t msm_hsusb_store_change_pid(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t size)
+{
+//		      struct usb_info *ui = the_usb_info;
+		      	   		
+  	if (!strncmp(buf, "diag", strlen("diag"))) {
+             fih_enable = 1;
+             usb_chg_pid(true);		
+	     pr_info("%s: msm_hsusb_store_change_pid \n", __func__);
+		
+	  }else if (!strncmp(buf, "hidden", strlen("hidden"))) {
+             fih_enable = 2;
+             usb_chg_pid(true);		
+	     pr_info("%s: msm_hsusb_store_change_pid \n", __func__);
+		
+	  }else if (!strncmp(buf, "ethernet", strlen("ethernet"))) {
+             fih_enable = 3;
+             usb_chg_pid(true);	
+	     pr_info("%s: msm_hsusb_store_change_pid \n", __func__);	
+	  }  
+	   else
+		  pr_info("%s:  msm_hsusb_store_change_pid failed buf==%s\n", __func__,buf);
+
+	return size;
+}
+/* } FIH, WilsonWHLee, 2009/09/021 */
+
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+static ssize_t msm_hsusb_store_hs_connect(struct device *dev,
+					  struct device_attribute *attr,
+					  const char *buf, size_t size)
+{
+	//struct usb_info *ui = the_usb_info;
+	//unsigned long flags;
+
+	USB_Connect = 2;
+  power_supply_changed(g_ps_usb);
+	return size;
+}
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
+/* FIH, WilsonWHLee, 2009/09/021 { */
+/* [FXX_CR], enable USB port dynamically */
+static ssize_t msm_hsusb_show_switch_enable(struct device *dev,
+					 struct device_attribute *attr,
+					 char *buf)
+{
+    	//struct usb_info *ui = the_usb_info;
+    	int i;
+
+        if(Dynamic_switch)
+	        i = scnprintf(buf, PAGE_SIZE, "true");
+        else
+          i = scnprintf(buf, PAGE_SIZE, "false");
+	    return i;
+}
+/* } FIH, WilsonWHLee, 2009/09/021  */
 static ssize_t usb_remote_wakeup(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -2035,19 +2457,88 @@ static ssize_t show_usb_chg_type(struct device *dev,
 
 	return count;
 }
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+static DEVICE_ATTR(hs_connect, 0664,
+		NULL, msm_hsusb_store_hs_connect);
+
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
 static DEVICE_ATTR(wakeup, S_IWUSR, 0, usb_remote_wakeup);
 static DEVICE_ATTR(usb_state, S_IRUSR, show_usb_state, 0);
 static DEVICE_ATTR(usb_speed, S_IRUSR, show_usb_speed, 0);
 static DEVICE_ATTR(chg_type, S_IRUSR, show_usb_chg_type, 0);
 static DEVICE_ATTR(chg_current, S_IWUSR | S_IRUSR,
 		show_usb_chg_current, store_usb_chg_current);
+/* FIH, WilsonWHLee, 2009/09/021 { */
+/* [FXX_CR], enable USB port dynamically */
+
+static DEVICE_ATTR(switch, 0664,NULL, msm_hsusb_store_change_pid);
+static DEVICE_ATTR(switch_enable, 0664,msm_hsusb_show_switch_enable, NULL);
+/* } FIH, WilsonWHLee, 2009/09/021  */
 
 static int msm72k_probe(struct platform_device *pdev)
 {
 	struct usb_info *ui;
+	int ret;
 	struct msm_hsusb_gadget_platform_data *pdata;
 	struct msm_otg *otg;
 	int retval;
+/* FIH, WilsonWHLee, 2009/06/04 { */
+
+/* [FXX_CR], Porting 4115 to 4215 */
+
+#ifdef CONFIG_FIH_FXX
+
+	struct goldfish_usb_data *data;
+	//struct goldfish_ac_data  *adata; //marked for charging status
+
+
+	data = kzalloc(sizeof(*data), GFP_KERNEL);
+	if (data == NULL) {
+        return -ENOMEM;
+		//ret = -ENOMEM;
+		//return usb_init_err;
+	}
+	spin_lock_init(&data->lock);
+	data->usb.properties = fih_goldfish_power_props;
+	data->usb.num_properties = ARRAY_SIZE(fih_goldfish_power_props);
+	data->usb.get_property = goldfish_power_get_property;
+	data->usb.name = "usb";
+	data->usb.type = POWER_SUPPLY_TYPE_USB;
+	ret = power_supply_register(&pdev->dev, &data->usb);
+	
+	platform_set_drvdata(pdev, data);
+	usb_data = data;
+	g_ps_usb = &(data->usb);
+
+	data->ac.properties = fih_goldfish_power_props;
+	data->ac.num_properties = ARRAY_SIZE(fih_goldfish_power_props);
+	data->ac.get_property = goldfish_power_get_property;
+	data->ac.name = "ac";
+	data->ac.type = POWER_SUPPLY_TYPE_MAINS;
+	ret = power_supply_register(&pdev->dev, &data->ac);
+
+		
+	platform_set_drvdata(pdev, data);
+	usb_data = data;
+	g_ps_ac = &(data->ac);
+	/* FIH, WilsonWHLee, 2009/06/22 { */
+
+	/* [FXX_CR], Init charging GPIO */
+	gpio_set_value(USBSET,0); 
+	gpio_set_value(CHR_1A,0);
+	gpio_set_value(CHR_EN,1);
+	
+	/* } FIH, WilsonWHLee, 2009/06/22  */
+#endif
+
+/* } FIH, WilsonWHLee, 2009/06/04 */
 
 	INFO("msm72k_probe\n");
 	ui = kzalloc(sizeof(struct usb_info), GFP_KERNEL);
@@ -2120,6 +2611,35 @@ static int msm72k_probe(struct platform_device *pdev)
 	return 0;
 }
 
+
+void usb_chg_pid(bool usb_switch) 
+{
+  //struct usb_info *ui = the_usb_info;
+  //int i;
+  //struct file			*gMD_filp = NULL;               
+  //char temp[10];
+  switch_enable = true;
+  backup_USB_Connect = USB_Connect;
+  if(usb_switch){
+       Dynamic_switch = true;
+      if (fih_read_usb_id_from_smem() == 0xc000 || fih_enable == 1){
+         //upid = 0xc000;
+         USB_Connect = 5;
+         power_supply_changed(g_ps_usb);
+      }else if (fih_read_usb_id_from_smem() == 0xc001 || fih_enable == 2){
+         //upid = 0xc001;
+         USB_Connect = 6;
+         power_supply_changed(g_ps_usb);
+      }else if(fih_enable == 3){
+         //upid = 0xc003;
+         USB_Connect = 7;
+         power_supply_changed(g_ps_usb);
+      }
+  }
+   fih_enable = 0;
+   switch_enable = false;
+}
+/* } FIH, WilsonWHLee, 2009/09/021 */
 int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 {
 	struct usb_info *ui = the_usb_info;
@@ -2169,6 +2689,20 @@ int usb_gadget_register_driver(struct usb_gadget_driver *driver)
 	}
 
 	/* create sysfs node for remote wakeup */
+//WilsonWHLee 2010/02/22 5110 porting ++++++++++++++++
+	retval = device_create_file(&ui->gadget.dev, &dev_attr_switch_enable);
+	if (retval != 0)
+		INFO("failed to create sysfs entry: (dev_attr_switch_enable) error: (%d)\n",
+					retval);
+	retval = device_create_file(&ui->gadget.dev, &dev_attr_switch);
+	if (retval != 0)
+		INFO("failed to create sysfs entry: (dev_attr_switch) error: (%d)\n",
+					retval);
+	retval = device_create_file(&ui->gadget.dev, &dev_attr_hs_connect);
+	if (retval != 0)
+		INFO("failed to create sysfs entry: (dev_attr_hs_connect) error: (%d)\n",
+					retval);
+//WilsonWHLee 2010/02/22 5110 porting -----------------
 	retval = device_create_file(&ui->gadget.dev, &dev_attr_wakeup);
 	if (retval != 0)
 		INFO("failed to create sysfs entry: (wakeup) error: (%d)\n",

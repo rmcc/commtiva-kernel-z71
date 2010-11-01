@@ -38,8 +38,10 @@ MODULE_LICENSE("GPL");
 
 static LIST_HEAD(rfkill_list);	/* list of registered rf switches */
 static DEFINE_MUTEX(rfkill_global_mutex);
-
-static unsigned int rfkill_default_state = RFKILL_STATE_UNBLOCKED;
+//++++FIH_FXX_misty modify for avoiding enable bt/wifi power by register
+static unsigned int rfkill_default_state = RFKILL_STATE_SOFT_BLOCKED;
+//static unsigned int rfkill_default_state = RFKILL_STATE_UNBLOCKED;
+//----FIH_FXX_
 module_param_named(default_state, rfkill_default_state, uint, 0444);
 MODULE_PARM_DESC(default_state,
 		 "Default initial state for all radio types, 0 = radio off");

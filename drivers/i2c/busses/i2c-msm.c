@@ -706,6 +706,16 @@ static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 		dev->suspended = 1;
 		mutex_unlock(&dev->mlock);
 		clk_disable(dev->clk);
+//henry,add for suspend power saving.++
+                gpio_tlmm_config(GPIO_CFG(60, 0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), GPIO_ENABLE);
+	        gpio_tlmm_config(GPIO_CFG(61, 0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), GPIO_ENABLE);
+//henry,add for suspend power saving.--
+/* FIH, Henry Juang, 2009/06/06 { */
+/* [FXX_CR], add log for i2c */
+#ifdef CONFIG_FIH_FXX
+		printk("******I2C-msm Suspend status=0x%x",readl(dev->base + I2C_STATUS));
+#endif
+/* } FIH, Henry Juang, 2009/06/06 */
 	}
 
 	return 0;
@@ -715,8 +725,16 @@ static int msm_i2c_resume(struct platform_device *pdev)
 {
 	struct msm_i2c_dev *dev = platform_get_drvdata(pdev);
 	if (dev) {
+                gpio_tlmm_config(GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
+	        gpio_tlmm_config(GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
 		clk_enable(dev->clk);
 		dev->suspended = 0;
+/* FIH, Henry Juang, 2009/06/06 { */
+/* [FXX_CR], add log for i2c */
+#ifdef CONFIG_FIH_FXX
+		printk("******I2C-msm Resume status=0x%x",readl(dev->base + I2C_STATUS));
+#endif
+/* } FIH, Henry Juang, 2009/06/06 */
 	}
 	return 0;
 }

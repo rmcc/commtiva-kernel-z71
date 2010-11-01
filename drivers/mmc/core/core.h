@@ -18,8 +18,18 @@
 struct mmc_bus_ops {
 	void (*remove)(struct mmc_host *);
 	void (*detect)(struct mmc_host *);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	void (*suspend)(struct mmc_host *);
 	void (*resume)(struct mmc_host *);
+#else
+	int (*suspend)(struct mmc_host *);
+	int (*resume)(struct mmc_host *);
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 };
 
 void mmc_attach_bus(struct mmc_host *host, const struct mmc_bus_ops *ops);

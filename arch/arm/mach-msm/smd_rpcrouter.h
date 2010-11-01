@@ -53,6 +53,10 @@
 
 #define RPCROUTER_DEFAULT_RX_QUOTA	5
 
+#define RPCROUTER_XPRT_EVENT_DATA  1
+#define RPCROUTER_XPRT_EVENT_OPEN  2
+#define RPCROUTER_XPRT_EVENT_CLOSE 3
+
 union rr_control_msg {
 	uint32_t cmd;
 	struct {
@@ -185,13 +189,25 @@ struct msm_rpc_endpoint {
 	struct list_head reply_avail_q;
 	spinlock_t reply_q_lock;
 	uint32_t reply_cnt;
+	struct wake_lock reply_q_wake_lock;
 
 	/* device node if this endpoint is accessed via userspace */
 	dev_t dev;
 };
 
-/* shared between smd_rpcrouter*.c */
+struct rpcrouter_xprt {
+	char *name;
+	void *priv;
 
+	int (*read_avail)(void);
+	int (*read)(void *data, uint32_t len);
+	int (*write_avail)(void);
+	int (*write)(void *data, uint32_t len);
+	int (*close)(void);
+};
+
+/* shared between smd_rpcrouter*.c */
+void msm_rpcrouter_xprt_notify(struct rpcrouter_xprt *xprt, unsigned event);
 int __msm_rpc_read(struct msm_rpc_endpoint *ept,
 		   struct rr_fragment **frag,
 		   unsigned len, long timeout);

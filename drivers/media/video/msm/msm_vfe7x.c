@@ -44,6 +44,7 @@
 
 #define VFE_ADSP_EVENT 0xFFFF
 #define SNAPSHOT_MASK_MODE 0x00000002
+#define MSM_AXI_QOS_PREVIEW	192000
 
 static struct msm_adsp_module *qcam_mod;
 static struct msm_adsp_module *vfe_mod;
@@ -251,6 +252,7 @@ static void vfe_7x_release(struct platform_device *pdev)
 
 	/* release AXI frequency request */
 	release_axi_qos();
+
 }
 
 static int vfe_7x_init(struct msm_vfe_callback *presp,

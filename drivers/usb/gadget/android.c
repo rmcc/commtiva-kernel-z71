@@ -33,6 +33,9 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
+///WilsonWHLee 2010/02/23 5110 porting +++++++++++
+#include <mach/msm_smd.h>
+///WilsonWHLee 2010/02/23 5110 porting -----------
 #ifdef CONFIG_USB_ANDROID_CDC_ECM
 #include "u_ether.h"
 #endif
@@ -95,13 +98,19 @@ static int gser_func_cnt;
 static atomic_t adb_enable_excl;
 static struct android_dev *_android_dev;
 static void android_switch_composition(unsigned short pid);
-
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+void msm_read_fih_version_from_nvitem(void);
+char *fih_version_buf;
+#include "../../../arch/arm/mach-msm/proc_comm.h"
+#define NV_FIH_VERSION_I 8030
+/* }FIH, WilsonWHLee, 2009/11/19 */
 /* string IDs are assigned dynamically */
 
 #define STRING_MANUFACTURER_IDX		0
 #define STRING_PRODUCT_IDX		1
 #define STRING_SERIAL_IDX		2
-
+static unsigned short desc_pid;
 /* String Table */
 static struct usb_string strings_dev[] = {
 	/* These dummy values should be overridden by platform data */
@@ -141,12 +150,13 @@ static ssize_t  show_##function(struct device *dev,			\
 									\
 	unsigned long n = _android_dev->functions;			\
 	int val = 0;							\
-									\
+	printk("%s n=0x%x\n",__func__,(unsigned int)n);								\
 	while (n) {							\
 		if ((n & 0x0F) == index)				\
 			val = 1;					\
 		n = n >> 4;						\
 	}								\
+	printk("%s val=%d\n",__func__,val);								\
 	return sprintf(buf, "%d", val);					\
 									\
 }									\
@@ -180,7 +190,25 @@ static struct attribute_group android_func_attr_grp = {
 	.name  = "functions",
 	.attrs = android_func_attrs,
 };
+/* FIH, WilsonWHLee, 2009/11/19 { */
+/* [FXX_CR], add for download tool */
+void msm_read_fih_version_from_nvitem(void)
+{
+	uint32_t smem_proc_comm_oem_cmd1 = PCOM_CUSTOMER_CMD1;
+	uint32_t smem_proc_comm_oem_data1 = SMEM_PROC_COMM_OEM_NV_READ;
+  	uint32_t smem_proc_comm_oem_data2= NV_FIH_VERSION_I;
+  	uint32_t fih_version[32];	
+  	//struct usb_info *ui = the_usb_info;
 
+    if(msm_proc_comm_oem(smem_proc_comm_oem_cmd1, &smem_proc_comm_oem_data1, fih_version, &smem_proc_comm_oem_data2) == 0)
+    {
+      printk(KERN_INFO"%s: [wilson fih_version=%s]\r\n",__func__,(char *) fih_version);
+      memcpy(fih_version_buf , fih_version , 36);
+    }
+}
+/* }FIH, WilsonWHLee, 2009/11/19 */
+/* FIH, WilsonWHLee, 2009/09/021 { */
+/* [FXX_CR], enable USB port dynamically */
 static int  android_bind_config(struct usb_configuration *c)
 {
 	struct android_dev *dev = _android_dev;
@@ -316,7 +344,9 @@ static int  android_bind(struct usb_composite_dev *cdev)
 	if (id < 0)
 		return id;
 	strings_dev[STRING_SERIAL_IDX].id = id;
-	device_desc.iSerialNumber = id;
+	printk("desc_pid=0x%x",desc_pid);
+	if(desc_pid != 0xc002)
+	    device_desc.iSerialNumber = id;
 
 	if (gadget->ops->wakeup)
 		android_config_driver.bmAttributes |= USB_CONFIG_ATT_WAKEUP;
@@ -441,8 +471,13 @@ static unsigned short android_validate_function_map(unsigned int n)
 }
 static void android_switch_composition(unsigned short pid)
 {
+	//WilsonWHLee 2010/06/09 FA3E.B-157 from VFS can't get right info++
+	if(desc_pid==0xc000)
+		return;
+	//WilsonWHLee 2010/06/09 FA3E.B-157 --
 	if (!android_validate_product_id(pid))
 		return;
+
 	usb_composite_unregister(&android_usb_driver);
 	usb_composite_register(&android_usb_driver);
 }
@@ -536,16 +571,41 @@ static int __init android_probe(struct platform_device *pdev)
 {
 	struct android_usb_platform_data *pdata = pdev->dev.platform_data;
 	struct android_dev *dev = _android_dev;
-
+///WilsonWHLee 2010/02/23 5110 porting +++++++++++
+    unsigned short pid = 0;
+    pid = (unsigned short)fih_read_usb_id_from_smem(); //get pid value from share memory
+	desc_pid = pid;
+	printk("android_probe USB PID = 0x%x",pid);
+    if(pid == 0)
+	    pid = 0xC000;
+///WilsonWHLee 2010/02/23 5110 porting ------------
 	printk(KERN_INFO "android_probe pdata: %p\n", pdata);
 
 	if (pdata) {
+		if (pdata->fih_version)
+			fih_version_buf=pdata->fih_version;
 		if (pdata->vendor_id)
 			device_desc.idVendor =
 				__constant_cpu_to_le16(pdata->vendor_id);
 		if (pdata->product_id) {
-			dev->product_id = pdata->product_id;
-			dev->functions  = pdata->functions;
+	        if (pid == 0xC001 )
+	        {
+	        	pid = 0xC001;
+	        	dev->functions = 0x612;
+	        }
+	        else if (pid == 0xC002)
+	        {
+	            pid = 0xC002;
+	        	dev->functions = 0x4;
+	        }
+	        else if (pid == 0xC000)
+	        {
+	            pid = 0xC000;
+	        	dev->functions = 0x76142;	        	
+	        }	
+			dev->product_id = pid;
+			//dev->product_id = pdata->product_id;
+			//dev->functions  = pdata->functions;
 			device_desc.idProduct =
 				__constant_cpu_to_le16(pdata->product_id);
 		}
@@ -560,7 +620,9 @@ static int __init android_probe(struct platform_device *pdev)
 			strings_dev[STRING_MANUFACTURER_IDX].s =
 					pdata->manufacturer_name;
 		if (pdata->serial_number)
-			strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
+		    if( pid != 0xC002)
+				strings_dev[STRING_SERIAL_IDX].s = pdata->serial_number;
+
 		dev->nluns = pdata->nluns;
 		dev->pdata     = pdata;
 	}

@@ -156,6 +156,12 @@ struct msm_sync {
 	 * interrupt context, and by the control thread.
 	 */
 	struct msm_device_queue pict_q;
+/* FIH, Charles Huang, 2010/05/13 { */
+/* [FXX_CR], merge from R5330 */
+#ifdef CONFIG_FIH_FXX
+	int get_pic_abort;
+#endif
+/* } FIH, Charles Huang, 2010/05/13 */
 
 	struct msm_camera_sensor_info *sdata;
 	struct msm_camvfe_fn vfefn;

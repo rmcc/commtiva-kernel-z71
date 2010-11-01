@@ -261,8 +261,24 @@ static int lcdc_register_driver(void)
 	return platform_driver_register(&lcdc_driver);
 }
 
+/* { FIH, Chandlerkang 10/3/30, For power consumption issue */
+void lcdc_clk_off(void)
+{    
+    printk(KERN_INFO "lcm_innolux: lcdc_clk_off()\n");    
+
+    clk_enable(mdp_lcdc_pclk_clk);	
+    clk_enable(mdp_lcdc_pad_pclk_clk);    
+
+    clk_disable(mdp_lcdc_pclk_clk);	
+    clk_disable(mdp_lcdc_pad_pclk_clk);    
+}
+EXPORT_SYMBOL(lcdc_clk_off);
+/* } FIH, Chandlerkang 10/3/30 */
+
 static int __init lcdc_driver_init(void)
 {
+    printk(KERN_INFO "lcm_innolux: +lcdc_driver_init()\n");
+    
 	mdp_lcdc_pclk_clk = clk_get(NULL, "mdp_lcdc_pclk_clk");
 	if (IS_ERR(mdp_lcdc_pclk_clk)) {
 		printk(KERN_ERR "error: can't get mdp_lcdc_pclk_clk!\n");

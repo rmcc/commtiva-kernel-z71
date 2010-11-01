@@ -61,14 +61,19 @@ obj-$(CONFIG_FB_MSM_EBI2_TMD_QVGA_EPSON_QCIF) += ebi2_tmd20.o
 obj-$(CONFIG_FB_MSM_EBI2_TMD_QVGA_EPSON_QCIF) += ebi2_l2f.o
 
 ifeq ($(CONFIG_FB_MSM_MDDI_AUTO_DETECT),y)
-obj-y += mddi_prism.o
-obj-y += mddi_toshiba.o
-obj-y += mddi_toshiba_vga.o
-obj-y += mddi_toshiba_wvga_pt.o
-obj-y += mddi_toshiba_wvga.o
-obj-y += mddi_sharp.o
+# Chandler Kang, 2009/05/18 {
+obj-y += mddi_wintek.o
+#obj-y += mddi_prism.o
+#obj-y += mddi_toshiba.o
+#obj-y += mddi_toshiba_vga.o
+#obj-y += mddi_toshiba_wvga_pt.o
+#obj-y += mddi_toshiba_wvga.o
+#obj-y += mddi_sharp.o
+# Chandler Kang, 2009/05/18 }
 else
 obj-$(CONFIG_FB_MSM_MDDI_PRISM_WVGA) += mddi_prism.o
+#lcm_wintek
+obj-$(CONFIG_FB_MSM_MDDI_WINTEK_HVGA) += mddi_wintek.o
 obj-$(CONFIG_FB_MSM_MDDI_TOSHIBA_COMMON) += mddi_toshiba.o
 obj-$(CONFIG_FB_MSM_MDDI_TOSHIBA_COMMON_VGA) += mddi_toshiba_vga.o
 obj-$(CONFIG_FB_MSM_MDDI_TOSHIBA_WVGA_PORTRAIT) += mddi_toshiba_wvga_pt.o
@@ -79,6 +84,8 @@ endif
 obj-$(CONFIG_FB_MSM_LCDC_PANEL) += lcdc_panel.o
 obj-$(CONFIG_FB_MSM_LCDC_PRISM_WVGA) += lcdc_prism.o
 obj-$(CONFIG_FB_MSM_LCDC_EXTERNAL_WXGA) += lcdc_external.o
+#lcm_innolux
+obj-$(CONFIG_FB_MSM_LCDC_INNOLUX) += lcdc_innolux.o
 obj-$(CONFIG_FB_MSM_HDMI_SII_EXTERNAL_720P) += hdmi_sii9022.o
 obj-$(CONFIG_FB_MSM_LCDC_GORDON_VGA) += lcdc_gordon.o
 obj-$(CONFIG_FB_MSM_LCDC_WXGA) += lcdc_wxga.o

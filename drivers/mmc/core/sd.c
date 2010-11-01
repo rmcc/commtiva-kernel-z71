@@ -16,6 +16,13 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/mmc.h>
 #include <linux/mmc/sd.h>
+/* FIH, BillHJChang, 2009/06/12 { */
+/* [FXX_CR], support HWID detection */
+#ifdef CONFIG_FIH_FXX
+#include <mach/msm_iomap.h>
+#include <mach/msm_smd.h>
+#endif
+/* } FIH, BillHJChang, 2009/06/12 */
 
 #include "core.h"
 #include "bus.h"
@@ -477,6 +484,23 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 			goto free_card;
 	}
 
+    /* FIH, BillHJChang, 2009/06/04 { */
+	/* [FXX_CR], EVB SD Data Transfer 1 bits Mode Enable (NO Error on 25MHz) */
+	#ifdef CONFIG_FIH_FXX 
+	// Modified Code
+	/*
+	 * Compute bus speed.
+	 */
+	if( FIH_READ_HWID_FROM_SMEM() == CMCS_HW_VER_EVB1)
+	{
+	max_dtr = (unsigned int)-1;
+	max_dtr = card->csd.max_dtr;
+	printk( "[SD][%d]",max_dtr);
+	
+	mmc_set_clock(host, max_dtr);
+	}
+	else
+	{
 	/*
 	 * Attempt to change to high-speed (if supported)
 	 */
@@ -498,6 +522,39 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 
 	mmc_set_clock(host, max_dtr);
 
+    }
+	#else
+	// Original Code
+	/*
+	 * Attempt to change to high-speed (if supported)
+	 */
+	err = mmc_switch_hs(card);
+	if (err)
+		goto free_card;
+
+	/*
+	 * Compute bus speed.
+	 */
+	max_dtr = (unsigned int)-1;
+
+	if (mmc_card_highspeed(card)) {
+		if (max_dtr > card->sw_caps.hs_max_dtr)
+			max_dtr = card->sw_caps.hs_max_dtr;
+	} else if (max_dtr > card->csd.max_dtr) {
+		max_dtr = card->csd.max_dtr;
+	}
+
+	mmc_set_clock(host, max_dtr);
+
+	#endif
+	/* } FIH, BillHJChang, 2009/06/04 */
+	/* FIH, BillHJChang, 2009/06/04 { */
+	/* [FXX_CR], EVB SD Data Transfer 1 bits Mode Enable (NO Error on 25MHz) */
+	#ifdef CONFIG_FIH_FXX 
+	// Modified Code
+	if( FIH_READ_HWID_FROM_SMEM() != CMCS_HW_VER_EVB1)
+	{
+
 	/*
 	 * Switch to wider bus (if supported).
 	 */
@@ -509,7 +566,22 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 
 		mmc_set_bus_width(host, MMC_BUS_WIDTH_4);
 	}
+	}
+	#else	
+	// Original Code
+	/*
+	 * Switch to wider bus (if supported).
+	 */
+	if ((host->caps & MMC_CAP_4_BIT_DATA) &&
+		(card->scr.bus_widths & SD_SCR_BUS_WIDTH_4)) {
+		err = mmc_app_set_bus_width(card, MMC_BUS_WIDTH_4);
+		if (err)
+			goto free_card;
 
+		mmc_set_bus_width(host, MMC_BUS_WIDTH_4);
+	}
+	#endif
+	/* } FIH, BillHJChang, 2009/06/04 */
 	/*
 	 * Check if read-only switch is active.
 	 */
@@ -601,7 +673,16 @@ static void mmc_sd_detect(struct mmc_host *host)
 /*
  * Suspend callback from host.
  */
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 static void mmc_sd_suspend(struct mmc_host *host)
+#else
+static int mmc_sd_suspend(struct mmc_host *host)
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 {
 	BUG_ON(!host);
 	BUG_ON(!host->card);
@@ -611,6 +692,13 @@ static void mmc_sd_suspend(struct mmc_host *host)
 		mmc_deselect_cards(host);
 	host->card->state &= ~MMC_STATE_HIGHSPEED;
 	mmc_release_host(host);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+#ifdef CONFIG_FIH_FXX
+	return 0;
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 }
 
 /*
@@ -619,7 +707,15 @@ static void mmc_sd_suspend(struct mmc_host *host)
  * This function tries to determine if the same card is still present
  * and, if so, restore all state to it.
  */
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 static void mmc_sd_resume(struct mmc_host *host)
+#else
+static int mmc_sd_resume(struct mmc_host *host)
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 {
 	int err;
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
@@ -648,7 +744,10 @@ static void mmc_sd_resume(struct mmc_host *host)
 	err = mmc_sd_init_card(host, host->ocr, host->card);
 #endif
 	mmc_release_host(host);
-
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	if (err) {
 		mmc_sd_remove(host);
 
@@ -656,7 +755,11 @@ static void mmc_sd_resume(struct mmc_host *host)
 		mmc_detach_bus(host);
 		mmc_release_host(host);
 	}
-
+#else
+	return err;
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 }
 
 #else

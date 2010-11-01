@@ -78,6 +78,7 @@
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/sched.h>
 
 #include <mach/msm_rpcrouter.h>
 
@@ -421,7 +422,7 @@ int xdr_send_msg(struct msm_rpc_xdr *xdr)
 void xdr_init(struct msm_rpc_xdr *xdr)
 {
 	mutex_init(&xdr->out_lock);
-	mutex_init(&xdr->in_lock);
+	init_waitqueue_head(&xdr->in_buf_wait_q);
 
 	xdr->in_buf = NULL;
 	xdr->in_size = 0;
@@ -434,7 +435,7 @@ void xdr_init(struct msm_rpc_xdr *xdr)
 
 void xdr_init_input(struct msm_rpc_xdr *xdr, void *buf, uint32_t size)
 {
-	mutex_lock(&xdr->in_lock);
+	wait_event(xdr->in_buf_wait_q, !(xdr->in_buf));
 
 	xdr->in_buf = buf;
 	xdr->in_size = size;
@@ -451,11 +452,11 @@ void xdr_init_output(struct msm_rpc_xdr *xdr, void *buf, uint32_t size)
 void xdr_clean_input(struct msm_rpc_xdr *xdr)
 {
 	kfree(xdr->in_buf);
-	xdr->in_buf = NULL;
 	xdr->in_size = 0;
 	xdr->in_index = 0;
+	xdr->in_buf = NULL;
 
-	mutex_unlock(&xdr->in_lock);
+	wake_up(&xdr->in_buf_wait_q);
 }
 
 void xdr_clean_output(struct msm_rpc_xdr *xdr)

@@ -23,12 +23,21 @@
 #include <linux/sysdev.h>
 #include <linux/wakelock.h>
 
+#include <linux/msm_rpcrouter.h>
+#include <mach/msm_rpcrouter.h>
+
+#define ONCRPC_TIME_ALARM_SET_PROC 3
+
+#define TIMEREMOTE_PROG_VER 0x00010003
+#define TIMEREMOTE_PROG_NUMBER 0x30000048
+//FIH --- Auto test tool --------
+
 #define ANDROID_ALARM_PRINT_ERRORS (1U << 0)
 #define ANDROID_ALARM_PRINT_INIT_STATUS (1U << 1)
 #define ANDROID_ALARM_PRINT_INFO (1U << 2)
 #define ANDROID_ALARM_PRINT_IO (1U << 3)
-#define ANDROID_ALARM_PRINT_INT (1U << 4)
-#define ANDROID_ALARM_PRINT_FLOW (1U << 5)
+#define ANDROID_ALARM_PRINT_INT (1U << 4)   //FIH_DEBUG_ZONE_G4
+#define ANDROID_ALARM_PRINT_FLOW (1U << 5)  //FIH_DEBUG_ZONE_G5
 
 #if 0
 #define ANDROID_ALARM_DPRINTF_MASK (~0)
@@ -88,6 +97,9 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	int rv = 0;
 	unsigned long flags;
 	int i;
+	//FIH +++ add for auto test tool ++++ 
+    static struct msm_rpc_endpoint *ep;
+	//FIH --- add for auto test tool ----		
 	struct timespec new_alarm_time;
 	struct timespec new_rtc_time;
 	struct timespec tmp_time;
@@ -102,6 +114,9 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if ((file->f_flags & O_ACCMODE) == O_RDONLY)
 			return -EPERM;
 		if (file->private_data == NULL &&
+		// FIH +++ for auto test tool +++
+			cmd != ANDROID_ALARM_SET_TO_POWER_ON &&
+		// FIH --- for auto test tool ---
 		    cmd != ANDROID_ALARM_SET_RTC) {
 			spin_lock_irqsave(&alarm_slock, flags);
 			if (alarm_opened) {
@@ -158,6 +173,42 @@ from_old_alarm_set:
 		    && cmd != ANDROID_ALARM_SET_AND_WAIT_OLD)
 			break;
 		/* fall though */
+	//FIH +++ add for auto test tool ++++ 
+	case ANDROID_ALARM_SET_TO_POWER_ON:
+	{
+		struct timeremote_set_alarm_req {
+			struct rpc_request_hdr hdr;
+			uint32_t expiration;
+		} req;
+
+		struct timeremote_set_alarm_rep {
+			struct rpc_reply_hdr hdr;
+		} rep;
+		int rc =0;
+
+		if (copy_from_user(&(req.expiration), (void __user *)arg,
+				    sizeof(uint32_t))) {
+					rv = -EFAULT;
+					goto Exit;
+				}		   
+		ep = msm_rpc_connect_compatible(TIMEREMOTE_PROG_NUMBER, TIMEREMOTE_PROG_VER, 0);
+		if (IS_ERR(ep)) {
+			goto Exit;
+		}
+		
+		req.expiration = cpu_to_be32(req.expiration);
+
+		rc = msm_rpc_call_reply(ep, ONCRPC_TIME_ALARM_SET_PROC ,
+					&req, sizeof(req),
+					&rep, sizeof(rep),
+					5 * HZ);
+
+		if (rc == -ENOMEM)	//Don't care this error, because the size of reply data of rpc all is 28.
+			rc = 0;
+		Exit:
+			break;
+		}
+	//FIH --- add for auto test tool -----		
 	case ANDROID_ALARM_WAIT:
 		spin_lock_irqsave(&alarm_slock, flags);
 		ANDROID_ALARM_DPRINTF(ANDROID_ALARM_PRINT_IO, "alarm wait\n");
@@ -264,7 +315,10 @@ static int alarm_release(struct inode *inode, struct file *file)
 
 	spin_lock_irqsave(&alarm_slock, flags);
 	if (file->private_data != 0) {
-		for (i = 0; i < ANDROID_ALARM_TYPE_COUNT; i++) {
+        //FIH +++ for auto test tool +++
+        for (i = 0; i < (ANDROID_ALARM_SYSTEMTIME+1); i++) {
+		//for (i = 0; i < ANDROID_ALARM_TYPE_COUNT; i++) {
+        //FIH -- for auto test tool ---
 			uint32_t alarm_type_mask = 1U << i;
 			if (alarm_enabled & alarm_type_mask) {
 				ANDROID_ALARM_DPRINTF(ANDROID_ALARM_PRINT_INFO,
@@ -463,7 +517,7 @@ static int rtc_alarm_add_device(struct device *dev,
 	mutex_unlock(&alarm_setrtc_mutex);
 
 	ANDROID_ALARM_DPRINTF(ANDROID_ALARM_PRINT_INFO, "alarm: parent %p\n",
-			      alarm_platform_dev->dev.power.pm_parent);
+			      alarm_platform_dev->dev.parent);
 	return 0;
 
 err3:
@@ -525,7 +579,6 @@ static int __init alarm_init(void)
 {
 	int err;
 	int i;
-
 	for (i = 0; i < ANDROID_ALARM_SYSTEMTIME; i++) {
 		hrtimer_init(&alarm_timer[i], CLOCK_REALTIME, HRTIMER_MODE_ABS);
 		alarm_timer[i].function = alarm_timer_triggered;

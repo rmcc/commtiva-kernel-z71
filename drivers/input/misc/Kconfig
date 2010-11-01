@@ -243,6 +243,14 @@ config INPUT_KEYCHORD
 	  To compile this driver as a module, choose M here: the
 	  module will be called keychord.
 
+#+++ FIH; Tiger; 2009/5/1
+config MINITRACKBALL
+        tristate "Mini-Trackball Driver"
+        help
+          Say Y here if you want support for the Mini-Trackball/Jogball
+          device.
+#--- FIH; Tiger; 2009/5/1
+
 config BMA150
 	tristate "Bosch BMA150 accelerometer"
 	default n

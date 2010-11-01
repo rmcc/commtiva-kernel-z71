@@ -13,6 +13,9 @@
 #include <linux/leds.h>
 
 #include <linux/mmc/core.h>
+/* ATHENV */
+#include <linux/wakelock.h>
+/* ATHENV */
 
 struct mmc_ios {
 	unsigned int	clock;			/* clock rate */
@@ -148,7 +151,15 @@ struct mmc_host {
 	struct mmc_card		*card;		/* device attached to this host */
 
 	wait_queue_head_t	wq;
-
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+#ifdef CONFIG_FIH_FXX
+	struct task_struct	*claimer;	/* task that has host claimed */
+	int			claim_cnt;	/* "claim" nesting count */
+	struct wake_lock	mmc_sdio_irq_wake_lock;
+/* ATHEVN */
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 	struct delayed_work	detect;
 
 	const struct mmc_bus_ops *bus_ops;	/* current bus driver */
@@ -180,6 +191,13 @@ struct mmc_host {
 	int			idle_timeout;
 	unsigned long		auto_suspend_state;
 #endif
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV*/
+#ifdef CONFIG_FIH_FXX
+    int    last_suspend_error;
+/* ATHENV*/
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 	unsigned long		private[0] ____cacheline_aligned;
 };
 

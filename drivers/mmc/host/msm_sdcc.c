@@ -47,6 +47,36 @@
 #include <mach/dma.h>
 #include <mach/htc_pwrsink.h>
 
+#ifdef CONFIG_FIH_FXX
+/* FIH, SimonSSChang, 2010/02/10 { */
+#define ATH_PATCH
+#define ATH_WLAN_SLOT		2
+/* } FIH, SimonSSChang, 2010/02/10 */
+#endif
+
+/* FIH, BillHJChang, 2009/06/12 { */
+/* [FXX_CR], support HWID detection */
+#ifdef CONFIG_FIH_FXX
+#include <mach/msm_iomap.h>
+#include <mach/msm_smd.h>
+#endif
+/* } FIH, BillHJChang, 2009/06/12 */
+
+/* FIH, BillHJChang, 2009/06/12 { */
+/* [FXX_CR], support interrupt on card detection */
+#ifdef CONFIG_FIH_FXX
+#define FIH_SD_SLOT				1
+#define GPIO_CARDDETECT_INTR 	18
+#endif
+/* } FIH, BillHJChang, 2009/06/12 */
+
+/* FIH, BillHJChang, 2009/06/25 { */
+#include <mach/gpio.h>
+/* } FIH, BillHJChang, 2009/06/25 */
+
+/* FIH, BillHJChang, 2009/11/20 { */
+static bool bSdSuspend = false;
+/* } FIH, BillHJChang, 2009/11/20 */
 
 #include "msm_sdcc.h"
 
@@ -1126,19 +1156,80 @@ msmsdcc_check_status(unsigned long data)
 	struct msmsdcc_host *host = (struct msmsdcc_host *)data;
 	unsigned int status;
 
+	pr_info("++ %s: Slot status change detected\n",__func__);
+
 	if (!host->plat->status) {
 		mmc_detect_change(host->mmc, 0);
 	} else {
+		/* FIH, BillHJChang, 2009/06/25 { */
+		pr_info("%s: SDCC%d\r\n",__func__, host->pdev_id);
+		/* FIH, BillHJChang, 2009/09/11 { */
+		/* [FXX_CR], insert/remove issue */
+		#if 0
+		if (host->pdev_id == FIH_SD_SLOT)
+			mdelay(500);
+		#endif
+		/* } FIH, BillHJChang, 2009/09/11 */		
+		/* } FIH, BillHJChang, 2009/06/25 */
+		
 		status = host->plat->status(mmc_dev(host->mmc));
 		host->eject = !status;
 		if (status ^ host->oldstat) {
 			pr_info("%s: Slot status change detected (%d -> %d)\n",
 			       mmc_hostname(host->mmc), host->oldstat, status);
+			/* FIH, BillHJChang, 2009/06/25 { */
+			/* [FXX_CR], absolute status */
+			// Modified Code
+			host->oldstat = status;			
+			/* } FIH, BillHJChang, 2009/06/25 */
+			
+			/* FIH, BillHJChang, 2009/09/11 { */
+			/* [FXX_CR], insert/remove issue */
+			#if 0	// Original Code
 			mmc_detect_change(host->mmc, 0);
+			#else	// Modified Code
+			/* FIH, WillChen, 2009/10/30 { */
+			/* [FXX_CR], Speed up wifi turn on time */
+			if (host->pdev_id == ATH_WLAN_SLOT)
+			mmc_detect_change(host->mmc, 0);
+			else
+			{
+				/* FIH, BillHJChang, 2009/11/20 { */
+				/* [FXX_CR], issue of card detect fail in suspend mode */
+				#ifdef CONFIG_FIH_FXX
+					if (host->eject)
+					{	
+						if (bSdSuspend == true)
+							mmc_detect_change(host->mmc, 1*HZ);
+						else
+							mmc_detect_change(host->mmc, 0);
 		}
+					else
+					{
+						mmc_detect_change(host->mmc, 2*HZ);
+					}
+				#endif
+				/* } FIH, BillHJChang, 2009/11/20 */
+			}
+			#endif
+			/* } FIH, BillHJChang, 2009/09/11 */
+		}
+		/* FIH, BillHJChang, 2009/06/25 { */
+		/* [FXX_CR], absolute status */		
+		// Original Code
+		#if 0
 		host->oldstat = status;
+		#endif
+		/* } FIH, BillHJChang, 2009/06/25 */		
 	}
 }
+
+/* FIH, BillHJChang, 2009/08/05 { */
+/* [FXX_CR], clk handle for power-on/suspend/resume  */
+#ifdef CONFIG_FIH_FXX
+int nReady2Detect=0;
+#endif	
+/* } FIH, BillHJChang, 2009/08/05 */
 
 static irqreturn_t
 msmsdcc_platform_status_irq(int irq, void *dev_id)
@@ -1146,6 +1237,15 @@ msmsdcc_platform_status_irq(int irq, void *dev_id)
 	struct msmsdcc_host *host = dev_id;
 
 	pr_debug("%s: %d\n", __func__, irq);
+
+	/* FIH, BillHJChang, 2009/08/05 { */
+	/* [FXX_CR], clk handle for power-on/suspend/resume  */
+	#ifdef CONFIG_FIH_FXX
+	if (nReady2Detect ==0)
+		return IRQ_HANDLED;
+	#endif	
+	/* } FIH, BillHJChang, 2009/08/05 */
+
 	msmsdcc_check_status((unsigned long) host);
 	return IRQ_HANDLED;
 }
@@ -1250,10 +1350,38 @@ set_polling(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
+#ifdef CONFIG_FIH_FXX
+/* FIH, SimonSSChang, 2010/03/31 { */
+/* ATHENV +++ */
+static ssize_t
+set_detect_change(struct device *dev, struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct mmc_host *mmc = dev_get_drvdata(dev);
+	struct msmsdcc_host *host = mmc_priv(mmc);
+	int value;
+	if (sscanf(buf, "%d", &value)==1 && value) {
+        mmc_detect_change(host->mmc, 0);
+    }
+	return count;
+}
+static DEVICE_ATTR(detect_change, S_IRUGO | S_IWUSR,
+		NULL, set_detect_change);
+/* ATHENV --- */
+#endif
+/* } FIH, SimonSSChang, 2010/03/31 */
+
 static DEVICE_ATTR(polling, S_IRUGO | S_IWUSR,
 		show_polling, set_polling);
 static struct attribute *dev_attrs[] = {
 	&dev_attr_polling.attr,
+#ifdef CONFIG_FIH_FXX
+/* FIH, SimonSSChang, 2010/03/31 { */
+/* ATHENV +++ */
+    &dev_attr_detect_change.attr,
+/* ATHENV --- */
+#endif
+/* } FIH, SimonSSChang, 2010/03/31 */
 	NULL,
 };
 static struct attribute_group dev_attr_grp = {
@@ -1286,6 +1414,21 @@ static void msmsdcc_late_resume(struct early_suspend *h)
 	}
 };
 #endif
+
+/* FIH, BillHJChang, 2009/06/25 { */
+/* [FXX_CR], add Card Detection uses HW double check mechanism */
+// unsigned int (*status)(struct device *);
+unsigned  int msmsdcc_platform_status(struct device *dev_sdcc1)
+{
+	 int rc= 0;
+	gpio_request(GPIO_CARDDETECT_INTR,0);
+	rc = gpio_get_value(GPIO_CARDDETECT_INTR);
+	gpio_free(GPIO_CARDDETECT_INTR);	
+	printk(KERN_INFO"%s: SD Card Detect GPIO (%d)\n",__func__, rc);	
+	return !rc;
+}
+/* } FIH, BillHJChang, 2009/06/25 */
+
 
 static int
 msmsdcc_probe(struct platform_device *pdev)
@@ -1448,12 +1591,43 @@ msmsdcc_probe(struct platform_device *pdev)
 	 * Setup card detect change
 	 */
 
+
+	/* FIH, BillHJChang, 2009/06/12 { */
+	/* [FXX_CR], support HWID detection */
+	#ifdef CONFIG_FIH_FXX
+	if (host->pdev_id == FIH_SD_SLOT)
+	{
+//		if( FIH_READ_HWID_FROM_SMEM() != CMCS_HW_VER_EVB1)
+			plat->status_irq = MSM_GPIO_TO_INT(GPIO_CARDDETECT_INTR);
+		    pr_info("%s: get slot IRQ %d \n",__func__, plat->status_irq);
+	}
+	#endif
+	/* } FIH, BillHJChang, 2009/06/12 */
+
 	if (plat->status_irq) {
+		/* FIH, BillHJChang, 2009/06/23 { */
+		/* [FXX_CR], support interrupt on card detection */
+		#ifdef	CONFIG_FIH_FXX
+		ret = request_irq(plat->status_irq,
+				  msmsdcc_platform_status_irq,
+				  (IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING),
+				  DRIVER_NAME " (slot)",
+				  host);		
+		#else
+		// Original Code
 		ret = request_irq(plat->status_irq,
 				  msmsdcc_platform_status_irq,
 				  IRQF_SHARED | plat->irq_flags,
 				  DRIVER_NAME " (slot)",
 				  host);
+		#endif
+		/* } FIH, BillHJChang, 2009/06/23 */
+
+		/* FIH, BillHJChang, 2009/06/26 { */
+		/* [FXX_CR], support wake up source */
+		if (host->pdev_id == FIH_SD_SLOT)
+			enable_irq_wake(plat->status_irq);
+		/* } FIH, BillHJChang, 2009/06/23 */		
 		if (ret) {
 			pr_err("Unable to get slot IRQ %d (%d)\n",
 			       plat->status_irq, ret);
@@ -1464,6 +1638,18 @@ msmsdcc_probe(struct platform_device *pdev)
 	} else if (!plat->status)
 		pr_err("%s: No card detect facilities available\n",
 		       mmc_hostname(mmc));
+
+	/* FIH, BillHJChang, 2009/06/25 { */
+	/* [FXX_CR], add Card Detection uses HW double check mechanism (Need HWID detection) */
+	/* [FXX_CR], move code to here to avoid mirco-bus issue */
+	#ifdef	CONFIG_FIH_FXX
+	if (host->pdev_id == FIH_SD_SLOT)
+	{
+//		if( FIH_READ_HWID_FROM_SMEM() != CMCS_HW_VER_EVB1)
+		plat->status = msmsdcc_platform_status;
+	}
+	#endif
+	/* } FIH, BillHJChang, 2009/06/25 */
 
 	if (plat->status) {
 		host->oldstat = host->plat->status(mmc_dev(host->mmc));
@@ -1496,6 +1682,14 @@ msmsdcc_probe(struct platform_device *pdev)
 		goto irq_free;
 
 	mmc_set_drvdata(pdev, mmc);
+
+	/* FIH, BillHJChang, 2009/08/05 { */
+	/* [FXX_CR], clk handle for power-on/suspend/resume  */
+	#ifdef CONFIG_FIH_FXX
+	nReady2Detect =1;
+	#endif	
+	/* } FIH, BillHJChang, 2009/08/05 */	
+	
 	mmc_add_host(mmc);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
@@ -1623,6 +1817,51 @@ static int msmsdcc_remove(struct platform_device *pdev)
 }
 
 #ifdef CONFIG_PM
+/* FIH, SimonSSChang, 2010/02/10 { */
+#ifdef CONFIG_FIH_FXX
+/* ATHENV */
+struct msmsdcc_host *wlan_host;
+void plat_disable_wlan_slot(void)
+{
+	struct msmsdcc_host *host = wlan_host;
+
+	if (host->plat->status_irq)
+		disable_irq(host->plat->status_irq);
+	writel(0, host->base + MMCIMASK0);
+	if (host->clks_on) {
+		clk_disable(host->clk);
+		clk_disable(host->pclk);
+		host->clks_on = 0;
+	}
+	if (host->plat->sdiowakeup_irq)
+		enable_irq(host->plat->sdiowakeup_irq);
+}
+EXPORT_SYMBOL(plat_disable_wlan_slot);
+
+void plat_enable_wlan_slot(void)
+{
+	struct msmsdcc_host *host = wlan_host;
+	unsigned long flags;
+
+	spin_lock_irqsave(&host->lock, flags);
+	if (!host->clks_on) {
+		clk_enable(host->pclk);
+		clk_enable(host->clk);
+		host->clks_on = 1;
+	}
+	writel(host->mci_irqenable, host->base + MMCIMASK0);
+	spin_unlock_irqrestore(&host->lock, flags);
+	if (host->plat->sdiowakeup_irq)
+		disable_irq(host->plat->sdiowakeup_irq);
+	if (host->plat->status_irq)
+		enable_irq(host->plat->status_irq);
+
+}
+EXPORT_SYMBOL(plat_enable_wlan_slot);
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
+
 static int
 msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 {
@@ -1635,11 +1874,36 @@ msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 		return 0;
 #endif
 	if (mmc) {
+/* FIH, SimonSSChang, 2010/02/10 { */
+#ifdef ATH_PATCH /* ATHENV+++ */
+        if (host->pdev_id == ATH_WLAN_SLOT)
+		{
+            if (mmc->last_suspend_error)
+			    return 0;
+		    rc = mmc_suspend_host(mmc, state);
+		    if (!rc) {
+			     host->mmc->caps &= ~MMC_CAP_NEEDS_POLL;
+#ifdef CONFIG_HAS_EARLYSUSPEND
+			host->polling_enabled = 0;
+#endif
+			cancel_delayed_work(&mmc->detect);
+			if (host->plat->status_irq)
+				disable_irq(host->plat->status_irq);
+		    }
+        } else if (host->pdev_id == FIH_SD_SLOT) {
+            rc = 0;
+        }
+#else
+#ifndef CONFIG_FIH_FXX
 		if (host->plat->status_irq)
 			disable_irq(host->plat->status_irq);
 
 		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO)
 			rc = mmc_suspend_host(mmc, state);
+#endif
+#endif /* ATHENV--- */
+/* } FIH, SimonSSChang, 2010/02/10 */
+
 		if (!rc) {
 			writel(0, host->base + MMCIMASK0);
 
@@ -1647,8 +1911,40 @@ msmsdcc_suspend(struct platform_device *dev, pm_message_t state)
 				clk_disable(host->clk);
 				clk_disable(host->pclk);
 				host->clks_on = 0;
+				pr_info("%s: SDCC%d clk_disable\n",__func__,host->pdev_id);
 			}
 		}
+/* FIH, BillHJChang, 2009/11/20 { */
+#ifdef CONFIG_FIH_FXX
+	     if (host->pdev_id == FIH_SD_SLOT)
+		     bSdSuspend = true;
+
+/* FIH, SimonSSChang, 2010/02/10 { */
+#ifdef ATH_PATCH /* ATHENV+++ */
+		if (mmc->last_suspend_error) {
+			wlan_host = host;
+			return 0;
+		}
+#endif /* ATHENV--- */
+#endif
+/* } FIH, BillHJChang, 2009/11/20 */
+/* } FIH, SimonSSChang, 2010/02/10 */
+
+/* FIH, SimonSSChang, 2010/04/07 { */
+/* [F0X_CR], Config SDIO2 gpio enter sleep mode */
+#ifdef CONFIG_FIH_FXX
+        if (host->pdev_id == ATH_WLAN_SLOT)
+		{
+		    printk(KERN_INFO "Config SDIO2 sleep status\n");
+            gpio_tlmm_config(GPIO_CFG(62, 0, GPIO_INPUT, GPIO_PULL_DOWN, GPIO_2MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(63, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_2MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(64, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_2MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(65, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_2MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(66, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_2MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(67, 0, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_2MA),GPIO_ENABLE);
+        }
+#endif        
+/* } FIH, SimonSSChang, 2010/04/07 */        
 
 		if (host->plat->sdiowakeup_irq)
 			enable_irq(host->plat->sdiowakeup_irq);
@@ -1668,13 +1964,56 @@ msmsdcc_resume(struct platform_device *dev)
 		return 0;
 #endif
 	if (mmc) {
+/* FIH, SimonSSChang, 2010/04/07 { */
+/* [F0X_CR], re-init SDIO2 gpio */
+#ifdef CONFIG_FIH_FXX
+        if (host->pdev_id == ATH_WLAN_SLOT)
+		{
+		    printk(KERN_INFO "re-init SDIO2 gpio\n");		
+            gpio_tlmm_config(GPIO_CFG(62, 2, GPIO_OUTPUT, GPIO_NO_PULL, GPIO_8MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(63, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(64, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(65, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(66, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),GPIO_ENABLE);
+            gpio_tlmm_config(GPIO_CFG(67, 2, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_8MA),GPIO_ENABLE);
+        }
+#endif        
+/* } FIH, SimonSSChang, 2010/04/07 */        
+        
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV+++ */
+		if (mmc->last_suspend_error) {
+			wlan_host = host;
+			mmc->last_suspend_error = 0;
+			return 0;
+		}
+/* ATHENV--- */
+/* } FIH, SimonSSChang, 2010/02/10 */
+
+/*FIH, MonkyChen, 2010/02/11*/
+/*Modified from BillHJChang's solution*/
 		spin_lock_irqsave(&host->lock, flags);
+#ifdef CONFIG_FIH_FXX
+		if ( (host->pdev_id == FIH_SD_SLOT) && mmc->card){	
+		    // SD card in enable clk
+				clk_enable(host->pclk);
+				clk_enable(host->clk);
+				host->clks_on = 1;
+                printk(KERN_INFO "%s: SDCC%d clk_enable\n",__func__,host->pdev_id);//Bill
+			}
+#else
 		if (!host->clks_on) {
 			clk_enable(host->pclk);
 			clk_enable(host->clk);
 			host->clks_on = 1;
 		}
+#endif
 
+/* FIH, MonkyChen, 2010/02/11 */
+/* Modified from BillHJChang's fix */
+        if (host->pdev_id == ATH_WLAN_SLOT)
+		    writel(host->mci_irqenable, host->base + MMCIMASK0);
+        else
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
 		spin_unlock_irqrestore(&host->lock, flags);
@@ -1682,7 +2021,16 @@ msmsdcc_resume(struct platform_device *dev)
 		if (host->plat->sdiowakeup_irq)
 			disable_irq(host->plat->sdiowakeup_irq);
 
+/* FIH, SimonSSChang, 2010/02/10 { */
+if(host->pdev_id == ATH_WLAN_SLOT) {
+
+#ifdef ATH_PATCH /* ATHENV+++ */
+		if (1) {
+#else
 		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO) {
+#endif /* ATHENV--- */
+/* } FIH, SimonSSChang, 2010/02/10 */
+
 #ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
 			schedule_work(&host->resume_task);
 #else
@@ -1690,10 +2038,36 @@ msmsdcc_resume(struct platform_device *dev)
 			if (host->plat->status_irq)
 				enable_irq(host->plat->status_irq);
 #endif
-		} else if (host->plat->status_irq)
-			enable_irq(host->plat->status_irq);
+     } else if (host->plat->status_irq)
+			  enable_irq(host->plat->status_irq);
+        }    
 
-	}
+}else if (host->pdev_id == FIH_SD_SLOT) {
+		if (!mmc->card || mmc->card->type != MMC_TYPE_SDIO) {
+            
+#ifndef CONFIG_FIH_FXX
+#ifdef CONFIG_MMC_MSM7X00A_RESUME_IN_WQ
+			schedule_work(&host->resume_task);
+#else
+			mmc_resume_host(mmc);
+			if (host->plat->status_irq)
+				enable_irq(host->plat->status_irq);
+#endif
+		  } else if (host->plat->status_irq)
+			  enable_irq(host->plat->status_irq);
+#endif
+     }  
+
+
+/* FIH, BillHJChang, 2009/11/20 { */
+#ifdef CONFIG_FIH_FXX
+	if (host->pdev_id == FIH_SD_SLOT)
+		bSdSuspend = false;
+#endif
+/* } FIH, BillHJChang, 2009/11/20 */
+
+       }
+
 	return 0;
 }
 #else

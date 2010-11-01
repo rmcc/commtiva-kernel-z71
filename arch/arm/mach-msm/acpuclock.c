@@ -106,6 +106,7 @@ static struct shared_pll_control *pll_control;
 static struct clock_state drv_state = { 0 };
 static struct clkctl_acpu_speed *acpu_freq_tbl;
 
+
 static void __init acpuclk_init(void);
 
 /*
@@ -428,6 +429,7 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s) {
 		writel(reg_clksel, A11S_CLK_SEL_ADDR);
 	}
 }
+
 
 int acpuclk_set_rate(unsigned long rate, enum setrate_reason reason)
 {
@@ -883,6 +885,50 @@ static void shared_pll_control_init(void)
 	pr_warning("Falling back to proc_comm PLL control.\n");
 }
 
+//[+++][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
+#ifdef CONFIG_FIH_FXX
+void acpuclk_set_lcdcoff_wait_for_irq(int on)
+{
+	int rc = 0;
+
+	mutex_lock(&drv_state.lock);
+	if(on)
+	{
+		//panel status is on
+		acpu_freq_tbl[0].axiclk_khz = 200000;
+		acpu_freq_tbl[1].axiclk_khz = 200000;
+		acpu_freq_tbl[2].axiclk_khz = 200000;
+		acpu_freq_tbl[3].axiclk_khz = 200000;
+		acpu_freq_tbl[4].axiclk_khz = 200000;
+		acpu_freq_tbl[5].axiclk_khz = 200000;
+		acpu_freq_tbl[6].axiclk_khz = 200000;		
+		acpu_freq_tbl[7].axiclk_khz = 200000;
+		acpu_freq_tbl[8].axiclk_khz = 200000;
+
+		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+				200000 * 1000);
+
+		if (rc < 0)
+			pr_err("Setting AXI min rate failed!\n");
+	}
+	else
+	{
+		//panel status is off
+		acpu_freq_tbl[0].axiclk_khz = 30720;
+		acpu_freq_tbl[1].axiclk_khz = 61440;
+		acpu_freq_tbl[2].axiclk_khz = 61440;
+		acpu_freq_tbl[3].axiclk_khz = 61440;
+		acpu_freq_tbl[4].axiclk_khz = 122880;
+		acpu_freq_tbl[5].axiclk_khz = 160000;
+		acpu_freq_tbl[6].axiclk_khz = 160000;		
+		acpu_freq_tbl[7].axiclk_khz = 160000;
+		acpu_freq_tbl[8].axiclk_khz = 200000;
+	}
+	mutex_unlock(&drv_state.lock);
+
+}
+#endif
+//[---][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	pr_info("acpu_clock_init()\n");
@@ -898,6 +944,7 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 		msm7x25_acpu_pll_hw_bug_fix();
 	acpuclk_init();
 	lpj_init();
+
 	print_acpu_freq_tbl();
 	if (cpu_is_msm7x27())
 		shared_pll_control_init();

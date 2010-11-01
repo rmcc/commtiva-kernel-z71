@@ -102,6 +102,20 @@ config SENSORS_TSL2550
 	  This driver can also be built as a module.  If so, the module
 	  will be called tsl2550.
 
+# +++ FIH_FXX +++, Neo Chen, 2009/06/08, change backlight driver from max7302 to max8831
+config BACKLIGHT_LED_MAX8831
+	tristate "Max8831 backlight controller"
+	depends on I2C=y && ARCH_MSM
+	help
+# --- FIH_FXX ---, Neo Chen, 2009/06/08,
+
+# +++ FIH_FXX +++, Charles Huang, 2009/05/18
+config FLASH_DRIVER_IC_AAT1272
+	tristate "AAT1272 flash driver ic"
+	depends on I2C=y && ARCH_MSM
+	help
+# --- FIH_FXX ---, Charles Huang, 2009/05/18
+
 config SENSORS_AKM8976
 	tristate "AKM8976 Compass Driver"
 	depends on I2C
@@ -125,5 +139,11 @@ config SENSORS_MT9T013
 	help
 	 MT9T013 Camera Driver implemented by HTC.
 
+# +++ FIH_FXX +++  //Michael
+config BACKLIGHT_LED_TCA6507
+	tristate "TCA6507 backlight led controller"
+	depends on I2C=y && ARCH_MSM
+	help
+# --- FIH_FXX ---
 
 endmenu

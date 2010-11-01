@@ -40,11 +40,21 @@
 static struct workqueue_struct *workqueue;
 static struct wake_lock mmc_delayed_work_wake_lock;
 
+/* FIH, BillHJChang, 2009/11/20 { */
+/* [FXX_CR], issue of card detect fail in suspend mode */
+#ifdef CONFIG_FIH_FXX
+static struct wake_lock sdcard_idle_wake_lock;
+#endif
+/* } FIH, BillHJChang, 2009/11/20 */
+
 /*
  * Enabling software CRCs on the data blocks can be a significant (30%)
  * performance cost, and for other reasons may not always be desired.
  * So we allow it it to be disabled.
  */
+/* FIH:WilsonWHLee 2009/08/21 { */
+bool storage_state=false; 
+/* }FIH:WilsonWHLee 2009/08/21 */
 int use_spi_crc = 1;
 module_param(use_spi_crc, bool, 0);
 
@@ -55,6 +65,14 @@ static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
 	wake_lock(&mmc_delayed_work_wake_lock);
+
+	/* FIH, BillHJChang, 2009/11/20 { */
+	/* [FXX_CR], issue of card detect fail in suspend mode */
+	#ifdef CONFIG_FIH_FXX
+	wake_lock(&sdcard_idle_wake_lock);
+	#endif
+	/* } FIH, BillHJChang, 2009/11/20 */
+
 	return queue_delayed_work(workqueue, work, delay);
 }
 
@@ -353,16 +371,39 @@ int __mmc_claim_host(struct mmc_host *host, atomic_t *abort)
 	while (1) {
 		set_current_state(TASK_UNINTERRUPTIBLE);
 		stop = abort ? atomic_read(abort) : 0;
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 		if (stop || !host->claimed)
 			break;
+#else
+		if (stop || !host->claimed || host->claimer == current)
+			break;
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 		spin_unlock_irqrestore(&host->lock, flags);
 		schedule();
 		spin_lock_irqsave(&host->lock, flags);
 	}
 	set_current_state(TASK_RUNNING);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	if (!stop)
 		host->claimed = 1;
 	else
+#else
+	if (!stop) {
+		host->claimed = 1;
+		host->claimer = current;
+		host->claim_cnt += 1;
+	} else
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 		wake_up(&host->wq);
 	spin_unlock_irqrestore(&host->lock, flags);
 	remove_wait_queue(&host->wq, &wait);
@@ -385,10 +426,26 @@ void mmc_release_host(struct mmc_host *host)
 	WARN_ON(!host->claimed);
 
 	spin_lock_irqsave(&host->lock, flags);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	host->claimed = 0;
 	spin_unlock_irqrestore(&host->lock, flags);
 
+	wake_up(&host->wq)
+#else
+	if (--host->claim_cnt) {
+		spin_unlock_irqrestore(&host->lock, flags);
+	} else {
+		host->claimed = 0;
+		host->claimer = NULL;
+		spin_unlock_irqrestore(&host->lock, flags);
 	wake_up(&host->wq);
+}
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 }
 
 EXPORT_SYMBOL(mmc_release_host);
@@ -808,6 +865,11 @@ void mmc_rescan(struct work_struct *work)
 	}
 #endif
 	if (host->bus_ops == NULL) {
+/* FIH:WilsonWHLee 2009/08/21 { */
+	#if 0 // FIH_FOX, BillHJChang, 20090904,  Modify for UMS currect handle
+     storage_state = true;
+	#endif
+/* }FIH:WilsonWHLee 2009/08/21 */
 		/*
 		 * Only we can add a new handler, so it's safe to
 		 * release the lock here.
@@ -857,14 +919,49 @@ void mmc_rescan(struct work_struct *work)
 		mmc_release_host(host);
 		mmc_power_off(host);
 	} else {
+/* FIH:WilsonWHLee 2009/08/21 { */
+		#if 0 // FIH_F0X, BillHJChang, 20090904,  Modify for UMS currect handle
+		storage_state = false;
+		#endif
+/* }FIH:WilsonWHLee 2009/08/21 */
 		if (host->bus_ops->detect && !host->bus_dead)
 			host->bus_ops->detect(host);
 
 		mmc_bus_put(host);
 	}
 out:
-	/* give userspace some time to react */
-	wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
+// FIH_FOX, BillHJChang	{ 20090904,  Modify for UMS currect handle
+	if(host->index == 0) 
+	{
+		if(host->bus_ops == NULL)
+			storage_state = false;
+		else
+			storage_state = true;
+
+		printk(KERN_INFO"%s: (storage_state : %d)\n",__func__,storage_state);
+	}
+	// FIH_F0X, BillHJChang	}
+
+	/* FIH, BillHJChang, 2009/11/20 { */
+	/* [FXX_CR], issue of card detect fail in suspend mode */
+	#ifdef CONFIG_FIH_FXX
+		if(host->index == 0) 
+		{
+		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ * 2);		
+		wake_lock_timeout(&sdcard_idle_wake_lock, HZ * 2);	
+
+		}
+		else
+		{
+		wake_unlock(&mmc_delayed_work_wake_lock);
+		wake_unlock(&sdcard_idle_wake_lock);
+		}
+	#else
+		/* give userspace some time to react */
+	    wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
+	#endif
+	/* } FIH, BillHJChang, 2009/11/20 */
+	
 
 	if (host->caps & MMC_CAP_NEEDS_POLL)
 		mmc_schedule_delayed_work(&host->detect, HZ);
@@ -916,6 +1013,11 @@ void mmc_stop_host(struct mmc_host *host)
  */
 int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 {
+/* FIH, SimonSSChang, 2010/02/10 { */
+#ifdef CONFIG_FIH_FXX
+	int err = 0;
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 	cancel_delayed_work(&host->detect);
 #ifdef CONFIG_MMC_AUTO_SUSPEND
 	cancel_delayed_work(&host->auto_suspend);
@@ -923,6 +1025,10 @@ int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 	mmc_flush_scheduled_work();
 
 	mmc_bus_get(host);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	if (host->bus_ops && !host->bus_dead) {
 		if (host->bus_ops->suspend)
 			host->bus_ops->suspend(host);
@@ -934,10 +1040,43 @@ int mmc_suspend_host(struct mmc_host *host, pm_message_t state)
 			mmc_detach_bus(host);
 			mmc_release_host(host);
 		}
+#else
+	if (host->bus_ops && !host->bus_dead) {
+		if (host->bus_ops->suspend)
+			err = host->bus_ops->suspend(host);
+		if (err == -ENOSYS || !host->bus_ops->resume) {
+			/*
+			 * We simply "remove" the card in this case.
+			 * It will be redetected on resume.
+			 */
+			if (host->bus_ops->remove)
+				host->bus_ops->remove(host);
+
+			mmc_claim_host(host);
+			mmc_detach_bus(host);
+			mmc_release_host(host);
+			err = 0;
+		}
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 	}
 	mmc_bus_put(host);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	mmc_power_off(host);
+
 	return 0;
+#else
+	if (!err)
+		mmc_power_off(host);
+	host->last_suspend_error = err;
+
+	return err;
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 }
 
 EXPORT_SYMBOL(mmc_suspend_host);
@@ -948,11 +1087,44 @@ EXPORT_SYMBOL(mmc_suspend_host);
  */
 int mmc_resume_host(struct mmc_host *host)
 {
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+#ifdef CONFIG_FIH_FXX
+	int err = 0;
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 	mmc_bus_get(host);
 	if (host->bus_ops && !host->bus_dead) {
 		mmc_power_up(host);
+/* FIH, SimonSSChang, 2010/02/10 { */
+#ifdef CONFIG_FIH_FXX
+		mmc_select_voltage(host, host->ocr);
+#endif
+/* } FIH, SimonSSChang, 2010/02/10 */
 		BUG_ON(!host->bus_ops->resume);
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 		host->bus_ops->resume(host);
+#else
+		err = host->bus_ops->resume(host);
+		if (err) {
+			printk(KERN_WARNING "%s: error %d during resume "
+					"(card was removed?)\n",
+					mmc_hostname(host), err);
+			if (host->bus_ops->remove)
+				host->bus_ops->remove(host);
+			mmc_claim_host(host);
+			mmc_detach_bus(host);
+			mmc_release_host(host);
+			/* no need to bother upper layers */
+			err = 0;
+		}
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 	}
 	mmc_bus_put(host);
 
@@ -960,9 +1132,26 @@ int mmc_resume_host(struct mmc_host *host)
 	 * We add a slight delay here so that resume can progress
 	 * in parallel.
 	 */
-	mmc_detect_change(host, 1);
 
+    /* FIH, SimonSSChang, 2010/02/26 { */
+    /* Avoid resume will hang here when wifi has trun on */
+    #ifdef CONFIG_FIH_FXX
+    mmc_detect_change(host, 0);
+    #else
+	mmc_detect_change(host, 1);
+    #endif
+    /* } FIH, SimonSSChang, 2010/02/26 */
+
+/* FIH, SimonSSChang, 2010/02/10 { */
+/* ATHENV */
+//#if 0
+#ifndef CONFIG_FIH_FXX
 	return 0;
+#else
+	return err;
+#endif
+/* ATHENV */
+/* } FIH, SimonSSChang, 2010/02/10 */
 }
 
 EXPORT_SYMBOL(mmc_resume_host);
@@ -991,6 +1180,13 @@ static int __init mmc_init(void)
 
 	wake_lock_init(&mmc_delayed_work_wake_lock, WAKE_LOCK_SUSPEND, "mmc_delayed_work");
 
+	/* FIH, BillHJChang, 2009/11/20 { */
+	/* [FXX_CR], issue of card detect fail in suspend mode */
+	#ifdef CONFIG_FIH_FXX
+	wake_lock_init(&sdcard_idle_wake_lock, WAKE_LOCK_IDLE, "sd_suspend_work");	
+	#endif
+	/* } FIH, BillHJChang, 2009/11/20 */
+	
 	workqueue = create_singlethread_workqueue("kmmcd");
 	if (!workqueue)
 		return -ENOMEM;
@@ -1026,6 +1222,13 @@ static void __exit mmc_exit(void)
 	mmc_unregister_bus();
 	destroy_workqueue(workqueue);
 	wake_lock_destroy(&mmc_delayed_work_wake_lock);
+
+	/* FIH, BillHJChang, 2009/11/20 { */
+	/* [FXX_CR], issue of card detect fail in suspend mode */
+	#ifdef CONFIG_FIH_FXX
+	wake_lock_destroy(&sdcard_idle_wake_lock); 
+	#endif
+	/* } FIH, BillHJChang, 2009/11/20 */	
 }
 
 subsys_initcall(mmc_init);

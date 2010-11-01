@@ -383,9 +383,31 @@ typedef struct GCC_PACKED {
 
 } mddi_register_access_packet_type;
 
+/* { FIH,Chandler, lcm_wintek */
+typedef struct GCC_PACKED {
+	uint16 packet_length;
+	/* total # of bytes in the packet not including the packet_length field. */
+
+	uint16 packet_type;
+	/* A Packet Type of 69 identifies the packet as a Link shutdown Packet. */
+
+	uint16 parameter_CRC;
+	/* 16-bit CRC of all bytes from the Packet Length to the packet type. */
+
+	uint8 zero[16];
+	/* all zero */
+
+} mddi_link_shutdown_packet_type;
+/* } FIH,Chandler, lcm_wintek */
+
+
 typedef union GCC_PACKED {
 	mddi_video_stream_packet_type video_pkt;
 	mddi_register_access_packet_type register_pkt;
+/* { FIH,Chandler, lcm_wintek */
+	mddi_link_shutdown_packet_type shutdown_pkt;
+/* } FIH,Chandler, lcm_wintek */
+
 	/* add 48 byte pad to ensure 64 byte llist struct, that can be
 	 * manipulated easily with cache */
 	uint32 alignment_pad[12];	/* 48 bytes */
