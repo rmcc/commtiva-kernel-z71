@@ -26,8 +26,8 @@
  *
  */
 
-#ifndef _SS_VIDEO_DECODER_H_
-#define _SS_VIDEO_DECODER_H_
+#ifndef _MSM_VIDC_DEC_H_
+#define _MSM_VIDC_DEC_H_
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
@@ -194,6 +194,8 @@ struct vdec_ioctl_msg {
 /*IOCTL params: InputParam - NULL, OutputParam - struct vdec_msginfo*/
 #define VDEC_IOCTL_GET_NEXT_MSG \
 	_IOR(VDEC_IOCTL_MAGIC, 25, struct vdec_ioctl_msg)
+
+#define VDEC_IOCTL_STOP_NEXT_MSG _IO(VDEC_IOCTL_MAGIC, 26)
 
 enum vdec_picture {
 	PICTURE_TYPE_I,

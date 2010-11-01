@@ -1,6 +1,6 @@
 /*
    BlueZ - Bluetooth protocol stack for Linux
-   Copyright (C) 2000-2001 Qualcomm Incorporated
+   Copyright (c) 2000-2001, 2010, Code Aurora Forum. All rights reserved.
 
    Written 2000,2001 by Maxim Krasnyansky <maxk@qualcomm.com>
 
@@ -117,8 +117,17 @@ void hci_add_sco(struct hci_conn *conn, __u16 handle)
 {
 	struct hci_dev *hdev = conn->hdev;
 	struct hci_cp_add_sco cp;
+	struct hci_conn *acl = conn->link;
 
 	BT_DBG("%p", conn);
+
+	if (acl->mode == HCI_CM_SNIFF &&
+		test_bit(HCI_CONN_MODE_CHANGE_PEND, &acl->pend)) {
+		set_bit(HCI_CONN_SCO_PEND, &conn->pend);
+		return;
+	}
+
+	clear_bit(HCI_CONN_SCO_PEND, &conn->pend);
 
 	conn->state = BT_CONNECT;
 	conn->out = 1;
@@ -135,8 +144,17 @@ void hci_setup_sync(struct hci_conn *conn, __u16 handle)
 {
 	struct hci_dev *hdev = conn->hdev;
 	struct hci_cp_setup_sync_conn cp;
+	struct hci_conn *acl = conn->link;
 
 	BT_DBG("%p", conn);
+
+	if (acl->mode == HCI_CM_SNIFF &&
+		test_bit(HCI_CONN_MODE_CHANGE_PEND, &acl->pend)) {
+		set_bit(HCI_CONN_SCO_PEND, &conn->pend);
+		return;
+	}
+
+	clear_bit(HCI_CONN_SCO_PEND, &conn->pend);
 
 	conn->state = BT_CONNECT;
 	conn->out = 1;
@@ -372,6 +390,9 @@ struct hci_conn *hci_connect(struct hci_dev *hdev, int type, bdaddr_t *dst, __u8
 
 	if (acl->state == BT_CONNECTED &&
 			(sco->state == BT_OPEN || sco->state == BT_CLOSED)) {
+		acl->power_save = 1;
+		hci_conn_enter_active_mode(acl);
+
 		if (lmp_esco_capable(hdev))
 			hci_setup_sync(sco, acl->handle);
 		else
@@ -492,7 +513,7 @@ void hci_conn_enter_active_mode(struct hci_conn *conn)
 	if (test_bit(HCI_RAW, &hdev->flags))
 		return;
 
-	if (conn->mode != HCI_CM_SNIFF || !conn->power_save)
+	if (conn->mode != HCI_CM_SNIFF /* || !conn->power_save */)
 		goto timer;
 
 	if (!test_and_set_bit(HCI_CONN_MODE_CHANGE_PEND, &conn->pend)) {

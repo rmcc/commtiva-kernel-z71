@@ -93,6 +93,7 @@
 #define	SSBI_REG_ADDR_LPG_BANK_EN	0x144
 #define	SSBI_REG_ADDR_LPG_LUT_CFG0	0x145
 #define	SSBI_REG_ADDR_LPG_LUT_CFG1	0x146
+#define	SSBI_REG_ADDR_LPG_TEST		0x147
 
 /* Control 0 */
 #define	PM8058_PWM_1KHZ_COUNT_MASK	0xF0
@@ -153,6 +154,12 @@
 
 #define	PM8058_PWM_PAUSE_ENABLE_LOW		0x02
 #define	PM8058_PWM_RESERVED			0x01
+
+/* TEST */
+#define	PM8058_PWM_DTEST_MASK		0x38
+#define	PM8058_PWM_DTEST_SHIFT		3
+
+#define	PM8058_PWM_DTEST_BANK_MASK	0x07
 
 /* PWM frequency support
  *
@@ -607,6 +614,37 @@ void pwm_disable(struct pwm_device *pwm)
 }
 EXPORT_SYMBOL(pwm_disable);
 
+int pwm_set_dtest(struct pwm_device *pwm, int enable)
+{
+	int	rc;
+	u8	reg;
+
+	if (pwm == NULL || IS_ERR(pwm))
+		return -EINVAL;
+	if (pwm->chip == NULL)
+		return -ENODEV;
+
+	mutex_lock(&pwm->chip->pwm_mutex);
+	if (!pwm->in_use)
+		rc = -EINVAL;
+	else {
+		reg = pwm->pwm_id & PM8058_PWM_DTEST_BANK_MASK;
+		if (enable)
+			/* Only Test 1 available */
+			reg |= (1 << PM8058_PWM_DTEST_SHIFT) &
+				PM8058_PWM_DTEST_MASK;
+		rc = pm8058_write(pwm->chip->pm_chip, SSBI_REG_ADDR_LPG_TEST,
+				  &reg, 1);
+		if (rc)
+			pr_err("%s: pm8058_write(DTEST=0x%x): rc=%d\n",
+			       __func__, reg, rc);
+
+	}
+	mutex_unlock(&pwm->chip->pwm_mutex);
+	return rc;
+}
+EXPORT_SYMBOL(pwm_set_dtest);
+
 static int __devinit pmic8058_pwm_probe(struct platform_device *pdev)
 {
 	struct pm8058_chip	*pm_chip;
@@ -668,7 +706,7 @@ static void __exit pm8058_pwm_exit(void)
 	platform_driver_unregister(&pmic8058_pwm_driver);
 }
 
-module_init(pm8058_pwm_init);
+subsys_initcall(pm8058_pwm_init);
 module_exit(pm8058_pwm_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");

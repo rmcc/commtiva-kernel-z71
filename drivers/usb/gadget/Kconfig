@@ -742,6 +742,14 @@ config USB_ANDROID_CDC_ECM
 	  android gadget.
 	  Say "y" to link the CDC-ECM as a part of android gadget
 
+config USB_ANDROID_RNDIS
+	bool "RNDIS function driver"
+	depends on USB_ANDROID
+	default n
+	help
+	  enabling this option adds RNDIS support to the
+	  android gadget.
+
 config USB_ANDROID_RMNET
 	bool "RmNet function driver"
 	depends on USB_ANDROID

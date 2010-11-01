@@ -81,7 +81,7 @@ static void otg_reset(struct msm_otg *dev);
 static void msm_otg_set_vbus_state(int online);
 
 struct msm_otg *the_msm_otg;
-extern void cable_status(bool status);
+
 static unsigned ulpi_read(struct msm_otg *dev, unsigned reg)
 {
 	unsigned timeout = 100000;
@@ -357,10 +357,10 @@ static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 		dev->pmic_register_vbus_sn(&msm_otg_set_vbus_state);
 	pr_info("peripheral driver registered w/ tranceiver\n");
 
-	if (is_b_sess_vld())
-		msm_otg_start_peripheral(&dev->otg, 1);
-	else if (is_host())
+	if (is_host())
 		msm_otg_start_host(&dev->otg, 1);
+	else if (is_b_sess_vld())
+		msm_otg_start_peripheral(&dev->otg, 1);
 	else
 		msm_otg_suspend(dev);
 
@@ -441,10 +441,6 @@ static irqreturn_t msm_otg_irq(int irq, void *data)
 		msm_otg_start_host(&dev->otg, is_host());
 	} else if ((otgsc & OTGSC_BSVIS) && (otgsc & OTGSC_BSVIE)) {
 		pr_info("VBUS - (%s)\n", otgsc & OTGSC_BSV ? "ON" : "OFF");
-		if(otgsc & OTGSC_BSV)
-			cable_status(true);
-		else
-			cable_status(false);
 		if (!is_host())
 			msm_otg_start_peripheral(&dev->otg, is_b_sess_vld());
 	}
@@ -547,7 +543,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto rpc_fail;
 	}
 	dev->pclk = clk_get(&pdev->dev, "usb_hs_pclk");
-	if (IS_ERR(dev->clk)) {
+	if (IS_ERR(dev->pclk)) {
 		pr_err("%s: failed to get usb_hs_pclk\n", __func__);
 		ret = PTR_ERR(dev->pclk);
 		goto put_clk;

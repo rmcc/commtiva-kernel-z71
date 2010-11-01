@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -69,6 +69,7 @@
 #include <mach/qdsp5v2/lpa.h>
 #include <mach/vreg.h>
 #include <mach/pmic.h>
+#include <mach/debug_audio_mm.h>
 
 #define SNDDEV_ICODEC_PCM_SZ 32 /* 16 bit / sample stereo mode */
 #define SNDDEV_ICODEC_MUL_FACTOR 3 /* Multi by 8 Shift by 3  */
@@ -379,6 +380,10 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	struct msm_afe_config afe_config;
 	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;;
 
+	/* Reuse pamp_on for TX platform-specific setup  */
+	if (icodec->data->pamp_on)
+		icodec->data->pamp_on();
+
 	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
 		pmic_hsed_enable(icodec->data->pmctl_id[i],
 			 PM_HSED_ENABLE_PWM_TCXO);
@@ -419,6 +424,8 @@ static int snddev_icodec_open_tx(struct snddev_icodec_state *icodec)
 	trc = afe_enable(AFE_HW_PATH_CODEC_TX, &afe_config);
 	if (IS_ERR_VALUE(trc))
 		goto error_afe;
+
+
 	icodec->enabled = 1;
 	return 0;
 
@@ -432,6 +439,15 @@ error_invalid_freq:
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
+
+	/* Disable mic bias */
+	for (i = 0; i < icodec->data->pmctl_id_sz; i++) {
+		pmic_hsed_enable(icodec->data->pmctl_id[i],
+			 PM_HSED_ENABLE_OFF);
+	}
+
+	if (icodec->data->pamp_off)
+		icodec->data->pamp_off();
 
 	pr_err("%s: encounter error\n", __func__);
 	return -ENODEV;
@@ -498,6 +514,10 @@ static int snddev_icodec_close_tx(struct snddev_icodec_state *icodec)
 	vreg_disable(drv->vreg_gp16);
 	vreg_disable(drv->vreg_msme);
 	vreg_disable(drv->vreg_rf2);
+
+	/* Reuse pamp_off for TX platform-specific setup  */
+	if (icodec->data->pamp_off)
+		icodec->data->pamp_off();
 
 	icodec->enabled = 0;
 	return 0;
@@ -634,6 +654,41 @@ error:
 	return rc;
 }
 
+static int snddev_icodec_enable_sidetone(struct msm_snddev_info *dev_info,
+	u32 enable)
+{
+	int rc = 0;
+	struct snddev_icodec_state *icodec;
+	struct snddev_icodec_drv_state *drv = &snddev_icodec_drv;
+
+	if (!dev_info) {
+		MM_ERR("invalid dev_info\n");
+		rc = -EINVAL;
+		goto error;
+	}
+
+	icodec = dev_info->private_data;
+
+	if (icodec->data->capability & SNDDEV_CAP_RX) {
+		mutex_lock(&drv->rx_lock);
+		if (!drv->rx_active || !dev_info->opened) {
+			MM_ERR("dev not active\n");
+			rc = -EPERM;
+			mutex_unlock(&drv->rx_lock);
+			goto error;
+		}
+		rc = adie_codec_enable_sidetone(icodec->adie_path, enable);
+		mutex_unlock(&drv->rx_lock);
+	} else {
+		rc = -EINVAL;
+		MM_ERR("rx device only\n");
+	}
+
+error:
+	return rc;
+
+}
+
 static int snddev_icodec_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -680,7 +735,12 @@ static int snddev_icodec_probe(struct platform_device *pdev)
 	if (pdata->capability & SNDDEV_CAP_RX) {
 		dev_info->max_voc_rx_vol = pdata->max_voice_rx_vol;
 		dev_info->min_voc_rx_vol = pdata->min_voice_rx_vol;
+		dev_info->dev_ops.enable_sidetone =
+		snddev_icodec_enable_sidetone;
+	} else {
+		dev_info->dev_ops.enable_sidetone = NULL;
 	}
+
 error:
 	return rc;
 }

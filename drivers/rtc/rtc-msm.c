@@ -220,11 +220,11 @@ static int msmrtc_tod_proc_result(struct msm_rpc_client *client, void *buff,
 		rtc_args->tm->tm_mon--;
 
 		if (rtc_valid_tm(rtc_args->tm) < 0) {
-			pr_err("%s: Retrived data/time not valid \n", __func__);
+			pr_err("%s: Retrieved data/time not valid\n", __func__);
 			rtc_time_to_tm(0, rtc_args->tm);
 		}
 
-	return 0;
+		return 0;
 	} else
 		return 0;
 }
@@ -251,12 +251,12 @@ msmrtc_timeremote_set_time(struct device *dev, struct rtc_time *tm)
 				msmrtc_tod_proc_args, &rtc_args,
 				NULL, NULL, -1);
 	if (rc) {
-		pr_err("%s: rtc time could not be set \n", __func__);
+		pr_err("%s: rtc time (TOD) could not be set\n", __func__);
 		return rc;
 	}
 
 	return 0;
-	}
+}
 
 static int
 msmrtc_timeremote_read_time(struct device *dev, struct rtc_time *tm)
@@ -272,7 +272,7 @@ msmrtc_timeremote_read_time(struct device *dev, struct rtc_time *tm)
 				msmrtc_tod_proc_result, &rtc_args, -1);
 
 	if (rc) {
-		pr_err("%s: Error retriving rtc time \n", __func__);
+		pr_err("%s: Error retrieving rtc (TOD) time\n", __func__);
 		return rc;
 	}
 
@@ -326,11 +326,12 @@ msmrtc_timeremote_set_time_secure(struct device *dev, struct rtc_time *tm)
 	rtc_args.proc = TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN;
 	rtc_args.tm = tm;
 
-	rc = msm_rpc_client_req(rpc_client, TIMEREMOTE_PROCEEDURE_SET_JULIAN,
+	rc = msm_rpc_client_req(rpc_client,
+			TIMEREMOTE_PROCEEDURE_SET_SECURE_JULIAN,
 				msmrtc_tod_proc_args, &rtc_args,
 				NULL, NULL, -1);
 	if (rc) {
-		pr_err("%s: rtc secure time  could not be set \n", __func__);
+		pr_err("%s: rtc secure time could not be set\n", __func__);
 		return rc;
 	}
 
@@ -351,7 +352,7 @@ msmrtc_timeremote_read_time_secure(struct device *dev, struct rtc_time *tm)
 		&rtc_args, msmrtc_tod_proc_result, &rtc_args, -1);
 
 	if (rc) {
-		pr_err("%s: Error retriving rtc time \n", __func__);
+		pr_err("%s: Error retrieving secure rtc time\n", __func__);
 		return rc;
 	}
 
@@ -391,7 +392,7 @@ static void process_cb_request(void *buffer)
 		rtc_cb->cb_info_data.tod_update.freq =
 			be32_to_cpu(rtc_cb->cb_info_data.tod_update.freq);
 		printk(KERN_INFO "RPC CALL -- TOD TIME UPDATE: ttick = %d\n"
-			"stamp=%lld, freq = %d \n",
+			"stamp=%lld, freq = %d\n",
 			rtc_cb->cb_info_data.tod_update.tick,
 			rtc_cb->cb_info_data.tod_update.stamp,
 			rtc_cb->cb_info_data.tod_update.freq);
@@ -422,7 +423,7 @@ static int msmrtc_cb_func(struct msm_rpc_client *client, void *buffer, int size)
 
 	rc = msm_rpc_send_accepted_reply(client, 0);
 	if (rc) {
-		pr_err("%s: sending reply failed: %d\n", __func__, rc);
+		pr_debug("%s: sending reply failed: %d\n", __func__, rc);
 		return rc;
 	}
 
@@ -480,7 +481,7 @@ static int msmrtc_rpc_proc_result(struct msm_rpc_client *client, void *buff,
 		if (client_id_ptr == 1)
 			client_id = (u8) be32_to_cpu(*(uint32_t *)(buff));
 		else {
-			pr_err("%s: Client-id not received from Modem \n",
+			pr_debug("%s: Client-id not received from Modem\n",
 								__func__);
 			return -EINVAL;
 		}
@@ -490,12 +491,12 @@ static int msmrtc_rpc_proc_result(struct msm_rpc_client *client, void *buff,
 	}
 
 	if (result == ERR_NONE) {
-		pr_info("%s: RPC client reply for PROC=%x success \n",
+		pr_debug("%s: RPC client reply for PROC=%x success\n",
 					 __func__, *(uint32_t *)data);
 		return 0;
 	}
 
-	pr_err("%s: RPC client registration failed ERROR=%x \n",
+	pr_debug("%s: RPC client registration failed ERROR=%x\n",
 						__func__, result);
 	return -EINVAL;
 }
@@ -510,7 +511,7 @@ static int msmrtc_setup_cb(void)
 				msmrtc_rpc_proc_args, &proc,
 				msmrtc_rpc_proc_result, &proc, -1);
 	if (rc) {
-		pr_err("%s: rpc client registration for PROC:%x failed \n",
+		pr_debug("%s: RPC client registration for PROC:%x failed\n",
 					__func__, RTC_CLIENT_INIT_PROC);
 		return rc;
 	}
@@ -521,7 +522,7 @@ static int msmrtc_setup_cb(void)
 				msmrtc_rpc_proc_args, &proc,
 				msmrtc_rpc_proc_result, &proc, -1);
 	if (rc) {
-		pr_err("%s: rpc client registration for PROC:%x failed \n",
+		pr_debug("%s: RPC client registration for PROC:%x failed\n",
 					__func__, RTC_REQUEST_CB_PROC);
 	}
 
@@ -547,18 +548,19 @@ msmrtc_probe(struct platform_device *pdev)
 	rpc_client = msm_rpc_register_client("rtc", rdev->prog,
 				prog_version, 1, msmrtc_cb_func);
 	if (IS_ERR(rpc_client)) {
-		pr_err("%s: init rpc failed! VERS = %x \n", __func__,
+		pr_err("%s: init RPC failed! VERS = %x\n", __func__,
 					prog_version);
 		return PTR_ERR(rpc_client);
 	}
 
 	/*
 	 * Set up the callback client.
-	 * For older targets this initilization will fail
+	 * For older targets this initialization will fail
 	 */
 	rc = msmrtc_setup_cb();
 	if (rc)
-		pr_err("%s: Could not intialize RTC RPC callback \n", __func__);
+		pr_debug("%s: Could not initialize RPC callback\n",
+								__func__);
 
 	rtc = rtc_device_register("msm_rtc",
 				  &pdev->dev,
@@ -593,33 +595,22 @@ fail_cb_setup:
 	return rc;
 }
 
-
-static unsigned long msmrtc_get_seconds(void)
-{
-	struct rtc_time tm;
-	unsigned long now;
-
-	msmrtc_timeremote_read_time(NULL, &tm);
-	rtc_tm_to_time(&tm, &now);
-	return now;
-}
-
 static int
 msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 {
-	/* FIH, Michael Kao, 2009/06/08{ */
-	/* [FXX_CR], Add For Blink RED LED when battery low in suspend mode */
-	//if (rtcalarm_time) {
+	int rc, diff;
+	struct rtc_time tm;
+	unsigned long now;
 	int RPC_wakeup_cycle_time=600;
-	/* FIH, Michael Kao, 2009/07/10{ */
-	/* [FXX_CR], Modify for FTM sleep current test */
+
 	if (rtcalarm_time) {
-		unsigned long now = msmrtc_get_seconds();
-		int diff = rtcalarm_time - now;
-
-        if(diff>RPC_wakeup_cycle_time)
-		    diff=RPC_wakeup_cycle_time;
-
+		rc = msmrtc_timeremote_read_time(NULL, &tm);
+		if (rc) {
+			pr_err("%s: Unable to read from RTC\n", __func__);
+			return rc;
+		}
+		rtc_tm_to_time(&tm, &now);
+		diff = rtcalarm_time - now;
 		if (diff <= 0) {
 			msmrtc_alarmtimer_expired(1);
 			msm_pm_set_max_sleep_time(0);
@@ -639,9 +630,18 @@ msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 static int
 msmrtc_resume(struct platform_device *dev)
 {
+	int rc, diff;
+	struct rtc_time tm;
+	unsigned long now;
+
 	if (rtcalarm_time) {
-		unsigned long now = msmrtc_get_seconds();
-		int diff = rtcalarm_time - now;
+		rc = msmrtc_timeremote_read_time(NULL, &tm);
+		if (rc) {
+			pr_err("%s: Unable to read from RTC\n", __func__);
+			return rc;
+		}
+		rtc_tm_to_time(&tm, &now);
+		diff = rtcalarm_time - now;
 		if (diff <= 0)
 			msmrtc_alarmtimer_expired(2);
 	}

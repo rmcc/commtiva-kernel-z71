@@ -143,6 +143,7 @@ struct venc_msg_list {
 };
 struct venc_buf {
 	int fd;
+	u32 src;
 	u32 offset;
 	u32 size;
 	u32 btype;
@@ -297,6 +298,7 @@ static struct venc_pmem_list *venc_add_pmem_to_list(struct venc_dev *dvenc,
 	plist->buf.size = mptr->size;
 	plist->buf.btype = btype;
 	plist->buf.offset = mptr->offset;
+	plist->buf.src = mptr->src;
 
 	spin_lock_irqsave(&dvenc->venc_pmem_list_lock, flags);
 	list_add(&plist->list, &dvenc->venc_pmem_list_head);
@@ -377,7 +379,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf1.region = 0;
+	pcfg->recon_buf1.region = pbufs->recon_buf[0].src;
 	pcfg->recon_buf1.phys = plist->buf.paddr;
 	pcfg->recon_buf1.size = plist->buf.size;
 	pcfg->recon_buf1.offset = 0;
@@ -389,7 +391,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->recon_buf2.region = 0;
+	pcfg->recon_buf2.region = pbufs->recon_buf[1].src;
 	pcfg->recon_buf2.phys = plist->buf.paddr;
 	pcfg->recon_buf2.size = plist->buf.size;
 	pcfg->recon_buf2.offset = 0;
@@ -401,7 +403,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->wb_buf.region = 0;
+	pcfg->wb_buf.region = pbufs->wb_buf.src;
 	pcfg->wb_buf.phys = plist->buf.paddr;
 	pcfg->wb_buf.size = plist->buf.size;
 	pcfg->wb_buf.offset = 0;
@@ -413,7 +415,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 			__func__);
 		return -EPERM;
 	}
-	pcfg->cmd_buf.region = 0;
+	pcfg->cmd_buf.region = pbufs->cmd_buf.src;
 	pcfg->cmd_buf.phys = plist->buf.paddr;
 	pcfg->cmd_buf.size = plist->buf.size;
 	pcfg->cmd_buf.offset = 0;
@@ -425,7 +427,7 @@ static int venc_assign_q6_buffers(struct venc_dev *dvenc,
 		" failed\n", __func__);
 		return -EPERM;
 	}
-	pcfg->vlc_buf.region = 0;
+	pcfg->vlc_buf.region = pbufs->vlc_buf.src;
 	pcfg->vlc_buf.phys = plist->buf.paddr;
 	pcfg->vlc_buf.size = plist->buf.size;
 	pcfg->vlc_buf.offset = 0;
@@ -509,7 +511,7 @@ static int venc_encode_frame(struct venc_dev *dvenc, void *argp)
 	q6_input.flags = 0;
 	if (input.flags & VENC_FLAG_EOS)
 		q6_input.flags |= 0x00000001;
-	q6_input.yuv_buf.region = 0;
+	q6_input.yuv_buf.region = plist->buf.src;
 	q6_input.yuv_buf.phys = plist->buf.paddr;
 	q6_input.yuv_buf.size = plist->buf.size;
 	q6_input.yuv_buf.offset = 0;
@@ -562,7 +564,7 @@ static int venc_fill_output(struct venc_dev *dvenc, void *argp)
 			return -EPERM;
 		}
 	}
-	q6_output.bit_stream_buf.region = 0;
+	q6_output.bit_stream_buf.region = plist->buf.src;
 	q6_output.bit_stream_buf.phys = (u32)plist->buf.paddr;
 	q6_output.bit_stream_buf.size = plist->buf.size;
 	q6_output.bit_stream_buf.offset = 0;
@@ -949,6 +951,23 @@ static void venc_q6_callback(void *data, int len, void *cookie)
 	return;
 }
 
+static int venc_get_version(struct venc_dev *dvenc, void *argp)
+{
+	struct venc_version ver_info;
+	int ret = 0;
+
+	ver_info.major = VENC_GET_MAJOR_VERSION(VENC_INTERFACE_VERSION);
+	ver_info.minor = VENC_GET_MINOR_VERSION(VENC_INTERFACE_VERSION);
+
+	ret = copy_to_user(((struct venc_version *)argp),
+				&ver_info, sizeof(ver_info));
+	if (ret)
+		pr_err("%s failed to copy_to_user\n", __func__);
+
+	return ret;
+
+}
+
 static long q6venc_ioctl(struct file *file, u32 cmd,
 			   unsigned long arg)
 {
@@ -1015,6 +1034,9 @@ static long q6venc_ioctl(struct file *file, u32 cmd,
 		break;
 	case VENC_IOCTL_CMD_STOP_READ_MSG:
 		ret = venc_stop_read_msg(dvenc);
+		break;
+	case VENC_IOCTL_GET_VERSION:
+		ret = venc_get_version(dvenc, argp);
 		break;
 	default:
 		pr_err("%s: invalid ioctl code (%d)\n", __func__, cmd);

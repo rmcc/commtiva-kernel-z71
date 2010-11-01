@@ -53,28 +53,28 @@ struct q6_hw_info {
 
 static struct q6_hw_info q6_audio_hw[Q6_HW_COUNT] = {
 	[Q6_HW_HANDSET] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -400,
+		.max_gain = 1100,
 	},
 	[Q6_HW_HEADSET] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -1100,
+		.max_gain = 400,
 	},
 	[Q6_HW_SPEAKER] = {
-		.min_gain = -1500,
-		.max_gain = 0,
+		.min_gain = -1000,
+		.max_gain = 500,
 	},
 	[Q6_HW_TTY] = {
-		.min_gain = -2000,
+		.min_gain = 0,
 		.max_gain = 0,
 	},
 	[Q6_HW_BT_SCO] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -1100,
+		.max_gain = 400,
 	},
 	[Q6_HW_BT_A2DP] = {
-		.min_gain = -2000,
-		.max_gain = 0,
+		.min_gain = -1100,
+		.max_gain = 400,
 	},
 };
 
@@ -121,54 +121,69 @@ void q6audio_register_analog_ops(struct q6audio_analog_ops *ops)
 	analog_ops = ops;
 }
 
-static struct q6_device_info *q6_lookup_device(uint32_t device_id)
+static struct q6_device_info *q6_lookup_device(uint32_t device_id,
+						uint32_t acdb_id)
 {
 	struct q6_device_info *di = q6_audio_devices;
-	for (;;) {
-		if (di->id == device_id)
-			return di;
-		if (di->id == 0) {
-			pr_err("q6_lookup_device: bogus id 0x%08x\n",
-			       device_id);
-			return di;
+
+	if (acdb_id) {
+		for (;;) {
+			if (di->cad_id == acdb_id && di->id == device_id)
+				return di;
+			if (di->id == 0) {
+				pr_err("q6_lookup_device: bogus id 0x%08x\n",
+					device_id);
+				return di;
+			}
+			di++;
 		}
-		di++;
+	} else {
+		for (;;) {
+			if (di->id == device_id)
+				return di;
+			if (di->id == 0) {
+				pr_err("q6_lookup_device: bogus id 0x%08x\n",
+				       device_id);
+				return di;
+			}
+			di++;
+		}
 	}
 }
 
 static uint32_t q6_device_to_codec(uint32_t device_id)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, 0);
 	return di->codec;
 }
 
 static uint32_t q6_device_to_dir(uint32_t device_id)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, 0);
 	return di->dir;
 }
 
 static uint32_t q6_device_to_cad_id(uint32_t device_id)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, 0);
 	return di->cad_id;
 }
 
-static uint32_t q6_device_to_path(uint32_t device_id)
+static uint32_t q6_device_to_path(uint32_t device_id, uint32_t acdb_id)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, acdb_id);
 	return di->path;
 }
 
 static uint32_t q6_device_to_rate(uint32_t device_id)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, 0);
 	return di->rate;
 }
 
 int q6_device_volume(uint32_t device_id, int level)
 {
-	struct q6_device_info *di = q6_lookup_device(device_id);
+	struct q6_device_info *di = q6_lookup_device(device_id, 0);
 	struct q6_hw_info *hw;
 
 	hw = &q6_audio_hw[di->hw];
@@ -276,10 +291,14 @@ static void audio_client_free(struct audio_client *ac)
 {
 	session_free(ac->session, ac);
 
-	if (ac->buf[0].data)
+	if (ac->buf[0].data) {
+		iounmap(ac->buf[0].data);
 		pmem_kfree(ac->buf[0].phys);
-	if (ac->buf[1].data)
+	}
+	if (ac->buf[1].data) {
+		iounmap(ac->buf[1].data);
 		pmem_kfree(ac->buf[1].phys);
+	}
 	kfree(ac);
 }
 
@@ -573,6 +592,8 @@ static int audio_amrnb_open(struct audio_client *ac, uint32_t bufsz,
 	return audio_ioctl(ac, &rpc, sizeof(rpc));
 }
 
+
+
 static int audio_close(struct audio_client *ac)
 {
 	TRACE("%p: close\n", ac);
@@ -588,8 +609,14 @@ static int audio_set_table(struct audio_client *ac,
 
 	memset(&rpc, 0, sizeof(rpc));
 	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_SET_DEVICE_CONFIG_TABLE;
-	if (q6_device_to_dir(device_id) == Q6_TX)
-		rpc.hdr.data = tx_clk_freq;
+	if (q6_device_to_dir(device_id) == Q6_TX) {
+		if (tx_clk_freq > 16000)
+			rpc.hdr.data = 48000;
+		else if (tx_clk_freq > 8000)
+			rpc.hdr.data = 16000;
+		else
+			rpc.hdr.data = 8000;
+	}
 	rpc.device_id = device_id;
 	rpc.phys_addr = audio_phys;
 	rpc.phys_size = size;
@@ -973,6 +1000,8 @@ static void audio_tx_analog_enable(int en)
 		break;
 	case ADSP_AUDIO_DEVICE_ID_HEADSET_MIC:
 	case ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_MIC:
+	case ADSP_AUDIO_DEVICE_ID_HANDSET_DUAL_MIC:
+	case ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_DUAL_MIC:
 		if (analog_ops->ext_mic_enable)
 			analog_ops->ext_mic_enable(en);
 		break;
@@ -988,36 +1017,57 @@ static int audio_update_acdb(uint32_t adev, uint32_t acdb_id)
 	uint32_t sample_rate;
 	int sz;
 
-	sample_rate = q6_device_to_rate(adev);
-
-	if (q6_device_to_dir(adev) == Q6_RX)
+	if (q6_device_to_dir(adev) == Q6_RX) {
 		rx_acdb = acdb_id;
-	else
+		sample_rate = q6_device_to_rate(adev);
+	} else {
+
 		tx_acdb = acdb_id;
+		if (tx_clk_freq > 16000)
+			sample_rate = 48000;
+		else if (tx_clk_freq > 8000)
+			sample_rate = 16000;
+		else
+			sample_rate = 8000;
+	}
 
 	if (acdb_id == 0)
 		acdb_id = q6_device_to_cad_id(adev);
 
 	sz = acdb_get_config_table(acdb_id, sample_rate);
 	audio_set_table(ac_control, adev, sz);
+
 	return 0;
 }
 
-static void _audio_rx_path_enable(int reconf, uint32_t acdb_id)
+static void adie_rx_path_enable(uint32_t acdb_id)
 {
-	adie_enable();
-	adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
-	adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
+	if (audio_rx_path_id) {
+		adie_enable();
+		adie_set_path(adie, audio_rx_path_id, ADIE_PATH_RX);
+		adie_set_path_freq_plan(adie, ADIE_PATH_RX, 48000);
 
-	adie_proceed_to_stage(adie, ADIE_PATH_RX, ADIE_STAGE_DIGITAL_READY);
-	adie_proceed_to_stage(adie, ADIE_PATH_RX, ADIE_STAGE_DIGITAL_ANALOG_READY);
+		adie_proceed_to_stage(adie, ADIE_PATH_RX,
+				ADIE_STAGE_DIGITAL_READY);
+		adie_proceed_to_stage(adie, ADIE_PATH_RX,
+				ADIE_STAGE_DIGITAL_ANALOG_READY);
+	}
+}
 
+static void q6_rx_path_enable(int reconf, uint32_t acdb_id)
+{
 	audio_update_acdb(audio_rx_device_id, acdb_id);
 	if (!reconf)
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, audio_rx_device_id);
 	qdsp6_standby(ac_control);
 	qdsp6_start(ac_control);
+}
 
+static void _audio_rx_path_enable(int reconf, uint32_t acdb_id)
+{
+	q6_rx_path_enable(reconf, acdb_id);
+	if (audio_rx_path_id)
+		adie_rx_path_enable(acdb_id);
 	audio_rx_analog_enable(1);
 }
 
@@ -1025,21 +1075,28 @@ static void _audio_tx_path_enable(int reconf, uint32_t acdb_id)
 {
 	audio_tx_analog_enable(1);
 
-	adie_enable();
-	adie_set_path(adie, audio_tx_path_id, ADIE_PATH_TX);
+	if (audio_tx_path_id) {
+		adie_enable();
+		adie_set_path(adie, audio_tx_path_id, ADIE_PATH_TX);
 
-	if (tx_clk_freq > 8000)
-		adie_set_path_freq_plan(adie, ADIE_PATH_TX, 48000);
-	else
-		adie_set_path_freq_plan(adie, ADIE_PATH_TX, 8000);
+		if (tx_clk_freq > 16000)
+			adie_set_path_freq_plan(adie, ADIE_PATH_TX, 48000);
+		else if (tx_clk_freq > 8000)
+			adie_set_path_freq_plan(adie, ADIE_PATH_TX, 16000);
+		else
+			adie_set_path_freq_plan(adie, ADIE_PATH_TX, 8000);
 
-	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_READY);
-	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_ANALOG_READY);
+		adie_proceed_to_stage(adie, ADIE_PATH_TX,
+				ADIE_STAGE_DIGITAL_READY);
+		adie_proceed_to_stage(adie, ADIE_PATH_TX,
+				ADIE_STAGE_DIGITAL_ANALOG_READY);
+	}
 
 	audio_update_acdb(audio_tx_device_id, acdb_id);
 
 	if (!reconf)
-		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, audio_tx_device_id);
+		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE,
+				audio_tx_device_id);
 	qdsp6_standby(ac_control);
 	qdsp6_start(ac_control);
 
@@ -1050,18 +1107,26 @@ static void _audio_rx_path_disable(void)
 {
 	audio_rx_analog_enable(0);
 
-	adie_proceed_to_stage(adie, ADIE_PATH_RX, ADIE_STAGE_ANALOG_OFF);
-	adie_proceed_to_stage(adie, ADIE_PATH_RX, ADIE_STAGE_DIGITAL_OFF);
-	adie_disable();
+	if (audio_rx_path_id) {
+		adie_proceed_to_stage(adie, ADIE_PATH_RX,
+				ADIE_STAGE_ANALOG_OFF);
+		adie_proceed_to_stage(adie, ADIE_PATH_RX,
+				ADIE_STAGE_DIGITAL_OFF);
+		adie_disable();
+	}
 }
 
 static void _audio_tx_path_disable(void)
 {
 	audio_tx_analog_enable(0);
 
-	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_ANALOG_OFF);
-	adie_proceed_to_stage(adie, ADIE_PATH_TX, ADIE_STAGE_DIGITAL_OFF);
-	adie_disable();
+	if (audio_tx_path_id) {
+		adie_proceed_to_stage(adie, ADIE_PATH_TX,
+				ADIE_STAGE_ANALOG_OFF);
+		adie_proceed_to_stage(adie, ADIE_PATH_TX,
+				ADIE_STAGE_DIGITAL_OFF);
+		adie_disable();
+	}
 }
 
 static int icodec_rx_clk_refcount;
@@ -1196,7 +1261,7 @@ static void _audio_tx_clk_disable(void)
 	}
 }
 
-static void _audio_rx_clk_reinit(uint32_t rx_device)
+static void _audio_rx_clk_reinit(uint32_t rx_device, uint32_t acdb_id)
 {
 	uint32_t device_group = q6_device_to_codec(rx_device);
 
@@ -1204,14 +1269,14 @@ static void _audio_rx_clk_reinit(uint32_t rx_device)
 		_audio_rx_clk_disable();
 
 	audio_rx_device_id = rx_device;
-	audio_rx_path_id = q6_device_to_path(rx_device);
+	audio_rx_path_id = q6_device_to_path(rx_device, acdb_id);
 
 	if (device_group != audio_rx_device_group)
 		_audio_rx_clk_enable();
 
 }
 
-static void _audio_tx_clk_reinit(uint32_t tx_device)
+static void _audio_tx_clk_reinit(uint32_t tx_device, uint32_t acdb_id)
 {
 	uint32_t device_group = q6_device_to_codec(tx_device);
 
@@ -1219,7 +1284,7 @@ static void _audio_tx_clk_reinit(uint32_t tx_device)
 		_audio_tx_clk_disable();
 
 	audio_tx_device_id = tx_device;
-	audio_tx_path_id = q6_device_to_path(tx_device);
+	audio_tx_path_id = q6_device_to_path(tx_device, acdb_id);
 
 	if (device_group != audio_tx_device_group)
 		_audio_tx_clk_enable();
@@ -1309,7 +1374,13 @@ int q6audio_set_tx_mute(int mute)
 
 	adev = audio_tx_device_id;
 	rc = audio_tx_mute(ac_control, adev, mute);
-	if (!rc) tx_mute_status = mute;
+
+	/* DSP caches the requested MUTE state when it cannot apply the state
+	  immediately. In that case, it returns EUNSUPPORTED and applies the
+	  cached state later */
+	if ((rc == ADSP_AUDIO_STATUS_SUCCESS) ||
+			(rc == ADSP_AUDIO_STATUS_EUNSUPPORTED))
+		tx_mute_status = mute;
 	mutex_unlock(&audio_path_lock);
 	return 0;
 }
@@ -1350,7 +1421,8 @@ int q6audio_set_rx_volume(int level)
 
 static void do_rx_routing(uint32_t device_id, uint32_t acdb_id)
 {
-	if (device_id == audio_rx_device_id) {
+	if (device_id == audio_rx_device_id &&
+		audio_rx_path_id == q6_device_to_path(device_id, acdb_id)) {
 		if (acdb_id != rx_acdb) {
 			audio_update_acdb(device_id, acdb_id);
 			qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, device_id);
@@ -1363,17 +1435,18 @@ static void do_rx_routing(uint32_t device_id, uint32_t acdb_id)
 	if (audio_rx_path_refcount > 0) {
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_RX_DEVICE, device_id);
 		_audio_rx_path_disable();
-		_audio_rx_clk_reinit(device_id);
+		_audio_rx_clk_reinit(device_id, acdb_id);
 		_audio_rx_path_enable(1, acdb_id);
 	} else {
 		audio_rx_device_id = device_id;
-		audio_rx_path_id = q6_device_to_path(device_id);
+		audio_rx_path_id = q6_device_to_path(device_id, acdb_id);
 	}
 }
 
 static void do_tx_routing(uint32_t device_id, uint32_t acdb_id)
 {
-	if (device_id == audio_tx_device_id) {
+	if (device_id == audio_tx_device_id &&
+		audio_tx_path_id == q6_device_to_path(device_id, acdb_id)) {
 		if (acdb_id != tx_acdb) {
 			audio_update_acdb(device_id, acdb_id);
 			qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, device_id);
@@ -1386,11 +1459,12 @@ static void do_tx_routing(uint32_t device_id, uint32_t acdb_id)
 	if (audio_tx_path_refcount > 0) {
 		qdsp6_devchg_notify(ac_control, ADSP_AUDIO_TX_DEVICE, device_id);
 		_audio_tx_path_disable();
-		_audio_tx_clk_reinit(device_id);
+		_audio_tx_clk_reinit(device_id, acdb_id);
 		_audio_tx_path_enable(1, acdb_id);
 	} else {
 		audio_tx_device_id = device_id;
-		audio_tx_path_id = q6_device_to_path(device_id);
+		audio_tx_path_id = q6_device_to_path(device_id, acdb_id);
+		tx_acdb = acdb_id;
 	}
 }
 
@@ -1446,6 +1520,38 @@ done:
 	return 0;
 }
 
+static int audio_stream_equalizer(struct audio_client *ac, void *eq_config)
+{
+	int i;
+	struct adsp_set_equalizer_command rpc;
+	struct adsp_audio_eq_stream_config *eq_cfg;
+	eq_cfg = (struct adsp_audio_eq_stream_config *) eq_config;
+
+	memset(&rpc, 0, sizeof(rpc));
+
+	rpc.hdr.opcode = ADSP_AUDIO_IOCTL_SET_SESSION_EQ_CONFIG;
+	rpc.enable = eq_cfg->enable;
+	rpc.num_bands = eq_cfg->num_bands;
+	for (i = 0; i < eq_cfg->num_bands; i++) {
+		rpc.eq_bands[i].band_idx = eq_cfg->eq_bands[i].band_idx;
+		rpc.eq_bands[i].filter_type = eq_cfg->eq_bands[i].filter_type;
+		rpc.eq_bands[i].center_freq_hz =
+					eq_cfg->eq_bands[i].center_freq_hz;
+		rpc.eq_bands[i].filter_gain = eq_cfg->eq_bands[i].filter_gain;
+		rpc.eq_bands[i].q_factor = eq_cfg->eq_bands[i].q_factor;
+	}
+	return audio_ioctl(ac, &rpc, sizeof(rpc));
+}
+
+int q6audio_set_stream_eq_pcm(struct audio_client *ac, void *eq_config)
+{
+	int rc = 0;
+	mutex_lock(&audio_path_lock);
+	rc = audio_stream_equalizer(ac, eq_config);
+	mutex_unlock(&audio_path_lock);
+	return rc;
+}
+
 struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 				      uint32_t channels, uint32_t flags, uint32_t acdb_id)
 {
@@ -1465,13 +1571,16 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 
 	if (ac->flags & AUDIO_FLAG_WRITE) {
 		audio_rx_path_refcount++;
-		if (audio_rx_path_refcount == 1)
+		if (audio_rx_path_refcount == 1) {
 			_audio_rx_clk_enable();
+			q6_rx_path_enable(0, acdb_id);
+			adie_rx_path_enable(acdb_id);
+		}
 	} else {
 		/* TODO: consider concurrency with voice call */
-		tx_clk_freq = rate;
 		audio_tx_path_refcount++;
 		if (audio_tx_path_refcount == 1) {
+			tx_clk_freq = rate;
 			_audio_tx_clk_enable();
 			_audio_tx_path_enable(0, acdb_id);
 		}
@@ -1490,9 +1599,10 @@ struct audio_client *q6audio_open_pcm(uint32_t bufsz, uint32_t rate,
 		msleep(1);
 	}
 
-	if (ac->flags & AUDIO_FLAG_WRITE)
+	if (ac->flags & AUDIO_FLAG_WRITE) {
 		if (audio_rx_path_refcount == 1)
-			_audio_rx_path_enable(0, acdb_id);
+			audio_rx_analog_enable(1);
+	}
 	mutex_unlock(&audio_path_lock);
 
 	for (retry = 5;;retry--) {
@@ -1541,10 +1651,11 @@ struct audio_client *q6voice_open(uint32_t flags)
 
 	ac->flags = flags;
 	if (ac->flags & AUDIO_FLAG_WRITE)
-		audio_rx_path_enable(1, 0);
+		audio_rx_path_enable(1, rx_acdb);
 	else {
-		tx_clk_freq = 8000;
-		audio_tx_path_enable(1, 0);
+		if (!audio_tx_path_refcount)
+			tx_clk_freq = 8000;
+		audio_tx_path_enable(1, tx_acdb);
 	}
 
 	return ac;
@@ -1663,7 +1774,8 @@ struct audio_client *q6audio_open_aac(uint32_t bufsz, uint32_t samplerate,
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1, acdb_id);
 	else{
-		tx_clk_freq = 48000;
+		if (!audio_tx_path_refcount)
+			tx_clk_freq = 48000;
 		audio_tx_path_enable(1, acdb_id);
 	}
 
@@ -1702,7 +1814,8 @@ struct audio_client *q6audio_open_qcp(uint32_t bufsz, uint32_t min_rate,
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1, acdb_id);
 	else{
-		tx_clk_freq = 8000;
+		if (!audio_tx_path_refcount)
+			tx_clk_freq = 8000;
 		audio_tx_path_enable(1, acdb_id);
 	}
 
@@ -1738,7 +1851,8 @@ struct audio_client *q6audio_open_amrnb(uint32_t bufsz, uint32_t enc_mode,
 	if (ac->flags & AUDIO_FLAG_WRITE)
 		audio_rx_path_enable(1, acdb_id);
 	else{
-		tx_clk_freq = 8000;
+		if (!audio_tx_path_refcount)
+			tx_clk_freq = 8000;
 		audio_tx_path_enable(1, acdb_id);
 	}
 

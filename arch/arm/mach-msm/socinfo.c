@@ -64,6 +64,7 @@
 #include "socinfo.h"
 #include "smd_private.h"
 
+#define BUILD_ID_LENGTH 32
 enum {
 	HW_PLATFORM_UNKNOWN = 0,
 	HW_PLATFORM_SURF    = 1,
@@ -84,7 +85,7 @@ struct socinfo_v1 {
 	uint32_t format;
 	uint32_t id;
 	uint32_t version;
-	char build_id[32];
+	char build_id[BUILD_ID_LENGTH];
 };
 
 struct socinfo_v2 {
@@ -102,10 +103,18 @@ struct socinfo_v3 {
 	uint32_t hw_platform;
 };
 
+struct socinfo_v4 {
+	struct socinfo_v3 v3;
+
+	/* only valid when format==4 */
+	uint32_t platform_version;
+};
+
 static union {
 	struct socinfo_v1 v1;
 	struct socinfo_v2 v2;
 	struct socinfo_v3 v3;
+	struct socinfo_v4 v4;
 } *socinfo;
 
 static enum msm_cpu cpu_of_id[] = {
@@ -161,6 +170,10 @@ static enum msm_cpu cpu_of_id[] = {
 	[59] = MSM_CPU_7X30,
 	[60] = MSM_CPU_7X30,
 
+	/* 8x55 IDs */
+	[74] = MSM_CPU_8X55,
+	[75] = MSM_CPU_8X55,
+
 	/* Uninitialized IDs are not known to run Linux.
 	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
 	   considered as unknown CPU. */
@@ -186,21 +199,29 @@ char *socinfo_get_build_id(void)
 uint32_t socinfo_get_raw_id(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 2 ? socinfo->v2.raw_id : 0)
+		(socinfo->v1.format >= 2 ? socinfo->v2.raw_id : 0)
 		: 0;
 }
 
 uint32_t socinfo_get_raw_version(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 2 ? socinfo->v2.raw_version : 0)
+		(socinfo->v1.format >= 2 ? socinfo->v2.raw_version : 0)
 		: 0;
 }
 
 uint32_t socinfo_get_platform_type(void)
 {
 	return socinfo ?
-		(socinfo->v1.format == 3 ? socinfo->v3.hw_platform : 0)
+		(socinfo->v1.format >= 3 ? socinfo->v3.hw_platform : 0)
+		: 0;
+}
+
+
+uint32_t socinfo_get_platform_version(void)
+{
+	return socinfo ?
+		(socinfo->v1.format >= 4 ? socinfo->v4.platform_version : 0)
 		: 0;
 }
 
@@ -262,7 +283,7 @@ socinfo_show_raw_id(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 2) {
+	if (socinfo->v1.format < 2) {
 		pr_err("%s: Raw ID not available!\n", __func__);
 		return 0;
 	}
@@ -279,7 +300,7 @@ socinfo_show_raw_version(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 2) {
+	if (socinfo->v1.format < 2) {
 		pr_err("%s: Raw version not available!\n", __func__);
 		return 0;
 	}
@@ -298,7 +319,7 @@ socinfo_show_platform_type(struct sys_device *dev,
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
 	}
-	if (socinfo->v1.format != 3) {
+	if (socinfo->v1.format < 3) {
 		pr_err("%s: platform type not available!\n", __func__);
 		return 0;
 	}
@@ -311,6 +332,25 @@ socinfo_show_platform_type(struct sys_device *dev,
 	}
 
 	return snprintf(buf, PAGE_SIZE, "%-.32s\n", hw_platform[hw_type]);
+}
+
+static ssize_t
+socinfo_show_platform_version(struct sys_device *dev,
+			 struct sysdev_attribute *attr,
+			 char *buf)
+{
+
+	if (!socinfo) {
+		pr_err("%s: No socinfo found!\n", __func__);
+		return 0;
+	}
+	if (socinfo->v1.format < 4) {
+		pr_err("%s: platform version not available!\n", __func__);
+		return 0;
+	}
+
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		socinfo_get_platform_version());
 }
 
 static struct sysdev_attribute socinfo_v1_files[] = {
@@ -326,6 +366,11 @@ static struct sysdev_attribute socinfo_v2_files[] = {
 
 static struct sysdev_attribute socinfo_v3_files[] = {
 	_SYSDEV_ATTR(hw_platform, 0444, socinfo_show_platform_type, NULL),
+};
+
+static struct sysdev_attribute socinfo_v4_files[] = {
+	_SYSDEV_ATTR(platform_version, 0444,
+			socinfo_show_platform_version, NULL),
 };
 
 static struct sysdev_class soc_sysdev_class = {
@@ -381,11 +426,21 @@ static void __init socinfo_init_sysdev(void)
 	socinfo_create_files(&soc_sys_device, socinfo_v3_files,
 				ARRAY_SIZE(socinfo_v3_files));
 
+	if (socinfo->v1.format < 4)
+		return;
+
+	socinfo_create_files(&soc_sys_device, socinfo_v4_files,
+				ARRAY_SIZE(socinfo_v4_files));
+
 }
 
 int __init socinfo_init(void)
 {
-	socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID, sizeof(struct socinfo_v3));
+	socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID, sizeof(struct socinfo_v4));
+	if (!socinfo)
+		socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID,
+				sizeof(struct socinfo_v3));
+
 	if (!socinfo)
 		socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID,
 				sizeof(struct socinfo_v2));
@@ -432,6 +487,15 @@ int __init socinfo_init(void)
 			SOCINFO_VERSION_MINOR(socinfo->v1.version),
 			socinfo->v2.raw_id, socinfo->v2.raw_version,
 			socinfo->v3.hw_platform);
+		break;
+	case 4:
+		pr_info("%s: v%u, id=%u, ver=%u.%u, "
+			 "raw_id=%u, raw_ver=%u, hw_plat=%u, hw_plat_ver=%u\n",
+			__func__, socinfo->v1.format, socinfo->v1.id,
+			SOCINFO_VERSION_MAJOR(socinfo->v1.version),
+			SOCINFO_VERSION_MINOR(socinfo->v1.version),
+			socinfo->v2.raw_id, socinfo->v2.raw_version,
+			socinfo->v3.hw_platform, socinfo->v4.platform_version);
 		break;
 	default:
 		pr_err("%s: Unknown format found\n", __func__);

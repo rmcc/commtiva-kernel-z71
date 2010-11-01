@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/clock.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -108,7 +108,9 @@ EXPORT_SYMBOL(clk_disable);
 
 int clk_reset(struct clk *clk, enum clk_reset_action action)
 {
-	return clk->ops->reset(clk->id, action);
+	if (!clk->ops->reset)
+		clk->ops->reset = &pc_clk_reset;
+	return clk->ops->reset(clk->remote_id, action);
 }
 EXPORT_SYMBOL(clk_reset);
 
@@ -270,17 +272,40 @@ int msm_clock_get_name(uint32_t id, char *name, uint32_t size)
 	return ret;
 }
 
+static unsigned __initdata local_count;
+
+static void __init set_clock_ops(struct clk *clk)
+{
+	if (!clk->ops) {
+		struct clk_ops *ops = clk_7x30_is_local(clk->id);
+		if (ops) {
+			clk->ops = ops;
+			local_count++;
+		} else {
+			clk->ops = &clk_ops_pcom;
+			clk->id = clk->remote_id;
+		}
+	}
+}
+
 void __init msm_clock_init(struct clk *clock_tbl, unsigned num_clocks)
 {
 	unsigned n;
+
+	clk_7x30_init();
 
 	spin_lock_init(&clocks_lock);
 	mutex_lock(&clocks_mutex);
 	msm_clocks = clock_tbl;
 	msm_num_clocks = num_clocks;
-	for (n = 0; n < msm_num_clocks; n++)
+	for (n = 0; n < msm_num_clocks; n++) {
+		set_clock_ops(&msm_clocks[n]);
 		list_add_tail(&msm_clocks[n].list, &clocks);
+	}
 	mutex_unlock(&clocks_mutex);
+	if (local_count)
+		pr_info("%u clock%s locally owned\n", local_count,
+			local_count > 1 ? "s are" : " is");
 
 	ebi1_clk = clk_get(NULL, "ebi1_clk");
 	BUG_ON(ebi1_clk == NULL);
@@ -399,7 +424,7 @@ static int __init clock_late_init(void)
 			spin_lock_irqsave(&clocks_lock, flags);
 			if (!clk->count) {
 				count++;
-				clk->ops->disable(clk->id);
+				clk->ops->auto_off(clk->id);
 			}
 			spin_unlock_irqrestore(&clocks_lock, flags);
 		}

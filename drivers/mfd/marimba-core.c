@@ -75,6 +75,8 @@ static bool inuse;
 
 struct marimba marimba_modules[MARIMBA_NUM_CHILD + 1];
 
+#define MARIMBA_VERSION_REG		0x11
+
 #ifdef CONFIG_I2C_SSBI
 #define NUM_ADD	MARIMBA_NUM_CHILD
 #else
@@ -357,8 +359,9 @@ static void marimba_init_reg(struct i2c_client *client)
 {
 	struct marimba_platform_data *pdata = client->dev.platform_data;
 	struct marimba *marimba = &marimba_modules[MARIMBA_SLAVE_ID_MARIMBA];
-	int i;
-	u8 buf[1];
+	int i, rc;
+	u8 buf[1], reg_version;
+	static struct vreg *vreg_s2;
 
 	buf[0] = 0x10;
 
@@ -369,6 +372,22 @@ static void marimba_init_reg(struct i2c_client *client)
 	for (i = 1; i < MARIMBA_NUM_CHILD; i++)
 		marimba_write(marimba, i , &pdata->slave_id[i], 1);
 
+	marimba_read(marimba, MARIMBA_VERSION_REG, &reg_version, 1);
+
+	vreg_s2 = vreg_get(NULL, "s2");
+	if (IS_ERR(vreg_s2)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)/n",
+			__func__, PTR_ERR(vreg_s2));
+		return;
+	}
+
+	if (reg_version >= 1) {
+		rc = vreg_disable(vreg_s2);
+		if (rc) {
+			printk(KERN_ERR "%s: return val: %d \n",
+				__func__, rc);
+		}
+	}
 }
 
 static int marimba_probe(struct i2c_client *client,

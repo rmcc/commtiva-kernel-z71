@@ -22,6 +22,7 @@
 #include <mach/gpio.h>
 #include <mach/board.h>
 #include <mach/camera.h>
+#include <mach/clk.h>
 
 #define CAMIF_CFG_RMSK 0x1fffff
 #define CAM_SEL_BMSK 0x2
@@ -52,7 +53,6 @@ static struct resource *appio, *mdcio;
 
 void __iomem *appbase, *mdcbase;
 
-extern int clk_set_flags(struct clk *clk, unsigned long flags);
 
 int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 {

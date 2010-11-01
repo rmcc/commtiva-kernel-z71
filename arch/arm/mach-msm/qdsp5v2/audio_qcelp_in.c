@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -402,6 +402,7 @@ static int audqcelp_in_enable(struct audio_in *audio)
 
 	if (msm_adsp_enable(audio->audrec)) {
 		MM_ERR("msm_adsp_enable(audrec) failed\n");
+		audpreproc_disable(audio->enc_id, audio);
 		return -ENODEV;
 	}
 	audio->enabled = 1;

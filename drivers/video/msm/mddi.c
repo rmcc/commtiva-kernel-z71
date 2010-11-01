@@ -236,7 +236,15 @@ static int mddi_probe(struct platform_device *pdev)
 	 * get/set panel specific fb info
 	 */
 	mfd->panel_info = pdata->panel_info;
+
+#ifdef MSMFB_FRAMEBUF_32
+	if (mfd->index == 0)
+		mfd->fb_imgType = MDP_RGBA_8888; /* primary */
+	else
+		mfd->fb_imgType = MDP_RGB_565;	/* secondary */
+#else
 	mfd->fb_imgType = MDP_RGB_565;
+#endif
 
 	clk_rate = mfd->panel_info.clk_max;
 	if (mddi_pdata &&

@@ -39,6 +39,12 @@ config MT9D112
 	default y
 	---help---
 	  MICRON 2M YUV Sensor
+config VX6953
+	bool "Sensor VX6953 (BAYER 5M)"
+	depends on MSM_CAMERA && ARCH_MSM7X30
+	default y
+	---help---
+	STM 5M Bayer Sensor with EDOF
 
 config MT9P012
 	bool "Sensor mt9p012 (BAYER 5M)"

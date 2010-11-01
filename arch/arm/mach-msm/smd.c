@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -128,6 +128,10 @@ static unsigned last_heap_free = 0xffffffff;
 #else
 #define MSM_TRIG_A2M_INT(n) (writel(1, MSM_CSR_BASE + 0x400 + (n) * 4))
 #endif
+
+#define SMD_LOOPBACK_CID 100
+
+static LIST_HEAD(smd_ch_list_loopback);
 
 static void notify_other_smsm(uint32_t smsm_entry, uint32_t notify_mask)
 {
@@ -864,6 +868,64 @@ static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
 	return 0;
 }
 
+static inline void notify_loopback_smd(void)
+{
+	unsigned long flags;
+	struct smd_channel *ch;
+
+	spin_lock_irqsave(&smd_lock, flags);
+	list_for_each_entry(ch, &smd_ch_list_loopback, ch_list) {
+		ch->notify(ch->priv, SMD_EVENT_DATA);
+	}
+	spin_unlock_irqrestore(&smd_lock, flags);
+}
+
+static int smd_alloc_loopback_channel(void)
+{
+	static struct smd_half_channel smd_loopback_ctl;
+	static char smd_loopback_data[SMD_BUF_SIZE];
+	struct smd_channel *ch;
+
+	ch = kzalloc(sizeof(struct smd_channel), GFP_KERNEL);
+	if (ch == 0) {
+		pr_err("%s: out of memory\n", __func__);
+		return -1;
+	}
+	ch->n = SMD_LOOPBACK_CID;
+
+	ch->send = &smd_loopback_ctl;
+	ch->recv = &smd_loopback_ctl;
+	ch->send_data = smd_loopback_data;
+	ch->recv_data = smd_loopback_data;
+	ch->fifo_size = SMD_BUF_SIZE;
+
+	ch->fifo_mask = ch->fifo_size - 1;
+	ch->type = SMD_LOOPBACK_TYPE;
+	ch->notify_other_cpu = notify_loopback_smd;
+
+	ch->read = smd_stream_read;
+	ch->write = smd_stream_write;
+	ch->read_avail = smd_stream_read_avail;
+	ch->write_avail = smd_stream_write_avail;
+	ch->update_state = update_stream_state;
+	ch->read_from_cb = smd_stream_read;
+
+	memset(ch->name, 0, 20);
+	memcpy(ch->name, "local_loopback", 14);
+
+	ch->pdev.name = ch->name;
+	ch->pdev.id = ch->type;
+
+	SMD_INFO("%s: '%s' cid=%d\n", __func__, ch->name, ch->n);
+
+	mutex_lock(&smd_creation_mutex);
+	list_add(&ch->ch_list, &smd_ch_closed_list);
+	mutex_unlock(&smd_creation_mutex);
+
+	platform_device_register(&ch->pdev);
+	return 0;
+}
+
 static void do_nothing_notify(void *priv, unsigned flags)
 {
 }
@@ -912,6 +974,14 @@ int smd_named_open_on_edge(const char *name, uint32_t edge,
 	ch->last_state = SMD_SS_CLOSED;
 	ch->priv = priv;
 
+	if (edge == SMD_LOOPBACK_TYPE) {
+		ch->last_state = SMD_SS_OPENED;
+		ch->send->state = SMD_SS_OPENED;
+		ch->send->fDSR = 1;
+		ch->send->fCTS = 1;
+		ch->send->fCD = 1;
+	}
+
 	*_ch = ch;
 
 	SMD_DBG("smd_open: opening '%s'\n", ch->name);
@@ -919,12 +989,15 @@ int smd_named_open_on_edge(const char *name, uint32_t edge,
 	spin_lock_irqsave(&smd_lock, flags);
 	if (SMD_CHANNEL_TYPE(ch->type) == SMD_APPS_MODEM)
 		list_add(&ch->ch_list, &smd_ch_list_modem);
-	else
+	else if (SMD_CHANNEL_TYPE(ch->type) == SMD_APPS_QDSP_I)
 		list_add(&ch->ch_list, &smd_ch_list_dsp);
+	else
+		list_add(&ch->ch_list, &smd_ch_list_loopback);
 
 	SMD_DBG("%s: opening ch %d\n", __func__, ch->n);
 
-	smd_state_change(ch, ch->last_state, SMD_SS_OPENING);
+	if (edge != SMD_LOOPBACK_TYPE)
+		smd_state_change(ch, ch->last_state, SMD_SS_OPENING);
 
 	spin_unlock_irqrestore(&smd_lock, flags);
 
@@ -953,7 +1026,13 @@ int smd_close(smd_channel_t *ch)
 	spin_lock_irqsave(&smd_lock, flags);
 	ch->notify = do_nothing_notify;
 	list_del(&ch->ch_list);
-	ch_set_state(ch, SMD_SS_CLOSED);
+	if (ch->n == SMD_LOOPBACK_CID) {
+		ch->send->fDSR = 0;
+		ch->send->fCTS = 0;
+		ch->send->fCD = 0;
+		ch->send->state = SMD_SS_CLOSED;
+	} else
+		ch_set_state(ch, SMD_SS_CLOSED);
 	spin_unlock_irqrestore(&smd_lock, flags);
 
 	mutex_lock(&smd_creation_mutex);
@@ -1202,8 +1281,6 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 			apps |= SMSM_INIT;
 			if (modm & SMSM_SMDINIT)
 				apps |= SMSM_SMDINIT;
-			if (modm & SMSM_RPCINIT)
-				apps |= SMSM_RPCINIT;
 			if ((apps & (SMSM_INIT | SMSM_SMDINIT | SMSM_RPCINIT)) ==
 				(SMSM_INIT | SMSM_SMDINIT | SMSM_RPCINIT))
 				apps |= SMSM_RUN;
@@ -1732,6 +1809,8 @@ static int __init msm_smd_probe(struct platform_device *pdev)
 	msm_check_for_modem_crash = check_for_modem_crash;
 
 	smd_initialized = 1;
+
+	smd_alloc_loopback_channel();
 
 	return 0;
 }

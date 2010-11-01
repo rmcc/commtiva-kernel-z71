@@ -105,9 +105,12 @@
 #define VFE_IRQ_STATUS1_RESET_AXI_HALT_ACK_MASK   0x00800000
 #define VFE_IRQ_STATUS0_STATS_COMPOSIT_MASK       0x01000000
 
-#define VFE_IRQ_STATUS0_STATS_AEC                 0x2000
-#define VFE_IRQ_STATUS0_STATS_AF                  0x4000
-#define VFE_IRQ_STATUS0_STATS_AWB                 0x8000
+#define VFE_IRQ_STATUS0_STATS_AEC     0x2000  /* bit 13 */
+#define VFE_IRQ_STATUS0_STATS_AF      0x4000  /* bit 14 */
+#define VFE_IRQ_STATUS0_STATS_AWB     0x8000  /* bit 15 */
+#define VFE_IRQ_STATUS0_STATS_RS      0x10000  /* bit 16 */
+#define VFE_IRQ_STATUS0_STATS_CS      0x20000  /* bit 17 */
+#define VFE_IRQ_STATUS0_STATS_IHIST   0x40000  /* bit 18 */
 
 /* imask for while waiting for stop ack,  driver has already
  * requested stop, waiting for reset irq, and async timer irq.
@@ -135,11 +138,14 @@
 /* For MCE Q_K bit 28 to 31 set to zero and other's 1 */
 #define MCE_Q_K_MASK 0x0FFFFFFF
 
-#define AWB_ENABLE_MASK 0x00000080
+#define AWB_ENABLE_MASK 0x00000080     /* bit 7 */
+#define AF_ENABLE_MASK 0x00000040      /* bit 6 */
+#define AE_ENABLE_MASK 0x00000020      /* bit 5 */
+#define IHIST_ENABLE_MASK 0x00008000   /* bit 15 */
+#define RS_ENABLE_MASK 0x00000100      /* bit 8  */
+#define CS_ENABLE_MASK 0x00000200      /* bit 9  */
 
-#define AF_ENABLE_MASK 0x00000040
 
-#define AE_ENABLE_MASK 0x00000020
 #define VFE_REG_UPDATE_TRIGGER           1
 #define VFE_PM_BUF_MAX_CNT_MASK          0xFF
 #define VFE_DMI_CFG_DEFAULT              0x00000100
@@ -355,6 +361,16 @@ enum  VFE_STATE {
 
 #define V31_STATS_AWB_OFF 0x0000054c
 #define V31_STATS_AWB_LEN 32
+
+#define V31_STATS_IHIST_OFF 0x0000057c
+#define V31_STATS_IHIST_LEN 8
+
+#define V31_STATS_RS_OFF 0x0000056c
+#define V31_STATS_RS_LEN 8
+
+#define V31_STATS_CS_OFF 0x00000574
+#define V31_STATS_CS_LEN 8
+
 
 #define V31_ASF_OFF 0x000004A0
 #define V31_ASF_LEN 48
@@ -743,10 +759,10 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_STATS_AEC,
 	MSG_ID_STATS_AF,
 	MSG_ID_STATS_AWB, /* 8 */
-	MSM_ID_STATS_RS,
-	MSM_ID_STATS_CS,
-	MSM_ID_STATS_IHIST,
-	MSM_ID_STATS_SKIN,
+	MSG_ID_STATS_RS,
+	MSG_ID_STATS_CS,
+	MSG_ID_STATS_IHIST,
+	MSG_ID_STATS_SKIN,
 	MSG_ID_EPOCH1,
 	MSG_ID_EPOCH2,
 	MSG_ID_SYNC_TIMER0_DONE,
@@ -961,9 +977,14 @@ struct vfe31_ctrl_type {
 
 	uint32_t vfeImaskCompositePacked;
 
-	spinlock_t  ack_lock;
+	spinlock_t  stop_flag_lock;
+	spinlock_t  update_ack_lock;
 	spinlock_t  state_lock;
 	spinlock_t  io_lock;
+
+	spinlock_t  aec_ack_lock;
+	spinlock_t  awb_ack_lock;
+	spinlock_t  af_ack_lock;
 
 	struct msm_vfe_callback *resp;
 	uint32_t extlen;
@@ -999,6 +1020,9 @@ struct vfe31_ctrl_type {
 	struct vfe_stats_control afStatsControl;
 	struct vfe_stats_control awbStatsControl;
 	struct vfe_stats_control aecStatsControl;
+	struct vfe_stats_control ihistStatsControl;
+	struct vfe_stats_control rsStatsControl;
+	struct vfe_stats_control csStatsControl;
 };
 
 #define statsAeNum      0

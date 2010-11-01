@@ -50,9 +50,6 @@
 
 #include <asm/tlbflush.h>
 #include <asm/div64.h>
-#ifdef CONFIG_ARM
-#include <asm/setup.h>
-#endif
 #include "internal.h"
 
 /*
@@ -768,11 +765,6 @@ static int move_freepages_block(struct zone *zone, struct page *page,
 {
 	unsigned long start_pfn, end_pfn;
 	struct page *start_page, *end_page;
-#ifdef CONFIG_ARM
-	struct meminfo *mi = &meminfo;
-	unsigned long start_pfn_gap, end_pfn_gap;
-	int i;
-#endif
 
 	start_pfn = page_to_pfn(page);
 	start_pfn = start_pfn & ~(pageblock_nr_pages-1);
@@ -785,17 +777,6 @@ static int move_freepages_block(struct zone *zone, struct page *page,
 		start_page = page;
 	if (end_pfn >= zone->zone_start_pfn + zone->spanned_pages)
 		return 0;
-
-#ifdef CONFIG_ARM
-	/* XXX Temporary hack until we have a better solution */
-	for (i = 1; i < mi->nr_banks; i++) {
-		start_pfn_gap = mi->bank[i-1].start + mi->bank[i-1].size;
-		start_pfn_gap >>= PAGE_SHIFT;
-		end_pfn_gap = mi->bank[i].start >> PAGE_SHIFT;
-		if (end_pfn > start_pfn_gap && end_pfn < end_pfn_gap)
-			return 0;
-	}
-#endif
 
 	return move_freepages(zone, start_page, end_page, migratetype);
 }

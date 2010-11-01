@@ -612,7 +612,6 @@ static void adsp_rtos_mtoa_cb(void *context, uint32_t param,
 		mutex_unlock(&module->lock);
 		return;
 	}
-	mutex_unlock(&module->lock);
 #ifdef CONFIG_MSM_ADSP_REPORT_EVENTS
 	event_addr = (uint32_t *)evt_buf;
 	if (module->ops)
@@ -621,6 +620,7 @@ static void adsp_rtos_mtoa_cb(void *context, uint32_t param,
 					EVENT_LEN,
 					read_event);
 #endif
+	mutex_unlock(&module->lock);
 }
 
 static size_t read_event_size;

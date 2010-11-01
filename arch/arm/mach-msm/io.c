@@ -132,6 +132,7 @@ static struct map_desc msm7x30_io_desc[] __initdata = {
 	MSM_DEVICE(GPIO1),
 	MSM_DEVICE(GPIO2),
 	MSM_DEVICE(CLK_CTL),
+	MSM_DEVICE(CLK_CTL_SH2),
 	MSM_DEVICE(AD5),
 	MSM_DEVICE(MDC),
 	MSM_DEVICE(ACC),

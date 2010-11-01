@@ -122,7 +122,6 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	int hsync_end_x;
 	uint8 *buf;
 	int bpp, ptype;
-	uint32 format;
 	struct fb_info *fbi;
 	struct fb_var_screeninfo *var;
 	struct msm_fb_data_type *mfd;
@@ -148,20 +147,12 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	buf += fbi->var.xoffset * bpp +
 		fbi->var.yoffset * fbi->fix.line_length;
 
-	if (bpp == 2)
-		format = MDP_RGB_565;
-	else if (bpp == 3)
-		format = MDP_RGB_888;
-	else
-		format = MDP_ARGB_8888;
-
-
 	if (lcdc_pipe == NULL) {
-		ptype = mdp4_overlay_format2type(format);
+		ptype = mdp4_overlay_format2type(mfd->fb_imgType);
 		pipe = mdp4_overlay_pipe_alloc(ptype);
 		pipe->mixer_stage  = MDP4_MIXER_STAGE_BASE;
 		pipe->mixer_num  = MDP4_MIXER0;
-		pipe->src_format = format;
+		pipe->src_format = mfd->fb_imgType;
 		mdp4_overlay_format2pipe(pipe);
 
 		lcdc_pipe = pipe; /* keep it */
@@ -270,7 +261,7 @@ int mdp_lcdc_on(struct platform_device *pdev)
 	if (ret == 0) {
 		/* enable LCDC block */
 		MDP_OUTP(MDP_BASE + LCDC_BASE, 1);
-		mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+		mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	}
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
@@ -287,16 +278,18 @@ int mdp_lcdc_off(struct platform_device *pdev)
 	MDP_OUTP(MDP_BASE + LCDC_BASE, 0);
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
-	mdp_pipe_ctrl(MDP_DMA2_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	ret = panel_next_off(pdev);
 
 	/* delay to make sure the last frame finishes */
 	mdelay(100);
 
+#ifdef LCDC_RGB_UNSTAGE
 	/* dis-engage rgb0 from mixer0 */
 	if (lcdc_pipe)
 		mdp4_mixer_stage_down(lcdc_pipe);
+#endif
 
 	return ret;
 }

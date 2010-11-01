@@ -75,4 +75,20 @@ struct msm_otg {
 	int (*pmic_enable_ldo) (int);
 };
 
+/* usb controller's protocol engine depends on AXI clock.
+ * On some platforms this dependency is removed by
+ * introducing usb core clock
+ */
+static inline int depends_on_axi_freq(struct otg_transceiver *xceiv)
+{
+	struct msm_otg *dev;
+
+	if (!xceiv)
+		return 0;
+
+	dev = container_of(xceiv, struct msm_otg, otg);
+
+	return !dev->core_clk;
+}
+
 #endif

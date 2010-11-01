@@ -52,10 +52,6 @@ if ARCH_QSD8X50
 config MSM_SOC_REV_A
 	bool "Rev. A"
 endif
-if ARCH_MSM7X30
-config MSM_SOC_REV_2
-	bool "Rev. 2"
-endif
 endchoice
 
 config  ARCH_MSM_ARM11
@@ -221,6 +217,22 @@ config MACH_MSM7X25_FFA
 	help
 	  Support for the Qualcomm MSM7x25 FFA eval board.
 
+config MACH_QSD8X55_SURF
+       depends on ARCH_MSM7X30
+       depends on !MSM_STACKED_MEMORY
+       default y
+       bool "QSD8X55 SURF"
+       help
+         Support for the Qualcomm QSD8x55 SURF eval board.
+
+config MACH_QSD8X55_FFA
+       depends on ARCH_MSM7X30
+       depends on !MSM_STACKED_MEMORY
+       default y
+       bool "QSD8X55 FFA"
+       help
+         Support for the Qualcomm QSD8x55 FFA eval board.
+
 endmenu
 
 config MSM_STACKED_MEMORY
@@ -297,6 +309,14 @@ choice
 	config MSM_DEBUG_UART3
 		bool "UART3"
 endchoice
+
+config CACHE_FLUSH_RANGE_LIMIT
+	hex "Cache flush range limit"
+	default 0x40000
+	help
+	  When flushing a cache range larger then this (hex) limit, flush the
+	  entire cache instead. Flushing a large range can be slower than
+	  flushing, then refilling, the entire cache.
 
 choice
 	prompt "Default Timer"
@@ -607,6 +627,14 @@ config MSM_ONCRPCROUTER_DEBUG
 	  Support for debugging the ONCRPC router for communication
 	  between the ARM9 and ARM11
 
+config MSM_RPC_LOOPBACK_XPRT
+	depends on MSM_ONCRPCROUTER
+	default n
+	bool "MSM RPC local routing support"
+	help
+	  Support for routing RPC messages between APPS clients
+	  and APPS servers.  Helps in testing APPS RPC framework.
+
 config MSM_RPCSERVER_TIME_REMOTE
 	depends on MSM_ONCRPCROUTER && RTC_HCTOSYS
 	default y
@@ -859,11 +887,18 @@ endchoice
 config NPA_REMOTE_ONCRPC
 	bool "Enables NPA remoting through ONCRPC protocol."
 	depends on NPA && MSM_ONCRPCROUTER
-	select CONFIG_NPA_REMOTE
+	select NPA_REMOTE
 	default n
 	help
 	  Enables Linux NPA clients to talk to NPA nodes in the modem
 	  using ONCRPC communication protocol.
+
+config MSM_SPM
+	bool "Subsystem Power Manager"
+	depends on ARCH_MSM7X30
+	default y
+	help
+	  Enables support for the subsystem power manager.
 
 endif
 

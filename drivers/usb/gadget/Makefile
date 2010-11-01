@@ -31,7 +31,7 @@ F_DIAG = f_diag.o
 endif
 
 ifeq ($(CONFIG_USB_ANDROID_CDC_ECM),y)
-F_ECM = f_ecm.o u_ether.o
+F_ECM = f_ecm.o
 endif
 ifeq ($(CONFIG_USB_F_SERIAL),y)
 F_SERIAL = f_serial.o
@@ -39,6 +39,10 @@ endif
 
 ifeq ($(CONFIG_USB_ANDROID_RMNET),y)
 F_RMNET = f_rmnet.o
+endif
+
+ifeq ($(CONFIG_USB_ANDROID_RNDIS),y)
+F_RNDIS = rndis.o f_rndis.o
 endif
 
 g_zero-objs			:= zero.o
@@ -50,8 +54,9 @@ g_file_storage-objs		:= file_storage.o
 g_printer-objs			:= printer.o
 g_cdc-objs			:= cdc2.o
 g_android-objs			:= android.o f_adb.o f_mass_storage.o \
-					u_serial.o f_acm.o $(F_ECM) \
-					$(F_SERIAL) $(F_DIAG) $(F_RMNET)
+					u_serial.o f_acm.o u_ether.o \
+					$(F_ECM) $(F_SERIAL) $(F_DIAG) \
+					$(F_RMNET) $(F_RNDIS)
 
 obj-$(CONFIG_USB_ZERO)		+= g_zero.o
 obj-$(CONFIG_USB_ETH)		+= g_ether.o

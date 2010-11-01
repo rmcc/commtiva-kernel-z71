@@ -72,19 +72,24 @@
 #ifdef CONFIG_ARCH_MSM7X25
 #define MSM_PMEM_MDP_SIZE	0xb21000
 #define MSM_PMEM_ADSP_SIZE	0x97b000
+#define MSM_PMEM_AUDIO_SIZE	0x121000
 #define MSM_FB_SIZE		0x200000
-#define PMEM_KERNEL_EBI1_SIZE	0x80000
+#define PMEM_KERNEL_EBI1_SIZE	0x64000
 #endif
 
 #ifdef CONFIG_ARCH_MSM7X27
-#define MSM_PMEM_MDP_SIZE	0x1C91000
+#define MSM_PMEM_MDP_SIZE	0x1B76000
 #define MSM_PMEM_ADSP_SIZE	0xAE4000
-#define MSM_PMEM_GPU1_SIZE	0x1600000
-#define MSM_FB_SIZE		0x200000
+#define MSM_PMEM_AUDIO_SIZE	0x5B000
+#define MSM_FB_SIZE		0x177000
 #define MSM_GPU_PHYS_SIZE	SZ_2M
-#define PMEM_KERNEL_EBI1_SIZE	0x200000
+#define PMEM_KERNEL_EBI1_SIZE	0x1C000
+/* Using lower 1MB of OEMSBL memory for GPU_PHYS */
+#define MSM_GPU_PHYS_START_ADDR	 0xD600000ul
 #endif
 
+/* Using upper 1/2MB of Apps Bootloader memory*/
+#define MSM_PMEM_AUDIO_START_ADDR	0x80000ul
 
 static struct resource smc91x_resources[] = {
 	[0] = {
@@ -120,75 +125,84 @@ static struct platform_device mass_storage_device = {
 /* dynamic composition */
 static struct usb_composition usb_func_composition[] = {
 	{
-		.product_id         = 0x9015,
-		/* MSC + ADB */
-		.functions	    = 0x12 /* 10010 */
-	},
-	{
-		.product_id         = 0xF000,
 		/* MSC */
-		.functions	    = 0x02, /* 0010 */
+		.product_id         = 0xF000,
+		.functions	    = 0x02,
+		.adb_product_id     = 0x9015,
+		.adb_functions	    = 0x12
 	},
+#ifdef CONFIG_USB_F_SERIAL
 	{
-		.product_id         = 0xF005,
-		/* MODEM ONLY */
-		.functions	    = 0x03,
+		/* MODEM */
+		.product_id         = 0xF00B,
+		.functions	    = 0x06,
+		.adb_product_id     = 0x901E,
+		.adb_functions	    = 0x16,
 	},
-
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
 	{
-		.product_id         = 0x8080,
+		/* DIAG */
+		.product_id         = 0x900E,
+		.functions	    = 0x04,
+		.adb_product_id     = 0x901D,
+		.adb_functions	    = 0x14,
+	},
+#endif
+#if defined(CONFIG_USB_ANDROID_DIAG) && defined(CONFIG_USB_F_SERIAL)
+	{
 		/* DIAG + MODEM */
-		.functions	    = 0x34,
+		.product_id         = 0x9004,
+		.functions	    = 0x64,
+		.adb_product_id     = 0x901F,
+		.adb_functions	    = 0x0614,
 	},
 	{
-		.product_id         = 0x8082,
-		/* DIAG + ADB + MODEM */
-		.functions	    = 0x0314,
-	},
-	{
-		.product_id         = 0x8085,
-		/* DIAG + ADB + MODEM + NMEA + MSC*/
-		.functions	    = 0x25314,
-	},
-	{
+		/* DIAG + MODEM + NMEA*/
 		.product_id         = 0x9016,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA*/
 		.functions	    = 0x764,
+		.adb_product_id     = 0x9020,
+		.adb_functions	    = 0x7614,
 	},
 	{
+		/* DIAG + MODEM + NMEA + MSC */
 		.product_id         = 0x9017,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA + MSC*/
 		.functions	    = 0x2764,
+		.adb_product_id     = 0x9018,
+		.adb_functions	    = 0x27614,
 	},
+#endif
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 	{
-		.product_id         = 0x9018,
-		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
-		.functions	    = 0x27614,
+		/* MSC + CDC-ECM */
+		.product_id         = 0x9014,
+		.functions	    = 0x82,
+		.adb_product_id     = 0x9023,
+		.adb_functions	    = 0x812,
 	},
-	{
-		.product_id         = 0xF009,
-		/* CDC-ECM*/
-		.functions	    = 0x08,
-	},
+#endif
 #ifdef CONFIG_USB_ANDROID_RMNET
 	{
-		.product_id         = 0x9021,
 		/* DIAG + RMNET */
+		.product_id         = 0x9021,
 		.functions	    = 0x94,
+		.adb_product_id     = 0x9022,
+		.adb_functions	    = 0x914,
 	},
+#endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
 	{
-		.product_id         = 0x9022,
-		/* DIAG + ADB + RMNET */
-		.functions	    = 0x914,
+		/* RNDIS */
+		.product_id         = 0xF00E,
+		.functions	    = 0xA,
+		.adb_product_id     = 0x9024,
+		.adb_functions	    = 0x1A,
 	},
 #endif
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,
-	.product_id	= 0x9018,
-	.functions	= 0x27614,
 	.version	= 0x0100,
-	.serial_number  = "1234567890ABCDEF",
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.product_name	= "Qualcomm HSUSB Device",
@@ -276,10 +290,8 @@ static struct usb_composition usb_func_composition[] = {
 #endif
 
 };
-#endif
 
 static struct msm_hsusb_platform_data msm_hsusb_pdata = {
-#ifdef CONFIG_USB_FUNCTION
 	.version	= 0x0100,
 	.phy_info	= (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
 	.vendor_id          = 0x5c6,
@@ -291,9 +303,10 @@ static struct msm_hsusb_platform_data msm_hsusb_pdata = {
 	.function_map   = usb_functions_map,
 	.num_functions	= ARRAY_SIZE(usb_functions_map),
 	.config_gpio    = NULL,
-#endif
 };
+#endif
 
+#ifdef CONFIG_USB_MSM_OTG_72K
 static int hsusb_rpc_connect(int connect)
 {
 	if (connect)
@@ -301,12 +314,16 @@ static int hsusb_rpc_connect(int connect)
 	else
 		return msm_hsusb_rpc_close();
 }
+#endif
 
+#if defined(CONFIG_USB_MSM_OTG_72K) || defined(CONFIG_USB_EHCI_MSM)
 static int msm_hsusb_rpc_phy_reset(void __iomem *addr)
 {
 	return msm_hsusb_phy_reset();
 }
+#endif
 
+#ifdef CONFIG_USB_MSM_OTG_72K
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
 	.phy_reset	= msm_hsusb_rpc_phy_reset,
@@ -317,7 +334,10 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.pmic_enable_ldo         = msm_pm_app_enable_usb_ldo,
 };
 
+#ifdef CONFIG_USB_GADGET
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
+#endif
+#endif
 
 #define SND(desc, num) { .name = #desc, .id = num }
 static struct snd_endpoint snd_endpoints_list[] = {
@@ -355,11 +375,9 @@ static struct platform_device msm_device_snd = {
 	(1<<MSM_ADSP_CODEC_ADPCM)|(1<<MSM_ADSP_CODEC_YADPCM)| \
 	(1<<MSM_ADSP_CODEC_EVRC)|(1<<MSM_ADSP_CODEC_QCELP))
 #define DEC1_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
+	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP))
 #define DEC2_FORMAT ((1<<MSM_ADSP_CODEC_WAV)|(1<<MSM_ADSP_CODEC_ADPCM)| \
-	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP)| \
-	(1<<MSM_ADSP_CODEC_MP3))
+	(1<<MSM_ADSP_CODEC_YADPCM)|(1<<MSM_ADSP_CODEC_QCELP))
 
 #ifdef CONFIG_ARCH_MSM7X25
 #define DEC3_FORMAT 0
@@ -424,8 +442,8 @@ static unsigned int dec_concurrency_table[] = {
 
 static struct msm_adspdec_info dec_info_list[] = {
 	DEC_INFO("AUDPLAY0TASK", 13, 0, 11), /* AudPlay0BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY1TASK", 14, 1, 5),  /* AudPlay1BitStreamCtrlQueue */
-	DEC_INFO("AUDPLAY2TASK", 15, 2, 5),  /* AudPlay2BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY1TASK", 14, 1, 4),  /* AudPlay1BitStreamCtrlQueue */
+	DEC_INFO("AUDPLAY2TASK", 15, 2, 4),  /* AudPlay2BitStreamCtrlQueue */
 #ifdef CONFIG_ARCH_MSM7X25
 	DEC_INFO("AUDPLAY3TASK", 16, 3, 0),  /* AudPlay3BitStreamCtrlQueue */
 	DEC_INFO("AUDPLAY4TASK", 17, 4, 0),  /* AudPlay4BitStreamCtrlQueue */
@@ -474,13 +492,11 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
-#ifdef CONFIG_ARCH_MSM7X27
-static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
-	.name = "pmem_gpu1",
+static struct android_pmem_platform_data android_pmem_audio_pdata = {
+	.name = "pmem_audio",
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
-#endif
 
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
@@ -494,21 +510,17 @@ static struct platform_device android_pmem_adsp_device = {
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
+static struct platform_device android_pmem_audio_device = {
+	.name = "android_pmem",
+	.id = 2,
+	.dev = { .platform_data = &android_pmem_audio_pdata },
+};
+
 static struct platform_device android_pmem_kernel_ebi1_device = {
 	.name = "android_pmem",
 	.id = 4,
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
-
-#ifdef CONFIG_ARCH_MSM7X27
-static struct platform_device android_pmem_gpu1_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
-
-
-#endif
 
 static struct platform_device hs_device = {
 	.name   = "msm-handset",
@@ -1062,7 +1074,18 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+	.flash_sr_type = MSM_CAMERA_FLASH_SRC_PMIC,
+	._fsrc.pmic_src.low_current  = 30,
+	._fsrc.pmic_src.high_current = 100,
+};
+
 #ifdef CONFIG_MT9D112
+static struct msm_camera_sensor_flash_data flash_mt9d112 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.sensor_name    = "mt9d112",
 	.sensor_reset   = 89,
@@ -1070,7 +1093,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9d112
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -1082,6 +1105,11 @@ static struct platform_device msm_camera_sensor_mt9d112 = {
 #endif
 
 #ifdef CONFIG_S5K3E2FX
+static struct msm_camera_sensor_flash_data flash_s5k3e2fx = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.sensor_name    = "s5k3e2fx",
 	.sensor_reset   = 89,
@@ -1089,7 +1117,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_s5k3e2fx
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -1101,6 +1129,11 @@ static struct platform_device msm_camera_sensor_s5k3e2fx = {
 #endif
 
 #ifdef CONFIG_MT9P012
+static struct msm_camera_sensor_flash_data flash_mt9p012 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.sensor_name    = "mt9p012",
 	.sensor_reset   = 89,
@@ -1108,7 +1141,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9p012
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -1120,6 +1153,11 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 #endif
 
 #ifdef CONFIG_MT9P012_KM
+static struct msm_camera_sensor_flash_data flash_mt9p012_km = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
 	.sensor_name    = "mt9p012_km",
 	.sensor_reset   = 89,
@@ -1127,7 +1165,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9p012_km
 };
 
 static struct platform_device msm_camera_sensor_mt9p012_km = {
@@ -1139,6 +1177,11 @@ static struct platform_device msm_camera_sensor_mt9p012_km = {
 #endif
 
 #ifdef CONFIG_MT9T013
+static struct msm_camera_sensor_flash_data flash_mt9t013 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_name    = "mt9t013",
 	.sensor_reset   = 89,
@@ -1146,7 +1189,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9t013
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {
@@ -1158,6 +1201,11 @@ static struct platform_device msm_camera_sensor_mt9t013 = {
 #endif
 
 #ifdef CONFIG_VB6801
+static struct msm_camera_sensor_flash_data flash_vb6801 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_vb6801_data = {
 	.sensor_name    = "vb6801",
 	.sensor_reset   = 89,
@@ -1165,7 +1213,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_vb6801_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_vb6801
 };
 
 static struct platform_device msm_camera_sensor_vb6801 = {
@@ -1211,14 +1259,19 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_dmov,
 	&msm_device_nand,
+
+#ifdef CONFIG_USB_MSM_OTG_72K
 	&msm_device_otg,
-	&msm_device_hsusb_otg,
-	&msm_device_hsusb_host,
-	&msm_device_hsusb_peripheral,
+#ifdef CONFIG_USB_GADGET
 	&msm_device_gadget_peripheral,
+#endif
+#endif
+
 #ifdef CONFIG_USB_FUNCTION
+	&msm_device_hsusb_peripheral,
 	&mass_storage_device,
 #endif
+
 #ifdef CONFIG_USB_ANDROID
 	&android_usb_device,
 #endif
@@ -1228,9 +1281,7 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-#ifdef CONFIG_ARCH_MSM7X27
-	&android_pmem_gpu1_device,
-#endif
+	&android_pmem_audio_device,
 	&msm_fb_device,
 	&lcdc_gordon_panel_device,
 	&msm_device_uart_dm1,
@@ -1293,6 +1344,30 @@ static struct msm_acpu_clock_platform_data msm7x2x_clock_data = {
 
 void msm_serial_debug_init(unsigned int base, int irq,
 			   struct device *clk_device, int signal_irq);
+
+#ifdef CONFIG_USB_EHCI_MSM
+static void msm_hsusb_vbus_power(unsigned phy_info, int on)
+{
+	if (on)
+		msm_hsusb_vbus_powerup();
+	else
+		msm_hsusb_vbus_shutdown();
+}
+
+static struct msm_usb_host_platform_data msm_usb_host_pdata = {
+	.phy_info       = (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
+	.phy_reset = msm_hsusb_rpc_phy_reset,
+	.vbus_power = msm_hsusb_vbus_power,
+};
+static void __init msm7x2x_init_host(void)
+{
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
+		return;
+
+	msm_add_host(0, &msm_usb_host_pdata);
+}
+#endif
+
 
 #ifdef CONFIG_MMC
 static void sdcc_gpio_init(void)
@@ -1548,44 +1623,6 @@ static void __init msm7x2x_init_mmc(void)
 #define msm7x2x_init_mmc() do {} while (0)
 #endif
 
-static unsigned mpp_deep_sleep = 3;
-static int __init wifi_power_init(void)
-{
-	int rc;
-	struct vreg *vreg_wlan;
-
-	rc = mpp_config_digital_out(mpp_deep_sleep,
-	     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
-	     MPP_DLOGIC_OUT_CTRL_LOW));
-	if (rc) {
-		printk(KERN_ERR "%s: return val:  (%d)\n",
-		       __func__, rc);
-		return -EIO;
-	}
-
-	vreg_wlan = vreg_get(NULL, "wlan");
-	if (IS_ERR(vreg_wlan)) {
-		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-		       __func__, PTR_ERR(vreg_wlan));
-		return PTR_ERR(vreg_wlan);
-	}
-
-	rc = vreg_set_level(vreg_wlan, 2600);
-	if (rc) {
-		printk(KERN_ERR "%s: vreg set level failed (%d)\n",
-		       __func__, rc);
-		return -EIO;
-	}
-
-	rc = vreg_enable(vreg_wlan);
-	if (rc) {
-		printk(KERN_ERR "%s: vreg enable failed (%d)\n",
-		       __func__, rc);
-		return -EIO;
-	}
-
-	return 0;
-}
 
 static struct msm_pm_platform_data msm7x25_pm_data[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE].latency = 16000,
@@ -1705,32 +1742,43 @@ static void __init msm7x2x_init(void)
 	msm_acpu_clock_init(&msm7x2x_clock_data);
 
 #ifdef CONFIG_ARCH_MSM7X27
+	/* Initialize the zero page for barriers and cache ops */
+	map_zero_page_strongly_ordered();
 	/* This value has been set to 160000 for power savings. */
 	/* OEMs may modify the value at their discretion for performance */
 	/* The appropriate maximum replacement for 160000 is: */
 	/* clk_get_max_axi_khz() */
-	kgsl_pdata.max_axi_freq = 160000;
+	kgsl_pdata.high_axi_3d = 160000;
 
 	/* 7x27 doesn't allow graphics clocks to be run asynchronously to */
 	/* the AXI bus */
 	kgsl_pdata.max_grp2d_freq = 0;
+	kgsl_pdata.min_grp2d_freq = 0;
 	kgsl_pdata.set_grp2d_async = NULL;
 	kgsl_pdata.max_grp3d_freq = 0;
+	kgsl_pdata.min_grp3d_freq = 0;
 	kgsl_pdata.set_grp3d_async = NULL;
 #endif
 
+#ifdef CONFIG_USB_FUNCTION
 	msm_hsusb_pdata.swfi_latency =
 		msm7x27_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
+#endif
+
+#ifdef CONFIG_USB_MSM_OTG_72K
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 
+#ifdef CONFIG_USB_GADGET
 	msm_gadget_pdata.swfi_latency =
 		msm7x27_pm_data
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
-	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
+#endif
+#endif
+
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
@@ -1747,9 +1795,11 @@ static void __init msm7x2x_init(void)
 	lcdc_gordon_gpio_init();
 	msm_fb_add_devices();
 	rmt_storage_add_ramfs();
+#ifdef CONFIG_USB_EHCI_MSM
+	msm7x2x_init_host();
+#endif
 	msm7x2x_init_mmc();
 	bt_power_init();
-	wifi_power_init();
 
 	if (cpu_is_msm7x27())
 		msm_pm_set_platform_data(msm7x27_pm_data);
@@ -1778,29 +1828,12 @@ static void __init pmem_adsp_size_setup(char **p)
 }
 __early_param("pmem_adsp_size=", pmem_adsp_size_setup);
 
-#ifdef CONFIG_ARCH_MSM7X27
-static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
-static void __init pmem_gpu1_size_setup(char **p)
-{
-	pmem_gpu1_size = memparse(*p, p);
-}
-__early_param("pmem_gpu1_size=", pmem_gpu1_size_setup);
-#endif
 static unsigned fb_size = MSM_FB_SIZE;
 static void __init fb_size_setup(char **p)
 {
 	fb_size = memparse(*p, p);
 }
 __early_param("fb_size=", fb_size_setup);
-
-#ifdef CONFIG_ARCH_MSM7X27
-static unsigned gpu_phys_size = MSM_GPU_PHYS_SIZE;
-static void __init gpu_phys_size_setup(char **p)
-{
-	gpu_phys_size = memparse(*p, p);
-}
-__early_param("gpu_phys_size=", gpu_phys_size_setup);
-#endif
 
 static void __init msm_msm7x2x_allocate_memory_regions(void)
 {
@@ -1825,6 +1858,12 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
+	size = MSM_PMEM_AUDIO_SIZE ;
+	android_pmem_audio_pdata.start = MSM_PMEM_AUDIO_START_ADDR ;
+	android_pmem_audio_pdata.size = size;
+	pr_info("allocating %lu bytes (at %lx physical) for audio "
+		"pmem arena\n", size , MSM_PMEM_AUDIO_START_ADDR);
+
 	size = fb_size ? : MSM_FB_SIZE;
 	addr = alloc_bootmem(size);
 	msm_fb_resources[0].start = __pa(addr);
@@ -1841,21 +1880,12 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 			" ebi1 pmem arena\n", size, addr, __pa(addr));
 	}
 #ifdef CONFIG_ARCH_MSM7X27
-	size = gpu_phys_size ? : MSM_GPU_PHYS_SIZE;
-	addr = alloc_bootmem(size);
-	kgsl_resources[1].start = __pa(addr);
+	size = MSM_GPU_PHYS_SIZE;
+	kgsl_resources[1].start = MSM_GPU_PHYS_START_ADDR ;
 	kgsl_resources[1].end = kgsl_resources[1].start + size - 1;
-	pr_info("allocating %lu bytes at %p (%lx physical) for KGSL\n",
-		size, addr, __pa(addr));
+	pr_info("allocating %lu bytes (at %lx physical) for KGSL\n",
+		size , MSM_GPU_PHYS_START_ADDR);
 
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
 #endif
 
 }

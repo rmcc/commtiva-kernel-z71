@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_private.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -260,6 +260,9 @@ enum {
 	SMEM_SMDLITE_TABLE,
 	SMEM_SD_IMG_UPGRADE_STATUS,
 	SMEM_SEFS_INFO,
+	SMEM_RESET_LOG,
+	SMEM_RESET_LOG_SYMBOLS,
+	SMEM_MEM_LAST = SMEM_RESET_LOG_SYMBOLS,
 	SMEM_NUM_ITEMS,
 };
 

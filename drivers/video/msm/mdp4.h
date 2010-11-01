@@ -38,9 +38,6 @@ extern boolean mdp_is_in_isr;
 extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 
-
-#define MDP4_NONBLOCKING	/* enable non blocking ioctl */
-
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
 
@@ -107,14 +104,16 @@ enum {
 #define INTR_DMA_P_HISTOGRAM		BIT(17)
 
 /* histogram interrupts */
-#define INTR_HIST_DONE			BIT(0)
-#define INTR_HIST_RESET_SEQ_DONE	BIT(1)
+#define INTR_HIST_DONE			BIT(1)
+#define INTR_HIST_RESET_SEQ_DONE	BIT(0)
 
 
 #ifdef CONFIG_FB_MSM_OVERLAY
-#define MDP4_ANY_INTR_MASK	(INTR_OVERLAY0_DONE)
+#define MDP4_ANY_INTR_MASK	(INTR_OVERLAY0_DONE| \
+				INTR_DMA_P_HISTOGRAM)
 #else
-#define MDP4_ANY_INTR_MASK	(INTR_DMA_P_DONE)
+#define MDP4_ANY_INTR_MASK	(INTR_DMA_P_DONE| \
+				INTR_DMA_P_HISTOGRAM)
 #endif
 
 enum {
@@ -344,7 +343,7 @@ void mdp4_overlay_dmap_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmap_xy(struct mdp4_overlay_pipe *pipe);
 void mdp4_overlay_dmae_cfg(struct msm_fb_data_type *mfd, int lcdc);
 void mdp4_overlay_dmae_xy(struct mdp4_overlay_pipe *pipe);
-int mdp4_overlay_active(int mixer);
+int mdp4_overlay_pipe_staged(int mixer);
 void mdp4_overlay0_done_lcdc(void);
 void mdp4_overlay0_done_mddi(void);
 void mdp4_overlay1_done_dtv(void);
@@ -356,12 +355,12 @@ void mdp4_vg_igc_lut_setup(int num);
 void mdp4_mixer_gc_lut_setup(int mixer_num);
 void mdp4_fetch_cfg(uint32 clk);
 uint32 mdp4_rgb_igc_lut_cvt(uint32 ndx);
+void mdp4_vg_qseed_init(int);
 
 #ifdef CONFIG_DEBUG_FS
 int mdp4_debugfs_init(void);
 #endif
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file);
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req);
 
 #endif /* MDP_H */

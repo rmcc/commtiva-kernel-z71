@@ -333,7 +333,6 @@ int npa_assign_resource_state(struct npa_resource *resource,
 
 #endif
 
-#ifdef CONFIG_NPA_DEBUG
 #ifdef CONFIG_NPA_LOG
 /* NPA logging */
 extern int npa_log_mask;
@@ -357,8 +356,12 @@ static inline void __print_resources(void) {}
 static inline void __print_client_states(struct npa_resource *resource) {}
 static inline void __print_aliases(void) {}
 #endif
+
+#ifdef CONFIG_NPA_DEBUG
 /* Clear all internal NPA resources, their clients and events. */
 void npa_reset(void);
+#else
+static inline void npa_reset(void) {}
 #endif
 
 #endif

@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -66,6 +66,7 @@
 
 #define AFE_MAX_TIMEOUT 500 /* 500 ms */
 #define AFE_MAX_CLNT 6 /* 6 HW path defined so far */
+#define GETDEVICEID(x) ((x) - 1)
 
 struct msm_afe_state {
 	struct msm_adsp_module *mod;
@@ -88,7 +89,7 @@ static void afe_dsp_event(void *data, unsigned id, size_t len,
 {
 	struct msm_afe_state *afe = data;
 
-	MM_INFO("%s: msg_id %d \n", __func__, id);
+	MM_INFO("msg_id %d \n", id);
 
 	switch (id) {
 	case AFE_APU_MSG_CODEC_CONFIG_ACK: {
@@ -97,9 +98,9 @@ static void afe_dsp_event(void *data, unsigned id, size_t len,
 		MM_INFO("%s: device_id: %d device activity: %d\n", __func__,
 		afe_ack.device_id, afe_ack.device_activity);
 		if (afe_ack.device_activity == AFE_MSG_CODEC_CONFIG_DISABLED)
-			afe->codec_config[afe_ack.device_id] = 0;
+			afe->codec_config[GETDEVICEID(afe_ack.device_id)] = 0;
 		else
-			afe->codec_config[afe_ack.device_id] =
+			afe->codec_config[GETDEVICEID(afe_ack.device_id)] =
 			afe_ack.device_activity;
 
 		wake_up(&afe->wait);
@@ -145,25 +146,43 @@ int afe_enable(u8 path_id, struct msm_afe_config *config)
 		rc = msm_adsp_get("AFETASK", &afe->mod, &afe->adsp_ops, afe);
 		if (rc < 0) {
 			MM_ERR("%s: failed to get AFETASK module\n", __func__);
-			goto error;
+			goto error_adsp_get;
 		}
 		rc = msm_adsp_enable(afe->mod);
 		if (rc < 0)
-			goto error;
+			goto error_adsp_enable;
 	}
 	/* Issue codec config command */
 	afe_dsp_codec_config(afe, path_id, 1, config);
 	rc = wait_event_timeout(afe->wait,
-		afe->codec_config[path_id],
+		afe->codec_config[GETDEVICEID(path_id)],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		MM_ERR("AFE failed to respond within 500 ms\n");
+		MM_ERR("AFE failed to respond within %d ms\n", AFE_MAX_TIMEOUT);
 		rc = -ENODEV;
-		goto error;
-	} else
+		if (!afe->in_use) {
+			if (!afe->aux_conf_flag ||
+			(afe->aux_conf_flag &&
+			(path_id == AFE_HW_PATH_AUXPCM_RX ||
+			path_id == AFE_HW_PATH_AUXPCM_TX))) {
+				/* clean up if there is no client */
+				msm_adsp_disable(afe->mod);
+				msm_adsp_put(afe->mod);
+				afe->aux_conf_flag = 0;
+			}
+		}
+
+	} else {
 		rc = 0;
-	afe->in_use++;
-error:
+		afe->in_use++;
+	}
+
+	mutex_unlock(&afe->lock);
+	return rc;
+
+error_adsp_enable:
+	msm_adsp_put(afe->mod);
+error_adsp_get:
 	mutex_unlock(&afe->lock);
 	return rc;
 }
@@ -183,11 +202,11 @@ int afe_config_aux_codec(int pcm_ctl_value, int aux_codec_intf_value,
 		rc = msm_adsp_get("AFETASK", &afe->mod, &afe->adsp_ops, afe);
 		if (rc < 0) {
 			MM_ERR("%s: failed to get AFETASK module\n", __func__);
-			goto error;
+			goto error_adsp_get;
 		}
 		rc = msm_adsp_enable(afe->mod);
 		if (rc < 0)
-			goto error;
+			goto error_adsp_enable;
 	}
 	afe->aux_conf_flag = 1;
 	memset(&cmd, 0, sizeof(cmd));
@@ -199,7 +218,12 @@ int afe_config_aux_codec(int pcm_ctl_value, int aux_codec_intf_value,
 	cmd.data_format_padding_info = data_format_pad;
 
 	afe_send_queue(afe, &cmd, sizeof(cmd));
-error:
+
+	mutex_unlock(&afe->lock);
+	return rc;
+error_adsp_enable:
+	msm_adsp_put(afe->mod);
+error_adsp_get:
 	mutex_unlock(&afe->lock);
 	return rc;
 }
@@ -214,15 +238,14 @@ int afe_disable(u8 path_id)
 
 	BUG_ON(!afe->in_use);
 	MM_INFO("%s() path_id:%d codec state:%d\n", __func__, path_id,
-	afe->codec_config[path_id]);
+	afe->codec_config[GETDEVICEID(path_id)]);
 	afe_dsp_codec_config(afe, path_id, 0, NULL);
 	rc = wait_event_timeout(afe->wait,
-		!afe->codec_config[path_id],
+		!afe->codec_config[GETDEVICEID(path_id)],
 		msecs_to_jiffies(AFE_MAX_TIMEOUT));
 	if (!rc) {
-		MM_ERR("AFE failed to respond within 500 ms\n");
+		MM_ERR("AFE failed to respond within %d ms\n", AFE_MAX_TIMEOUT);
 		rc = -1;
-		goto error;
 	} else
 		rc = 0;
 	afe->in_use--;
@@ -232,9 +255,8 @@ int afe_disable(u8 path_id)
 		msm_adsp_put(afe->mod);
 		afe->aux_conf_flag = 0;
 	}
-error:
 	mutex_unlock(&afe->lock);
-	return 0;
+	return rc;
 }
 EXPORT_SYMBOL(afe_disable);
 

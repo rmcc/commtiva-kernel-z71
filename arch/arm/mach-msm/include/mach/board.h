@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/board.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -39,12 +39,27 @@ struct msm_camera_io_ext {
 	uint32_t appsz;
 	uint32_t camifpadphy;
 	uint32_t camifpadsz;
+	uint32_t csiphy;
+	uint32_t csisz;
+	uint32_t csiirq;
 };
 
 struct msm_camera_device_platform_data {
 	void (*camera_gpio_on) (void);
 	void (*camera_gpio_off)(void);
 	struct msm_camera_io_ext ioext;
+};
+enum msm_camera_csi_data_format {
+	CSI_8BIT,
+	CSI_10BIT,
+	CSI_12BIT,
+};
+struct msm_camera_csi_params {
+	enum msm_camera_csi_data_format data_format;
+	uint8_t lane_cnt;
+	uint8_t lane_assign;
+	uint8_t settle_cnt;
+	uint8_t dpcm_scheme;
 };
 
 #ifdef CONFIG_SENSORS_MT9T013
@@ -60,6 +75,36 @@ struct msm_camera_legacy_device_platform_data {
 #define MSM_CAMERA_FLASH_NONE 0
 #define MSM_CAMERA_FLASH_LED  1
 
+#define MSM_CAMERA_FLASH_SRC_PMIC (0x00000001<<0)
+#define MSM_CAMERA_FLASH_SRC_PWM  (0x00000001<<1)
+
+struct msm_camera_sensor_flash_pmic {
+	uint32_t low_current;
+	uint32_t high_current;
+};
+
+struct msm_camera_sensor_flash_pwm {
+	uint32_t freq;
+	uint32_t max_load;
+	uint32_t low_load;
+	uint32_t high_load;
+	uint32_t channel;
+};
+
+struct msm_camera_sensor_flash_src {
+	int flash_sr_type;
+
+	union {
+		struct msm_camera_sensor_flash_pmic pmic_src;
+		struct msm_camera_sensor_flash_pwm pwm_src;
+	} _fsrc;
+};
+
+struct msm_camera_sensor_flash_data {
+	int flash_type;
+	struct msm_camera_sensor_flash_src *flash_src;
+};
+
 struct msm_camera_sensor_info {
 	const char *sensor_name;
 	int sensor_reset;
@@ -67,10 +112,12 @@ struct msm_camera_sensor_info {
 	int vcm_pwd;
 	int vcm_enable;
 	int mclk;
-	int flash_type;
 	struct msm_camera_device_platform_data *pdata;
 	struct resource *resource;
 	uint8_t num_resources;
+	struct msm_camera_sensor_flash_data *flash_data;
+	int csi_if;
+	struct msm_camera_csi_params csi_params;
 };
 
 struct clk;
@@ -172,6 +219,7 @@ struct msm_i2c_platform_data {
 	int pri_dat;
 	int aux_clk;
 	int aux_dat;
+	const char *clk;
 	const char *pclk;
 	void (*msm_i2c_config_gpio)(int iface, int config_type);
 };
@@ -213,6 +261,8 @@ void msm_snddev_poweramp_on(void);
 void msm_snddev_poweramp_off(void);
 void msm_snddev_hsed_pamp_on(void);
 void msm_snddev_hsed_pamp_off(void);
+void msm_snddev_tx_route_config(void);
+void msm_snddev_tx_route_deconfig(void);
 
 extern unsigned int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 

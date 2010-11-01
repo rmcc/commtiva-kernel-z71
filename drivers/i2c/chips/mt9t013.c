@@ -34,6 +34,7 @@
 #include <mach/msm_rpcrouter.h>
 #include <mach/vreg.h>
 #include <mach/board.h>
+#include <mach/clk.h>
 #include <linux/mt9t013.h> /* define ioctls */
 
 
@@ -439,7 +440,6 @@ static int clk_select(int internal)
 	printk(KERN_INFO "mt9t013: clk select %d\n", internal);
 	CLK_GET(vfe_clk);
 	if (vfe_clk != NULL) {
-		extern int clk_set_flags(struct clk *clk, unsigned long flags);
 		rc = clk_set_flags(vfe_clk, 0x00000100 << internal);
 		if (!rc && internal) rc = msm_camio_vfe_clk_enable();
 	}

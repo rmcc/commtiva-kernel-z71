@@ -1,7 +1,7 @@
 /*
  * Common code to deal with the AUDPREPROC dsp task (audio preprocessing)
  *
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  *
  * Based on the audpp layer in arch/arm/mach-msm/qdsp5/audpp.c
  *
@@ -230,6 +230,7 @@ int audpreproc_enable(int enc_id, audpreproc_event_func func, void *private)
 			msm_adsp_put(audpreproc->mod);
 			audpreproc->mod = NULL;
 			res = -ENODEV;
+			allow_suspend();
 			goto out;
 		}
 	}
@@ -310,6 +311,7 @@ int audpreproc_aenc_alloc(unsigned enc_type, const char **module_name,
 {
 	struct audpreproc_state *audpreproc = &the_audpreproc_state;
 	int encid = -1, idx;
+	static int wakelock_init;
 
 	mutex_lock(audpreproc->lock);
 	for (idx = (msm_enc_database.num_enc - 1);
@@ -330,7 +332,11 @@ int audpreproc_aenc_alloc(unsigned enc_type, const char **module_name,
 		    msm_enc_database.enc_info_list[idx].module_queueids;
 		encid = msm_enc_database.enc_info_list[idx].module_encid;
 	}
-	wake_lock_init(&audpre_wake_lock, WAKE_LOCK_SUSPEND, "audpre");
+
+	if (!wakelock_init) {
+		wake_lock_init(&audpre_wake_lock, WAKE_LOCK_SUSPEND, "audpre");
+		wakelock_init = 1;
+	}
 
 	mutex_unlock(audpreproc->lock);
 	return encid;

@@ -34,6 +34,14 @@
 
 #include "usb_function.h"
 
+static char *rmnet_ctl_ch = CONFIG_RMNET_SMD_CTL_CHANNEL;
+module_param(rmnet_ctl_ch, charp, S_IRUGO);
+MODULE_PARM_DESC(rmnet_ctl_ch, "RmNet control SMD channel");
+
+static char *rmnet_data_ch = CONFIG_RMNET_SMD_DATA_CHANNEL;
+module_param(rmnet_data_ch, charp, S_IRUGO);
+MODULE_PARM_DESC(rmnet_data_ch, "RmNet data SMD channel");
+
 #define RMNET_NOTIFY_INTERVAL	5
 #define RMNET_MAX_NOTIFY_SIZE	sizeof(struct usb_cdc_notification)
 
@@ -741,7 +749,7 @@ static void rmnet_connect_work(struct work_struct *w)
 	int ret;
 
 	/* Control channel for QMI messages */
-	ret = smd_open(CONFIG_RMNET_SMD_CTL_CHANNEL, &dev->smd_ctl.ch,
+	ret = smd_open(rmnet_ctl_ch, &dev->smd_ctl.ch,
 			&dev->smd_ctl, rmnet_smd_notify);
 	if (ret) {
 		pr_err("%s: Unable to open control smd channel\n", __func__);
@@ -751,7 +759,7 @@ static void rmnet_connect_work(struct work_struct *w)
 				&dev->smd_ctl.flags));
 
 	/* Data channel for network packets */
-	ret = smd_open(CONFIG_RMNET_SMD_DATA_CHANNEL, &dev->smd_data.ch,
+	ret = smd_open(rmnet_data_ch, &dev->smd_data.ch,
 			&dev->smd_data, rmnet_smd_notify);
 	if (ret) {
 		pr_err("%s: Unable to open data smd channel\n", __func__);

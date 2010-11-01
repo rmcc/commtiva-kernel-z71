@@ -19,11 +19,13 @@
 #include <linux/init.h>
 #include <linux/i2c.h>
 #include <linux/interrupt.h>
+#include <linux/irq.h>
 #include <linux/platform_device.h>
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <mach/board.h>
 #include <linux/mutex.h>
+#include <linux/timer.h>
 #include <linux/remote_spinlock.h>
 #include <linux/pm_qos_params.h>
 #include <mach/gpio.h>
@@ -80,12 +82,33 @@ struct msm_i2c_dev {
 	int                          flush_cnt;
 	int                          rd_acked;
 	int                          one_bit_t;
-	remote_mutex_t               r_lock;
+	remote_spinlock_t            s_lock;
 	int                          suspended;
 	struct mutex                 mlock;
 	struct msm_i2c_platform_data *pdata;
+	struct timer_list            pwr_timer;
+	int                          clk_state;
 	void                         *complete;
 };
+
+static void
+msm_i2c_pwr_mgmt(struct msm_i2c_dev *dev, unsigned int state)
+{
+	dev->clk_state = state;
+	if (state != 0)
+		clk_enable(dev->clk);
+	else
+		clk_disable(dev->clk);
+}
+
+static void
+msm_i2c_pwr_timer(unsigned long data)
+{
+	struct msm_i2c_dev *dev = (struct msm_i2c_dev *) data;
+	dev_dbg(dev->dev, "I2C_Power: Inactivity based power management\n");
+	if (dev->clk_state == 1)
+		msm_i2c_pwr_mgmt(dev, 0);
+}
 
 #if DEBUG
 static void
@@ -334,6 +357,35 @@ msm_i2c_recover_bus_busy(struct msm_i2c_dev *dev, struct i2c_adapter *adap)
 	return -EBUSY;
 }
 
+static void
+msm_i2c_rspin_lock(struct msm_i2c_dev *dev)
+{
+	int gotlock = 0;
+	unsigned long flags;
+	uint32_t *smem_ptr = (uint32_t *)dev->pdata->rmutex;
+	do {
+		remote_spin_lock_irqsave(&dev->s_lock, flags);
+		if (*smem_ptr == 0) {
+			*smem_ptr = 1;
+			gotlock = 1;
+		}
+		remote_spin_unlock_irqrestore(&dev->s_lock, flags);
+		/* wait for 1-byte clock interval */
+		if (!gotlock)
+			udelay(10000000/dev->pdata->clk_freq);
+	} while (!gotlock);
+}
+
+static void
+msm_i2c_rspin_unlock(struct msm_i2c_dev *dev)
+{
+	unsigned long flags;
+	uint32_t *smem_ptr = (uint32_t *)dev->pdata->rmutex;
+	remote_spin_lock_irqsave(&dev->s_lock, flags);
+	*smem_ptr = 0;
+	remote_spin_unlock_irqrestore(&dev->s_lock, flags);
+}
+
 static int
 msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 {
@@ -346,17 +398,29 @@ msm_i2c_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 	unsigned long flags;
 	int check_busy = 1;
 
+	del_timer_sync(&dev->pwr_timer);
 	mutex_lock(&dev->mlock);
 	if (dev->suspended) {
 		mutex_unlock(&dev->mlock);
 		return -EIO;
 	}
 
+	if (dev->clk_state == 0) {
+		dev_dbg(dev->dev, "I2C_Power: Enable I2C clock(s)\n");
+		msm_i2c_pwr_mgmt(dev, 1);
+	}
+
 	/* Don't allow power collapse until we release remote spinlock */
 	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
 					dev->pdata->pm_lat);
-	if (dev->pdata->rmutex)
-		remote_mutex_lock(&dev->r_lock);
+	if (dev->pdata->rmutex) {
+		msm_i2c_rspin_lock(dev);
+		/* If other processor did some transactions, we may have
+		 * interrupt pending. Clear it
+		 */
+		get_irq_chip(dev->irq)->ack(dev->irq);
+	}
+
 	if (adap == &dev->adap_pri)
 		writel(0, dev->base + I2C_INTERFACE_SELECT);
 	else
@@ -500,9 +564,10 @@ wait_for_int:
 	spin_unlock_irqrestore(&dev->lock, flags);
 	disable_irq(dev->irq);
 	if (dev->pdata->rmutex)
-		remote_mutex_unlock(&dev->r_lock);
+		msm_i2c_rspin_unlock(dev);
 	pm_qos_update_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c",
 					PM_QOS_DEFAULT_VALUE);
+	mod_timer(&dev->pwr_timer, (jiffies + 3*HZ));
 	mutex_unlock(&dev->mlock);
 	return ret;
 }
@@ -599,10 +664,9 @@ msm_i2c_probe(struct platform_device *pdev)
 	clk_enable(clk);
 
 	if (pdata->rmutex) {
-		struct remote_mutex_id rmid;
-		rmid.r_spinlock_id = pdata->rsl_id;
-		rmid.delay_us = 10000000/pdata->clk_freq;
-		if (remote_mutex_init(&dev->r_lock, &rmid) != 0)
+		remote_spinlock_id_t rmid;
+		rmid = pdata->rsl_id;
+		if (remote_spin_lock_init(&dev->s_lock, rmid) != 0)
 			pdata->rmutex = 0;
 	}
 	/* I2C_HS_CLK = I2C_CLK/(3*(HS_DIVIDER_VALUE+1) */
@@ -653,9 +717,12 @@ msm_i2c_probe(struct platform_device *pdev)
 	disable_irq(dev->irq);
 	dev->suspended = 0;
 	mutex_init(&dev->mlock);
+	dev->clk_state = 0;
 	/* Config GPIOs for primary and secondary lines */
 	pdata->msm_i2c_config_gpio(dev->adap_pri.nr, 1);
 	pdata->msm_i2c_config_gpio(dev->adap_aux.nr, 1);
+	clk_disable(dev->clk);
+	setup_timer(&dev->pwr_timer, msm_i2c_pwr_timer, (unsigned long) dev);
 
 	return 0;
 
@@ -681,12 +748,19 @@ msm_i2c_remove(struct platform_device *pdev)
 	struct msm_i2c_dev	*dev = platform_get_drvdata(pdev);
 	struct resource		*mem;
 
+	/* Grab mutex to ensure ongoing transaction is over */
+	mutex_lock(&dev->mlock);
+	dev->suspended = 1;
+	mutex_unlock(&dev->mlock);
+	mutex_destroy(&dev->mlock);
+	del_timer_sync(&dev->pwr_timer);
+	if (dev->clk_state != 0)
+		msm_i2c_pwr_mgmt(dev, 0);
 	platform_set_drvdata(pdev, NULL);
 	pm_qos_remove_requirement(PM_QOS_CPU_DMA_LATENCY, "msm_i2c");
 	free_irq(dev->irq, dev);
 	i2c_del_adapter(&dev->adap_pri);
 	i2c_del_adapter(&dev->adap_aux);
-	clk_disable(dev->clk);
 	clk_put(dev->clk);
 	iounmap(dev->base);
 	kfree(dev);
@@ -702,20 +776,17 @@ static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 	 * Make sure remote lock is released before we suspend
 	 */
 	if (dev) {
+		/* Grab mutex to ensure ongoing transaction is over */
 		mutex_lock(&dev->mlock);
 		dev->suspended = 1;
 		mutex_unlock(&dev->mlock);
-		clk_disable(dev->clk);
 //henry,add for suspend power saving.++
                 gpio_tlmm_config(GPIO_CFG(60, 0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), GPIO_ENABLE);
 	        gpio_tlmm_config(GPIO_CFG(61, 0, GPIO_OUTPUT, GPIO_PULL_DOWN, GPIO_2MA), GPIO_ENABLE);
 //henry,add for suspend power saving.--
-/* FIH, Henry Juang, 2009/06/06 { */
-/* [FXX_CR], add log for i2c */
-#ifdef CONFIG_FIH_FXX
-		printk("******I2C-msm Suspend status=0x%x",readl(dev->base + I2C_STATUS));
-#endif
-/* } FIH, Henry Juang, 2009/06/06 */
+		del_timer_sync(&dev->pwr_timer);
+		if (dev->clk_state != 0)
+			msm_i2c_pwr_mgmt(dev, 0);
 	}
 
 	return 0;
@@ -724,18 +795,9 @@ static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 static int msm_i2c_resume(struct platform_device *pdev)
 {
 	struct msm_i2c_dev *dev = platform_get_drvdata(pdev);
-	if (dev) {
-                gpio_tlmm_config(GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
-	        gpio_tlmm_config(GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
-		clk_enable(dev->clk);
-		dev->suspended = 0;
-/* FIH, Henry Juang, 2009/06/06 { */
-/* [FXX_CR], add log for i2c */
-#ifdef CONFIG_FIH_FXX
-		printk("******I2C-msm Resume status=0x%x",readl(dev->base + I2C_STATUS));
-#endif
-/* } FIH, Henry Juang, 2009/06/06 */
-	}
+        gpio_tlmm_config(GPIO_CFG(60, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
+	gpio_tlmm_config(GPIO_CFG(61, 1, GPIO_OUTPUT, GPIO_PULL_UP, GPIO_16MA), GPIO_ENABLE);
+	dev->suspended = 0;
 	return 0;
 }
 

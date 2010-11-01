@@ -50,17 +50,17 @@ enum {
 	L_7X30_GRP_3D_P_CLK,
 	L_7X30_IMEM_CLK,
 	L_7X30_SDC1_CLK,
-	L_7X30_SDC1_H_CLK,
+	L_7X30_SDC1_P_CLK,
 	L_7X30_SDC2_CLK,
-	L_7X30_SDC2_H_CLK,
+	L_7X30_SDC2_P_CLK,
 	L_7X30_SDC3_CLK,
-	L_7X30_SDC3_H_CLK,
+	L_7X30_SDC3_P_CLK,
 	L_7X30_SDC4_CLK,
-	L_7X30_SDC4_H_CLK,
+	L_7X30_SDC4_P_CLK,
 	L_7X30_MDP_CLK,
 	L_7X30_MDP_P_CLK,
-	L_7X30_MDP_LCDC_P_CLK,
-	L_7X30_MDP_LCDC_PAD_P_CLK,
+	L_7X30_MDP_LCDC_PCLK_CLK,
+	L_7X30_MDP_LCDC_PAD_PCLK_CLK,
 	L_7X30_MDP_VSYNC_CLK,
 	L_7X30_MI2S_CODEC_RX_M_CLK,
 	L_7X30_MI2S_CODEC_RX_S_CLK,
@@ -76,8 +76,9 @@ enum {
 	L_7X30_ROTATOR_IMEM_CLK,
 	L_7X30_ROTATOR_P_CLK,
 	L_7X30_SDAC_M_CLK,
-	L_7X30_SDAC_S_CLK,
+	L_7X30_SDAC_CLK,
 	L_7X30_UART1_CLK,
+	L_7X30_UART2_CLK,
 	L_7X30_UART3_CLK,
 	L_7X30_TV_CLK,
 	L_7X30_TV_DAC_CLK,
@@ -100,14 +101,22 @@ enum {
 	L_7X30_VFE_MDC_CLK,
 	L_7X30_VFE_CAMIF_CLK,
 	L_7X30_CAMIF_PAD_P_CLK,
-	L_7X30_CAM_CLK,
+	L_7X30_CAM_M_CLK,
 	L_7X30_JPEG_CLK,
 	L_7X30_JPEG_P_CLK,
 	L_7X30_VPE_CLK,
 	L_7X30_MFC_CLK,
+	L_7X30_MFC_DIV2_CLK,
 	L_7X30_MFC_P_CLK,
 	L_7X30_SPI_CLK,
 	L_7X30_SPI_P_CLK,
+	L_7X30_CSI0_CLK,
+	L_7X30_CSI0_VFE_CLK,
+	L_7X30_CSI0_P_CLK,
+	L_7X30_CSI1_CLK,
+	L_7X30_CSI1_VFE_CLK,
+	L_7X30_CSI1_P_CLK,
+	L_7X30_GLBL_ROOT_CLK,
 
 	L_7X30_AXI_LI_VG_CLK,
 	L_7X30_AXI_LI_GRP_CLK,
@@ -128,16 +137,35 @@ enum {
 struct clk_ops;
 extern struct clk_ops clk_ops_7x30;
 
+#ifdef CONFIG_ARCH_MSM7X30
+struct clk_ops *clk_7x30_is_local(uint32_t id);
+int clk_7x30_init(void);
+#else
+static inline struct clk_ops *clk_7x30_is_local(uint32_t id) { return NULL; }
+static inline int clk_7x30_init(void) { return 0; }
+#endif
+
 void pll_enable(uint32_t pll);
 void pll_disable(uint32_t pll);
+
+extern int internal_pwr_rail_ctl_auto(unsigned rail_id, bool enable);
 
 #define CLK_7X30(clk_name, clk_id, clk_dev, clk_flags) {	\
 	.name = clk_name, \
 	.id = L_7X30_##clk_id, \
-	.ops = &clk_ops_7x30, \
+	.remote_id = P_##clk_id, \
 	.flags = clk_flags, \
 	.dev = clk_dev, \
 	.dbg_name = #clk_id, \
+	}
+
+#define CLK_7X30S(clk_name, l_id, r_id, clk_dev, clk_flags) {	\
+	.name = clk_name, \
+	.id = L_7X30_##l_id, \
+	.remote_id = P_##r_id, \
+	.flags = clk_flags, \
+	.dev = clk_dev, \
+	.dbg_name = #l_id, \
 	}
 
 #endif

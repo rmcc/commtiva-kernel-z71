@@ -537,6 +537,12 @@ static int get_id(struct file *file)
 	return MINOR(file->f_dentry->d_inode->i_rdev);
 }
 
+static char *get_name(struct file *file)
+{
+	int id = get_id(file);
+	return pmem[id].name;
+}
+
 static int is_pmem_file(struct file *file)
 {
 	int id;
@@ -682,7 +688,7 @@ static int pmem_free_bitmap(int id, int bitnum)
 		}
 	}
 	printk(KERN_ALERT "pmem: %s: Attempt to free unallocated index %d, id"
-		" %d, proc %d(%s)\n", __func__, bitnum, id,  current->pid,
+		" %d, pid %d(%s)\n", __func__, bitnum, id,  current->pid,
 		get_task_comm(currtask_name, current));
 
 	return -1;
@@ -697,7 +703,12 @@ static int pmem_release(struct inode *inode, struct file *file)
 	struct list_head *elt, *elt2;
 	int id = get_id(file), ret = 0;
 
-	DLOG("release\n");
+#if PMEM_DEBUG_MSGS
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
+#endif
+	DLOG("releasing memory pid %u(%s) file %p(%ld) dev %s(id: %d)\n",
+		current->pid, get_task_comm(currtask_name, current),
+		file, file_count(file), get_name(file), id);
 	mutex_lock(&pmem[id].data_list_mutex);
 	/* if this file is a master, revoke all the memory in the connected
 	 *  files */
@@ -764,9 +775,9 @@ static int pmem_open(struct inode *inode, struct file *file)
 
 	if (pmem[id].memory_state == MEMORY_UNSTABLE_NO_MEMORY_ALLOCATED)
 		return -1;
-	DLOG("current %u(%s) file %p(%ld) id %d\n",
+	DLOG("pid %u(%s) file %p(%ld) dev %s(id: %d)\n",
 		current->pid, get_task_comm(currtask_name, current),
-		file, file_count(file), id);
+		file, file_count(file), get_name(file), id);
 	/* setup file->private_data to indicate its unmapped */
 	/*  you can only open a pmem device one time */
 	if (file->private_data != NULL)
@@ -1266,8 +1277,13 @@ static void pmem_vma_open(struct vm_area_struct *vma)
 	struct pmem_data *data = file->private_data;
 	int id = get_id(file);
 
-	DLOG("id %d current %u ppid %u file %p count %ld\n", id, current->pid,
-	     current->parent->pid, file, file_count(file));
+#if PMEM_DEBUG_MSGS
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
+#endif
+	DLOG("Dev %s(id: %d) pid %u(%s) ppid %u file %p count %ld\n",
+		get_name(file), id, current->pid,
+		get_task_comm(currtask_name, current),
+		current->parent->pid, file, file_count(file));
 	/* this should never be called as we don't support copying pmem
 	 * ranges via fork */
 	down_read(&data->sem);
@@ -1282,8 +1298,13 @@ static void pmem_vma_close(struct vm_area_struct *vma)
 	struct file *file = vma->vm_file;
 	struct pmem_data *data = file->private_data;
 
-	DLOG("current %u ppid %u file %p count %ld\n", current->pid,
-	     current->parent->pid, file, file_count(file));
+#if PMEM_DEBUG_MSGS
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
+#endif
+	DLOG("Dev %s(id: %d) pid %u(%s) ppid %u file %p count %ld\n",
+		get_name(file), get_id(file), current->pid,
+		get_task_comm(currtask_name, current),
+		current->parent->pid, file, file_count(file));
 
 	if (unlikely(!is_pmem_file(file))) {
 		printk(KERN_WARNING "pmem: something is very wrong, you are "
@@ -1322,7 +1343,12 @@ static int pmem_mmap(struct file *file, struct vm_area_struct *vma)
 	unsigned long vma_size =  vma->vm_end - vma->vm_start;
 	int ret = 0, id = get_id(file);
 
-	DLOG("mmap vma_size %lu\n", vma_size);
+#if PMEM_DEBUG_MSGS
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
+#endif
+	DLOG("pid %u(%s) mmap vma_size %lu on dev %s(id: %d)\n", current->pid,
+		get_task_comm(currtask_name, current), vma_size,
+		get_name(file), id);
 	if (vma->vm_pgoff || !PMEM_IS_PAGE_ALIGNED(vma_size)) {
 #if PMEM_DEBUG
 		printk(KERN_ERR "pmem: mmaps must be at offset zero, aligned"
@@ -1352,6 +1378,10 @@ static int pmem_mmap(struct file *file, struct vm_area_struct *vma)
 				PMEM_ALIGN_4K);
 		mutex_unlock(&pmem[id].arena_mutex);
 		data->index = index;
+		if (data->index < 0) {
+			printk(KERN_ERR "pmem: mmap unable to allocate memory"
+				"on %s\n", get_name(file));
+		}
 	}
 
 	/* either no space was available or an error occured */
@@ -1502,10 +1532,11 @@ int get_pmem_file(unsigned int fd, unsigned long *start, unsigned long *vstart,
 #if PMEM_DEBUG_MSGS
 		char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
 #endif
-		DLOG("filp %p rdev %d current %u(%s) file %p(%ld) id %d\n",
-			filp, file->f_dentry->d_inode->i_rdev,
+		DLOG("filp %p rdev %d pid %u(%s) file %p(%ld)"
+			" dev %s(id: %d)\n", filp,
+			file->f_dentry->d_inode->i_rdev,
 			current->pid, get_task_comm(currtask_name, current),
-			file, file_count(file), get_id(file));
+			file, file_count(file), get_name(file), get_id(file));
 
 		if (!get_pmem_addr(file, start, vstart, len)) {
 			if (filp)
@@ -1528,6 +1559,13 @@ EXPORT_SYMBOL(get_pmem_fd);
 
 void put_pmem_file(struct file *file)
 {
+#if PMEM_DEBUG_MSGS
+	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
+#endif
+	DLOG("rdev %d pid %u(%s) file %p(%ld)" " dev %s(id: %d)\n",
+		file->f_dentry->d_inode->i_rdev, current->pid,
+		get_task_comm(currtask_name, current), file,
+		file_count(file), get_name(file), get_id(file));
 	if (is_pmem_file(file)) {
 #if PMEM_DEBUG
 		struct pmem_data *data = file->private_data;
@@ -1669,8 +1707,9 @@ int pmem_cache_maint(struct file *file, unsigned int cmd,
 	vaddr = pmem_addr->vaddr;
 	paddr = pmem_start_addr + offset;
 
-	DLOG("pmem cache maint on id %d (vaddr %lx paddr %lx len %lu bytes)\n",
-			id, vaddr, paddr, length);
+	DLOG("pmem cache maint on dev %s(id: %d)"
+		"(vaddr %lx paddr %lx len %lu bytes)\n",
+		get_name(file), id, vaddr, paddr, length);
 	if (cmd == PMEM_CLEAN_INV_CACHES)
 		clean_and_invalidate_caches(vaddr,
 				length, paddr);
@@ -1926,7 +1965,7 @@ static int pmem_lock_data_and_mm(struct file *file, struct pmem_data *data,
 #if PMEM_DEBUG_MSGS
 	char currtask_name[FIELD_SIZEOF(struct task_struct, comm) + 1];
 #endif
-	DLOG("current %u(%s) file %p(%ld)\n",
+	DLOG("pid %u(%s) file %p(%ld)\n",
 		current->pid, get_task_comm(currtask_name, current),
 		file, file_count(file));
 
@@ -2156,9 +2195,9 @@ static long pmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		FIELD_SIZEOF(struct task_struct, comm) + 1];
 #endif
 
-	DLOG("current %u(%s) file %p(%ld) cmd %#x, id %d\n",
+	DLOG("pid %u(%s) file %p(%ld) cmd %#x, dev %s(id: %d)\n",
 		current->pid, get_task_comm(currtask_name, current),
-		file, file_count(file), cmd, id);
+		file, file_count(file), cmd, get_name(file), id);
 
 	switch (cmd) {
 	case PMEM_GET_PHYS:

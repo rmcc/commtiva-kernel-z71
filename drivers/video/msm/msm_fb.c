@@ -238,6 +238,9 @@ static int msm_fb_probe(struct platform_device *pdev)
 
 	mfd->panel_info.frame_count = 0;
 	mfd->bl_level = mfd->panel_info.bl_max;
+#ifdef CONFIG_FB_MSM_OVERLAY
+	mfd->overlay_play_enable = 1;
+#endif
 
 	rc = msm_fb_register(mfd);
 	if (rc)
@@ -815,7 +818,26 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		var->red.msb_right = 0;
 		var->transp.offset = 24;
 		var->transp.length = 8;
-		bpp = 3;
+		bpp = 4;
+		break;
+
+	case MDP_RGBA_8888:
+		fix->type = FB_TYPE_PACKED_PIXELS;
+		fix->xpanstep = 1;
+		fix->ypanstep = 1;
+		var->vmode = FB_VMODE_NONINTERLACED;
+		var->blue.offset = 8;
+		var->green.offset = 16;
+		var->red.offset = 24;
+		var->blue.length = 8;
+		var->green.length = 8;
+		var->red.length = 8;
+		var->blue.msb_right = 0;
+		var->green.msb_right = 0;
+		var->red.msb_right = 0;
+		var->transp.offset = 0;
+		var->transp.length = 8;
+		bpp = 4;
 		break;
 
 	case MDP_YCRYCB_H2V1:
@@ -847,9 +869,19 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		return ret;
 	}
 
-	fix->smem_len =
-	    panel_info->xres * panel_info->yres * bpp * mfd->fb_page;
-	fix->line_length = panel_info->xres * bpp;
+	/* The adreno GPU hardware requires that the pitch be aligned to
+	   32 pixels for color buffers, so for the cases where the GPU
+	   is writing directly to fb0, the framebuffer pitch
+	   also needs to be 32 pixel aligned */
+
+	if (mfd->index == 0)
+		fix->line_length = ALIGN(panel_info->xres, 32) * bpp;
+	else
+		fix->line_length = panel_info->xres * bpp;
+
+	fix->smem_len = fix->line_length * panel_info->yres * mfd->fb_page;
+
+
 
 	mfd->var_xres = panel_info->xres;
 	mfd->var_yres = panel_info->yres;
@@ -861,7 +893,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->yres = panel_info->yres;
 	var->xres_virtual = panel_info->xres;
 	var->yres_virtual = panel_info->yres * mfd->fb_page;
-	var->bits_per_pixel = bpp * 8,	/* FrameBuffer color depth */
+	var->bits_per_pixel = bpp * 8;	/* FrameBuffer color depth */
 		/*
 		 * id field for fb app
 		 */
@@ -1246,6 +1278,23 @@ static int msm_fb_check_var(struct fb_var_screeninfo *var, struct fb_info *info)
 				return -EINVAL;
 		break;
 
+	case 32:
+		if ((var->blue.offset != 8) ||
+			(var->green.offset != 16) ||
+			(var->red.offset != 24) ||
+			(var->blue.length != 8) ||
+			(var->green.length != 8) ||
+			(var->red.length != 8) ||
+			(var->blue.msb_right != 0) ||
+			(var->green.msb_right != 0) ||
+			(var->red.msb_right != 0) ||
+			!(((var->transp.offset == 0) &&
+				(var->transp.length == 8)) ||
+			((var->transp.offset == 0) &&
+				(var->transp.length == 8))))
+				return -EINVAL;
+		break;
+
 	default:
 		return -EINVAL;
 	}
@@ -1297,6 +1346,10 @@ static int msm_fb_set_par(struct fb_info *info)
 			mfd->fb_imgType = MDP_ARGB_8888;
 			info->var.bits_per_pixel = 32;
 		}
+		break;
+
+	case 32:
+		mfd->fb_imgType = MDP_RGBA_8888;
 		break;
 
 	default:
@@ -1361,12 +1414,161 @@ int msm_fb_resume_sw_refresher(struct msm_fb_data_type *mfd)
 	return 0;
 }
 
+#if defined CONFIG_FB_MSM_MDP31
+static int mdp_blit_split_height(struct fb_info *info,
+				struct mdp_blit_req *req)
+{
+	int ret;
+	struct mdp_blit_req splitreq;
+	int s_x_0, s_x_1, s_w_0, s_w_1, s_y_0, s_y_1, s_h_0, s_h_1;
+	int d_x_0, d_x_1, d_w_0, d_w_1, d_y_0, d_y_1, d_h_0, d_h_1;
 
+	splitreq = *req;
+	/* break dest roi at height*/
+	d_x_0 = d_x_1 = req->dst_rect.x;
+	d_w_0 = d_w_1 = req->dst_rect.w;
+	d_y_0 = req->dst_rect.y;
+	if (req->dst_rect.h % 32 == 3)
+		d_h_1 = (req->dst_rect.h - 3) / 2 - 1;
+	else if (req->dst_rect.h % 32 == 2)
+		d_h_1 = (req->dst_rect.h - 2) / 2 - 6;
+	else
+		d_h_1 = (req->dst_rect.h - 1) / 2 - 1;
+	d_h_0 = req->dst_rect.h - d_h_1;
+	d_y_1 = d_y_0 + d_h_0;
+	if (req->dst_rect.h == 3) {
+		d_h_1 = 2;
+		d_h_0 = 2;
+		d_y_1 = d_y_0 + 1;
+	}
+
+	/* blit first region */
+	if (((splitreq.flags & 0x07) == 0x04) ||
+		((splitreq.flags & 0x07) == 0x0)) {
+
+		if (splitreq.flags & MDP_ROT_90) {
+			s_y_0 = s_y_1 = req->src_rect.y;
+			s_h_0 = s_h_1 = req->src_rect.h;
+			s_x_0 = req->src_rect.x;
+			s_w_1 = (req->src_rect.w * d_h_1) / req->dst_rect.h;
+			s_w_0 = req->src_rect.w - s_w_1;
+			s_x_1 = s_x_0 + s_w_0;
+			if (d_h_1 >= 8 * s_w_1) {
+				s_w_1++;
+				s_x_1--;
+			}
+		} else {
+			s_x_0 = s_x_1 = req->src_rect.x;
+			s_w_0 = s_w_1 = req->src_rect.w;
+			s_y_0 = req->src_rect.y;
+			s_h_1 = (req->src_rect.h * d_h_1) / req->dst_rect.h;
+			s_h_0 = req->src_rect.h - s_h_1;
+			s_y_1 = s_y_0 + s_h_0;
+			if (d_h_1 >= 8 * s_h_1) {
+				s_h_1++;
+				s_y_1--;
+			}
+		}
+
+		splitreq.src_rect.h = s_h_0;
+		splitreq.src_rect.y = s_y_0;
+		splitreq.dst_rect.h = d_h_0;
+		splitreq.dst_rect.y = d_y_0;
+		splitreq.src_rect.x = s_x_0;
+		splitreq.src_rect.w = s_w_0;
+		splitreq.dst_rect.x = d_x_0;
+		splitreq.dst_rect.w = d_w_0;
+	} else {
+
+		if (splitreq.flags & MDP_ROT_90) {
+			s_y_0 = s_y_1 = req->src_rect.y;
+			s_h_0 = s_h_1 = req->src_rect.h;
+			s_x_0 = req->src_rect.x;
+			s_w_1 = (req->src_rect.w * d_h_0) / req->dst_rect.h;
+			s_w_0 = req->src_rect.w - s_w_1;
+			s_x_1 = s_x_0 + s_w_0;
+			if (d_h_0 >= 8 * s_w_1) {
+				s_w_1++;
+				s_x_1--;
+			}
+		} else {
+			s_x_0 = s_x_1 = req->src_rect.x;
+			s_w_0 = s_w_1 = req->src_rect.w;
+			s_y_0 = req->src_rect.y;
+			s_h_1 = (req->src_rect.h * d_h_0) / req->dst_rect.h;
+			s_h_0 = req->src_rect.h - s_h_1;
+			s_y_1 = s_y_0 + s_h_0;
+			if (d_h_0 >= 8 * s_h_1) {
+				s_h_1++;
+				s_y_1--;
+			}
+		}
+		splitreq.src_rect.h = s_h_0;
+		splitreq.src_rect.y = s_y_0;
+		splitreq.dst_rect.h = d_h_1;
+		splitreq.dst_rect.y = d_y_1;
+		splitreq.src_rect.x = s_x_0;
+		splitreq.src_rect.w = s_w_0;
+		splitreq.dst_rect.x = d_x_1;
+		splitreq.dst_rect.w = d_w_1;
+	}
+	ret = mdp_ppp_blit(info, &splitreq);
+	if (ret)
+		return ret;
+
+	/* blit second region */
+	if (((splitreq.flags & 0x07) == 0x04) ||
+		((splitreq.flags & 0x07) == 0x0)) {
+		splitreq.src_rect.h = s_h_1;
+		splitreq.src_rect.y = s_y_1;
+		splitreq.dst_rect.h = d_h_1;
+		splitreq.dst_rect.y = d_y_1;
+		splitreq.src_rect.x = s_x_1;
+		splitreq.src_rect.w = s_w_1;
+		splitreq.dst_rect.x = d_x_1;
+		splitreq.dst_rect.w = d_w_1;
+	} else {
+		splitreq.src_rect.h = s_h_1;
+		splitreq.src_rect.y = s_y_1;
+		splitreq.dst_rect.h = d_h_0;
+		splitreq.dst_rect.y = d_y_0;
+		splitreq.src_rect.x = s_x_1;
+		splitreq.src_rect.w = s_w_1;
+		splitreq.dst_rect.x = d_x_0;
+		splitreq.dst_rect.w = d_w_0;
+	}
+	ret = mdp_ppp_blit(info, &splitreq);
+	return ret;
+}
+#endif
 
 int mdp_blit(struct fb_info *info, struct mdp_blit_req *req)
 {
 	int ret;
-	struct file *p_src_file = 0, *p_dst_file = 0;
+#if defined CONFIG_FB_MSM_MDP31 || defined CONFIG_FB_MSM_MDP30
+	unsigned int remainder = 0, is_bpp_4 = 0;
+	struct mdp_blit_req splitreq;
+	int s_x_0, s_x_1, s_w_0, s_w_1, s_y_0, s_y_1, s_h_0, s_h_1;
+	int d_x_0, d_x_1, d_w_0, d_w_1, d_y_0, d_y_1, d_h_0, d_h_1;
+
+	if (req->flags & MDP_ROT_90) {
+		if (((req->dst_rect.h == 1) && ((req->src_rect.w != 1) ||
+			(req->dst_rect.w != req->src_rect.h))) ||
+			((req->dst_rect.w == 1) && ((req->src_rect.h != 1) ||
+			(req->dst_rect.h != req->src_rect.w)))) {
+			printk(KERN_ERR "mpd_ppp: error scaling when size is 1!\n");
+			return -EINVAL;
+		}
+	} else {
+		if (((req->dst_rect.w == 1) && ((req->src_rect.w != 1) ||
+			(req->dst_rect.h != req->src_rect.h))) ||
+			((req->dst_rect.h == 1) && ((req->src_rect.h != 1) ||
+			(req->dst_rect.h != req->src_rect.h)))) {
+			printk(KERN_ERR "mpd_ppp: error scaling when size is 1!\n");
+			return -EINVAL;
+		}
+	}
+#endif
 	if (unlikely(req->src_rect.h == 0 || req->src_rect.w == 0)) {
 		printk(KERN_ERR "mpd_ppp: src img of zero size!\n");
 		return -EINVAL;
@@ -1374,8 +1576,308 @@ int mdp_blit(struct fb_info *info, struct mdp_blit_req *req)
 	if (unlikely(req->dst_rect.h == 0 || req->dst_rect.w == 0))
 		return 0;
 
-	ret = mdp_ppp_blit(info, req, &p_src_file, &p_dst_file);
+#if defined CONFIG_FB_MSM_MDP31
+	/* MDP width split workaround */
+	remainder = (req->dst_rect.w)%32;
+	is_bpp_4 = (mdp_get_bytes_per_pixel(req->dst.format) == 4) ? 1 : 0;
+
+	if ((is_bpp_4 && (remainder == 6 || remainder == 14 ||
+	remainder == 22 || remainder == 30)) || remainder == 3 ||
+	(remainder == 1 && req->dst_rect.w != 1) ||
+	(remainder == 2 && req->dst_rect.w != 2)) {
+		/* make new request as provide by user */
+		splitreq = *req;
+
+		/* break dest roi at width*/
+		d_y_0 = d_y_1 = req->dst_rect.y;
+		d_h_0 = d_h_1 = req->dst_rect.h;
+		d_x_0 = req->dst_rect.x;
+
+		if (remainder == 14)
+			d_w_1 = (req->dst_rect.w - 14) / 2 + 4;
+		else if (remainder == 22)
+			d_w_1 = (req->dst_rect.w - 22) / 2 + 10;
+		else if (remainder == 30)
+			d_w_1 = (req->dst_rect.w - 30) / 2 + 10;
+		else if (remainder == 6)
+			d_w_1 = req->dst_rect.w / 2 - 1;
+		else if (remainder == 3)
+			d_w_1 = (req->dst_rect.w - 3) / 2 - 1;
+		else if (remainder == 2)
+			d_w_1 = (req->dst_rect.w - 2) / 2 - 6;
+		else
+			d_w_1 = (req->dst_rect.w - 1) / 2 - 1;
+		d_w_0 = req->dst_rect.w - d_w_1;
+		d_x_1 = d_x_0 + d_w_0;
+		if (req->dst_rect.w == 3) {
+			d_w_1 = 2;
+			d_w_0 = 2;
+			d_x_1 = d_x_0 + 1;
+		}
+
+		/* blit first region */
+		if (((splitreq.flags & 0x07) == 0x07) ||
+			((splitreq.flags & 0x07) == 0x0)) {
+
+			if (splitreq.flags & MDP_ROT_90) {
+				s_x_0 = s_x_1 = req->src_rect.x;
+				s_w_0 = s_w_1 = req->src_rect.w;
+				s_y_0 = req->src_rect.y;
+				s_h_1 = (req->src_rect.h * d_w_1) /
+					req->dst_rect.w;
+				s_h_0 = req->src_rect.h - s_h_1;
+				s_y_1 = s_y_0 + s_h_0;
+				if (d_w_1 >= 8 * s_h_1) {
+					s_h_1++;
+					s_y_1--;
+				}
+			} else {
+				s_y_0 = s_y_1 = req->src_rect.y;
+				s_h_0 = s_h_1 = req->src_rect.h;
+				s_x_0 = req->src_rect.x;
+				s_w_1 = (req->src_rect.w * d_w_1) /
+					req->dst_rect.w;
+				s_w_0 = req->src_rect.w - s_w_1;
+				s_x_1 = s_x_0 + s_w_0;
+				if (d_w_1 >= 8 * s_w_1) {
+					s_w_1++;
+					s_x_1--;
+				}
+			}
+
+			splitreq.src_rect.h = s_h_0;
+			splitreq.src_rect.y = s_y_0;
+			splitreq.dst_rect.h = d_h_0;
+			splitreq.dst_rect.y = d_y_0;
+			splitreq.src_rect.x = s_x_0;
+			splitreq.src_rect.w = s_w_0;
+			splitreq.dst_rect.x = d_x_0;
+			splitreq.dst_rect.w = d_w_0;
+		} else {
+			if (splitreq.flags & MDP_ROT_90) {
+				s_x_0 = s_x_1 = req->src_rect.x;
+				s_w_0 = s_w_1 = req->src_rect.w;
+				s_y_0 = req->src_rect.y;
+				s_h_1 = (req->src_rect.h * d_w_0) /
+					req->dst_rect.w;
+				s_h_0 = req->src_rect.h - s_h_1;
+				s_y_1 = s_y_0 + s_h_0;
+				if (d_w_0 >= 8 * s_h_1) {
+					s_h_1++;
+					s_y_1--;
+				}
+			} else {
+				s_y_0 = s_y_1 = req->src_rect.y;
+				s_h_0 = s_h_1 = req->src_rect.h;
+				s_x_0 = req->src_rect.x;
+				s_w_1 = (req->src_rect.w * d_w_0) /
+					req->dst_rect.w;
+				s_w_0 = req->src_rect.w - s_w_1;
+				s_x_1 = s_x_0 + s_w_0;
+				if (d_w_0 >= 8 * s_w_1) {
+					s_w_1++;
+					s_x_1--;
+				}
+			}
+			splitreq.src_rect.h = s_h_0;
+			splitreq.src_rect.y = s_y_0;
+			splitreq.dst_rect.h = d_h_1;
+			splitreq.dst_rect.y = d_y_1;
+			splitreq.src_rect.x = s_x_0;
+			splitreq.src_rect.w = s_w_0;
+			splitreq.dst_rect.x = d_x_1;
+			splitreq.dst_rect.w = d_w_1;
+		}
+
+		if ((splitreq.dst_rect.h % 32 == 3) ||
+			((req->dst_rect.h % 32) == 1 && req->dst_rect.h != 1) ||
+			((req->dst_rect.h % 32) == 2 && req->dst_rect.h != 2))
+			ret = mdp_blit_split_height(info, &splitreq);
+		else
+			ret = mdp_ppp_blit(info, &splitreq);
+		if (ret)
+			return ret;
+		/* blit second region */
+		if (((splitreq.flags & 0x07) == 0x07) ||
+			((splitreq.flags & 0x07) == 0x0)) {
+			splitreq.src_rect.h = s_h_1;
+			splitreq.src_rect.y = s_y_1;
+			splitreq.dst_rect.h = d_h_1;
+			splitreq.dst_rect.y = d_y_1;
+			splitreq.src_rect.x = s_x_1;
+			splitreq.src_rect.w = s_w_1;
+			splitreq.dst_rect.x = d_x_1;
+			splitreq.dst_rect.w = d_w_1;
+		} else {
+			splitreq.src_rect.h = s_h_1;
+			splitreq.src_rect.y = s_y_1;
+			splitreq.dst_rect.h = d_h_0;
+			splitreq.dst_rect.y = d_y_0;
+			splitreq.src_rect.x = s_x_1;
+			splitreq.src_rect.w = s_w_1;
+			splitreq.dst_rect.x = d_x_0;
+			splitreq.dst_rect.w = d_w_0;
+		}
+		if (((splitreq.dst_rect.h % 32) == 3) ||
+			((req->dst_rect.h % 32) == 1 && req->dst_rect.h != 1) ||
+			((req->dst_rect.h % 32) == 2 && req->dst_rect.h != 2))
+			ret = mdp_blit_split_height(info, &splitreq);
+		else
+			ret = mdp_ppp_blit(info, &splitreq);
+		if (ret)
+			return ret;
+	} else if ((req->dst_rect.h % 32) == 3 ||
+		((req->dst_rect.h % 32) == 1 && req->dst_rect.h != 1) ||
+		((req->dst_rect.h % 32) == 2 && req->dst_rect.h != 2))
+		ret = mdp_blit_split_height(info, req);
+	else
+		ret = mdp_ppp_blit(info, req);
 	return ret;
+#elif defined CONFIG_FB_MSM_MDP30
+	/* MDP width split workaround */
+	remainder = (req->dst_rect.w)%16;
+	ret = mdp_get_bytes_per_pixel(req->dst.format);
+	if (ret <= 0) {
+		printk(KERN_ERR "mdp_ppp: incorrect bpp!\n");
+		return -EINVAL;
+	}
+	is_bpp_4 = (ret == 4) ? 1 : 0;
+
+	if ((is_bpp_4 && (remainder == 6 || remainder == 14))) {
+
+		/* make new request as provide by user */
+		splitreq = *req;
+
+		/* break dest roi at width*/
+		d_y_0 = d_y_1 = req->dst_rect.y;
+		d_h_0 = d_h_1 = req->dst_rect.h;
+		d_x_0 = req->dst_rect.x;
+
+		if (remainder == 14)
+			d_w_1 = (req->dst_rect.w - 14) / 2 + 4;
+		else if (remainder == 6)
+			d_w_1 = req->dst_rect.w / 2 - 1;
+		else
+			d_w_1 = (req->dst_rect.w - 1) / 2 - 1;
+
+		d_w_0 = req->dst_rect.w - d_w_1;
+		d_x_1 = d_x_0 + d_w_0;
+
+		/* blit first region */
+		if (((splitreq.flags & 0x07) == 0x07) ||
+			((splitreq.flags & 0x07) == 0x0)) {
+
+			if (splitreq.flags & MDP_ROT_90) {
+				s_x_0 = s_x_1 = req->src_rect.x;
+				s_w_0 = s_w_1 = req->src_rect.w;
+				s_y_0 = req->src_rect.y;
+				s_h_1 = (req->src_rect.h * d_w_1) /
+					req->dst_rect.w;
+				s_h_0 = req->src_rect.h - s_h_1;
+				s_y_1 = s_y_0 + s_h_0;
+				if (d_w_1 >= 8 * s_h_1) {
+					s_h_1++;
+					s_y_1--;
+				}
+			} else {
+				s_y_0 = s_y_1 = req->src_rect.y;
+				s_h_0 = s_h_1 = req->src_rect.h;
+				s_x_0 = req->src_rect.x;
+				s_w_1 = (req->src_rect.w * d_w_1) /
+					req->dst_rect.w;
+				s_w_0 = req->src_rect.w - s_w_1;
+				s_x_1 = s_x_0 + s_w_0;
+				if (d_w_1 >= 8 * s_w_1) {
+					s_w_1++;
+					s_x_1--;
+				}
+			}
+
+			splitreq.src_rect.h = s_h_0;
+			splitreq.src_rect.y = s_y_0;
+			splitreq.dst_rect.h = d_h_0;
+			splitreq.dst_rect.y = d_y_0;
+			splitreq.src_rect.x = s_x_0;
+			splitreq.src_rect.w = s_w_0;
+			splitreq.dst_rect.x = d_x_0;
+			splitreq.dst_rect.w = d_w_0;
+		} else {
+			if (splitreq.flags & MDP_ROT_90) {
+				s_x_0 = s_x_1 = req->src_rect.x;
+				s_w_0 = s_w_1 = req->src_rect.w;
+				s_y_0 = req->src_rect.y;
+				s_h_1 = (req->src_rect.h * d_w_0) /
+					req->dst_rect.w;
+				s_h_0 = req->src_rect.h - s_h_1;
+				s_y_1 = s_y_0 + s_h_0;
+				if (d_w_0 >= 8 * s_h_1) {
+					s_h_1++;
+					s_y_1--;
+				}
+			} else {
+				s_y_0 = s_y_1 = req->src_rect.y;
+				s_h_0 = s_h_1 = req->src_rect.h;
+				s_x_0 = req->src_rect.x;
+				s_w_1 = (req->src_rect.w * d_w_0) /
+					req->dst_rect.w;
+				s_w_0 = req->src_rect.w - s_w_1;
+				s_x_1 = s_x_0 + s_w_0;
+				if (d_w_0 >= 8 * s_w_1) {
+					s_w_1++;
+					s_x_1--;
+				}
+			}
+			splitreq.src_rect.h = s_h_0;
+			splitreq.src_rect.y = s_y_0;
+			splitreq.dst_rect.h = d_h_1;
+			splitreq.dst_rect.y = d_y_1;
+			splitreq.src_rect.x = s_x_0;
+			splitreq.src_rect.w = s_w_0;
+			splitreq.dst_rect.x = d_x_1;
+			splitreq.dst_rect.w = d_w_1;
+		}
+
+		/* No need to split in height */
+		ret = mdp_ppp_blit(info, &splitreq);
+
+		if (ret)
+			return ret;
+
+		/* blit second region */
+		if (((splitreq.flags & 0x07) == 0x07) ||
+			((splitreq.flags & 0x07) == 0x0)) {
+			splitreq.src_rect.h = s_h_1;
+			splitreq.src_rect.y = s_y_1;
+			splitreq.dst_rect.h = d_h_1;
+			splitreq.dst_rect.y = d_y_1;
+			splitreq.src_rect.x = s_x_1;
+			splitreq.src_rect.w = s_w_1;
+			splitreq.dst_rect.x = d_x_1;
+			splitreq.dst_rect.w = d_w_1;
+		} else {
+			splitreq.src_rect.h = s_h_1;
+			splitreq.src_rect.y = s_y_1;
+			splitreq.dst_rect.h = d_h_0;
+			splitreq.dst_rect.y = d_y_0;
+			splitreq.src_rect.x = s_x_1;
+			splitreq.src_rect.w = s_w_1;
+			splitreq.dst_rect.x = d_x_0;
+			splitreq.dst_rect.w = d_w_0;
+		}
+
+		/* No need to split in height ... just width */
+		ret = mdp_ppp_blit(info, &splitreq);
+
+		if (ret)
+			return ret;
+
+	} else
+		ret = mdp_ppp_blit(info, req);
+	return ret;
+#else
+	ret = mdp_ppp_blit(info, req);
+	return ret;
+#endif
 }
 
 typedef void (*msm_dma_barrier_function_pointer) (void *, size_t);
@@ -1838,8 +2340,12 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 	struct mdp_page_protection fb_page_protection;
 	int ret = 0;
 
-	if (!mfd->op_enable)
-		return -EPERM;
+#ifdef CONFIG_FB_MSM_OVERLAY
+	/* always let unset cmd go */
+	if (cmd != MSMFB_OVERLAY_UNSET)
+#endif
+		if (!mfd->op_enable)
+			return -EPERM;
 
 	switch (cmd) {
 #ifdef CONFIG_FB_MSM_OVERLAY

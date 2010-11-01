@@ -122,6 +122,13 @@
 #define MAX_SESSIONS 16
 #define INVALID_SESSION -1
 
+struct tile_parm {
+	unsigned int width;  /* tile's width */
+	unsigned int height; /* tile's height */
+	unsigned int row_tile_w; /* tiles per row's width */
+	unsigned int row_tile_h; /* tiles per row's height */
+};
+
 struct msm_rotator_dev {
 	void __iomem *io_base;
 	int irq;
@@ -139,7 +146,7 @@ struct msm_rotator_dev {
 	struct class *class;
 	dev_t dev_num;
 	int processing;
-	int last_session_id;
+	int last_session_idx;
 	struct mutex rotator_lock;
 	struct mutex imem_lock;
 	int imem_owner;
@@ -272,6 +279,8 @@ static int get_bpp(int format)
 
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
+	case MDP_Y_CRCB_H2V2_TILE:
+	case MDP_Y_CBCR_H2V2_TILE:
 		return 1;
 
 	case MDP_RGB_888:
@@ -410,6 +419,97 @@ static int msm_rotator_ycxcx_h2v2(struct msm_rotator_img_info *info,
 			  1 << 8,      		/* ROT_EN */
 			  MSM_ROTATOR_SUB_BLOCK_CFG);
 		iowrite32(0 << 29 | 		/* frame format 0 = linear */
+			  (use_imem ? 0 : 1) << 22 | /* tile size */
+			  2 << 19 | 		/* fetch planes 2 = pseudo */
+			  0 << 18 | 		/* unpack align */
+			  1 << 17 | 		/* unpack tight */
+			  1 << 13 | 		/* unpack count 0=1 component */
+			  (bpp-1) << 9  |	/* src Bpp 0=1 byte ... */
+			  0 << 8  | 		/* has alpha */
+			  0 << 6  | 		/* alpha bits 3=8bits */
+			  3 << 4  | 		/* R/Cr bits 1=5 2=6 3=8 */
+			  3 << 2  | 		/* B/Cb bits 1=5 2=6 3=8 */
+			  3 << 0,   		/* G/Y  bits 1=5 2=6 3=8 */
+			  MSM_ROTATOR_SRC_FORMAT);
+	}
+	return 0;
+}
+
+static unsigned int tile_size(unsigned int src_width,
+		unsigned int src_height,
+		const struct tile_parm *tp)
+{
+	unsigned int tile_w, tile_h;
+	unsigned int row_num_w, row_num_h;
+	tile_w = tp->width * tp->row_tile_w;
+	tile_h = tp->height * tp->row_tile_h;
+	row_num_w = (src_width + tile_w - 1) / tile_w;
+	row_num_h = (src_height + tile_h - 1) / tile_h;
+	return row_num_w * row_num_h * tile_w * tile_h;
+}
+
+static int msm_rotator_ycxcx_h2v2_tile(struct msm_rotator_img_info *info,
+				  unsigned int in_paddr,
+				  unsigned int out_paddr,
+				  unsigned int use_imem,
+				  int new_session)
+{
+	int bpp;
+	unsigned int offset = 0;
+	/*
+	 * each row of samsung tile consists of two tiles in height
+	 * and two tiles in width which means width should align to
+	 * 64 x 2 bytes and height should align to 32 x 2 bytes.
+	 * video decoder generate two tiles in width and one tile
+	 * in height which ends up height align to 32 X 1 bytes.
+	 */
+	const struct tile_parm tile = {64, 32, 2, 1};
+	if ((info->src.format == MDP_Y_CRCB_H2V2_TILE &&
+		info->dst.format != MDP_Y_CRCB_H2V2) ||
+		(info->src.format == MDP_Y_CBCR_H2V2_TILE &&
+		info->dst.format != MDP_Y_CBCR_H2V2))
+		return -EINVAL;
+
+	bpp = get_bpp(info->src.format);
+	if (bpp < 0)
+		return -ENOTTY;
+
+	offset = tile_size(info->src.width, info->src.height, &tile);
+
+	iowrite32(in_paddr, MSM_ROTATOR_SRCP0_ADDR);
+	iowrite32(in_paddr + offset, MSM_ROTATOR_SRCP1_ADDR);
+	iowrite32(out_paddr +
+			((info->dst_y * info->dst.width) + info->dst_x),
+		  MSM_ROTATOR_OUTP0_ADDR);
+	iowrite32(chroma_addr(out_paddr, info->dst.width, info->dst.height,
+			      bpp) +
+			((info->dst_y * info->dst.width)/2 + info->dst_x),
+		  MSM_ROTATOR_OUTP1_ADDR);
+
+	if (new_session) {
+		iowrite32(info->src.width |
+			  info->src.width << 16,
+			  MSM_ROTATOR_SRC_YSTRIDE1);
+
+		iowrite32(info->dst.width |
+			  info->dst.width << 16,
+			  MSM_ROTATOR_OUT_YSTRIDE1);
+		if (info->src.format == MDP_Y_CBCR_H2V2_TILE) {
+			iowrite32(GET_PACK_PATTERN(0, 0, CLR_CB, CLR_CR, 8),
+				  MSM_ROTATOR_SRC_UNPACK_PATTERN1);
+			iowrite32(GET_PACK_PATTERN(0, 0, CLR_CB, CLR_CR, 8),
+				  MSM_ROTATOR_OUT_PACK_PATTERN1);
+		} else {
+			iowrite32(GET_PACK_PATTERN(0, 0, CLR_CR, CLR_CB, 8),
+				  MSM_ROTATOR_SRC_UNPACK_PATTERN1);
+			iowrite32(GET_PACK_PATTERN(0, 0, CLR_CR, CLR_CB, 8),
+				  MSM_ROTATOR_OUT_PACK_PATTERN1);
+		}
+		iowrite32((3  << 18) | 		/* chroma sampling 3=4:2:0 */
+			  (ROTATIONS_TO_BITMASK(info->rotations) << 9) |
+			  1 << 8,      		/* ROT_EN */
+			  MSM_ROTATOR_SUB_BLOCK_CFG);
+		iowrite32(2 << 29 | 		/* frame format 2 = supertile */
 			  (use_imem ? 0 : 1) << 22 | /* tile size */
 			  2 << 19 | 		/* fetch planes 2 = pseudo */
 			  0 << 18 | 		/* unpack align */
@@ -595,7 +695,8 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	struct msm_rotator_data_info info;
 	unsigned int in_paddr, out_paddr, vaddr;
 	unsigned long len;
-	struct file *file;
+	struct file *src_file = 0;
+	struct file *dst_file = 0;
 	int use_imem = 0;
 	int s;
 
@@ -604,7 +705,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 
 	rc = get_pmem_file(info.src.memory_id, (unsigned long *)&in_paddr,
 			   (unsigned long *)&vaddr, (unsigned long *)&len,
-			   &file);
+			   &src_file);
 	if (rc) {
 		printk(KERN_ERR "%s: in get_pmem_file() failed id=0x%08x\n",
 		       DRIVER_NAME, info.src.memory_id);
@@ -614,7 +715,7 @@ static int msm_rotator_do_rotate(unsigned long arg)
 
 	rc = get_pmem_file(info.dst.memory_id, (unsigned long *)&out_paddr,
 			   (unsigned long *)&vaddr, (unsigned long *)&len,
-			   &file);
+			   &dst_file);
 	if (rc) {
 		printk(KERN_ERR "%s: out get_pmem_file() failed id=0x%08x\n",
 		       DRIVER_NAME, info.dst.memory_id);
@@ -623,9 +724,14 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	out_paddr += info.dst.offset;
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	s = info.session_id;
-	if ((s < 0) || (s >= MAX_SESSIONS) ||
-	    (msm_rotator_dev->img_info[s] == NULL)) {
+	for (s = 0; s < MAX_SESSIONS; s++)
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(info.session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s]
+			))
+			break;
+
+	if (s == MAX_SESSIONS) {
 		dev_dbg(msm_rotator_dev->device,
 			"%s() : Attempt to use invalid session_id %d\n",
 			__func__, s);
@@ -670,27 +776,35 @@ static int msm_rotator_do_rotate(unsigned long arg)
 		rc = msm_rotator_rgb_types(msm_rotator_dev->img_info[s],
 					   in_paddr, out_paddr,
 					   use_imem,
-					   msm_rotator_dev->last_session_id
+					   msm_rotator_dev->last_session_idx
 								!= s);
 		break;
 	case MDP_Y_CBCR_H2V2:
 	case MDP_Y_CRCB_H2V2:
 		rc = msm_rotator_ycxcx_h2v2(msm_rotator_dev->img_info[s],
 					    in_paddr, out_paddr, use_imem,
-					    msm_rotator_dev->last_session_id
+					    msm_rotator_dev->last_session_idx
 								!= s);
 		break;
+	case MDP_Y_CRCB_H2V2_TILE:
+	case MDP_Y_CBCR_H2V2_TILE:
+		rc = msm_rotator_ycxcx_h2v2_tile(msm_rotator_dev->img_info[s],
+				in_paddr, out_paddr, use_imem,
+				msm_rotator_dev->last_session_idx
+				!= s);
+	break;
+
 	case MDP_Y_CBCR_H2V1:
 	case MDP_Y_CRCB_H2V1:
 		rc = msm_rotator_ycxcx_h2v1(msm_rotator_dev->img_info[s],
 					    in_paddr, out_paddr, use_imem,
-					    msm_rotator_dev->last_session_id
+					    msm_rotator_dev->last_session_idx
 								!= s);
 		break;
 	case MDP_YCRYCB_H2V1:
 		rc = msm_rotator_ycrycb(msm_rotator_dev->img_info[s],
-					in_paddr, out_paddr, use_imem,
-					msm_rotator_dev->last_session_id != s);
+				in_paddr, out_paddr, use_imem,
+				msm_rotator_dev->last_session_idx != s);
 		break;
 	default:
 		rc = -EINVAL;
@@ -698,13 +812,16 @@ static int msm_rotator_do_rotate(unsigned long arg)
 	}
 
 	if (rc != 0) {
-		msm_rotator_dev->last_session_id = INVALID_SESSION;
+		msm_rotator_dev->last_session_idx = INVALID_SESSION;
 		goto do_rotate_exit;
-	}
+	} else
+		msm_rotator_dev->last_session_idx = s;
 
 	iowrite32(3, MSM_ROTATOR_INTR_ENABLE);
+
 	msm_rotator_dev->processing = 1;
 	iowrite32(0x1, MSM_ROTATOR_START);
+
 	wait_event(msm_rotator_dev->wq,
 		   (msm_rotator_dev->processing == 0));
 	status = (unsigned char)ioread32(MSM_ROTATOR_INTR_STATUS);
@@ -718,7 +835,10 @@ do_rotate_exit:
 	msm_rotator_imem_free(ROTATOR_REQUEST);
 	schedule_delayed_work(&msm_rotator_dev->rot_clk_work, HZ);
 do_rotate_unlock_mutex:
-	put_pmem_file(file);
+	if (src_file)
+		put_pmem_file(src_file);
+	if (dst_file)
+		put_pmem_file(dst_file);
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 	dev_dbg(msm_rotator_dev->device, "%s() returning rc = %d\n",
 		__func__, rc);
@@ -730,6 +850,7 @@ static int msm_rotator_start(unsigned long arg)
 	struct msm_rotator_img_info info;
 	int rc = 0;
 	int s;
+	int first_free_index = INVALID_SESSION;
 
 	if (copy_from_user(&info, (void __user *)arg, sizeof(info)))
 		return -EFAULT;
@@ -765,6 +886,8 @@ static int msm_rotator_start(unsigned long arg)
 	case MDP_Y_CBCR_H2V1:
 	case MDP_Y_CRCB_H2V1:
 	case MDP_YCRYCB_H2V1:
+	case MDP_Y_CRCB_H2V2_TILE:
+	case MDP_Y_CBCR_H2V2_TILE:
 		break;
 	default:
 		return -EINVAL;
@@ -789,31 +912,47 @@ static int msm_rotator_start(unsigned long arg)
 	}
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	/* allocate a session id */
-	s = 0;
-	while (s < MAX_SESSIONS) {
-		if (msm_rotator_dev->img_info[s] == NULL) {
-			info.session_id = s;
-			msm_rotator_dev->img_info[s] =
-				kzalloc(sizeof(struct msm_rotator_img_info),
-					GFP_KERNEL);
-			if (!msm_rotator_dev->img_info[s]) {
-				printk(KERN_ERR "%s : unable to alloc mem\n",
-				       __func__);
-				rc = -ENOMEM;
-				goto rotator_start_exit;
-			}
+	for (s = 0; s < MAX_SESSIONS; s++) {
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(info.session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s]
+			)) {
 			*(msm_rotator_dev->img_info[s]) = info;
+
+			if (msm_rotator_dev->last_session_idx == s)
+				msm_rotator_dev->last_session_idx =
+				INVALID_SESSION;
 			break;
 		}
-		s++;
+
+		if ((msm_rotator_dev->img_info[s] == NULL) &&
+			(first_free_index ==
+			INVALID_SESSION))
+			first_free_index = s;
 	}
-	if (s >= MAX_SESSIONS) {
+
+	if ((s == MAX_SESSIONS) && (first_free_index != INVALID_SESSION)) {
+		/* allocate a session id */
+		msm_rotator_dev->img_info[first_free_index] =
+			kzalloc(sizeof(struct msm_rotator_img_info),
+					GFP_KERNEL);
+		if (!msm_rotator_dev->img_info[first_free_index]) {
+			printk(KERN_ERR "%s : unable to alloc mem\n",
+					__func__);
+			rc = -ENOMEM;
+			goto rotator_start_exit;
+		}
+		info.session_id = (unsigned int)
+			msm_rotator_dev->img_info[first_free_index];
+		*(msm_rotator_dev->img_info[first_free_index]) = info;
+
+		if (copy_to_user((void __user *)arg, &info, sizeof(info)))
+			rc = -EFAULT;
+	} else if (s == MAX_SESSIONS) {
 		dev_dbg(msm_rotator_dev->device, "%s: all sessions in use\n",
 			__func__);
 		rc = -EBUSY;
-	} else if (copy_to_user((void __user *)arg, &info, sizeof(info)))
-		rc = -EFAULT;
+	}
 
 rotator_start_exit:
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
@@ -825,20 +964,27 @@ static int msm_rotator_finish(unsigned long arg)
 {
 	int rc = 0;
 	int s;
+	unsigned int session_id;
 
-	if (copy_from_user(&s, (void __user *)arg, sizeof(s)))
+	if (copy_from_user(&session_id, (void __user *)arg, sizeof(s)))
 		return -EFAULT;
 
 	mutex_lock(&msm_rotator_dev->rotator_lock);
-	if ((s < 0) || (s >= MAX_SESSIONS) ||
-	    (msm_rotator_dev->img_info[s] == NULL))
-		rc = -EINVAL;
-	else {
-		kfree(msm_rotator_dev->img_info[s]);
-		msm_rotator_dev->img_info[s] = NULL;
+	for (s = 0; s < MAX_SESSIONS; s++) {
+		if ((msm_rotator_dev->img_info[s] != NULL) &&
+			(session_id ==
+			(unsigned int)msm_rotator_dev->img_info[s])) {
+			if (msm_rotator_dev->last_session_idx == s)
+				msm_rotator_dev->last_session_idx =
+					INVALID_SESSION;
+			kfree(msm_rotator_dev->img_info[s]);
+			msm_rotator_dev->img_info[s] = NULL;
+			break;
+		}
 	}
-	if (s == msm_rotator_dev->last_session_id)
-		msm_rotator_dev->last_session_id = INVALID_SESSION;
+
+	if (s == MAX_SESSIONS)
+		rc = -EINVAL;
 	mutex_unlock(&msm_rotator_dev->rotator_lock);
 	return rc;
 }
@@ -884,7 +1030,7 @@ static int __devinit msm_rotator_probe(struct platform_device *pdev)
 	}
 	for (i = 0; i < MAX_SESSIONS; i++)
 		msm_rotator_dev->img_info[i] = NULL;
-	msm_rotator_dev->last_session_id = INVALID_SESSION;
+	msm_rotator_dev->last_session_idx = INVALID_SESSION;
 
 	msm_rotator_dev->imem_owner = IMEM_NO_OWNER;
 	mutex_init(&msm_rotator_dev->imem_lock);

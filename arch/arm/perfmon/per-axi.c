@@ -196,10 +196,6 @@ uint32_t AXI_BASE;
 unsigned int is_first = 1;
 struct perf_mon_axi_data pm_axi_info;
 struct perf_mon_axi_cnts axi_cnts;
-unsigned long axi_cycle_overflows;
-unsigned long axi_evt0_overflows;
-unsigned long axi_evt1_overflows;
-unsigned long axi_ten_total_overflows;
 
 /*
 FUNCTION get_axi_sel_reg0
@@ -353,12 +349,6 @@ SIDE EFFECTS
 */
 void pm_axi_update_cnts(void)
 {
-	unsigned long cycle_cnt;
-	unsigned long evt0_cnt;
-	unsigned long evt1_cnt;
-	unsigned long ten_total_cnt;
-	unsigned long long llstore;
-	unsigned long long newllstore;
 	if (is_first) {
 		pm_axi_start();
 	} else {
@@ -370,53 +360,16 @@ void pm_axi_update_cnts(void)
 		}
 	}
 	is_first = 0;
-	cycle_cnt = pm_get_axi_cycle_count();
-	llstore = 0xffffffff;
-	llstore *= axi_cycle_overflows;
-	llstore += cycle_cnt;
-	if (axi_cnts.cycles > llstore)
-		axi_cycle_overflows++;
-	newllstore = 0xffffffff;
-	newllstore *= axi_cycle_overflows;
-	newllstore += cycle_cnt;
-	axi_cnts.cycles = newllstore;
-
-	evt0_cnt = pm_get_axi_evt0_count();
-	llstore = 0xffffffff;
-	llstore *= axi_evt0_overflows;
-	llstore += evt0_cnt;
-	if (axi_cnts.cnt0 > llstore)
-		axi_evt0_overflows++;
-	newllstore = 0xffffffff;
-	newllstore *= axi_evt0_overflows;
-	newllstore += evt0_cnt;
-	axi_cnts.cnt0 = newllstore;
-
-	evt1_cnt = pm_get_axi_evt1_count();
-	llstore = 0xffffffff;
-	llstore *= axi_evt1_overflows;
-	llstore += evt1_cnt;
-	if (axi_cnts.cnt1 > llstore)
-		axi_evt1_overflows++;
-	newllstore = 0xffffffff;
-	newllstore *= axi_evt1_overflows;
-	newllstore += evt1_cnt;
-	axi_cnts.cnt1 = newllstore;
-
-	ten_total_cnt = pm_get_axi_ten_total_count();
-	llstore = 0xffffffff;
-	llstore *= axi_ten_total_overflows;
-	llstore += ten_total_cnt;
-	if (axi_cnts.tenure_total > llstore)
-		axi_ten_total_overflows++;
-	newllstore = 0xffffffff;
-	newllstore *= axi_ten_total_overflows;
-	newllstore += ten_total_cnt;
-	axi_cnts.tenure_total = newllstore;
+	axi_cnts.cycles += pm_get_axi_cycle_count();
+	axi_cnts.cnt0 += pm_get_axi_evt0_count();
+	axi_cnts.cnt1 += pm_get_axi_evt1_count();
+	axi_cnts.tenure_total += pm_get_axi_ten_total_count();
 
 	axi_cnts.tenure_min = pm_get_axi_ten_min_count();
 	axi_cnts.tenure_max = pm_get_axi_ten_max_count();
 	axi_cnts.tenure_last = pm_get_axi_ten_last_count();
+
+	pm_axi_start();
 }
 
 /*

@@ -1,4 +1,5 @@
 menu "USB Function Support"
+	depends on !USB_GADGET
 
 config USB_MSM_OTG
 	bool "OTG support for Qualcomm on-chip USB controller"

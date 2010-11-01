@@ -279,6 +279,33 @@ struct adsp_audio_dtmf_start_command {
 /* These commands will affect a logical device and all its associated */
 /* streams. */
 
+#define ADSP_AUDIO_MAX_EQ_BANDS 12
+
+struct adsp_audio_eq_band {
+	u16     band_idx; /* The band index, 0 .. 11 */
+	u32     filter_type; /* Filter band type */
+	u32     center_freq_hz; /* Filter band center frequency */
+	s32     filter_gain; /* Filter band initial gain (dB) */
+			/* Range is +12 dB to -12 dB with 1dB increments. */
+	s32     q_factor;
+		/* Filter band quality factor expressed as q-8 number, */
+		/* e.g. 3000/(2^8) */
+} __attribute__ ((packed));
+
+struct adsp_audio_eq_stream_config {
+	uint32_t  enable; /* Number of consequtive bands specified */
+	uint32_t  num_bands;
+	struct adsp_audio_eq_band  eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
+} __attribute__ ((packed));
+
+/* set device equalizer */
+struct adsp_set_dev_equalizer_command {
+	struct adsp_command_hdr hdr;
+	u32    device_id;
+	u32    enable;
+	u32    num_bands;
+	struct adsp_audio_eq_band eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
+} __attribute__ ((packed));
 
 /* Set device volume. */
 #define ADSP_AUDIO_IOCTL_CMD_SET_DEVICE_VOL		0x0107605c
@@ -459,6 +486,12 @@ struct adsp_set_mute_command {
 } __attribute__ ((packed));
 
 
+struct adsp_set_equalizer_command {
+	struct adsp_command_hdr hdr;
+	u32    enable;
+	u32    num_bands;
+	struct adsp_audio_eq_band eq_bands[ADSP_AUDIO_MAX_EQ_BANDS];
+} __attribute__ ((packed));
 
 /* ---- audio events ---- */
 
@@ -532,6 +565,9 @@ struct adsp_buffer_event {
 #define ADSP_AUDIO_DEVICE_ID_TTY_HEADSET_MIC	0x108151b
 #define ADSP_AUDIO_DEVICE_ID_I2S_MIC		0x1089bf3
 
+#define ADSP_AUDIO_DEVICE_ID_SPKR_PHONE_DUAL_MIC	0x108f9c5
+#define ADSP_AUDIO_DEVICE_ID_HANDSET_DUAL_MIC		0x108f9c3
+
 /* Special loopback pseudo device to be paired with an RX device */
 /* with usage ADSP_AUDIO_DEVICE_USAGE_MIXED_PCM_LOOPBACK */
 #define ADSP_AUDIO_DEVICE_ID_MIXED_PCM_LOOPBACK_TX	0x1089bf2
@@ -569,5 +605,9 @@ struct adsp_buffer_event {
 #define ADSP_AUDIO_DEVICE_CONTEXT_MIXED_RECORD		0x10
 #define ADSP_AUDIO_DEVICE_CONTEXT_RECORD		0x20
 #define ADSP_AUDIO_DEVICE_CONTEXT_PCM_LOOPBACK		0x40
+
+/* ADSP audio driver return codes */
+#define ADSP_AUDIO_STATUS_SUCCESS               0
+#define ADSP_AUDIO_STATUS_EUNSUPPORTED          20
 
 #endif

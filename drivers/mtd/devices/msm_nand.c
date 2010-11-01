@@ -197,6 +197,11 @@ static void *msm_nand_get_dma_buffer(struct msm_nand_chip *chip, size_t size)
 	do {
 		free_index = __ffs(free_bitmask);
 		current_need_mask = need_mask << free_index;
+
+		if (size + free_index * MSM_NAND_DMA_BUFFER_SLOTS >=
+						 MSM_NAND_DMA_BUFFER_SIZE)
+			return NULL;
+
 		if ((bitmask & current_need_mask) == 0) {
 			old_bitmask =
 				atomic_cmpxchg(&chip->dma_buffer_busy,
@@ -6940,7 +6945,8 @@ no_dual_nand_ctlr_support:
 	return 0;
 
 out_free_dma_buffer:
-	dma_free_coherent(/*dev*/ NULL, SZ_4K, info->msm_nand.dma_buffer,
+	dma_free_coherent(NULL, MSM_NAND_DMA_BUFFER_SIZE,
+			info->msm_nand.dma_buffer,
 			info->msm_nand.dma_addr);
 out_free_info:
 	kfree(info);
@@ -6963,7 +6969,7 @@ static int __devexit msm_nand_remove(struct platform_device *pdev)
 			del_mtd_device(&info->mtd);
 
 		msm_nand_release(&info->mtd);
-		dma_free_coherent(/*dev*/ NULL, SZ_4K,
+		dma_free_coherent(NULL, MSM_NAND_DMA_BUFFER_SIZE,
 				  info->msm_nand.dma_buffer,
 				  info->msm_nand.dma_addr);
 		kfree(info);

@@ -721,7 +721,6 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 	}
 	rpc_send_accepted_void_reply(rpc_cb_server_client, req->xid,
 				     RPC_ACCEPTSTAT_SUCCESS);
-	mutex_unlock(&module->lock);
 #ifdef CONFIG_MSM_ADSP_REPORT_EVENTS
 	event_addr = (uint32_t *)req;
 	module->ops->event(module->driver_data,
@@ -729,6 +728,7 @@ static void handle_adsp_rtos_mtoa_app(struct rpc_request_hdr *req)
 				EVENT_LEN,
 				read_event);
 #endif
+	mutex_unlock(&module->lock);
 }
 
 static int handle_adsp_rtos_mtoa(struct rpc_request_hdr *req)

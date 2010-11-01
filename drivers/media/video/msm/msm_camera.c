@@ -37,21 +37,11 @@
 #include <media/msm_camera.h>
 #include <mach/camera.h>
 DEFINE_MUTEX(hlist_mut);
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 DEFINE_MUTEX(pp_prev_lock);
 DEFINE_MUTEX(pp_snap_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 
 #define MSM_MAX_CAMERA_SENSORS 5
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 #define CAMERA_STOP_SNAPSHOT 42
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 
 #define ERR_USER_COPY(to) pr_err("%s(%d): copy %s user\n", \
 				__func__, __LINE__, ((to) ? "to" : "from"))
@@ -141,8 +131,8 @@ static void msm_enqueue(struct msm_device_queue *queue,
 		qcmd = list_first_entry(&__q->list,		\
 				struct msm_queue_cmd, member);	\
 		list_del_init(&qcmd->member);			\
-		spin_unlock_irqrestore(&__q->lock, flags);	\
 	}							\
+	spin_unlock_irqrestore(&__q->lock, flags);	\
 	qcmd;							\
 })
 
@@ -653,14 +643,8 @@ static int msm_control(struct msm_control_device *ctrl_pmsm,
 
 	uptr = udata.value;
 	udata.value = data;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 	if (udata.type == CAMERA_STOP_SNAPSHOT)
 		sync->get_pic_abort = 1;
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
-
 	qcmd.on_heap = 0;
 	qcmd.type = MSM_CAM_Q_CTRL;
 	qcmd.command = &udata;
@@ -894,20 +878,9 @@ static int msm_get_stats(struct msm_sync *sync, void __user *arg)
 			se.stats_event.len,
 			se.stats_event.msg_id);
 
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 		if ((data->type >= VFE_MSG_STATS_AEC) &&
 		    (data->type <=  VFE_MSG_STATS_WE)) {
 			/* the check above includes all stats type. */
-#else
-		if ((data->type == VFE_MSG_STATS_AF) ||
-				(data->type == VFE_MSG_STATS_WE) ||
-				(data->type == VFE_MSG_STATS_AEC) ||
-				(data->type == VFE_MSG_STATS_AWB)) {
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
-
 			stats.buffer =
 			msm_pmem_stats_ptov_lookup(sync,
 					data->phy.sbuf_phy,
@@ -1133,6 +1106,47 @@ static int msm_config_vfe(struct msm_sync *sync, void __user *arg)
 		}
 		axi_data.region = &region[0];
 		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+
+	case CMD_STATS_IHIST_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_IHIST, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+	case CMD_STATS_RS_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_RS, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
+	case CMD_STATS_CS_ENABLE:
+		axi_data.bufnum1 =
+			msm_pmem_region_lookup(&sync->pmem_stats,
+			MSM_PMEM_CS, &region[0],
+			NUM_STAT_OUTPUT_BUFFERS);
+		if (!axi_data.bufnum1) {
+			pr_err("%s %d: pmem region lookup error\n",
+				__func__, __LINE__);
+			return -EINVAL;
+		}
+		axi_data.region = &region[0];
+		return sync->vfefn.vfe_config(&cfgcmd, &axi_data);
+
 	case CMD_GENERAL:
 	case CMD_STATS_DISABLE:
 		return sync->vfefn.vfe_config(&cfgcmd, NULL);
@@ -1267,7 +1281,8 @@ static int msm_get_sensor_info(struct msm_sync *sync, void __user *arg)
 	memcpy(&info.name[0],
 		sdata->sensor_name,
 		MAX_SENSOR_NAME);
-	info.flash_enabled = sdata->flash_type != MSM_CAMERA_FLASH_NONE;
+	info.flash_enabled = sdata->flash_data->flash_type !=
+		MSM_CAMERA_FLASH_NONE;
 
 	/* copy back to user space */
 	if (copy_to_user((void *)arg,
@@ -1442,6 +1457,13 @@ static int msm_put_stats_buffer(struct msm_sync *sync, void __user *arg)
 			cfgcmd.cmd_type = CMD_STATS_AEC_BUF_RELEASE;
 		else if (buf.type == STAT_AWB)
 			cfgcmd.cmd_type = CMD_STATS_AWB_BUF_RELEASE;
+		else if (buf.type == STAT_IHIST)
+			cfgcmd.cmd_type = CMD_STATS_IHIST_BUF_RELEASE;
+		else if (buf.type == STAT_RS)
+			cfgcmd.cmd_type = CMD_STATS_RS_BUF_RELEASE;
+		else if (buf.type == STAT_CS)
+			cfgcmd.cmd_type = CMD_STATS_CS_BUF_RELEASE;
+
 		else {
 			pr_err("%s: invalid buf type %d\n",
 				__func__,
@@ -1507,9 +1529,6 @@ static int __msm_get_pic(struct msm_sync *sync, struct msm_ctrl_cmd *ctrl)
 
 	tm = (int)ctrl->timeout_ms;
 
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 	rc = wait_event_interruptible_timeout(
 			sync->pict_q.wait,
 			!list_empty_careful(
@@ -1520,13 +1539,6 @@ static int __msm_get_pic(struct msm_sync *sync, struct msm_ctrl_cmd *ctrl)
 		sync->get_pic_abort = 0;
 		return -ENODATA;
 	}
-#else
-	rc = wait_event_interruptible_timeout(
-			sync->pict_q.wait,
-			!list_empty_careful(&sync->pict_q.list),
-			msecs_to_jiffies(tm));
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 	if (list_empty_careful(&sync->pict_q.list)) {
 		if (rc == 0)
 			return -ETIMEDOUT;
@@ -1672,33 +1684,18 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 	if (sync->pp_mask & PP_PREV) {
 
 		if (mask & PP_PREV) {
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_lock(&pp_prev_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 			if (!sync->pp_prev) {
 				pr_err("%s: no preview frame to deliver!\n",
 					__func__);
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 				mutex_unlock(&pp_prev_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 				return -EINVAL;
 			}
 			pr_info("%s: delivering pp_prev\n", __func__);
 
 			msm_enqueue(&sync->frame_q, &sync->pp_prev->list_frame);
 			sync->pp_prev = NULL;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_unlock(&pp_prev_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 		} else if (!(mask & PP_PREV)) {
 			sync->pp_mask &= ~PP_PREV;
 		}
@@ -1707,25 +1704,16 @@ static int msm_pp_release(struct msm_sync *sync, void __user *arg)
 
 	if (((mask & PP_SNAP) && (sync->pp_mask & PP_SNAP)) ||
 		((mask & PP_RAW_SNAP) && (sync->pp_mask & PP_RAW_SNAP))) {
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 		mutex_lock(&pp_snap_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 		if (!sync->pp_snap) {
 			pr_err("%s: no snapshot to deliver!\n", __func__);
+			mutex_unlock(&pp_snap_lock);
 			return -EINVAL;
 		}
 		pr_info("%s: delivering pp_snap\n", __func__);
 		msm_enqueue(&sync->pict_q, &sync->pp_snap->list_pict);
 		sync->pp_snap = NULL;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 		mutex_unlock(&pp_snap_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 		sync->pp_mask &=
 			(mask & PP_SNAP) ? ~PP_SNAP : ~PP_RAW_SNAP;
 	}
@@ -1827,7 +1815,8 @@ static long msm_ioctl_config(struct file *filep, unsigned int cmd,
 			ERR_COPY_FROM_USER();
 			rc = -EFAULT;
 		} else
-			rc = msm_camera_flash_set_led_state(led_state);
+			rc = msm_camera_flash_set_led_state(pmsm->sync->
+					sdata->flash_data, led_state);
 		break;
 	}
 
@@ -1948,18 +1937,9 @@ static int __msm_release(struct msm_sync *sync)
 			put_pmem_file(region->file);
 			kfree(region);
 		}
-
-		msm_queue_drain(&sync->event_q, list_config);
-		msm_queue_drain(&sync->frame_q, list_frame);
 		msm_queue_drain(&sync->pict_q, list_pict);
 
 		wake_unlock(&sync->wake_lock);
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifndef CONFIG_FIH_FXX
-		msm_disable_io_gpio_clk(sync->pdev);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 		sync->apps_id = NULL;
 		CDBG("%s: completed\n", __func__);
 	}
@@ -1974,8 +1954,10 @@ static int msm_release_config(struct inode *node, struct file *filep)
 	struct msm_device *pmsm = filep->private_data;
 	CDBG("%s: %s\n", __func__, filep->f_path.dentry->d_name.name);
 	rc = __msm_release(pmsm->sync);
-	if (!rc)
+	if (!rc) {
+		msm_queue_drain(&pmsm->sync->event_q, list_config);
 		atomic_set(&pmsm->opened, 0);
+	}
 	return rc;
 }
 
@@ -2000,8 +1982,10 @@ static int msm_release_frame(struct inode *node, struct file *filep)
 	struct msm_device *pmsm = filep->private_data;
 	CDBG("%s: %s\n", __func__, filep->f_path.dentry->d_name.name);
 	rc = __msm_release(pmsm->sync);
-	if (!rc)
+	if (!rc) {
+		msm_queue_drain(&pmsm->sync->frame_q, list_frame);
 		atomic_set(&pmsm->opened, 0);
+	}
 	return rc;
 }
 
@@ -2105,23 +2089,13 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 				__func__,
 				vdata->phy.y_phy,
 				vdata->phy.cbcr_phy);
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_lock(&pp_prev_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 			if (sync->pp_prev)
 				pr_warning("%s: overwriting pp_prev!\n",
 					__func__);
 			pr_info("%s: sending preview to config\n", __func__);
 			sync->pp_prev = qcmd;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_unlock(&pp_prev_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 				break;
 			}
 		CDBG("%s: msm_enqueue frame_q\n", __func__);
@@ -2141,23 +2115,13 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 		if (sync->pp_mask & (PP_SNAP | PP_RAW_SNAP)) {
 			CDBG("%s: PP_SNAP in progress: pp_mask %x\n",
 				__func__, sync->pp_mask);
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_lock(&pp_snap_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 			if (sync->pp_snap)
 				pr_warning("%s: overwriting pp_snap!\n",
 					__func__);
 			pr_info("%s: sending snapshot to config\n", __func__);
 			sync->pp_snap = qcmd;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			mutex_unlock(&pp_snap_lock);
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 				break;
 			}
 
@@ -2176,11 +2140,26 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 		     __func__, vdata->type);
 		break;
 
+		case VFE_MSG_STATS_IHIST:
+		CDBG("%s: qtype %d, ihist stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_STATS_RS:
+		CDBG("%s: qtype %d, rs stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+		case VFE_MSG_STATS_CS:
+		CDBG("%s: qtype %d, cs stats, enqueue event_q.\n",
+		     __func__, vdata->type);
+		break;
+
+
 		case VFE_MSG_GENERAL:
 		CDBG("%s: qtype %d, general msg, enqueue event_q.\n",
 		    __func__, vdata->type);
 		break;
-
 		default:
 		CDBG("%s: qtype %d not handled\n", __func__, vdata->type);
 		/* fall through, send to config. */
@@ -2220,12 +2199,7 @@ static int __msm_open(struct msm_sync *sync, const char *const apps_id)
 
 		msm_camvfe_fn_init(&sync->vfefn, sync);
 		if (sync->vfefn.vfe_init) {
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 			sync->get_pic_abort = 0;
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 			rc = sync->vfefn.vfe_init(&msm_vfe_s,
 				sync->pdev);
 			if (rc < 0) {

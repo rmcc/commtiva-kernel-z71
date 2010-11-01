@@ -24,6 +24,7 @@ obj-$(CONFIG_HP_ILO)		+= hpilo.o
 obj-$(CONFIG_UID_STAT)		+= uid_stat.o
 obj-$(CONFIG_C2PORT)		+= c2port/
 obj-y				+= eeprom/
+obj-$(CONFIG_MSM_720P_CORE)	+= video_core/720p/
 obj-$(CONFIG_TSIF) += msm_tsif.o
 msm_tsif-objs := tsif.o
 

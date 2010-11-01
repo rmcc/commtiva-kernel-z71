@@ -193,6 +193,7 @@ char *per_process_proc_names[PP_MAX_PROC_ENTRIES];
 
 unsigned int axi_swaps;
 #define MAX_AXI_SWAPS	10
+int first_switch = 1;
 /*
   Forward Declarations
 */
@@ -552,19 +553,25 @@ SIDE EFFECTS
 */
 void _per_process_switch(unsigned long old_pid, unsigned long new_pid)
 {
-  struct per_process_perf_mon_type *p_old, *p_new;
+	struct per_process_perf_mon_type *p_old, *p_new;
 
-  if (pm_global_enable == 0)
-	return;
-  /*
-   * Always collect for 0, it collects for all.
-   */
-  if (pp_enabled)
-	per_process_swap_out(&perf_mons[0]);
+	if (pm_global_enable == 0)
+		return;
+	  pm_stop_all();
+	/*
+	* Always collect for 0, it collects for all.
+	*/
+	if (pp_enabled) {
+		if (first_switch == 1) {
+			per_process_initialize(&perf_mons[0], 0);
+			first_switch = 0;
+		}
+		per_process_swap_out(&perf_mons[0]);
+		per_process_swap_in(&perf_mons[0], 0);
+	}
 
-  pm_stop_all();
-  p_old = per_process_find(old_pid);
-  p_new = per_process_find(new_pid);
+	p_old = per_process_find(old_pid);
+	p_new = per_process_find(new_pid);
 
 	/*
 	* Clear the data collected so far for this process?
@@ -594,14 +601,15 @@ void _per_process_switch(unsigned long old_pid, unsigned long new_pid)
 	/*
 	* Setup the counters for the new process
 	*/
-	if (p_new)
+	if (pp_set_pid == new_pid)
+		per_process_initialize(p_new, new_pid);
+	if (p_new->pid != 0)
 		per_process_swap_in(p_new, new_pid);
 	pm_reset_all();
 	axi_swaps++;
 	if (axi_swaps%pm_axi_info.refresh == 0) {
 		if (pm_axi_info.clear == 1) {
 			pm_axi_clear_cnts();
-			axi_cycle_overflows = 0;
 			pm_axi_info.clear = 0;
 		}
 		if (pm_axi_info.enable == 0)
@@ -958,4 +966,5 @@ void per_process_perf_exit(void)
 	remove_proc_entry("ppPerf", NULL);
 	pm_free_irq();
 	thread_unregister_notifier(&perfmon_notifier_block);
+	pm_deinitialize();
 }

@@ -39,7 +39,7 @@
 #define P_ECODEC_CLK	5   /* External CODEC clock */
 #define P_EMDH_CLK	6   /* External MDDI host clock */
 #define P_GP_CLK	7   /* General purpose clock */
-#define P_GRP_CLK	8   /* Graphics clock */
+#define P_GRP_3D_CLK	8   /* Graphics clock */
 #define P_I2C_CLK	9   /* I2C clock */
 #define P_ICODEC_RX_CLK	10  /* Internal CODEX RX clock */
 #define P_ICODEC_TX_CLK	11  /* Internal CODEX TX clock */
@@ -51,13 +51,13 @@
 #define P_PMDH_CLK	17  /* Primary MDDI host clock */
 #define P_SDAC_CLK	18  /* Stereo DAC clock */
 #define P_SDC1_CLK	19  /* Secure Digital Card clocks */
-#define P_SDC1_PCLK	20
+#define P_SDC1_P_CLK	20
 #define P_SDC2_CLK	21
-#define P_SDC2_PCLK	22
+#define P_SDC2_P_CLK	22
 #define P_SDC3_CLK	23
-#define P_SDC3_PCLK	24
+#define P_SDC3_P_CLK	24
 #define P_SDC4_CLK	25
-#define P_SDC4_PCLK	26
+#define P_SDC4_P_CLK	26
 #define P_TSIF_CLK	27  /* Transport Stream Interface clocks */
 #define P_TSIF_REF_CLK	28
 #define P_TV_DAC_CLK	29  /* TV clocks */
@@ -68,7 +68,7 @@
 #define P_UART1DM_CLK	34
 #define P_UART2DM_CLK	35
 #define P_USB_HS_CLK	36  /* High speed USB core clock */
-#define P_USB_HS_PCLK	37  /* High speed USB pbus clock */
+#define P_USB_HS_P_CLK	37  /* High speed USB pbus clock */
 #define P_USB_OTG_CLK	38  /* Full speed USB clock */
 #define P_VDC_CLK	39  /* Video controller clock */
 #define P_VFE_MDC_CLK	40  /* Camera / Video Front End clock */
@@ -79,67 +79,73 @@
 #define P_SPI_CLK	45
 #define P_VFE_AXI_CLK	46
 #define P_USB_HS2_CLK	47  /* High speed USB 2 core clock */
-#define P_USB_HS2_PCLK	48  /* High speed USB 2 pbus clock */
+#define P_USB_HS2_P_CLK	48  /* High speed USB 2 pbus clock */
 #define P_USB_HS3_CLK	49  /* High speed USB 3 core clock */
-#define P_USB_HS3_PCLK	50  /* High speed USB 3 pbus clock */
-#define P_GRP_PCLK	51  /* Graphics pbus clock */
+#define P_USB_HS3_P_CLK	50  /* High speed USB 3 pbus clock */
+#define P_GRP_3D_P_CLK	51  /* Graphics pbus clock */
 #define P_USB_PHY_CLK	52  /* USB PHY clock */
 #define P_USB_HS_CORE_CLK	53  /* High speed USB 1 core clock */
 #define P_USB_HS2_CORE_CLK	54  /* High speed USB 2 core clock */
 #define P_USB_HS3_CORE_CLK	55  /* High speed USB 3 core clock */
-#define P_CAM_MCLK_CLK		56
-#define P_CAMIF_PAD_PCLK	57
+#define P_CAM_M_CLK		56
+#define P_CAMIF_PAD_P_CLK	57
 #define P_GRP_2D_CLK		58
-#define P_GRP_2D_PCLK		59
+#define P_GRP_2D_P_CLK		59
 #define P_I2S_CLK		60
 #define P_JPEG_CLK		61
-#define P_JPEG_PCLK		62
+#define P_JPEG_P_CLK		62
 #define P_LPA_CODEC_CLK		63
 #define P_LPA_CORE_CLK		64
-#define P_LPA_PCLK		65
+#define P_LPA_P_CLK		65
 #define P_MDC_IO_CLK		66
-#define P_MDC_PCLK		67
+#define P_MDC_P_CLK		67
 #define P_MFC_CLK		68
 #define P_MFC_DIV2_CLK		69
-#define P_MFC_PCLK		70
+#define P_MFC_P_CLK		70
 #define P_QUP_I2C_CLK		71
 #define P_ROTATOR_IMEM_CLK	72
-#define P_ROTATOR_PCLK		73
+#define P_ROTATOR_P_CLK		73
 #define P_VFE_CAMIF_CLK		74
-#define P_VFE_PCLK		75
+#define P_VFE_P_CLK		75
 #define P_VPE_CLK		76
 #define P_I2C_2_CLK		77
-#define P_MI2S_CODEC_RX_SCLK	78
-#define P_MI2S_CODEC_RX_MCLK	79
-#define P_MI2S_CODEC_TX_SCLK	80
-#define P_MI2S_CODEC_TX_MCLK	81
-#define P_PMDH_PCLK		82
-#define P_EMDH_PCLK		83
-#define P_SPI_PCLK		84
-#define P_TSIF_PCLK		85
-#define P_MDP_PCLK		86
-#define P_SDAC_MCLK		87
+#define P_MI2S_CODEC_RX_S_CLK	78
+#define P_MI2S_CODEC_RX_M_CLK	79
+#define P_MI2S_CODEC_TX_S_CLK	80
+#define P_MI2S_CODEC_TX_M_CLK	81
+#define P_PMDH_P_CLK		82
+#define P_EMDH_P_CLK		83
+#define P_SPI_P_CLK		84
+#define P_TSIF_P_CLK		85
+#define P_MDP_P_CLK		86
+#define P_SDAC_M_CLK		87
 #define P_MI2S_HDMI_CLK		88
-#define P_MI2S_HDMI_MCLK	89
+#define P_MI2S_HDMI_M_CLK	89
 #define P_AXI_ROTATOR_CLK	90
 #define P_HDMI_CLK		91
 #define P_CSI0_CLK		92
 #define P_CSI0_VFE_CLK		93
-#define P_CSI0_PCLK		94
+#define P_CSI0_P_CLK		94
 #define P_CSI1_CLK		95
 #define P_CSI1_VFE_CLK		96
-#define P_CSI1_PCLK		97
+#define P_CSI1_P_CLK		97
 #define P_GSBI_CLK		98
-#define P_GSBI_PCLK		99
+#define P_GSBI_P_CLK		99
 
-#define P_NR_CLKS		100
+#define P_CE_CLK		100 /* Crypto engine */
+#define P_CODEC_SSBI_CLK	101
+#define P_NR_CLKS		102
+
 
 struct clk_ops;
 extern struct clk_ops clk_ops_pcom;
 
+int pc_clk_reset(unsigned id, enum clk_reset_action action);
+
 #define CLK_PCOM(clk_name, clk_id, clk_dev, clk_flags) {	\
 	.name = clk_name, \
 	.id = P_##clk_id, \
+	.remote_id = P_##clk_id, \
 	.ops = &clk_ops_pcom, \
 	.flags = clk_flags, \
 	.dev = clk_dev, \

@@ -57,6 +57,27 @@ struct audplay_cmd_bitstream_data_avail{
 
 } __attribute__((packed));
 
+#define AUDPLAY_CMD_CHANNEL_INFO 0x0001
+#define AUDPLAY_CMD_CHANNEL_INFO_LEN \
+  sizeof(struct audplay_cmd_channel_info)
+
+struct audplay_cmd_channel_select {
+  unsigned int cmd_id;
+  unsigned int stream_id;
+  unsigned int channel_select;
+} __attribute__((packed));
+
+struct audplay_cmd_threshold_update {
+  unsigned int cmd_id;
+  unsigned int threshold_update;
+  unsigned int threshold_value;
+} __attribute__((packed));
+
+union audplay_cmd_channel_info {
+  struct audplay_cmd_channel_select ch_select;
+  struct audplay_cmd_threshold_update thr_update;
+};
+
 #define AUDPLAY_CMD_HPCM_BUF_CFG 0x0003
 #define AUDPLAY_CMD_HPCM_BUF_CFG_LEN \
   sizeof(struct audplay_cmd_hpcm_buf_cfg)
@@ -113,6 +134,12 @@ struct audplay_cmd_bitstream_data_avail_nt2 {
 	/* bitstream write pointer */
 	unsigned int dspBitstreamWritePtr;
 
+} __attribute__((packed));
+
+#define AUDPLAY_CMD_OUTPORT_FLUSH 0x0006
+
+struct audplay_cmd_outport_flush {
+	unsigned int cmd_id;
 } __attribute__((packed));
 
 #endif /* QDSP5AUDPLAYCMD_H */

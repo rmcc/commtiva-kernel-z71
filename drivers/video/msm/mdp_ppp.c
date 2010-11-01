@@ -437,7 +437,7 @@ static void mdp_ppp_setbg(MDPIBUF *iBuf)
 						 8);
 		else if (iBuf->ibuf_type == MDP_XRGB_8888)
 			unpack_pattern =
-			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
+			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
 		else
 			unpack_pattern =
@@ -630,6 +630,7 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 		    PPP_DST_BPP_3BYTES | PPP_DST_PLANE_INTERLVD;
 		break;
 
+	case MDP_BGRA_8888:
 	case MDP_XRGB_8888:
 	case MDP_ARGB_8888:
 	case MDP_RGBA_8888:
@@ -645,7 +646,7 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 						 8);
 		else if (iBuf->ibuf_type == MDP_XRGB_8888)
 			dst_packPattern =
-			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
+			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
 		else
 			dst_packPattern =
@@ -854,7 +855,7 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 						 8);
 		else if (iBuf->ibuf_type == MDP_XRGB_8888)
 			packPattern =
-			    MDP_GET_PACK_PATTERN(CLR_B, CLR_G, CLR_R, CLR_ALPHA,
+			    MDP_GET_PACK_PATTERN(CLR_ALPHA, CLR_R, CLR_G, CLR_B,
 						 8);
 		else
 			packPattern =
@@ -1150,6 +1151,9 @@ struct mdp_blit_req *req, struct file *p_src_file, struct file *p_dst_file)
 		 (dest0_ystride << 16 | dest0_ystride));
 
 	flush_imgs(req, inpBpp, iBuf->bpp, p_src_file, p_dst_file);
+#ifdef	CONFIG_FB_MSM_MDP31
+	MDP_OUTP(MDP_BASE + 0x00100, 0xFF00);
+#endif
 	mdp_pipe_kickoff(MDP_PPP_TERM, mfd);
 }
 
@@ -1266,8 +1270,7 @@ void put_img(struct file *p_src_file)
 }
 
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file)
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 {
 	unsigned long src_start, dst_start;
 	unsigned long src_len = 0;
@@ -1294,8 +1297,6 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 		       "memory\n");
 		return -1;
 	}
-	*pp_src_file = p_src_file;
-	*pp_dst_file = p_dst_file;
 	if (mdp_ppp_verify_req(req)) {
 		printk(KERN_ERR "mdp_ppp: invalid image!\n");
 		put_img(p_src_file);
@@ -1371,11 +1372,14 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	if (req->flags & MDP_DEINTERLACE) {
 #ifdef CONFIG_FB_MSM_MDP31
 		if ((req->src.format != MDP_Y_CBCR_H2V2) &&
-			(req->src.format != MDP_Y_CRCB_H2V2))
+			(req->src.format != MDP_Y_CRCB_H2V2)) {
 #endif
 			put_img(p_src_file);
 			put_img(p_dst_file);
 			return -EINVAL;
+#ifdef CONFIG_FB_MSM_MDP31
+		}
+#endif
 	}
 
 	/* scale check */
@@ -1514,6 +1518,7 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 	     (req->src.format == MDP_RGBA_8888)) &&
 	    (iBuf.mdpImg.mdpOp & MDPOP_ROT90) && (req->dst_rect.w <= 16)) {
 		int dst_h, src_w, i;
+		uint32 mdpOp = iBuf.mdpImg.mdpOp;
 
 		src_w = req->src_rect.w;
 		dst_h = iBuf.roi.dst_height;
@@ -1545,6 +1550,8 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
 			/* this is for a remainder update */
 			dst_h -= 16;
 			src_w -= iBuf.roi.width;
+			/* restore mdpOp since MDPOP_ASCALE have been cleared */
+			iBuf.mdpImg.mdpOp = mdpOp;
 		}
 
 		if ((dst_h < 0) || (src_w < 0))

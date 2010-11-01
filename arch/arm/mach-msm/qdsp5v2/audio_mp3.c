@@ -74,6 +74,8 @@
 
 #define AUDMP3_EVENT_NUM 10 /* Default number of pre-allocated event packets */
 
+#define BITSTREAM_ERROR_THRESHOLD_VALUE 0x1 /* DEFAULT THRESHOLD VALUE */
+
 #define __CONTAINS(r, v, l) ({					\
 	typeof(r) __r = r;					\
 	typeof(v) __v = v;					\
@@ -232,6 +234,10 @@ struct audio {
 	struct list_head pmem_region_queue; /* protected by lock */
 	struct audmp3_drv_operations drv_ops;
 
+	struct msm_audio_bitstream_info stream_info;
+	struct msm_audio_bitstream_error_info bitstream_error_info;
+	uint32_t bitstream_error_threshold_value;
+
 	int eq_enable;
 	int eq_needs_commit;
 	struct audpp_cmd_cfg_object_params_eqalizer eq;
@@ -242,6 +248,7 @@ static int auddec_dsp_config(struct audio *audio, int enable);
 static void audpp_cmd_cfg_adec_params(struct audio *audio);
 static void audpp_cmd_cfg_routing_mode(struct audio *audio);
 static void audplay_send_data(struct audio *audio, unsigned needed);
+static void audplay_error_threshold_config(struct audio *audio);
 static void audplay_config_hostpcm(struct audio *audio);
 static void audplay_buffer_refresh(struct audio *audio);
 static void audio_dsp_event(void *private, unsigned id, uint16_t *msg);
@@ -267,6 +274,14 @@ static void mp3_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 		audio->source &= ~(0x1 << evt_payload->routing_id);
 		if (audio->running == 1 && audio->enabled == 1)
 			audpp_route_stream(audio->dec_id, audio->source);
+		break;
+	case AUDDEV_EVT_STREAM_VOL_CHG:
+		audio->vol_pan.volume = evt_payload->session_vol;
+		MM_DBG(":AUDDEV_EVT_STREAM_VOL_CHG, stream vol %d\n",
+				audio->vol_pan.volume);
+		if (audio->running)
+			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan,
+					POPP);
 		break;
 	default:
 		MM_ERR(":ERROR:wrong event\n");
@@ -401,6 +416,59 @@ static void audio_update_pcm_buf_entry(struct audio *audio, uint32_t *payload)
 
 }
 
+static void audmp3_bitstream_error_info(struct audio *audio, uint32_t *payload)
+{
+	unsigned long flags;
+	union msm_audio_event_payload e_payload;
+
+	if (payload[0] != AUDDEC_DEC_MP3) {
+		MM_ERR("Unexpected bitstream error info from DSP:\
+				Invalid decoder\n");
+		return;
+	}
+
+	/* get stream info from DSP msg */
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+
+	audio->bitstream_error_info.dec_id = payload[0];
+	audio->bitstream_error_info.err_msg_indicator = payload[1];
+	audio->bitstream_error_info.err_type = payload[2];
+
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+	MM_ERR("bit_stream_error_type=%d error_count=%d\n",
+			audio->bitstream_error_info.err_type, (0x0000FFFF &
+			audio->bitstream_error_info.err_msg_indicator));
+
+	/* send event to ARM to notify error info coming */
+	e_payload.error_info = audio->bitstream_error_info;
+	audmp3_post_event(audio, AUDIO_EVENT_BITSTREAM_ERROR_INFO, e_payload);
+}
+
+static void audmp3_update_stream_info(struct audio *audio, uint32_t *payload)
+{
+	unsigned long flags;
+	union msm_audio_event_payload e_payload;
+
+	/* get stream info from DSP msg */
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+
+	audio->stream_info.codec_type = AUDIO_CODEC_TYPE_MP3;
+	audio->stream_info.chan_info = (0x0000FFFF & payload[1]);
+	audio->stream_info.sample_rate = (0x0000FFFF & payload[2]);
+	audio->stream_info.bit_stream_info = (0x0000FFFF & payload[3]);
+	audio->stream_info.bit_rate = payload[4];
+
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+	MM_DBG("chan_info=%d, sample_rate=%d, bit_stream_info=%d\n",
+			audio->stream_info.chan_info,
+			audio->stream_info.sample_rate,
+			audio->stream_info.bit_stream_info);
+
+	/* send event to ARM to notify steam info coming */
+	e_payload.stream_info = audio->stream_info;
+	audmp3_post_event(audio, AUDIO_EVENT_STREAM_INFO, e_payload);
+}
+
 static void audplay_dsp_event(void *data, unsigned id, size_t len,
 			      void (*getevent) (void *ptr, size_t len))
 {
@@ -417,6 +485,23 @@ static void audplay_dsp_event(void *data, unsigned id, size_t len,
 
 	case AUDPLAY_MSG_BUFFER_UPDATE:
 		audio->drv_ops.pcm_buf_update(audio, msg);
+		break;
+
+	case AUDPLAY_UP_STREAM_INFO:
+		if ((msg[1] & AUDPLAY_STREAM_INFO_MSG_MASK) ==
+				AUDPLAY_STREAM_INFO_MSG_MASK) {
+			audmp3_bitstream_error_info(audio, msg);
+		} else {
+			audmp3_update_stream_info(audio, msg);
+		}
+		break;
+
+	case AUDPLAY_UP_OUTPORT_FLUSH_ACK:
+		MM_DBG("OUTPORT_FLUSH_ACK\n");
+		audio->rflush = 0;
+		wake_up(&audio->read_wait);
+		if (audio->pcm_feedback)
+			audio->drv_ops.buffer_refresh(audio);
 		break;
 
 	case ADSP_MESSAGE_ID:
@@ -473,6 +558,7 @@ static void audio_dsp_event(void *private, unsigned id, uint16_t *msg)
 				audpp_route_stream(audio->dec_id,
 						audio->source);
 				if (audio->pcm_feedback) {
+					audplay_error_threshold_config(audio);
 					audplay_config_hostpcm(audio);
 					audio->drv_ops.buffer_refresh(audio);
 				}
@@ -650,6 +736,18 @@ static void audplay_buffer_refresh(struct audio *audio)
 	(void)audplay_send_queue0(audio, &refresh_cmd, sizeof(refresh_cmd));
 }
 
+static void audplay_error_threshold_config(struct audio *audio)
+{
+	union audplay_cmd_channel_info ch_cfg_cmd;
+
+	MM_DBG("\n"); /* Macro prints the file name and function */
+	ch_cfg_cmd.thr_update.cmd_id = AUDPLAY_CMD_CHANNEL_INFO;
+	ch_cfg_cmd.thr_update.threshold_update = AUDPLAY_ERROR_THRESHOLD_ENABLE;
+	ch_cfg_cmd.thr_update.threshold_value =
+		audio->bitstream_error_threshold_value;
+	(void)audplay_send_queue0(audio, &ch_cfg_cmd, sizeof(ch_cfg_cmd));
+}
+
 static void audplay_config_hostpcm(struct audio *audio)
 {
 	struct audplay_cmd_hpcm_buf_cfg cfg_cmd;
@@ -663,6 +761,15 @@ static void audplay_config_hostpcm(struct audio *audio)
 	cfg_cmd.partition_number = 0;
 	(void)audplay_send_queue0(audio, &cfg_cmd, sizeof(cfg_cmd));
 
+}
+
+static void audplay_outport_flush(struct audio *audio)
+{
+	struct audplay_cmd_outport_flush op_flush_cmd;
+
+	MM_DBG("\n"); /* Macro prints the file name and function */
+	op_flush_cmd.cmd_id = AUDPLAY_CMD_OUTPORT_FLUSH;
+	(void)audplay_send_queue0(audio, &op_flush_cmd, sizeof(op_flush_cmd));
 }
 
 static void audmp3_async_send_data(struct audio *audio, unsigned needed)
@@ -1331,7 +1438,25 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			audio->wflush = 0;
 		}
 		break;
-
+	case AUDIO_OUTPORT_FLUSH:
+		MM_DBG("AUDIO_OUTPORT_FLUSH\n");
+		audio->rflush = 1;
+		if (audio->drv_status & ADRV_STATUS_AIO_INTF) {
+			audio->drv_ops.in_flush(audio);
+		} else {
+			wake_up(&audio->read_wait);
+			mutex_lock(&audio->read_lock);
+			audio->drv_ops.in_flush(audio);
+			mutex_unlock(&audio->read_lock);
+		}
+		audplay_outport_flush(audio);
+		rc = wait_event_interruptible(audio->read_wait,
+				!audio->rflush);
+		if (rc < 0) {
+			MM_ERR("AUDPLAY_OUTPORT_FLUSH interrupted\n");
+			rc = -EINTR;
+		}
+		break;
 	case AUDIO_SET_CONFIG: {
 		struct msm_audio_config config;
 		if (copy_from_user(&config, (void *) arg, sizeof(config))) {
@@ -1467,6 +1592,37 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		rc = audpp_pause(audio->dec_id, (int) arg);
 		break;
 
+	case AUDIO_GET_STREAM_INFO:{
+		if (audio->stream_info.sample_rate == 0) {
+			/* haven't received DSP stream event,
+			the stream info is not updated */
+			rc = -EPERM;
+			break;
+		}
+		if (copy_to_user((void *)arg, &audio->stream_info,
+			sizeof(struct msm_audio_bitstream_info)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
+	case AUDIO_GET_BITSTREAM_ERROR_INFO:{
+		if ((audio->bitstream_error_info.err_msg_indicator &
+				AUDPLAY_STREAM_INFO_MSG_MASK) ==
+				AUDPLAY_STREAM_INFO_MSG_MASK) {
+			/* haven't received bitstream error info event,
+			the bitstream error info is not updated */
+			rc = -EPERM;
+			break;
+		}
+		if (copy_to_user((void *)arg, &audio->bitstream_error_info,
+			sizeof(struct msm_audio_bitstream_error_info)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	}
+
 	case AUDIO_REGISTER_PMEM: {
 			struct msm_audio_pmem_info info;
 			MM_DBG("AUDIO_REGISTER_PMEM\n");
@@ -1502,6 +1658,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case AUDIO_GET_SESSION_ID:
 		if (copy_to_user((void *) arg, &audio->dec_id,
 					sizeof(unsigned short)))
+			rc = -EFAULT;
+		else
+			rc = 0;
+		break;
+	case AUDIO_SET_ERR_THRESHOLD_VALUE:
+		if (copy_from_user(&audio->bitstream_error_threshold_value,
+					(void *)arg, sizeof(uint32_t)))
 			rc = -EFAULT;
 		else
 			rc = 0;
@@ -1632,13 +1795,17 @@ static ssize_t audio_read(struct file *file, char __user *buf, size_t count,
 	mutex_lock(&audio->read_lock);
 	MM_DBG("%d \n",	count);
 	while (count > 0) {
-		rc = wait_event_interruptible(
+		rc = wait_event_interruptible_timeout(
 			audio->read_wait,
 			(audio->in[audio->read_next].
 			used > 0) || (audio->stopped)
-			|| (audio->rflush));
+			|| (audio->rflush),
+			msecs_to_jiffies(MSM_AUD_BUFFER_UPDATE_WAIT_MS));
 
-		if (rc < 0)
+		if (rc == 0) {
+			rc = -ETIMEDOUT;
+			break;
+		} else if (rc < 0)
 			break;
 
 		if (audio->stopped || audio->rflush) {
@@ -2191,6 +2358,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->out_sample_rate = 44100;
 	audio->out_channel_mode = AUDPP_CMD_PCM_INTF_STEREO_V;
 	audio->vol_pan.volume = 0x2000;
+	audio->bitstream_error_threshold_value =
+		BITSTREAM_ERROR_THRESHOLD_VALUE;
 
 	audio->drv_ops.out_flush(audio);
 
@@ -2198,7 +2367,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->opened = 1;
 
 	audio->device_events = AUDDEV_EVT_DEV_RDY
-				|AUDDEV_EVT_DEV_RLS;
+				|AUDDEV_EVT_DEV_RLS |
+				AUDDEV_EVT_STREAM_VOL_CHG;
 
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_DEC,
@@ -2234,6 +2404,9 @@ static int audio_open(struct inode *inode, struct file *file)
 			break;
 		}
 	}
+	memset(&audio->stream_info, 0, sizeof(struct msm_audio_bitstream_info));
+	memset(&audio->bitstream_error_info, 0,
+			sizeof(struct msm_audio_bitstream_info));
 done:
 	return rc;
 event_err:

@@ -226,6 +226,10 @@ struct msm_camera_cfg_cmd {
 #define CMD_AXI_CFG_PREVIEW		36
 #define CMD_AXI_CFG_VIDEO		37
 
+#define CMD_STATS_IHIST_ENABLE 38
+#define CMD_STATS_RS_ENABLE 39
+#define CMD_STATS_CS_ENABLE 40
+
 /* vfe config command: config command(from config thread)*/
 struct msm_vfe_cfg_cmd {
 	int cmd_type;
@@ -578,7 +582,11 @@ struct fps_cfg {
 	uint16_t fps_div;
 	uint32_t pict_fps_div;
 };
-
+struct wb_info_cfg {
+	uint16_t red_gain;
+	uint16_t green_gain;
+	uint16_t blue_gain;
+};
 struct sensor_cfg_data {
 	int cfgtype;
 	int mode;
@@ -672,6 +680,7 @@ struct sensor_cfg_data {
 		struct exp_gain_cfg exp_gain;
 		struct focus_cfg focus;
 		struct fps_cfg fps;
+		struct wb_info_cfg wb_info;
 	} cfg;
 };
 

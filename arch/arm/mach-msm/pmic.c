@@ -150,6 +150,7 @@
 #define PMIC_RPC_PROG	0x30000061
 #define PMIC_RPC_VER_1_1	0x00010001
 #define PMIC_RPC_VER_2_1	0x00020001
+#define PMIC_RPC_VER_3_1	0x00030001
 
 /* error bit flags defined by modem side */
 #define PM_ERR_FLAG__PAR1_OUT_OF_RANGE		(0x0001)
@@ -329,10 +330,15 @@ static int pmic_rpc_req_reply(struct pmic_buf *tbuf, struct pmic_buf *rbuf,
 
 	if ((pm->endpoint == NULL) || IS_ERR(pm->endpoint)) {
 		pm->endpoint = msm_rpc_connect_compatible(PMIC_RPC_PROG,
-					PMIC_RPC_VER_2_1, 0);
+					PMIC_RPC_VER_3_1, 0);
 		if (IS_ERR(pm->endpoint)) {
 			pm->endpoint = msm_rpc_connect_compatible(PMIC_RPC_PROG,
+						PMIC_RPC_VER_2_1, 0);
+			if (IS_ERR(pm->endpoint)) {
+				pm->endpoint = msm_rpc_connect_compatible(
+						PMIC_RPC_PROG,
 						PMIC_RPC_VER_1_1, 0);
+			}
 		}
 
 		if (IS_ERR(pm->endpoint)) {

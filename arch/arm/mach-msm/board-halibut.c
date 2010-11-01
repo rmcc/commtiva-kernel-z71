@@ -419,14 +419,25 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+	.flash_sr_type = MSM_CAMERA_FLASH_SRC_PMIC,
+	._fsrc.pmic_src.low_current  = 30,
+	._fsrc.pmic_src.high_current = 100,
+};
+
 #ifdef CONFIG_MT9D112
+static struct msm_camera_sensor_flash_data flash_mt9d112 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.sensor_name	= "mt9d112",
 	.sensor_reset	= 89,
 	.sensor_pwd	= 85,
 	.vcm_pwd	= 0,
 	.pdata		= &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data    = &flash_mt9d112
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -438,13 +449,18 @@ static struct platform_device msm_camera_sensor_mt9d112 = {
 #endif
 
 #ifdef CONFIG_S5K3E2FX
+static struct msm_camera_sensor_flash_data flash_s5k3e2fx = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.sensor_name	= "s5k3e2fx",
 	.sensor_reset	= 89,
 	.sensor_pwd	= 85,
 	.vcm_pwd	= 0,
 	.pdata		= &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_s5k3e2fx
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -456,13 +472,18 @@ static struct platform_device msm_camera_sensor_s5k3e2fx = {
 #endif
 
 #ifdef CONFIG_MT9P012
+static struct msm_camera_sensor_flash_data flash_mt9p012 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.sensor_name	= "mt9p012",
 	.sensor_reset	= 89,
 	.sensor_pwd	= 85,
 	.vcm_pwd	= 88,
 	.pdata		= &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9p012
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -474,13 +495,18 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 #endif
 
 #ifdef CONFIG_MT9T013
+static struct msm_camera_sensor_flash_data flash_mt9t013 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_name	= "mt9t013",
 	.sensor_reset	= 89,
 	.sensor_pwd	= 85,
 	.vcm_pwd	= 0,
 	.pdata		= &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_mt9t013
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {

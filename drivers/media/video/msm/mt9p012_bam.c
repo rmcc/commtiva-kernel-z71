@@ -385,11 +385,6 @@ static int32_t mt9p012_set_lc(void)
 {
 	int32_t rc;
 
-	rc = mt9p012_i2c_write_w_table(mt9p012_regs.lctbl,
-				       mt9p012_regs.lctbl_size);
-	if (rc < 0)
-		return rc;
-
 	rc = mt9p012_i2c_write_w_table(mt9p012_regs.rftbl,
 				       mt9p012_regs.rftbl_size);
 
@@ -519,7 +514,7 @@ static int32_t mt9p012_write_exp_gain(uint16_t gain, uint32_t line)
 	}
 
 	/* Verify no overflow */
-	if (mt9p012_ctrl->sensormode != SENSOR_SNAPSHOT_MODE) {
+	if (mt9p012_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
 		line = (uint32_t) (line * mt9p012_ctrl->fps_divider /
 				   0x00000400);
 		setting = RES_PREVIEW;

@@ -22,8 +22,9 @@
 #include <asm/io.h>
 #include <asm/mach/map.h>
 #include <asm/cacheflush.h>
-#if defined(CONFIG_NPA_REMOTE)
-#include <linux/npa_remote.h>
+#include <linux/hardirq.h>
+#if defined(CONFIG_MSM_NPA_REMOTE)
+#include "npa_remote.h"
 #include <linux/completion.h>
 #include <linux/err.h>
 #endif
@@ -41,28 +42,45 @@ int arch_io_remap_pfn_range(struct vm_area_struct *vma, unsigned long addr,
 
 void *zero_page_strongly_ordered;
 
-static void map_zero_page_strongly_ordered(void)
+void map_zero_page_strongly_ordered(void)
 {
+#if defined(CONFIG_ARCH_MSM7X27)
 	if (zero_page_strongly_ordered)
 		return;
 
 	zero_page_strongly_ordered =
 		ioremap_strongly_ordered(page_to_pfn(empty_zero_page)
 		<< PAGE_SHIFT, PAGE_SIZE);
+	printk(KERN_ALERT "Initialized Zero page successfully\n");
+#endif
 }
+EXPORT_SYMBOL(map_zero_page_strongly_ordered);
 
 void write_to_strongly_ordered_memory(void)
 {
-	map_zero_page_strongly_ordered();
+#if defined(CONFIG_ARCH_MSM7X27)
+	if (!zero_page_strongly_ordered) {
+		if (!in_interrupt())
+			map_zero_page_strongly_ordered();
+		else {
+			printk(KERN_ALERT "Cannot map zero page in "
+				"Interrupt Context\n");
+			/* capture it here before the allocation fails later */
+			BUG();
+		}
+	}
 	*(int *)zero_page_strongly_ordered = 0;
+#endif
 }
 EXPORT_SYMBOL(write_to_strongly_ordered_memory);
 
 void flush_axi_bus_buffer(void)
 {
+#if defined(CONFIG_ARCH_MSM7X27)
 	__asm__ __volatile__ ("mcr p15, 0, %0, c7, c10, 5" \
 				    : : "r" (0) : "memory");
 	write_to_strongly_ordered_memory();
+#endif
 }
 
 #define CACHE_LINE_SIZE 32
@@ -154,19 +172,22 @@ struct npa_client *npa_memory_client;
 static int change_memory_power_state(unsigned long start_pfn,
 	unsigned long nr_pages, int state)
 {
+#if defined(CONFIG_NPA_REMOTE)
+	static atomic_t node_created_flag = ATOMIC_INIT(1);
+#else
 	unsigned long start;
 	unsigned long size;
 	unsigned long virtual;
+#endif
 	int rc = 0;
-#if defined(CONFIG_NPA_REMOTE)
-	static atomic_t node_created_flag = ATOMIC_INIT(1);
 
+#if defined(CONFIG_NPA_REMOTE)
 	if (atomic_dec_and_test(&node_created_flag)) {
 		/* Create NPA 'required' client. */
 		npa_memory_client = npa_create_sync_client(NPA_MEMORY_NODE_NAME,
 			"memory node", NPA_CLIENT_REQUIRED);
-		if (IS_ERR(npa_client)) {
-			rc = PTR_ERR(npa_client);
+		if (IS_ERR(npa_memory_client)) {
+			rc = PTR_ERR(npa_memory_client);
 			return rc;
 		}
 	}

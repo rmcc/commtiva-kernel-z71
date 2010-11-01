@@ -32,6 +32,9 @@
 #define KGSL_CONTEXT_SAVE_GMEM		1
 #define KGSL_CONTEXT_NO_GMEM_ALLOC	2
 
+/* Memory allocayion flags */
+#define KGSL_MEMFLAGS_GPUREADONLY	0x01000000
+
 /* generic flag values */
 #define KGSL_FLAGS_NORMALMODE  0x00000000
 #define KGSL_FLAGS_SAFEMODE    0x00000001
@@ -105,10 +108,13 @@ struct kgsl_shadowprop {
 };
 
 struct kgsl_platform_data {
-	unsigned int max_axi_freq;
+	unsigned int high_axi_2d;
+	unsigned int high_axi_3d;
 	unsigned int max_grp2d_freq;
+	unsigned int min_grp2d_freq;
 	int (*set_grp2d_async)(void);
 	unsigned int max_grp3d_freq;
+	unsigned int min_grp3d_freq;
 	int (*set_grp3d_async)(void);
 };
 
@@ -285,9 +291,7 @@ struct kgsl_bind_gmem_shadow {
 struct kgsl_sharedmem_from_vmalloc {
 	unsigned int gpuaddr;	/*output param */
 	unsigned int hostptr;
-	/* If set from user space then will attempt to
-	 * allocate even if low watermark is crossed */
-	int force_no_low_watermark;
+	unsigned int flags;
 };
 
 #define IOCTL_KGSL_SHAREDMEM_FROM_VMALLOC \

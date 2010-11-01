@@ -61,6 +61,10 @@
 #include <linux/mfd/marimba.h>
 #include <linux/err.h>
 
+#define MARIMBA_CDC_RX_CTL 0x81
+#define MARIMBA_CDC_RX_CTL_ST_EN_MASK 0x20
+#define MARIMBA_CDC_RX_CTL_ST_EN_SHFT 0x5
+
 static struct adie_codec_register adie_codec_tx_regs[] =
 {
 	{ 0x04, 0xc0, 0x8C },
@@ -149,14 +153,26 @@ struct adie_codec_state {
 
 static struct adie_codec_state adie_codec;
 
-static void adie_codec_write(u8 reg, u8 mask, u8 val)
+static int adie_codec_write(u8 reg, u8 mask, u8 val)
 {
+	int rc;
 	u8 cur_val;
 
-	marimba_read(adie_codec.pdrv_ptr, reg, &cur_val, 1);
+	rc = marimba_read(adie_codec.pdrv_ptr, reg, &cur_val, 1);
+	if (IS_ERR_VALUE(rc)) {
+		pr_err("%s: fail to read reg %x\n", __func__, reg);
+		return -EIO;
+	}
 	cur_val = (cur_val & ~mask) | (val & mask);
-	marimba_write(adie_codec.pdrv_ptr, reg,  &cur_val, 1);
+	rc = marimba_write(adie_codec.pdrv_ptr, reg,  &cur_val, 1);
+	if (IS_ERR_VALUE(rc)) {
+		pr_err("%s: fail to write reg %x\n", __func__, reg);
+		return -EIO;
+	}
+
 	pr_debug("%s: write reg %x val %x\n", __func__, reg, cur_val);
+
+	return 0;
 }
 
 int adie_codec_setpath(struct adie_codec_path *path_ptr, u32 freq_plan, u32 osr)
@@ -213,6 +229,40 @@ u32 adie_codec_freq_supported(struct adie_codec_dev_profile *profile,
 	return rc;
 }
 EXPORT_SYMBOL(adie_codec_freq_supported);
+
+int adie_codec_enable_sidetone(struct adie_codec_path *rx_path_ptr,
+	u32 enable)
+{
+	int rc = 0;
+
+	pr_debug("%s()\n", __func__);
+
+	mutex_lock(&adie_codec.lock);
+
+	if (!rx_path_ptr || &adie_codec.path[ADIE_CODEC_RX] != rx_path_ptr) {
+		pr_err("%s: invalid path pointer\n", __func__);
+		rc = -EINVAL;
+		goto error;
+	} else if (rx_path_ptr->curr_stage !=
+		ADIE_CODEC_DIGITAL_ANALOG_READY) {
+		pr_err("%s: bad state\n", __func__);
+		rc = -EPERM;
+		goto error;
+	}
+
+	if (enable)
+		rc = adie_codec_write(MARIMBA_CDC_RX_CTL,
+		MARIMBA_CDC_RX_CTL_ST_EN_MASK,
+		(0x1 << MARIMBA_CDC_RX_CTL_ST_EN_SHFT));
+	else
+		rc = adie_codec_write(MARIMBA_CDC_RX_CTL,
+		MARIMBA_CDC_RX_CTL_ST_EN_MASK, 0);
+
+error:
+	mutex_unlock(&adie_codec.lock);
+	return rc;
+}
+EXPORT_SYMBOL(adie_codec_enable_sidetone);
 
 static void adie_codec_reach_stage_action(struct adie_codec_path *path_ptr,
 	u32 stage)

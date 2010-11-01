@@ -3,7 +3,7 @@
  * MSM Power Management Routines
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -50,6 +50,7 @@
 #include "gpio.h"
 #include "timer.h"
 #include "pm.h"
+#include "spm.h"
 
 
 /******************************************************************************
@@ -142,6 +143,8 @@ static char *msm_pm_sleep_mode_labels[MSM_PM_SLEEP_MODE_NR] = {
 	[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT] = "wfi",
 	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN] =
 		"power_collapse_no_xo_shutdown",
+	[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE] =
+		"standalone_power_collapse",
 };
 
 static struct msm_pm_platform_data *msm_pm_modes;
@@ -396,6 +399,7 @@ static void msm_pm_config_hw_after_power_up(void)
 #if defined(CONFIG_ARCH_MSM7X30)
 	writel(0, APPS_SECOP);
 	writel(0, APPS_PWRDOWN);
+	msm_spm_reinit();
 #else
 	writel(0, APPS_PWRDOWN);
 	writel(0, APPS_CLK_SLEEP_EN);
@@ -593,6 +597,8 @@ enum msm_pm_time_stats_id {
 	MSM_PM_STAT_REQUESTED_IDLE,
 	MSM_PM_STAT_IDLE_SPIN,
 	MSM_PM_STAT_IDLE_WFI,
+	MSM_PM_STAT_IDLE_STANDALONE_POWER_COLLAPSE,
+	MSM_PM_STAT_IDLE_FAILED_STANDALONE_POWER_COLLAPSE,
 	MSM_PM_STAT_IDLE_SLEEP,
 	MSM_PM_STAT_IDLE_FAILED_SLEEP,
 	MSM_PM_STAT_IDLE_POWER_COLLAPSE,
@@ -622,6 +628,16 @@ static struct msm_pm_time_stats {
 
 	[MSM_PM_STAT_IDLE_WFI].name = "idle-wfi",
 	[MSM_PM_STAT_IDLE_WFI].first_bucket_time =
+		CONFIG_MSM_IDLE_STATS_FIRST_BUCKET,
+
+	[MSM_PM_STAT_IDLE_STANDALONE_POWER_COLLAPSE].name =
+		"idle-standalone-power-collapse",
+	[MSM_PM_STAT_IDLE_STANDALONE_POWER_COLLAPSE].first_bucket_time =
+		CONFIG_MSM_IDLE_STATS_FIRST_BUCKET,
+
+	[MSM_PM_STAT_IDLE_FAILED_STANDALONE_POWER_COLLAPSE].name =
+		"idle-failed-standalone-power-collapse",
+	[MSM_PM_STAT_IDLE_FAILED_STANDALONE_POWER_COLLAPSE].first_bucket_time =
 		CONFIG_MSM_IDLE_STATS_FIRST_BUCKET,
 
 	[MSM_PM_STAT_IDLE_SLEEP].name = "idle-sleep",
@@ -1190,6 +1206,69 @@ power_collapse_bail:
 }
 
 /*
+ * Power collapse the Apps processor without involving Modem.
+ *
+ * Return value:
+ *      0: success
+ */
+static int msm_pm_power_collapse_standalone(void)
+{
+	uint32_t saved_vector[2];
+	int collapsed = 0;
+	int ret;
+
+	MSM_PM_DPRINTK(MSM_PM_DEBUG_SUSPEND|MSM_PM_DEBUG_POWER_COLLAPSE,
+		KERN_INFO, "%s()\n", __func__);
+
+	ret = msm_spm_set_low_power_mode(MSM_SPM_MODE_POWER_COLLAPSE, false);
+	WARN_ON(ret);
+
+	saved_vector[0] = msm_pm_reset_vector[0];
+	saved_vector[1] = msm_pm_reset_vector[1];
+	msm_pm_reset_vector[0] = 0xE51FF004; /* ldr pc, 4 */
+	msm_pm_reset_vector[1] = virt_to_phys(msm_pm_collapse_exit);
+
+	MSM_PM_DPRINTK(MSM_PM_DEBUG_RESET_VECTOR, KERN_INFO,
+		"%s(): vector %x %x -> %x %x\n", __func__,
+		saved_vector[0], saved_vector[1],
+		msm_pm_reset_vector[0], msm_pm_reset_vector[1]);
+
+#ifdef CONFIG_VFP
+	vfp_flush_context();
+#endif
+
+#ifdef CONFIG_CACHE_L2X0
+	l2x0_suspend();
+#endif
+
+	collapsed = msm_pm_collapse();
+
+#ifdef CONFIG_CACHE_L2X0
+	l2x0_resume(collapsed);
+#endif
+
+	msm_pm_reset_vector[0] = saved_vector[0];
+	msm_pm_reset_vector[1] = saved_vector[1];
+
+	if (collapsed) {
+#ifdef CONFIG_VFP
+		vfp_reinit();
+#endif
+		cpu_init();
+		local_fiq_enable();
+	}
+
+	MSM_PM_DPRINTK(MSM_PM_DEBUG_SUSPEND | MSM_PM_DEBUG_POWER_COLLAPSE,
+		KERN_INFO,
+		"%s(): msm_pm_collapse returned %d\n", __func__, collapsed);
+
+	ret = msm_spm_set_low_power_mode(MSM_SPM_MODE_CLOCK_GATING, false);
+	WARN_ON(ret);
+
+	return 0;
+}
+
+/*
  * Apps-sleep the Apps processor.  This function execute the handshake
  * protocol with Modem.
  *
@@ -1287,6 +1366,9 @@ void arch_idle(void)
 			false;
 		/* fall through */
 	case MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT:
+		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE] = false;
+		/* fall through */
+	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE:
 		allow[MSM_PM_SLEEP_MODE_APPS_SLEEP] = false;
 		/* fall through */
 	case MSM_PM_SLEEP_MODE_APPS_SLEEP:
@@ -1386,6 +1468,14 @@ void arch_idle(void)
 		else
 			exit_stat = MSM_PM_STAT_IDLE_SLEEP;
 #endif /* CONFIG_MSM_IDLE_STATS */
+	} else if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE]) {
+		ret = msm_pm_power_collapse_standalone();
+		low_power = 0;
+#ifdef CONFIG_MSM_IDLE_STATS
+		exit_stat = ret ?
+			MSM_PM_STAT_IDLE_FAILED_STANDALONE_POWER_COLLAPSE :
+			MSM_PM_STAT_IDLE_STANDALONE_POWER_COLLAPSE;
+#endif /* CONFIG_MSM_IDLE_STATS */
 	} else if (allow[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT]) {
 		ret = msm_pm_swfi(true);
 		if (ret)
@@ -1466,6 +1556,9 @@ static int msm_pm_enter(suspend_state_t state)
 			false;
 		/* fall through */
 	case MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT:
+		allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE] = false;
+		/* fall through */
+	case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE:
 		allow[MSM_PM_SLEEP_MODE_APPS_SLEEP] = false;
 		/* fall through */
 	case MSM_PM_SLEEP_MODE_APPS_SLEEP:
@@ -1533,6 +1626,8 @@ static int msm_pm_enter(suspend_state_t state)
 
 		msm_pm_add_stat(id, time);
 #endif
+	} else if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE]) {
+		ret = msm_pm_power_collapse_standalone();
 	} else if (allow[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT]) {
 		ret = msm_pm_swfi(true);
 		if (ret)

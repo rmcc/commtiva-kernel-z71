@@ -229,6 +229,14 @@ static void pcm_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 		if (audio->running == 1 && audio->enabled == 1)
 			audpp_route_stream(audio->dec_id, audio->source);
 		break;
+	case AUDDEV_EVT_STREAM_VOL_CHG:
+		audio->volume = evt_payload->session_vol;
+		pr_debug(":AUDDEV_EVT_STREAM_VOL_CHG, stream vol %d\n",
+				audio->volume);
+		if (audio->running)
+			audpp_set_volume_and_pan(audio->dec_id, audio->volume,
+					0, POPP);
+		break;
 	default:
 		pr_err(":ERROR:wrong event\n");
 		break;
@@ -1571,7 +1579,8 @@ static int audio_open(struct inode *inode, struct file *file)
 	audio->opened = 1;
 
 	audio->device_events = AUDDEV_EVT_DEV_RDY
-				|AUDDEV_EVT_DEV_RLS;
+				|AUDDEV_EVT_DEV_RLS|
+				AUDDEV_EVT_STREAM_VOL_CHG;
 
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_DEC,

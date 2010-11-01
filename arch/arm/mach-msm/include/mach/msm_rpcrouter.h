@@ -157,13 +157,7 @@ struct msm_rpc_xdr {
 	void *in_buf;
 	uint32_t in_size;
 	uint32_t in_index;
-/* FIH;Tiger;2010/7/5 { */
-#ifdef CONFIG_FIH_FXX
 	wait_queue_head_t in_buf_wait_q;
-#else
-	struct mutex in_lock;
-#endif
-/* } FIH;Tiger;2010/7/5 */
 
 	void *out_buf;
 	uint32_t out_size;

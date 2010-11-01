@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -129,6 +129,10 @@ struct smem_log_item {
 
 static remote_spinlock_t remote_spinlock;
 static remote_spinlock_t remote_spinlock_static;
+static uint32_t smem_log_enable;
+module_param_named(log_enable, smem_log_enable, int,
+		   S_IRUGO | S_IWUSR | S_IWGRP);
+
 
 struct smem_log_inst {
 	int which_log;
@@ -799,35 +803,43 @@ static void _smem_log_event6(
 void smem_log_event(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(inst[GEN].events, inst[GEN].idx,
-			inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
-			id, data1, data2, data3);
+	if (smem_log_enable)
+		_smem_log_event(inst[GEN].events, inst[GEN].idx,
+				inst[GEN].remote_spinlock,
+				SMEM_LOG_NUM_ENTRIES, id,
+				data1, data2, data3);
 }
 
 void smem_log_event6(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(inst[GEN].events, inst[GEN].idx,
-			 inst[GEN].remote_spinlock, SMEM_LOG_NUM_ENTRIES,
-			 id, data1, data2, data3, data4, data5, data6);
+	if (smem_log_enable)
+		_smem_log_event6(inst[GEN].events, inst[GEN].idx,
+				 inst[GEN].remote_spinlock,
+				 SMEM_LOG_NUM_ENTRIES, id,
+				 data1, data2, data3, data4, data5, data6);
 }
 
 void smem_log_event_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		    uint32_t data3)
 {
-	_smem_log_event(inst[STA].events, inst[STA].idx,
-			inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
-			id, data1, data2, data3);
+	if (smem_log_enable)
+		_smem_log_event(inst[STA].events, inst[STA].idx,
+				inst[STA].remote_spinlock,
+				SMEM_LOG_NUM_STATIC_ENTRIES, id,
+				data1, data2, data3);
 }
 
 void smem_log_event6_to_static(uint32_t id, uint32_t data1, uint32_t data2,
 		     uint32_t data3, uint32_t data4, uint32_t data5,
 		     uint32_t data6)
 {
-	_smem_log_event6(inst[STA].events, inst[STA].idx,
-			 inst[STA].remote_spinlock, SMEM_LOG_NUM_STATIC_ENTRIES,
-			 id, data1, data2, data3, data4, data5, data6);
+	if (smem_log_enable)
+		_smem_log_event6(inst[STA].events, inst[STA].idx,
+				 inst[STA].remote_spinlock,
+				 SMEM_LOG_NUM_STATIC_ENTRIES, id,
+				 data1, data2, data3, data4, data5, data6);
 }
 
 static int _smem_log_init(void)
@@ -1014,9 +1026,10 @@ static ssize_t smem_log_write_bin(struct file *fp, const char __user *buf,
 	if (count < sizeof(struct smem_log_item))
 		return -EINVAL;
 
-	smem_log_event_from_user(fp->private_data, buf,
-				 sizeof(struct smem_log_item),
-				 count / sizeof(struct smem_log_item));
+	if (smem_log_enable)
+		smem_log_event_from_user(fp->private_data, buf,
+					sizeof(struct smem_log_item),
+					count / sizeof(struct smem_log_item));
 	return count;
 }
 
@@ -1042,6 +1055,9 @@ static ssize_t smem_log_write(struct file *fp, const char __user *buf,
 	}
 
 	count = count > 255 ? 255 : count;
+
+	if (!smem_log_enable)
+		return count;
 
 	locbuf[count] = '\0';
 
@@ -1932,6 +1948,7 @@ static int __init smem_log_init(void)
 	if (ret < 0)
 		return ret;
 
+	smem_log_enable = 1;
 	smem_log_debugfs_init();
 
 	return misc_register(&smem_log_dev);

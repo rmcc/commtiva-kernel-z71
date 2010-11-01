@@ -183,7 +183,7 @@ static void __exit pm8058_gpio_exit(void)
 	platform_driver_unregister(&pm8058_gpio_driver);
 }
 
-module_init(pm8058_gpio_init);
+subsys_initcall(pm8058_gpio_init);
 module_exit(pm8058_gpio_exit);
 
 MODULE_LICENSE("Dual BSD/GPL");

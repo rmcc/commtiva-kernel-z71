@@ -1,7 +1,7 @@
 /* linux/include/asm-arm/arch-msm/msm_smd.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -164,11 +164,14 @@ int smd_tiocmset(smd_channel_t *ch, unsigned int set, unsigned int clear);
 enum {
 	SMD_APPS_MODEM = 0,
 	SMD_APPS_QDSP,
-	SMD_MODEM_QDSP
+	SMD_MODEM_QDSP,
+	SMD_LOOPBACK_TYPE = 100,
+
 };
 #else
 enum {
-	SMD_APPS_MODEM = 0
+	SMD_APPS_MODEM = 0,
+	SMD_LOOPBACK_TYPE = 100,
 };
 #endif
 

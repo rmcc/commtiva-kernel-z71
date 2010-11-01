@@ -68,6 +68,7 @@
 #include <linux/mfd/tps65023.h>
 #include <linux/bma150.h>
 #include <linux/power_supply.h>
+#include <linux/clk.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -102,6 +103,7 @@
 #include "msm-keypad-devices.h"
 #include "pm.h"
 #include "proc_comm.h"
+#include "smd_private.h"
 #include <linux/msm_kgsl.h>
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android.h>
@@ -115,8 +117,7 @@
 #define SMEM_SPINLOCK_I2C	"S:6"
 
 #define MSM_PMEM_ADSP_SIZE	0x2196000
-#define MSM_PMEM_GPU1_SIZE	0x800000
-#define MSM_FB_SIZE             0x500000
+#define MSM_FB_SIZE         0x177000
 #define MSM_AUDIO_SIZE		0x80000
 #define MSM_GPU_PHYS_SIZE 	SZ_2M
 
@@ -133,8 +134,8 @@
 
 #define MSM_FB_BASE		MSM_PMEM_SMI_BASE
 #define MSM_GPU_PHYS_BASE 	(MSM_FB_BASE + MSM_FB_SIZE)
-#define MSM_PMEM_GPU0_BASE	(MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
-#define MSM_PMEM_GPU0_SIZE	(MSM_PMEM_SMI_SIZE - MSM_FB_SIZE \
+#define MSM_PMEM_SMIPOOL_BASE	(MSM_GPU_PHYS_BASE + MSM_GPU_PHYS_SIZE)
+#define MSM_PMEM_SMIPOOL_SIZE	(MSM_PMEM_SMI_SIZE - MSM_FB_SIZE \
 					- MSM_GPU_PHYS_SIZE)
 
 #define PMEM_KERNEL_EBI1_SIZE	0x28000
@@ -175,75 +176,84 @@ static struct platform_device mass_storage_device = {
 /* dynamic composition */
 static struct usb_composition usb_func_composition[] = {
 	{
-		.product_id         = 0x9015,
-		/* MSC + ADB */
-		.functions	    = 0x12 /* 10010 */
-	},
-	{
-		.product_id         = 0xF000,
 		/* MSC */
-		.functions	    = 0x02, /* 0010 */
+		.product_id         = 0xF000,
+		.functions	    = 0x02,
+		.adb_product_id     = 0x9015,
+		.adb_functions	    = 0x12
 	},
+#ifdef CONFIG_USB_F_SERIAL
 	{
-		.product_id         = 0xF005,
-		/* MODEM ONLY */
-		.functions	    = 0x03,
+		/* MODEM */
+		.product_id         = 0xF00B,
+		.functions	    = 0x06,
+		.adb_product_id     = 0x901E,
+		.adb_functions	    = 0x16,
 	},
-
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
 	{
-		.product_id         = 0x8080,
+		/* DIAG */
+		.product_id         = 0x900E,
+		.functions	    = 0x04,
+		.adb_product_id     = 0x901D,
+		.adb_functions	    = 0x14,
+	},
+#endif
+#if defined(CONFIG_USB_ANDROID_DIAG) && defined(CONFIG_USB_F_SERIAL)
+	{
 		/* DIAG + MODEM */
-		.functions	    = 0x34,
+		.product_id         = 0x9004,
+		.functions	    = 0x64,
+		.adb_product_id     = 0x901F,
+		.adb_functions	    = 0x0614,
 	},
 	{
-		.product_id         = 0x8082,
-		/* DIAG + ADB + MODEM */
-		.functions	    = 0x0314,
-	},
-	{
-		.product_id         = 0x8085,
-		/* DIAG + ADB + MODEM + NMEA + MSC*/
-		.functions	    = 0x25314,
-	},
-	{
+		/* DIAG + MODEM + NMEA*/
 		.product_id         = 0x9016,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA*/
 		.functions	    = 0x764,
+		.adb_product_id     = 0x9020,
+		.adb_functions	    = 0x7614,
 	},
 	{
+		/* DIAG + MODEM + NMEA + MSC */
 		.product_id         = 0x9017,
-		/* DIAG + GENERIC MODEM + GENERIC NMEA + MSC*/
 		.functions	    = 0x2764,
+		.adb_product_id     = 0x9018,
+		.adb_functions	    = 0x27614,
 	},
+#endif
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
 	{
-		.product_id         = 0x9018,
-		/* DIAG + ADB + GENERIC MODEM + GENERIC NMEA + MSC*/
-		.functions	    = 0x27614,
+		/* MSC + CDC-ECM */
+		.product_id         = 0x9014,
+		.functions	    = 0x82,
+		.adb_product_id     = 0x9023,
+		.adb_functions	    = 0x812,
 	},
-	{
-		.product_id         = 0xF009,
-		/* CDC-ECM*/
-		.functions	    = 0x08,
-	},
+#endif
 #ifdef CONFIG_USB_ANDROID_RMNET
 	{
-		.product_id         = 0x9021,
 		/* DIAG + RMNET */
+		.product_id         = 0x9021,
 		.functions	    = 0x94,
+		.adb_product_id     = 0x9022,
+		.adb_functions	    = 0x914,
 	},
+#endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
 	{
-		.product_id         = 0x9022,
-		/* DIAG + ADB + RMNET */
-		.functions	    = 0x914,
+		/* RNDIS */
+		.product_id         = 0xF00E,
+		.functions	    = 0xA,
+		.adb_product_id     = 0x9024,
+		.adb_functions	    = 0x1A,
 	},
 #endif
 };
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id	= 0x05C6,
-	.product_id	= 0x9018,
-	.functions	= 0x27614,
 	.version	= 0x0100,
-	.serial_number  = "1234567890ABCDEF",
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.product_name	= "Qualcomm HSUSB Device",
@@ -482,29 +492,22 @@ static int ulpi_write(void __iomem *addr, unsigned val, unsigned reg)
 	return 0;
 }
 
+struct clk *hs_clk, *phy_clk;
 #define CLKRGM_APPS_RESET_USBH      37
 #define CLKRGM_APPS_RESET_USB_PHY   34
 static void msm_hsusb_apps_reset_link(int reset)
 {
-	unsigned usb_id = CLKRGM_APPS_RESET_USBH;
-
 	if (reset)
-		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
-				&usb_id, NULL);
+		clk_reset(hs_clk, CLK_RESET_ASSERT);
 	else
-		msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
-				&usb_id, NULL);
+		clk_reset(hs_clk, CLK_RESET_DEASSERT);
 }
 
 static void msm_hsusb_apps_reset_phy(void)
 {
-	unsigned usb_phy_id = CLKRGM_APPS_RESET_USB_PHY;
-
-	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_ASSERT,
-			&usb_phy_id, NULL);
+	clk_reset(phy_clk, CLK_RESET_ASSERT);
 	msleep(1);
-	msm_proc_comm(PCOM_CLK_REGIME_SEC_RESET_DEASSERT,
-			&usb_phy_id, NULL);
+	clk_reset(phy_clk, CLK_RESET_DEASSERT);
 }
 
 #define ULPI_VERIFY_MAX_LOOP_COUNT  3
@@ -715,21 +718,14 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
-#ifdef CONFIG_PMEM_GPU0
-static struct android_pmem_platform_data android_pmem_gpu0_pdata = {
-	.name = "pmem_gpu0",
-	.start = MSM_PMEM_GPU0_BASE,
-	.size = MSM_PMEM_GPU0_SIZE,
+static struct android_pmem_platform_data android_pmem_smipool_pdata = {
+	.name = "pmem_smipool",
+	.start = MSM_PMEM_SMIPOOL_BASE,
+	.size = MSM_PMEM_SMIPOOL_SIZE,
 	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
 	.cached = 0,
 };
-#endif
 
-static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
-	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 0,
-};
 
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
@@ -743,30 +739,23 @@ static struct platform_device android_pmem_adsp_device = {
 	.dev = { .platform_data = &android_pmem_adsp_pdata },
 };
 
-#ifdef CONFIG_PMEM_GPU0
-static struct platform_device android_pmem_gpu0_device = {
+static struct platform_device android_pmem_smipool_device = {
 	.name = "android_pmem",
 	.id = 2,
-	.dev = { .platform_data = &android_pmem_gpu0_pdata },
+	.dev = { .platform_data = &android_pmem_smipool_pdata },
 };
-#endif
 
-static struct platform_device android_pmem_gpu1_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
 
 static struct platform_device android_pmem_kernel_ebi1_device = {
 	.name = "android_pmem",
-	.id = 5,
+	.id = 3,
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 static struct platform_device android_pmem_kernel_smi_device = {
 	.name = "android_pmem",
-	.id = 6,
+	.id = 4,
 	.dev = { .platform_data = &android_pmem_kernel_smi_pdata },
 };
 #endif
@@ -1472,10 +1461,12 @@ static struct resource kgsl_resources[] = {
        },
 };
 static struct kgsl_platform_data kgsl_pdata = {
-	.max_axi_freq = 128000, /*Max for 8K*/
+	.high_axi_3d = 128000, /* Max for 8K */
 	.max_grp2d_freq = 0,
+	.min_grp2d_freq = 0,
 	.set_grp2d_async = NULL,
 	.max_grp3d_freq = 0,
+	.min_grp3d_freq = 0,
 	.set_grp3d_async = NULL,
 };
 
@@ -1902,7 +1893,18 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+	.flash_sr_type = MSM_CAMERA_FLASH_SRC_PMIC,
+	._fsrc.pmic_src.low_current  = 30,
+	._fsrc.pmic_src.high_current = 100,
+};
+
 #ifdef CONFIG_MT9D112
+static struct msm_camera_sensor_flash_data flash_mt9d112 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.sensor_name    = "mt9d112",
 	.sensor_reset   = 17,
@@ -1910,9 +1912,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED,
 	.resource       = msm_camera_resources,
-	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_mt9d112
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -1924,6 +1926,11 @@ static struct platform_device msm_camera_sensor_mt9d112 = {
 #endif
 
 #ifdef CONFIG_S5K3E2FX
+static struct msm_camera_sensor_flash_data flash_s5k3e2fx = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.sensor_name    = "s5k3e2fx",
 	.sensor_reset   = 17,
@@ -1931,9 +1938,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	/*.vcm_pwd = 31, */  /* CAM1_VCM_EN, enabled in a9 */
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED,
 	.resource       = msm_camera_resources,
-	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_s5k3e2fx
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -1945,6 +1952,11 @@ static struct platform_device msm_camera_sensor_s5k3e2fx = {
 #endif
 
 #ifdef CONFIG_MT9P012
+static struct msm_camera_sensor_flash_data flash_mt9p012 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.sensor_name    = "mt9p012",
 	.sensor_reset   = 17,
@@ -1952,9 +1964,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED,
 	.resource       = msm_camera_resources,
-	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_mt9p012
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -1966,6 +1978,11 @@ static struct platform_device msm_camera_sensor_mt9p012 = {
 #endif
 
 #ifdef CONFIG_MT9P012_KM
+static struct msm_camera_sensor_flash_data flash_mt9p012_km = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
 	.sensor_name    = "mt9p012_km",
 	.sensor_reset   = 17,
@@ -1973,9 +1990,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED,
 	.resource       = msm_camera_resources,
-	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_mt9p012_km
 };
 
 static struct platform_device msm_camera_sensor_mt9p012_km = {
@@ -1987,6 +2004,11 @@ static struct platform_device msm_camera_sensor_mt9p012_km = {
 #endif
 
 #ifdef CONFIG_MT9T013
+static struct msm_camera_sensor_flash_data flash_mt9t013 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
+};
+
 static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.sensor_name    = "mt9t013",
 	.sensor_reset   = 17,
@@ -1994,9 +2016,9 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED,
 	.resource       = msm_camera_resources,
-	.num_resources  = ARRAY_SIZE(msm_camera_resources)
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_mt9t013
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {
@@ -2066,22 +2088,16 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-#ifdef CONFIG_PMEM_GPU0
-	&android_pmem_gpu0_device,
-#endif
-	&android_pmem_gpu1_device,
+	&android_pmem_smipool_device,
 	&msm_device_nand,
 	&msm_device_i2c,
 	&qsd_device_spi,
-	&msm_device_hsusb_peripheral,
-	&msm_device_gadget_peripheral,
 #ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
 #endif
 #ifdef CONFIG_USB_ANDROID
 	&android_usb_device,
 #endif
-	&msm_device_otg,
 	&msm_device_tssc,
 	&msm_audio_device,
 	&msm_device_uart_dm1,
@@ -2128,8 +2144,32 @@ static void kgsl_phys_memory_init(void)
 		resource_size(&kgsl_resources[1]), "kgsl");
 }
 
-static void __init qsd8x50_init_host(void)
+static void __init qsd8x50_init_usb(void)
 {
+	hs_clk = clk_get(NULL, "usb_hs_clk");
+	if (IS_ERR(hs_clk)) {
+		printk(KERN_ERR "%s: hs_clk clk get failed\n", __func__);
+		return;
+	}
+
+	phy_clk = clk_get(NULL, "usb_phy_clk");
+	if (IS_ERR(phy_clk)) {
+		printk(KERN_ERR "%s: phy_clk clk get failed\n", __func__);
+		return;
+	}
+
+#ifdef CONFIG_USB_MSM_OTG_72K
+	platform_device_register(&msm_device_otg);
+#endif
+
+#ifdef CONFIG_USB_FUNCTION_MSM_HSUSB
+	platform_device_register(&msm_device_hsusb_peripheral);
+#endif
+
+#ifdef CONFIG_USB_MSM_72K
+	platform_device_register(&msm_device_gadget_peripheral);
+#endif
+
 	if (machine_is_qsd8x50_ffa() || machine_is_qsd8x50a_ffa())
 		return;
 
@@ -2490,7 +2530,7 @@ static void __init msm_device_i2c_init(void)
 	if (gpio_request(61, "i2c_sec_dat"))
 		pr_err("failed to request gpio i2c_sec_dat\n");
 
-	msm_i2c_pdata.rmutex = 1;
+	msm_i2c_pdata.rmutex = (uint32_t)smem_alloc(SMEM_I2C_MUTEX, 8);
 	msm_i2c_pdata.pm_lat =
 		msm_pm_data[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_NO_XO_SHUTDOWN]
 		.latency;
@@ -2505,7 +2545,7 @@ static void __init pmem_kernel_ebi1_size_setup(char **p)
 __early_param("pmem_kernel_ebi1_size=", pmem_kernel_ebi1_size_setup);
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
-static unsigned pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+static unsigned pmem_kernel_smi_size = MSM_PMEM_SMIPOOL_SIZE;
 static void __init pmem_kernel_smi_size_setup(char **p)
 {
 	pmem_kernel_smi_size = memparse(*p, p);
@@ -2514,8 +2554,8 @@ static void __init pmem_kernel_smi_size_setup(char **p)
 	   available - the kernel mapping code has no way of knowing
 	   if it has gone over the edge */
 
-	if (pmem_kernel_smi_size > MSM_PMEM_GPU0_SIZE)
-		pmem_kernel_smi_size = MSM_PMEM_GPU0_SIZE;
+	if (pmem_kernel_smi_size > MSM_PMEM_SMIPOOL_SIZE)
+		pmem_kernel_smi_size = MSM_PMEM_SMIPOOL_SIZE;
 }
 __early_param("pmem_kernel_smi_size=", pmem_kernel_smi_size_setup);
 #endif
@@ -2534,12 +2574,6 @@ static void __init pmem_adsp_size_setup(char **p)
 }
 __early_param("pmem_adsp_size=", pmem_adsp_size_setup);
 
-static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
-static void __init pmem_gpu1_size_setup(char **p)
-{
-	pmem_gpu1_size = memparse(*p, p);
-}
-__early_param("pmem_gpu1_size=", pmem_gpu1_size_setup);
 
 static unsigned audio_size = MSM_AUDIO_SIZE;
 static void __init audio_size_setup(char **p)
@@ -2575,7 +2609,7 @@ static void __init qsd8x50_init(void)
 #ifdef CONFIG_MSM_CAMERA
 	config_camera_off_gpios(); /* might not be necessary */
 #endif
-	qsd8x50_init_host();
+	qsd8x50_init_usb();
 	qsd8x50_init_mmc();
 	bt_power_init();
 	audio_gpio_init();
@@ -2612,20 +2646,20 @@ static void __init qsd8x50_allocate_memory_regions(void)
 
 #ifdef CONFIG_KERNEL_PMEM_SMI_REGION
 	size = pmem_kernel_smi_size;
-	if (size > MSM_PMEM_GPU0_SIZE) {
+	if (size > MSM_PMEM_SMIPOOL_SIZE) {
 		printk(KERN_ERR "pmem kernel smi arena size %lu is too big\n",
 			size);
 
-		size = MSM_PMEM_GPU0_SIZE;
+		size = MSM_PMEM_SMIPOOL_SIZE;
 	}
 
-	android_pmem_kernel_smi_pdata.start = MSM_PMEM_GPU0_BASE;
+	android_pmem_kernel_smi_pdata.start = MSM_PMEM_SMIPOOL_BASE;
 	android_pmem_kernel_smi_pdata.size = size;
 
 	pr_info("allocating %lu bytes at %lx (%lx physical)"
 		"for pmem kernel smi arena\n", size,
-		(long unsigned int) MSM_PMEM_GPU0_BASE,
-		__pa(MSM_PMEM_GPU0_BASE));
+		(long unsigned int) MSM_PMEM_SMIPOOL_BASE,
+		__pa(MSM_PMEM_SMIPOOL_BASE));
 #endif
 
 	size = pmem_mdp_size;
@@ -2646,14 +2680,6 @@ static void __init qsd8x50_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
 
 	size = MSM_FB_SIZE;
 	addr = (void *)MSM_FB_BASE;

@@ -174,8 +174,7 @@ void mdp4_mddi_setup(int mddi, unsigned long id)
 	outpdw(MDP_BASE + 0x0090, bits); /* MDP_MDDI_PARAM_WR_SEL */
 }
 
-int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req,
-	struct file **pp_src_file, struct file **pp_dst_file)
+int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 {
 
 	/* not implemented yet */
@@ -300,6 +299,8 @@ void mdp4_clear_lcdc(void)
 {
 	uint32 bits;
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
 	bits = inpdw(MDP_BASE + 0xc0000);
 	if (bits & 0x01) /* enabled already */
 		return;
@@ -318,6 +319,8 @@ void mdp4_clear_lcdc(void)
 	outpdw(MDP_BASE + 0xc0030, 0);	/* lcdc hsync skew */
 	outpdw(MDP_BASE + 0xc0034, 0);	/* lcdc test ctl */
 	outpdw(MDP_BASE + 0xc0038, 0);	/* lcdc ctl polarity */
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 static int intr_dma_p;
@@ -980,6 +983,8 @@ void mdp4_vg_qseed_init(int vp_num)
 	uint32 *off;
 	int i, voff;
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
 	voff = MDP4_VIDEO_OFF * vp_num;
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 						MDP4_QSEED_TABLE0_OFF);
@@ -1002,6 +1007,8 @@ void mdp4_vg_qseed_init(int vp_num)
 		off++;
 	}
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+
 }
 
 void mdp4_mixer_blend_init(mixer_num)
@@ -1013,6 +1020,8 @@ void mdp4_mixer_blend_init(mixer_num)
 		overlay_base = MDP_BASE + MDP4_OVERLAYPROC1_BASE;/* 0x18000 */
 	else
 		overlay_base = MDP_BASE + MDP4_OVERLAYPROC0_BASE;/* 0x10000 */
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
 	/* stage 0 to stage 2 */
 	off = 0;
@@ -1029,6 +1038,8 @@ void mdp4_mixer_blend_init(mixer_num)
 	outpdw(overlay_base + off + 0x104, 0x010);
 	outpdw(overlay_base + off + 0x108, 0xff);/* FG */
 	outpdw(overlay_base + off + 0x10c, 0x00);/* BG */
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 
@@ -1058,10 +1069,13 @@ void mdp4_vg_csc_mv_setup(int vp_num)
 	voff = MDP4_VIDEO_OFF * vp_num;
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 					MDP4_CSC_MV_OFF);
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 9; i++) {
 		outpdw(off, csc_matrix_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_vg_csc_pre_bv_setup(int vp_num)
@@ -1072,10 +1086,13 @@ void mdp4_vg_csc_pre_bv_setup(int vp_num)
 	voff = MDP4_VIDEO_OFF * vp_num;
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 					MDP4_CSC_PRE_BV_OFF);
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 3; i++) {
 		outpdw(off, csc_pre_bv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_vg_csc_post_bv_setup(int vp_num)
@@ -1086,10 +1103,13 @@ void mdp4_vg_csc_post_bv_setup(int vp_num)
 	voff = MDP4_VIDEO_OFF * vp_num;
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 					MDP4_CSC_POST_BV_OFF);
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 3; i++) {
 		outpdw(off, csc_post_bv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_vg_csc_pre_lv_setup(int vp_num)
@@ -1101,10 +1121,12 @@ void mdp4_vg_csc_pre_lv_setup(int vp_num)
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 					MDP4_CSC_PRE_LV_OFF);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 6; i++) {
 		outpdw(off, csc_pre_lv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_vg_csc_post_lv_setup(int vp_num)
@@ -1116,10 +1138,12 @@ void mdp4_vg_csc_post_lv_setup(int vp_num)
 	off = (uint32 *)(MDP_BASE + MDP4_VIDEO_BASE + voff +
 					MDP4_CSC_POST_LV_OFF);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 6; i++) {
 		outpdw(off, csc_post_lv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 static uint32 csc_rgb2yuv_matrix_tab[9] = {
@@ -1149,10 +1173,12 @@ void mdp4_mixer1_csc_mv_setup(void)
 
 	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2400);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 9; i++) {
 		outpdw(off, csc_rgb2yuv_matrix_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_mixer1_csc_pre_bv_setup(void)
@@ -1162,10 +1188,12 @@ void mdp4_mixer1_csc_pre_bv_setup(void)
 
 	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2500);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 3; i++) {
 		outpdw(off, csc_rgb2yuv_pre_bv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_mixer1_csc_post_bv_setup(void)
@@ -1175,10 +1203,12 @@ void mdp4_mixer1_csc_post_bv_setup(void)
 
 	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2580);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 3; i++) {
 		outpdw(off, csc_rgb2yuv_post_bv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_mixer1_csc_pre_lv_setup(void)
@@ -1188,10 +1218,12 @@ void mdp4_mixer1_csc_pre_lv_setup(void)
 
 	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2600);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 6; i++) {
 		outpdw(off, csc_rgb2yuv_pre_lv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 void mdp4_mixer1_csc_post_lv_setup(void)
@@ -1201,10 +1233,12 @@ void mdp4_mixer1_csc_post_lv_setup(void)
 
 	off = (uint32 *)(MDP_BASE + MDP4_OVERLAYPROC1_BASE + 0x2680);
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	for (i = 0; i < 6; i++) {
 		outpdw(off, csc_rgb2yuv_post_lv_tab[i]);
 		off++;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 
@@ -1737,6 +1771,7 @@ void mdp4_mixer_gc_lut_setup(int mixer_num)
 
 	base += 0x4000;	/* GC_LUT offset */
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	off = 0;
 	for (i = 0; i < 4096; i++) {
 		val = gc_lut[i];
@@ -1744,6 +1779,7 @@ void mdp4_mixer_gc_lut_setup(int mixer_num)
 		outpdw(base + off, data);
 		off += 4;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 uint32 igc_video_lut[] = {	 /* non linear */
@@ -1790,6 +1826,7 @@ void mdp4_vg_igc_lut_setup(int vp_num)
 	voff = MDP4_VIDEO_OFF * vp_num;
 	base = MDP_BASE + MDP4_VIDEO_BASE + voff + 0x5000;
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	off = 0;
 	for (i = 0; i < 256; i++) {
 		val = igc_video_lut[i];
@@ -1798,6 +1835,7 @@ void mdp4_vg_igc_lut_setup(int vp_num)
 		outpdw(base + off + 0x800, val);	/* color 2 */
 		off += 4;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 uint32 igc_rgb_lut[] = {   /* linear */
@@ -1844,6 +1882,7 @@ void mdp4_rgb_igc_lut_setup(int num)
 	voff = MDP4_RGB_OFF * num;
 	base = MDP_BASE + MDP4_RGB_BASE + voff + 0x5000;
 
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	off = 0;
 	for (i = 0; i < 256; i++) {
 		val = igc_rgb_lut[i];
@@ -1852,6 +1891,7 @@ void mdp4_rgb_igc_lut_setup(int num)
 		outpdw(base + off + 0x800, val);	/* color 2 */
 		off += 4;
 	}
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 uint32 mdp4_rgb_igc_lut_cvt(uint32 ndx)

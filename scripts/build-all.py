@@ -41,7 +41,7 @@ import sys
 version = 'build-all.py, version 0.01'
 
 build_dir = '../all-kernels'
-make_command = ["-j", "6", "vmlinux", "modules"]
+make_command = ["vmlinux", "modules"]
 make_env = os.environ
 make_env.update({
 	'ARCH': 'arm',
@@ -177,6 +177,11 @@ def main():
             dest='updateconfigs',
             help="Update defconfigs with provided option setting, "
                  "e.g. --updateconfigs=\'CONFIG_USE_THING=y\'")
+    parser.add_option('-j', '--jobs', type='int', dest="jobs",
+	    help="Number of simultaneous jobs")
+    parser.add_option('-l', '--load-average', type='int',
+	    dest='load_average',
+	    help="Don'start t multiple jobs unless load is below LOAD_AVERAGE.")
 
     (options, args) = parser.parse_args()
     global all_options
@@ -191,6 +196,11 @@ def main():
     if options.oldconfig:
 	global make_command
 	make_command = ["oldconfig"]
+
+    if options.jobs:
+	make_command.append("-j%d" % options.jobs)
+    if options.load_average:
+	make_command.append("-l%d" % options.load_average)
 
     if args == ['all']:
         build_many(configs, configs.keys())

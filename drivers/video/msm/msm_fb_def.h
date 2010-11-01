@@ -99,6 +99,10 @@ typedef unsigned int boolean;
 #define MSM_FB_ENABLE_DBGFS
 #define FEATURE_MDDI
 
+#ifdef CONFIG_FB_MSM_MDP40
+#define MSMFB_FRAMEBUF_32
+#endif
+
 #define outp32(addr, val) writel(val, addr)
 #define outp16(addr, val) writew(val, addr)
 #define outp8(addr, val) writeb(val, addr)

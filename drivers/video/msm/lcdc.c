@@ -219,10 +219,19 @@ static int lcdc_probe(struct platform_device *pdev)
 	 * get/set panel specific fb info
 	 */
 	mfd->panel_info = pdata->panel_info;
+
+#ifdef MSMFB_FRAMEBUF_32
+	if (mfd->index == 0)
+		mfd->fb_imgType = MDP_RGBA_8888; /* primary */
+	else
+		mfd->fb_imgType = MDP_RGB_565;	/* secondary */
+#else
 	mfd->fb_imgType = MDP_RGB_565;
+#endif
 
 	fbi = mfd->fbi;
-	fbi->var.pixclock = mfd->panel_info.clk_rate;
+	fbi->var.pixclock = clk_round_rate(mdp_lcdc_pclk_clk,
+					mfd->panel_info.clk_rate);
 	fbi->var.left_margin = mfd->panel_info.lcdc.h_back_porch;
 	fbi->var.right_margin = mfd->panel_info.lcdc.h_front_porch;
 	fbi->var.upper_margin = mfd->panel_info.lcdc.v_back_porch;

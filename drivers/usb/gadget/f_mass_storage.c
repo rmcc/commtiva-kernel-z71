@@ -72,11 +72,7 @@
 #include <linux/usb/ch9.h>
 #include <linux/usb/composite.h>
 #include <linux/usb/gadget.h>
-/* FIH:WilsonWHLee 2009/06/30 { */
-//#include <linux/gasgauge_bridge.h>
-#include <linux/power_supply.h>
-#include <linux/reboot.h>
-/* } FIH:WilsonWHLee 2009/06/30 */
+
 #include "f_mass_storage.h"
 #include "gadget_chips.h"
 
@@ -84,40 +80,7 @@
 #define BULK_BUFFER_SIZE           16384
 
 /*-------------------------------------------------------------------------*/
-/* FIH:WilsonWHLee 2009/06/30 { */
 
-#define ISO_FILE "/hidden/custom.iso"
-//WilsonWHLee 2010/02/22 5110 porting ++++++++++++++++++++++
-//#define CONNECT_FILE "/sys/devices/platform/msm_hsusb_periphera/hs_connect"
-#define CONNECT_FILE "/sys/devices/platform/msm_hsusb/gadget/hs_connect"
-//WilsonWHLee 2010/02/22 5110 porting ++++++++++++++++++++++
-#define MOD_CONNECT_FILE "/sys/devices/platform/msm_hsusb_periphera/modem_connect"
-#define MOD_DIS_CONNECT_FILE "/sys/devices/platform/msm_hsusb_periphera/modem_disconnect"
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */
-#define BUILD_ID "/system/build_id"
-extern	int	zeus_bat_val;
-extern void msm_read_fih_version_from_nvitem(void);
-extern unsigned int fih_host_usb_id;
-extern int fih_enable;
-extern char *fih_version_buf;
-/* }FIH, WilsonWHLee, 2009/11/19 */
-struct file			*gCD_filp = NULL;
-#if 1
-
-extern unsigned long fih_modem_status;
-loff_t	num_sectors_temp;
-loff_t	size_temp;
-extern int Linux_Mass;
-int Mac_OS = 1;    ///0: It's not Mac OS, 1: Mac_OS
-extern int OS_Type;
-
-#endif
-extern bool storage_state;
-extern bool is_switch;
-extern bool Dynamic_switch;
-extern void usb_chg_pid(bool usb_switch);
-/* } FIH:WilsonWHLee 2009/06/30 */
 #define DRIVER_NAME		"usb_mass_storage"
 #define MAX_LUNS		8
 
@@ -235,22 +198,6 @@ struct bulk_cs_wrap {
 #define SC_WRITE_6			0x0a
 #define SC_WRITE_10			0x2a
 #define SC_WRITE_12			0xaa
-/* FIH:WilsonWHLee 2009/06/30 { */
-#define SC_MASS_STORGE        0xfe
-#define SC_ENABLE_ALL_PORT        0xfd
-#define SC_READ_IMAGE		0xfa
-#define SC_READ_BATTERY	    0xf9
-#define SC_DIAG_RUT	        0xf8
-#define SC_MODEM_CONNECT	0xf7
-#define SC_MODEM_DISCONNECT	0xf6
-#define SC_SHOW_PORT      	0xf5
-#define SC_MODEM_STATUS     0xf4
-#define SC_SWITCH_PORT      0xf2
-#define SC_SWITCH_STATUS    0xf1
-#define SC_READ_NV          0xf0
-#define SC_READ_HEADER		  0x44
-#define SC_READ_TOC			    0x43
-/* } FIH:WilsonWHLee 2009/06/30 */
 
 /* SCSI Sense Key/Additional Sense Code/ASC Qualifier values */
 #define SS_NO_SENSE				0
@@ -860,14 +807,8 @@ static int do_read(struct fsg_dev *fsg)
 		curlun->sense_data = SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
 		return -EINVAL;
 	}
-/* FIH:WilsonWHLee 2009/06/30 { */	
-	if(fsg->lun == 0)
-       file_offset = ((loff_t) lba) << 9;
-    else if(fsg->lun == 1 && Mac_OS ==0)
-	   file_offset = ((loff_t) lba) << 11;	    
-	else                       ///Mac_OS
-	   file_offset = ((loff_t) lba) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */
+	file_offset = ((loff_t) lba) << 9;
+
 	/* Carry out the file reads */
 	amount_left = fsg->data_size_from_cmnd;
 	if (unlikely(amount_left == 0))
@@ -905,14 +846,7 @@ static int do_read(struct fsg_dev *fsg)
 		if (amount == 0) {
 			curlun->sense_data =
 					SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-/* FIH:WilsonWHLee 2009/06/30 { */					
-        if(fsg->lun == 0)					
 			curlun->sense_data_info = file_offset >> 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)
-			curlun->sense_data_info = file_offset >> 11;
-		else                                  ///Mac_OS
-			curlun->sense_data_info = file_offset >> 9;			
-/* } FIH:WilsonWHLee 2009/06/30 */			
 			curlun->info_valid = 1;
 			bh->inreq->length = 0;
 			bh->state = BUF_STATE_FULL;
@@ -921,19 +855,9 @@ static int do_read(struct fsg_dev *fsg)
 
 		/* Perform the read */
 		file_offset_tmp = file_offset;
-/* FIH:WilsonWHLee 2009/06/30 { */	
-       if(fsg->lun == 0){
 		nread = vfs_read(curlun->filp,
 				(char __user *) bh->buf,
 				amount, &file_offset_tmp);
-        }else if(fsg->lun == 1 && Mac_OS ==0){				
-         nread=gCD_filp->f_op->read(gCD_filp,(char __user *)bh->buf,amount,&file_offset_tmp);
-		}else {                              ///Mac_OS
-		nread = vfs_read(curlun->filp,
-				(char __user *) bh->buf,
-				amount, &file_offset_tmp);		
-		}
-/* } FIH:WilsonWHLee 2009/06/30 */	
 		VLDBG(curlun, "file read %u @ %llu -> %d\n", amount,
 				(unsigned long long) file_offset,
 				(int) nread);
@@ -947,14 +871,7 @@ static int do_read(struct fsg_dev *fsg)
 		} else if (nread < amount) {
 			LDBG(curlun, "partial file read: %d/%u\n",
 					(int) nread, amount);
-/* FIH:WilsonWHLee 2009/06/30 { */						
-       if(fsg->lun == 0)						
 			nread -= (nread & 511);	/* Round down to a block */
-	   else if(fsg->lun == 1 && Mac_OS ==0)
-			nread -= (nread & 2047);	/* Round down to a block */	
-	   else                             ///Mac_OS
-	   		nread -= (nread & 511);	    /* Round down to a block */	
-/* } FIH:WilsonWHLee 2009/06/30 */				
 		}
 		file_offset  += nread;
 		amount_left  -= nread;
@@ -965,14 +882,7 @@ static int do_read(struct fsg_dev *fsg)
 		/* If an error occurred, report it and its position */
 		if (nread < amount) {
 			curlun->sense_data = SS_UNRECOVERED_READ_ERROR;
-/* FIH:WilsonWHLee 2009/06/30 { */				
-        if(fsg->lun == 0)	
-		   curlun->sense_data_info = file_offset >> 9;
-		else if(fsg->lun == 1 && Mac_OS == 0)
-		   curlun->sense_data_info = file_offset >> 11;
-		else                                ///Mac_OS
-		   curlun->sense_data_info = file_offset >> 9;
-/* } FIH:WilsonWHLee 2009/06/30 */					 
+			curlun->sense_data_info = file_offset >> 9;
 			curlun->info_valid = 1;
 			break;
 		}
@@ -1040,14 +950,7 @@ static int do_write(struct fsg_dev *fsg)
 
 	/* Carry out the file writes */
 	get_some_more = 1;
-/* FIH:WilsonWHLee 2009/06/30 { */		
-	if(fsg->lun == 0)
-	   file_offset = usb_offset = ((loff_t) lba) << 9;
-	else if(fsg->lun == 1 && Mac_OS == 0) 
-	   file_offset = usb_offset = ((loff_t) lba) << 11;
-	else                                    ///Mac_OS
-	   file_offset = usb_offset = ((loff_t) lba) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */		   
+	file_offset = usb_offset = ((loff_t) lba) << 9;
 	amount_left_to_req = amount_left_to_write = fsg->data_size_from_cmnd;
 
 	while (amount_left_to_write > 0) {
@@ -1077,25 +980,11 @@ static int do_write(struct fsg_dev *fsg)
 				get_some_more = 0;
 				curlun->sense_data =
 					SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-/* FIH:WilsonWHLee 2009/06/30 { */						
-			    if(fsg->lun == 0)
-				  curlun->sense_data_info = usb_offset >> 9;
-				else if(fsg->lun == 1 && Mac_OS == 0)   
-				  curlun->sense_data_info = usb_offset >> 11;
-				else                              ///Mac_OS
-				  curlun->sense_data_info = usb_offset >> 9;
-/* } FIH:WilsonWHLee 2009/06/30 */	  
+				curlun->sense_data_info = usb_offset >> 9;
 				curlun->info_valid = 1;
 				continue;
 			}
-/* FIH:WilsonWHLee 2009/06/30 { */				
-			if(fsg->lun == 0)
-			  amount -= (amount & 511);
-			else if(fsg->lun == 1 && Mac_OS == 0) 
-			  amount -= (amount & 2047);
-			else              ///Mac_OS
-			  amount -= (amount & 511);
-/* } FIH:WilsonWHLee 2009/06/30 */				  
+			amount -= (amount & 511);
 			if (amount == 0) {
 
 				/* Why were we were asked to transfer a
@@ -1143,14 +1032,7 @@ static int do_write(struct fsg_dev *fsg)
 			/* Did something go wrong with the transfer? */
 			if (bh->outreq->status != 0) {
 				curlun->sense_data = SS_COMMUNICATION_FAILURE;
-/* FIH:WilsonWHLee 2009/06/30 { */					
-				if(fsg->lun == 0)
-				   curlun->sense_data_info = file_offset >> 9;
-				else if(fsg->lun == 1 && Mac_OS == 0)    
-				   curlun->sense_data_info = file_offset >> 11;
-				else                                ///Mac_OS
-				   curlun->sense_data_info = file_offset >> 9;  
-/* } FIH:WilsonWHLee 2009/06/30 */					   
+				curlun->sense_data_info = file_offset >> 9;
 				curlun->info_valid = 1;
 				break;
 			}
@@ -1182,14 +1064,7 @@ static int do_write(struct fsg_dev *fsg)
 			} else if (nwritten < amount) {
 				LDBG(curlun, "partial file write: %d/%u\n",
 						(int) nwritten, amount);
-/* FIH:WilsonWHLee 2009/06/30 { */							
-			if(fsg->lun == 0)
-			   nwritten -= (nwritten & 511);
-			else if(fsg->lun == 1 && Mac_OS ==0)    
-			   nwritten -= (nwritten & 2047);
-			else                   ///Mac_OS
-			    nwritten -= (nwritten & 511);
-/* } FIH:WilsonWHLee 2009/06/30 */				   
+				nwritten -= (nwritten & 511);
 						/* Round down to a block */
 			}
 			file_offset += nwritten;
@@ -1215,14 +1090,7 @@ static int do_write(struct fsg_dev *fsg)
 				}
 #endif
 				curlun->sense_data = SS_WRITE_ERROR;
-/* FIH:WilsonWHLee 2009/06/30 { */					
-				if(fsg->lun == 0)
-				   curlun->sense_data_info = file_offset >> 9;
-				else if(fsg->lun == 1 && Mac_OS ==0)   
-				   curlun->sense_data_info = file_offset >> 11;
-				else                                ///Mac_OS
-				   curlun->sense_data_info = file_offset >> 9;
-/* } FIH:WilsonWHLee 2009/06/30 */					   
+				curlun->sense_data_info = file_offset >> 9;
 				curlun->info_valid = 1;
 				break;
 			}
@@ -1360,19 +1228,9 @@ static int do_verify(struct fsg_dev *fsg)
 		return -EIO;		/* No default reply */
 
 	/* Prepare to carry out the file verify */
-/* FIH:WilsonWHLee 2009/06/30 { */		
-    if(fsg->lun == 0){	
-    	amount_left = verification_length << 9;
-  	    file_offset = ((loff_t) lba) << 9;
-   }else if(fsg->lun == 1 && Mac_OS ==0){
-	    amount_left = verification_length << 11;
-    	file_offset = ((loff_t) lba) << 11;  	
-   }
-   else{                              ///Mac_OS
-    	amount_left = verification_length << 9;
-  	    file_offset = ((loff_t) lba) << 9;   
-   }
-/* } FIH:WilsonWHLee 2009/06/30 */	
+	amount_left = verification_length << 9;
+	file_offset = ((loff_t) lba) << 9;
+
 	/* Write out all the dirty buffers before invalidating them */
 	fsync_sub(curlun);
 	if (signal_pending(current))
@@ -1398,14 +1256,7 @@ static int do_verify(struct fsg_dev *fsg)
 		if (amount == 0) {
 			curlun->sense_data =
 					SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-/* FIH:WilsonWHLee 2009/06/30 { */						
-			if(fsg->lun == 0)		
-			   curlun->sense_data_info = file_offset >> 9;
-			else if(fsg->lun == 1 && Mac_OS ==0)
-			   curlun->sense_data_info = file_offset >> 11;  
-			else                                 ///Mac_OS
-			   curlun->sense_data_info = file_offset >> 9;
-/* } FIH:WilsonWHLee 2009/06/30 */					 
+			curlun->sense_data_info = file_offset >> 9;
 			curlun->info_valid = 1;
 			break;
 		}
@@ -1428,25 +1279,11 @@ static int do_verify(struct fsg_dev *fsg)
 		} else if (nread < amount) {
 			LDBG(curlun, "partial file verify: %d/%u\n",
 					(int) nread, amount);
-/* FIH:WilsonWHLee 2009/06/30 { */						
-		if(fsg->lun == 0)				
 			nread -= (nread & 511);	/* Round down to a sector */
-		else if(fsg->lun == 1 && Mac_OS ==0)   
-			nread -= (nread & 2047);	/* Round down to a sector */	
-		else                            ///Mac_OS
-			nread -= (nread & 511);	   /* Round down to a sector */	
-/* } FIH:WilsonWHLee 2009/06/30 */				
 		}
 		if (nread == 0) {
 			curlun->sense_data = SS_UNRECOVERED_READ_ERROR;
-/* FIH:WilsonWHLee 2009/06/30 { */				
-			if(fsg->lun == 0)	
-			   curlun->sense_data_info = file_offset >> 9;
-			else if(fsg->lun == 1 && Mac_OS ==0)   
-			   curlun->sense_data_info = file_offset >> 11;
-			else                                 ///Mac_OS
-			   curlun->sense_data_info = file_offset >> 9; 
-/* } FIH:WilsonWHLee 2009/06/30 */				   
+			curlun->sense_data_info = file_offset >> 9;
 			curlun->info_valid = 1;
 			break;
 		}
@@ -1458,137 +1295,20 @@ static int do_verify(struct fsg_dev *fsg)
 
 
 /*-------------------------------------------------------------------------*/
-/* FIH:WilsonWHLee 2009/06/30 { */
-static int do_read_battery(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */	
-	u8	*buf = (u8 *) bh->buf;
 
-  	printk(KERN_ERR "mass_storage vbatt = %d\n", zeus_bat_val);
-  	memset(buf, 0, 36);
-
-  	buf[0]= zeus_bat_val;
-
-	return 36;
-/* }FIH, WilsonWHLee, 2009/11/19 */
-}
-
-static int do_read_image(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-	u8	*buf = (u8 *) bh->buf;
-	struct file			*filp = NULL;
-	loff_t			file_offset = 0 ;
-	filp = filp_open("/proc/imageifo", O_RDONLY | O_LARGEFILE, 0);
-	if (IS_ERR(filp)) {
-		printk("unable to open image info file: /proc/imageifo \n");
-		return PTR_ERR(filp);
-	}
-
-	memset(buf, 0, 28);	/* Non-removable, direct-access device */
-				/* No special options */
-	vfs_read(filp,
-				(char __user *) bh->buf,  
-				28, &file_offset);
-				buf[28]='\0';
-	filp_close(filp,NULL);
-	return 28;
-}
-
-static void store_cdrom_address(u8 *dest, int msf, u32 addr)
-{
-        if (msf) {
-                /* Convert to Minutes-Seconds-Frames */
-              ///  addr >>= 2;             /* Convert to 2048-byte frames */
-                addr += 2*75;           /* Lead-in occupies 2 seconds */
-                dest[3] = addr % 75;    /* Frames */
-                addr /= 75;
-                dest[2] = addr % 60;    /* Seconds */
-                addr /= 60;
-                dest[1] = addr;         /* Minutes */
-                dest[0] = 0;            /* Reserved */
-        } else {
-                /* Absolute sector */
-                put_be32(dest, addr);
-        }
-}
-
-static int do_read_header(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-        struct lun      *curlun = fsg->curlun;
-        int             msf = fsg->cmnd[1] & 0x02;
-        u32             lba = get_be32(&fsg->cmnd[2]);
-        u8              *buf = (u8 *) bh->buf;
-
-        if ((fsg->cmnd[1] & ~0x02) != 0) {              /* Mask away MSF */
-                curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
-                return -EINVAL;
-        }
-        if (lba >= curlun->num_sectors) {
-                curlun->sense_data = SS_LOGICAL_BLOCK_ADDRESS_OUT_OF_RANGE;
-                return -EINVAL;
-        }
-
-        memset(buf, 0, 8);
-        buf[0] = 0x01;          /* 2048 bytes of user data, rest is EC */
-        store_cdrom_address(&buf[4], msf, lba);      
-        return 8;
-}
-
-
-static int do_read_toc(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-        struct lun      *curlun = fsg->curlun;
-        int             msf = fsg->cmnd[1] & 0x02;
-        int             start_track = fsg->cmnd[6];
-        u8              *buf = (u8 *) bh->buf;
- 
-        if ((fsg->cmnd[1] & ~0x02) != 0 ||              /* Mask away MSF */
-                        start_track > 1) {
-                curlun->sense_data = SS_INVALID_FIELD_IN_CDB;
-                return -EINVAL;
-        }
- 
-        start_track=(int)(fsg->cmnd[7]*256)+fsg->cmnd[8];           
-        memset(buf, 0, start_track);
-        buf[1] = (20-2);                /* TOC data length */
-        buf[2] = 1;                     /* First track number */
-        buf[3] = 1;                     /* Last track number */
-        buf[5] = 0x16;                  /* Data track, copying allowed */
-        buf[6] = 0x01;                  /* Only track is number 1 */
-        store_cdrom_address(&buf[8], msf, 0);
- 
-        buf[13] = 0x16;                 /* Lead-out track is data */
-        buf[14] = 0xAA;                 /* Lead-out track number */
-        store_cdrom_address(&buf[16], msf, curlun->num_sectors);
-        buf[17] = 0xCD;
-        buf[18] = 0x2A;
-        buf[19] = 0x43;
-        return start_track;
-}
-/* } FIH:WilsonWHLee 2009/06/30 */
-/*-------------------------------------------------------------------------*/
 static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 {
 	u8	*buf = (u8 *) bh->buf;
-	/* FIH:WilsonWHLee 2009/06/30 { */	
-    struct lun	*curlun = fsg->curlun;
-    /* FIH:WilsonWHLee 2009/06/30 { */		
 
 	if (!fsg->curlun) {		/* Unsupported LUNs are okay */
 		fsg->bad_lun_okay = 1;
 		memset(buf, 0, 36);
 		buf[0] = 0x7f;		/* Unsupported, no device-type */
-/* FIH:WilsonWHLee 2009/06/30 { */				
-		buf[4] = 31;		/* Additional length */
-/* } FIH:WilsonWHLee 2009/06/30 */				
 		return 36;
 	}
 
 	memset(buf, 0, 8);	/* Non-removable, direct-access device */
-/* FIH:WilsonWHLee 2009/06/30 { */
-	if(fsg->lun == 0)
- 	{
+
 	buf[1] = 0x80;	/* set removable bit */
 	buf[2] = 2;		/* ANSI SCSI level 2 */
 	buf[3] = 2;		/* SCSI-2 INQUIRY data format */
@@ -1596,104 +1316,9 @@ static int do_inquiry(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 				/* No special options */
 	sprintf(buf + 8, "%-8s%-16s%04x", fsg->vendor,
 			fsg->product, fsg->release);
-	}else if(fsg->lun == 1 && Mac_OS ==0){			
-    curlun->file_length = size_temp;	
-    curlun->num_sectors = num_sectors_temp;		
-    buf[0] = 0x05;   ///CDROM  0x05
-    buf[1] = 0x80;        /* set removable bit */
-    buf[2] = 2;              /* ANSI SCSI level 2 */
-    buf[3] = 2;              /* SCSI-2 INQUIRY data format */
-    buf[4] = 0x1F;            /* Additional length */
-	sprintf(buf + 8, "Android SCSI CD-ROM V001");	
-    }else{           ///Mac OS
-  #if 0
-	buf[1] = 0x80;	/* set removable bit */
-	buf[2] = 2;		/* ANSI SCSI level 2 */
-	buf[3] = 2;		/* SCSI-2 INQUIRY data format */
-	buf[4] = 31;		/* Additional length */
-				/* No special options */
-	sprintf(buf + 8, "%-8s%-16s%04x", fsg->vendor,
-			fsg->product, fsg->release);
-	#endif
-	fsg->bad_lun_okay = 1;
-	memset(buf, 0, 36);
-	buf[0] = 0x7f;		/* Unsupported, no device-type */	
-	}
-/* FIH:WilsonWHLee 2009/06/30 } */  
 	return 36;
 }
 
-
-/* FIH:WilsonWHLee 2009/08/21 { */
-static int do_mass_storage(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-	struct file			*gMD_filp = NULL;
-	char online[36]="1",offline[36]="0",temp[]="1"; 	
-	mm_segment_t oldfs;
-	u8	*buf = (u8 *) bh->buf;
-	
-	memset(buf, 0, 36);	
-	
-  if(storage_state ==true){
-     oldfs=get_fs();
-     set_fs(KERNEL_DS);
-     gMD_filp = filp_open(CONNECT_FILE, O_RDWR | O_LARGEFILE, 0);         	
-     gMD_filp->f_op->write(gMD_filp,(char __user *)temp,strlen(temp),&gMD_filp->f_pos);
-     filp_close(gMD_filp, NULL);
-     sprintf(buf , online);
-     printk("[USB]mass storage state = true\n");
-  }else {
-     sprintf(buf , offline);
-     printk("[USB]mass storage state = false\n");
-  }
-       
-	return 36;
-}
-/* } FIH:WilsonWHLee 2009/08/21 */
-static int do_switch_status(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-	//struct file			*gMD_filp = NULL;
-	char online[36]="1",offline[36]="0";//,temp[]="1"; 	
-	//mm_segment_t oldfs;
-	u8	*buf = (u8 *) bh->buf;
-	
-	memset(buf, 0, 36);	
-	
-  if(is_switch == true){
-     sprintf(buf , online);
-  }else {
-     sprintf(buf , offline);
-  }       
-	return 36;
-}
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */	
-static int do_read_nv(struct fsg_dev *fsg, struct fsg_buffhd *bh)
-{
-	struct file			*gMD_filp = NULL;
-	u8	*buf = (u8 *) bh->buf;
-    char temp[20]; 	
-	mm_segment_t oldfs;
-	msm_read_fih_version_from_nvitem();
-	oldfs=get_fs();
-    set_fs(KERNEL_DS);
-    gMD_filp = filp_open(BUILD_ID, O_RDONLY, 0);
-    if(!IS_ERR(gMD_filp))
-    {
-        gMD_filp->f_op->read(gMD_filp,temp,sizeof(temp),&gMD_filp->f_pos);
-        filp_close(gMD_filp, NULL);
-        printk("[USB]temp = %s\n",temp);
-        memcpy(&fih_version_buf[1],&temp[5],1);
-        memcpy(&fih_version_buf[2],&temp[7],3);
-        memset(buf, 0, 36);
-        sprintf(buf,fih_version_buf);
-        printk("fih_version_buf== %s\n",fih_version_buf);
-    }
-    else
-  	    printk("[USB]open file fail\n");
-	return 36;
-}
-/* }FIH, WilsonWHLee, 2009/11/19 */
 
 static int do_request_sense(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 {
@@ -1763,14 +1388,7 @@ static int do_read_capacity(struct fsg_dev *fsg, struct fsg_buffhd *bh)
 	}
 
 	put_be32(&buf[0], curlun->num_sectors - 1);	/* Max logical block */
-/* FIH:WilsonWHLee 2009/06/30 { */	
-    if(fsg->lun == 0)
-    	put_be32(&buf[4], 512);			    	/* Block length */   	
-	else if(fsg->lun == 1 && Mac_OS ==0)
-	    put_be32(&buf[4], 2048);				/* Block length */  
-	else                                        ///Mac_OS
-	    put_be32(&buf[4], 512);			    	/* Block length */  
-/* } FIH:WilsonWHLee 2009/06/30 */			
+	put_be32(&buf[4], 512);				/* Block length */
 	return 8;
 }
 
@@ -1908,14 +1526,7 @@ static int do_read_format_capacities(struct fsg_dev *fsg,
 	buf += 4;
 
 	put_be32(&buf[0], curlun->num_sectors);	/* Number of blocks */
-/* FIH:WilsonWHLee 2009/06/30 { */		
-	if(fsg->lun == 0)
-	put_be32(&buf[4], 512);		    		/* Block length */
-    else if(fsg->lun == 1 && Mac_OS ==0)
-	put_be32(&buf[4], 2048);				/* Block length */	
-	else                                    ///Mac_OS
-	put_be32(&buf[4], 512);		    		/* Block length */
-/* } FIH:WilsonWHLee 2009/06/30 */		
+	put_be32(&buf[4], 512);				/* Block length */
 	buf[4] = 0x02;					/* Current capacity */
 	return 12;
 }
@@ -2229,9 +1840,7 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 		/* Special case workaround: MS-Windows issues REQUEST SENSE/
 		 * INQUIRY with cbw->Length == 12 (it should be 6). */
 		if ((fsg->cmnd[0] == SC_REQUEST_SENSE && fsg->cmnd_size == 12)
-		 || (fsg->cmnd[0] == SC_INQUIRY && fsg->cmnd_size == 12)
-		 || (fsg->cmnd[0] == SC_TEST_UNIT_READY && fsg->cmnd_size == 12)
-		 || (fsg->cmnd[0] == SC_READ_TOC && fsg->cmnd_size == 12))
+		 || (fsg->cmnd[0] == SC_INQUIRY && fsg->cmnd_size == 12))
 			cmnd_size = fsg->cmnd_size;
 		else {
 			fsg->phase_error = 1;
@@ -2260,12 +1869,7 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 		/* INQUIRY and REQUEST SENSE commands are explicitly allowed
 		 * to use unsupported LUNs; all others may not. */
 		if (fsg->cmnd[0] != SC_INQUIRY &&
-				fsg->cmnd[0] != SC_REQUEST_SENSE && 
-				fsg->cmnd[0] != SC_MODEM_STATUS &&
-			    fsg->cmnd[0] != SC_MASS_STORGE&&
-                fsg->cmnd[0] != SC_SWITCH_STATUS &&
-                fsg->cmnd[0] !=SC_READ_NV &&
-                fsg->cmnd[0] !=SC_READ_BATTERY) {
+				fsg->cmnd[0] != SC_REQUEST_SENSE) {
 			DBG(fsg, "unsupported LUN %d\n", fsg->lun);
 			return -EINVAL;
 		}
@@ -2273,25 +1877,15 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 
 	/* If a unit attention condition exists, only INQUIRY and
 	 * REQUEST SENSE commands are allowed; anything else must fail. */
-/* FIH:WilsonWHLee 2009/06/30 { */		 
-	if(fsg->lun == 0){ 		 
 	if (curlun && curlun->unit_attention_data != SS_NO_SENSE &&
 			fsg->cmnd[0] != SC_INQUIRY &&
-			fsg->cmnd[0] != SC_REQUEST_SENSE && 
-			fsg->cmnd[0] != SC_MODEM_STATUS &&
-			fsg->cmnd[0] != SC_MASS_STORGE&&
-            fsg->cmnd[0] != SC_SWITCH_STATUS &&
-            fsg->cmnd[0] !=SC_READ_NV &&
-                fsg->cmnd[0] !=SC_READ_BATTERY) {
+			fsg->cmnd[0] != SC_REQUEST_SENSE) {
 		curlun->sense_data = curlun->unit_attention_data;
 		curlun->unit_attention_data = SS_NO_SENSE;
 		return -EINVAL;
-	 }
-  }
-/* } FIH:WilsonWHLee 2009/06/30 */	
+	}
+
 	/* Check that only command bytes listed in the mask are non-zero */
-/* FIH:WilsonWHLee 2009/06/30 { */		
-	if(fsg->lun == 0){ 	
 	fsg->cmnd[1] &= 0x1f;			/* Mask away the LUN */
 	for (i = 1; i < cmnd_size; ++i) {
 		if (fsg->cmnd[i] && !(mask & (1 << i))) {
@@ -2301,19 +1895,15 @@ static int check_command(struct fsg_dev *fsg, int cmnd_size,
 			return -EINVAL;
 		}
 	}
- }
-/* } FIH:WilsonWHLee 2009/06/30 */	 
+
 	/* If the medium isn't mounted and the command needs to access
 	 * it, return an error. */
-/* FIH:WilsonWHLee 2009/06/30 { */		 
-	if(fsg->lun == 0){ 
 	if (curlun && !backing_file_is_open(curlun) && needs_medium) {
 		curlun->sense_data = SS_MEDIUM_NOT_PRESENT;
 		DBG(fsg, "SS_MEDIUM_NOT_PRESENT\n");
 		return -EINVAL;
 	}
-  }
-/* } FIH:WilsonWHLee 2009/06/30 */	  
+
 	return 0;
 }
 
@@ -2325,12 +1915,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 	int			reply = -EINVAL;
 	int			i;
 	static char		unknown[16];
-/* FIH:WilsonWHLee 2009/06/30 { */ 
-  //struct file			*gMD_filp = NULL;
-  struct file			*gMOD_filp = NULL;
-  char temp[]="1"; 
- 	mm_segment_t oldfs;
-/* } FIH:WilsonWHLee 2009/06/30  */ 
+
 	dump_cdb(fsg);
 
 	/* Wait for the next buffer to become available for data or status */
@@ -2347,45 +1932,11 @@ static int do_scsi_command(struct fsg_dev *fsg)
 	switch (fsg->cmnd[0]) {
 
 	case SC_INQUIRY:
- 	    if(fsg->lun == 1 && OS_Type==1){
-		  OS_Type = 2;                       ///Mac OS
-		  Mac_OS = 1;
-		}else if(fsg->lun == 1 && OS_Type==0){
-		  OS_Type = 3;                       ///Microsoft Windows 
-		  Mac_OS = 0;
-		}
 		fsg->data_size_from_cmnd = fsg->cmnd[4];
 		if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
 				(1<<4), 0,
-				"INQUIRY")) == 0){
-		    if(fsg->cmnd[1]==0x20)
- 			    Mac_OS = 1;		
+				"INQUIRY")) == 0)
 			reply = do_inquiry(fsg, bh);
-		}
-			if(fsg->cmnd[1]==0x20){                 ///Linux os for Mass storage
-				 if(Linux_Mass == 0){
-           
-                       usb_chg_pid(true);
-                       Linux_Mass = true;
-            }
-            #if 0
-            else {                             ///Linux os for Mass storage
-			       oldfs=get_fs();
-                   set_fs(KERNEL_DS);
-      	           gMD_filp = filp_open(CONNECT_FILE, O_RDWR | O_LARGEFILE, 0);         	
-                   gMD_filp->f_op->write(gMD_filp,(char __user *)temp,strlen(temp),&gMD_filp->f_pos);
-                   filp_close(gMD_filp, NULL);	
-                   //Linux_Mass = 1;
-                 }
-             #endif
-         }else if(OS_Type == 2){            ///Mac OS
-            if(Linux_Mass == 0){
-           
-                       usb_chg_pid(true);
-                       Linux_Mass = true;
-            }         	
-
-         }
 		break;
 
 	case SC_MODE_SELECT_6:
@@ -2430,14 +1981,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 
 	case SC_READ_6:
 		i = fsg->cmnd[4];
-/* FIH:WilsonWHLee 2009/06/30 { */			
-		if(fsg->lun == 0)
-  		  fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)
-		  fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 11;	
-		else                                        ///Mac_OS
-		  fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */			  	
+		fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
 		if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
 				(7<<1) | (1<<4), 1,
 				"READ(6)")) == 0)
@@ -2445,14 +1989,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		break;
 
 	case SC_READ_10:
-/* FIH:WilsonWHLee 2009/06/30 { */		
-		if(fsg->lun == 0)
-  		  fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)
-		  fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 11;	
-		else                                            ///Mac_OS
-		  fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9; 
-/* } FIH:WilsonWHLee 2009/06/300 */			  
+		fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9;
 		if ((reply = check_command(fsg, 10, DATA_DIR_TO_HOST,
 				(1<<1) | (0xf<<2) | (3<<7), 1,
 				"READ(10)")) == 0)
@@ -2460,14 +1997,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		break;
 
 	case SC_READ_12:
-/* FIH:WilsonWHLee 2009/06/30 { */		
-		if(fsg->lun == 0)
-		   fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)
-		   fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 11;	
-		else                                             ///Mac_OS
-		   fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;	
-/* } FIH:WilsonWHLee 2009/06/30 */			   
+		fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;
 		if ((reply = check_command(fsg, 12, DATA_DIR_TO_HOST,
 				(1<<1) | (0xf<<2) | (0xf<<6), 1,
 				"READ(12)")) == 0)
@@ -2515,8 +2045,6 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		break;
 
 	case SC_TEST_UNIT_READY:
-         if(fsg->lun == 1 && OS_Type == 0)	
-           OS_Type=1;
 		fsg->data_size_from_cmnd = 0;
 		reply = check_command(fsg, 6, DATA_DIR_NONE,
 				0, 1,
@@ -2535,14 +2063,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 
 	case SC_WRITE_6:
 		i = fsg->cmnd[4];
-/* FIH:WilsonWHLee 2009/06/30 { */			
-		if(fsg->lun == 0)
-		   fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)	
-		   fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 11;
-		else                                         ///Mac_OS
-           fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */			 
+		fsg->data_size_from_cmnd = (i == 0 ? 256 : i) << 9;
 		if ((reply = check_command(fsg, 6, DATA_DIR_FROM_HOST,
 				(7<<1) | (1<<4), 1,
 				"WRITE(6)")) == 0)
@@ -2550,14 +2071,7 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		break;
 
 	case SC_WRITE_10:
-/* FIH:WilsonWHLee 2009/06/30 { */		
-		if(fsg->lun == 0)
-		 fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9;
-		else if(fsg->lun == 1 && Mac_OS ==0)
-		 fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 11;
-		else                                            ///Mac_OS
-		 fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */			 
+		fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]) << 9;
 		if ((reply = check_command(fsg, 10, DATA_DIR_FROM_HOST,
 				(1<<1) | (0xf<<2) | (3<<7), 1,
 				"WRITE(10)")) == 0)
@@ -2565,137 +2079,13 @@ static int do_scsi_command(struct fsg_dev *fsg)
 		break;
 
 	case SC_WRITE_12:
-/* FIH:WilsonWHLee 2009/06/30 { */		
-     	if(fsg->lun == 0)
-            fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;	
-        else if(fsg->lun == 1 && Mac_OS ==0)
-            fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 11;
-		else                                               ///Mac_OS
-            fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;
-/* } FIH:WilsonWHLee 2009/06/30 */				
+		fsg->data_size_from_cmnd = get_be32(&fsg->cmnd[6]) << 9;
 		if ((reply = check_command(fsg, 12, DATA_DIR_FROM_HOST,
 				(1<<1) | (0xf<<2) | (0xf<<6), 1,
 				"WRITE(12)")) == 0)
 			reply = do_write(fsg);
 		break;
-///+++ FIH:WilsonWHLee 2009/06/30 +++ 
-#if 0
-    case SC_MODEM_CONNECT:
-         oldfs=get_fs();
-         set_fs(KERNEL_DS);
-      	 gMOD_filp = filp_open(MOD_CONNECT_FILE, O_RDWR | O_LARGEFILE, 0);         	
-         gMOD_filp->f_op->write(gMOD_filp,(char __user *)temp,strlen(temp),&gMOD_filp->f_pos);
-         filp_close(gMOD_filp, NULL);    	
-    	  break;
-#endif
-    case SC_MODEM_DISCONNECT:
-         oldfs=get_fs();
-         set_fs(KERNEL_DS);
-      	 gMOD_filp = filp_open(MOD_DIS_CONNECT_FILE, O_RDWR | O_LARGEFILE, 0);         	
-         gMOD_filp->f_op->write(gMOD_filp,(char __user *)temp,strlen(temp),&gMOD_filp->f_pos);
-         filp_close(gMOD_filp, NULL);    	
-    	  break;    
-#if 0
-///+++ FIH:WilsonWHLee 2009/06/30 +++ 
-    case SC_MODEM_STATUS:
-         fsg->data_size_from_cmnd = fsg->cmnd[4];
-         if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
-				(1<<4), 0,
-				"MOSTATUS")) == 0)
-         reply = do_query_modem(fsg, bh);
-         
-        break;
-///--- FIH:WilsonWHLee 2009/06/30 --- 
-#endif
-		
-/* FIH:WilsonWHLee 2009/06/30 { */		
-    case SC_MASS_STORGE:
-	/* FIH:WilsonWHLee 2009/08/21 { */
-         fsg->data_size_from_cmnd = fsg->cmnd[4];
-         if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
-				(1<<4), 0,
-				"STORAGE")) == 0)
-         reply = do_mass_storage(fsg, bh);    
-	/* }FIH:WilsonWHLee 2009/08/21 */         	        
-#if 0
-     	 oldfs=get_fs();
-         set_fs(KERNEL_DS);
-      	 gMD_filp = filp_open(CONNECT_FILE, O_RDWR | O_LARGEFILE, 0);         	
-         gMD_filp->f_op->write(gMD_filp,(char __user *)temp,strlen(temp),&gMD_filp->f_pos);
-         filp_close(gMD_filp, NULL);
-#endif
-        break;
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */	
-    case SC_ENABLE_ALL_PORT:
-    		fih_enable = 1;
-	      usb_chg_pid(true);
-	      msleep(1000);
-	      fih_host_usb_id = 0xc000;
-    	break;
-    case SC_DIAG_RUT:
-        if(fsg->cmnd[1] == 'F' && fsg->cmnd[2] == 'I' && fsg->cmnd[3] == 'H')
-        {
-          printk("mass storage recovery mode");
-          kernel_restart("recovery");
-        }
 
-    	break;
-/* }FIH:WilsonWHLee 2009/11/19 */
-/* }FIH:WilsonWHLee 2009/06/30 */
-    case SC_READ_IMAGE:
-  			fsg->data_size_from_cmnd = 0x1C;
-        fsg->data_dir = DATA_DIR_TO_HOST;
-		  	reply = do_read_image(fsg, bh);
-  	    break;
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */
-    case SC_READ_BATTERY:
-    	   fsg->data_size_from_cmnd = fsg->cmnd[4];
-         if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
-				(1<<4), 0,
-				"READ BATTERY")) == 0)
-		  	reply = do_read_battery(fsg, bh);
-  	    break;	
-/* }FIH:WilsonWHLee 2009/11/19 */
-	case SC_READ_HEADER:
-		fsg->data_size_from_cmnd = get_be16(&fsg->cmnd[7]);
-		if ((reply = check_command(fsg, 10, DATA_DIR_TO_HOST,
-				(3<<7) | (0x1f<<1), 1,
-				"READ HEADER")) == 0)
-			reply = do_read_header(fsg, bh);
-		break;
-
-	case SC_READ_TOC:
- 	    Mac_OS = 0;                    ///It's not Mac OS
-		fsg->data_size_from_cmnd = (int)(fsg->cmnd[7]*256)+fsg->cmnd[8];
-		if ((reply = check_command(fsg, 10, DATA_DIR_TO_HOST,
-				(7<<6) | (1<<1), 1,
-				"READ TOC")) == 0)
-			reply = do_read_toc(fsg, bh);				
-		break;
-/* } FIH:WilsonWHLee 2009/06/30 */
-    case SC_SWITCH_PORT:
-         usb_chg_pid(true);
-        break;                   
-   case SC_SWITCH_STATUS:
-         fsg->data_size_from_cmnd = fsg->cmnd[4];
-         if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
-				(1<<4), 0,
-				"SWITCH STATUS")) == 0)
-         reply = do_switch_status(fsg, bh);    
-        break;
-/* FIH, WilsonWHLee, 2009/11/19 { */
-/* [FXX_CR], add for download tool */      
-   case SC_READ_NV:
-   	     printk(" SC_READ_NV \n");
-         fsg->data_size_from_cmnd = fsg->cmnd[4];
-         if ((reply = check_command(fsg, 6, DATA_DIR_TO_HOST,
-				(1<<4), 0,
-				"READ NV")) == 0)
-        reply = do_read_nv(fsg, bh);    
-        break;
-/* }FIH:WilsonWHLee 2009/11/19 */           	     
 	/* Some mandatory commands that we recognize but don't implement.
 	 * They don't mean much in this setting.  It's left as an exercise
 	 * for anyone interested to implement RESERVE and RELEASE in terms
@@ -2968,20 +2358,11 @@ static int do_set_config(struct fsg_dev *fsg, u8 new_config)
 	if (fsg->config != 0) {
 		DBG(fsg, "reset config\n");
 		fsg->config = 0;
-		rc = do_set_interface(fsg, -1);
 	}
 
 	/* Enable the interface */
-	if (new_config != 0) {
+	if (new_config != 0)
 		fsg->config = new_config;
-		rc = do_set_interface(fsg, 0);
-		if (rc != 0)
-			fsg->config = 0;	/* Reset on errors */
-		else
-			INFO(fsg, "config #%d\n", fsg->config);
-        if(Dynamic_switch)
-          is_switch = true;
-	}
 
 	switch_set_state(&fsg->sdev, new_config);
 	adjust_wake_lock(fsg);
@@ -3080,6 +2461,7 @@ static void handle_exception(struct fsg_dev *fsg)
 
 	case FSG_STATE_EXIT:
 	case FSG_STATE_TERMINATED:
+		do_set_interface(fsg, -1);
 		do_set_config(fsg, 0);			/* Free resources */
 		spin_lock_irq(&fsg->lock);
 		fsg->state = FSG_STATE_TERMINATED;	/* Stop the thread */
@@ -3182,21 +2564,8 @@ static int open_backing_file(struct fsg_dev *fsg, struct lun *curlun,
 	struct file			*filp = NULL;
 	int				rc = -EINVAL;
 	struct inode			*inode = NULL;
-	//loff_t				size;
-	//loff_t				num_sectors;
-/* FIH:WilsonWHLee 2009/06/30 { */	
-	mm_segment_t oldfs;
-	if(gCD_filp == NULL){
-       INFO(fsg, "[CDROM]open backing file %s\n",ISO_FILE);
-	   oldfs=get_fs();
-       set_fs(KERNEL_DS);
-	   gCD_filp = filp_open(ISO_FILE, O_RDONLY | O_LARGEFILE, 0);
-	if (IS_ERR(gCD_filp)) {
-	    INFO(fsg, "[CDROM]unable to open backing file %s\n",ISO_FILE);
-	    gCD_filp = NULL;
-		}		
-	}
-/* } FIH:WilsonWHLee 2009/06/30 */ 
+	loff_t				size;
+	loff_t				num_sectors;
 
 	/* R/W if we can, R/O if we must */
 	ro = curlun->ro;
@@ -3234,14 +2603,14 @@ static int open_backing_file(struct fsg_dev *fsg, struct lun *curlun,
 	if (!(filp->f_op->write || filp->f_op->aio_write))
 		ro = 1;
 
-	size_temp = i_size_read(inode->i_mapping->host);
-	if (size_temp < 0) {
+	size = i_size_read(inode->i_mapping->host);
+	if (size < 0) {
 		LINFO(curlun, "unable to find file size: %s\n", filename);
-		rc = (int) size_temp;
+		rc = (int) size;
 		goto out;
 	}
-	num_sectors_temp = size_temp >> 9;	/* File size in 512-byte sectors */
-	if (num_sectors_temp == 0) {
+	num_sectors = size >> 9;	/* File size in 512-byte sectors */
+	if (num_sectors == 0) {
 		LINFO(curlun, "file too small: %s\n", filename);
 		rc = -ETOOSMALL;
 		goto out;
@@ -3250,10 +2619,10 @@ static int open_backing_file(struct fsg_dev *fsg, struct lun *curlun,
 	get_file(filp);
 	curlun->ro = ro;
 	curlun->filp = filp;
-	curlun->file_length = size_temp;
-	curlun->num_sectors = num_sectors_temp;
+	curlun->file_length = size;
+	curlun->num_sectors = num_sectors;
 	LDBG(curlun, "open backing file: %s size: %lld num_sectors: %lld\n",
-			filename, size_temp, num_sectors_temp);
+			filename, size, num_sectors);
 	rc = 0;
 	adjust_wake_lock(fsg);
 
@@ -3463,15 +2832,7 @@ fsg_function_bind(struct usb_configuration *c, struct usb_function *f)
 	DBG(fsg, "fsg_function_bind\n");
 
 	dev_attr_file.attr.mode = 0644;
-	/* FIH:WilsonWHLee 2009/10/09 { add for sometimes init failed after plug in*/
-	i = 0;
-	while(fsg->thread_task != NULL)
-	{
-		 if(i++ >=5)
-		 	break;
-		 msleep(10);
-  }
-  /* }FIH:WilsonWHLee 2009/10/09 */
+
 	/* Find out how many LUNs there should be */
 	i = fsg->nluns;
 	if (i == 0)
@@ -3610,6 +2971,7 @@ static int fsg_function_set_alt(struct usb_function *f,
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_set_alt intf: %d alt: %d\n", intf, alt);
 	fsg->new_config = 1;
+	do_set_interface(fsg, 0);
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 	return 0;
 }
@@ -3618,6 +2980,8 @@ static void fsg_function_disable(struct usb_function *f)
 {
 	struct fsg_dev	*fsg = func_to_dev(f);
 	DBG(fsg, "fsg_function_disable\n");
+	if (fsg->new_config)
+		do_set_interface(fsg, -1);
 	fsg->new_config = 0;
 	raise_exception(fsg, FSG_STATE_CONFIG_CHANGE);
 }
@@ -3641,11 +3005,6 @@ int mass_storage_function_add(struct usb_composite_dev *cdev,
 	init_completion(&fsg->thread_notifier);
 
 	the_fsg->buf_size = BULK_BUFFER_SIZE;
-	//WilsonWHLee 2010/06/09 fill descriptors ++
-	the_fsg->vendor = "GOOGLE";
-	the_fsg->product = "Mass storage";
-	the_fsg->release = 0xffff;
-	//WilsonWHLee 2010/06/09 --
 	the_fsg->sdev.name = DRIVER_NAME;
 	the_fsg->sdev.print_name = print_switch_name;
 	the_fsg->sdev.print_state = print_switch_state;

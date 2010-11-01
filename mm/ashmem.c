@@ -242,7 +242,13 @@ static int ashmem_mmap(struct file *file, struct vm_area_struct *vma)
 	}
 	get_file(asma->file);
 
-	shmem_set_file(vma, asma->file);
+	if (vma->vm_flags & VM_SHARED)
+		shmem_set_file(vma, asma->file);
+	else {
+		if (vma->vm_file)
+			fput(vma->vm_file);
+		vma->vm_file = asma->file;
+	}
 	vma->vm_flags |= VM_CAN_NONLINEAR;
 
 out:
@@ -509,7 +515,7 @@ static int ashmem_pin_unpin(struct ashmem_area *asma, unsigned long cmd,
 
 	/* per custom, you can pass zero for len to mean "everything onward" */
 	if (!pin.len)
-		pin.len = asma->size - pin.offset;
+		pin.len = PAGE_ALIGN(asma->size) - pin.offset;
 
 	if (unlikely((pin.offset | pin.len) & ~PAGE_MASK))
 		return -EINVAL;
@@ -517,7 +523,7 @@ static int ashmem_pin_unpin(struct ashmem_area *asma, unsigned long cmd,
 	if (unlikely(((__u32) -1) - pin.offset < pin.len))
 		return -EINVAL;
 
-	if (unlikely(asma->size < pin.offset + pin.len))
+	if (unlikely(PAGE_ALIGN(asma->size) < pin.offset + pin.len))
 		return -EINVAL;
 
 	pgstart = pin.offset / PAGE_SIZE;
@@ -556,7 +562,7 @@ static long ashmem_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	case ASHMEM_SET_SIZE:
 		ret = -EINVAL;
-		if (!asma->file && !(arg & ~PAGE_MASK)) {
+		if (!asma->file) {
 			ret = 0;
 			asma->size = (size_t) arg;
 		}

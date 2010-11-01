@@ -109,6 +109,14 @@ static void audio_out_listener(u32 evt_id, union auddev_evt_data *evt_payload,
 		if (audio->running == 1 && audio->enabled == 1)
 			audpp_route_stream(audio->dec_id, audio->source);
 		break;
+	case AUDDEV_EVT_STREAM_VOL_CHG:
+		audio->vol_pan.volume = evt_payload->session_vol;
+		MM_DBG(":AUDDEV_EVT_STREAM_VOL_CHG, stream vol %d\n",
+				audio->vol_pan.volume);
+		if (audio->running)
+			audpp_dsp_set_vol_pan(audio->dec_id, &audio->vol_pan,
+					POPP);
+		break;
 	default:
 		MM_ERR("ERROR:wrong event\n");
 		break;
@@ -611,7 +619,9 @@ static int audio_open(struct inode *inode, struct file *file)
 
 	audio_flush(audio);
 	audio->device_events = AUDDEV_EVT_DEV_RDY
-				|AUDDEV_EVT_DEV_RLS;
+				|AUDDEV_EVT_DEV_RLS|
+				AUDDEV_EVT_STREAM_VOL_CHG;
+
 	MM_INFO("register for event callback pdata %p\n", audio);
 	rc = auddev_register_evt_listner(audio->device_events,
 					AUDDEV_CLNT_DEC,

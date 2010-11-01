@@ -42,7 +42,6 @@
 #define NUM_AUTOFOCUS_MULTI_WINDOW_GRIDS 16
 #define NUM_STAT_OUTPUT_BUFFERS      3
 #define NUM_AF_STAT_OUTPUT_BUFFERS      3
-#define MSM_AXI_QOS_PREVIEW	128000
 
 enum msm_queue {
 	MSM_CAM_Q_CTRL,     /* control command or control command status */
@@ -156,12 +155,7 @@ struct msm_sync {
 	 * interrupt context, and by the control thread.
 	 */
 	struct msm_device_queue pict_q;
-/* FIH, Charles Huang, 2010/05/13 { */
-/* [FXX_CR], merge from R5330 */
-#ifdef CONFIG_FIH_FXX
 	int get_pic_abort;
-#endif
-/* } FIH, Charles Huang, 2010/05/13 */
 
 	struct msm_camera_sensor_info *sdata;
 	struct msm_camvfe_fn vfefn;
@@ -230,12 +224,16 @@ struct axidata {
 };
 
 #ifdef CONFIG_MSM_CAMERA_FLASH
-int msm_camera_flash_set_led_state(unsigned led_state);
+	int msm_camera_flash_set_led_state(
+		struct msm_camera_sensor_flash_data *fdata,
+		unsigned led_state);
 #else
-static inline int msm_camera_flash_set_led_state(unsigned led_state)
-{
-	return -ENOTSUPP;
-}
+	static inline int msm_camera_flash_set_led_state(
+		struct msm_camera_sensor_flash_data *fdata,
+		unsigned led_state)
+	{
+		return -ENOTSUPP;
+	}
 #endif
 
 /* Below functions are added for V4L2 kernel APIs */
@@ -272,7 +270,9 @@ enum msm_camio_clk_type {
 	CAMIO_VFE_PBDG_CLK,
 	CAMIO_CAM_MCLK_CLK,
 	CAMIO_CAMIF_PAD_PBDG_CLK,
-
+	CAMIO_CSI_CLK,
+	CAMIO_CSI_VFE_CLK,
+	CAMIO_CSI_PCLK,
 	CAMIO_MAX_CLK
 };
 
@@ -330,17 +330,17 @@ void msm_camio_clk_sel(enum msm_camio_clk_src_type);
 void msm_camio_disable(struct platform_device *);
 int msm_camio_probe_on(struct platform_device *);
 int msm_camio_probe_off(struct platform_device *);
-
+int msm_camio_csi_config(struct msm_camera_csi_params *csi_params);
 int request_axi_qos(uint32_t freq);
 int update_axi_qos(uint32_t freq);
 void release_axi_qos(void);
 int msm_camio_read_camif_status(void);
 
 void msm_io_w(u32 data, void __iomem *addr);
+void msm_io_w_mb(u32 data, void __iomem *addr);
 u32 msm_io_r(void __iomem *addr);
+u32 msm_io_r_mb(void __iomem *addr);
 void msm_io_dump(void __iomem *addr, int size);
 void msm_io_memcpy(void __iomem *dest_addr, void __iomem *src_addr, u32 len);
-
-int clk_set_flags(struct clk *clk, unsigned long flags);
 
 #endif

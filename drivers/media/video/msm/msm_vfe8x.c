@@ -23,6 +23,7 @@
 
 #define ON  1
 #define OFF 0
+#define MSM_AXI_QOS_PREVIEW	128000
 
 static void     *vfe_syncdata;
 
@@ -43,6 +44,8 @@ static void vfe_release(struct platform_device *dev)
 {
 	msm_camio_disable(dev);
 	vfe_cmd_release(dev);
+	/* release AXI frequency request */
+	release_axi_qos();
 	vfe_syncdata = NULL;
 }
 

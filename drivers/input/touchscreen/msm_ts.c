@@ -1,6 +1,7 @@
 /* drivers/input/touchscreen/msm_ts.c
  *
  * Copyright (C) 2008 Google, Inc.
+ * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -262,17 +263,17 @@ static int __devinit msm_ts_probe(struct platform_device *pdev)
 	}
 
 	ts_client = marimba_tsadc_register(pdev, 1);
-	if (!ts_client) {
+	if (IS_ERR(ts_client)) {
+		err = -ENODEV;
 		pr_err("%s: Unable to register with TSADC\n", __func__);
-		err = -ENOMEM;
 		goto err_tsadc_register;
 	}
+
 	ts->ts_client = ts_client;
 
 	err = marimba_tsadc_start(ts_client);
-	if (err) {
+	if (err < 0) {
 		pr_err("%s: Unable to start TSADC\n", __func__);
-		err = -EINVAL;
 		goto err_start_tsadc;
 	}
 

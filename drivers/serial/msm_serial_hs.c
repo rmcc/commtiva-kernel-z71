@@ -415,7 +415,7 @@ static void msm_hs_set_termios(struct uart_port *uport,
 	unsigned long flags;
 	unsigned int c_cflag = termios->c_cflag;
 	struct msm_hs_port *msm_uport = UARTDM_TO_MSM(uport);
-	
+
 	spin_lock_irqsave(&uport->lock, flags);
 	clk_enable(msm_uport->clk);
 
@@ -1023,7 +1023,7 @@ static irqreturn_t msm_hs_isr(int irq, void *dev)
 			msm_hs_write(uport, UARTDM_IMR_ADDR,
 				     msm_uport->imr_reg);
 		}
-	
+
 		/* Complete DMA TX transactions and submit new transactions */
 		tx_buf->tail = (tx_buf->tail + tx->tx_count) & ~UART_XMIT_SIZE;
 
@@ -1221,6 +1221,15 @@ static int msm_hs_startup(struct uart_port *uport)
 	msm_uport->imr_reg |= UARTDM_ISR_CURRENT_CTS_BMSK;
 
 	msm_hs_write(uport, UARTDM_TFWR_ADDR, 0);  /* TXLEV on empty TX fifo */
+	if (use_low_power_wakeup(msm_uport)) {
+		ret = set_irq_wake(msm_uport->wakeup.irq, 1);
+		if (unlikely(ret))
+			return ret;
+	}
+
+	ret = set_irq_wake(uport->irq, 1);
+	if (unlikely(ret))
+		return ret;
 
 	ret = request_irq(uport->irq, msm_hs_isr, IRQF_TRIGGER_HIGH,
 			  "msm_hs_uart", msm_uport);
@@ -1347,8 +1356,6 @@ static int __init msm_hs_probe(struct platform_device *pdev)
 	uport->irq = platform_get_irq(pdev, 0);
 	if (unlikely(uport->irq < 0))
 		return -ENXIO;
-	if (unlikely(set_irq_wake(uport->irq, 1)))
-		return -ENXIO;
 
 	if (pdata == NULL)
 		msm_uport->wakeup.irq = -1;
@@ -1360,8 +1367,6 @@ static int __init msm_hs_probe(struct platform_device *pdev)
 
 		if (unlikely(msm_uport->wakeup.irq < 0))
 			return -ENXIO;
-		if (unlikely(set_irq_wake(msm_uport->wakeup.irq, 1)))
-			return -ENXIO;
 	}
 
 	resource = platform_get_resource_byname(pdev, IORESOURCE_DMA,
@@ -1370,7 +1375,7 @@ static int __init msm_hs_probe(struct platform_device *pdev)
 		return -ENXIO;
 	msm_uport->dma_tx_channel = resource->start;
 	msm_uport->dma_rx_channel = resource->end;
-	
+
 	resource = platform_get_resource_byname(pdev, IORESOURCE_DMA,
 						"uartdm_crci");
 	if (unlikely(!resource))
@@ -1446,8 +1451,8 @@ static void msm_hs_shutdown(struct uart_port *uport)
 
 	BUG_ON(msm_uport->rx.flush < FLUSH_STOP);
 	tasklet_kill(&msm_uport->tx.tlet);
-	tasklet_kill(&msm_uport->rx.tlet);
 	wait_event(msm_uport->rx.wait, msm_uport->rx.flush == FLUSH_SHUTDOWN);
+	tasklet_kill(&msm_uport->rx.tlet);
 
 	spin_lock_irqsave(&uport->lock, flags);
 	clk_enable(msm_uport->clk);
@@ -1469,6 +1474,11 @@ static void msm_hs_shutdown(struct uart_port *uport)
 			 UART_XMIT_SIZE, DMA_TO_DEVICE);
 
 	spin_unlock_irqrestore(&uport->lock, flags);
+
+	if (use_low_power_wakeup(msm_uport))
+		set_irq_wake(msm_uport->wakeup.irq, 0);
+
+	set_irq_wake(uport->irq, 0);
 
 	/* Free the interrupt */
 	free_irq(uport->irq, msm_uport);

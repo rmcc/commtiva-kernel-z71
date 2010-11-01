@@ -161,50 +161,92 @@ static struct platform_device mass_storage_device = {
 /* dynamic composition */
 static struct usb_composition usb_func_composition[] = {
 	{
+		/* MSC */
 		.product_id         = 0xC000,
-		.functions	    = 0x76142, /* 011111 */
+		.functions	    = 0x02,
+		.adb_product_id     = 0xC002,
+		.adb_functions	    = 0x12
 	},
-	// 0xC001 composition is removed diag port
+#ifdef CONFIG_USB_F_SERIAL
 	{
-		.product_id         = 0xC001,
-		.functions	    = 0x612, /* 011101 */
-	},	
-	// 0xC002 composition is only diag port
-	{
-		.product_id         = 0xC002,
-		.functions	    = 0x04, /* 000001 */
+		/* MODEM */
+		.product_id         = 0xF00B,
+		.functions	    = 0x06,
+		.adb_product_id     = 0x901E,
+		.adb_functions	    = 0x16,
 	},
-/* FIH, WilsonWHLee, 2009/09/021 { */
-/* [FXX_CR], enable USB port dynamically */
-    	// 0xC003 composition is add ethernet port
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
 	{
-		.product_id         = 0xC003,
-		.functions	    = 0x81, /* 100100 */
-	},	
-	// 0xC004 Power off (mass storage) Chargering
+		/* DIAG */
+		.product_id         = 0x900E,
+		.functions	    = 0x04,
+		.adb_product_id     = 0x901D,
+		.adb_functions	    = 0x14,
+	},
+#endif
+#if defined(CONFIG_USB_ANDROID_DIAG) && defined(CONFIG_USB_F_SERIAL)
 	{
+		/* DIAG + MODEM */
+		.product_id         = 0x9004,
+		.functions	    = 0x64,
+		.adb_product_id     = 0x901F,
+		.adb_functions	    = 0x0614,
+	},
+	{
+		/* DIAG + MODEM + NMEA*/
+		.product_id         = 0x9016,
+		.functions	    = 0x764,
+		.adb_product_id     = 0x9020,
+		.adb_functions	    = 0x7614,
+	},
+	{
+		/* DIAG + MODEM + NMEA + MSC */
+		.product_id         = 0x9017,
+		.functions	    = 0x2764,
+		.adb_product_id     = 0x9018,
+		.adb_functions	    = 0x27614,
+	},
+#endif
+#ifdef CONFIG_USB_ANDROID_CDC_ECM
+	{
+		/* MSC + CDC-ECM */
+		.product_id         = 0x9014,
+		.functions	    = 0x82,
+		.adb_product_id     = 0x9023,
+		.adb_functions	    = 0x812,
+	},
+#endif
+#ifdef CONFIG_USB_ANDROID_RMNET
+	{
+		/* DIAG + RMNET */
+		.product_id         = 0x9021,
+		.functions	    = 0x94,
+		.adb_product_id     = 0x9022,
+		.adb_functions	    = 0x914,
+	},
+#endif
+#ifdef CONFIG_USB_ANDROID_RNDIS
+	{
+		/* RNDIS */
 		.product_id         = 0xC004,
-		.functions	    = 0x02, /* 100100 */
+		.functions	    = 0xA,
+		.adb_product_id     = 0xC001,
+		.adb_functions	    = 0x1A,
 	},
-/* } FIH, WilsonWHLee, 2009/09/21 */
+#endif
 };
+
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id  = 0x489,
-	.product_id	= 0xc000,
-	
-	.functions	= 0x76142,  /* GENERIC NMEA + GENERIC MODEM + ADB  + DIAG  + MSC*/
 	.version	= 0x0100,
-	.serial_number  = "1234567890ABCDEF",
 	.compositions   = usb_func_composition,
 	.num_compositions = ARRAY_SIZE(usb_func_composition),
 	.product_name	= "Qualcomm HSUSB Device",
 	.manufacturer_name = "Qualcomm Incorporated",
 	.nluns = 2,
-	/* FIH, WilsonWHLee, 2009/11/19 { */
-	/* [FXX_CR], add for download tool */
-	.fih_version    = "0SWVECHIDMODECUST00000000",
-	/* }FIH, WilsonWHLee, 2009/11/19 */
 };
+
 static struct platform_device android_usb_device = {
 	.name	= "android_usb",
 	.id		= -1,
@@ -625,6 +667,21 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+static struct resource ram_console_resource[] = {
+        {
+            .flags  = IORESOURCE_MEM,
+        }
+};
+
+static struct platform_device ram_console_device = {
+        .name = "ram_console",
+        .id = -1,
+        .num_resources  = ARRAY_SIZE(ram_console_resource),
+        .resource       = ram_console_resource,
+};
+#endif
+
 /* FIH, JamesKCTung, 2009/05/11 { */
 static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd);
 static uint32_t msm_ar6k_sdcc_setup_power(struct device *dv, unsigned int vdd);
@@ -646,6 +703,9 @@ static int ar6k_wifi_status_register(void (*callback)(int card_present, void *de
 	ar6k_wifi_status_cb_devid = dev_id;
 	return 0;
 }
+
+extern int android_set_sn(const char *kmessage, struct kernel_param *kp);
+
 //FIH, WilsonWHLee, 2009/11/26++
 /* [FXX_CR], read product id as serial number*/
 static int msm_read_serial_number_from_nvitem()
@@ -660,8 +720,9 @@ static int msm_read_serial_number_from_nvitem()
     {      
       printk(KERN_INFO"%s: [wilson product_id=%s]\r\n",__func__,(char *)product_id);
       //memcpy(msm_hsusb_pdata.serial_number, product_id, 16);
-	  memcpy(android_usb_pdata.serial_number, product_id, 16);
+	  //memcpy(android_usb_pdata.serial_number, product_id, 16);
 	  memcpy(board_serial, product_id, 16);
+	  android_set_sn(board_serial,NULL);
     } 	
 	return 1;
   	
@@ -1384,9 +1445,20 @@ static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.appsz  = MSM_CLK_CTL_SIZE,
 };
 
-/* FIH, Charles Huang, 2009/05/11 { */
-/* [FXX_CR], camera sensor ov5642 */
+
+static struct msm_camera_sensor_flash_src msm_flash_src = {
+        .flash_sr_type = MSM_CAMERA_FLASH_SRC_PMIC,
+        ._fsrc.pmic_src.low_current  = 30,
+        ._fsrc.pmic_src.high_current = 100,
+};
+
 #ifdef CONFIG_OV5642
+
+static struct msm_camera_sensor_flash_data flash_ov5642 = {
+        .flash_type = MSM_CAMERA_FLASH_LED,
+        .flash_src  = &msm_flash_src
+};
+ 
 static struct msm_camera_sensor_info msm_camera_sensor_ov5642_data = {
 	.sensor_name    = "ov5642",
 	.sensor_reset   = 0,
@@ -1394,7 +1466,8 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov5642_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	.flash_data     = &flash_ov5642,
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_ov5642 = {
@@ -1416,7 +1489,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov5642af_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_ov5642af = {
@@ -1438,7 +1511,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov3642_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_ov3642 = {
@@ -1458,7 +1531,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9d112_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9d112 = {
@@ -1477,7 +1550,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_s5k3e2fx_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_s5k3e2fx = {
@@ -1496,7 +1569,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9p012 = {
@@ -1515,7 +1588,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9p012_km_data = {
 	.vcm_pwd        = 88,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9p012_km = {
@@ -1534,7 +1607,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_mt9t013_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_mt9t013 = {
@@ -1553,7 +1626,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_vb6801_data = {
 	.vcm_pwd        = 0,
 	.vcm_enable     = 0,
 	.pdata          = &msm_camera_device_data,
-	.flash_type     = MSM_CAMERA_FLASH_LED
+	//.flash_type     = MSM_CAMERA_FLASH_LED
 };
 
 static struct platform_device msm_camera_sensor_vb6801 = {
@@ -1704,6 +1777,9 @@ static struct platform_device msm_wlan_ar6000_pm_device = {
 /* } FIH, SimonSSChang, 2009/02/26 */
 
 static struct platform_device *devices[] __initdata = {
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
+    &ram_console_device,
+#endif
 /* FIH, SimonSSChang, 2009/02/26 { */
 /* ATHENV */
 	&msm_wlan_ar6000_pm_device,
@@ -2298,11 +2374,6 @@ static void __init msm7x2x_init(void)
 	msm_acpu_clock_init(&msm7x2x_clock_data);
 
 #ifdef CONFIG_ARCH_MSM7X27
-	/* This value has been set to 160000 for power savings. */
-	/* OEMs may modify the value at their discretion for performance */
-	/* The appropriate maximum replacement for 160000 is: */
-	/* clk_get_max_axi_khz() */
-	kgsl_pdata.max_axi_freq = 160000;
 
 	/* 7x27 doesn't allow graphics clocks to be run asynchronously to */
 	/* the AXI bus */
@@ -2447,12 +2518,23 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 			"pmem arena\n", size, addr, __pa(addr));
 	}
 
+
 	size = fb_size ? : MSM_FB_SIZE;
 	addr = alloc_bootmem(size);
 	msm_fb_resources[0].start = __pa(addr);
 	msm_fb_resources[0].end = msm_fb_resources[0].start + size - 1;
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
+
+	/* RAM Console can't use alloc_bootmem(), since that zeroes the
+         * region */
+	size = 128 * SZ_1K;
+	ram_console_resource[0].start = msm_fb_resources[0].end+1;
+	ram_console_resource[0].end = ram_console_resource[0].start + size - 1;
+	pr_info("allocating %lu bytes at (%lx physical) for ram console\n",
+		size, (unsigned long)ram_console_resource[0].start);
+	/* We still have to reserve it, though */
+	reserve_bootmem(ram_console_resource[0].start,size,0);
 
 	size = pmem_kernel_ebi1_size;
 	if (size) {

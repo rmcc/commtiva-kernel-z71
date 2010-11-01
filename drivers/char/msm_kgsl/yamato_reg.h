@@ -150,6 +150,25 @@ union reg_rb_edram_info {
 	struct rb_edram_info_t f;
 };
 
+#define RBBM_READ_ERROR_UNUSED0_SIZE		2
+#define RBBM_READ_ERROR_READ_ADDRESS_SIZE	15
+#define RBBM_READ_ERROR_UNUSED1_SIZE		13
+#define RBBM_READ_ERROR_READ_REQUESTER_SIZE	1
+#define RBBM_READ_ERROR_READ_ERROR_SIZE		1
+
+struct rbbm_read_error_t {
+	unsigned int unused0:RBBM_READ_ERROR_UNUSED0_SIZE;
+	unsigned int read_address:RBBM_READ_ERROR_READ_ADDRESS_SIZE;
+	unsigned int unused1:RBBM_READ_ERROR_UNUSED1_SIZE;
+	unsigned int read_requester:RBBM_READ_ERROR_READ_REQUESTER_SIZE;
+	unsigned int read_error:RBBM_READ_ERROR_READ_ERROR_SIZE;
+};
+
+union rbbm_read_error_u {
+	unsigned int val:32;
+	struct rbbm_read_error_t f;
+};
+
 #define CP_RB_CNTL_RB_BUFSZ_SIZE                           6
 #define CP_RB_CNTL_UNUSED0_SIZE                            2
 #define CP_RB_CNTL_RB_BLKSZ_SIZE                           6
@@ -400,5 +419,10 @@ union reg_cp_rb_cntl {
 #define REG_RB_SAMPLE_COUNT_CTL          0x2324
 #define REG_SQ_CONSTANT_0                0x4000
 #define REG_SQ_FETCH_0                   0x4800
+
+#define REG_MH_AXI_ERROR		 0xA45
+#define REG_COHER_BASE_PM4		 0xA2A
+#define REG_COHER_STATUS_PM4		 0xA2B
+#define REG_COHER_SIZE_PM4		 0xA29
 
 #endif /* _YAMATO_REG_H */

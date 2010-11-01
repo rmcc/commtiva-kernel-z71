@@ -1,4 +1,5 @@
 /* Copyright (c) 2002,2007-2009, Code Aurora Forum. All rights reserved.
+ * Copyright (C) 2010 Sony Ericsson Mobile Communications AB.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -68,6 +69,7 @@
 
 #include "yamato_reg.h"
 
+#define VALID_STATUS_COUNT_MAX	10
 #define GSL_RB_NOP_SIZEDWORDS				2
 /* protected mode error checking below register address 0x800
 *  note: if CP_INTERRUPT packet is used then checking needs
@@ -105,12 +107,35 @@ inline unsigned int kgsl_ringbuffer_sizelog2quadwords(unsigned int sizedwords)
 /* functions */
 void kgsl_cp_intrcallback(struct kgsl_device *device)
 {
-	unsigned int status = 0;
+	unsigned int status = 0, num_reads = 0, master_status = 0;
 	struct kgsl_ringbuffer *rb = &device->ringbuffer;
 
 	KGSL_CMD_VDBG("enter (device=%p)\n", device);
 
-	kgsl_yamato_regread(device, REG_CP_INT_STATUS, &status);
+	kgsl_yamato_regread(device, REG_MASTER_INT_SIGNAL, &master_status);
+	while (!status && (num_reads < VALID_STATUS_COUNT_MAX) &&
+		(master_status & MASTER_INT_SIGNAL__CP_INT_STAT)) {
+		kgsl_yamato_regread(device, REG_CP_INT_STATUS, &status);
+		kgsl_yamato_regread(device, REG_MASTER_INT_SIGNAL,
+					&master_status);
+		num_reads++;
+	}
+	if (num_reads > 1)
+		KGSL_DRV_WARN("Looped %d times to read REG_CP_INT_STATUS\n",
+				num_reads);
+	if (!status) {
+		if (master_status & MASTER_INT_SIGNAL__CP_INT_STAT) {
+			/* This indicates that we could not read CP_INT_STAT.
+			 * As a precaution just wake up processes so
+			 * they can check their timestamps. Since, we
+			 * did not ack any interrupts this interrupt will
+			 * be generated again */
+			KGSL_DRV_WARN("Unable to read CP_INT_STATUS\n");
+			wake_up_interruptible_all(&device->ib1_wq);
+		} else
+			KGSL_DRV_WARN("Spurious interrput detected\n");
+		return;
+	}
 
 	if (status & CP_INT_CNTL__IB1_INT_MASK) {
 		/*this is the only used soft interrupt */
@@ -451,8 +476,6 @@ static int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb)
 	rb->timestamp = 0;
 	GSL_RB_INIT_TIMESTAMP(rb);
 
-	INIT_LIST_HEAD(&rb->memqueue);
-
 	/* clear ME_HALT to start micro engine */
 	kgsl_yamato_regwrite(device, REG_CP_ME_CNTL, 0);
 
@@ -541,6 +564,8 @@ int kgsl_ringbuffer_init(struct kgsl_device *device)
 	rb->device = device;
 	rb->sizedwords = (2 << kgsl_cfg_rb_sizelog2quadwords);
 	rb->blksizequadwords = kgsl_cfg_rb_blksizequadwords;
+
+	INIT_LIST_HEAD(&rb->memqueue);
 
 	/* allocate memory for ringbuffer, needs to be double octword aligned
 	* align on page from contiguous physical memory
@@ -723,6 +748,8 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device *device,
 	link[0] = PM4_HDR_INDIRECT_BUFFER_PFD;
 	link[1] = ibaddr;
 	link[2] = sizedwords;
+
+	kgsl_setstate(device, device->mmu.tlb_flags);
 
 	kgsl_drawctxt_switch(device, &device->drawctxt[drawctxt_index], flags);
 

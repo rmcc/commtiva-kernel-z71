@@ -41,7 +41,7 @@
 		_IOW(MSM_ROTATOR_IOCTL_MAGIC, 3, int)
 
 struct msm_rotator_img_info {
-	int session_id;
+	unsigned int session_id;
 	struct msmfb_img  src;
 	struct msmfb_img  dst;
 	struct mdp_rect src_rect;

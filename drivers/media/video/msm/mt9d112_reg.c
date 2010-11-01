@@ -54,7 +54,7 @@ preview_snapshot_mode_reg_settings_array[] = {
 	{0x338C, 0x2723},
 	{0x3390, 659},    /* Frame Lines (P) = 679 */
 	{0x338C, 0x2725},
-	{0x3390, 0x0824}, /* Line Length (P) = 2084 */
+	{0x3390, 0x061B}, /* Line Length (P) = 1563 */
 	{0x338C, 0x2727},
 	{0x3390, 0x2020},
 	{0x338C, 0x2729},

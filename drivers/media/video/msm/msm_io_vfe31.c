@@ -62,6 +62,7 @@
 #include <mach/board.h>
 #include <mach/camera.h>
 #include <mach/vreg.h>
+#include <mach/clk.h>
 
 #define CAMIF_CFG_RMSK             0x1fffff
 #define CAM_SEL_BMSK               0x2
@@ -81,7 +82,54 @@
 #define EXT_CAM_HSYNC_POL_SEL_SHFT 0x10
 #define EXT_CAM_VSYNC_POL_SEL_SHFT 0xF
 #define MDDI_CLK_CHICKEN_BIT_SHFT  0x7
-#define APPS_RESET_OFFSET          0x00000214
+/* MIPI	CSI	controller registers */
+#define	MIPI_PHY_CONTROL			0x00000000
+#define	MIPI_PROTOCOL_CONTROL		0x00000004
+#define	MIPI_INTERRUPT_STATUS		0x00000008
+#define	MIPI_INTERRUPT_MASK			0x0000000C
+#define	MIPI_CAMERA_CNTL			0x00000024
+#define	MIPI_CALIBRATION_CONTROL	0x00000018
+#define	MIPI_PHY_D0_CONTROL2		0x00000038
+#define	MIPI_PHY_D1_CONTROL2		0x0000003C
+#define	MIPI_PHY_D2_CONTROL2		0x00000040
+#define	MIPI_PHY_D3_CONTROL2		0x00000044
+#define	MIPI_PHY_CL_CONTROL			0x00000048
+#define	MIPI_PHY_D0_CONTROL			0x00000034
+#define	MIPI_PHY_D1_CONTROL			0x00000020
+#define	MIPI_PHY_D2_CONTROL			0x0000002C
+#define	MIPI_PHY_D3_CONTROL			0x00000030
+#define	MIPI_PROTOCOL_CONTROL_SW_RST_BMSK			0x8000000
+#define	MIPI_PROTOCOL_CONTROL_LONG_PACKET_HEADER_CAPTURE_BMSK	0x200000
+#define	MIPI_PROTOCOL_CONTROL_DATA_FORMAT_BMSK			0x180000
+#define	MIPI_PROTOCOL_CONTROL_DECODE_ID_BMSK			0x40000
+#define	MIPI_PROTOCOL_CONTROL_ECC_EN_BMSK			0x20000
+#define	MIPI_CALIBRATION_CONTROL_SWCAL_CAL_EN_SHFT		0x16
+#define	MIPI_CALIBRATION_CONTROL_SWCAL_STRENGTH_OVERRIDE_EN_SHFT	0x15
+#define	MIPI_CALIBRATION_CONTROL_CAL_SW_HW_MODE_SHFT		0x14
+#define	MIPI_CALIBRATION_CONTROL_MANUAL_OVERRIDE_EN_SHFT	0x7
+#define	MIPI_PROTOCOL_CONTROL_DATA_FORMAT_SHFT			0x13
+#define	MIPI_PROTOCOL_CONTROL_DPCM_SCHEME_SHFT			0x1e
+#define	MIPI_PHY_D0_CONTROL2_SETTLE_COUNT_SHFT			0x18
+#define	MIPI_PHY_D0_CONTROL2_HS_TERM_IMP_SHFT			0x10
+#define	MIPI_PHY_D0_CONTROL2_LP_REC_EN_SHFT				0x4
+#define	MIPI_PHY_D0_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
+#define	MIPI_PHY_D1_CONTROL2_SETTLE_COUNT_SHFT			0x18
+#define	MIPI_PHY_D1_CONTROL2_HS_TERM_IMP_SHFT			0x10
+#define	MIPI_PHY_D1_CONTROL2_LP_REC_EN_SHFT				0x4
+#define	MIPI_PHY_D1_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
+#define	MIPI_PHY_D2_CONTROL2_SETTLE_COUNT_SHFT			0x18
+#define	MIPI_PHY_D2_CONTROL2_HS_TERM_IMP_SHFT			0x10
+#define	MIPI_PHY_D2_CONTROL2_LP_REC_EN_SHFT				0x4
+#define	MIPI_PHY_D2_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
+#define	MIPI_PHY_D3_CONTROL2_SETTLE_COUNT_SHFT			0x18
+#define	MIPI_PHY_D3_CONTROL2_HS_TERM_IMP_SHFT			0x10
+#define	MIPI_PHY_D3_CONTROL2_LP_REC_EN_SHFT				0x4
+#define	MIPI_PHY_D3_CONTROL2_ERR_SOT_HS_EN_SHFT			0x3
+#define	MIPI_PHY_CL_CONTROL_HS_TERM_IMP_SHFT			0x18
+#define	MIPI_PHY_CL_CONTROL_LP_REC_EN_SHFT				0x2
+#define	MIPI_PHY_D0_CONTROL_HS_REC_EQ_SHFT				0x1c
+#define	MIPI_PHY_D1_CONTROL_MIPI_CLK_PHY_SHUTDOWNB_SHFT		0x9
+#define	MIPI_PHY_D1_CONTROL_MIPI_DATA_PHY_SHUTDOWNB_SHFT	0x8
 
 static struct clk *camio_vfe_mdc_clk;
 static struct clk *camio_mdc_clk;
@@ -90,9 +138,12 @@ static struct clk *camio_vfe_camif_clk;
 static struct clk *camio_vfe_pbdg_clk;
 static struct clk *camio_cam_m_clk;
 static struct clk *camio_camif_pad_pbdg_clk;
+static struct clk *camio_csi_clk;
+static struct clk *camio_csi_pclk;
+static struct clk *camio_csi_vfe_clk;
 static struct msm_camera_io_ext camio_ext;
-static struct resource *appio, *mdcio, *camifpadio;
-void __iomem *appbase, *mdcbase, *camifpadbase;
+static struct resource *camifpadio, *csiio;
+void __iomem *camifpadbase, *csibase;
 
 void msm_io_w(u32 data, void __iomem *addr)
 {
@@ -100,9 +151,27 @@ void msm_io_w(u32 data, void __iomem *addr)
 	writel((data), (addr));
 }
 
+void msm_io_w_mb(u32 data, void __iomem *addr)
+{
+	CDBG("%s: %08x %08x\n", __func__, (int) (addr), (data));
+	wmb();
+	writel((data), (addr));
+	wmb();
+}
+
 u32 msm_io_r(void __iomem *addr)
 {
 	uint32_t data = readl(addr);
+	CDBG("%s: %08x %08x\n", __func__, (int) (addr), (data));
+	return data;
+}
+
+u32 msm_io_r_mb(void __iomem *addr)
+{
+	uint32_t data;
+	rmb();
+	data = readl(addr);
+	rmb();
 	CDBG("%s: %08x %08x\n", __func__, (int) (addr), (data));
 	return data;
 }
@@ -245,7 +314,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 	case CAMIO_VFE_CLK:
 		camio_vfe_clk =
 		clk = clk_get(NULL, "vfe_clk");
-		msm_camio_clk_rate_set_2(clk, 134000000);
+		msm_camio_clk_rate_set_2(clk, 122880000);
 		break;
 
 	case CAMIO_VFE_CAMIF_CLK:
@@ -269,6 +338,19 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 		clk = clk_get(NULL, "camif_pad_pclk");
 		break;
 
+	case CAMIO_CSI_CLK:
+		camio_csi_clk =
+		clk = clk_get(NULL, "csi_clk");
+		msm_camio_clk_rate_set_2(clk, 153600000);
+		break;
+	case CAMIO_CSI_VFE_CLK:
+		camio_csi_vfe_clk =
+		clk = clk_get(NULL, "csi_vfe_clk");
+		break;
+	case CAMIO_CSI_PCLK:
+		camio_csi_pclk =
+		clk = clk_get(NULL, "csi_pclk");
+		break;
 	default:
 		break;
 	}
@@ -313,6 +395,15 @@ int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
 	case CAMIO_CAMIF_PAD_PBDG_CLK:
 		clk = camio_camif_pad_pbdg_clk;
 		break;
+	case CAMIO_CSI_CLK:
+		clk = camio_csi_clk;
+		break;
+	case CAMIO_CSI_VFE_CLK:
+		clk = camio_csi_vfe_clk;
+		break;
+	case CAMIO_CSI_PCLK:
+		clk = camio_csi_pclk;
+		break;
 	default:
 		break;
 	}
@@ -337,6 +428,14 @@ void msm_camio_clk_rate_set_2(struct clk *clk, int rate)
 	clk_set_rate(clk, rate);
 }
 
+static irqreturn_t msm_io_csi_irq(int irq_num, void *data)
+{
+	uint32_t irq;
+	irq = msm_io_r(csibase + MIPI_INTERRUPT_STATUS);
+	CDBG("%s MIPI_INTERRUPT_STATUS = 0x%x\n", __func__, irq);
+	msm_io_w(irq, csibase + MIPI_INTERRUPT_STATUS);
+	return IRQ_HANDLED;
+}
 int msm_camio_enable(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -345,96 +444,92 @@ int msm_camio_enable(struct platform_device *pdev)
 
 	camio_ext = camdev->ioext;
 
-	appio = request_mem_region(camio_ext.appphy,
-		camio_ext.appsz, pdev->name);
-	if (!appio) {
-		rc = -EBUSY;
-		goto enable_fail;
-	}
-
-	appbase = ioremap(camio_ext.appphy,
-		camio_ext.appsz);
-	if (!appbase) {
-		rc = -ENOMEM;
-		goto apps_no_mem;
-	}
-
-	mdcio = request_mem_region(camio_ext.mdcphy,
-		camio_ext.mdcsz, pdev->name);
-	if (!mdcio) {
-		rc = -EBUSY;
-		goto mdc_busy;
-	}
-
-	mdcbase = ioremap(camio_ext.mdcphy,
-		camio_ext.mdcsz);
-	if (!mdcbase) {
-		rc = -ENOMEM;
-		goto mdc_no_mem;
-	}
-
-	camifpadio = request_mem_region(camio_ext.camifpadphy,
-		camio_ext.camifpadsz, pdev->name);
-	if (!camifpadio) {
-		rc = -EBUSY;
-		goto camifpad_busy;
-	}
-
-	camifpadbase = ioremap(camio_ext.camifpadphy,
-		camio_ext.camifpadsz);
-	if (!camifpadbase) {
-		rc = -ENOMEM;
-		goto camifpad_no_mem;
-	}
-
 	camdev->camera_gpio_on();
 	msm_camera_vreg_enable();
-
 	msm_camio_clk_enable(CAMIO_VFE_PBDG_CLK);
 	msm_camio_clk_enable(CAMIO_CAMIF_PAD_PBDG_CLK);
 	msm_camio_clk_enable(CAMIO_CAM_MCLK_CLK);
 	msm_camio_clk_enable(CAMIO_VFE_CLK);
-	msm_camio_clk_enable(CAMIO_VFE_CAMIF_CLK);
+	if (!sinfo->csi_if) {
+		camifpadio = request_mem_region(camio_ext.camifpadphy,
+			camio_ext.camifpadsz, pdev->name);
+		if (!camifpadio) {
+			rc = -EBUSY;
+			goto common_fail;
+		}
+		camifpadbase = ioremap(camio_ext.camifpadphy,
+			camio_ext.camifpadsz);
+		if (!camifpadbase) {
+			rc = -ENOMEM;
+			goto parallel_busy;
+		}
+		msm_camio_clk_enable(CAMIO_VFE_CAMIF_CLK);
+	} else {
+		csiio = request_mem_region(camio_ext.csiphy,
+			camio_ext.csisz, pdev->name);
+		if (!csiio) {
+			rc = -EBUSY;
+			goto common_fail;
+		}
+		csibase = ioremap(camio_ext.csiphy,
+			camio_ext.csisz);
+		if (!csibase) {
+			rc = -ENOMEM;
+			goto csi_busy;
+		}
+		rc = request_irq(camio_ext.csiirq, msm_io_csi_irq,
+			IRQF_TRIGGER_RISING, "csi", 0);
+		if (rc < 0)
+			goto csi_irq_fail;
+		/* enable required clocks for CSI */
+		msm_camio_clk_enable(CAMIO_CSI_PCLK);
+		msm_camio_clk_enable(CAMIO_CSI_VFE_CLK);
+		msm_camio_clk_enable(CAMIO_CSI_CLK);
+	}
 	return 0;
 
-camifpad_no_mem:
+parallel_busy:
 	release_mem_region(camio_ext.camifpadphy, camio_ext.camifpadsz);
-camifpad_busy:
-	iounmap(camifpadbase);
-mdc_no_mem:
-	release_mem_region(camio_ext.mdcphy, camio_ext.mdcsz);
-mdc_busy:
-	iounmap(appbase);
-apps_no_mem:
-	release_mem_region(camio_ext.appphy, camio_ext.appsz);
-enable_fail:
+	goto common_fail;
+csi_irq_fail:
+	iounmap(csibase);
+csi_busy:
+	release_mem_region(camio_ext.csiphy, camio_ext.csisz);
+common_fail:
+	msm_camio_clk_disable(CAMIO_VFE_CLK);
+	msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
+	msm_camio_clk_disable(CAMIO_CAMIF_PAD_PBDG_CLK);
+	msm_camio_clk_disable(CAMIO_VFE_PBDG_CLK);
+	msm_camera_vreg_disable();
+	camdev->camera_gpio_off();
 	return rc;
 }
 
 void msm_camio_disable(struct platform_device *pdev)
 {
-	iounmap(mdcbase);
-	release_mem_region(camio_ext.mdcphy, camio_ext.mdcsz);
-	iounmap(appbase);
-	release_mem_region(camio_ext.appphy, camio_ext.appsz);
-	iounmap(camifpadbase);
-	release_mem_region(camio_ext.camifpadphy, camio_ext.camifpadsz);
-}
-
-void msm_disable_io_gpio_clk(struct platform_device *pdev)
-{
 	struct msm_camera_sensor_info *sinfo = pdev->dev.platform_data;
 	struct msm_camera_device_platform_data *camdev = sinfo->pdata;
 
-	msm_camera_vreg_disable();
-	camdev->camera_gpio_off();
-
+	if (!sinfo->csi_if) {
+		msm_camio_clk_disable(CAMIO_VFE_CAMIF_CLK);
+		iounmap(camifpadbase);
+		release_mem_region(camio_ext.camifpadphy, camio_ext.camifpadsz);
+	} else {
+		free_irq(camio_ext.csiirq, 0);
+		msm_camio_clk_disable(CAMIO_CSI_PCLK);
+		msm_camio_clk_disable(CAMIO_CSI_VFE_CLK);
+		msm_camio_clk_disable(CAMIO_CSI_CLK);
+		iounmap(csibase);
+		release_mem_region(camio_ext.csiphy, camio_ext.csisz);
+	}
 	CDBG("disable clocks\n");
-	msm_camio_clk_disable(CAMIO_VFE_CAMIF_CLK);
+
 	msm_camio_clk_disable(CAMIO_VFE_CLK);
 	msm_camio_clk_disable(CAMIO_CAM_MCLK_CLK);
 	msm_camio_clk_disable(CAMIO_CAMIF_PAD_PBDG_CLK);
 	msm_camio_clk_disable(CAMIO_VFE_PBDG_CLK);
+	msm_camera_vreg_disable();
+	camdev->camera_gpio_off();
 }
 
 void msm_camio_camif_pad_reg_reset(void)
@@ -463,17 +558,9 @@ void msm_camio_camif_pad_reg_reset(void)
 
 void msm_camio_vfe_blk_reset(void)
 {
-	uint32_t val;
+	return;
 
-	val = msm_io_r(appbase + APPS_RESET_OFFSET);
-	val |= 0x1;
-	msm_io_w(val, appbase + APPS_RESET_OFFSET);
-	mdelay(10);
 
-	val = msm_io_r(appbase + APPS_RESET_OFFSET);
-	val &= ~0x1;
-	msm_io_w(val, appbase + APPS_RESET_OFFSET);
-	mdelay(10);
 }
 
 void msm_camio_camif_pad_reg_reset_2(void)
@@ -534,4 +621,96 @@ int msm_camio_probe_off(struct platform_device *pdev)
 int msm_camio_read_camif_status(void)
 {
 	return msm_io_r(camifpadbase + 0x4);
+}
+int msm_camio_csi_config(struct msm_camera_csi_params *csi_params)
+{
+	int rc = 0;
+	uint32_t val = 0;
+
+	CDBG("msm_camio_csi_config \n");
+
+	/* SOT_ECC_EN enable error correction for SYNC (data-lane) */
+	msm_io_w(0x4, csibase + MIPI_PHY_CONTROL);
+
+	/* SW_RST to the CSI core */
+	msm_io_w(MIPI_PROTOCOL_CONTROL_SW_RST_BMSK,
+		csibase + MIPI_PROTOCOL_CONTROL);
+
+	/* PROTOCOL CONTROL */
+	val = MIPI_PROTOCOL_CONTROL_LONG_PACKET_HEADER_CAPTURE_BMSK |
+		MIPI_PROTOCOL_CONTROL_DECODE_ID_BMSK |
+		MIPI_PROTOCOL_CONTROL_ECC_EN_BMSK;
+	val |= (uint32_t)(csi_params->data_format) <<
+		MIPI_PROTOCOL_CONTROL_DATA_FORMAT_SHFT;
+	val |= csi_params->dpcm_scheme <<
+		MIPI_PROTOCOL_CONTROL_DPCM_SCHEME_SHFT;
+	CDBG("%s MIPI_PROTOCOL_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_PROTOCOL_CONTROL);
+
+	/* SW CAL EN */
+	val = (0x1 << MIPI_CALIBRATION_CONTROL_SWCAL_CAL_EN_SHFT) |
+		(0x1 <<
+		MIPI_CALIBRATION_CONTROL_SWCAL_STRENGTH_OVERRIDE_EN_SHFT) |
+		(0x1 << MIPI_CALIBRATION_CONTROL_CAL_SW_HW_MODE_SHFT) |
+		(0x1 << MIPI_CALIBRATION_CONTROL_MANUAL_OVERRIDE_EN_SHFT);
+	CDBG("%s MIPI_CALIBRATION_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_CALIBRATION_CONTROL);
+
+	/* settle_cnt is very sensitive to speed!
+	increase this value to run at higher speeds */
+	val = (csi_params->settle_cnt <<
+			MIPI_PHY_D0_CONTROL2_SETTLE_COUNT_SHFT) |
+		(0x0F << MIPI_PHY_D0_CONTROL2_HS_TERM_IMP_SHFT) |
+		(0x1 << MIPI_PHY_D0_CONTROL2_LP_REC_EN_SHFT) |
+		(0x1 << MIPI_PHY_D0_CONTROL2_ERR_SOT_HS_EN_SHFT);
+	CDBG("%s MIPI_PHY_D0_CONTROL2 val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_PHY_D0_CONTROL2);
+	msm_io_w(val, csibase + MIPI_PHY_D1_CONTROL2);
+	msm_io_w(val, csibase + MIPI_PHY_D2_CONTROL2);
+	msm_io_w(val, csibase + MIPI_PHY_D3_CONTROL2);
+
+
+	val = (0x0F << MIPI_PHY_CL_CONTROL_HS_TERM_IMP_SHFT) |
+		(0x1 << MIPI_PHY_CL_CONTROL_LP_REC_EN_SHFT);
+	CDBG("%s MIPI_PHY_CL_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_PHY_CL_CONTROL);
+
+	val = 0 << MIPI_PHY_D0_CONTROL_HS_REC_EQ_SHFT;
+	msm_io_w(val, csibase + MIPI_PHY_D0_CONTROL);
+
+	val = (0x1 << MIPI_PHY_D1_CONTROL_MIPI_CLK_PHY_SHUTDOWNB_SHFT) |
+		(0x1 << MIPI_PHY_D1_CONTROL_MIPI_DATA_PHY_SHUTDOWNB_SHFT);
+	CDBG("%s MIPI_PHY_D1_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_PHY_D1_CONTROL);
+
+	msm_io_w(0x00000000, csibase + MIPI_PHY_D2_CONTROL);
+	msm_io_w(0x00000000, csibase + MIPI_PHY_D3_CONTROL);
+
+	/* halcyon only supports 1 or 2 lane */
+	switch (csi_params->lane_cnt) {
+	case 1:
+		msm_io_w(csi_params->lane_assign << 8 | 0x4,
+			csibase + MIPI_CAMERA_CNTL);
+		break;
+	case 2:
+		msm_io_w(csi_params->lane_assign << 8 | 0x5,
+			csibase + MIPI_CAMERA_CNTL);
+		break;
+	case 3:
+		msm_io_w(csi_params->lane_assign << 8 | 0x6,
+			csibase + MIPI_CAMERA_CNTL);
+		break;
+	case 4:
+		msm_io_w(csi_params->lane_assign << 8 | 0x7,
+			csibase + MIPI_CAMERA_CNTL);
+		break;
+	}
+
+	/* mask out ID_ERROR[19], DATA_CMM_ERR[11]
+	and CLK_CMM_ERR[10] - de-featured */
+	msm_io_w(0xFFF7F3FF, csibase + MIPI_INTERRUPT_MASK);
+	/*clear IRQ bits*/
+	msm_io_w(0xFFF7F3FF, csibase + MIPI_INTERRUPT_STATUS);
+
+	return rc;
 }

@@ -2193,12 +2193,12 @@ config FB_MSM_LCDC
 	default n
 
 config FB_MSM_OVERLAY
-	depends on FB_MSM_MDP40
+	depends on FB_MSM_MDP40 && ANDROID_PMEM
 	bool "MDP4 overlay support"
 	default n
 
 config FB_MSM_DTV
-	depends on FB_MSM_OVERALY
+	depends on FB_MSM_OVERLAY
 	bool
 	default n
 
@@ -2222,6 +2222,12 @@ config FB_MSM_MDDI_TOSHIBA_COMMON
 config FB_MSM_MDDI_TOSHIBA_COMMON_VGA
 	bool
 	select FB_MSM_MDDI_TOSHIBA_COMMON
+	default n
+
+config FB_MSM_MDDI_ORISE
+	depends on FB_MSM_MDDI_2
+	bool
+	select FB_MSM_MDDI
 	default n
 
 config FB_MSM_MDDI_AUTO_DETECT
