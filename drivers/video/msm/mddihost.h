@@ -208,6 +208,13 @@ void mddi_queue_static_window_adjust
 #define mddi_queue_register_write_extn(reg, val, pkt_size, wait, sig) \
 	mddi_host_register_write(reg, val, pkt_size, \
 	wait, NULL, MDDI_HOST_PRIM)
+/* { FIH,Chandler, lcm_wintek */
+void mddi_host_link_shutdown_write
+    ( boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host);
+
+#define mddi_queue_shutdown_write( wait, sig) \
+	mddi_host_link_shutdown_write( wait, NULL, MDDI_HOST_PRIM)
+/* } FIH,Chandler, lcm_wintek */
 #define mddi_queue_register_write_int(reg, val) \
 	mddi_host_register_write_int(reg, val, NULL, MDDI_HOST_PRIM)
 #define mddi_queue_register_read_int(reg, val_ptr) \

@@ -170,5 +170,97 @@ enum {
 
 void msm_proc_comm_reset_modem_now(void);
 int msm_proc_comm(unsigned cmd, unsigned *data1, unsigned *data2);
+int proc_comm_read_adc(unsigned *cmd_parameter);
+//Added for new touch calibration by Stanley++
+int proc_comm_read_nv(unsigned *cmd_parameter);
+int proc_comm_write_nv(unsigned *cmd_parameter);
+//Added for new touch calibration by Stanley--
+/* FIH, Debbie, 2009/06/30 { */
+#ifdef CONFIG_FIH_FXX
+int msm_proc_comm_oem(unsigned cmd, unsigned *data1, unsigned *data2, unsigned *cmd_parameter);
+int msm_proc_comm_oem_for_nv(unsigned cmd, unsigned *data1, unsigned *data2, unsigned *cmd_parameter);  //Added for new touch calibration by Stanley
 
+/* FIH, Tiger, 2009/12/10 { */
+#ifdef CONFIG_FIH_FXX
+#define CLEAR_TABLE		0
+#define ADD_DEST_PORT		1
+#define DELETE_DEST_PORT	2
+#define UPDATE_COMPLETE		3
+
+
+int msm_proc_comm_oem_tcp_filter(void *cmd_data, unsigned cmd_size);
+#endif 
+/* } FIH; Tiger; 2009/12/10 */
+
+
+/* Refer to the definition at AMSS/products/7625/services/mproc/smem/smem_oem.h */
+// The total size is SMEM_OEM_CMD_BUF_SIZE x 4 bytes for smem command parameter 
+#define SMEM_OEM_CMD_BUF_SIZE  32
+
+typedef union smem_oem_cmd_data
+{
+  struct t_cmd_data
+  {
+    unsigned int check_flag;
+    unsigned int cmd_parameter[SMEM_OEM_CMD_BUF_SIZE];
+  }cmd_data;
+
+  struct t_return_data
+  {
+    unsigned int check_flag;
+    unsigned int return_value[SMEM_OEM_CMD_BUF_SIZE];
+  }return_data;
+  
+} smem_oem_cmd_data;
+
+// used for checking the cmd_buff
+#define smem_oem_locked_flag	0x10000000
+#define smem_oem_unlocked_flag	0x20000000
+
+/* Commands are only handled by the modem processor but the cmd list must 
+   match up on both sides*/
+// ------------------------------------------------------------
+// -----------  FIH share memory command START  ---------------
+// ------------------------------------------------------------
+typedef enum
+{
+  SMEM_PROC_COMM_OEM_ADC_READ = 0,              /* ZEUS_CR_52 */
+  SMEM_PROC_COMM_OEM_PM_SET_LED_INTENSITY,  /* ZEUS_CR_66 */
+  SMEM_PROC_COMM_OEM_PM_MIC_EN, /* ZEUS_CR_130 */  
+  SMEM_PROC_COMM_OEM_EBOOT_SLEEP_REQ,       /* ZEUS_CR_165 */
+  SMEM_PROC_COMM_OEM_RESET_PM_RTC,          /* ZEUS_CR_177 */
+  SMEM_PROC_COMM_OEM_PWR_KEY_DECT,          /* ZEUS_CR_471 */
+  SMEM_PROC_COMM_OEM_PRODUCT_ID_READ,           /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_PRODUCT_ID_WRITE,          /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_SERIAL_NUM_READ,           /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_SERIAL_NUM_WRITE,          /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_TEST_FLAG_READ,            /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_TEST_FLAG_WRITE,           /* ZEUS_CR_558  */
+  SMEM_PROC_COMM_OEM_RESET_CHIP_EBOOT,           /* ZEUS_CR_1129  */
+  SMEM_PROC_COMM_OEM_NV_WRITE,
+  SMEM_PROC_COMM_OEM_NV_READ,
+  SMEM_PROC_COMM_OEM_ADIE_ADC_READ,
+  SMEM_PROC_COMM_OEM_POWER_OFF,         /* FIH, Paul Huang, 2009/08/12 */
+/* FIH; Tiger; 2009/12/10 { */
+/* add TCP filter command */
+  SMEM_PROC_COMM_OEM_UPDATE_TCP_FILTER,
+
+  SMEM_PROC_COMM_OEM_SET_RTC_ALARM,     /*F0X_B_446: Setting the RTC alarm*/
+  SMEM_PROC_COMM_OEM_GET_RTC_ALARM,     /*F0X_B_446: Getting the RTC alarm*/
+  SMEM_PROC_COMM_OEM_GET_SYSTEM_TIME,   /*F0X_B_446: Getting the system time*/
+/* } FIH; Tiger; 2009/12/10 */
+// +++ for SD card download, paul huang
+  SMEM_PROC_COMM_OEM_ALLOC_SD_DL_INFO,
+// --- for SD card download, paul huang
+  /* FIH, SimonSSChang 2010/05/31 { */
+  /* keep AXI on 160MHz*/
+  SMEM_PRPC_COMM_OEM_FIX_AXI_CLOCK = 22, 
+  /* } FIH, SimonSSChang 2010/05/31 */
+  SMEM_PROC_COMM_OEM_NUM_CMDS  /* always last! */
+} smem_proc_comm_oem_cmd_type;
+// -----------------------------------------------------------
+// -----------  FIH share memory command END  ----------------
+// -----------------------------------------------------------
+#endif
+/* FIH, Debbie, 2009/06/30 } */
 #endif

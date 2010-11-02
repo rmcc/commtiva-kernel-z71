@@ -132,6 +132,14 @@
 #define MSM_CAM_IOCTL_STROBE_FLASH_RELEASE \
 	_IO(MSM_CAM_IOCTL_MAGIC, 31)
 
+/* FIH, Charles Huang, 2009/11/09 { */
+/* [FXX_CR], new function  */
+#ifdef CONFIG_FIH_FXX
+#define MSM_CAM_IOCTL_GET_FIH_SENSOR_INFO \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 27, struct msm_camsensor_info *)
+#endif
+/* } FIH, Charles Huang, 2009/11/09 */
+
 #define MAX_SENSOR_NUM  3
 #define MAX_SENSOR_NAME 32
 
@@ -426,8 +434,25 @@ struct msm_snapshot_pp_status {
 #define CFG_GET_PICT_P_PL		25
 #define CFG_GET_AF_MAX_STEPS		26
 #define CFG_GET_PICT_MAX_EXP_LC		27
-#define CFG_SEND_WB_INFO    28
-#define CFG_MAX 			29
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], new function  */
+#ifdef CONFIG_FIH_FXX
+#define CFG_SET_LEDMOD		28
+#define CFG_SET_EXPOSUREMOD		29
+#define CFG_SET_SATURATION		30
+#define CFG_SET_SHARPNESS		31
+#define CFG_SET_HUE		32
+#define CFG_SET_GAMMA		33
+#define CFG_SET_AUTOEXPOSURE		34
+#define CFG_SET_AUTOFOCUS		35
+#define CFG_SET_METERINGMOD		36
+#define CFG_SET_SCENEMOD		37
+#define CFG_MAX				38
+#else
+#define CFG_MAX				28
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+
 
 #define MOVE_NEAR	0
 #define MOVE_FAR	1
@@ -451,7 +476,138 @@ struct msm_snapshot_pp_status {
 #define CAMERA_EFFECT_WHITEBOARD	6
 #define CAMERA_EFFECT_BLACKBOARD	7
 #define CAMERA_EFFECT_AQUA		8
+/* FIH, Charles Huang, 2009/07/30 { */
+/* [FXX_CR], add new effect to meet requirement */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_EFFECT_BLUISH		9
+#define CAMERA_EFFECT_REDDISH		10
+#define CAMERA_EFFECT_GREENISH		11
+#define CAMERA_EFFECT_MAX		12
+#else
 #define CAMERA_EFFECT_MAX		9
+#endif
+/* } FIH, Charles Huang, 2009/07/30 */
+
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], add new param to meet requirement */
+#ifdef CONFIG_FIH_FXX
+/* White balancing type, used for CAMERA_PARM_WHITE_BALANCING */
+#define CAMERA_WB_MIN_MINUS_1		0
+#define CAMERA_WB_AUTO			1
+#define CAMERA_WB_CUSTOM		2
+#define CAMERA_WB_INCANDESCENT		3
+#define CAMERA_WB_FLUORESCENT		4
+#define CAMERA_WB_DAYLIGHT		5
+#define CAMERA_WB_CLOUDY_DAYLIGHT	6
+#define CAMERA_WB_TWILIGHT		7
+#define CAMERA_WB_SHADE			8
+#define CAMERA_WB_1			9
+#define CAMERA_WB_2			10
+#define CAMERA_WB_3			11
+#define CAMERA_WB_MAX_PLUS_1		12
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+
+/* FIH, Charles Huang, 2009/07/15 { */
+/* [FXX_CR], add new param to meet requirement */
+#ifdef CONFIG_FIH_FXX
+/* White balancing type, used for CAMERA_PARM_WHITE_BALANCING */
+#define CAMERA_BRIGHTNESS_MIN		0
+#define CAMERA_BRIGHTNESS_0		0
+#define CAMERA_BRIGHTNESS_1		1
+#define CAMERA_BRIGHTNESS_2		2
+#define CAMERA_BRIGHTNESS_3		3
+#define CAMERA_BRIGHTNESS_4		4
+#define CAMERA_BRIGHTNESS_5		5
+#define CAMERA_BRIGHTNESS_DEFAULT	5
+#define CAMERA_BRIGHTNESS_6		6
+#define CAMERA_BRIGHTNESS_7		7
+#define CAMERA_BRIGHTNESS_8		8
+#define CAMERA_BRIGHTNESS_9		9
+#define CAMERA_BRIGHTNESS_10		10
+#define CAMERA_BRIGHTNESS_MAX		10
+#endif
+/* } FIH, Charles Huang, 2009/07/15 */
+
+/* FIH, Charles Huang, 2009/07/15 { */
+/* [FXX_CR], add new param to meet requirement */
+#ifdef CONFIG_FIH_FXX
+/* White balancing type, used for CAMERA_PARM_WHITE_BALANCING */
+#define CAMERA_ANTIBANDING_OFF		0
+#define CAMERA_ANTIBANDING_60HZ	1
+#define CAMERA_ANTIBANDING_50HZ	2
+#define CAMERA_ANTIBANDING_AUTO	3
+#define CAMERA_MAX_ANTIBANDING		4
+#endif
+/* } FIH, Charles Huang, 2009/07/15 */
+
+/* FIH, Charles Huang, 2009/09/01 { */
+/* [FXX_CR], flashlight function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_LED_MODE_OFF 0
+#define CAMERA_LED_MODE_AUTO 1
+#define CAMERA_LED_MODE_ON 2
+#endif
+/* } FIH, Charles Huang, 2009/09/01 */
+
+/* FIH, Charles Huang, 2009/11/04 { */
+/* [FXX_CR], af function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_AUTOFOCUS 0
+#endif
+/* } FIH, Charles Huang, 2009/11/04 */
+
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], metering mode function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_AVERAGE_METERING 0
+#define CAMERA_CENTER_METERING 1
+#define CAMERA_SPOT_METERING 2
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
+
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], scene mode function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_SCENE_MODE_AUTO 0
+#define CAMERA_SCENE_MODE_LANDSCAPE 1
+#define CAMERA_SCENE_MODE_PORTRAIT 2
+#define CAMERA_SCENE_MODE_NIGHT 3
+#define CAMERA_SCENE_MODE_NIGHT_PORTRAIT 4
+#define CAMERA_SCENE_MODE_SUNSET 5
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
+
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], contrast function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_CONTRAST_MINUS_2 0
+#define CAMERA_CONTRAST_MINUS_1 1
+#define CAMERA_CONTRAST_ZERO 2
+#define CAMERA_CONTRAST_POSITIVE_1 3
+#define CAMERA_CONTRAST_POSITIVE_2 4
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
+
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], saturation function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_SATURATION_MINUS_2 0
+#define CAMERA_SATURATION_MINUS_1 1
+#define CAMERA_SATURATION_ZERO 2
+#define CAMERA_SATURATION_POSITIVE_1 3
+#define CAMERA_SATURATION_POSITIVE_2 4
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
+
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], sharpness function  */
+#ifdef CONFIG_FIH_FXX
+#define CAMERA_SHARPNESS_ZERO 0
+#define CAMERA_SHARPNESS_POSITIVE_1 1
+#define CAMERA_SHARPNESS_POSITIVE_2 2
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
 
 struct sensor_pict_fps {
 	uint16_t prevfps;
@@ -486,6 +642,80 @@ struct sensor_cfg_data {
 
 	union {
 		int8_t effect;
+/* FIH, Charles Huang, 2009/07/15 { */
+/* [FXX_CR], add new param to meet requirement */
+#ifdef CONFIG_FIH_FXX
+		int8_t wb;
+		int8_t antibanding;
+		int8_t brightness;
+#endif
+/* } FIH, Charles Huang, 2009/07/15 */
+/* FIH, Charles Huang, 2009/09/01 { */
+/* [FXX_CR], flashlight function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t ledmod;
+#endif
+/* } FIH, Charles Huang, 2009/09/01 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], exposuremod function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t exposuremod;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], saturation function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t saturation;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], sharpness function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t sharpness;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], contrast function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t contrast;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], hue function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t hue;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], gamma function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t gamma;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/10/28 { */
+/* [FXX_CR], autoexposure function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t autoexposure;
+#endif
+/* } FIH, Charles Huang, 2009/10/28 */
+/* FIH, Charles Huang, 2009/11/04 { */
+/* [FXX_CR], af function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t autofocus;
+#endif
+/* } FIH, Charles Huang, 2009/11/04 */
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], metering mode function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t meteringmod;
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
+/* FIH, Charles Huang, 2009/11/05 { */
+/* [FXX_CR], scene mode function  */
+#ifdef CONFIG_FIH_FXX
+		int8_t scenemod;
+#endif
+/* } FIH, Charles Huang, 2009/11/05 */
 		uint8_t lens_shading;
 		uint16_t prevl_pf;
 		uint16_t prevp_pl;

@@ -293,7 +293,13 @@ out_mm:
 out:
 	return res;
 }
-
+// +++ paul
+int fih_proc_pid_cmdline(struct task_struct *task, char * buffer)
+{
+    return proc_pid_cmdline(task, buffer);
+}
+EXPORT_SYMBOL(fih_proc_pid_cmdline);
+// --- paul
 static int proc_pid_auxv(struct task_struct *task, char *buffer)
 {
 	int res = 0;

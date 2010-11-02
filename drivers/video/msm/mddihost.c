@@ -272,6 +272,145 @@ int mddi_host_register_write(uint32 reg_addr,
 	return ret;
 }				/* mddi_host_register_write */
 
+/* FIH, ChandlerKang ,09.12.14 { */
+/* { FIH,Chandler, lcm_wintek */
+//chandler_failon
+int mddi_host_register_write_non_block(uint32 reg_addr,
+     uint32 reg_val,
+     boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host) {
+	mddi_linked_list_type *curr_llist_ptr;
+	mddi_linked_list_type *curr_llist_dma_ptr;
+	mddi_register_access_packet_type *regacc_pkt_ptr;
+	uint16 curr_llist_idx;
+	int ret = 0;
+
+	if (in_interrupt())
+		MDDI_MSG_CRIT("Called from ISR context\n");
+
+	if (!mddi_host_powered) {
+		MDDI_MSG_ERR("MDDI powered down!\n");
+		mddi_init();
+	}
+
+	down(&mddi_host_mutex);
+
+	curr_llist_idx = mddi_get_next_free_llist_item(host, FALSE);//chandler_failon
+	curr_llist_ptr = &llist_extern[host][curr_llist_idx];
+	curr_llist_dma_ptr = &llist_dma_extern[host][curr_llist_idx];
+
+	curr_llist_ptr->link_controller_flags = 1;
+	curr_llist_ptr->packet_header_count = 14;
+	curr_llist_ptr->packet_data_count = 4;
+
+	curr_llist_ptr->next_packet_pointer = NULL;
+	curr_llist_ptr->reserved = 0;
+
+	regacc_pkt_ptr = &curr_llist_ptr->packet_header.register_pkt;
+
+	regacc_pkt_ptr->packet_length = curr_llist_ptr->packet_header_count + 4;
+	regacc_pkt_ptr->packet_type = 146;	/* register access packet */
+	regacc_pkt_ptr->bClient_ID = 0;
+	regacc_pkt_ptr->read_write_info = 0x0001;
+	regacc_pkt_ptr->register_address = reg_addr;
+	regacc_pkt_ptr->register_data_list = reg_val;
+
+	MDDI_MSG_DEBUG("Reg Access write reg=0x%x, value=0x%x\n",
+		       regacc_pkt_ptr->register_address,
+		       regacc_pkt_ptr->register_data_list);
+
+	regacc_pkt_ptr = &curr_llist_dma_ptr->packet_header.register_pkt;
+	curr_llist_ptr->packet_data_pointer =
+	    (void *)(&regacc_pkt_ptr->register_data_list);
+
+	/* now adjust pointers */
+	mddi_queue_forward_packets(curr_llist_idx, curr_llist_idx, wait,
+				   done_cb, host);
+
+	up(&mddi_host_mutex);
+
+	if(curr_llist_idx==UNASSIGNED_INDEX) //chandler_failon
+	    return -1;
+
+	if (wait) {
+		int wait_ret;
+
+		mddi_linked_list_notify_type *llist_notify_ptr;
+		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
+		wait_ret = wait_for_completion_timeout(
+					&(llist_notify_ptr->done_comp), 5 * HZ);
+
+		if (wait_ret <= 0)
+			ret = -EBUSY;
+
+		if (wait_ret < 0)
+			printk(KERN_ERR "%s: failed to wait for completion!\n",
+				__func__);
+		else if (!wait_ret)
+			printk(KERN_ERR "%s: Timed out waiting!\n", __func__);
+	}
+
+	return ret;
+}				/* mddi_host_register_write */
+/* FIH, ChandlerKang ,09.12.14 } */
+
+void mddi_host_link_shutdown_write (boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host) 
+{
+     
+	mddi_linked_list_type *curr_llist_ptr;
+	mddi_linked_list_type *curr_llist_dma_ptr;
+	mddi_link_shutdown_packet_type *regacc_pkt_ptr;  
+	uint16 curr_llist_idx;
+
+	if (in_interrupt())
+		MDDI_MSG_CRIT("Called from ISR context\n");
+
+	if (!mddi_host_powered) {
+		MDDI_MSG_ERR("MDDI powered down!\n");
+		mddi_init();
+	}
+
+	down(&mddi_host_mutex);
+/* FIH, ChandlerKang ,09.12.14 { */
+//	curr_llist_idx = mddi_get_next_free_llist_item(host, TRUE);
+	curr_llist_idx = mddi_get_next_free_llist_item(host, FALSE);//chandler_failon
+/* FIH, ChandlerKang ,09.12.14 } */
+	curr_llist_ptr = &llist_extern[host][curr_llist_idx];
+	curr_llist_dma_ptr = &llist_dma_extern[host][curr_llist_idx];
+
+	curr_llist_ptr->link_controller_flags = 1;
+	curr_llist_ptr->packet_header_count = 6;
+	curr_llist_ptr->packet_data_count = 16;
+
+	curr_llist_ptr->next_packet_pointer = NULL;
+	curr_llist_ptr->reserved = 0;
+
+	regacc_pkt_ptr = &curr_llist_ptr->packet_header.shutdown_pkt; 
+ 
+	regacc_pkt_ptr->packet_length = 22;
+	regacc_pkt_ptr->packet_type = 69;	/* register access packet */
+    memset(regacc_pkt_ptr->zero,0,16);
+    
+	regacc_pkt_ptr = &curr_llist_dma_ptr->packet_header.shutdown_pkt; //chandler_test
+	curr_llist_ptr->packet_data_pointer =
+	    (void *)(&regacc_pkt_ptr->zero);
+
+	/* now adjust pointers */
+	mddi_queue_forward_packets(curr_llist_idx, curr_llist_idx, wait,
+				   done_cb, host);
+
+	up(&mddi_host_mutex);
+
+	if (wait) {
+		mddi_linked_list_notify_type *llist_notify_ptr;
+		llist_notify_ptr = &llist_extern_notify[host][curr_llist_idx];
+		wait_for_completion_killable(&
+						  (llist_notify_ptr->
+						   done_comp));
+	}
+
+}				
+/* } FIH,Chandler, lcm_wintek */
+
 boolean mddi_host_register_read_int
     (uint32 reg_addr, uint32 *reg_value_ptr, mddi_host_type host) {
 	mddi_linked_list_type *curr_llist_ptr;

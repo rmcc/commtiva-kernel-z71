@@ -63,7 +63,14 @@ static int msm_rpc_connect_timeout_ms;
 module_param_named(connect_timeout, msm_rpc_connect_timeout_ms,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 
+/* FIH; Tiger; 2009/12/25 { */
+#ifdef CONFIG_FIH_FXX
+static int smd_rpcrouter_debug_mask=SMEM_LOG;
+#else
 static int smd_rpcrouter_debug_mask;
+#endif
+/* } FIH; Tiger; 2009/12/25 */
+
 module_param_named(debug_mask, smd_rpcrouter_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
 

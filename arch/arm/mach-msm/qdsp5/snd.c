@@ -30,6 +30,8 @@
 #include <mach/msm_rpcrouter.h>
 #include <mach/debug_mm.h>
 
+bool EnableAbnormalHS = false; //FIH, KarenLiao, @20091023: [F0X.FC-663]: Allow user to use the normal headset.
+
 struct snd_ctxt {
 	struct mutex lock;
 	int opened;
@@ -165,6 +167,10 @@ static long snd_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			break;
 		}
+		// +++ FIH, KarenLiao, @20091023: [F0X.FC-663]: Allow user to use the normal headset.
+		if((dev.device == 3) && EnableAbnormalHS) // 3: SND_DEVICE_STEREO_HEADSET
+			dev.device = 27;  // 27: SND_DEVICE_STEREO_HEADSET_WITH_INNER_MIC	
+		// --- FIH, KarenLiao, @20091023: [F0X.FC-663]: Allow user to use the normal headset.
 
 		dmsg.args.device = cpu_to_be32(dev.device);
 		dmsg.args.ear_mute = cpu_to_be32(dev.ear_mute);

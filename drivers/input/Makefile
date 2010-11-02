@@ -26,3 +26,11 @@ obj-$(CONFIG_INPUT_APMPOWER)	+= apm-power.o
 obj-$(CONFIG_INPUT_KEYRESET)	+= keyreset.o
 
 obj-$(CONFIG_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
+
+#+++ FIH; Tiger; 2009/5/1
+obj-$(CONFIG_INPUT_ECOMPASS)      += ecompass/
+#+--- FIH; Tiger; 2009/5/1
+#FIH, WillChen, 2009/8/24 ++
+obj-$(CONFIG_INPUT_LPSENSOR)     += lightproxisensor/
+#FIH, WillChen, 2009/8/24 --
+

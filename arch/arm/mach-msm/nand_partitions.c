@@ -46,7 +46,13 @@ struct msm_ptbl_entry {
 	__u32 flags;
 };
 
+/* Debbie, 2009/09/04 { */
+#ifdef CONFIG_FIH_FXX
+#define MSM_MAX_PARTITIONS 11 	/*WillChen change to misc2 */
+#else
 #define MSM_MAX_PARTITIONS 8
+#endif
+/* Debbie, 2009/09/04 } */
 
 static struct mtd_partition msm_nand_partitions[MSM_MAX_PARTITIONS];
 static char msm_nand_names[MSM_MAX_PARTITIONS * 16];

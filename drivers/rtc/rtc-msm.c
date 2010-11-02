@@ -605,6 +605,7 @@ msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 	int rc, diff;
 	struct rtc_time tm;
 	unsigned long now;
+	int RPC_wakeup_cycle_time=600;
 
 	if (rtcalarm_time) {
 		rc = msmrtc_timeremote_read_time(NULL, &tm);
@@ -620,8 +621,13 @@ msmrtc_suspend(struct platform_device *dev, pm_message_t state)
 			return 0;
 		}
 		msm_pm_set_max_sleep_time((int64_t) ((int64_t) diff * NSEC_PER_SEC));
-	} else
-		msm_pm_set_max_sleep_time(0);
+	}
+	else
+	{   
+		msm_pm_set_max_sleep_time((int64_t) ((int64_t) RPC_wakeup_cycle_time * NSEC_PER_SEC));
+	}
+	/* FIH, Michael Kao, 2009/07/10{ */
+	/* } FIH, Michael Kao, 2009/06/08 */
 	return 0;
 }
 
@@ -660,7 +666,6 @@ static int __init msmrtc_init(void)
 {
 	int rc;
 	rtcalarm_time = 0;
-
 	/*
 	 * For backward compatibility, register multiple platform
 	 * drivers with the RPC PROG_VERS to be supported.

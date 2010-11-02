@@ -295,6 +295,12 @@ void msm_hsusb_set_vbus_state(int online);
 static inline void msm_hsusb_set_vbus_state(int online) {}
 #endif
 
+//[+++][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
+#ifdef CONFIG_FIH_FXX
+void acpuclk_set_lcdcoff_wait_for_irq(int on);
+#endif
+//[---][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
+
 void __init msm_snddev_init(void);
 void msm_snddev_poweramp_on(void);
 void msm_snddev_poweramp_off(void);

@@ -2260,6 +2260,13 @@ config FB_MSM_LCDC_ST15_PANEL
     ---help---
       Support for ST1.5 WXGA (1366x768) panel
 
+# { FIH, ChandlerKang, lcm_innolux	
+config FB_MSM_LCDC_INNOLUX
+	bool
+	select FB_MSM_LCDC_PANEL
+	default n
+# } FIH, ChandlerKang, lcm_innolux	
+
 config FB_MSM_LCDC_PRISM_WVGA
 	bool
 	select FB_MSM_LCDC_PANEL
@@ -2289,10 +2296,20 @@ config FB_MSM_LCDC_WXGA
 	bool
 	select FB_MSM_LCDC_PANEL
 	default n
+# { FIH, ChandlerKang,
 
-choice
-	prompt "LCD Panel"
-	default FB_MSM_MDDI_AUTO_DETECT
+#choice
+#	prompt "LCD Panel"
+#	default FB_MSM_MDDI_AUTO_DETECT
+
+# { lcm_innolux 
+config FB_MSM_LCDC_INNOLUX_PANEL
+    depends on FB_MSM_LCDC_HW
+    bool "LCDC INNOLUX Panel"
+	select FB_MSM_LCDC_INNOLUX	
+    ---help---
+	  Support for LCDC INNOLUX (320x480) panel	  
+# } lcm_innolux 
 
 config FB_MSM_LCDC_PRISM_WVGA_PANEL
 	depends on FB_MSM_LCDC_HW
@@ -2349,6 +2366,14 @@ config FB_MSM_MDDI_PANEL_AUTO_DETECT
 	---help---
 	  Support for MDDI panel auto detect
 
+# { FIH, Chandler,  lcm_wintek
+config FB_MSM_MDDI_WINTEK_HVGA
+	bool "MDDI Wintek HVGA Panel"
+	select FB_MSM_MDDI
+	---help---
+	  Support for MDDI Wintek HVGA (320x480) panel
+# } FIH, Chandler, lcm_wintek
+
 config FB_MSM_MDDI_PRISM_WVGA
 	bool "MDDI Prism WVGA Panel"
 	select FB_MSM_MDDI
@@ -2393,7 +2418,9 @@ config FB_MSM_PANEL_NONE
 	bool "NONE"
 	---help---
 	  This will disable LCD panel
-endchoice
+
+# } FIH, ChandlerKang,
+#endchoice
 
 choice
 	prompt "Secondary LCD Panel"

@@ -36,4 +36,5 @@ obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 obj-$(CONFIG_PMIC8058_PWRKEY)		+= pmic8058-pwrkey.o
 obj-$(CONFIG_PMIC8058_OTHC)		+= pmic8058-othc.o
 obj-$(CONFIG_INPUT_KP_FLIP_SWITCH)	+= kp_flip_switch.o
+obj-$(CONFIG_MINITRACKBALL)                    += minitrackball.o
 

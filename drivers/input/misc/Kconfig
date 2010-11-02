@@ -143,6 +143,12 @@ config INPUT_KEYCHORD
 	  To compile this driver as a module, choose M here: the
 	  module will be called keychord.
 
+config MINITRACKBALL
+	tristate "Mini-Trackball Driver"
+	help
+	  Say Y here if you want support for the Mini-Trackball/Jogball
+	  device.
+
 config INPUT_KEYSPAN_REMOTE
 	tristate "Keyspan DMR USB remote control (EXPERIMENTAL)"
 	depends on EXPERIMENTAL

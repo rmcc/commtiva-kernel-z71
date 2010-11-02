@@ -1936,7 +1936,6 @@ static long msm_ioctl_frame(struct file *filep, unsigned int cmd,
 	void __user *argp = (void __user *)arg;
 	struct msm_cam_device *pmsm = filep->private_data;
 
-
 	switch (cmd) {
 	case MSM_CAM_IOCTL_GETFRAME:
 		/* Coming from frame thread to get frame
@@ -1990,6 +1989,14 @@ static long msm_ioctl_control(struct file *filep, unsigned int cmd,
 	case MSM_CAM_IOCTL_GET_SENSOR_INFO:
 		rc = msm_get_sensor_info(pmsm->sync, argp);
 		break;
+/* FIH, Charles Huang, 2009/11/09 { */
+/* [FXX_CR], new function  */
+#ifdef CONFIG_FIH_FXX
+	case MSM_CAM_IOCTL_GET_FIH_SENSOR_INFO:
+		rc = msm_get_sensor_info(pmsm->sync, argp);
+		break;
+#endif
+/* } FIH, Charles Huang, 2009/11/09 */
 	default:
 		rc = msm_ioctl_common(pmsm, cmd, argp);
 		break;
@@ -2816,6 +2823,7 @@ int msm_camera_drv_start(struct platform_device *dev,
 				__func__, rc);
 			return rc;
 		}
+
 	}
 
 	pmsm = kzalloc(sizeof(struct msm_cam_device) * 3 +

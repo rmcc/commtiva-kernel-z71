@@ -620,7 +620,17 @@ static struct platform_device msm_tvenc_device = {
 	.num_resources  = ARRAY_SIZE(msm_tvenc_resources),
 	.resource       = msm_tvenc_resources,
 };
-
+/* FIH, Michael Kao, 2009/07/02{ */
+/* [FXX_CR], Add For Battery Driver*/
+#ifdef CONFIG_FIH_FXX
+/* ZEUS_ANDROID_CR, register device for Battery Report */
+///+FIH_ADQ
+static struct platform_device goldfish_battery_device = {
+	.name		= "goldfish-battery",
+	.id		  = -1,
+};
+#endif
+/* } FIH, Michael Kao, 2009/07/02 */
 /* TSIF begin */
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
 
@@ -685,7 +695,8 @@ static struct resource resources_tssc[] = {
 };
 
 struct platform_device msm_device_tssc = {
-	.name = "msm_touchscreen",
+	//.name = "msm_touchscreen",
+	.name = "msm_touch",  //Modified by Stanley
 	.id = 0,
 	.num_resources = ARRAY_SIZE(resources_tssc),
 	.resource = resources_tssc,
@@ -716,6 +727,13 @@ void __init msm_fb_register_device(char *name, void *data)
 		msm_register_device(&msm_ebi2_lcd_device, data);
 	else if (!strncmp(name, "tvenc", 5))
 		msm_register_device(&msm_tvenc_device, data);
+	/* FIH, Michael Kao, 2009/07/02{ */
+	/* [FXX_CR], Add For Battery Driver*/
+#ifdef CONFIG_FIH_FXX
+	else if (!strncmp(name, "batt", 4))
+		msm_register_device(&goldfish_battery_device, data);
+#endif
+	/* } FIH, Michael Kao, 2009/07/02 */
 	else if (!strncmp(name, "lcdc", 4))
 		msm_register_device(&msm_lcdc_device, data);
 	else
@@ -751,7 +769,14 @@ struct clk msm_clocks_7x27[] = {
 	CLK_PCOM("imem_clk",	IMEM_CLK,	NULL, OFF),
 	CLK_PCOM("mdc_clk",	MDC_CLK,	NULL, 0),
 	CLK_PCOM("mddi_clk",	PMDH_CLK,	NULL, OFF | CLK_MINMAX),
+/* { FIH, ChandlerKang, chandler_porting, 09/9/24 */
+#ifdef CONFIG_FIH_FXX    
+    CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, 0),
+#else
 	CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, OFF),
+#endif
+/* } FIH, ChandlerKang, 09/9/24 */
+
 	CLK_PCOM("mdp_lcdc_pclk_clk", MDP_LCDC_PCLK_CLK, NULL, 0),
 	CLK_PCOM("mdp_lcdc_pad_pclk_clk", MDP_LCDC_PAD_PCLK_CLK, NULL, 0),
 	CLK_PCOM("mdp_vsync_clk",	MDP_VSYNC_CLK,  NULL, OFF),
