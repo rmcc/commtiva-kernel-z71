@@ -510,7 +510,9 @@ static int __msm_get_frame(struct msm_sync *sync,
 		goto err;
 	}
 
+#ifndef CONFIG_FIH_FXX
 	frame->ts = qcmd->ts;
+#endif
 	frame->buffer = (unsigned long)pmem_info.vaddr;
 	frame->y_off = pmem_info.y_off;
 	frame->cbcr_off = pmem_info.cbcr_off;
@@ -2202,7 +2204,9 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 	qcmd->type = qtype;
 	qcmd->command = vdata;
 
+#ifndef CONFIG_FIH_FXX
 	ktime_get_ts(&(qcmd->ts));
+#endif
 
 	if (qtype != MSM_CAM_Q_VFE_MSG)
 		goto vfe_for_config;

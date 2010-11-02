@@ -360,7 +360,9 @@ struct outputCfg {
 #define OUTPUT_TYPE_L		(1<<4)
 
 struct msm_frame {
+#ifndef CONFIG_FIH_FXX
 	struct timespec ts;
+#endif
 	int path;
 	unsigned long buffer;
 	uint32_t y_off;
