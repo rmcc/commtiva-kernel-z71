@@ -604,7 +604,7 @@ static int __init cm3602_init(void)
 	if (entry)
 		entry->proc_fops = &cm3602_proc_ops;
 
-	rc = gpio_request(CM3602_EN_GPIO, "gpio_alsps");
+	rc = gpio_request(CM3602_EN_GPIO, "alsps_enable");
 	if (rc){
 		return -EIO;
 	}
@@ -617,6 +617,7 @@ static int __init cm3602_init(void)
 		return -EIO;
 	}	
 	gpio_direction_output(CM3602_EN_GPIO, 1);
+	gpio_free(CM3602_EN_GPIO);
 #ifndef DISABLE_PROXIMITY
 //FIH, HenryJuang 2009/11/11 ++
 /* Enable Proximaty wake source.*/
@@ -657,11 +658,16 @@ static int __init cm3602_init(void)
 		}
 	}
 
-	rc = gpio_request(CM3602_PS_GPIO, "gpio_alsps");
+	rc = gpio_request(CM3602_PS_GPIO, "alsps_prox");
 	if (rc){
 		return -EIO;
 	}
 	gpio_direction_output(CM3602_PS_GPIO, 0);
+
+	rc = gpio_request(CM3602_EN_GPIO, "alsps_ena");
+	if (rc){
+		return -EIO;
+	}
 
 //FIH, HenryJuang 2009/11/11 ++
 /* Enable Proximaty wake source.*/
@@ -669,9 +675,9 @@ static int __init cm3602_init(void)
 	gpio_direction_output(CM3602_PS_GPIO, 1);
 
 	if (HWID == CMCS_HW_VER_EVB1)
-		gpio_request(CM3602_EVB1_PS_GPIO_OUT,"gpio_alsps");
+		gpio_request(CM3602_EVB1_PS_GPIO_OUT,"alsps_ps");
 	else
-		gpio_request(CM3602_PR1_PS_GPIO_OUT,"gpio_alsps");
+		gpio_request(CM3602_PR1_PS_GPIO_OUT,"alsps_ps");
 //FIH, HenryJuang 2009/11/11 --
 /* Enable Proximaty wake source.*/
 	if (HWID == CMCS_HW_VER_EVB1)
