@@ -42,7 +42,7 @@
 
 // FIH;NicoleWeng;2010/6/01 { 
 //#define DISABLE_PROXIMITY //if not support PS, open this define (ex:FM6)
-#define FAST_DATA_PATH // if hal and framework has changed to support this, open this define (Tiger implement)
+//#define FAST_DATA_PATH // if hal and framework has changed to support this, open this define (Tiger implement)
 // } FIH;NicoleWeng;2010/6/01 
 
 int g_activate;
