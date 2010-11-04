@@ -793,7 +793,7 @@ static struct platform_device msm_fb_device = {
 	}
 };
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE_HOLD
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
 static struct resource ram_console_resource[] = {
         {
             .flags  = IORESOURCE_MEM,
@@ -1916,7 +1916,7 @@ static struct platform_device msm_wlan_ar6000_pm_device = {
 /* } FIH, SimonSSChang, 2009/02/26 */
 
 static struct platform_device *devices[] __initdata = {
-#ifdef CONFIG_ANDROID_RAM_CONSOLE_HOLD
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
     &ram_console_device,
 #endif
 /* FIH, SimonSSChang, 2009/02/26 { */
@@ -2673,7 +2673,7 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 	pr_info("allocating %lu bytes at %p (%lx physical) for fb\n",
 		size, addr, __pa(addr));
 
-#ifdef CONFIG_ANDROID_RAM_CONSOLE_HOLD
+#ifdef CONFIG_ANDROID_RAM_CONSOLE
 	/* RAM Console can't use alloc_bootmem(), since that zeroes the
          * region */
 	size = 128 * SZ_1K;
