@@ -246,6 +246,7 @@ int lcd_bl_set_intensity(int level)
 			return ret;
 		}else if( level > 0 && (value.reg & 0x01) == 0){
 			// FXX_CR, Neo Chen, 2009.08.13, if in suspend state, not to open backlight
+#if 0
 			SuspendState = get_suspend_state();
 			if(SuspendState == PM_SUSPEND_MEM) //3
 				return -1;
@@ -263,6 +264,7 @@ int lcd_bl_set_intensity(int level)
 				//if(checkTimes>=20) return -1;
 			}
 			// FXX_CR, Neo Chen, 2009.06.12 ---
+#endif
 			
 			value.data = value.reg | 0x01;
 			value.reg = 0x00;
