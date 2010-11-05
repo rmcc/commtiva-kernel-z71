@@ -791,6 +791,7 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 	/* } FIH; Tiger; 2009/8/15 */
 	/* FIH, Michael Kao, 2010/05/06{ */
 	/* [FXX_CR], Divide battery level (0~100) into 10 pieces*/
+#if 0
 	if (Volt_pec == 0)      
     		return 0;
     	else if (Volt_pec <= 5)
@@ -819,6 +820,7 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
     		return 100;
     	else
     		return -1;
+#endif
 		
 	
 	return Volt_pec;
