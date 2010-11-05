@@ -1282,6 +1282,8 @@ static void polling_timer_func(unsigned long unused)
 		g_use_battery_thermal=g_pre_use_battery_thermal;
 	/* FIH, Michael Kao, 2010/05/14{ */
 	queue_work(zeus_batt_wq, &zeus_power_supplies[CHARGER_BATTERY].changed_work);
+
+	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
 	
 	/* FIH, Michael Kao, 2009/08/13{ */
 	mod_timer(&polling_timer,
