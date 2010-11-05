@@ -959,7 +959,7 @@ static int zeus_battery_get_property(struct power_supply *psy,
 		val->intval = msm_termal*10;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = zeus_bat_vol;
+		val->intval = zeus_bat_vol*1000;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		// +++ADQ_FIH+++ 
