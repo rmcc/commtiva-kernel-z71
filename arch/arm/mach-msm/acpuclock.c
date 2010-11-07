@@ -735,7 +735,7 @@ static void __init acpu_freq_tbl_fixup(void)
 		udelay(50);
 	} while (pll1_l == 0);
 	do {
-#ifdef CONFIG_FIH_FXX
+#ifdef CONFIG_MSM7227_800
 		pll2_l = writel(PLL_800_MHZ,PLLn_L_VAL(2));
 		cpu_relax();
 #endif

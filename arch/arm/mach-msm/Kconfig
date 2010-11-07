@@ -1229,4 +1229,10 @@ config MSM_WATCHDOG
 		not run during the bootup process, so it will not catch any early
 		lockups.
 
+config CONFIG_MSM7227_800
+	bool "Force PLL2 rate to enable 800MHz"
+	depends on ARCH_MSM7X27
+	help
+		This reconfigures the CPU's PLL2 in order to enable the
+		800MHz clock frequency
 endif
