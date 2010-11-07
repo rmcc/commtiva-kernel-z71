@@ -210,10 +210,12 @@ static void max8831_enable(int port, int data)
 int lcd_bl_set_intensity(int level)
 {
   	int ret = 0;
+#if 0
 	int checkPanelON = 0; // FXX_CR, Neo Chen, 2009.06.12, Add for ensuring backlight on after panel on
 	int checkTimes = 0; //FXX_CR, Neo Chen, 2009.08.11, Prevent to block in while loop when check panel on
-	struct max8831_i2c_data value;
 	suspend_state_t SuspendState = PM_SUSPEND_ON;//0
+#endif
+	struct max8831_i2c_data value;
 
 	if(check_max8831_exist())
 	  	return -1;
