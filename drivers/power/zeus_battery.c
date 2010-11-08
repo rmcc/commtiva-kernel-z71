@@ -23,6 +23,7 @@
 #include <linux/types.h>
 #include <linux/pci.h>
 #include <linux/interrupt.h>
+#include "../../kernel/power/power.h"
 #include <asm/io.h>
 #include <linux/delay.h>
 #include <mach/msm_iomap.h>
@@ -38,13 +39,9 @@
 //#include <linux/gasgauge_bridge.h>
 #include <asm/gpio.h>
 /* FIH, Michael Kao, 2009/10/14{ */
-/* [FXX_CR], Add wake lock to avoid incompleted update battery information*/
+
 #include <linux/wakelock.h>
-/* FIH, Michael Kao, 2009/10/14{ */
-/* FIH, Michael Kao, 2009/11/25{ */
-/* [FXX_CR], add event log*/
-//#include <linux/eventlog.h>
-/* FIH, Michael Kao, 2009/11/25{ */
+#include <linux/android_alarm.h>
 
 #ifdef CONFIG_USB_GADGET_MSM_72K 
 #include <mach/msm_hsusb.h>
@@ -59,7 +56,6 @@
 #define CHR_1A 26			//Charging current 1A/500mA
 #define USBSET 123                       //current 1 or1/5
 /* FIH, Michael Kao, 2009/08/14{ */
-#define FLAG_BATTERY_POLLING
 #define FLAG_CHARGER_DETECT
 #endif	// T_FIH	///-T_FIH
 /*+++FIH_ADQ+++*/
@@ -197,11 +193,27 @@ static int g_charging_state_last = CHARGER_STATE_NOT_CHARGING;
 
 /* FIH, Michael Kao, 2009/08/13{ */
 /* [FXX_CR], Modify to create a new work queue for BT play MP3 smoothly*/
-struct workqueue_struct *zeus_batt_wq;
 /* FIH, Michael Kao, 2009/08/13{ */
 
-bool wakelock_flag;
-	/* FIH, Michael Kao, 2009/10/14{ */
+struct zeus_battery_data {
+	u8 capacity;
+	int voltage;
+} __attribute__((packed));
+
+struct zeus_battery_update {
+	struct power_supply bat;
+
+	struct zeus_battery_data data;
+
+	struct alarm alarm;
+	struct wake_lock wakelock;
+	struct work_struct zeus_batt_work;
+	struct workqueue_struct *wqueue;
+	ktime_t last_poll;
+	u8 slow_poll;
+};
+
+static struct zeus_battery_update *batt_update;
 
 unsigned int Battery_HWID;
 /* FIH, Michael Kao, 2009/07/16{ */
@@ -382,7 +394,6 @@ int pre_val;
 /* [FXX_CR], add for update battery information more accuracy in suspend mode*/
 bool suspend_update_flag;
 /* FIH, Michael Kao, 2009/09/30{ */
-int zeus_bat_val;
 int VBAT_from_SMEM;
 int battery_low;
 /* FIH, Michael Kao, 2009/11/25{ */
@@ -401,7 +412,6 @@ int suspend_update_sample_gate;
 int high_vol;
 int charging_bat_vol;
 bool over_temper2;
-int zeus_bat_vol;
 
 /* FIH, Michael Kao, 2009/12/25{ */
 
@@ -439,7 +449,6 @@ static int Average_Voltage(void)
 		}
   	   	/* FIH, Michael Kao, 2009/09/30{ */
 	}
-	suspend_update_flag=false;
 	for(j=0;j<10;j++)
 	{
 		temp_sum+=g_batt_data[j];
@@ -641,7 +650,6 @@ if(charger_on==0)
 			weird_count++;
 			if(weird_count<weird_count_number)
 			{
-				suspend_update_flag=false;
 				return PMIC_batt.pre_batt_val;
 			}
 		}
@@ -696,13 +704,11 @@ if(charger_on==0)
 		//Voltage only can go down
 		if(PMIC_batt.new_batt_val>PMIC_batt.pre_batt_val)
 		{
-			suspend_update_flag=false;
 			return PMIC_batt.pre_batt_val;
 		}
 		//Filter weird value
 		else if((PMIC_batt.pre_batt_val -PMIC_batt.new_batt_val)>300)
 		{
-			suspend_update_flag=false;
 			return PMIC_batt.pre_batt_val;
 		}
 		/* FIH, Michael Kao, 2009/10/14{ */
@@ -726,6 +732,7 @@ if(charger_on==0)
 	}
 	return PMIC_batt.new_batt_val;			
 }
+
 static int	ChangeToVoltPercentage(unsigned Vbat)
 {
 	int Volt_pec=0;
@@ -825,24 +832,24 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 	
 	return Volt_pec;
 }
+
+
+static void zeus_program_alarm(struct zeus_battery_update *zbu, int seconds)
+{
+    ktime_t low_interval = ktime_set(seconds - 10, 0);
+    ktime_t slack = ktime_set(20, 0);
+    ktime_t next;
+
+    next = ktime_add(zbu->last_poll, low_interval);
+
+    alarm_start_range(&zbu->alarm, next, ktime_add(next, slack));
+}
+
 /* FIH, Michael Kao, 2009/06/08{ */
 /* [FXX_CR], Add For Blink RED LED when battery low in suspend mode */
 void Battery_power_supply_change(void)
 {
-	/* FIH, Michael Kao, 2009/12/01{ */
-	/* [FXX_CR], add for update battery information more accuracy only for battery update in suspend mode*/
-	suspend_time_duration=get_seconds()-pre_suspend_time;
-	if(suspend_time_duration>300)
-	{
-		suspend_update_flag=true;
-		queue_work(zeus_batt_wq, &zeus_power_supplies[CHARGER_BATTERY].changed_work);
-		/* FIH, Michael Kao, 2009/10/14{ */
-		pre_suspend_time=get_seconds();
-	}
-	/* FIH, Michael Kao, 2009/12/01{ */
-	/* FIH, Michael Kao, 2009/09/30{ */
-
-	/* FIH, Michael Kao, 2009/08/13{ */
+	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
 }
 EXPORT_SYMBOL(Battery_power_supply_change);
 /* } FIH, Michael Kao, 2009/06/08 */
@@ -859,14 +866,252 @@ void Battery_update_state(int _device, int device_state)
 		batt_state.F9_phone_state=device_state;
 }
 EXPORT_SYMBOL(Battery_update_state);
+
+static void zeus_battery_refresh_values(struct zeus_battery_update *zbu) {
+
+	unsigned vbatt;
+	u8 percent_now;
+
+	/* [FXX_CR], add a retry mechanism to prevent the sudden high value*/
+	vbatt=GetPMICBatteryInfo();
+	if(weird_retry_flag)
+	{
+		weird_retry_flag=false;
+		vbatt=GetPMICBatteryInfo();
+		if(weird_retry_flag)
+		{
+			vbatt=GetPMICBatteryInfo();
+		}
+	}
+
+	/* [FXX_CR], add event log*/
+	percent_now=ChangeToVoltPercentage(vbatt);
+	zbu->data.voltage=vbatt;
+	msm_termal=GetPMIC_MSM_TERMAL();
+	if(!gpio_get_value(GPIO_CHR_DET))
+	{
+		if(charging_bat_vol>4000)
+			high_vol=1;
+		else
+			high_vol=0;
+		/* [FXX_CR], charging full protection*/
+		//Battery full protection
+		//if(!battery_full_flag&&(val->intval==100))
+
+		/* [FXX_CR], Improve charging full protection scenario*/
+		if(vbatt>=4120)
+		{
+			if(battery_full_count==0)
+				battery_full_start_time=get_seconds();
+			battery_full_count++;
+		}
+		else
+			battery_full_count=0;
+
+		/* [FXX_CR], Modify for battery_full_falg abnormal changed*/
+		if((battery_full_flag==0)&&(vbatt>=4120))
+		{
+			battery_full_time_duration=get_seconds()-battery_full_start_time;
+			//pmlog("time_du=%d\n",battery_full_time_duration);
+			if(charger_on==0)
+			{
+				if(battery_full_time_duration>=5400)
+				{
+					gpio_set_value(GPIO_CHR_EN,1);//Disable chager
+					battery_full_flag=1;
+					//pmlog("BAT_F\n");
+					//eventlog("BAT_F\n") ;
+				}
+			}
+		}
+		//else if(battery_full_flag&&(val->intval<100)&&!over_temper)
+		else if((battery_full_flag==1)&&(vbatt<=4120)&&!over_temper)
+		{
+			gpio_set_value(GPIO_CHR_EN,0);//Enable charger
+			battery_full_flag=0;
+			battery_full_flag2=true;
+			//val->intval=100;
+			//pmlog("BAT_NOF\n");
+			//eventlog("BAT_NOF\n") ;
+		}
+		if(battery_full_flag2&&(percent_now<100)&&(percent_now>90))
+			percent_now=100;
+		//Temperature protection
+		//New charging temperature protection scenario
+#if 0
+		if(!slight_over_temper&&(msm_termal>55))
+		{
+			//eventlog("sOVT\n") ;
+			//pmlog("sOVT\n");
+			if(batt_state.F9_battery_charger_type==2)
+			{
+				gpio_set_value(CHR_1A,0);//Set to 500mA
+				gpio_set_value(USBSET,1);
+			}
+			slight_over_temper=true;
+		}
+		if(slight_over_temper&&(msm_termal>=5)&&(msm_termal<=52))
+		{
+			//eventlog("Recover\n") ;
+			//pmlog("Recover\n");
+			if(batt_state.F9_battery_charger_type==2)
+			{
+				gpio_set_value(CHR_1A,1);//Set to 1A
+				gpio_set_value(USBSET,1);
+			}
+			slight_over_temper=false;
+		}
+#endif
+
+		/* [FXX_CR], Add Greco battery protection scenario*/
+#if GET_TEMPERATURE_FROM_BATTERY_THERMAL
+
+		if (((g_orig_hw_id >= CMCS_125_CTP_GRE_PR1 && g_orig_hw_id <= CMCS_125_CTP_GRE_MP2)||
+					(g_orig_hw_id >= CMCS_CTP_F917_PR2 && g_orig_hw_id <= CMCS_CTP_F917_MP3))&&g_use_battery_thermal)
+			//if (g_orig_hw_id >= CMCS_HW_EVB1 && g_orig_hw_id < CMCS_7627_ORIG_EVB1&& g_use_battery_thermal)
+		{
+			printk("Battery Thermistor Case\n");
+			if (!over_temper
+					&& !over_temper2
+					&& (msm_termal <= BATTERY_TEMP_LOW_LIMIT || msm_termal >= (BATTERY_TEMP_HIGH_LIMIT + BATTERY_THERMAL_TEMP_OFFSET))
+			   )
+			{
+				//eventlog("OVT\n") ;	
+
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 1) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+
+				/* } FIH; Tiger; 2009/8/15 */
+				gpio_set_value(GPIO_CHR_EN,1);//Disable chager
+				over_temper=true;
+				//pmlog("OVT\n");
+			}
+
+			if (over_temper
+					&&(msm_termal >= (BATTERY_TEMP_LOW_LIMIT + RECHARGE_TEMP_OFFSET))
+					&&(msm_termal <= (BATTERY_TEMP_HIGH_LIMIT - RECHARGE_TEMP_OFFSET))
+			   )
+			{
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 1) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+
+				/* } FIH; Tiger; 2009/8/15 */
+				gpio_set_value(GPIO_CHR_EN,0);//Enable chager
+				over_temper=false;
+				//eventlog("Recharge\n") ;	
+			}
+		}
+		else
+		{
+#endif  //end of GET_TEMPERATURE_FROM_BATTERY_THERMAL
+			if(!over_temper&&!over_temper2&&(((msm_termal<=10)||(msm_termal>=60))&&(high_vol==1)))
+			{
+				//eventlog("OVT\n") ;	
+
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 1) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+				/* } FIH; Tiger; 2009/8/15 */
+				/* [FXX_CR], add for not to disable charger*/
+				if(charger_on==0)
+					gpio_set_value(GPIO_CHR_EN,1);//Disable chager
+				over_temper=true;
+				//pmlog("OVT\n");
+			}
+			if(!over_temper&&!over_temper2&&(((msm_termal<=10)||(msm_termal>=70))&&(high_vol==0)))
+			{
+				//eventlog("OVT2\n") ;	
+
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 1) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+				/* } FIH; Tiger; 2009/8/15 */
+				/* [FXX_CR], add for not to disable charger*/
+				if(charger_on==0)
+					gpio_set_value(GPIO_CHR_EN,1);//Disable chager
+				over_temper2=true;
+				//pmlog("OVT\n");
+			}
+
+			if(over_temper&&((msm_termal>=15)&&(msm_termal<=55)))
+			{
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 0) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+				/* } FIH; Tiger; 2009/8/15 */
+				gpio_set_value(GPIO_CHR_EN,0);//Enable chager
+				over_temper=false;
+				//eventlog("Recharge\n") ;	
+			}
+			if(over_temper2&&((msm_termal>=15)&&(msm_termal<=65)))
+			{
+				/* FIH; Tiger; 2009/8/15 { */
+#ifdef FEATURE_ECOMPASS
+				if(fihsensor_magnet_guard1 != 0) {
+					fihsensor_magnet_guard1 = -1;
+				}
+#endif
+				/* } FIH; Tiger; 2009/8/15 */
+				gpio_set_value(GPIO_CHR_EN,0);//Enable chager
+				over_temper2=false;
+				//eventlog("Recharge2\n") ;	
+			}
+
+#if GET_TEMPERATURE_FROM_BATTERY_THERMAL
+		}   //End of (Battery_HWID >= CMCS_125_CTP_GRE_PR1 && Battery_HWID <=CMCS_125_CTP_GRE_MP2 && g_use_battery_thermal)
+#endif
+	}
+	else
+		battery_full_flag2=false;
+	//pmlog("Temp= %d\n", msm_termal);
+
+	// +++ADQ_FIH+++
+	if ((percent_now == 100)&&(g_charging_state == CHARGER_STATE_CHARGING)){
+		g_charging_state = CHARGER_STATE_FULL;
+	}
+	else if (g_charging_state == CHARGER_STATE_FULL) {
+		if (percent_now < 98) {
+			g_charging_state = CHARGER_STATE_CHARGING;
+		}
+	}
+	else if (g_charging_state == CHARGER_STATE_NOT_CHARGING){
+		if (percent_now < 15) 
+		{
+			g_charging_state = CHARGER_STATE_LOW_POWER;
+		}
+	}
+
+	printk(KERN_DEBUG "batt : %d - %d, EN = %d, 1A = %d, SET = %d\n", percent_now, g_charging_state, gpio_get_value(GPIO_CHR_EN), gpio_get_value(CHR_1A), gpio_get_value(USBSET));
+	if ((g_charging_state_last != g_charging_state))
+		tca6507_charger_state_report(g_charging_state);   
+	zbu->data.capacity=percent_now;
+	g_charging_state_last = g_charging_state;
+
+}
+
 static int zeus_battery_get_property(struct power_supply *psy,
 				 enum power_supply_property psp,
 				 union power_supply_propval *val)
 {
-	//int buf;
 	int ret = 0;
-	unsigned	vbatt;
-	int time_cycle=0;
+
 	switch (psp) {
 	case POWER_SUPPLY_PROP_STATUS:
 		// "Unknown", "Charging", "Discharging", "Not charging", "Full"
@@ -961,299 +1206,10 @@ static int zeus_battery_get_property(struct power_supply *psy,
 		val->intval = msm_termal*10;
 		break;
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = zeus_bat_vol*1000;
+		val->intval = batt_update->data.voltage*1000;
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
-		// +++ADQ_FIH+++ 
-		//tca6507_port4_enable(1);
-		//ret=GetBatteryInfo(BATT_CAPACITY_INFO, &buf);
-               // if (ret < 0){
-			//power_supply_changed(g_ps_battery);
-                        //ret = 0;
-                //}
-                //else{
-			//val->intval = buf;
-			//if ((val->intval==0) ||(val->intval ==255))
-			//{
-				/* FIH, Michael Kao, 2009/09/10{ */
-				/* [FXX_CR], add for avoid too frequently update battery*/
-				time_cycle=get_seconds()-pre_time_cycle;
-				pre_time_cycle=get_seconds();
-				if(time_cycle<5&&pre_val!=0)
-				{
-					val->intval=pre_val;
-					//break;
-				}else
-				{
-				/* FIH, Michael Kao, 2009/09/10{ */
-				
-				/* FIH, Michael Kao, 2009/11/25{ */
-				/* [FXX_CR], add a retry mechanism to prevent the sudden high value*/
-				vbatt=GetPMICBatteryInfo();
-				if(weird_retry_flag)
-				{
-					weird_retry_flag=false;
-					vbatt=GetPMICBatteryInfo();
-					if(weird_retry_flag)
-					{
-						suspend_update_flag=false;
-						vbatt=GetPMICBatteryInfo();
-					}
-				}
-				/* FIH, Michael Kao, 2009/11/25{ */
-				
-				/* FIH, Michael Kao, 2009/11/25{ */
-				/* [FXX_CR], add event log*/
-				val->intval=ChangeToVoltPercentage(vbatt);
-				zeus_bat_val=val->intval;
-				zeus_bat_vol=vbatt;
-				msm_termal=GetPMIC_MSM_TERMAL();
-				if(!gpio_get_value(GPIO_CHR_DET))
-				{
-					if(charging_bat_vol>4000)
-						high_vol=1;
-					else
-						high_vol=0;
-					/* FIH, Michael Kao, 2009/09/10{ */
-					/* [FXX_CR], charging full protection*/
-					//Battery full protection
-					//if(!battery_full_flag&&(val->intval==100))
-					
-					/* FIH, Michael Kao, 2009/11/11{ */
-					/* [FXX_CR], Improve charging full protection scenario*/
-					if(vbatt>=4120)
-					{
-						if(battery_full_count==0)
-							battery_full_start_time=get_seconds();
-						battery_full_count++;
-					}
-					else
-						battery_full_count=0;
-					
-					/* FIH, Michael Kao, 2009/12/01{ */
-					/* [FXX_CR], Modify for battery_full_falg abnormal changed*/
-					if((battery_full_flag==0)&&(vbatt>=4120))
-					{
-						battery_full_time_duration=get_seconds()-battery_full_start_time;
-						//pmlog("time_du=%d\n",battery_full_time_duration);
-				if(charger_on==0)
-				{
-						if(battery_full_time_duration>=5400)
-						{
-							gpio_set_value(GPIO_CHR_EN,1);//Disable chager
-							battery_full_flag=1;
-							//pmlog("BAT_F\n");
-							//eventlog("BAT_F\n") ;
-						}
-					}
-				}
-					//else if(battery_full_flag&&(val->intval<100)&&!over_temper)
-					else if((battery_full_flag==1)&&(vbatt<=4120)&&!over_temper)
-					{
-						gpio_set_value(GPIO_CHR_EN,0);//Enable charger
-						battery_full_flag=0;
-						battery_full_flag2=true;
-						//val->intval=100;
-						//pmlog("BAT_NOF\n");
-						//eventlog("BAT_NOF\n") ;
-					}
-					/* FIH, Michael Kao, 2009/12/01{ */
-					if(battery_full_flag2&&(val->intval<100)&&(val->intval>90))
-						val->intval=100;
-					/* FIH, Michael Kao, 2009/11/11{ */
-					/* FIH, Michael Kao, 2009/09/10{ */
-					//Temperature protection
-					/* FIH, Michael Kao, 2009/12/25{ */
-					//New charging temperature protection scenario
-					#if 0
-					if(!slight_over_temper&&(msm_termal>55))
-					{
-						//eventlog("sOVT\n") ;
-						//pmlog("sOVT\n");
-						if(batt_state.F9_battery_charger_type==2)
-						{
-							gpio_set_value(CHR_1A,0);//Set to 500mA
-							gpio_set_value(USBSET,1);
-						}
-						slight_over_temper=true;
-					}
-					if(slight_over_temper&&(msm_termal>=5)&&(msm_termal<=52))
-					{
-						//eventlog("Recover\n") ;
-						//pmlog("Recover\n");
-						if(batt_state.F9_battery_charger_type==2)
-						{
-							gpio_set_value(CHR_1A,1);//Set to 1A
-							gpio_set_value(USBSET,1);
-						}
-						slight_over_temper=false;
-					}
-					#endif
-					
-					/* FIH, Michael Kao, 2010/05/17{ */
-					/* [FXX_CR], Add Greco battery protection scenario*/
-                				#if GET_TEMPERATURE_FROM_BATTERY_THERMAL
-								
-					if (((g_orig_hw_id >= CMCS_125_CTP_GRE_PR1 && g_orig_hw_id <= CMCS_125_CTP_GRE_MP2)||
-					(g_orig_hw_id >= CMCS_CTP_F917_PR2 && g_orig_hw_id <= CMCS_CTP_F917_MP3))&&g_use_battery_thermal)
-					//if (g_orig_hw_id >= CMCS_HW_EVB1 && g_orig_hw_id < CMCS_7627_ORIG_EVB1&& g_use_battery_thermal)
-					{
-                        				printk("Battery Thermistor Case\n");
-                        				if (!over_temper
-                            				&& !over_temper2
-                            				&& (msm_termal <= BATTERY_TEMP_LOW_LIMIT || msm_termal >= (BATTERY_TEMP_HIGH_LIMIT + BATTERY_THERMAL_TEMP_OFFSET))
-                            				)
-    						{
-    							//eventlog("OVT\n") ;	
-
-    							/* FIH; Tiger; 2009/8/15 { */
-							#ifdef FEATURE_ECOMPASS
-							if(fihsensor_magnet_guard1 != 1) {
-								fihsensor_magnet_guard1 = -1;
-							}
-							#endif
-
-    						/* } FIH; Tiger; 2009/8/15 */
-    						gpio_set_value(GPIO_CHR_EN,1);//Disable chager
-    						over_temper=true;
-    						//pmlog("OVT\n");
-    						}
-
-    						if (over_temper
-                            				&&(msm_termal >= (BATTERY_TEMP_LOW_LIMIT + RECHARGE_TEMP_OFFSET))
-                            				&&(msm_termal <= (BATTERY_TEMP_HIGH_LIMIT - RECHARGE_TEMP_OFFSET))
-                            			)
-    						{
-    							/* FIH; Tiger; 2009/8/15 { */
-							#ifdef FEATURE_ECOMPASS
-							if(fihsensor_magnet_guard1 != 1) {
-								fihsensor_magnet_guard1 = -1;
-							}
-							#endif
-
-    							/* } FIH; Tiger; 2009/8/15 */
-    							gpio_set_value(GPIO_CHR_EN,0);//Enable chager
-    							over_temper=false;
-    							//eventlog("Recharge\n") ;	
-    						}
-                    			}
-                    			else
-                    			{
-                				#endif  //end of GET_TEMPERATURE_FROM_BATTERY_THERMAL
-					/* FIH, Michael Kao, 2010/05/17{ */
-					if(!over_temper&&!over_temper2&&(((msm_termal<=10)||(msm_termal>=60))&&(high_vol==1)))
-					{
-						//eventlog("OVT\n") ;	
-
-						/* FIH; Tiger; 2009/8/15 { */
-						#ifdef FEATURE_ECOMPASS
-						if(fihsensor_magnet_guard1 != 1) {
-							fihsensor_magnet_guard1 = -1;
-						}
-						#endif
-						/* } FIH; Tiger; 2009/8/15 */
-					/* FIH, Michael Kao, 2010/05/14{ */
-					/* [FXX_CR], add for not to disable charger*/
-					if(charger_on==0)
-						gpio_set_value(GPIO_CHR_EN,1);//Disable chager
-					/* FIH, Michael Kao, 2010/05/14{ */
-						over_temper=true;
-						//pmlog("OVT\n");
-					}
-					if(!over_temper&&!over_temper2&&(((msm_termal<=10)||(msm_termal>=70))&&(high_vol==0)))
-					{
-						//eventlog("OVT2\n") ;	
-
-						/* FIH; Tiger; 2009/8/15 { */
-			#ifdef FEATURE_ECOMPASS
-						if(fihsensor_magnet_guard1 != 1) {
-							fihsensor_magnet_guard1 = -1;
-						}
-			#endif
-						/* } FIH; Tiger; 2009/8/15 */
-					/* FIH, Michael Kao, 2010/05/14{ */
-					/* [FXX_CR], add for not to disable charger*/
-					if(charger_on==0)
-						gpio_set_value(GPIO_CHR_EN,1);//Disable chager
-					/* FIH, Michael Kao, 2010/05/14{ */
-						over_temper2=true;
-						//pmlog("OVT\n");
-					}
-					
-					if(over_temper&&((msm_termal>=15)&&(msm_termal<=55)))
-					{
-						/* FIH; Tiger; 2009/8/15 { */
-			#ifdef FEATURE_ECOMPASS
-						if(fihsensor_magnet_guard1 != 0) {
-							fihsensor_magnet_guard1 = -1;
-						}
-			#endif
-						/* } FIH; Tiger; 2009/8/15 */
-						gpio_set_value(GPIO_CHR_EN,0);//Enable chager
-						over_temper=false;
-						//eventlog("Recharge\n") ;	
-					}
-					if(over_temper2&&((msm_termal>=15)&&(msm_termal<=65)))
-					{
-						/* FIH; Tiger; 2009/8/15 { */
-			#ifdef FEATURE_ECOMPASS
-						if(fihsensor_magnet_guard1 != 0) {
-							fihsensor_magnet_guard1 = -1;
-						}
-			#endif
-						/* } FIH; Tiger; 2009/8/15 */
-						gpio_set_value(GPIO_CHR_EN,0);//Enable chager
-						over_temper2=false;
-						//eventlog("Recharge2\n") ;	
-					}
-					/* FIH, Michael Kao, 2009/12/25{ */
-                    
-                    #if GET_TEMPERATURE_FROM_BATTERY_THERMAL
-                    }   //End of (Battery_HWID >= CMCS_125_CTP_GRE_PR1 && Battery_HWID <=CMCS_125_CTP_GRE_MP2 && g_use_battery_thermal)
-                    #endif
-				}
-				else
-					battery_full_flag2=false;
-				//pmlog("Temp= %d\n", msm_termal);
-				}
-					
-		//eventlog("Bat=%d\n",zeus_bat_val)	;	
-		/* FIH, Michael Kao, 2009/11/25{ */
-		/* [FXX_CR], add event log*/
-		//GetBatteryInfo(BATT_VOLTAGE_INFO, &buf);
-		//buf = buf * 100 / 4200;
-		// +++ADQ_FIH+++
-       		if ((val->intval == 100)&&(g_charging_state == CHARGER_STATE_CHARGING)){
-		 	g_charging_state = CHARGER_STATE_FULL;
-		}
-		else if (g_charging_state == CHARGER_STATE_FULL) {
-		  if (val->intval < 98) {
-		  	  g_charging_state = CHARGER_STATE_CHARGING;
-			}
-		}
-                	else if (g_charging_state == CHARGER_STATE_NOT_CHARGING){
-		  if (val->intval < 15) 
-		  	{
-		  	  g_charging_state = CHARGER_STATE_LOW_POWER;
-		  	}
-		}
-		/* FIH, Michael Kao, 2009/08/18{ */
-		/* [FXX_CR], Add pmlog*/
-#ifdef __FIH_PM_LOG__
-		printk( "<8>" "batt : %d - %d, EN = %d, 1A = %d, SET = %d\n", val->intval, g_charging_state, gpio_get_value(GPIO_CHR_EN), gpio_get_value(CHR_1A), gpio_get_value(USBSET));
-			
-		//pmlog("batt : %d\%_%d, %d, %d, %d,tem=%d,ch=%d\n", val->intval, g_charging_state, gpio_get_value(GPIO_CHR_EN), gpio_get_value(CHR_1A), gpio_get_value(USBSET),msm_termal,batt_state.F9_battery_charger_type);
-#else		
-		printk( "<8>" "batt : %d - %d, EN = %d, 1A = %d, SET = %d\n", val->intval, g_charging_state, gpio_get_value(GPIO_CHR_EN), gpio_get_value(CHR_1A), gpio_get_value(USBSET));
-#endif
-/* FIH, Michael Kao, 2009/08/18{ */
-		if ((g_charging_state_last != g_charging_state))
-	        		tca6507_charger_state_report(g_charging_state);   
-                	pre_val=val->intval;
-                	g_charging_state_last = g_charging_state;
-		// ---ADQ_FIH---
-                //}
-                // ---ADQ_FIH--- 
+		val->intval = batt_update->data.capacity;
                 break;
 	default:
 		ret = -EINVAL;
@@ -1263,35 +1219,53 @@ static int zeus_battery_get_property(struct power_supply *psy,
 	return ret;
 }
 
+#define BATTERY_POLLING_TIMER  60//300000 10000
 
-#ifdef T_FIH	///+T_FIH
-#ifdef FLAG_BATTERY_POLLING
-static struct timer_list polling_timer;
-
-
-#define BATTERY_POLLING_TIMER  60000//300000 10000
-
-static void polling_timer_func(unsigned long unused)
+static void zeus_battery_alarm(struct alarm *alarm)
 {
-	/* FIH, Michael Kao, 2009/08/13{ */
-	/* [FXX_CR], Modify to create a new work queue for BT play MP3 smoothly*/
-	//power_supply_changed(g_ps_battery);
-	/* FIH, Michael Kao, 2010/05/14{ */
-	/* [FXX_CR], add for not to disable charger*/
+	struct zeus_battery_update *zbu =
+		container_of(alarm, struct zeus_battery_update, alarm);
+
+	wake_lock(&zbu->wakelock);
+
+	queue_work(zbu->wqueue, &zbu->zeus_batt_work);
+}
+
+static void zeus_battery_work(struct work_struct *work)
+{
+	struct zeus_battery_update *zbu =
+		container_of(work, struct zeus_battery_update, zeus_batt_work);
+	struct timespec ts;
+	unsigned long flags;
+	unsigned capacity;
+
 	if(charger_on==1)
 		g_use_battery_thermal=FALSE;
 	else
 		g_use_battery_thermal=g_pre_use_battery_thermal;
-	/* FIH, Michael Kao, 2010/05/14{ */
-	queue_work(zeus_batt_wq, &zeus_power_supplies[CHARGER_BATTERY].changed_work);
 
-	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
-	
-	/* FIH, Michael Kao, 2009/08/13{ */
-	mod_timer(&polling_timer,
-		  jiffies + msecs_to_jiffies(BATTERY_POLLING_TIMER));
+	zbu->last_poll = alarm_get_elapsed_realtime();
+
+
+	ts = ktime_to_timespec(zbu->last_poll);
+
+	capacity = zbu->data.capacity;
+	zeus_battery_refresh_values(zbu);
+	/* Notify userspace */
+	if (capacity != zbu->data.capacity)
+		power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
+
+	/* prevent suspend before starting the alarm */
+	local_irq_save(flags);
+	wake_unlock(&zbu->wakelock);
+
+	zeus_program_alarm(zbu, get_suspend_state() == PM_SUSPEND_MEM ? 
+			(BATTERY_POLLING_TIMER*10) : BATTERY_POLLING_TIMER);
+	local_irq_restore(flags);
+
 }
-#endif	// FLAG_BATTERY_POLLING
+
+#ifdef T_FIH	///+T_FIH
 
 #ifdef FLAG_CHARGER_DETECT
 #include <asm/gpio.h>
@@ -1306,11 +1280,8 @@ static irqreturn_t chgdet_irqhandler(int irq, void *dev_id)
 	/* [FXX_CR], Not update battery information when charger state changes*/
 	charger_state_change=true;
 	system_time_second=get_seconds();
-	/* FIH, Michael Kao, 2009/08/14{ */
-	/* FIH, Michael Kao, 2009/08/13{ */
-	/* [FXX_CR], Modify to create a new work queue for BT play MP3 smoothly*/
 	//power_supply_changed(g_ps_battery);
-	queue_work(zeus_batt_wq, &zeus_power_supplies[CHARGER_BATTERY].changed_work);
+	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
 	
 	/* FIH, Michael Kao, 2009/08/13{ */
 	return IRQ_HANDLED;
@@ -1345,7 +1316,7 @@ static int Zeus_battery_miscdev_ioctl( struct inode * inode, struct file * filp,
     
     	if(cmd2 == FTMBATTERY_VOL)
     	{
-		ret = zeus_bat_vol;	
+		ret = 3800;
     	}
 	else if(cmd2 ==FTMBATTERY_PRE_VOL)
 	{
@@ -1392,6 +1363,13 @@ static struct miscdevice Zeus_battery_miscdev = {
 static int goldfish_battery_probe(struct platform_device *pdev)
 {
        int ret, i;
+	struct zeus_battery_update *zbu;
+
+	zbu = kzalloc(sizeof(*zbu), GFP_KERNEL);
+	if (!zbu)
+		return -ENOMEM;
+
+	platform_set_drvdata(pdev, zbu);
 
 	msm_termal=10;
 	over_temper=false;
@@ -1421,10 +1399,8 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 	
 	/* FIH, Michael Kao, 2009/10/14{ */
 	/* [FXX_CR], Add wake lock to avoid incompleted update battery information*/
-	wakelock_flag=false;
 	/* FIH, Michael Kao, 2009/10/14{ */
 	battery_low=false;
-	zeus_bat_val=0;
 	VBAT_from_SMEM=0;
 	
 	/* FIH, Michael Kao, 2009/11/25{ */
@@ -1443,7 +1419,6 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 	charging_bat_vol=0;
 	over_temper2=false;
 	suspend_update_sample_gate=0;
-	zeus_bat_vol=0;
 	charger_on=0;
 	/* FIH, Michael Kao, 2009/12/25{ */
 
@@ -1517,20 +1492,26 @@ static int goldfish_battery_probe(struct platform_device *pdev)
                }
     }
 
-	/* FIH, Michael Kao, 2009/08/13{ */
-	/* [FXX_CR], Modify to create a new work queue for BT play MP3 smoothly*/
-	zeus_batt_wq=create_singlethread_workqueue("zeus_battery");
-	if (!zeus_batt_wq) {
+	INIT_WORK(&zbu->zeus_batt_work, zeus_battery_work);
+	zbu->wqueue = create_freezeable_workqueue(dev_name(&pdev->dev));
+	zbu->last_poll = alarm_get_elapsed_realtime();
+
+	if (!zbu->wqueue)
 		return -ENOMEM;
-	}
-	/* FIH, Michael Kao, 2009/08/13{ */
+
+		
+	wake_lock_init(&zbu->wakelock, WAKE_LOCK_SUSPEND, "zeus_battery");
+
+	batt_update = zbu;
+
+	/* Init the values */
+	zeus_battery_refresh_values(zbu);
+
+	alarm_init(&zbu->alarm, ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP,
+		zeus_battery_alarm);
+	queue_work(zbu->wqueue, &zbu->zeus_batt_work);
 
 #ifdef T_FIH	///+T_FIH
-#ifdef FLAG_BATTERY_POLLING
-	setup_timer(&polling_timer, polling_timer_func, 0);
-	mod_timer(&polling_timer,
-		  jiffies + msecs_to_jiffies(BATTERY_POLLING_TIMER));
-#endif	// FLAG_BATTERY_POLLING
 
 #ifdef FLAG_CHARGER_DETECT
 	gpio_tlmm_config( GPIO_CFG(GPIO_CHR_DET, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA ), GPIO_CFG_ENABLE );
@@ -1553,7 +1534,8 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 static int goldfish_battery_remove(struct platform_device *pdev)
 {
 
-       int i;
+	int i;
+	struct zeus_battery_update *zbu = platform_get_drvdata(pdev);
 
 #ifdef T_FIH	///+T_FIH
 #ifdef FLAG_CHARGER_DETECT
@@ -1561,15 +1543,15 @@ static int goldfish_battery_remove(struct platform_device *pdev)
 	gpio_free(GPIO_CHR_DET);
 #endif	// FLAG_CHARGER_DETECT
 
-#ifdef FLAG_BATTERY_POLLING
-	del_timer_sync(&polling_timer);
-#endif	// FLAG_BATTERY_POLLING
 #endif	// T_FIH	///-T_FIH
 
-    for (i = 0; i < ARRAY_SIZE(zeus_power_supplies); i++) {
-        power_supply_unregister(&zeus_power_supplies[i]);
-    }
+	for (i = 0; i < ARRAY_SIZE(zeus_power_supplies); i++) {
+		power_supply_unregister(&zeus_power_supplies[i]);
+	}
 
+
+	kfree(zbu);
+	batt_update = NULL;
 
 	return 0;
 }
@@ -1629,11 +1611,12 @@ void zeus_update_usb_status(enum chg_type chgtype) {
 EXPORT_SYMBOL(zeus_update_usb_status);
 #endif
 
+
 static struct platform_driver goldfish_battery_device = {
 	.probe		= goldfish_battery_probe,
 	.remove		= goldfish_battery_remove,
 	.driver = {
-		.name = "goldfish-battery"
+		.name = "goldfish-battery",
 	}
 };
 
