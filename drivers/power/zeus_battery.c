@@ -1260,7 +1260,7 @@ static void zeus_battery_work(struct work_struct *work)
 	wake_unlock(&zbu->wakelock);
 
 	zeus_program_alarm(zbu, get_suspend_state() == PM_SUSPEND_MEM ? 
-			(BATTERY_POLLING_TIMER*10) : BATTERY_POLLING_TIMER);
+			(BATTERY_POLLING_TIMER*3) : BATTERY_POLLING_TIMER);
 	local_irq_restore(flags);
 
 }
@@ -1606,6 +1606,7 @@ void zeus_update_usb_status(enum chg_type chgtype) {
        gpio_free(USBSET);
        gpio_free(CHR_1A);
 
+       zeus_battery_refresh_values(batt_update);
        power_supply_changed(&zeus_power_supplies[current_charger]);
 }
 EXPORT_SYMBOL(zeus_update_usb_status);
