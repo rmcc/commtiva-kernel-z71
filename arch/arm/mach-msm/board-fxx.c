@@ -821,8 +821,6 @@ static struct platform_device ram_console_device = {
 /* FIH, JamesKCTung, 2009/05/11 { */
 static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd);
 static uint32_t msm_ar6k_sdcc_setup_power(struct device *dv, unsigned int vdd);
-int static ar6k_wifi_suspend(int dev_id);
-int static ar6k_wifi_resume(int dev_id);
 static void (*ar6k_wifi_status_cb)(int card_present, void *dev_id);
 static void *ar6k_wifi_status_cb_devid;
 static unsigned int  wifi_power_on = 0;
@@ -880,6 +878,7 @@ static struct mmc_platform_data ar6k_wifi_data = {
 	.msmsdcc_fmax   = 49152000,
 	.nonremovable   = 1,
 	.dummy52_required = 1,	
+	.sdiowakeup_irq = MSM_GPIO_TO_INT(66),
 };
 /* } FIH, JamesKCTung, 2009/05/11 */
 #ifdef CONFIG_BT
@@ -2274,7 +2273,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	}
 	/* } FIH, BillHJChang, 2009/07/22 */	
 	
-	printk(KERN_ERR "%s: vdd: %d \n", __func__, vdd);
+	printk(KERN_DEBUG "%s: vdd: %d \n", __func__, vdd);
 
 	pdev = container_of(dv, struct platform_device, dev);
 	msm_sdcc_setup_gpio(pdev->id, !!vdd);
