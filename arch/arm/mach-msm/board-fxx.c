@@ -1673,6 +1673,15 @@ static struct platform_device msm_camera_sensor_vb6801 = {
 #endif
 #endif
 
+#if (!defined(CONFIG_ARCH_MSM_FLASHLIGHT) && \
+	defined(CONFIG_FLASH_DRIVER_IC_AAT1272))
+static struct platform_device aat1272_flashlight_device = {
+	.name = "flashlight",
+	.dev = {
+	},
+};
+#endif
+
 /* FIH, Chandler Kang, 2009/05/18 { */
 /* lcm_innolux gpio */
 #ifdef CONFIG_SPI_GPIO
@@ -2415,6 +2424,8 @@ static void __init msm7x2x_init(void)
 
 	msm_fb_add_devices();
 	msm7x2x_init_mmc();
+
+	platform_device_register(&aat1272_flashlight_device);
 
 // +++ FIH, KarenLiao, 20090518: Add for headset detection.	
 	//init_headset_sensor(); 

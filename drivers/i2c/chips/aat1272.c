@@ -24,6 +24,9 @@
 #include <linux/completion.h>
 #include <../../../drivers/staging/android/timed_output.h>
 #include <linux/hrtimer.h>
+#ifndef CONFIG_ARCH_MSM_FLASHLIGHT
+#include <linux/leds.h>
+#endif
 
 static unsigned mpp_19= 18;
 static unsigned mpp_22= 21;
@@ -435,6 +438,79 @@ static struct i2c_driver aat1272_driver = {
 	},
 };
 
+#ifndef CONFIG_ARCH_MSM_FLASHLIGHT
+struct led_classdev fl_lcdev;
+
+static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
+                        int brightness)
+{
+
+	uint8_t write_cmd_R00[2];
+	uint8_t write_cmd_R01[2];
+	uint8_t param1;
+	uint8_t param2;
+
+	if (brightness > 0 && brightness <=128) {
+		param2 = 51;
+		if (brightness == 1) {
+			param1 = 239; // Lowest setting
+		} else if (brightness == 3) {
+			param1 = 0; // Highest setting
+		} else {
+			param1 = 120; // Halfway
+		}
+		brightness_onoff(1);
+	} else {
+		param1 = 0; param2 = 0;
+	}
+	write_cmd_R00[0] = 0x00;
+	write_cmd_R00[1] = (uint8_t)param1;
+	write_cmd_R01[0] = 0x01;
+	write_cmd_R01[1] = (uint8_t)param2;
+
+	if (!aat1272_write(aat1272_drvdata.aat1272_i2c_client, write_cmd_R00, sizeof(write_cmd_R00))) {
+		aat1272_write(aat1272_drvdata.aat1272_i2c_client, write_cmd_R01, sizeof(write_cmd_R01));
+	}
+
+	if (!param2)
+		brightness_onoff(0);
+
+	return;
+}
+static int flashlight_probe(struct platform_device *pdev)
+{
+	fl_lcdev.name = pdev->name;
+	fl_lcdev.brightness_set = fl_lcdev_brightness_set;
+	fl_lcdev.brightness = 0;
+	return led_classdev_register(&pdev->dev, &fl_lcdev);
+}
+
+static int flashlight_remove(struct platform_device *pdev)
+{
+	led_classdev_unregister(&fl_lcdev);
+	return 0;
+}
+
+static struct platform_driver flashlight_driver = {
+    .probe      = flashlight_probe,
+    .remove     = flashlight_remove,
+    .driver     = {
+        .name       = "flashlight",
+        .owner      = THIS_MODULE,
+    },
+};
+
+static int __init flashlight_init(void)
+{
+    return platform_driver_register(&flashlight_driver);
+}
+
+static void __exit flashlight_exit(void)
+{
+    platform_driver_unregister(&flashlight_driver);
+}
+#endif
+
 static int __init aat1272_init(void)
 {
 	int ret = 0;
@@ -446,6 +522,9 @@ static int __init aat1272_init(void)
 		goto driver_del;
 	}
 
+#ifndef CONFIG_ARCH_MSM_FLASHLIGHT
+	ret = flashlight_init();
+#endif
 	return ret;
 
 driver_del:
@@ -456,6 +535,9 @@ driver_del:
 
 static void __exit aat1272_exit(void)
 {
+#ifndef CONFIG_ARCH_MSM_FLASHLIGHT
+	flashlight_exit();
+#endif
 	i2c_del_driver(&aat1272_driver);
 }
 
