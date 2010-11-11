@@ -471,39 +471,6 @@ dbglog_get_debug_hdr_ptr(AR_SOFTC_T *ar)
     return param;
 }
 
-static void free_raw_buffers(AR_SOFTC_T *ar)
-{
-	int i, j;
-
-	for (i = 0; i != HTC_RAW_STREAM_NUM_MAX; i++) {
-		for (j = 0; j != RAW_HTC_READ_BUFFERS_NUM; j++)
-			kfree(ar->raw_htc_read_buffer[i][j]);
-		for (j = 0; j != RAW_HTC_WRITE_BUFFERS_NUM; j++)
-			kfree(ar->raw_htc_write_buffer[i][j]);
-	}
-}
-
-static int alloc_raw_buffers(AR_SOFTC_T *ar)
-{
-	int i, j;
-	raw_htc_buffer *b;
-
-	for (i = 0; i != HTC_RAW_STREAM_NUM_MAX; i++) {
-		for (j = 0; j != RAW_HTC_READ_BUFFERS_NUM; j++) {
-			b = kzalloc(sizeof(*b), GFP_KERNEL);
-			if (!b)
-				return -ENOMEM;
-			ar->raw_htc_read_buffer[i][j] = b;
-		}
-		for (j = 0; j != RAW_HTC_WRITE_BUFFERS_NUM; j++) {
-			b = kzalloc(sizeof(*b), GFP_KERNEL);
-			if (!b)
-				return -ENOMEM;
-			ar->raw_htc_write_buffer[i][j] = b;
-		}
-	}
-	return 0;
-}
 /*
  * The dbglog module has been initialized. Its ok to access the relevant
  * data stuctures over the diagnostic window.
@@ -2015,12 +1982,6 @@ ar6000_avail_ev(void *context, void *hif_handle)
     sema_init(&ar->arSem, 1);
     ar->bIsDestroyProgress = FALSE;
 
-    if (alloc_raw_buffers(ar)) {
-        free_raw_buffers(ar);
-        return A_ERROR;
-    }
-
-
 #ifdef ADAPTIVE_POWER_THROUGHPUT_CONTROL
     A_INIT_TIMER(&aptcTimer, aptcTimerHandler, ar);
 #endif /* ADAPTIVE_POWER_THROUGHPUT_CONTROL */
@@ -2382,7 +2343,6 @@ ar6000_destroy(struct net_device *dev, unsigned int unregister)
     /* Free up the device data structure */
     if( unregister )
         unregister_netdev(dev);
-	free_raw_buffers(ar);
 #ifndef free_netdev
     kfree(dev);
 #else

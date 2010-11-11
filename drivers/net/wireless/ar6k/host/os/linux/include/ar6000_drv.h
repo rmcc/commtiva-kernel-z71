@@ -324,8 +324,8 @@ typedef struct ar6_softc {
     struct semaphore        raw_htc_write_sem[HTC_RAW_STREAM_NUM_MAX];
     wait_queue_head_t       raw_htc_read_queue[HTC_RAW_STREAM_NUM_MAX];
     wait_queue_head_t       raw_htc_write_queue[HTC_RAW_STREAM_NUM_MAX];
-    raw_htc_buffer          *raw_htc_read_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_READ_BUFFERS_NUM];
-    raw_htc_buffer          *raw_htc_write_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_WRITE_BUFFERS_NUM];
+    raw_htc_buffer          raw_htc_read_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_READ_BUFFERS_NUM];
+    raw_htc_buffer          raw_htc_write_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_WRITE_BUFFERS_NUM];
     A_BOOL                  write_buffer_available[HTC_RAW_STREAM_NUM_MAX];
     A_BOOL                  read_buffer_available[HTC_RAW_STREAM_NUM_MAX];
 #endif

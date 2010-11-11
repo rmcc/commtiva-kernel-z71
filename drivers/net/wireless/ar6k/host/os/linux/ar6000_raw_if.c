@@ -201,9 +201,9 @@ int ar6000_htc_raw_open(AR_SOFTC_T *ar)
 
         for (count2 = 0; count2 < RAW_HTC_READ_BUFFERS_NUM; count2 ++) {
             /* Initialize the receive buffers */
-            buffer = ar->raw_htc_write_buffer[streamID][count2];
+            buffer = &ar->raw_htc_write_buffer[streamID][count2];
             memset(buffer, 0, sizeof(raw_htc_buffer));
-            buffer = ar->raw_htc_read_buffer[streamID][count2];
+            buffer = &ar->raw_htc_read_buffer[streamID][count2];
             memset(buffer, 0, sizeof(raw_htc_buffer));
 
             SET_HTC_PACKET_INFO_RX_REFILL(&buffer->HTCPacket,
@@ -222,7 +222,7 @@ int ar6000_htc_raw_open(AR_SOFTC_T *ar)
 
         for (count2 = 0; count2 < RAW_HTC_WRITE_BUFFERS_NUM; count2 ++) {
             /* Initialize the receive buffers */
-            buffer = ar->raw_htc_write_buffer[streamID][count2];
+            buffer = &ar->raw_htc_write_buffer[streamID][count2];
             memset(buffer, 0, sizeof(raw_htc_buffer));
         }
 
@@ -278,7 +278,7 @@ get_filled_buffer(AR_SOFTC_T *ar, HTC_RAW_STREAM_ID StreamID)
 
     /* Check for data */
     for (count = 0; count < RAW_HTC_READ_BUFFERS_NUM; count ++) {
-        busy = ar->raw_htc_read_buffer[StreamID][count];
+        busy = &ar->raw_htc_read_buffer[StreamID][count];
         if (busy->length) {
             break;
         }
@@ -360,7 +360,7 @@ get_free_buffer(AR_SOFTC_T *ar, HTC_ENDPOINT_ID StreamID)
 
     free = NULL;
     for (count = 0; count < RAW_HTC_WRITE_BUFFERS_NUM; count ++) {
-        free = ar->raw_htc_write_buffer[StreamID][count];
+        free = &ar->raw_htc_write_buffer[StreamID][count];
         if (free->length == 0) {
             break;
         }
