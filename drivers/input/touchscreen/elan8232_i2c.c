@@ -436,20 +436,6 @@ static void bi8232_isr_workqueue(struct work_struct *work)
         //Modified for new CAP sample by Stanley ++(2009/05/25)
         if((virtual_button == 0) && !bSoft1CapKeyPressed && !bSoft2CapKeyPressed && !bHomeCapKeyPressed && !bApCapKeyPressed && !bCenterKeyPressed && !bIsNeedSkipTouchEvent)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
         {
-            #if 0
-		    input_report_key(input, BTN_TOUCH, cnt > 0);
-		    input_report_key(input, BTN_2, cnt == 2);
-		    input_report_key(input, BTN_3, cnt == 3);
-		    
-		    if (cnt) {
-			    input_report_abs(input, ABS_X, (1792 - XCORD1(buffer)));  //Add for protect origin point
-			    input_report_abs(input, ABS_Y, YCORD1(buffer));
-		    }
-		    if (cnt > 1) {
-                input_report_abs(input, ABS_HAT0X, (1792 - XCORD2(buffer)));  //Add for protect origin point
-                input_report_abs(input, ABS_HAT0Y, YCORD2(buffer));
-            }
-            #endif
             //Added the MT protocol for Eclair by Stanley (2010/03/23)++
 			if (cnt) {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
@@ -501,6 +487,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             {
                 //input_report_key(input, KEY_KBDILLUMDOWN, 0);
                 //Added for FST++ 
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+                input_mt_sync(input);
                 if(bIsFST)
                     input_report_key(input, KEY_SEND, 0);  //FST
                 else
@@ -517,6 +505,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             {
                 //input_report_key(input, KEY_BACK, 0);
                 //Added for FST++
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+                input_mt_sync(input);
                 if(bIsFST)
                     input_report_key(input, KEY_END, 0);  //FST
                 else
@@ -537,6 +527,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
                 //else
                     //input_report_key(input, KEY_HOME, 0);  //F905 or other
                 //Added for FST++
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+                input_mt_sync(input);
                 if(bIsF913 && !bIsFST)
                     input_report_key(input, KEYCODE_SEACHER, 0);  //F913
                 else if(bIsFST)
@@ -555,6 +547,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             {
                 //input_report_key(input, KEYCODE_BROWSER, 0);
                 //Added for FST++
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+                input_mt_sync(input);
                 if(bIsFST)
                     input_report_key(input, KEY_BACK, 0);  //FST
                 else if(bIsGRECO)
@@ -572,6 +566,8 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             //Added for FST++
             else if(bCenterKeyPressed)
             {
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+                input_mt_sync(input);
                 input_report_key(input, KEYCODE_SEACHER, 0);
                 bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center key - up!\r\n");
                 bSoft2CapKeyPressed = 0;
@@ -588,17 +584,19 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             //Added for touch behavior (2009/08/14)++
             if(!bIsPenUp)
             {
-                //input_report_key(input, BTN_TOUCH, 0);
-                //Added for F0XE.B-346++
                 input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
                 input_mt_sync(input);
-                //Added for F0XE.B-346--
                 bIsPenUp = 1;
                 bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
                 bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            }
+            } else {
             //Added for touch behavior (2009/08/14)--
             //Added for FST++
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+		input_report_abs(input, ABS_MT_POSITION_X, 1565);
+		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+                input_mt_sync(input);
+	    }
             if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
             {
                 if(bIsFST)
@@ -617,17 +615,17 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             //Added for touch behavior (2009/08/14)++
             if(!bIsPenUp)
             {
-                //input_report_key(input, BTN_TOUCH, 0);
-                //Added for F0XE.B-346++
                 input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
                 input_mt_sync(input);
-                //Added for F0XE.B-346--
                 bIsPenUp = 1;
                 bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
                 bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            }
-            //Added for touch behavior (2009/08/14)--
-            //Added for FST++
+            } else {
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+		input_report_abs(input, ABS_MT_POSITION_X, 1280);
+		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+                input_mt_sync(input);
+	    }
             if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
             {
                 if(bIsFST)
@@ -647,16 +645,17 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             //Added for touch behavior (2009/08/14)++
             if(!bIsPenUp)
             {
-                //input_report_key(input, BTN_TOUCH, 0);
-                //Added for F0XE.B-346++
                 input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
                 input_mt_sync(input);
-                //Added for F0XE.B-346--
                 bIsPenUp = 1;
                 bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
                 bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            }
-            //Added for touch behavior (2009/08/14)--
+            } else {
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+		input_report_abs(input, ABS_MT_POSITION_X, 768);
+		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+                input_mt_sync(input);
+	    }
             if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
             {
                 if(bIsF913 && !bIsFST)  //Added for FST
@@ -678,17 +677,17 @@ static void bi8232_isr_workqueue(struct work_struct *work)
             //Added for touch behavior (2009/08/14)++
             if(!bIsPenUp)
             {
-                //input_report_key(input, BTN_TOUCH, 0);
-                //Added for F0XE.B-346++
                 input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
                 input_mt_sync(input);
-                //Added for F0XE.B-346--
                 bIsPenUp = 1;
                 bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
                 bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            }
-            //Added for touch behavior (2009/08/14)--
-            //Added for FST++ 
+            } else {
+                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+		input_report_abs(input, ABS_MT_POSITION_X, 256);
+		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+                input_mt_sync(input);
+	    }
             if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
             {
                 if(bIsFST)
