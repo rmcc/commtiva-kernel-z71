@@ -2327,12 +2327,44 @@ static void __init init_headset_sensor(void)
 {	
 	gpio_direction_input(40);
 }
+
+
+static ssize_t fxx_virtual_keys_show(struct kobject *kobj,
+                               struct kobj_attribute *attr, char *buf)
+{
+                /* center: x: home: 55, menu: 185, back: 305, search 425, y: 835 */
+                return sprintf(buf,
+                        __stringify(EV_KEY) ":" __stringify(KEY_MENU)  ":48:525:60:60"
+                   ":" __stringify(EV_KEY) ":" __stringify(KEY_HOME)   ":137:525:60:60"
+                   ":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH)   ":228:525:60:60"
+                   ":" __stringify(EV_KEY) ":" __stringify(KEY_BACK) ":280:525:60:60"
+                 "\n");
+}
+
+static struct kobj_attribute fxx_virtual_keys_attr = {
+        .attr = {
+                .name = "virtualkeys.Elan BI1050-M32EMAU Touchscreen",
+                .mode = S_IRUGO,
+        },
+        .show = &fxx_virtual_keys_show,
+};
+
+static struct attribute *fxx_properties_attrs[] = {
+        &fxx_virtual_keys_attr.attr,
+        NULL
+};
+
+static struct attribute_group fxx_properties_attr_group = {
+        .attrs = fxx_properties_attrs,
+};
+
 // --- FIH, KarenLiao, 20090518: Add for headset detection.
 // +++ FIH, WillChen, 20090712: Add for device info
 extern void adq_info_init(void);
 // --- FIH, WillChen, 20090712: Add for device info
 static void __init msm7x2x_init(void)
 {
+	struct kobject *properties_kobj;
 /* FIH, Debbie, 2009/09/11 { */
 /* get share memory command address dynamically */
        fih_smem_alloc_for_host_used();
@@ -2420,6 +2452,15 @@ static void __init msm7x2x_init(void)
 
 	msm_fb_add_devices();
 	msm7x2x_init_mmc();
+
+        properties_kobj = kobject_create_and_add("board_properties", NULL);
+        if (properties_kobj) {
+                if (sysfs_create_group(properties_kobj,
+                                         &fxx_properties_attr_group))
+			pr_err("failed to create board_properties\n");
+	} else {
+                pr_err("failed to create board_properties\n");
+	}
 
 	platform_device_register(&aat1272_flashlight_device);
 
