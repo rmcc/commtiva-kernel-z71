@@ -27,7 +27,6 @@ to earlysuspend */
 #include "../../../kernel/power/power.h"
 #include <linux/suspend.h>
 
-bool b_EnableWakeKey = false;
 bool b_EnableIncomingCallWakeKey = false;
 
 bool b_Key1_DisableIrq = false;
@@ -286,31 +285,6 @@ static struct attribute_group dev_attr_grp = {
 
 /* FIH, SimonSSChang, 2009/07/28 { */
 /* [FXX_CR], F0X.FC-116 Add option for wake up source*/
-#ifdef CONFIG_FIH_FXX
-bool key_wakeup_get(void)
-{
-    //printk(KERN_INFO "Simon: key_wakeup_get() return %d\n", b_EnableWakeKey);
-    return b_EnableWakeKey;
-}
-EXPORT_SYMBOL(key_wakeup_get);
-
-int key_wakeup_set(int on)
-{
-    if(on)
-    {
-        b_EnableWakeKey = true;
-        //printk(KERN_INFO "Simon: key_wakeup_set() %d\n", b_EnableWakeKey);
-        return 0;
-    }
-    else
-    {
-        b_EnableWakeKey = false;
-        //printk(KERN_INFO "Simon: key_wakeup_set() %d\n", b_EnableWakeKey);        
-        return 0;
-    }
-}    
-EXPORT_SYMBOL(key_wakeup_set);
-#endif
 /* } FIH, SimonSSChang, 2009/07/28 */
 
 /* FIH, SimonSSChang, 2009/09/10 { */
@@ -485,22 +459,6 @@ static int Q7x27_kybd_irqsetup(struct Q7x27_kybd_record *kbdrec)
 	}
 #endif
 	
-/* FIH, PeterKCTseng, @20090603 { */
-/* let switch_gpio.c control it   */
-#if 0 // SWITCH_KEY_ENABLE // Peter, Debug
-	/* Hook Switch key interrupt */
-	rc = request_irq(MSM_GPIO_TO_INT(kbdrec->hook_sw_pin), &Q7x27_kybd_irqhandler,
-			     (IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING), 
-			     Q7x27_kybd_name, kbdrec);
-	if (rc < 0) {
-		printk(KERN_ERR
-		       "Could not register for  %s interrupt "
-		       "(rc = %d)\n", Q7x27_kybd_name, rc);
-		rc = -EIO;
-	}
-#endif
-/* } FIH, PeterKCTseng, @20090603 */
-
 /* FIH, PeterKCTseng, @20090527 { */
 /* add center key                 */
 #if CENTER_KEY_ENABLE // Peter, Debug
@@ -1490,7 +1448,7 @@ static void Q7x27_hook_switchkey(struct work_struct *work)
 
 #define SELECT_INPUT_BTN  230//BTN_LEFT	//misty change HOME key/* This is chosen to match with the mousedev driver */
 #define SELECT_INPUT_MENU 229 //MENU key //used for F902 PR2
-#define SELECT_INPUT_ENTER 28 //Enter key //used for F910/F911 jogball
+#define SELECT_INPUT_ENTER 272 //Enter key //used for F910/F911 jogball
 static void Q7x27_kybd_centerkey(struct work_struct *work)
 {
 	struct Q7x27_kybd_record *kbdrec= container_of(work, struct Q7x27_kybd_record, kybd_centerkey);
@@ -1519,7 +1477,7 @@ static void Q7x27_kybd_centerkey(struct work_struct *work)
     }*/
 	//printk(KERN_INFO "CENTER KEY <%d>\n", center_val);
 
-	disable_irq(MSM_GPIO_TO_INT(kbdrec->center_pin));
+	//disable_irq(MSM_GPIO_TO_INT(kbdrec->center_pin));
 
 /* FIH, PeterKCTseng, @20090520 { */
 /* The active type of input pin   */
@@ -1610,7 +1568,7 @@ static void Q7x27_kybd_centerkey(struct work_struct *work)
     	
 }//if(EnableKeyInt)
     
-	enable_irq(MSM_GPIO_TO_INT(kbdrec->center_pin));
+	//enable_irq(MSM_GPIO_TO_INT(kbdrec->center_pin));
 }
 #endif
 /* } FIH, PeterKCTseng, @20090527 */
@@ -1784,181 +1742,34 @@ static int testfor_keybd(void)
 }
 /* FIH, SimonSSChang, 2009/09/04 { */
 /* [FXX_CR], change keypad suspend/resume function
-to earlysuspend */
+   to earlysuspend */
 #ifdef CONFIG_FIH_FXX
 #ifdef CONFIG_HAS_EARLYSUSPEND
 void Q7x27_kybd_early_suspend(struct early_suspend *h)
 {
-    //printk(KERN_INFO "Q7x27_kybd_early_suspend()(%d)\n",rd->kybd_connected);
 
- if(SetupKeyFail)
- {
-     SetupKeyFail=false;
-     KeySetup();
-    
- }
- //printk(KERN_ERR "%s""@@@g_center_pin:%d \n", __func__,g_center_pin);
- if(b_EnableWakeKey)
- {
-	 //Set this if you want use IRQs to wake the system up
-	 if(device_may_wakeup(&rd->pdev->dev)) 
-     {
-//FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
-       //if(g_SndEndkey)
-       if(g_Send && g_End)
-// } FIH, NicoleWeng, 2010/05/26 for F0XE.B-955
-       {
-           //printk(KERN_INFO "enable key1   wakeup pin: %d\n", rd->key_1_pin);
-    	   enable_irq_wake(MSM_GPIO_TO_INT(rd->key_1_pin));
-           b_Key1_EnableWakeIrq = true;
-    
-           //printk(KERN_INFO "enable key2   wakeup pin: %d\n", rd->key_2_pin);  
-           enable_irq_wake(MSM_GPIO_TO_INT(rd->key_2_pin));
-           b_Key2_EnableWakeIrq = true;
-       }
-	 }
- }
- else
- {
-    if(b_EnableIncomingCallWakeKey)
-    {
-	  if(device_may_wakeup(&rd->pdev->dev)) 
-      {
-//FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
-       //if(g_SndEndkey)
-       if(g_Send && g_End)
-// } FIH, NicoleWeng, 2010/05/26 for F0XE.B-955
-        {
-            //printk(KERN_INFO "enable key1   wakeup pin: %d\n", rd->key_1_pin);
-	        enable_irq_wake(MSM_GPIO_TO_INT(rd->key_1_pin));
-            b_Key1_EnableWakeIrq = true;
+	if(SetupKeyFail)
+	{
+		SetupKeyFail=false;
+		KeySetup();
 
-            //printk(KERN_INFO "enable key2   wakeup pin: %d\n", rd->key_2_pin); 
-	        enable_irq_wake(MSM_GPIO_TO_INT(rd->key_2_pin));
-            b_Key2_EnableWakeIrq = true;
-        }
-	    //printk(KERN_INFO "enable VolUp   wakeup pin: %d\n", rd->volup_pin);
-	    enable_irq_wake(MSM_GPIO_TO_INT(rd->volup_pin));
-        b_VolUp_EnableWakeIrq = true;
-
-	    //printk(KERN_INFO "enable VolDown   wakeup pin: %d\n", rd->voldn_pin); 
-	    enable_irq_wake(MSM_GPIO_TO_INT(rd->voldn_pin));
-        b_VolDown_EnableWakeIrq = true;
-      }
-    }
-    else
-    {
-//FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
-       //if(g_SndEndkey)
-      if(g_Send && g_End)
-// } FIH, NicoleWeng, 2010/05/26 for F0XE.B-955
-      {
-          //printk(KERN_INFO "diable key1 interrupt   pin: %d\n", rd->key_1_pin);
-          disable_irq(MSM_GPIO_TO_INT(rd->key_1_pin));
-          b_Key1_DisableIrq = true;
-         // printk(KERN_INFO "diable key2 interrupt   pin: %d\n", rd->key_2_pin);
-          disable_irq(MSM_GPIO_TO_INT(rd->key_2_pin));  
-          b_Key2_DisableIrq = true;  
-      }    
-    }
- }
- 
- //+++ FIH, KarenLiao@20100304: F0X.B-9873: [Call control]Cannot end the call when long press hook key.
- if((b_EnableIncomingCallWakeKey ==true) && (rd->bHookSWIRQEnabled == true) && device_may_wakeup(&rd->pdev->dev) )
- {
-     printk(KERN_INFO "enable Hook Key   wakeup pin: %d\n", rd->hook_sw_pin);
-     enable_irq_wake(MSM_GPIO_TO_INT(rd->hook_sw_pin));
-     b_HookKey_EnableWakeIrq = true;
- }
- //--- FIH, KarenLiao@20100304: F0X.B-9873: [Call control]Cannot end the call when long press hook key.
- //FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
- //+++add for FST back cover key
- if(g_Send && !g_End)
- {
- 	enable_irq_wake(MSM_GPIO_TO_INT(rd->key_1_pin));
- 	printk(KERN_INFO "enable FST SEND key(F23) as  wakeup pin: %d\n", rd->key_1_pin);
- }
- //--add for FST back cover key
- //FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
- 
- 
+	}
+	//Set this if you want use IRQs to wake the system up
+	if(device_may_wakeup(&rd->pdev->dev)) 
+		enable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
 }
+
 void Q7x27_kybd_late_resume(struct early_suspend *h)
 {
- //printk(KERN_INFO "Q7x27_kybd_late_resume()(%d)\n",rd->kybd_connected);
-// printk(KERN_ERR "%s""#######################g_center_pin:%d \n", __func__,g_center_pin);
-  if(SetupKeyFail)
- {
-     SetupKeyFail=false;
-     KeySetup();
- }
- if (device_may_wakeup(&rd->pdev->dev))
- {
-   //printk(KERN_INFO "b_Key1_EnableWakeIrq = %d\n", b_Key1_EnableWakeIrq);
-   if(b_Key1_EnableWakeIrq)
-   {
-     //printk(KERN_INFO "disable key1   wakeup pin: %d\n", rd->key_1_pin);
-     disable_irq_wake(MSM_GPIO_TO_INT(rd->key_1_pin));
-     b_Key1_EnableWakeIrq = false;
-   }
-
-   //printk(KERN_INFO "b_Key2_EnableWakeIrq = %d\n", b_Key2_EnableWakeIrq);
-   if(b_Key2_EnableWakeIrq)
-   {
-     //printk(KERN_INFO "disable key2   wakeup pin: %d\n", rd->key_2_pin);
-	 disable_irq_wake(MSM_GPIO_TO_INT(rd->key_2_pin));
-     b_Key2_EnableWakeIrq = false;     
-   }
-
-   if(b_VolUp_EnableWakeIrq)
-   {
-     //printk(KERN_INFO "disable VolUp   wakeup pin: %d\n", rd->volup_pin);
-	 disable_irq_wake(MSM_GPIO_TO_INT(rd->volup_pin));
-     b_VolUp_EnableWakeIrq = false;     
-   }
-
-   if(b_VolDown_EnableWakeIrq)
-   {
-     //printk(KERN_INFO "disable VolDown   wakeup pin: %d\n", rd->voldn_pin);
-	 disable_irq_wake(MSM_GPIO_TO_INT(rd->voldn_pin));
-     b_VolDown_EnableWakeIrq = false;     
-   }
-   
-   //+++ FIH, KarenLiao@20100304: F0X.B-9873: [Call control]Cannot end the call when long press hook key.
-   if(b_HookKey_EnableWakeIrq == true)
-   {
-     printk(KERN_INFO "disable HookKey   wakeup pin: %d\n", rd->hook_sw_pin);
-	 disable_irq_wake(MSM_GPIO_TO_INT(rd->hook_sw_pin));
-     b_HookKey_EnableWakeIrq = false;
-   }
-   //--- FIH, KarenLiao@20100304: F0X.B-9873: [Call control]Cannot end the call when long press hook key.
-   
- }
-
- //printk(KERN_INFO "b_Key1_DisableIrq = %d\n", b_Key1_DisableIrq);
- if(b_Key1_DisableIrq)
- {
-   //printk(KERN_INFO "enable key1 interrupt   pin: %d\n", rd->key_1_pin);
-   enable_irq(MSM_GPIO_TO_INT(rd->key_1_pin)); 
-   b_Key1_DisableIrq = false; 
- }
-
- //printk(KERN_INFO "b_Key2_DisableIrq = %d\n", b_Key2_DisableIrq);
- if(b_Key2_DisableIrq)
- {
-   //printk(KERN_INFO "enable key2 interrupt   pin: %d\n", rd->key_2_pin);
-   enable_irq(MSM_GPIO_TO_INT(rd->key_2_pin));  
-   b_Key2_DisableIrq = false; 
- }
-
-//FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
- if(g_Send && !g_End)
- {
-	disable_irq_wake(MSM_GPIO_TO_INT(rd->key_1_pin));
- 	 printk(KERN_INFO "disable SEND key(F23)  wakeup pin: %d\n", rd->key_1_pin);
- }
-// } FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 
+	if(SetupKeyFail)
+	{
+		SetupKeyFail=false;
+		KeySetup();
+	}
+	if(device_may_wakeup(&rd->pdev->dev)) 
+		disable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
 }
+
 #endif
 #endif
 /* } FIH, SimonSSChang, 2009/09/04 */
@@ -1991,56 +1802,6 @@ to earlysuspend */
 	return 0;
 }
 
-//++++++++++++++++++++++++++++FIH_F0X_misty
-/* FIH, SimonSSChang, 2009/09/04 { */
-/* [FXX_CR], change keypad suspend/resume function
-to earlysuspend*/
-//#ifdef CONFIG_PM
-#ifdef CONFIG_PM__
-/* } FIH, SimonSSChang, 2009/09/04 */
-static int Q7x27_kybd_suspend(struct platform_device *pdev, pm_message_t state)
-{
- struct Q7x27_kybd_platform_data *kbdrec;
- kbdrec       = pdev->dev.platform_data;
- 
- printk(KERN_ERR "%s""@@@@@@@@@@@@@@@@@@@@@@@@g_center_pin:%d \n", __func__,g_center_pin);
- if(b_EnableWakeKey)
- {
-	 //Set this if you want use IRQs to wake the system up
-	 if (device_may_wakeup(&pdev->dev)) {
-	  printk(KERN_ERR "%s++++++"" \n", __func__);
-	  enable_irq_wake(MSM_GPIO_TO_INT(kbdrec->key_1_pin));
-	  enable_irq_wake(MSM_GPIO_TO_INT(kbdrec->key_2_pin));
-	  enable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
-	  printk(KERN_ERR "%s--------"" \n", __func__);
-	 }
- }
- return 0;
-}
-static int Q7x27_kybd_resume(struct platform_device *pdev)
-{
- struct Q7x27_kybd_platform_data *kbdrec;
- kbdrec       = pdev->dev.platform_data;
- 
- printk(KERN_ERR "%s""#######################g_center_pin:%d \n", __func__,g_center_pin);
- if(b_EnableWakeKey)
- {
-	 if (device_may_wakeup(&pdev->dev)) {
-	  printk(KERN_ERR "%s++++++disable irq_wake"" \n", __func__);
-	  disable_irq_wake(MSM_GPIO_TO_INT(kbdrec->key_1_pin));
-	  disable_irq_wake(MSM_GPIO_TO_INT(kbdrec->key_2_pin));
-	  disable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
-	  printk(KERN_ERR "%s--------disable irq_wake"" \n", __func__);
-	  
-	 }
- }
- return 0;
-}
-#else
-# define Q7x27_kybd_suspend NULL
-# define Q7x27_kybd_resume  NULL
-#endif
-//---------------------------FIH_F0X_misty
 static int Q7x27_kybd_probe(struct platform_device *pdev)
 {
 	struct Q7x27_kybd_platform_data *setup_data;
@@ -2356,8 +2117,6 @@ static struct platform_driver Q7x27_kybd_driver = {
 	},
 	.probe	  = Q7x27_kybd_probe,
 	.remove	  = Q7x27_kybd_remove,
-	.suspend  = Q7x27_kybd_suspend,
-	.resume   = Q7x27_kybd_resume,
 };
 
 static int __init Q7x27_kybd_init(void)
