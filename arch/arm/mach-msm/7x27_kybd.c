@@ -32,7 +32,6 @@ bool b_EnableIncomingCallWakeKey = false;
 
 bool b_Key1_DisableIrq = false;
 bool b_Key2_DisableIrq = false;
-bool b_Center_DisableIrq = false;
 
 bool b_Key1_EnableWakeIrq = false;
 bool b_Key2_EnableWakeIrq = false;
@@ -1817,12 +1816,6 @@ void Q7x27_kybd_early_suspend(struct early_suspend *h)
            enable_irq_wake(MSM_GPIO_TO_INT(rd->key_2_pin));
            b_Key2_EnableWakeIrq = true;
        }
-       if(g_centerkey)
-       {
-           //printk(KERN_INFO "diable center interrupt pin: %d\n", g_center_pin);
-           disable_irq(MSM_GPIO_TO_INT(g_center_pin));
-           b_Center_DisableIrq = true;
-       }
 	 }
  }
  else
@@ -1843,12 +1836,6 @@ void Q7x27_kybd_early_suspend(struct early_suspend *h)
             //printk(KERN_INFO "enable key2   wakeup pin: %d\n", rd->key_2_pin); 
 	        enable_irq_wake(MSM_GPIO_TO_INT(rd->key_2_pin));
             b_Key2_EnableWakeIrq = true;
-        }
-        if(g_centerkey)
-        {
-            //printk(KERN_INFO "diable center interrupt pin: %d\n", g_center_pin);
-            disable_irq(MSM_GPIO_TO_INT(g_center_pin));
-            b_Center_DisableIrq = true;
         }
 	    //printk(KERN_INFO "enable VolUp   wakeup pin: %d\n", rd->volup_pin);
 	    enable_irq_wake(MSM_GPIO_TO_INT(rd->volup_pin));
@@ -1873,12 +1860,6 @@ void Q7x27_kybd_early_suspend(struct early_suspend *h)
           disable_irq(MSM_GPIO_TO_INT(rd->key_2_pin));  
           b_Key2_DisableIrq = true;  
       }    
-      if(g_centerkey)
-      {
-         //printk(KERN_INFO "diable center interrupt pin: %d\n", g_center_pin);
-         disable_irq(MSM_GPIO_TO_INT(g_center_pin));       
-         b_Center_DisableIrq = true;      
-      }
     }
  }
  
@@ -1970,13 +1951,6 @@ void Q7x27_kybd_late_resume(struct early_suspend *h)
    b_Key2_DisableIrq = false; 
  }
 
- //printk(KERN_INFO "b_Center_DisableIrq = %d\n", b_Center_DisableIrq); 
- if(b_Center_DisableIrq)
- {
-   //printk(KERN_INFO "enable center interrupt pin: %d\n", g_center_pin);
-   enable_irq(MSM_GPIO_TO_INT(g_center_pin));
-   b_Center_DisableIrq = false; 
- }
 //FIH, NicoleWeng, 2010/05/26 for F0XE.B-955 {
  if(g_Send && !g_End)
  {
