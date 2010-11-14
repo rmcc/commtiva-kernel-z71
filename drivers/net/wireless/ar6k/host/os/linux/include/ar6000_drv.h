@@ -165,10 +165,12 @@ typedef enum _HTC_RAW_STREAM_ID {
 #define RAW_HTC_READ_BUFFERS_NUM    4
 #define RAW_HTC_WRITE_BUFFERS_NUM   4
 
+#define HTC_RAW_BUFFER_SIZE  1664
+
 typedef struct {
     int currPtr;
     int length;
-    unsigned char data[AR6000_BUFFER_SIZE];
+    unsigned char data[HTC_RAW_BUFFER_SIZE];
     HTC_PACKET    HTCPacket;
 } raw_htc_buffer;
 
@@ -239,6 +241,19 @@ typedef struct {
     A_NETBUF_QUEUE_T        psq;    /* power save q */
     A_MUTEX_T               psqLock;
 } sta_t;
+
+typedef struct ar6_raw_htc {
+    HTC_ENDPOINT_ID         arRaw2EpMapping[HTC_RAW_STREAM_NUM_MAX];
+    HTC_RAW_STREAM_ID       arEp2RawMapping[ENDPOINT_MAX];
+    struct semaphore        raw_htc_read_sem[HTC_RAW_STREAM_NUM_MAX];
+    struct semaphore        raw_htc_write_sem[HTC_RAW_STREAM_NUM_MAX];
+    wait_queue_head_t       raw_htc_read_queue[HTC_RAW_STREAM_NUM_MAX];
+    wait_queue_head_t       raw_htc_write_queue[HTC_RAW_STREAM_NUM_MAX];
+    raw_htc_buffer          raw_htc_read_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_READ_BUFFERS_NUM];
+    raw_htc_buffer          raw_htc_write_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_WRITE_BUFFERS_NUM];
+    A_BOOL                  write_buffer_available[HTC_RAW_STREAM_NUM_MAX];
+    A_BOOL                  read_buffer_available[HTC_RAW_STREAM_NUM_MAX];
+} AR_RAW_HTC_T;
 
 typedef struct ar6_softc {
     struct net_device       *arNetDev;    /* net_device pointer */
@@ -318,16 +333,7 @@ typedef struct ar6_softc {
     A_UINT8                 arEp2AcMapping[ENDPOINT_MAX];
     HTC_ENDPOINT_ID         arControlEp;
 #ifdef HTC_RAW_INTERFACE
-    HTC_ENDPOINT_ID         arRaw2EpMapping[HTC_RAW_STREAM_NUM_MAX];
-    HTC_RAW_STREAM_ID       arEp2RawMapping[ENDPOINT_MAX];
-    struct semaphore        raw_htc_read_sem[HTC_RAW_STREAM_NUM_MAX];
-    struct semaphore        raw_htc_write_sem[HTC_RAW_STREAM_NUM_MAX];
-    wait_queue_head_t       raw_htc_read_queue[HTC_RAW_STREAM_NUM_MAX];
-    wait_queue_head_t       raw_htc_write_queue[HTC_RAW_STREAM_NUM_MAX];
-    raw_htc_buffer          raw_htc_read_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_READ_BUFFERS_NUM];
-    raw_htc_buffer          raw_htc_write_buffer[HTC_RAW_STREAM_NUM_MAX][RAW_HTC_WRITE_BUFFERS_NUM];
-    A_BOOL                  write_buffer_available[HTC_RAW_STREAM_NUM_MAX];
-    A_BOOL                  read_buffer_available[HTC_RAW_STREAM_NUM_MAX];
+    AR_RAW_HTC_T            *arRawHtc;
 #endif
     A_BOOL                  arNetQueueStopped;
     A_BOOL                  arRawIfInit;
@@ -451,11 +457,11 @@ static inline void *netdev_priv(struct net_device *dev)
 #define arEndpoint2Ac(ar,ep)           (ar)->arEp2AcMapping[(ep)]
 
 #define arRawIfEnabled(ar) (ar)->arRawIfInit
-#define arRawStream2EndpointID(ar,raw)          (ar)->arRaw2EpMapping[(raw)]
+#define arRawStream2EndpointID(ar,raw)          (ar)->arRawHtc->arRaw2EpMapping[(raw)]
 #define arSetRawStream2EndpointIDMap(ar,raw,ep)  \
-{  (ar)->arRaw2EpMapping[(raw)] = (ep); \
-   (ar)->arEp2RawMapping[(ep)] = (raw); }
-#define arEndpoint2RawStreamID(ar,ep)           (ar)->arEp2RawMapping[(ep)]
+{  (ar)->arRawHtc->arRaw2EpMapping[(raw)] = (ep); \
+   (ar)->arRawHtc->arEp2RawMapping[(ep)] = (raw); }
+#define arEndpoint2RawStreamID(ar,ep)           (ar)->arRawHtc->arEp2RawMapping[(ep)]
 
 struct ar_giwscan_param {
     char    *current_ev;

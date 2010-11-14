@@ -391,6 +391,7 @@ static void dhcp_timer_handler(unsigned long ptr);
  */
 
 static struct net_device *ar6000_devices[MAX_AR6000];
+static int is_netdev_registered;
 extern struct iw_handler_def ath_iw_handler_def;
 DECLARE_WAIT_QUEUE_HEAD(arEvent);
 DECLARE_WAIT_QUEUE_HEAD(ar6000_scan_queue);
@@ -2105,6 +2106,9 @@ ar6000_avail_ev(void *context, void *hif_handle)
         return A_ERROR;
     }
 
+
+    is_netdev_registered = 1;
+
 #ifdef CONFIG_HAS_EARLYSUSPEND_DO_NOT_USE
     ar->ar6k_early_suspend.suspend = android_early_suspend;
     ar->ar6k_early_suspend.resume  = android_late_resume;
@@ -2340,9 +2344,18 @@ ar6000_destroy(struct net_device *dev, unsigned int unregister)
     memset(tx_post, 0, sizeof(tx_post));
     memset(tx_complete, 0, sizeof(tx_complete));
 
+#ifdef HTC_RAW_INTERFACE
+    if (ar->arRawHtc) {
+        A_FREE(ar->arRawHtc);
+        ar->arRawHtc = NULL;
+    }
+#endif 
+
     /* Free up the device data structure */
-    if( unregister )
+    if( unregister && is_netdev_registered ) {
         unregister_netdev(dev);
+	is_netdev_registered = 0;
+    }
 #ifndef free_netdev
     kfree(dev);
 #else
