@@ -64,7 +64,6 @@ bool bIsFxxPR2 = 0;  //Added for PR2
 bool bIsPenUp = 1;  //Added for touch behavior (2009/08/14)
 bool bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
 bool bIsNewFWVer = 0;  //Add for detect firmware version
-bool bPrintPenDown = 0;  //Added log for debugging
 /* FIH, Henry Juang, 2009/11/20 ++*/
 /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
 bool bIsNeedSkipTouchEvent = 0;  
@@ -425,18 +424,18 @@ EXPORT_SYMBOL(notify_from_proximity);
 static void bi8232_isr_workqueue(struct work_struct *work)
 {
 	struct input_dev *input = bi8232->input;
+	uint32_t poc = FIH_READ_POWER_ON_CAUSE();
 	int cnt, virtual_button;  //Modified for new CAP sample by Stanley (2009/05/25)
-	
+
 	disable_irq(bi8232->client->irq);
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
 	if (buffer[0] == 0x5A) {
 		cnt = (buffer[8] ^ 0x01) >> 1;
 		virtual_button = (buffer[8]) >> 3;  //Modified for Home and AP key (2009/07/31)
-        //bi8232_msg(INFO, "[TOUCH-CAP]virtual button = %d\r\n", virtual_button); 
-        //Modified for new CAP sample by Stanley ++(2009/05/25)
-        if((virtual_button == 0) && !bSoft1CapKeyPressed && !bSoft2CapKeyPressed && !bHomeCapKeyPressed && !bApCapKeyPressed && !bCenterKeyPressed && !bIsNeedSkipTouchEvent)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added the MT protocol for Eclair by Stanley (2010/03/23)++
+		//Modified for new CAP sample by Stanley ++(2009/05/25)
+		if((virtual_button == 0) && !bSoft1CapKeyPressed && !bSoft2CapKeyPressed && !bHomeCapKeyPressed && !bApCapKeyPressed && !bCenterKeyPressed && !bIsNeedSkipTouchEvent)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added the MT protocol for Eclair by Stanley (2010/03/23)++
 			if (cnt) {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
 				input_report_abs(input, ABS_MT_POSITION_X, (1792 - XCORD1(buffer)));
@@ -459,273 +458,263 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, YCORD2(buffer));
 				input_mt_sync(input);
 			}
-			//Added the MT protocol for Eclair by Stanley (2010/03/23)--
-            //Added log for debugging++
-            //{
-                if (cnt && bPrintPenDown)
-                {
-                    //bi8232_msg(INFO, "[TOUCH-CAP]Pen down x = %d, y = %d", 1792 - XCORD1(buffer), YCORD1(buffer));
-                    bPrintPenDown = 0;
-                }
-                else if (!cnt)
-                {
-                    //bi8232_msg(INFO, "[TOUCH-CAP]Pen up x = %d, y = %d", XCORD1(buffer), YCORD1(buffer));
-                    bPrintPenDown = 1;
-                }
-            //}
-            //Added log for debugging--
-            //Added for touch behavior (2009/08/14)++
-            if(!cnt)
-                bIsPenUp = 1;
-            else
-                bIsPenUp = 0;
-            //Added for touch behavior (2009/08/14)--
-        }
-        else if ((virtual_button == 0) && (bSoft1CapKeyPressed || bSoft2CapKeyPressed || bHomeCapKeyPressed || bApCapKeyPressed || bCenterKeyPressed) && !bIsKeyLock)  //Button up  //Modified for Home and AP key (2009/07/31)
-        {
-            if(bSoft1CapKeyPressed)
-            {
-                //input_report_key(input, KEY_KBDILLUMDOWN, 0);
-                //Added for FST++ 
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                if(bIsFST)
-                    input_report_key(input, KEY_SEND, 0);  //FST
-                else
-                    input_report_key(input, KEY_KBDILLUMDOWN, 0);
-                //Added for FST--
-                bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - up!\r\n");
-                bSoft1CapKeyPressed = 0;
-                bSoft2CapKeyPressed = 0;
-                bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bCenterKeyPressed = 0;  //Added for FST
-            }
-            else if(bSoft2CapKeyPressed)
-            {
-                //input_report_key(input, KEY_BACK, 0);
-                //Added for FST++
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                if(bIsFST)
-                    input_report_key(input, KEY_END, 0);  //FST
-                else
-                    input_report_key(input, KEY_BACK, 0);
-                //Added for FST--
-                bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - up!\r\n");
-                bSoft2CapKeyPressed = 0;
-                bSoft1CapKeyPressed = 0;
-                bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bCenterKeyPressed = 0;  //Added for FST
-            }
-            //Modified for Home and AP key (2009/07/31)++
-            else if(bHomeCapKeyPressed)
-            {
-                //if(bIsF913)
-                    //input_report_key(input, KEYCODE_SEACHER, 0);  //F913
-                //else
-                    //input_report_key(input, KEY_HOME, 0);  //F905 or other
-                //Added for FST++
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                if(bIsF913 && !bIsFST)
-                    input_report_key(input, KEYCODE_SEACHER, 0);  //F913
-                else if(bIsFST)
-                    input_report_key(input, KEY_KBDILLUMDOWN, 0);  //FST
-                else
-                    input_report_key(input, KEY_HOME, 0);  //F905 or other
-                //Added for FST--
-                bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - up!\r\n");
-                bSoft2CapKeyPressed = 0;
-                bSoft1CapKeyPressed = 0;
-                bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bCenterKeyPressed = 0;  //Added for FST
-            }
-            else if(bApCapKeyPressed)
-            {
-                //input_report_key(input, KEYCODE_BROWSER, 0);
-                //Added for FST++
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                if(bIsFST)
-                    input_report_key(input, KEY_BACK, 0);  //FST
-                else if(bIsGRECO)
-                    input_report_key(input, KEY_SEARCH, 0);  //Added for GRECO
-                else
-                    input_report_key(input, KEYCODE_BROWSER, 0);
-                //Added for FST--
-                bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - up!\r\n");
-                bSoft2CapKeyPressed = 0;
-                bSoft1CapKeyPressed = 0;
-                bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bCenterKeyPressed = 0;  //Added for FST
-            }
-            //Added for FST++
-            else if(bCenterKeyPressed)
-            {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                input_report_key(input, KEYCODE_SEACHER, 0);
-                bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center key - up!\r\n");
-                bSoft2CapKeyPressed = 0;
-                bSoft1CapKeyPressed = 0;
-                bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
-                bCenterKeyPressed = 0;  //Added for FST
-            }
-            //Added for FST--
-            //Modified for Home and AP key (2009/07/31)--
-        }
-        else if(virtual_button == 16 && !bSoft2CapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 4 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added for touch behavior (2009/08/14)++
-            if(!bIsPenUp)
-            {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                bIsPenUp = 1;
-                bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
-                bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            } else {
-            //Added for touch behavior (2009/08/14)--
-            //Added for FST++
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
-		input_report_abs(input, ABS_MT_POSITION_X, 1565);
-		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
-                input_mt_sync(input);
-	    }
-            if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
-            {
-                if(bIsFST)
-                    input_report_key(input, KEY_END, 1);  //FST
-                else
-                    input_report_key(input, KEY_BACK, 1);
-            }
-            //Added for FST--
-            bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-            bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - down!\r\n");
-            bSoft2CapKeyPressed = 1;
-        }
-        //Modified for Home and AP key (2009/07/31)++
-        else if(virtual_button == 8 && !bApCapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 3 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added for touch behavior (2009/08/14)++
-            if(!bIsPenUp)
-            {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                bIsPenUp = 1;
-                bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
-                bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            } else {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
-		input_report_abs(input, ABS_MT_POSITION_X, 1280);
-		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
-                input_mt_sync(input);
-	    }
-            if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
-            {
-                if(bIsFST)
-                    input_report_key(input, KEY_BACK, 1);  //FST
-                else if(bIsGRECO)
-                    input_report_key(input, KEY_SEARCH, 1);  //Added for GRECO
-                else
-                    input_report_key(input, KEYCODE_BROWSER, 1);
-            }
-            //Added for FST--
-            bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-            bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - down!\r\n");
-            bApCapKeyPressed = 1;
-        }
-        else if(virtual_button == 4 && !bHomeCapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 2 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added for touch behavior (2009/08/14)++
-            if(!bIsPenUp)
-            {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                bIsPenUp = 1;
-                bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
-                bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            } else {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
-		input_report_abs(input, ABS_MT_POSITION_X, 768);
-		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
-                input_mt_sync(input);
-	    }
-            if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
-            {
-                if(bIsF913 && !bIsFST)  //Added for FST
-                    input_report_key(input, KEYCODE_SEACHER, 1);  //F913
-                //Added for FST++
-                else if(bIsFST)
-                    input_report_key(input, KEY_KBDILLUMDOWN, 1);  //FST
-                //Added for FST--
-                else
-                    input_report_key(input, KEY_HOME, 1);  //F905 or other
-            }
-            bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-            bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - down!\r\n");
-            bHomeCapKeyPressed = 1;
-        }
-        //Modified for Home and AP key (2009/07/31)--
-        else if(virtual_button == 2 && !bSoft1CapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 1 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added for touch behavior (2009/08/14)++
-            if(!bIsPenUp)
-            {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                bIsPenUp = 1;
-                bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
-                bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            } else {
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
-		input_report_abs(input, ABS_MT_POSITION_X, 256);
-		input_report_abs(input, ABS_MT_POSITION_Y, 3072);
-                input_mt_sync(input);
-	    }
-            if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
-            {
-                if(bIsFST)
-                    input_report_key(input, KEY_SEND, 1);  //FST
-                else{
-                    input_report_key(input, KEY_KBDILLUMDOWN, 1);
-                    //bi8232_msg(INFO, "[TOUCH-CAP]virtual button KEY_KBDILLUMDOWN1 - down!\r\n");
-                }
-            }
-            //Added for FST--
-            bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-            bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - down!\r\n");
-            bSoft1CapKeyPressed = 1;
-        }
-        //Added for FST++
-        else if(virtual_button == 1 && !bCenterKeyPressed && !bIsNeedSkipTouchEvent)  //Added for FST  //Button 5  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-        {
-            //Added for touch behavior (2009/08/14)++
-            if(!bIsPenUp)
-            {
-                //input_report_key(input, BTN_TOUCH, 0);
-                //Added for F0XE.B-346++
-                input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
-                input_mt_sync(input);
-                //Added for F0XE.B-346--
-                bIsPenUp = 1;
-                bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
-                bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
-            }
-            //Added for touch behavior (2009/08/14)--
-            if(!bIsKeyLock)
-                input_report_key(input, KEYCODE_SEACHER, 1);
-            bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-            bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center - down!\r\n");
-            bCenterKeyPressed = 1;  //Added for FST
-        }
-        //Added for FST--
-        //Modified for new CAP sample by Stanley --(2009/05/25)
+			if(!cnt)
+				bIsPenUp = 1;
+			else
+				bIsPenUp = 0;
+			//Added for touch behavior (2009/08/14)--
+		}
+		else if ((virtual_button == 0) && (bSoft1CapKeyPressed || bSoft2CapKeyPressed || bHomeCapKeyPressed || bApCapKeyPressed || bCenterKeyPressed) && !bIsKeyLock)  //Button up  //Modified for Home and AP key (2009/07/31)
+		{
+			if(bSoft1CapKeyPressed)
+			{
+				//input_report_key(input, KEY_KBDILLUMDOWN, 0);
+				//Added for FST++ 
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				if(bIsFST)
+					input_report_key(input, KEY_SEND, 0);  //FST
+				else
+					input_report_key(input, KEY_KBDILLUMDOWN, 0);
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - up!\r\n");
+				bSoft1CapKeyPressed = 0;
+				bSoft2CapKeyPressed = 0;
+				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bCenterKeyPressed = 0;  //Added for FST
+			}
+			else if(bSoft2CapKeyPressed)
+			{
+				//input_report_key(input, KEY_BACK, 0);
+				//Added for FST++
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				if(bIsFST)
+					input_report_key(input, KEY_END, 0);  //FST
+				else
+					input_report_key(input, KEY_BACK, 0);
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - up!\r\n");
+				bSoft2CapKeyPressed = 0;
+				bSoft1CapKeyPressed = 0;
+				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bCenterKeyPressed = 0;  //Added for FST
+			}
+			//Modified for Home and AP key (2009/07/31)++
+			else if(bHomeCapKeyPressed)
+			{
+				//if(bIsF913)
+				//input_report_key(input, KEYCODE_SEACHER, 0);  //F913
+				//else
+				//input_report_key(input, KEY_HOME, 0);  //F905 or other
+				//Added for FST++
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				if(bIsF913 && !bIsFST)
+					input_report_key(input, KEYCODE_SEACHER, 0);  //F913
+				else if(bIsFST)
+					input_report_key(input, KEY_KBDILLUMDOWN, 0);  //FST
+				else
+					input_report_key(input, KEY_HOME, 0);  //F905 or other
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - up!\r\n");
+				bSoft2CapKeyPressed = 0;
+				bSoft1CapKeyPressed = 0;
+				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bCenterKeyPressed = 0;  //Added for FST
+			}
+			else if(bApCapKeyPressed)
+			{
+				//input_report_key(input, KEYCODE_BROWSER, 0);
+				//Added for FST++
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				if(bIsFST)
+					input_report_key(input, KEY_BACK, 0);  //FST
+				else if(bIsGRECO)
+					input_report_key(input, KEY_SEARCH, 0);  //Added for GRECO
+				else
+					input_report_key(input, KEYCODE_BROWSER, 0);
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - up!\r\n");
+				bSoft2CapKeyPressed = 0;
+				bSoft1CapKeyPressed = 0;
+				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bCenterKeyPressed = 0;  //Added for FST
+			}
+			//Added for FST++
+			else if(bCenterKeyPressed)
+			{
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				input_report_key(input, KEYCODE_SEACHER, 0);
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center key - up!\r\n");
+				bSoft2CapKeyPressed = 0;
+				bSoft1CapKeyPressed = 0;
+				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bApCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
+				bCenterKeyPressed = 0;  //Added for FST
+			}
+			//Added for FST--
+			//Modified for Home and AP key (2009/07/31)--
+		}
+		else if(virtual_button == 16 && !bSoft2CapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 4 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added for touch behavior (2009/08/14)++
+			if(!bIsPenUp)
+			{
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				bIsPenUp = 1;
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
+			} else {
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+				input_report_abs(input, ABS_MT_POSITION_X, 1565);
+				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+				input_mt_sync(input);
+			}
+			if (poc != 0x30) {
+				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
+				{
+					if(bIsFST)
+						input_report_key(input, KEY_END, 1);  //FST
+					else
+						input_report_key(input, KEY_BACK, 1);
+				}
+				//Added for FST--
+				bSoft2CapKeyPressed = 1;
+			}
+			bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - down!\r\n");
+			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
+		}
+		//Modified for Home and AP key (2009/07/31)++
+		else if(virtual_button == 8 && !bApCapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 3 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added for touch behavior (2009/08/14)++
+			if(!bIsPenUp)
+			{
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				bIsPenUp = 1;
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
+			} else {
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+				input_report_abs(input, ABS_MT_POSITION_X, 1280);
+				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+				input_mt_sync(input);
+			}
+			if (poc != 0x30) {
+				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
+				{
+					if(bIsFST)
+						input_report_key(input, KEY_BACK, 1);  //FST
+					else if(bIsGRECO)
+						input_report_key(input, KEY_SEARCH, 1);  //Added for GRECO
+					else
+						input_report_key(input, KEYCODE_BROWSER, 1);
+				}
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - down!\r\n");
+				bApCapKeyPressed = 1;
+			}
+			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
+		}
+		else if(virtual_button == 4 && !bHomeCapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 2 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added for touch behavior (2009/08/14)++
+			if(!bIsPenUp)
+			{
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				bIsPenUp = 1;
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
+			} else {
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+				input_report_abs(input, ABS_MT_POSITION_X, 768);
+				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+				input_mt_sync(input);
+			}
+			if (poc != 0x30) {
+				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
+				{
+					if(bIsF913 && !bIsFST)  //Added for FST
+						input_report_key(input, KEYCODE_SEACHER, 1);  //F913
+					//Added for FST++
+					else if(bIsFST)
+						input_report_key(input, KEY_KBDILLUMDOWN, 1);  //FST
+					//Added for FST--
+					else
+						input_report_key(input, KEY_HOME, 1);  //F905 or other
+				}
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - down!\r\n");
+				bHomeCapKeyPressed = 1;
+			}
+			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
+		}
+		//Modified for Home and AP key (2009/07/31)--
+		else if(virtual_button == 2 && !bSoft1CapKeyPressed && !bIsNeedSkipTouchEvent)  //Button 1 //Modified for Home and AP key (2009/07/31)  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added for touch behavior (2009/08/14)++
+			if(!bIsPenUp)
+			{
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				bIsPenUp = 1;
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
+			} else {
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
+				input_report_abs(input, ABS_MT_POSITION_X, 256);
+				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
+				input_mt_sync(input);
+			}
+			if (poc != 0x30) {
+				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
+				{
+					if(bIsFST)
+						input_report_key(input, KEY_SEND, 1);  //FST
+					else{
+						input_report_key(input, KEY_KBDILLUMDOWN, 1);
+						//bi8232_msg(INFO, "[TOUCH-CAP]virtual button KEY_KBDILLUMDOWN1 - down!\r\n");
+					}
+				}
+				//Added for FST--
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - down!\r\n");
+				bSoft1CapKeyPressed = 1;
+			}
+			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
+		}
+		//Added for FST++
+		else if(virtual_button == 1 && !bCenterKeyPressed && !bIsNeedSkipTouchEvent)  //Added for FST  //Button 5  /* FIH, Henry Juang, 2009/11/20 ++*/ /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
+		{
+			//Added for touch behavior (2009/08/14)++
+			if(!bIsPenUp)
+			{
+				//input_report_key(input, BTN_TOUCH, 0);
+				//Added for F0XE.B-346++
+				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
+				input_mt_sync(input);
+				//Added for F0XE.B-346--
+				bIsPenUp = 1;
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
+			}
+			//Added for touch behavior (2009/08/14)--
+			if(!bIsKeyLock)
+				input_report_key(input, KEYCODE_SEACHER, 1);
+			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
+			bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center - down!\r\n");
+			bCenterKeyPressed = 1;  //Added for FST
+		}
+		//Added for FST--
+		//Modified for new CAP sample by Stanley --(2009/05/25)
 		input_sync(input);
 	} else if (buffer[0] == 0x52) {
 		complete(&bi8232->data_ready);
@@ -734,7 +723,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 	//Modify the scheme for receive hello packet++
 	else if ((buffer[0] == 0x55) && (buffer[1] == 0x55) && (buffer[2] == 0x55) && (buffer[3] == 0x55))
 	{
-	    bi8232_msg(INFO, "[TOUCH-CAP]Receive the hello packet!\r\n");	    
+		bi8232_msg(INFO, "[TOUCH-CAP]Receive the hello packet!\r\n");	    
 	}
 	//gpio_clear_detect_status(bi8232->client->irq);  
 	//Modify the scheme for receive hello packet--
