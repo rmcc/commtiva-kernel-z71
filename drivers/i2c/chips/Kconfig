@@ -1,0 +1,28 @@
+#
+# Miscellaneous I2C chip drivers configuration
+#
+# *** DEPRECATED! Do not add new entries! See Makefile ***
+#
+
+menu "Miscellaneous I2C Chip support"
+
+# +++ FIH_FXX +++, Neo Chen, 2009/06/08, change backlight driver from max7302 to max8831
+config BACKLIGHT_LED_MAX8831
+        tristate "Max8831 backlight controller"
+        depends on I2C=y && ARCH_MSM
+        help
+# --- FIH_FXX ---, Neo Chen, 2009/06/08,
+
+# +++ FIH_FXX +++, Charles Huang, 2009/05/18
+config FLASH_DRIVER_IC_AAT1272
+        tristate "AAT1272 flash driver ic"
+        depends on I2C=y && ARCH_MSM
+        help
+# --- FIH_FXX ---, Charles Huang, 2009/05/18
+
+config BACKLIGHT_LED_TCA6507
+        tristate "TCA6507 backlight led controller"
+        depends on I2C=y && ARCH_MSM
+        help
+
+endmenu
