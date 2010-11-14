@@ -36,7 +36,6 @@
 #include <linux/pmic8058-pwm.h>
 #include <linux/leds-pmic8058.h>
 #include <linux/mfd/marimba.h>
-#include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/i2c/sx150x.h>
 #include <linux/smsc911x.h>
@@ -117,7 +116,7 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 		.reg_init_values[MSM_SPM_REG_SAW_SPM_SLP_TMR_DLY] = 0xFFFFFFFF,
 		.reg_init_values[MSM_SPM_REG_SAW_SPM_WAKE_TMR_DLY] = 0xFFFFFFFF,
 
-		.reg_init_values[MSM_SPM_REG_SAW_SLP_CLK_EN] = 0x17,
+		.reg_init_values[MSM_SPM_REG_SAW_SLP_CLK_EN] = 0x11,
 		.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_PRECLMP_EN] = 0x07,
 		.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_POSTCLMP_EN] = 0x00,
 
@@ -142,7 +141,7 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 		.reg_init_values[MSM_SPM_REG_SAW_SPM_SLP_TMR_DLY] = 0xFFFFFFFF,
 		.reg_init_values[MSM_SPM_REG_SAW_SPM_WAKE_TMR_DLY] = 0xFFFFFFFF,
 
-		.reg_init_values[MSM_SPM_REG_SAW_SLP_CLK_EN] = 0x17,
+		.reg_init_values[MSM_SPM_REG_SAW_SLP_CLK_EN] = 0x13,
 		.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_PRECLMP_EN] = 0x07,
 		.reg_init_values[MSM_SPM_REG_SAW_SLP_HSFS_POSTCLMP_EN] = 0x00,
 
@@ -335,7 +334,7 @@ static int msm_hsusb_ldo_init(int init)
 			return PTR_ERR(vdd_cx);
 		}
 
-		regulator_set_voltage(vdd_cx,   1100000, 1100000);
+		regulator_set_voltage(vdd_cx,   1000000, 1200000);
 		regulator_set_voltage(ldo7_1p8, 1800000, 1800000);
 		regulator_set_voltage(ldo6_3p3, 3050000, 3050000);
 	} else {
@@ -2866,6 +2865,8 @@ struct sdcc_reg {
 	 * 0 = not supported, 1 = supported
 	 */
 	unsigned char set_voltage_sup;
+	/* voltage level to be set */
+	unsigned int level;
 	/* VDD/VCC/VCCQ voltage regulator handle */
 	struct regulator *reg;
 };
@@ -2911,7 +2912,8 @@ static int msm_sdcc_vreg_init(int dev_id, unsigned char init)
 
 			if (curr_vdd_reg->set_voltage_sup) {
 				rc = regulator_set_voltage(curr_vdd_reg->reg,
-					2850000, 2850000);
+					curr_vdd_reg->level,
+					curr_vdd_reg->level);
 				if (rc) {
 					pr_err("%s: regulator_set_voltage(%s)"
 						" = %d\n", __func__,
@@ -2932,7 +2934,8 @@ static int msm_sdcc_vreg_init(int dev_id, unsigned char init)
 			}
 			if (curr_vccq_reg->set_voltage_sup) {
 				rc = regulator_set_voltage(curr_vccq_reg->reg,
-						2850000, 2850000);
+					curr_vccq_reg->level,
+					curr_vccq_reg->level);
 				if (rc) {
 					pr_err("%s: regulator_set_voltage()"
 						"= %d\n", __func__, rc);
@@ -3158,6 +3161,9 @@ static struct mmc_platform_data msm8x60_sdc4_data = {
 	.msmsdcc_fmid	= 24000000,
 	.msmsdcc_fmax	= 48000000,
 	.nonremovable	= 1,
+#ifdef CONFIG_MMC_MSM_SDC4_DUMMY52_REQUIRED
+	.dummy52_required = 1,
+#endif
 };
 #endif
 
@@ -3180,6 +3186,7 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[0].vdd_data = &sdcc_vdd_reg_data[0];
 	sdcc_vreg_data[0].vdd_data->reg_name = "8901_l5";
 	sdcc_vreg_data[0].vdd_data->set_voltage_sup = 1;
+	sdcc_vreg_data[0].vdd_data->level = 2850000;
 	sdcc_vreg_data[0].vccq_data = &sdcc_vccq_reg_data[0];
 	sdcc_vreg_data[0].vccq_data->reg_name = "8901_lvs0";
 	sdcc_vreg_data[0].vccq_data->set_voltage_sup = 0;
@@ -3190,6 +3197,7 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[1].vdd_data = &sdcc_vdd_reg_data[1];
 	sdcc_vreg_data[1].vdd_data->reg_name = "8058_s3";
 	sdcc_vreg_data[1].vdd_data->set_voltage_sup = 1;
+	sdcc_vreg_data[1].vdd_data->level = 1800000;
 	sdcc_vreg_data[1].vccq_data = NULL;
 	msm_add_sdcc(2, &msm8x60_sdc2_data);
 #endif
@@ -3198,6 +3206,7 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[2].vdd_data = &sdcc_vdd_reg_data[2];
 	sdcc_vreg_data[2].vdd_data->reg_name = "8058_l14";
 	sdcc_vreg_data[2].vdd_data->set_voltage_sup = 1;
+	sdcc_vreg_data[2].vdd_data->level = 2850000;
 	sdcc_vreg_data[2].vccq_data = NULL;
 	msm_add_sdcc(3, &msm8x60_sdc3_data);
 #endif
@@ -3206,6 +3215,7 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[3].vdd_data = &sdcc_vdd_reg_data[3];
 	sdcc_vreg_data[3].vdd_data->reg_name = "8058_s3";
 	sdcc_vreg_data[3].vdd_data->set_voltage_sup = 1;
+	sdcc_vreg_data[3].vdd_data->level = 1800000;
 	sdcc_vreg_data[3].vccq_data = NULL;
 	msm_add_sdcc(4, &msm8x60_sdc4_data);
 #endif
@@ -3214,6 +3224,7 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[4].vdd_data = &sdcc_vdd_reg_data[4];
 	sdcc_vreg_data[4].vdd_data->reg_name = "8058_s3";
 	sdcc_vreg_data[4].vdd_data->set_voltage_sup = 1;
+	sdcc_vreg_data[4].vdd_data->level = 1800000;
 	sdcc_vreg_data[4].vccq_data = NULL;
 	msm_add_sdcc(5, &msm8x60_sdc5_data);
 #endif
@@ -3250,14 +3261,86 @@ static uint32_t lcd_panel_gpios[] = {
 	GPIO_CFG(27, 1, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* lcdc_blu0 */
 };
 
+static struct regulator *reg_8901_l1;
+static struct regulator *reg_8901_l2;
 
 static void lcd_panel_power(int on)
 {
 	int n;
+	int rc;
+
+	if (!reg_8901_l1) {
+		reg_8901_l1 = regulator_get(NULL, "8901_l1");
+		if (IS_ERR(reg_8901_l1)) {
+			pr_err("%s: Unable to get 8901_l1\n", __func__);
+			return;
+		}
+	}
+
+	if (!reg_8901_l2) {
+		reg_8901_l2 = regulator_get(NULL, "8901_l2");
+		if (IS_ERR(reg_8901_l2)) {
+			pr_err("%s: Unable to get 8901_l2\n", __func__);
+			regulator_put(reg_8901_l1);
+			reg_8901_l1 = NULL;
+			return;
+		}
+	}
+
+	if (on) {
+		rc = regulator_set_voltage(reg_8901_l1, 3300000, 3300000);
+		if (rc) {
+			pr_err("%s: error set 8901_l1 to 3.3V\n", __func__);
+			goto fail;
+		}
+
+		rc = regulator_set_voltage(reg_8901_l2, 3300000, 3300000);
+		if (rc) {
+			pr_err("%s: error set 8901_l2 to 3.3V\n", __func__);
+			goto fail;
+		}
+
+		rc = regulator_enable(reg_8901_l1);
+		if (rc) {
+			pr_err("%s: 8901_l1 enable failed, rc=%d\n",
+				__func__, rc);
+			goto fail;
+		}
+
+		rc = regulator_enable(reg_8901_l2);
+		if (rc) {
+			pr_err("%s: 8901_l2 enable failed, rc=%d\n",
+				__func__, rc);
+			rc = regulator_disable(reg_8901_l1);
+			goto fail;
+		}
+	} else {
+		if (regulator_is_enabled(reg_8901_l1)) {
+			rc = regulator_disable(reg_8901_l1);
+			if (rc)
+				pr_warning("%s: 8901_l1 disable failed, "
+					"rc=%d\n", __func__, rc);
+		}
+
+		if (regulator_is_enabled(reg_8901_l2)) {
+			rc = regulator_disable(reg_8901_l2);
+			if (rc)
+				pr_warning("%s: 8901_l2 disable failed, "
+					"rc=%d\n", __func__, rc);
+		}
+	}
 
 	/*TODO if on = 0 free the gpio's */
 	for (n = 0; n < ARRAY_SIZE(lcd_panel_gpios); ++n)
 		gpio_tlmm_config(lcd_panel_gpios[n], 0);
+
+	return;
+
+fail:
+	regulator_put(reg_8901_l1);
+	regulator_put(reg_8901_l2);
+	reg_8901_l1 = NULL;
+	reg_8901_l2 = NULL;
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -3428,32 +3511,36 @@ static void msm_auxpcm_init(void)
 	gpio_tlmm_config(auxpcm_gpio_table[3], GPIO_CFG_ENABLE);
 }
 
-static void __init msm_gfx3d_clk_init(void)
+#ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
+
+#define WLAN_PWDN_N_GPIO	118
+
+static void enable_wlan_bt(void)
 {
-	struct clk *clk;
-	int rc;
+	int rc = 0;
 
-	/* Disabling or changing the rate of the gfx3d_clk may causes
-	 * instability. Turn it on and leave it on until this is resolved. */
-	WARN((kgsl_pdata.max_grp3d_freq != kgsl_pdata.min_grp3d_freq),
-		"gfx3d_clk scaling is not allowed, re-setting "
-		"min_grp3d_freq to match max_grp3d_freq.\n");
-	kgsl_pdata.min_grp3d_freq = kgsl_pdata.max_grp3d_freq;
+	rc = gpio_request(WLAN_PWDN_N_GPIO, "WLAN_PWDN_N");
+	if (rc) {
+		pr_err("%s: WLAN_PWDN_N gpio %d request failed: %d\n",
+			__func__, WLAN_PWDN_N_GPIO, rc);
+		return;
+	}
 
-	clk = clk_get(NULL, "gfx3d_clk");
-	if (IS_ERR(clk))
-		goto err;
-	rc = clk_set_rate(clk, kgsl_pdata.max_grp3d_freq);
-	if (rc)
-		goto err;
-	rc = clk_enable(clk);
-	if (rc)
-		goto err;
+	rc = gpio_direction_output(WLAN_PWDN_N_GPIO, 0);
+	if (rc) {
+		pr_err("%s: gpio_direction_output %d failed: %d\n",
+			__func__, WLAN_PWDN_N_GPIO, rc);
+		gpio_free(WLAN_PWDN_N_GPIO);
+		return;
+	}
 
-	return;
-err:
-	pr_err("%s: Failed to set up gfx3d_clk.\n", __func__);
+	gpio_set_value(WLAN_PWDN_N_GPIO, 1);
+	usleep(5);
+	gpio_set_value(WLAN_PWDN_N_GPIO, 0);
+	usleep(5);
+	gpio_set_value(WLAN_PWDN_N_GPIO, 1);
 }
+#endif
 
 static void __init msm8x60_init(void)
 {
@@ -3464,16 +3551,18 @@ static void __init msm8x60_init(void)
 #ifdef CONFIG_MSM_RPM
 	BUG_ON(msm_rpm_init(&msm_rpm_data));
 #endif
+	if (msm_xo_init())
+		pr_err("Failed to initialize XO votes\n");
 
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
 
 	msm_clock_init(msm_clocks_8x60, msm_num_clocks_8x60);
+	msm_clock_temp_force_on();
 	/* initialize SPM before acpuclock as the latter calls into SPM
 	 * driver to set ACPU voltages.
 	 */
-	msm_gfx3d_clk_init();
 	msm_spm_init(msm_spm_data, ARRAY_SIZE(msm_spm_data));
 	platform_add_devices(early_devices, ARRAY_SIZE(early_devices));
 	msm_acpu_clock_init(&msm8x60_acpu_clock_data);
@@ -3503,6 +3592,10 @@ static void __init msm8x60_init(void)
 				msm_pm_data);
 
 	msm_auxpcm_init();
+
+#ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
+	enable_wlan_bt();
+#endif
 }
 
 MACHINE_START(MSM8X60_QRDC, "QCT MSM8X60 QRDC")

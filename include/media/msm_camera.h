@@ -126,8 +126,17 @@
 #define MSM_CAM_IOCTL_STROBE_FLASH_RELEASE \
 	_IO(MSM_CAM_IOCTL_MAGIC, 31)
 
+#define MSM_CAM_IOCTL_FLASH_CTRL \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 32, struct flash_ctrl_data *)
+
 #define MSM_CAM_IOCTL_ERROR_CONFIG \
-	_IOW(MSM_CAM_IOCTL_MAGIC, 32, uint32_t *)
+	_IOW(MSM_CAM_IOCTL_MAGIC, 33, uint32_t *)
+
+#define MSM_CAM_IOCTL_ABORT_CAPTURE \
+	_IO(MSM_CAM_IOCTL_MAGIC, 34)
+
+#define MSM_CAM_IOCTL_SET_FD_ROI \
+	_IOW(MSM_CAM_IOCTL_MAGIC, 35, struct fd_roi_info *)
 
 #define MSM_CAMERA_LED_OFF  0
 #define MSM_CAMERA_LED_LOW  1
@@ -363,6 +372,11 @@ struct outputCfg {
 #define OUTPUT_TYPE_V		(1<<3)
 #define OUTPUT_TYPE_L		(1<<4)
 
+struct fd_roi_info {
+	void *info;
+	int info_len;
+};
+
 struct msm_frame {
 #ifndef CONFIG_FIH_FXX
 	struct timespec ts;
@@ -376,6 +390,7 @@ struct msm_frame {
 	void *cropinfo;
 	int croplen;
 	uint32_t error_code;
+	struct fd_roi_info roi_info;
 };
 
 #define MSM_CAMERA_ERR_MASK (0xFFFFFFFF & 1)
@@ -738,6 +753,30 @@ struct sensor_cfg_data {
 		struct fps_cfg fps;
 		struct wb_info_cfg wb_info;
 	} cfg;
+};
+
+enum flash_type {
+	LED_FLASH,
+	STROBE_FLASH,
+};
+
+enum strobe_flash_ctrl_type {
+	STROBE_FLASH_CTRL_INIT,
+	STROBE_FLASH_CTRL_CHARGE,
+	STROBE_FLASH_CTRL_RELEASE
+};
+
+struct strobe_flash_ctrl_data {
+	enum strobe_flash_ctrl_type type;
+	int charge_en;
+};
+
+struct flash_ctrl_data {
+	int flashtype;
+	union {
+		int led_state;
+		struct strobe_flash_ctrl_data strobe_ctrl;
+	} ctrl_data;
 };
 
 #define GET_NAME			0

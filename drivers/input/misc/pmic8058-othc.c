@@ -27,9 +27,11 @@
 #include <linux/slab.h>
 #include <linux/pm_runtime.h>
 #include <linux/hrtimer.h>
+#include <linux/delay.h>
 
 #include <linux/mfd/pmic8058.h>
 #include <linux/pmic8058-othc.h>
+#include <linux/m_adc.h>
 
 #define PM8058_OTHC_LOW_CURR_MASK	0xF0
 #define PM8058_OTHC_HIGH_CURR_MASK	0x0F
@@ -59,11 +61,16 @@ struct pm8058_othc {
 	bool othc_sw_state;
 	bool othc_ir_state;
 	bool switch_reject;
+	bool othc_support_n_switch;
+	void *adc_handle;
 	int othc_nc_gpio;
+	u32 sw_key_code;
 	unsigned long switch_debounce_ms;
 	spinlock_t lock;
 	struct hrtimer timer;
+	struct othc_n_switch_config *switch_config;
 	struct pm8058_chip *pm_chip;
+	struct work_struct headset_work;
 	struct work_struct switch_work;
 };
 
@@ -176,10 +183,10 @@ static enum hrtimer_restart pm8058_othc_timer(struct hrtimer *timer)
 	return HRTIMER_NORESTART;
 }
 
-static void switch_work_f(struct work_struct *work)
+static void headset_work_f(struct work_struct *work)
 {
 	struct pm8058_othc *dd =
-		container_of(work, struct pm8058_othc, switch_work);
+		container_of(work, struct pm8058_othc, headset_work);
 
 	if (dd->othc_ir_state == true)
 		switch_set_state(&dd->othc_sdev, 1);
@@ -189,13 +196,74 @@ static void switch_work_f(struct work_struct *work)
 	enable_irq(dd->othc_irq_ir);
 }
 
+static void othc_report_switch(struct pm8058_othc *dd, u32 res)
+{
+	u8 i;
+	struct othc_switch_info *sw_info = dd->switch_config->switch_info;
+
+	for (i = 0; i < dd->switch_config->num_keys; i++) {
+		if (res >= sw_info[i].min_adc_threshold &&
+				res <= sw_info[i].max_adc_threshold) {
+			dd->othc_sw_state = true;
+			dd->sw_key_code = sw_info[i].key_code;
+			input_report_key(dd->othc_ipd, sw_info[i].key_code, 1);
+			input_sync(dd->othc_ipd);
+			return;
+		}
+	}
+}
+
+static void switch_work_f(struct work_struct *work)
+{
+	int rc, i;
+	u32 res = 0;
+	struct adc_chan_result adc_result;
+	struct pm8058_othc *dd =
+		container_of(work, struct pm8058_othc, switch_work);
+	DECLARE_COMPLETION_ONSTACK(adc_wait);
+	u8 num_adc_samples = dd->switch_config->num_adc_samples;
+
+	/* sleep for settling time */
+	msleep(dd->switch_config->voltage_settling_time_ms);
+
+	for (i = 0; i < num_adc_samples; i++) {
+		rc = adc_channel_request_conv(dd->adc_handle, &adc_wait);
+		if (rc) {
+			pr_err("%s: adc_channel_request_conv failed\n",
+								__func__);
+			goto bail_out;
+		}
+		rc = wait_for_completion_interruptible(&adc_wait);
+		if (rc) {
+			pr_err("%s: wait_for_completion_interruptible failed\n"
+								, __func__);
+			goto bail_out;
+		}
+		rc = adc_channel_read_result(dd->adc_handle, &adc_result);
+		if (rc) {
+			pr_err("%s: adc_channel_read_result failed\n",
+								 __func__);
+			goto bail_out;
+		}
+		res += adc_result.physical;
+	}
+bail_out:
+	if (i == num_adc_samples && num_adc_samples != 0) {
+		res /= num_adc_samples;
+		othc_report_switch(dd, res);
+	} else
+		pr_err("%s: Insufficient ADC samples\n", __func__);
+
+	enable_irq(dd->othc_irq_sw);
+}
+
 static void
 pm8058_headset_switch(struct input_dev *dev, int key, int value)
 {
 	struct pm8058_othc *dd = input_get_drvdata(dev);
 
 	input_report_switch(dev, key, value);
-	schedule_work(&dd->switch_work);
+	schedule_work(&dd->headset_work);
 }
 
 /*
@@ -223,6 +291,17 @@ static irqreturn_t pm8058_no_sw(int irq, void *dev_id)
 		return IRQ_HANDLED;
 	}
 
+	if (dd->othc_support_n_switch == true) {
+		if (level == 0) {
+			dd->othc_sw_state = false;
+			input_report_key(dd->othc_ipd, dd->sw_key_code, 0);
+			input_sync(dd->othc_ipd);
+		} else {
+			disable_irq_nosync(dd->othc_irq_sw);
+			schedule_work(&dd->switch_work);
+		}
+		return IRQ_HANDLED;
+	}
 	/*
 	 * It is necessary to check the software state and the hardware state
 	 * to make sure that the residual interrupt after the debounce time does
@@ -244,46 +323,7 @@ static irqreturn_t pm8058_no_sw(int irq, void *dev_id)
 }
 
 /*
- * For the NC type headset, a single interrupt is triggered
- * for all the events (insert, remove, press, release).
- * A external GPIO is used to distinguish between diff. states.
- * The GPIO is pulled low when the headset is inserted. Using
- * the current state of the switch, headset and the gpio value we
- * determine which event has occured.
- */
-static void othc_process_nc(struct pm8058_othc *dd)
-{
-	if (!gpio_get_value(dd->othc_nc_gpio)) {
-		/* headset plugged in and/or button press/release */
-		if (dd->othc_ir_state == false) {
-			/* disable irq, this gets enabled in the workqueue */
-			disable_irq_nosync(dd->othc_irq_ir);
-			/* headset plugged in */
-			dd->othc_ir_state = true;
-			pm8058_headset_switch(dd->othc_ipd,
-					SW_HEADPHONE_INSERT, 1);
-		} else if (dd->othc_sw_state == false) {
-			/*  Switch has been pressed */
-			dd->othc_sw_state = true;
-			input_report_key(dd->othc_ipd, KEY_MEDIA, 1);
-		} else {
-			/* Switch has been released */
-			dd->othc_sw_state = false;
-			input_report_key(dd->othc_ipd, KEY_MEDIA, 0);
-		}
-	} else {
-		/* disable irq, this gets enabled in the workqueue */
-		disable_irq_nosync(dd->othc_irq_ir);
-		/* headset has been plugged out */
-		dd->othc_ir_state = false;
-		pm8058_headset_switch(dd->othc_ipd,
-				SW_HEADPHONE_INSERT, 0);
-	}
-}
-
-/*
- * The pm8058_nc_ir detects insert / remove of the headset (for NO and NC),
- * as well as button press / release (for NC type).
+ * The pm8058_nc_ir detects insert / remove of the headset (for NO),
  * The current state of the headset is maintained in othc_ir_state variable.
  * Due to a hardware bug, false switch interrupts are seen during headset
  * insert. This is handled in the software by rejecting the switch interrupts
@@ -293,7 +333,6 @@ static irqreturn_t pm8058_nc_ir(int irq, void *dev_id)
 {
 	unsigned long flags;
 	struct pm8058_othc *dd = dev_id;
-	struct othc_hsed_config *hsed_config = dd->othc_pdata->hsed_config;
 
 	spin_lock_irqsave(&dd->lock, flags);
 	/* Enable the switch reject flag */
@@ -308,23 +347,19 @@ static irqreturn_t pm8058_nc_ir(int irq, void *dev_id)
 		ktime_set((dd->switch_debounce_ms / 1000),
 		(dd->switch_debounce_ms % 1000) * 1000000), HRTIMER_MODE_REL);
 
-	if (hsed_config->othc_headset == OTHC_HEADSET_NC)
-		othc_process_nc(dd);
-	else {
-		/* disable irq, this gets enabled in the workqueue */
-		disable_irq_nosync(dd->othc_irq_ir);
-		/* Processing for NO type headset */
-		if (dd->othc_ir_state == false) {
-			/*  headset jack inserted */
-			dd->othc_ir_state = true;
-			pm8058_headset_switch(dd->othc_ipd,
-					SW_HEADPHONE_INSERT, 1);
-		} else {
-			/* headset jack removed */
-			dd->othc_ir_state = false;
-			pm8058_headset_switch(dd->othc_ipd,
-					SW_HEADPHONE_INSERT, 0);
-		}
+	/* disable irq, this gets enabled in the workqueue */
+	disable_irq_nosync(dd->othc_irq_ir);
+	/* Processing for NO type headset */
+	if (dd->othc_ir_state == false) {
+		/*  headset jack inserted */
+		dd->othc_ir_state = true;
+		pm8058_headset_switch(dd->othc_ipd,
+				SW_HEADPHONE_INSERT, 1);
+	} else {
+		/* headset jack removed */
+		dd->othc_ir_state = false;
+		pm8058_headset_switch(dd->othc_ipd,
+				SW_HEADPHONE_INSERT, 0);
 	}
 	input_sync(dd->othc_ipd);
 
@@ -347,16 +382,9 @@ static int pm8058_configure_othc(struct pm8058_othc *dd)
 		return rc;
 	}
 
-	if (hsed_config->othc_headset == OTHC_HEADSET_NO) {
-		/* set iDAC high current threshold */
-		value = (hsed_config->othc_highcurr_thresh_uA / 100) - 2;
-		reg =  (reg & PM8058_OTHC_HIGH_CURR_MASK) | value;
-	} else {
-		/* set iDAC low current threshold */
-		value = (hsed_config->othc_lowcurr_thresh_uA / 10) - 1;
-		reg &= PM8058_OTHC_LOW_CURR_MASK;
-		reg |= (value << PM8058_OTHC_LOW_CURR_SHIFT);
-	}
+	/* set iDAC high current threshold */
+	value = (hsed_config->othc_highcurr_thresh_uA / 100) - 2;
+	reg =  (reg & PM8058_OTHC_HIGH_CURR_MASK) | value;
 
 	rc = pm8058_write(dd->pm_chip, base_addr, &reg, 1);
 	if (rc < 0) {
@@ -440,6 +468,17 @@ static int pm8058_configure_othc(struct pm8058_othc *dd)
 		return rc;
 	}
 
+	/* Configure the ADC if n_switch_headset is supported */
+	if (dd->othc_support_n_switch == true) {
+		rc = adc_channel_open(dd->switch_config->adc_channel,
+							&dd->adc_handle);
+		if (rc) {
+			pr_err("%s: Unable to open ADC channel\n", __func__);
+			return -ENODEV;
+		}
+		pr_debug("%s: ADC channel open SUCCESS\n", __func__);
+	}
+
 	return 0;
 }
 
@@ -457,7 +496,7 @@ static ssize_t othc_headset_print_name(struct switch_dev *sdev, char *buf)
 static int
 othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 {
-	int rc;
+	int rc, i;
 	struct input_dev *ipd;
 	struct pmic8058_othc_config_pdata *pdata = pd->dev.platform_data;
 	struct othc_hsed_config *hsed_config = pdata->hsed_config;
@@ -486,38 +525,41 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 		rc = -ENXIO;
 		goto fail_othc_config;
 	}
-	if (hsed_config->othc_headset == OTHC_HEADSET_NO) {
-		if (dd->othc_irq_sw < 0) {
-			pr_err("%s: othc resource:IRQ_SW absent\n", __func__);
-			rc = -ENXIO;
-			goto fail_othc_config;
-		}
+	if (dd->othc_irq_sw < 0) {
+		pr_err("%s: othc resource:IRQ_SW absent\n", __func__);
+		rc = -ENXIO;
+		goto fail_othc_config;
 	}
 
 	ipd->name = "pmic8058_othc";
 	ipd->phys = "pmic8058_othc/input0";
 	ipd->dev.parent = &pd->dev;
 
-	input_set_capability(ipd, EV_SW, SW_HEADPHONE_INSERT);
-	input_set_capability(ipd, EV_KEY, KEY_MEDIA);
-
-	input_set_drvdata(ipd, dd);
-
 	dd->othc_ipd = ipd;
 	dd->othc_sw_state = false;
 	dd->othc_ir_state = false;
 	dd->switch_debounce_ms = hsed_config->switch_debounce_ms;
-	spin_lock_init(&dd->lock);
+	dd->othc_support_n_switch = hsed_config->othc_support_n_switch;
 
-	if (hsed_config->othc_headset == OTHC_HEADSET_NC) {
-		/* Check if NC specific pdata is present */
-		if (!hsed_config->othc_nc_gpio_setup ||
-					!hsed_config->othc_nc_gpio) {
-			pr_err("%s: NC headset pdata missing \n", __func__);
+	if (dd->othc_support_n_switch == true) {
+		pr_debug("%s: OTHC 'n' switch supported\n", __func__);
+		if (!hsed_config->switch_config ||
+				!hsed_config->switch_config->switch_info) {
 			rc = -EINVAL;
+			pr_err("%s: Switch pdata absent!\n", __func__);
 			goto fail_othc_config;
 		}
-	}
+		dd->switch_config = hsed_config->switch_config;
+		for (i = 0; i < dd->switch_config->num_keys; i++) {
+			input_set_capability(ipd, EV_KEY,
+				dd->switch_config->switch_info[i].key_code);
+		}
+	} else
+		input_set_capability(ipd, EV_KEY, KEY_MEDIA);
+
+	input_set_capability(ipd, EV_SW, SW_HEADPHONE_INSERT);
+	input_set_drvdata(ipd, dd);
+	spin_lock_init(&dd->lock);
 
 	rc = pm8058_configure_othc(dd);
 	if (rc < 0)
@@ -555,29 +597,22 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 		goto fail_ir_irq;
 	}
 
-	if (hsed_config->othc_headset == OTHC_HEADSET_NO) {
-		/* This irq is used only for NO type headset */
-		rc = request_threaded_irq(dd->othc_irq_sw, NULL, pm8058_no_sw,
-		IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_DISABLED,
-				"pm8058_othc_sw", dd);
-		if (rc < 0) {
-			pr_err("%s: Unable to request pm8058_othc_sw IRQ\n",
-								__func__);
-			goto fail_sw_irq;
-		}
-	} else {
-		/* NC type of headset use GPIO for IR */
-		rc = hsed_config->othc_nc_gpio_setup();
-		if (rc < 0) {
-			pr_err("%s: Unable to setup gpio for NC type \n",
-								__func__);
-			goto fail_sw_irq;
-		}
+	/* This irq is used only for NO type headset */
+	rc = request_threaded_irq(dd->othc_irq_sw, NULL, pm8058_no_sw,
+	IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_DISABLED,
+			"pm8058_othc_sw", dd);
+	if (rc < 0) {
+		pr_err("%s: Unable to request pm8058_othc_sw IRQ\n",
+							__func__);
+		goto fail_sw_irq;
 	}
 
 	device_init_wakeup(&pd->dev, hsed_config->othc_wakeup);
 
-	INIT_WORK(&dd->switch_work, switch_work_f);
+	INIT_WORK(&dd->headset_work, headset_work_f);
+
+	if (dd->othc_support_n_switch == true)
+		INIT_WORK(&dd->switch_work, switch_work_f);
 
 	return 0;
 
@@ -693,8 +728,11 @@ static void __exit pm8058_othc_exit(void)
 {
 	platform_driver_unregister(&pm8058_othc_driver);
 }
-
-module_init(pm8058_othc_init);
+/*
+ * Move to late_initcall, to make sure that the ADC driver registration is
+ * completed before we open a ADC channel.
+ */
+late_initcall(pm8058_othc_init);
 module_exit(pm8058_othc_exit);
 
 MODULE_ALIAS("platform:pmic8058_othc");

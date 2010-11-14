@@ -60,6 +60,12 @@
 #define MSM_SNDDEV_ACTIVE_CONFIG	(GPIOMUX_FUNC_1 | GPIOMUX_PULL_NONE |\
 					 GPIOMUX_DRV_2MA | GPIOMUX_VALID)
 #define MSM_SNDDEV_SUSPEND_CONFIG	(GPIOMUX_VALID | GPIOMUX_PULL_DOWN)
+
+#define WLAN_PWDN_N_ACTV_CFG		(GPIOMUX_FUNC_GPIO | GPIOMUX_DRV_2MA |\
+					 GPIOMUX_PULL_UP | GPIOMUX_VALID)
+#define WLAN_PWDN_N_SUSP_CFG		(GPIOMUX_FUNC_GPIO | GPIOMUX_VALID |\
+					 GPIOMUX_PULL_DOWN)
+
 #define EBI2_A_D	(GPIOMUX_FUNC_1 | GPIOMUX_PULL_UP | GPIOMUX_DRV_8MA |\
 			 GPIOMUX_VALID)
 #define EBI2_OE		(GPIOMUX_FUNC_1 | GPIOMUX_PULL_UP | GPIOMUX_DRV_8MA |\
@@ -149,6 +155,12 @@
 					| GPIOMUX_FUNC_1 | GPIOMUX_DRV_2MA)
 
 #define MI2S_SUSPEND_CFG (GPIOMUX_VALID | GPIOMUX_PULL_DOWN)
+
+#define LCDC_ACTIVE_CFG (GPIOMUX_VALID | GPIOMUX_PULL_NONE\
+					| GPIOMUX_FUNC_1 | GPIOMUX_DRV_16MA)
+
+#define LCDC_SUSPEND_CFG (GPIOMUX_VALID | GPIOMUX_PULL_DOWN)
+#define HDMI_SUSPEND_CFG (GPIOMUX_VALID | GPIOMUX_PULL_DOWN)
 
 static struct msm_gpiomux_config msm8x60_gsbi_configs[] __initdata = {
 	{
@@ -365,6 +377,10 @@ static struct msm_gpiomux_config msm8x60_uart_configs[] __initdata = {
 
 static struct msm_gpiomux_config msm8x60_tmg200_configs[] __initdata = {
 	{
+		.gpio = 58,
+		.suspended = GPIOMUX_PULL_DOWN | GPIOMUX_VALID,
+	},
+	{
 		.gpio = 61,
 		.active = GPIOMUX_PULL_NONE | GPIOMUX_DRV_2MA |
 				GPIOMUX_VALID | GPIOMUX_FUNC_GPIO,
@@ -458,6 +474,14 @@ static struct msm_gpiomux_config msm8x60_sdc_configs[] __initdata = {
 	},
 };
 
+static struct msm_gpiomux_config msm_qrdc_sdc_configs[] __initdata = {
+	{
+		.gpio      = 118,
+		.active    = WLAN_PWDN_N_ACTV_CFG,
+		.suspended = WLAN_PWDN_N_SUSP_CFG,
+	},
+};
+
 static struct msm_gpiomux_config msm_qrdc_usb_configs[] __initdata = {
 	{
 		.gpio      = 34,
@@ -516,11 +540,221 @@ static struct msm_gpiomux_config msm8x60_mi2s_configs[] __initdata = {
 	},
 };
 
+static struct msm_gpiomux_config msm8x60_lcdc_configs[] __initdata = {
+	/* lcdc_pclk */
+	{
+		.gpio = 0,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_hsync */
+	{
+		.gpio = 1,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_vsync */
+	{
+		.gpio = 2,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_den */
+	{
+		.gpio = 3,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red7 */
+	{
+		.gpio = 4,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red6 */
+	{
+		.gpio = 5,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red5 */
+	{
+		.gpio = 6,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red4 */
+	{
+		.gpio = 7,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red3 */
+	{
+		.gpio = 8,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red2 */
+	{
+		.gpio = 9,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red1 */
+	{
+		.gpio = 10,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_red0 */
+	{
+		.gpio = 11,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn7 */
+	{
+		.gpio = 12,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn6 */
+	{
+		.gpio = 13,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn5 */
+	{
+		.gpio = 14,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn4 */
+	{
+		.gpio = 15,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn3 */
+	{
+		.gpio = 16,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn2 */
+	{
+		.gpio = 17,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn1 */
+	{
+		.gpio = 18,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_grn0 */
+	{
+		.gpio = 19,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu7 */
+	{
+		.gpio = 20,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu6 */
+	{
+		.gpio = 21,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu5 */
+	{
+		.gpio = 22,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu4 */
+	{
+		.gpio = 23,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu3 */
+	{
+		.gpio = 24,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu2 */
+	{
+		.gpio = 25,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu1 */
+	{
+		.gpio = 26,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+	/* lcdc_blu0 */
+	{
+		.gpio = 27,
+		.active = LCDC_ACTIVE_CFG,
+		.suspended = LCDC_SUSPEND_CFG
+	},
+};
+
+static struct msm_gpiomux_config msm8x60_hdmi_configs[] __initdata = {
+	{
+		.gpio = 169,
+		.active = GPIOMUX_FUNC_1 | GPIOMUX_PULL_UP | GPIOMUX_VALID,
+		.suspended = HDMI_SUSPEND_CFG,
+	},
+	{
+		.gpio = 170,
+		.active = GPIOMUX_FUNC_1 | GPIOMUX_DRV_16MA | GPIOMUX_VALID,
+		.suspended = HDMI_SUSPEND_CFG,
+	},
+	{
+		.gpio = 171,
+		.active = GPIOMUX_FUNC_1 | GPIOMUX_DRV_16MA | GPIOMUX_VALID,
+		.suspended = HDMI_SUSPEND_CFG,
+	},
+	{
+		.gpio = 172,
+		.active = GPIOMUX_FUNC_1 | GPIOMUX_PULL_DOWN | GPIOMUX_VALID,
+		.suspended = HDMI_SUSPEND_CFG,
+	},
+};
+
+/* Because PMIC drivers do not use gpio-management routines and PMIC
+ * gpios must never sleep, a "good enough" config is obtained by placing
+ * the active config in the 'suspended' slot and leaving the active
+ * config invalid: the suspended config will be installed at boot
+ * and never replaced.
+ */
+static struct msm_gpiomux_config msm8x60_pmic_configs[] __initdata = {
+	{
+		.gpio = 88,
+		.suspended = GPIOMUX_VALID,
+	},
+	{
+		.gpio = 91,
+		.suspended = GPIOMUX_VALID,
+	},
+};
+
 struct msm_gpiomux_cfg_block {
 	struct msm_gpiomux_config *cfg;
 	size_t                     ncfg;
 };
-
 static struct msm_gpiomux_cfg_block msm8x60_cfgs[] __initdata = {
 	{msm8x60_gsbi_configs, ARRAY_SIZE(msm8x60_gsbi_configs)},
 	{msm8x60_ebi2_configs, ARRAY_SIZE(msm8x60_ebi2_configs)},
@@ -530,10 +764,14 @@ static struct msm_gpiomux_cfg_block msm8x60_cfgs[] __initdata = {
 	{msm8x60_sdc_configs, ARRAY_SIZE(msm8x60_sdc_configs)},
 	{msm8x60_snd_configs, ARRAY_SIZE(msm8x60_snd_configs)},
 	{msm8x60_mi2s_configs, ARRAY_SIZE(msm8x60_mi2s_configs)},
+	{msm8x60_lcdc_configs, ARRAY_SIZE(msm8x60_lcdc_configs)},
+	{msm8x60_hdmi_configs, ARRAY_SIZE(msm8x60_hdmi_configs)},
+	{msm8x60_pmic_configs, ARRAY_SIZE(msm8x60_pmic_configs)},
 };
 
 static struct msm_gpiomux_cfg_block qrdc_cfgs[] __initdata = {
 	{msm_qrdc_usb_configs, ARRAY_SIZE(msm_qrdc_usb_configs)},
+	{msm_qrdc_sdc_configs, ARRAY_SIZE(msm_qrdc_sdc_configs)},
 };
 
 static int __init gpiomux_init(void)

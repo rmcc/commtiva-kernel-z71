@@ -96,15 +96,16 @@ static struct msm_rpmrs_resource msm_rpmrs_pxo = {
 	.rs[0].id = MSM_RPM_ID_PXO_CLK,
 	.size = 1,
 	.name = "pxo",
+	.enable_low_power = 1,
 	.append_req = msm_rpmrs_append_pxo,
 };
 
 static struct msm_rpmrs_resource msm_rpmrs_l2_cache = {
 	.rs[0].id = MSM_RPM_ID_APPS_L2_CACHE_CTL,
-	/*.rs[0].value = 0,*/
+	.rs[0].value = 0,
 	.size = 1,
 	.name = "L2_cache",
-	/*.is_set = true,*/
+	.is_set = true,
 	.append_req = msm_rpmrs_append_l2_cache,
 };
 
@@ -198,6 +199,12 @@ static struct msm_rpmrs_level msm_rpmrs_levels[] = {
 		MSM_RPMRS_LIMITS(ON, ACTIVE, ACTIVE, ACTIVE),
 		true,
 		1800, 5000, 60350000, 3500
+	},
+	{
+		MSM_PM_SLEEP_MODE_POWER_COLLAPSE,
+		MSM_RPMRS_LIMITS(OFF, ACTIVE, ACTIVE, ACTIVE),
+		true,
+		3800, 4500, 65350000, 5500
 	},
 
 	{

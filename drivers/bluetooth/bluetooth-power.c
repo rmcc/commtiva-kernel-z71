@@ -177,7 +177,6 @@ module_param_call(power, bluetooth_power_param_set, param_get_bool,
                  &bluetooth_power_state, S_IWUSR | S_IRUGO);
 
 
-
 static int __devinit bt_power_probe(struct platform_device *pdev)
 {
 	int ret = 0;

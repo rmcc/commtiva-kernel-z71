@@ -34,6 +34,7 @@
 #include <linux/platform_device.h>
 #include <linux/completion.h>
 #include <linux/msm_smd_pkt.h>
+#include <linux/poll.h>
 #include <asm/ioctls.h>
 
 #include <mach/msm_smd.h>
@@ -296,14 +297,21 @@ ssize_t smd_pkt_write(struct file *file,
 
 	if (smd_pkt_devp->blocking_write) {
 		for (;;) {
-			if (smd_pkt_devp->has_reset)
+			mutex_lock(&smd_pkt_devp->tx_lock);
+			if (smd_pkt_devp->has_reset) {
+				smd_disable_read_intr(smd_pkt_devp->ch);
+				mutex_unlock(&smd_pkt_devp->tx_lock);
 				return -ENETRESET;
-			if (signal_pending(current))
+			}
+			if (signal_pending(current)) {
+				smd_disable_read_intr(smd_pkt_devp->ch);
+				mutex_unlock(&smd_pkt_devp->tx_lock);
 				return -ERESTARTSYS;
+			}
 
 			prepare_to_wait(&smd_pkt_devp->ch_write_wait_queue,
 					&write_wait, TASK_INTERRUPTIBLE);
-			mutex_lock(&smd_pkt_devp->tx_lock);
+			smd_enable_read_intr(smd_pkt_devp->ch);
 			if (smd_write_avail(smd_pkt_devp->ch) < count) {
 				if (!smd_pkt_devp->needed_space ||
 				    count < smd_pkt_devp->needed_space)
@@ -314,6 +322,7 @@ ssize_t smd_pkt_write(struct file *file,
 				break;
 		}
 		finish_wait(&smd_pkt_devp->ch_write_wait_queue, &write_wait);
+		smd_disable_read_intr(smd_pkt_devp->ch);
 		if (smd_pkt_devp->has_reset) {
 			mutex_unlock(&smd_pkt_devp->tx_lock);
 			return -ENETRESET;
@@ -378,6 +387,22 @@ ssize_t smd_pkt_write(struct file *file,
 	return count;
 }
 
+static unsigned int smd_pkt_poll(struct file *file, poll_table *wait)
+{
+	struct smd_pkt_dev *smd_pkt_devp;
+	unsigned int mask = 0;
+
+	smd_pkt_devp = file->private_data;
+	if (!smd_pkt_devp)
+		return POLLERR;
+
+	poll_wait(file, &smd_pkt_devp->ch_read_wait_queue, wait);
+	if (smd_read_avail(smd_pkt_devp->ch))
+		mask |= POLLIN | POLLRDNORM;
+
+	return mask;
+}
+
 static void check_and_wakeup_reader(struct smd_pkt_dev *smd_pkt_devp)
 {
 	int sz;
@@ -413,6 +438,7 @@ static void check_and_wakeup_writer(struct smd_pkt_dev *smd_pkt_devp)
 	if (sz >= smd_pkt_devp->needed_space) {
 		D(KERN_ERR "%s: %d bytes Write Space available\n",
 			    __func__, sz);
+		smd_disable_read_intr(smd_pkt_devp->ch);
 		wake_up_interruptible(&smd_pkt_devp->ch_write_wait_queue);
 	}
 }
@@ -589,8 +615,10 @@ int smd_pkt_open(struct inode *inode, struct file *file)
 		} else if (!smd_pkt_devp->is_open) {
 			pr_err("%s: Invalid open notification\n", __func__);
 			r = -ENODEV;
-		} else
+		} else {
+			smd_disable_read_intr(smd_pkt_devp->ch);
 			r = 0;
+		}
 	}
 release_pil:
 	if (peripheral && (r < 0))
@@ -634,6 +662,7 @@ static const struct file_operations smd_pkt_fops = {
 	.release = smd_pkt_release,
 	.read = smd_pkt_read,
 	.write = smd_pkt_write,
+	.poll = smd_pkt_poll,
 	.ioctl = smd_pkt_ioctl,
 };
 

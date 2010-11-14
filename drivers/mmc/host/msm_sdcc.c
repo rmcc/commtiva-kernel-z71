@@ -602,13 +602,16 @@ msmsdcc_data_err(struct msmsdcc_host *host, struct mmc_data *data,
 		 unsigned int status)
 {
 	if (status & MCI_DATACRCFAIL) {
-		pr_err("%s: Data CRC error\n",
-		       mmc_hostname(host->mmc));
-		pr_err("%s: opcode 0x%.8x\n", __func__,
-		       data->mrq->cmd->opcode);
-		pr_err("%s: blksz %d, blocks %d\n", __func__,
-		       data->blksz, data->blocks);
-		data->error = -EILSEQ;
+		if (!(data->mrq->cmd->opcode == MMC_BUSTEST_W
+			|| data->mrq->cmd->opcode == MMC_BUSTEST_R)) {
+			pr_err("%s: Data CRC error\n",
+			       mmc_hostname(host->mmc));
+			pr_err("%s: opcode 0x%.8x\n", __func__,
+			       data->mrq->cmd->opcode);
+			pr_err("%s: blksz %d, blocks %d\n", __func__,
+			       data->blksz, data->blocks);
+			data->error = -EILSEQ;
+		}
 	} else if (status & MCI_DATATIMEOUT) {
 		/* CRC is optional for the bus test commands, not all
 		 * cards respond back with CRC. However controller
@@ -1109,9 +1112,6 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		pwr |= MCI_PWR_ON;
 		break;
 	}
-
-	if (ios->bus_mode == MMC_BUSMODE_OPENDRAIN)
-		pwr |= MCI_OD;
 
 	writel(clk, host->base + MMCICLOCK);
 
@@ -1781,27 +1781,23 @@ msmsdcc_runtime_suspend(struct device *dev)
 	if (mmc) {
 		host->sdcc_suspending = 1;
 
-		if (!mmc->card || (host->plat->sdiowakeup_irq &&
-				mmc->card->type == MMC_TYPE_SDIO) ||
-				mmc->card->type != MMC_TYPE_SDIO) {
-			/*
-			 * MMC core thinks that host is disabled by now since
-			 * runtime suspend is scheduled after msmsdcc_disable()
-			 * is called. Thus, MMC core will try to enable the host
-			 * while suspending it. This results in a synchronous
-			 * runtime resume request while in runtime suspending
-			 * context and hence inorder to complete this resume
-			 * requet, it will wait for suspend to be complete,
-			 * but runtime suspend also can not proceed further
-			 * until the host is resumed. Thus, it leads to a hang.
-			 * Hence, increase the pm usage count before suspending
-			 * the host so that any resume requests after this will
-			 * simple become pm usage counter increment operations.
-			 */
-			pm_runtime_get_noresume(dev);
-			rc = mmc_suspend_host(mmc);
-			pm_runtime_put_noidle(dev);
-		}
+		/*
+		 * MMC core thinks that host is disabled by now since
+		 * runtime suspend is scheduled after msmsdcc_disable()
+		 * is called. Thus, MMC core will try to enable the host
+		 * while suspending it. This results in a synchronous
+		 * runtime resume request while in runtime suspending
+		 * context and hence inorder to complete this resume
+		 * requet, it will wait for suspend to be complete,
+		 * but runtime suspend also can not proceed further
+		 * until the host is resumed. Thus, it leads to a hang.
+		 * Hence, increase the pm usage count before suspending
+		 * the host so that any resume requests after this will
+		 * simple become pm usage counter increment operations.
+		 */
+		pm_runtime_get_noresume(dev);
+		rc = mmc_suspend_host(mmc);
+		pm_runtime_put_noidle(dev);
 
 		if (!rc) {
 			/*
@@ -1857,10 +1853,8 @@ msmsdcc_runtime_resume(struct device *dev)
 		}
 
 		spin_unlock_irqrestore(&host->lock, flags);
-		if (!mmc->card || (host->plat->sdiowakeup_irq &&
-				mmc->card->type == MMC_TYPE_SDIO) ||
-				mmc->card->type != MMC_TYPE_SDIO)
-			mmc_resume_host(mmc);
+
+		mmc_resume_host(mmc);
 
 		/*
 		 * After resuming the host wait for sometime so that

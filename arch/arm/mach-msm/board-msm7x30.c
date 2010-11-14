@@ -201,13 +201,6 @@ static int pm8058_gpios_init(void)
 		pr_err("%s PMIC_GPIO_HDMI_5V_EN config failed\n", __func__);
 		return rc;
 	}
-	rc = gpio_request(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN),
-		"hdmi_5V_en");
-	if (rc) {
-		pr_err("%s PMIC_GPIO_HDMI_5V_EN gpio_request failed\n",
-			__func__);
-		return rc;
-	}
 
 	if (machine_is_msm7x30_fluid()) {
 		rc = pm8058_gpio_config(PMIC_GPIO_SDC4_EN, &sdc4_en);
@@ -228,9 +221,10 @@ static ssize_t tma300_vkeys_show(struct kobject *kobj,
 			struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf,
-	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":80:904:160:210"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":240:904:160:210"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":400:904:160:210"
+	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":60:879:120:80"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":180:879:120:80"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":300:879:120:80"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":420:879:120:80"
 	"\n");
 }
 
@@ -347,8 +341,10 @@ static int cyttsp_platform_resume(struct i2c_client *client)
 }
 
 static struct cyttsp_platform_data cyttsp_data = {
-	.maxx = 479,
-	.maxy = 799,
+	.panel_maxx = 479,
+	.panel_maxy = 799,
+	.disp_maxx = 479,
+	.disp_maxy = 799,
 	.flags = 0,
 	.gen = CY_GEN3,	/* or */
 	.use_st = CY_USE_ST,
@@ -2954,8 +2950,9 @@ static void msm_hsusb_vbus_power(unsigned phy_info, int on)
                         pr_err("%s PMIC GPIO 36 write failed\n", __func__);
                         return;
                 }
-        } else
-                gpio_set_value(PM8058_GPIO_PM_TO_SYS(36), 0);
+	} else {
+		gpio_set_value_cansleep(PM8058_GPIO_PM_TO_SYS(36), 0);
+	}
 
         vbus_is_on = on;
 }
@@ -3262,8 +3259,22 @@ static int hdmi_init_irq(void)
 static int hdmi_enable_5v(int on)
 {
 	pr_info("%s: %d\n", __func__, on);
-	gpio_set_value_cansleep(
-		PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN), on);
+	if (on) {
+		int rc;
+		rc = gpio_request(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN),
+			"hdmi_5V_en");
+		if (rc) {
+			pr_err("%s PMIC_GPIO_HDMI_5V_EN gpio_request failed\n",
+				__func__);
+			return rc;
+		}
+		gpio_set_value_cansleep(
+			PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN), 1);
+	} else {
+		gpio_set_value_cansleep(
+			PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN), 0);
+		gpio_free(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HDMI_5V_EN));
+	}
 	return 0;
 }
 
@@ -3837,9 +3848,18 @@ static struct mddi_platform_data mddi_pdata = {
 	.mddi_sel_clk = msm_fb_mddi_sel_clk,
 };
 
+int mdp_core_clk_rate_table[] = {
+	122880000,
+	122880000,
+	122880000,
+	192000000,
+};
+
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = 30,
 	.mdp_core_clk_rate = 122880000,
+	.mdp_core_clk_table = mdp_core_clk_rate_table,
+	.num_mdp_clk = ARRAY_SIZE(mdp_core_clk_rate_table),
 };
 
 static int lcd_panel_spi_gpio_num[] = {
@@ -6066,10 +6086,10 @@ static struct cy8c_ts_platform_data cy8ctma300_pdata = {
 	.max_touch = 255,
 	.min_width = 0,
 	.max_width = 255,
-	.use_polling = 1,
 	.invert_y = 1,
 	.nfingers = 4,
 	.irq_gpio = TS_GPIO_IRQ,
+	.resout_gpio = -1,
 };
 
 static struct i2c_board_info cy8ctma300_board_info[] = {
@@ -6212,7 +6232,6 @@ static void __init msm7x30_init(void)
 				socinfo_get_platform_version()) == 2) {
 			cy8ctma300_pdata.res_y = 920;
 			cy8ctma300_pdata.invert_y = 0;
-			cy8ctma300_pdata.use_polling = 0;
 		}
 		i2c_register_board_info(0, cy8ctma300_board_info,
 			ARRAY_SIZE(cy8ctma300_board_info));

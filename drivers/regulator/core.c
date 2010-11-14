@@ -571,8 +571,6 @@ static int update_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	struct regulator *sibling;
 	int ret = 0;
 
-	mutex_lock(&regulator_list_mutex);
-
 	list_for_each_entry(sibling, &rdev->consumer_list, list) {
 		if (regulator == sibling || !sibling->enabled)
 			continue;
@@ -600,7 +598,6 @@ static int update_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	_notifier_call_chain(rdev, REGULATOR_EVENT_VOLTAGE_CHANGE, NULL);
 
 out:
-	mutex_unlock(&regulator_list_mutex);
 	return ret;
 }
 
@@ -608,8 +605,6 @@ static int update_voltage_prev(struct regulator_dev *rdev)
 {
 	int ret, min_uV = INT_MIN, max_uV = INT_MAX;
 	struct regulator *consumer;
-
-	mutex_lock(&regulator_list_mutex);
 
 	list_for_each_entry(consumer, &rdev->consumer_list, list) {
 		if (!consumer->enabled)
@@ -619,8 +614,6 @@ static int update_voltage_prev(struct regulator_dev *rdev)
 		if (consumer->min_uV > min_uV)
 			min_uV = consumer->min_uV;
 	}
-
-	mutex_unlock(&regulator_list_mutex);
 
 	if (min_uV == INT_MIN)
 		return 0;
@@ -640,7 +633,7 @@ static void drms_uA_update(struct regulator_dev *rdev)
 {
 	struct regulator *sibling;
 	int current_uA = 0, output_uV, input_uV, err;
-	unsigned int mode;
+	unsigned int regulator_curr_mode, mode;
 
 	err = regulator_check_drms(rdev);
 	if (err < 0 || !rdev->desc->ops->get_optimum_mode ||
@@ -670,6 +663,14 @@ static void drms_uA_update(struct regulator_dev *rdev)
 
 	/* check the new mode is allowed */
 	err = regulator_check_mode(rdev, mode);
+	/* return if the same mode is requested */
+	if (rdev->desc->ops->get_mode) {
+		regulator_curr_mode = rdev->desc->ops->get_mode(rdev);
+		if (regulator_curr_mode == mode)
+			return;
+	} else
+		return;
+
 	if (err == 0)
 		rdev->desc->ops->set_mode(rdev, mode);
 }
@@ -1741,6 +1742,9 @@ int regulator_set_voltage(struct regulator *regulator, int min_uV, int max_uV)
 	/* constraints check */
 	ret = regulator_check_voltage(rdev, &min_uV, &max_uV);
 	if (ret < 0)
+		goto out;
+
+	if (min_uV == regulator->min_uV && max_uV == regulator->max_uV)
 		goto out;
 
 	if (regulator->enabled) {

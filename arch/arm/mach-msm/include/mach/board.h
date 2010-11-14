@@ -224,6 +224,8 @@ struct msm_panel_common_pdata {
 	int (*vga_switch)(int select_vga);
 	int *gpio_num;
 	int mdp_core_clk_rate;
+	unsigned num_mdp_clk;
+	int *mdp_core_clk_table;
 };
 
 struct lcdc_platform_data {
@@ -273,6 +275,7 @@ struct msm_i2c_platform_data {
 	const char *clk;
 	const char *pclk;
 	int src_clk_rate;
+	int use_gsbi_shared_mode;
 	void (*msm_i2c_config_gpio)(int iface, int config_type);
 };
 

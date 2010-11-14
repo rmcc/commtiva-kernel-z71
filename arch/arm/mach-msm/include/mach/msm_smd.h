@@ -381,4 +381,21 @@ typedef enum
 #endif
 /* } FIH, Charles Huang, 2009/05/18 */
 
+/* Tells the other end of the smd channel that this end wants to recieve
+ * interrupts when the written data is read.  Read interrupts should only
+ * enabled when there is no space left in the buffer to write to, thus the
+ * interrupt acts as notification that space may be avaliable.  If the
+ * other side does not support enabling/disabling interrupts on demand,
+ * then this function has no effect if called.
+ */
+void smd_enable_read_intr(smd_channel_t *ch);
+
+/* Tells the other end of the smd channel that this end does not want
+ * interrupts when written data is read.  The interrupts should be
+ * disabled by default.  If the other side does not support enabling/
+ * disabling interrupts on demand, then this function has no effect if
+ * called.
+ */
+void smd_disable_read_intr(smd_channel_t *ch);
+
 #endif

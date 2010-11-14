@@ -128,7 +128,7 @@ static unsigned last_heap_free = 0xffffffff;
 #define MSM_TRIG_A2M_SMD_INT     (writel(1 << 3, MSM_GCC_BASE + 0x8))
 #define MSM_TRIG_A2Q6_SMD_INT    (writel(1 << 15, MSM_GCC_BASE + 0x8))
 #define MSM_TRIG_A2M_SMSM_INT    (writel(1 << 4, MSM_GCC_BASE + 0x8))
-#define MSM_TRIG_A2Q6_SMSM_INT   (writel(1 << 15, MSM_GCC_BASE + 0x8))
+#define MSM_TRIG_A2Q6_SMSM_INT   (writel(1 << 14, MSM_GCC_BASE + 0x8))
 #define MSM_TRIG_A2DSPS_SMD_INT  (writel(1, MSM_SIC_NON_SECURE_BASE + 0x4080))
 #else
 #define MSM_TRIG_A2M_SMD_INT     (writel(1, MSM_CSR_BASE + 0x400 + (0) * 4))
@@ -144,8 +144,6 @@ static LIST_HEAD(smd_ch_list_loopback);
 
 static void notify_other_smsm(uint32_t smsm_entry, uint32_t notify_mask)
 {
-	uint32_t mux_val;
-
 	/* older protocol don't use smsm_intr_mask,
 	   but still communicates with modem */
 	if (!smsm_info.intr_mask ||
@@ -154,12 +152,15 @@ static void notify_other_smsm(uint32_t smsm_entry, uint32_t notify_mask)
 
 	if (smsm_info.intr_mask &&
 	    (readl(SMSM_INTR_MASK_ADDR(smsm_entry, SMSM_Q6)) & notify_mask)) {
+#if !defined(CONFIG_ARCH_MSM8X60)
+		uint32_t mux_val;
+
 		if (smsm_info.intr_mux) {
 			mux_val = readl(SMSM_INTR_MUX_ADDR(SMEM_APPS_Q6_SMSM));
 			mux_val++;
 			writel(mux_val, SMSM_INTR_MUX_ADDR(SMEM_APPS_Q6_SMSM));
 		}
-
+#endif
 		MSM_TRIG_A2Q6_SMSM_INT;
 	}
 }
@@ -200,7 +201,7 @@ void smd_diag(void)
 
 static void handle_modem_crash(void)
 {
-	pr_err("ARM9 has CRASHED\n");
+	pr_err("MODEM/AMSS has CRASHED\n");
 	smd_diag();
 
 	/* hard reboot if possible FIXME
@@ -382,6 +383,11 @@ static unsigned ch_read_buffer(struct smd_channel *ch, void **ptr)
 		return head - tail;
 	else
 		return ch->fifo_size - tail;
+}
+
+static int read_intr_blocked(struct smd_channel *ch)
+{
+	return ch->recv->fBLOCKREADINTR;
 }
 
 /* advance the fifo read pointer after data from ch_read_buffer is consumed */
@@ -745,7 +751,8 @@ static int smd_stream_read(smd_channel_t *ch, void *data, int len)
 
 	r = ch_read(ch, data, len);
 	if (r > 0)
-		ch->notify_other_cpu();
+		if (!read_intr_blocked(ch))
+			ch->notify_other_cpu();
 
 	return r;
 }
@@ -768,7 +775,8 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 
 	r = ch_read(ch, data, len);
 	if (r > 0)
-		ch->notify_other_cpu();
+		if (!read_intr_blocked(ch))
+			ch->notify_other_cpu();
 
     // +++ FIH +++
     #ifdef SAVE_QXDM_LOG_TO_SD_CARD
@@ -799,7 +807,8 @@ static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len)
 
 	r = ch_read(ch, data, len);
 	if (r > 0)
-		ch->notify_other_cpu();
+		if (!read_intr_blocked(ch))
+			ch->notify_other_cpu();
 
 	ch->current_packet -= r;
 	update_packet_state(ch);
@@ -1119,6 +1128,20 @@ int smd_write_avail(smd_channel_t *ch)
 }
 EXPORT_SYMBOL(smd_write_avail);
 
+void smd_enable_read_intr(smd_channel_t *ch)
+{
+	if (ch)
+		ch->send->fBLOCKREADINTR = 0;
+}
+EXPORT_SYMBOL(smd_enable_read_intr);
+
+void smd_disable_read_intr(smd_channel_t *ch)
+{
+	if (ch)
+		ch->send->fBLOCKREADINTR = 1;
+}
+EXPORT_SYMBOL(smd_disable_read_intr);
+
 int smd_wait_until_readable(smd_channel_t *ch, int bytes)
 {
 	return -1;
@@ -1346,18 +1369,24 @@ EXPORT_SYMBOL(smsm_reset_modem_cont);
 static irqreturn_t smsm_irq_handler(int irq, void *data)
 {
 	unsigned long flags;
-	static uint32_t prev_smem_q6_apps_smsm;
-	uint32_t mux_val;
 
-	if (irq == INT_ADSP_A11) {
+#if !defined(CONFIG_ARCH_MSM8X60)
+	uint32_t mux_val;
+	static uint32_t prev_smem_q6_apps_smsm;
+
+	if (irq == INT_ADSP_A11_SMSM) {
 		if (!smsm_info.intr_mux)
 			return IRQ_HANDLED;
 		mux_val = readl(SMSM_INTR_MUX_ADDR(SMEM_Q6_APPS_SMSM));
-		if (mux_val == prev_smem_q6_apps_smsm)
-			return IRQ_HANDLED;
-
-		prev_smem_q6_apps_smsm = mux_val;
+		if (mux_val != prev_smem_q6_apps_smsm)
+			prev_smem_q6_apps_smsm = mux_val;
+		return IRQ_HANDLED;
 	}
+#else
+	if (irq == INT_ADSP_A11_SMSM)
+		return IRQ_HANDLED;
+#endif
+
 
 	spin_lock_irqsave(&smem_lock, flags);
 	if (!smsm_info.state) {
@@ -1505,10 +1534,11 @@ uint32_t smsm_get_state(uint32_t smsm_entry)
 int smd_core_init(void)
 {
 	int r;
+	unsigned long flags = IRQF_TRIGGER_RISING;
 	SMD_INFO("smd_core_init()\n");
 
 	r = request_irq(INT_A9_M2A_0, smd_modem_irq_handler,
-			IRQF_TRIGGER_RISING, "smd_dev", 0);
+			flags, "smd_dev", 0);
 	if (r < 0)
 		return r;
 	r = enable_irq_wake(INT_A9_M2A_0);
@@ -1517,7 +1547,7 @@ int smd_core_init(void)
 		       "enable_irq_wake failed for INT_A9_M2A_0\n");
 
 	r = request_irq(INT_A9_M2A_5, smsm_irq_handler,
-			IRQF_TRIGGER_RISING, "smsm_dev", 0);
+			flags, "smsm_dev", 0);
 	if (r < 0) {
 		free_irq(INT_A9_M2A_0, 0);
 		return r;
@@ -1528,18 +1558,19 @@ int smd_core_init(void)
 		       "enable_irq_wake failed for INT_A9_M2A_5\n");
 
 #if defined(CONFIG_QDSP6)
+#if (INT_ADSP_A11 == INT_ADSP_A11_SMSM)
+		flags |= IRQF_SHARED;
+#endif
 	r = request_irq(INT_ADSP_A11, smd_dsp_irq_handler,
-			IRQF_TRIGGER_RISING | IRQF_SHARED, "smd_dev",
-			smd_dsp_irq_handler);
+			flags, "smd_dev", smd_dsp_irq_handler);
 	if (r < 0) {
 		free_irq(INT_A9_M2A_0, 0);
 		free_irq(INT_A9_M2A_5, 0);
 		return r;
 	}
 
-	r = request_irq(INT_ADSP_A11, smsm_irq_handler,
-			IRQF_TRIGGER_RISING | IRQF_SHARED, "smsm_dev",
-			smsm_irq_handler);
+	r = request_irq(INT_ADSP_A11_SMSM, smsm_irq_handler,
+			flags, "smsm_dev", smsm_irq_handler);
 	if (r < 0) {
 		free_irq(INT_A9_M2A_0, 0);
 		free_irq(INT_A9_M2A_5, 0);
@@ -1551,17 +1582,24 @@ int smd_core_init(void)
 	if (r < 0)
 		pr_err("smd_core_init: "
 		       "enable_irq_wake failed for INT_ADSP_A11\n");
+
+#if (INT_ADSP_A11 != INT_ADSP_A11_SMSM)
+	r = enable_irq_wake(INT_ADSP_A11_SMSM);
+	if (r < 0)
+		pr_err("smd_core_init: enable_irq_wake "
+		       "failed for INT_ADSP_A11_SMSM\n");
+#endif
+	flags &= ~IRQF_SHARED;
 #endif
 
 #if defined(CONFIG_DSPS)
 	r = request_irq(INT_DSPS_A11, smd_dsps_irq_handler,
-			IRQF_TRIGGER_RISING | IRQF_SHARED, "smd_dev",
-			smd_dsps_irq_handler);
+			flags, "smd_dev", smd_dsps_irq_handler);
 	if (r < 0) {
 		free_irq(INT_A9_M2A_0, 0);
 		free_irq(INT_A9_M2A_5, 0);
 		free_irq(INT_ADSP_A11, smd_dsp_irq_handler);
-		free_irq(INT_ADSP_A11, smsm_irq_handler);
+		free_irq(INT_ADSP_A11_SMSM, smsm_irq_handler);
 		return r;
 	}
 

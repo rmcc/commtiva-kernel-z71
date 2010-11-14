@@ -47,8 +47,9 @@
 #define HDLC_MAX 4096
 #define HDLC_OUT_BUF_SIZE	8192
 #define POOL_TYPE_COPY		1
-#define POOL_TYPE_HDLC		0
-#define POOL_TYPE_WRITE_STRUCT	2
+#define POOL_TYPE_HDLC		2
+#define POOL_TYPE_WRITE_STRUCT	4
+#define POOL_TYPE_ALL		7
 #define MODEM_DATA 		1
 #define QDSP_DATA  		2
 #define APPS_DATA  		3
@@ -154,9 +155,11 @@ struct diagchar_dev {
 	unsigned hdlc_escape;
 #ifdef CONFIG_DIAG_OVER_USB
 	int usb_connected;
+	struct usb_diag_ch *legacy_ch;
+	struct work_struct diag_proc_hdlc_work;
+	struct work_struct diag_read_work;
 #endif
 	struct workqueue_struct *diag_wq;
-	struct work_struct diag_read_work;
 	struct work_struct diag_drain_work;
 	struct work_struct diag_read_smd_work;
 	struct work_struct diag_read_smd_qdsp_work;

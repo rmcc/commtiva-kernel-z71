@@ -421,6 +421,7 @@ int msm_add_host(unsigned int host, struct msm_usb_host_platform_data *plat)
 
 #ifdef CONFIG_USB_ANDROID_DIAG
 struct usb_diag_platform_data usb_diag_pdata = {
+	.ch_name = DIAG_LEGACY,
 	.update_pid_and_serial_num = usb_diag_update_pid_and_serial_num,
 };
 
@@ -978,6 +979,7 @@ struct clk msm_clocks_7x30[] = {
 	CLK_7X30("adm_clk",	ADM_CLK,	NULL, 0),
 	CLK_7X30("cam_m_clk",	CAM_M_CLK,	NULL, 0),
 	CLK_7X30("camif_pad_pclk",	CAMIF_PAD_P_CLK,	NULL, OFF),
+	CLK_7X30("ce_clk",	CE_CLK,		NULL, 0),
 	CLK_7X30("emdh_clk",	EMDH_CLK,	NULL, OFF | CLK_MINMAX),
 	CLK_7X30("emdh_pclk",	EMDH_P_CLK,	NULL, OFF),
 	CLK_7X30("grp_2d_clk",	GRP_2D_CLK,	NULL, 0),
