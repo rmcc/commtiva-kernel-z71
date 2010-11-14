@@ -132,8 +132,8 @@ char *eeprom_file = NULL;
 
 /* int refClock = 26000000; */
 int refClock =   19200000;
-/* int regCode = 0x0; */
-int regCode = 0x4067;
+int regCode = 0x0;
+/* int regCode = 0x4067; */
 int txpwr = 0;
 #else /* ! ANDROID_ENV */
 int bmienable = 0;
