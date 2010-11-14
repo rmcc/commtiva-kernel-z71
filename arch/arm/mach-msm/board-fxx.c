@@ -1936,9 +1936,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_wlan_ar6000_pm_device,
 /* ATHENV */
 /* } FIH, SimonSSChang, 2009/02/26 */
-#if !defined(CONFIG_MSM_SERIAL_DEBUGGER)
-	&msm_device_uart3,
-#endif
 	&msm_device_smd,
 	&msm_device_dmov,
 	&msm_device_nand,
@@ -2513,11 +2510,6 @@ static void __init msm7x2x_init(void)
 	ar6k_wifi_status_cb_devid=NULL;
 #endif
 /* } FIH, JamesKCTung, 2009/06/03 */
-
-#if defined(CONFIG_MSM_SERIAL_DEBUGGER)
-	msm_serial_debug_init(MSM_UART3_PHYS, INT_UART3,
-			&msm_device_uart3.dev, 1);
-#endif
 
 	if (cpu_is_msm7x27())
 		msm7x2x_clock_data.max_axi_khz = 200000;

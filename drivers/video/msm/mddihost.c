@@ -320,7 +320,7 @@ int mddi_host_register_write_non_block(uint32 reg_addr,
 	regacc_pkt_ptr->bClient_ID = 0;
 	regacc_pkt_ptr->read_write_info = 0x0001;
 	regacc_pkt_ptr->register_address = reg_addr;
-	regacc_pkt_ptr->register_data_list = reg_val;
+	regacc_pkt_ptr->register_data_list[0] = reg_val;
 
 	MDDI_MSG_DEBUG("Reg Access write reg=0x%x, value=0x%x\n",
 		       regacc_pkt_ptr->register_address,

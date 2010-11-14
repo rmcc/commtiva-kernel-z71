@@ -2407,10 +2407,6 @@ config FB_MSM_MIPI_TOSHIBA_VIDEO_WVGA_PT
 	select FB_MSM_MIPI_DSI
 	default n
 
-choice
-	prompt "LCD Panel"
-	default FB_MSM_MDDI_AUTO_DETECT
-
 config FB_MSM_LCDC_PRISM_WVGA_PANEL
 	depends on FB_MSM_LCDC_HW
 	bool "LCDC Prism WVGA Panel"
