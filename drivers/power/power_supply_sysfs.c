@@ -50,10 +50,13 @@ static ssize_t power_supply_show_property(struct device *dev,
 	static char *charge_type[] = {
 		"Unknown", "N/A", "Trickle", "Fast"
 	};
+	/* FIH, Michael Kao, 2010/05/17{ */
+	/* [FXX_CR], Add Greco battery protection scenario*/
 	static char *health_text[] = {
 		"Unknown", "Good", "Overheat", "Dead", "Over voltage",
-		"Unspecified failure", "Cold",
+		"Unspecified failure", "Cold", "Shutdown AP", "Emgcy call only"
 	};
+	/* FIH, Michael Kao, 2010/05/17{ */
 	static char *technology_text[] = {
 		"Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd",
 		"LiMn"

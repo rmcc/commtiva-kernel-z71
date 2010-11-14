@@ -68,7 +68,13 @@ static unsigned bitbang_txrx_8(
 	unsigned		ns,
 	struct spi_transfer	*t
 ) {
+    /* { FIH, Chandler */
+	#ifdef CONFIG_FIH_FXX
+	unsigned		bits = t->bits_per_word; //lcm_innolux
+	#else
 	unsigned		bits = spi->bits_per_word;
+	#endif
+	/* } FIH, Chandler */
 	unsigned		count = t->len;
 	const u8		*tx = t->tx_buf;
 	u8			*rx = t->rx_buf;
@@ -196,6 +202,15 @@ int spi_bitbang_setup(struct spi_device *spi)
 		spi->controller_state = cs;
 	}
 
+       if (!spi->bits_per_word){
+               /* FIH, Chandler */
+               #ifdef CONFIG_FIH_FXX
+               spi->bits_per_word = 9;
+               #else
+                spi->bits_per_word = 8;
+               #endif
+       }
+
 	/* per-word shift register access, in hardware or bitbanging */
 	cs->txrx_word = bitbang->txrx_word[spi->mode & (SPI_CPOL|SPI_CPHA)];
 	if (!cs->txrx_word)
@@ -293,6 +308,17 @@ static void bitbang_work(struct work_struct *work)
 		status = 0;
 
 		list_for_each_entry (t, &m->transfers, transfer_list) {
+
+               /* { FIH, ChandlerKang, lcm_innolux : work_around */
+#ifdef CONFIG_FIH_FXX
+                if(t->rx_buf){
+                   t->bits_per_word=8;
+                }else{
+                   t->bits_per_word=9;
+                }
+                //printk(KERN_INFO "lcm_innolux: bitbang_work: t->bits_per_word(%d), t->len(%d)\n", t->bits_per_word, t->len);
+#endif        
+               /* } FIH, ChandlerKang, lcm_innolux : work_around */
 
 			/* override speed or wordsize? */
 			if (t->speed_hz || t->bits_per_word)

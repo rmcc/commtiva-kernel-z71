@@ -180,6 +180,28 @@ config XEN_KBDDEV_FRONTEND
 	  keyboard and mouse device driver.  It communicates with a back-end
 	  in another domain.
 
+#+++ FIH; Tiger; 2009/5/1
+config INPUT_ECOMPASS
+        bool "E-Compass interface"
+        ---help---
+                Say Y here if you want your ecompass to be accessible as char device
+                - /dev/input/ecompass device.
+
+                If unsure, say N.
+#--- FIH; Tiger; 2009/5/1
+#FIH, WillChen, 2009/8/24 ++
+config INPUT_LPSENSOR
+	bool "LPsensor interface"
+	---help---
+	  Say Y here if you want your gsensor to be accessible as char device
+	  - /dev/input/proximitysensor device.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose Y here: the
+	  module will be called psensor.
+#FIH, WillChen, 2009/8/24 --
+
 comment "Input Device Drivers"
 
 source "drivers/input/keyboard/Kconfig"
@@ -193,6 +215,13 @@ source "drivers/input/tablet/Kconfig"
 source "drivers/input/touchscreen/Kconfig"
 
 source "drivers/input/misc/Kconfig"
+
+#+++ FIH; Tiger; 2009/5/1
+source "drivers/input/ecompass/Kconfig"
+#--- FIH; Tiger; 2009/5/1
+#FIH, WillChen, 2009/8/24 ++
+source "drivers/input/lightproxisensor/Kconfig"
+#FIH, WillChen, 2009/8/24 --
 
 endif
 

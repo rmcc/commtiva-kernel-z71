@@ -18,6 +18,12 @@
 
 #include "mdp.h"
 
+/* { FIH, ChandlerKang, chandler_boot_lcdc, 09/9/24 */
+#ifdef CONFIG_FIH_FXX    
+#include <mach/msm_iomap.h>
+#include <mach/msm_smd.h>
+#endif
+/* } FIH, ChandlerKang, 09/9/24 */
 /* mdp primary csc limit vector */
 uint32 mdp_plv[] = { 0x10, 0xeb, 0x10, 0xf0 };
 
@@ -593,8 +599,28 @@ void mdp_hw_init(void)
 {
 	int i;
 
+/* { FIH, ChandlerKang, chandler_boot_lcdc, 09/9/24 */
+#ifdef CONFIG_FIH_FXX    
+	int id;
+	int mddi_type=0;
+	
+    id=FIH_READ_HWID_FROM_SMEM();
+    
+    if( (CMCS_CTP_PR1 <= id && id < CMCS_7627_EVB1 ) || (CMCS_7627_PR1 <= id) ) {
+        mddi_type=1;
+        printk( KERN_INFO "mdp_hw_init():  MDDI panel, default way !!\n");
+    }else{
+        printk( KERN_INFO "mdp_hw_init():  RGB panel, skip mdp power on!!\n");
+    }
+#endif    
+    //mddi_type=1;//chandler_porting: workaround for porting
+/* } FIH, ChandlerKang, 09/9/24 */
+
 	/* MDP cmd block enable */
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	//chandler_boot_lcdc
+	if(mddi_type){
+        mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	}
 
 	/* debug interface write access */
 	outpdw(MDP_BASE + 0x60, 1);
@@ -637,7 +663,13 @@ void mdp_hw_init(void)
 	MDP_OUTP(MDP_CMD_DEBUG_ACCESS_BASE + 0x01e4, 0);
 
 #ifndef CONFIG_FB_MSM_MDP22
+    //chandler_boot_lcdc
+    if(mddi_type){
 	MDP_OUTP(MDP_BASE + 0xE0000, 0);
+    }else{
+        MDP_OUTP(MDP_BASE + 0xE0000, 1);
+    }
+	
 	MDP_OUTP(MDP_BASE + 0x100, 0xffffffff);
 	MDP_OUTP(MDP_BASE + 0x90070, 0);
 	MDP_OUTP(MDP_BASE + 0x94010, 1);
@@ -717,5 +749,8 @@ void mdp_hw_init(void)
 #endif
 
 	/* MDP cmd block disable */
-	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+	//chandler_boot_lcdc
+	if(mddi_type){
+    	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+    }
 }

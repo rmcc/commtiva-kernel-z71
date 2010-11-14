@@ -579,7 +579,9 @@ static int __msm_get_frame(struct msm_sync *sync,
 		goto err;
 	}
 
+#ifndef CONFIG_FIH_FXX
 	frame->ts = qcmd->ts;
+#endif
 	frame->buffer = (unsigned long)pmem_info.vaddr;
 	frame->y_off = pmem_info.y_off;
 	frame->cbcr_off = pmem_info.cbcr_off;
@@ -2063,7 +2065,6 @@ static long msm_ioctl_frame(struct file *filep, unsigned int cmd,
 	void __user *argp = (void __user *)arg;
 	struct msm_cam_device *pmsm = filep->private_data;
 
-
 	switch (cmd) {
 	case MSM_CAM_IOCTL_GETFRAME:
 		/* Coming from frame thread to get frame
@@ -2117,6 +2118,14 @@ static long msm_ioctl_control(struct file *filep, unsigned int cmd,
 	case MSM_CAM_IOCTL_GET_SENSOR_INFO:
 		rc = msm_get_sensor_info(pmsm->sync, argp);
 		break;
+/* FIH, Charles Huang, 2009/11/09 { */
+/* [FXX_CR], new function  */
+#ifdef CONFIG_FIH_FXX
+	case MSM_CAM_IOCTL_GET_FIH_SENSOR_INFO:
+		rc = msm_get_sensor_info(pmsm->sync, argp);
+		break;
+#endif
+/* } FIH, Charles Huang, 2009/11/09 */
 	default:
 		rc = msm_ioctl_common(pmsm, cmd, argp);
 		break;
@@ -2325,7 +2334,9 @@ static void msm_vfe_sync(struct msm_vfe_resp *vdata,
 	qcmd->type = qtype;
 	qcmd->command = vdata;
 
+#ifndef CONFIG_FIH_FXX
 	ktime_get_ts(&(qcmd->ts));
+#endif
 
 	if (qtype != MSM_CAM_Q_VFE_MSG)
 		goto vfe_for_config;
@@ -2951,6 +2962,7 @@ int msm_camera_drv_start(struct platform_device *dev,
 				__func__, rc);
 			return rc;
 		}
+
 	}
 
 	pmsm = kzalloc(sizeof(struct msm_cam_device) * 3 +

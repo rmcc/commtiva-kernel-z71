@@ -105,6 +105,7 @@ static struct shared_pll_control *pll_control;
 static struct clock_state drv_state = { 0 };
 static struct clkctl_acpu_speed *acpu_freq_tbl;
 
+
 static void __init acpuclk_init(void);
 
 /*
@@ -734,6 +735,12 @@ static void __init acpu_freq_tbl_fixup(void)
 		udelay(50);
 	} while (pll1_l == 0);
 	do {
+#if 0
+#ifdef CONFIG_FIH_FXX
+		pll2_l = writel(PLL_800_MHZ,PLLn_L_VAL(2));
+		cpu_relax();
+#endif
+#endif
 		pll2_l = readl(PLLn_L_VAL(2)) & 0x3f;
 		cpu_relax();
 		udelay(50);
@@ -919,6 +926,50 @@ static void shared_pll_control_init(void)
 	pr_warning("Falling back to proc_comm PLL control.\n");
 }
 
+//[+++][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
+#ifdef CONFIG_FIH_FXX
+void acpuclk_set_lcdcoff_wait_for_irq(int on)
+{
+	int rc = 0;
+
+	mutex_lock(&drv_state.lock);
+	if(on)
+	{
+		//panel status is on
+		acpu_freq_tbl[0].axiclk_khz = 200000;
+		acpu_freq_tbl[1].axiclk_khz = 200000;
+		acpu_freq_tbl[2].axiclk_khz = 200000;
+		acpu_freq_tbl[3].axiclk_khz = 200000;
+		acpu_freq_tbl[4].axiclk_khz = 200000;
+		acpu_freq_tbl[5].axiclk_khz = 200000;
+		acpu_freq_tbl[6].axiclk_khz = 200000;		
+		acpu_freq_tbl[7].axiclk_khz = 200000;
+		acpu_freq_tbl[8].axiclk_khz = 200000;
+
+		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
+				200000 * 1000);
+
+		if (rc < 0)
+			pr_err("Setting AXI min rate failed!\n");
+	}
+	else
+	{
+		//panel status is off
+		acpu_freq_tbl[0].axiclk_khz = 30720;
+		acpu_freq_tbl[1].axiclk_khz = 61440;
+		acpu_freq_tbl[2].axiclk_khz = 61440;
+		acpu_freq_tbl[3].axiclk_khz = 61440;
+		acpu_freq_tbl[4].axiclk_khz = 122880;
+		acpu_freq_tbl[5].axiclk_khz = 160000;
+		acpu_freq_tbl[6].axiclk_khz = 160000;		
+		acpu_freq_tbl[7].axiclk_khz = 160000;
+		acpu_freq_tbl[8].axiclk_khz = 200000;
+	}
+	mutex_unlock(&drv_state.lock);
+
+}
+#endif
+//[---][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	pr_info("acpu_clock_init()\n");
@@ -936,6 +987,7 @@ void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 		msm7x25_acpu_pll_hw_bug_fix();
 	acpuclk_init();
 	lpj_init();
+
 	print_acpu_freq_tbl();
 #ifdef CONFIG_CPU_FREQ_MSM
 	cpufreq_table_init();

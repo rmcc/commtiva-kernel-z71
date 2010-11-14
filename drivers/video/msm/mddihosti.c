@@ -663,7 +663,10 @@ static void mddi_process_link_list_done(void)
 					(*(pmhctl->llist_notify[idx].done_cb))
 					    ();
 				}
-
+/* FIH, ChandlerKang, 09.12.14 { */
+				//chandler_failon
+                //printk(KERN_INFO"%s():chandler: idx(%d), in_use(%d)\n",__func__,idx,pmhctl->llist_notify[idx].in_use);
+/* FIH, ChandlerKang, 09.12.14 { */
 				pmhctl->llist_notify[idx].in_use = FALSE;
 				pmhctl->llist_notify[idx].waiting = FALSE;
 				pmhctl->llist_notify[idx].done_cb = NULL;
@@ -1629,10 +1632,23 @@ static void mddi_send_fw_link_skew_cal(mddi_host_type host_idx)
 }
 
 
+/* FIH, ChandlerKang, 09.12.14 { */
+//chandler_failon
+static boolean initialized = FALSE;
+void mddi_host_reinit(void)
+{
+    mddi_host_powerdown(MDDI_HOST_PRIM);
+    initialized=FALSE;
+    mddi_host_init(MDDI_HOST_PRIM);
+}
+/* FIH, ChandlerKang, 09.12.14 } */
+
 void mddi_host_init(mddi_host_type host_idx)
 /* Write out the MDDI configuration registers */
 {
-	static boolean initialized = FALSE;
+/* FIH, ChandlerKang, 09.12.14 { */
+	//static boolean initialized = FALSE;
+/* FIH, ChandlerKang, 09.12.14 } */
 	mddi_host_cntl_type *pmhctl;
 
 	if (host_idx >= MDDI_NUM_HOST_CORES) {
@@ -1649,7 +1665,15 @@ void mddi_host_init(mddi_host_type host_idx)
 		for (host = MDDI_HOST_PRIM; host < MDDI_NUM_HOST_CORES; host++) {
 			pmhctl = &(mhctl[host]);
 			initialized = TRUE;
-
+/* FIH, ChandlerKang, 09.12.14 { */
+            //chandler_failon
+            if(pmhctl->llist_ptr){
+                dma_free_coherent(NULL, MDDI_LLIST_POOL_SIZE, pmhctl->llist_ptr, (pmhctl->llist_dma_addr));
+                printk("[mddi_host_init]: pmhctl->llist_ptr not NULL, free it!!\n");
+                memset(pmhctl->llist_notify, 0, sizeof(pmhctl->llist_notify));
+                printk("[mddi_host_init]: set pmhctl->llist_notify zero, size(%d)!\n", sizeof(pmhctl->llist_notify));
+            }
+/* FIH, ChandlerKang, 09.12.14 } */
 			pmhctl->llist_ptr =
 			    dma_alloc_coherent(NULL, MDDI_LLIST_POOL_SIZE,
 					       &(pmhctl->llist_dma_addr),
@@ -1663,6 +1687,13 @@ void mddi_host_init(mddi_host_type host_idx)
 #else
 			mddi_rev_user.waiting = FALSE;
 			init_completion(&(mddi_rev_user.done_comp));
+/* FIH, ChandlerKang, 09.12.14 { */
+            //chandler_failon
+            if(pmhctl->rev_data_buf){
+                dma_free_coherent(NULL, MDDI_MAX_REV_DATA_SIZE, pmhctl->rev_data_buf, (pmhctl->rev_data_dma_addr));
+                printk("[mddi_host_init]: pmhctl->rev_data_buf not NULL, free it!!\n");
+            }
+/* FIH, ChandlerKang, 09.12.14 } */
 			pmhctl->rev_data_buf =
 			    dma_alloc_coherent(NULL, MDDI_MAX_REV_DATA_SIZE,
 					       &(pmhctl->rev_data_dma_addr),
@@ -1770,7 +1801,9 @@ void mddi_host_init(mddi_host_type host_idx)
 	pmhctl = &(mhctl[host_idx]);
 }
 
-#ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
+/* { FIH, Chandler, 2009/06/22*/
+//#ifdef CONFIG_FB_MSM_MDDI_AUTO_DETECT
+#if 1
 static uint32 mddi_client_id;
 
 uint32 mddi_get_client_id(void)
@@ -1877,6 +1910,7 @@ uint32 mddi_get_client_id(void)
 	return mddi_client_id;
 }
 #endif
+/* } FIH, Chandler, 2009/06/22*/
 
 void mddi_host_powerdown(mddi_host_type host_idx)
 {

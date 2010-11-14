@@ -181,6 +181,16 @@ config MACH_MSM7X30_FLUID
        help
          Support for the Qualcomm MSM7x30 FLUID eval board.
 
+
+#+++++FIH_simonsschang define vendor global macro for FXX, 2009/05/17
+config FIH_FXX
+	bool "Support for the FIH FXX board"
+	default y
+	help
+	  Say Y here if you want to support FIH FXX board.
+#-----FIH_simonsschang define vendor global macro for FXX, 2009/05/17	  
+
+
 config MACH_SAPPHIRE
 	depends on ARCH_MSM7X01A
 	default n
@@ -345,6 +355,7 @@ config MSM_STACKED_MEMORY
 
 config PHYS_OFFSET
 	hex
+	default "0x12E00000" if FIH_FXX
 	default "0x00200000" if !MSM_STACKED_MEMORY
 	default "0x00000000" if ARCH_QSD8X50 && MSM_SOC_REV_A
 	default "0x20000000" if ARCH_QSD8X50
@@ -1029,6 +1040,14 @@ config MSM_MEMORY_LOW_POWER_MODE
 	  The application processor controls whether memory should enter
 	  which low power mode.
 
+#+++ FIH; Peter; 2009/6/4
+config FIH_F9xx_GPIO_KEYPAD
+	bool "FIH F9xx GPIO keypad"
+	depends on (ARCH_QSD || ARCH_MSM) && INPUT_GPIO = "y"
+	default y
+	help
+	  Select if the GPIO keypad is attached.
+#--- FIH; Peter; 2009/6/4
 choice
 	prompt "Default Memory Low Power Mode during Idle"
 	depends on MSM_MEMORY_LOW_POWER_MODE

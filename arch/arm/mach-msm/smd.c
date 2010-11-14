@@ -34,6 +34,11 @@
 #include <mach/system.h>
 #include <linux/remote_spinlock.h>
 
+/* FIH, Debbie, 2009/12/07 { */
+/* add for F917 */
+#include <mach/gpio.h>
+/* FIH, Debbie, 2009/12/07 } */
+
 #include "smd_private.h"
 #include "proc_comm.h"
 #include "modem_notifier.h"
@@ -78,6 +83,11 @@ enum {
 static int msm_smd_debug_mask;
 module_param_named(debug_mask, msm_smd_debug_mask,
 		   int, S_IRUGO | S_IWUSR | S_IWGRP);
+
+/* FIH, Debbie, 2009/12/07 { */
+/* add for F917 */
+void fih_judge_hwid_from_fpc(void);
+/* FIH, Debbie, 2009/12/07 } */
 
 #if defined(CONFIG_MSM_SMD_DEBUG)
 #define SMD_DBG(x...) do {				\
@@ -743,6 +753,11 @@ static int smd_stream_read(smd_channel_t *ch, void *data, int len)
 static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 {
 	unsigned long flags;
+    // +++ FIH +++
+	#ifdef SAVE_QXDM_LOG_TO_SD_CARD
+    int lock_ok = 0;
+	#endif
+    // --- FIH ---
 	int r;
 
 	if (len < 0)
@@ -755,11 +770,20 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 	if (r > 0)
 		ch->notify_other_cpu();
 
+    // +++ FIH +++
+    #ifdef SAVE_QXDM_LOG_TO_SD_CARD
+    lock_ok = spin_trylock_irqsave(&smd_lock, flags);
+    ch->current_packet -= r;
+	update_packet_state(ch);
+    if (lock_ok)
+    	spin_unlock_irqrestore(&smd_lock, flags);
+    #else
 	spin_lock_irqsave(&smd_lock, flags);
 	ch->current_packet -= r;
 	update_packet_state(ch);
 	spin_unlock_irqrestore(&smd_lock, flags);
-
+    #endif
+    // --- FIH ---
 	return r;
 }
 
@@ -1558,7 +1582,340 @@ int smd_core_init(void)
 	return 0;
 }
 
-static int __init msm_smd_probe(struct platform_device *pdev)
+/* FIH, Debbie Sun, 2009/06/18 { */
+/* get share memory command address dynamically */
+#ifdef CONFIG_FIH_FXX
+unsigned int fih_hwid = 0x0;
+/* modify new hardware id */
+unsigned int fih_orig_hwid = 0x0;
+unsigned int fih_mode = 0x0;
+/* add for Read modem mode from smem */
+unsigned int fih_network_mode = 0x0;
+#ifdef POWER_ON_CAUSE_PROC_READ_ENTRY
+unsigned int fih_power_on_cause = 0x0;
+#endif
+
+/* FIH, Debbie Sun, 2010/05/24 { */
+/* get ram info and device name form share memory */
+unsigned int fih_dram_magic_number = 0;
+char   fih_flash_name[32]  = {0};
+/* FIH, Debbie Sun, 2010/05/24 } */
+
+
+/* switch UART for printk log */
+unsigned int fih_host_log_from_uart = 0x0;
+unsigned int fih_host_usb_id = 0x0;
+unsigned int fih_host_enable_kpd = 0x0;
+
+void fih_smem_alloc(void)
+{
+    struct smem_oem_info *fih_smem_info;
+
+    printk(KERN_INFO "fih_smem_alloc\n");
+
+    fih_smem_info = smem_alloc(SMEM_ID_VENDOR0, sizeof(*fih_smem_info));
+
+    printk(KERN_INFO "smd.c, fih_smem_info = 0x%X\n", (unsigned int)fih_smem_info);
+    if(fih_smem_info)
+    {
+        fih_orig_hwid = (fih_smem_info->hw_id);
+        fih_mode = (fih_smem_info->keypad_info);
+        #ifdef POWER_ON_CAUSE_PROC_READ_ENTRY
+        fih_power_on_cause = (fih_smem_info->power_on_cause);
+        #endif 
+	/* add for Read modem mode from smem */
+        fih_network_mode = (fih_smem_info->network_mode);
+
+        /* FIH, Debbie Sun, 2010/05/24 { */
+        /* get ram info and device name form share memory */
+        memcpy(fih_flash_name, fih_smem_info->flash_name, 32);
+        fih_dram_magic_number = (fih_smem_info->dram_info);
+        /* FIH, Debbie Sun, 2010/05/24 } */	
+		
+    }
+    printk(KERN_INFO "smd.c, fih_orig_hwid = 0x%X\n",fih_orig_hwid);
+    /* [FXX_CR], Modify to show correct FTM team required format*/
+    printk(KERN_INFO "smd.c, fih_mode=%d\n",fih_mode);
+	
+    printk(KERN_INFO "smd.c, fih_power_on_cause=0x%08x\n", fih_smem_info->power_on_cause);
+    printk(KERN_INFO "smd.c, fih_dram_magic_number=%d\n",fih_dram_magic_number);
+
+    /* FIH, Debbie, 2009/12/07 { */
+    /* add for F917 */
+    fih_judge_hwid_from_fpc();
+    /* FIH, Debbie, 2009/12/07 } */
+}
+
+/* FIH, Debbie, 2009/09/11 { */
+/* switch UART for printk log */
+void fih_smem_alloc_for_host_used(void)
+{
+    struct smem_host_oem_info* fih_smem_host_used;
+    printk(KERN_INFO "fih_smem_alloc_for_host_used\n");
+    fih_smem_host_used = smem_alloc(SMEM_ID_VENDOR2, sizeof(*fih_smem_host_used));
+    if(fih_smem_host_used)
+    {
+	 fih_host_log_from_uart = (fih_smem_host_used->host_log_from_uart);
+	 fih_host_usb_id = (fih_smem_host_used->host_usb_id);
+	 fih_host_enable_kpd = fih_smem_host_used->host_enable_kpd;
+    }
+    printk(KERN_INFO "smd.c, fih_smem_host_used address = 0x%X\n", (unsigned int)fih_smem_host_used);
+    printk(KERN_INFO "smd.c, host_usb_id = 0x%X\n", fih_smem_host_used->host_usb_id);
+    printk(KERN_INFO "smd.c, host_log_from_uart = 0x%X\n", fih_smem_host_used->host_log_from_uart);
+
+}
+/* FIH, Debbie, 2009/09/11 } */
+
+unsigned int fih_read_hwid_from_smem(void)
+{
+    /* map new hardware id */
+    switch(fih_orig_hwid)
+    {
+        case CMCS_850_RTP_PR2:
+        case CMCS_900_RTP_PR2:
+            fih_hwid = CMCS_RTP_PR2;
+            break;
+        case CMCS_850_RTP_PR3:
+        case CMCS_900_RTP_PR3:
+            fih_hwid = CMCS_RTP_PR3;
+            break;
+        case CMCS_850_RTP_PR4:
+        case CMCS_900_RTP_PR4:
+            fih_hwid = CMCS_RTP_PR4;
+            break;
+        case CMCS_850_RTP_PR5:
+        case CMCS_900_RTP_PR5:
+            fih_hwid = CMCS_RTP_PR5;
+            break;
+        case CMCS_850_RTP_MP1:
+        case CMCS_900_RTP_MP1:
+            fih_hwid = CMCS_RTP_MP1;
+            break;
+        case CMCS_850_RTP_MP2:
+        case CMCS_900_RTP_MP2:
+            fih_hwid = CMCS_RTP_MP2;
+            break;
+        case CMCS_850_RTP_MP3:
+        case CMCS_900_RTP_MP3:
+            fih_hwid = CMCS_RTP_MP3;
+            break;
+        case CMCS_850_CTP_PR2:
+        case CMCS_900_CTP_PR2:
+            fih_hwid = CMCS_CTP_PR2;
+        break;
+        case CMCS_850_CTP_PR3:
+        case CMCS_900_CTP_PR3:
+        /* add for FST */ 
+        case CMCS_125_FST_PR1:
+        case CMCS_125_FST_PR2:
+        case CMCS_125_FST_MP1:
+        case CMCS_128_FST_PR1:
+        case CMCS_128_FST_PR2:
+        case CMCS_128_FST_MP1:
+        /* FIH, Debbie, 2010/05/04 { */
+        case CMCS_CTP_F917_PR1:			
+        case CMCS_CTP_F917_PR2:
+        case CMCS_CTP_F917_PR3:
+        case CMCS_CTP_F917_PR4:
+        case CMCS_CTP_F917_MP1:
+        case CMCS_CTP_F917_MP2:
+        case CMCS_CTP_F917_MP3:
+        case CMCS_145_CTP_PR1:
+        case CMCS_125_CTP_GRE_PR1:
+        case CMCS_125_CTP_GRE_PR2:
+        case CMCS_125_CTP_GRE_MP1:
+        case CMCS_125_CTP_GRE_MP2:
+        case CMCS_125_FA9_PR1:
+        case CMCS_125_FA9_PR2:
+        case CMCS_125_FA9_PR3:
+        case CMCS_125_FA9_MP1:
+        /* FIH, Debbie, 2010/05/04 } */
+        /* FIH, Debbie, 2010/05/24 { */
+        case CMCS_125_4G4G_FAA_PR1:
+        case CMCS_125_4G4G_FAA_PR2:
+        case CMCS_125_4G4G_FAA_PR3:
+        case CMCS_125_4G4G_FAA_MP1:
+        case CMCS_128_4G4G_FAA_PR1:
+        case CMCS_128_4G4G_FAA_PR2:
+        case CMCS_128_4G4G_FAA_PR3:
+        case CMCS_128_4G4G_FAA_MP1:
+        /* FIH, Debbie, 2010/05/24 } */
+            fih_hwid = CMCS_CTP_PR3;
+        break;
+        case CMCS_850_CTP_PR4:
+        case CMCS_900_CTP_PR4:
+            fih_hwid = CMCS_CTP_PR4;
+            break;
+        case CMCS_850_CTP_PR5:
+        case CMCS_900_CTP_PR5:
+            fih_hwid = CMCS_CTP_PR5;
+            break;
+        case CMCS_850_CTP_MP1:
+        case CMCS_900_CTP_MP1:
+            fih_hwid = CMCS_CTP_MP1;
+            break;
+        case CMCS_850_CTP_MP2:
+        case CMCS_900_CTP_MP2:
+            fih_hwid = CMCS_CTP_MP2;
+            break;
+        case CMCS_850_CTP_MP3:
+        case CMCS_900_CTP_MP3:
+            fih_hwid = CMCS_CTP_MP3;
+            break;
+        case CMCS_7627_F913_MP1_W:
+        case CMCS_7627_F913_MP1_C_G:
+        /* FIH, Debbie Sun, 2010/05/24 { */ 
+        case CMCS_7627_F913_MP1_W_4G4G:
+        case CMCS_7627_F913_MP1_C_G_4G4G:
+        /* FIH, Debbie Sun, 2010/05/24 } */ 
+        /* FIH, Debbie, 2010/05/04 { */
+        case CMCS_7627_F20_PR1:
+        case CMCS_7627_F20_PR2:
+        case CMCS_7627_F20_PR3:
+        case CMCS_7627_F20_MP1:
+        /* FIH, Debbie, 2010/05/04 } */
+            fih_hwid = CMCS_F913_MP1;
+            break;
+        default:
+            fih_hwid = fih_orig_hwid;
+            printk(KERN_INFO " No mapping HWID\n");
+            break;
+    }
+    return fih_hwid;
+}
+
+/* modify new hardware id */
+unsigned int fih_read_orig_hwid_from_smem(void)
+{
+    printk(KERN_INFO "read fih_orig_hwid = 0x%X \n", fih_orig_hwid);
+    return fih_orig_hwid;
+}
+
+unsigned int fih_read_mode_from_smem(void)
+{
+    return fih_mode;
+}
+
+/* add for Read modem mode from smem */
+unsigned int fih_read_network_mode_from_smem(void)
+{
+    return fih_network_mode;
+}
+#ifdef POWER_ON_CAUSE_PROC_READ_ENTRY
+unsigned int fih_read_power_on_cuase_from_smem(void)
+{
+    return fih_power_on_cause;
+}
+#endif
+/* switch UART for printk log */
+unsigned int fih_read_uart_switch_from_smem(void)
+{
+    return fih_host_log_from_uart;
+}
+
+unsigned int fih_read_usb_id_from_smem(void)
+{
+    return fih_host_usb_id;
+}
+
+unsigned int fih_read_kpd_from_smem(void)
+{
+    return fih_host_enable_kpd;
+}
+
+/* FIH, Debbie Sun, 2010/05/24 { */
+/* get ram info and device name form share memory */
+unsigned int fih_read_dram_info_from_smem(void)
+{
+    return fih_dram_magic_number;
+}
+
+char* fih_read_flash_name_from_smem(void)
+{
+    return fih_flash_name ;
+}
+/* FIH, Debbie Sun, 2010/05/24 } */
+
+/* FIH, Debbie, 2009/12/07 { */
+/* add for F917 */
+void fih_judge_hwid_from_fpc(void)
+{
+     int gpio_jogball_left = 88;
+     int gpio_jogball_right = 91;
+     int gpio_jogball_down = 90;
+     int gpio_jogball_up = 93;
+
+     /* FIH, Debbie, 2010/06/01 { */
+     fih_read_hwid_from_smem();
+
+//     if(((fih_orig_hwid > CMCS_850_CTP_PR2) && (fih_orig_hwid <= CMCS_850_CTP_MP3))||
+//	  ((fih_orig_hwid > CMCS_900_CTP_PR2) && (fih_orig_hwid <= CMCS_900_CTP_MP3)))
+     if((fih_hwid > CMCS_CTP_PR2) && (fih_hwid <= CMCS_CTP_MP3))
+     /* FIH, Debbie, 2010/06/01 } */
+     {
+          gpio_tlmm_config(GPIO_CFG(gpio_jogball_left,
+                                                          0, /* function */
+                                                          GPIO_CFG_INPUT,
+                                                          GPIO_CFG_PULL_DOWN,
+                                                          GPIO_CFG_2MA),
+                                                          GPIO_CFG_ENABLE);
+          gpio_tlmm_config(GPIO_CFG(gpio_jogball_right,
+                                                          0, /* function */
+                                                          GPIO_CFG_INPUT,
+                                                          GPIO_CFG_PULL_DOWN,
+                                                          GPIO_CFG_2MA),
+                                                          GPIO_CFG_ENABLE);
+          gpio_tlmm_config(GPIO_CFG(gpio_jogball_down,
+                                                          0, /* function */
+                                                          GPIO_CFG_INPUT,
+                                                          GPIO_CFG_PULL_DOWN,
+                                                          GPIO_CFG_2MA),
+                                                          GPIO_CFG_ENABLE);
+          gpio_tlmm_config(GPIO_CFG(gpio_jogball_up,
+                                                          0, /* function */
+                                                          GPIO_CFG_INPUT,
+                                                          GPIO_CFG_PULL_DOWN,
+                                                          GPIO_CFG_2MA),
+                                                          GPIO_CFG_ENABLE);
+	 
+          printk(KERN_INFO " gpio_jogball_left = %d\n", gpio_get_value(gpio_jogball_left));
+          printk(KERN_INFO " gpio_jogball_down = %d\n", gpio_get_value(gpio_jogball_down));
+          printk(KERN_INFO " gpio_jogball_right = %d\n", gpio_get_value(gpio_jogball_right));
+          printk(KERN_INFO " gpio_jogball_up =%d\n", gpio_get_value(gpio_jogball_up));
+          if((!gpio_get_value(gpio_jogball_left)) && ( !gpio_get_value(gpio_jogball_down)) &&
+              (gpio_get_value(gpio_jogball_right)) && (!gpio_get_value(gpio_jogball_up))) 
+          {
+               switch(fih_orig_hwid)
+               {
+                    case CMCS_850_CTP_PR3:
+                    case CMCS_900_CTP_PR3:
+                         /* FIH, Debbie, 2010/05/04 { */
+                         fih_orig_hwid = CMCS_CTP_F917_PR1;
+                         /* FIH, Debbie, 2010/05/04 { */
+                         break;
+               }
+          }
+          /* FIH, Debbie, 2010/06/01 { */
+          else if((!gpio_get_value(gpio_jogball_left)) && ( gpio_get_value(gpio_jogball_down)) &&
+                     (!gpio_get_value(gpio_jogball_right)) && (!gpio_get_value(gpio_jogball_up))) 
+          {
+               switch(fih_orig_hwid)
+               {
+                    case CMCS_CTP_F917_PR2:
+                         fih_orig_hwid = CMCS_128_4G4G_FAA_PR1;
+                         break; 
+               }
+          }
+          /* FIH, Debbie, 2010/06/01 } */
+     }
+}
+
+/* FIH, Debbie, 2009/12/07 } */
+#endif
+/* FIH, Debbie Sun, 2009/06/18 }*/
+
+
+static int __devinit msm_smd_probe(struct platform_device *pdev)
 {
 	/* enable smd and smsm info messages */
 	msm_smd_debug_mask = 0xc;

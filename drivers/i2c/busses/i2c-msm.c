@@ -761,6 +761,10 @@ static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 		mutex_lock(&dev->mlock);
 		dev->suspended = 1;
 		mutex_unlock(&dev->mlock);
+//henry,add for suspend power saving.++
+                gpio_tlmm_config(GPIO_CFG(60, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	        gpio_tlmm_config(GPIO_CFG(61, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+//henry,add for suspend power saving.--
 		del_timer_sync(&dev->pwr_timer);
 		if (dev->clk_state != 0)
 			msm_i2c_pwr_mgmt(dev, 0);
@@ -772,6 +776,8 @@ static int msm_i2c_suspend(struct platform_device *pdev, pm_message_t state)
 static int msm_i2c_resume(struct platform_device *pdev)
 {
 	struct msm_i2c_dev *dev = platform_get_drvdata(pdev);
+        gpio_tlmm_config(GPIO_CFG(60, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
+	gpio_tlmm_config(GPIO_CFG(61, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
 	dev->suspended = 0;
 	return 0;
 }

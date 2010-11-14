@@ -405,6 +405,13 @@ do {								\
 #define LOCK_CONTENDED(_lock, try, lock) \
 	lock(_lock)
 
+/* FIH;Tiger;2010/2/10 { */
+#if defined(CONFIG_FIH_FXX) && defined(CONFIG_DEBUG_SPINLOCK)
+#define LOCK_CONTENDED_FIH(_lock, try, lock, file, line) \
+	lock(_lock, file, line)
+#endif
+/* } FIH;Tiger;2010/2/10 */
+
 #endif /* CONFIG_LOCK_STAT */
 
 #ifdef CONFIG_LOCKDEP

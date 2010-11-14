@@ -999,7 +999,7 @@ static struct uart_driver msm_uart_driver = {
 	.cons = MSM_CONSOLE,
 };
 
-static int __init msm_serial_probe(struct platform_device *pdev)
+static int __devinit msm_serial_probe(struct platform_device *pdev)
 {
 	struct msm_port *msm_port;
 	struct resource *resource;

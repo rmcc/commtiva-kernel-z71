@@ -552,7 +552,7 @@ static int bluesleep_write_proc_proto(struct file *file, const char *buffer,
 	return count;
 }
 
-static int __init bluesleep_probe(struct platform_device *pdev)
+static int __devinit bluesleep_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct resource *res;

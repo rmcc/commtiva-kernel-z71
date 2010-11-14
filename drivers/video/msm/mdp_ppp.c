@@ -1233,6 +1233,7 @@ static int mdp_ppp_verify_req(struct mdp_blit_req *req)
 	return 0;
 }
 
+#ifdef CONFIG_MSM_KGSL_DRM
 int get_gem_img(struct mdp_img *img, unsigned long *start, unsigned long *len)
 {
 	/* Set len to zero to appropriately error out if
@@ -1241,6 +1242,7 @@ int get_gem_img(struct mdp_img *img, unsigned long *start, unsigned long *len)
 	*len = 0;
 	return kgsl_gem_obj_addr(img->memory_id, (int) img->priv, start, len);
 }
+#endif
 
 int get_img(struct mdp_img *img, struct fb_info *info, unsigned long *start,
 	    unsigned long *len, struct file **pp_file)
@@ -1294,18 +1296,22 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 		req->dst.format =  mfd->fb_imgType;
 	if (req->src.format == MDP_FB_FORMAT)
 		req->src.format = mfd->fb_imgType;
+#ifdef CONFIG_MSM_KGSL_DRM
 	if (req->flags & MDP_BLIT_SRC_GEM)
 		get_gem_img(&req->src, &src_start, &src_len);
 	else
+#endif
 		get_img(&req->src, info, &src_start, &src_len, &p_src_file);
 	if (src_len == 0) {
 		printk(KERN_ERR "mdp_ppp: could not retrieve image from "
 		       "memory\n");
 		return -1;
 	}
+#ifdef CONFIG_MSM_KGSL_DRM
 	if (req->flags & MDP_BLIT_DST_GEM)
 		get_gem_img(&req->dst, &dst_start, &dst_len);
 	else
+#endif
 		get_img(&req->dst, info, &dst_start, &dst_len, &p_dst_file);
 	if (dst_len == 0) {
 		put_img(p_src_file);
@@ -1451,6 +1457,82 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 #ifndef CONFIG_FB_MSM_MDP22
 	mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);
 #else
+
+    
+/* { FIH, ChandlerKang, 09/11/25 */
+/* workaround for the performance of a game*/
+#ifdef CONFIG_FIH_FXX
+    if( (req->src.format == MDP_RGBA_8888) && (req->flags == MDP_ROT_90) && req->alpha ==255 &&
+        (req->src_rect.w==req->src.width && req->src_rect.h==5 && req->dst_rect.x== req->dst.width-5 && req->dst_rect.y==0) ){
+
+        int i,j;
+        uint32 src_r,src_g,src_b,src_a,r,g,b;
+
+        uint32 *p_src_img=(uint32*)(__va(src_start)+req->src.offset);
+        uint16 *p_dst_img=(uint16*)(__va(dst_start)+req->dst.offset);
+        
+        /*
+        printk(KERN_ERR "1. mdpOp(0x%x), src.format(0x%x)\n alpha(0x%x),trans(0x%x),x(%d),y(%d),w(%d),h(%d)  x(%d),y(%d),w(%d),h(%d)\n",
+            iBuf.mdpImg.mdpOp,req->src.format,req->alpha,req->transp_mask,
+            req->src_rect.x,req->src_rect.y,
+            req->src_rect.w,req->src_rect.h,
+            req->dst_rect.x,req->dst_rect.y,
+            req->dst_rect.w,req->dst_rect.h);
+
+        printk(KERN_ERR "1. src:offset(%d),format(%d),w(%d),h(%d)  dst:offset(%d),format(%d),w(%d),h(%d)\n",
+            req->src.offset,req->src.format,
+            req->src.width,req->src.height,
+            req->dst.offset,req->dst.format,
+            req->dst.width,req->dst.height);
+        */      
+
+        for(j=0;j<req->src_rect.h;j++){
+            for(i=0;i<req->src_rect.w;i++){
+
+                byte *rgba=(byte*)(p_src_img+((j+req->src_rect.y)*480)+(i+req->src_rect.x));          
+
+                int16 *p=p_dst_img+ ((i+req->dst_rect.y)*320)+ (req->dst_rect.x+(req->dst_rect.w-1-j));
+
+#if 0
+
+                r=((rgba[0])*(alpha))+((((*p)&0xf800)>>11)*8*(255-alpha));
+                g=((rgba[1])*(alpha))+((((*p)&0x07E0)>>5 )*4*(255-alpha));
+                b=((rgba[2])*(alpha))+((((*p)&0x001F)    )*8*(255-alpha));
+#else
+
+                /*
+                dst_r=(((*p)&0xf800)>>11)<<3;
+                dst_g=(((*p)&0x07E0)>>5)<<2;
+                dst_b=(((*p)&0x001F))<<3;
+                */
+
+                src_r=rgba[0];
+                src_g=rgba[1];
+                src_b=rgba[2];
+                src_a=rgba[3];
+                /*
+                r=dst_r;
+                g=dst_g;
+                b=dst_b;
+                */
+#endif
+
+                if(src_a==255){
+                    r=src_r;
+                    g=src_g;
+                    b=src_b;
+                    *p=(( r>>3)<<11) | ((g>>2 )<<5) | (b>>3 );                
+                }else{
+                    //do nothing
+                }
+
+            }
+        }
+
+    }else
+#endif   
+/* } FIH, ChandlerKang, 09/11/25 */
+
 	/* bg tile fetching HW workaround */
 	if (((iBuf.mdpImg.mdpOp & (MDPOP_TRANSP | MDPOP_ALPHAB)) ||
 	     (req->src.format == MDP_ARGB_8888) ||
@@ -1532,8 +1614,15 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 				 */
 				iBuf.roi.width = tmp_v;
 			}
-
-			mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);
+#if 0				
+			printk(KERN_INFO "%s():  roi-final:(%d,%d)(%d,%d)\n", __func__, 
+			iBuf.roi.width, iBuf.roi.height, iBuf.roi.dst_width, iBuf.roi.dst_height);
+#endif		
+			if(iBuf.roi.width<=16)
+				mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);
+			else{
+				printk(KERN_ERR "%s(): roi.width(%d) > 16, skip ppp.\n",__func__,iBuf.roi.width);
+			}
 		}
 	} else {
 		mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);

@@ -1,6 +1,9 @@
+# FIH_FXX, Charles YS Huang, 2009/08/13, add ov5642/ov3642 sensor driver and remove unused driver
 GCC_VERSION      := $(shell $(CONFIG_SHELL) $(PWD)/scripts/gcc-version.sh $(CROSS_COMPILE)gcc)
 ifeq ($(GCC_VERSION),0404)
 CFLAGS_REMOVE_msm_vfe8x.o = -Wframe-larger-than=1024
+CFLAGS_REMOVE_ov5642.o = -Wframe-larger-than=1024
+CFLAGS_REMOVE_ov5642af.o = -Wframe-larger-than=1024
 endif
 
 obj-$(CONFIG_MSM_CAMERA) += msm_camera.o msm_v4l2.o msm_axi_qos.o
@@ -13,6 +16,9 @@ obj-$(CONFIG_MT9T013) += mt9t013.o mt9t013_reg.o
 obj-$(CONFIG_MT9D112) += mt9d112.o mt9d112_reg.o
 obj-$(CONFIG_SN12M0PZ) += sn12m0pz.o sn12m0pz_reg.o
 obj-$(CONFIG_MT9P012) += mt9p012_reg.o
+obj-$(CONFIG_OV5642) += ov5642.o ov5642_reg.o
+obj-$(CONFIG_OV5642AF) += ov5642af.o ov5642af_reg.o
+obj-$(CONFIG_OV3642) += ov3642.o ov3642_reg.o
 obj-$(CONFIG_MSM_CAMERA_AF_FOXCONN) += mt9p012_fox.o
 obj-$(CONFIG_MSM_CAMERA_AF_BAM) += mt9p012_bam.o
 obj-$(CONFIG_MT9P012_KM) += mt9p012_km.o mt9p012_km_reg.o

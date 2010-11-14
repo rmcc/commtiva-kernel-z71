@@ -23,4 +23,19 @@ struct msm_ts_platform_data {
 	unsigned int pressure_max;
 };
 
+//Added for touch calibration++
+struct msm_data_from_ap {
+	unsigned int short x_max;
+	unsigned int short x_min;
+	unsigned int short y_max;
+	unsigned int short y_min;
+	//bool bIsFactoryTest; 
+};
+
+#define MSM_IOC_MAGIC    'M'
+#define MSM_IOC_BOUNDARY    _IOW(MSM_IOC_MAGIC, 0, int)  /* Send boundary value */
+#define MSM_IOC_ISFACTORYTEST    _IO(MSM_IOC_MAGIC, 1)  /* Pass factory test flag */
+#define MSM_IOC_MAXNR    2
+//Added for touch calibration--
+
 #endif

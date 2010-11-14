@@ -630,6 +630,14 @@ void hsusb_chg_connected(enum chg_type chgtype)
 			"DEDICATED CHARGER",
 			"INVALID"};
 
+#ifdef CONFIG_BATTERY_FIH_ZEUS_NOT
+       /* I don't really like this, but there doesn't seem to be any
+        * other way to get to this information from within the zeus/gasgauge
+        * driver...  - RC */
+        extern void zeus_update_usb_status(enum chg_type chgtype);
+        zeus_update_usb_status(chgtype);
+#endif
+
 	if (chgtype == USB_CHG_TYPE__INVALID) {
 		msm_chg_usb_i_is_not_available();
 		msm_chg_usb_charger_disconnected();

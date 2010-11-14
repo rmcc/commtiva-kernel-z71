@@ -581,6 +581,9 @@ static void msmfb_early_suspend(struct early_suspend *h)
 	/* set the last frame on suspend as black frame */
 	memset(fbi->screen_base, 0x0, fbi->fix.smem_len);
 	msm_fb_suspend_sub(mfd);
+    printk(KERN_INFO"%s(): blank screen (size: %d)\n", __FUNCTION__, mfd->fbi->fix.smem_len);
+    memset(mfd->fbi->screen_base, 0x00, mfd->fbi->fix.smem_len);
+	
 }
 
 static void msmfb_early_resume(struct early_suspend *h)
@@ -2839,6 +2842,17 @@ int get_fb_phys_info(unsigned long *start, unsigned long *len, int fb_num)
 	return 0;
 }
 EXPORT_SYMBOL(get_fb_phys_info);
+
+/* Chandler, 2009/06/12 { */
+/* for backlight to check panel status */
+#ifdef CONFIG_FIH_FXX
+int msm_fb_check_panel_on(int fb_no)
+{   
+    return mfd_list[fb_no]->panel_power_on;                                                                                                  
+}
+EXPORT_SYMBOL(msm_fb_check_panel_on);
+#endif
+/* Chandler, 2009/06/12 } */
 
 int __init msm_fb_init(void)
 {

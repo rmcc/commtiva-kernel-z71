@@ -1602,7 +1602,7 @@ static int uartdm_init_port(struct uart_port *uport)
 	return 0;
 }
 
-static int __init msm_hs_probe(struct platform_device *pdev)
+static int __devinit msm_hs_probe(struct platform_device *pdev)
 {
 	int ret;
 	struct uart_port *uport;
