@@ -1940,9 +1940,6 @@ static struct platform_device *devices[] __initdata = {
 	&msm_device_dmov,
 	&msm_device_nand,
 	&msm_device_otg,
-	&msm_device_hsusb_otg,
-	&msm_device_hsusb_host,
-	&msm_device_hsusb_peripheral,
 	&msm_device_gadget_peripheral,
 #ifdef CONFIG_USB_FUNCTION
 	&mass_storage_device,
@@ -2533,7 +2530,6 @@ static void __init msm7x2x_init(void)
 		[MSM_PM_SLEEP_MODE_RAMP_DOWN_AND_WAIT_FOR_INTERRUPT].latency;
 
 	msm_device_hsusb_peripheral.dev.platform_data = &msm_hsusb_pdata;
-	msm_device_hsusb_host.dev.platform_data = &msm_hsusb_pdata;
 #endif
 
 #ifdef CONFIG_USB_MSM_OTG_72K
@@ -2542,7 +2538,7 @@ static void __init msm7x2x_init(void)
             PRE_EMPHASIS_WITH_10_PERCENT;
         msm_otg_pdata.drv_ampl = HS_DRV_AMPLITUDE_5_PERCENT;
         msm_otg_pdata.cdr_autoreset = CDR_AUTO_RESET_DISABLE;
-	msm_otg_pdata.phy_reset = msm_otg_rpc_phy_reset;
+	msm_otg_pdata.phy_reset_sig_inverted = 1;
 
 
 #ifdef CONFIG_USB_GADGET
