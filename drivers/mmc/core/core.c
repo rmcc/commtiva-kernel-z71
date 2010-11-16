@@ -40,6 +40,9 @@
 
 static struct workqueue_struct *workqueue;
 static struct wake_lock mmc_delayed_work_wake_lock;
+#ifdef CONFIG_FIH_FXX
+static struct wake_lock sdcard_idle_wake_lock;
+#endif
 
 /*
  * Enabling software CRCs on the data blocks can be a significant (30%)
@@ -56,6 +59,9 @@ static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
 	wake_lock(&mmc_delayed_work_wake_lock);
+#ifdef CONFIG_FIH_FXX
+	wake_lock(&sdcard_idle_wake_lock);
+#endif
 	return queue_delayed_work(workqueue, work, delay);
 }
 
@@ -559,6 +565,9 @@ void mmc_host_deeper_disable(struct work_struct *work)
 
 out:
 	wake_unlock(&mmc_delayed_work_wake_lock);
+#ifdef CONFIG_FIH_FXX
+	wake_unlock(&sdcard_idle_wake_lock);
+#endif
 }
 
 /**
@@ -1167,10 +1176,17 @@ void mmc_rescan(struct work_struct *work)
 	mmc_power_off(host);
 
 out:
-	if (extend_wakelock)
+	if (extend_wakelock) {
 		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
-	else
+#ifdef CONFIG_FIH_FXX
+		wake_lock_timeout(&sdcard_idle_wake_lock, HZ / 2);
+#endif
+	} else {
 		wake_unlock(&mmc_delayed_work_wake_lock);
+#ifdef CONFIG_FIH_FXX
+		wake_unlock(&sdcard_idle_wake_lock);
+#endif
+	}
 
 	if (host->caps & MMC_CAP_NEEDS_POLL)
 		mmc_schedule_delayed_work(&host->detect, HZ);
@@ -1412,6 +1428,9 @@ static int __init mmc_init(void)
 	int ret;
 
 	wake_lock_init(&mmc_delayed_work_wake_lock, WAKE_LOCK_SUSPEND, "mmc_delayed_work");
+#ifdef CONFIG_FIH_FXX
+	wake_lock_init(&sdcard_idle_wake_lock, WAKE_LOCK_IDLE, "sd_suspend_work");
+#endif
 
 	workqueue = create_freezeable_workqueue("kmmcd");
 	if (!workqueue)
@@ -1448,6 +1467,9 @@ static void __exit mmc_exit(void)
 	mmc_unregister_bus();
 	destroy_workqueue(workqueue);
 	wake_lock_destroy(&mmc_delayed_work_wake_lock);
+#ifdef CONFIG_FIH_FXX
+	wake_lock_destroy(&sdcard_idle_wake_lock);
+#endif
 }
 
 subsys_initcall(mmc_init);
