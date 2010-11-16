@@ -126,19 +126,18 @@
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
 #endif
 
-#ifdef CONFIG_AR6K
-#define WIFI_CONTROL_MASK   0x10000000
-#define WIFI_SUSPEND_CONTROL_MASK   0x01000000
-#endif
-
 char *board_serial;
 
 #ifdef CONFIG_AR6K
-#define MODULE_TURN_ON      0x01
-#define MODULE_TURN_OFF     0x02
+#define WIFI_CONTROL_MASK   0x10000000
+static DEFINE_SPINLOCK(wif_bt_lock);
+#endif
+
+#if defined(CONFIG_BT) || defined(CONFIG_AR6K)
 static int wifi_status = 0;
 static int bt_status = 0;
-static DEFINE_SPINLOCK(wif_bt_lock);
+#define MODULE_TURN_ON      0x01
+#define MODULE_TURN_OFF     0x02
 #endif
 
 
@@ -717,26 +716,13 @@ static struct platform_device ram_console_device = {
 };
 #endif
 
-/* FIH, JamesKCTung, 2009/05/11 { */
-static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd);
-static void (*ar6k_wifi_status_cb)(int card_present, void *dev_id);
-static void *ar6k_wifi_status_cb_devid;
-static unsigned int  wifi_power_on = 0;
 //FIH, WilsonWHLee, 2009/11/26++
 /* [FXX_CR], read product id as serial number*/
 static int msm_read_serial_number_from_nvitem(void);
 //FIH, WilsonWHLee, 2009/11/26--
 
-static int ar6k_wifi_status_register(void (*callback)(int card_present, void *dev_id), void *dev_id)
-{
-	if (ar6k_wifi_status_cb)
-		return -EAGAIN;
-	ar6k_wifi_status_cb = callback;
-	ar6k_wifi_status_cb_devid = dev_id;
-	return 0;
-}
-
-extern int android_set_sn(const char *kmessage, struct kernel_param *kp);
+/* FIH, JamesKCTung, 2009/05/11 { */
+static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd);
 
 //FIH, WilsonWHLee, 2009/11/26++
 /* [FXX_CR], read product id as serial number*/
@@ -760,11 +746,30 @@ static int msm_read_serial_number_from_nvitem()
 	return 1;
 
 }
+
+#ifdef CONFIG_AR6K
+
+static void (*ar6k_wifi_status_cb)(int card_present, void *dev_id);
+static void *ar6k_wifi_status_cb_devid;
+static unsigned int  wifi_power_on = 0;
+
+static int ar6k_wifi_status_register(void (*callback)(int card_present, void *dev_id), void *dev_id)
+{
+	if (ar6k_wifi_status_cb)
+		return -EAGAIN;
+	ar6k_wifi_status_cb = callback;
+	ar6k_wifi_status_cb_devid = dev_id;
+	return 0;
+}
+
 //FIH, WilsonWHLee, 2009/11/26--
 static unsigned int ar6k_wifi_status(struct device *dev)
 {
 	return wifi_power_on;
 }
+
+#endif
+
 /* } FIH, JamesKCTung, 2009/05/11 */
 #ifdef CONFIG_BT
 static struct platform_device msm_bt_power_device = {
@@ -866,12 +871,6 @@ static int bluetooth_power(int on)
 {
     int module_status=0,prev_status=0;
     bool bConfigWIFI;
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-    bool bConfigWIFI_suspend;
-#endif
-/* } FIH, SimonSSChang, 2010/02/26 */
     int value = 0;
 /* FIH, WilsonWHLee, 2009/07/30 { */
 /* [FXX_CR], re-configure GPIO when BT turn on/off */
@@ -887,29 +886,16 @@ static int bluetooth_power(int on)
 	gpio_tlmm_config(GPIO_CFG(77, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);   /* 1.5V */
 	gpio_tlmm_config(GPIO_CFG(34, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);   /* 1.2V */
 #endif
-	spin_lock(&wif_bt_lock);
+
+#ifdef CONFIG_AR6K
+    spin_lock(&wif_bt_lock);
 
     bConfigWIFI = (on & WIFI_CONTROL_MASK);
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-    bConfigWIFI_suspend = (on & WIFI_SUSPEND_CONTROL_MASK);
-    printk(KERN_INFO "on = 0x%08x", on);
-#endif
-/* } FIH, SimonSSChang, 2010/02/26 */
 
     if(bConfigWIFI)
     {
         prev_status = wifi_status;
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-        wifi_status = on & ~(WIFI_CONTROL_MASK | WIFI_SUSPEND_CONTROL_MASK); 
-#else
         wifi_status = on & ~(WIFI_CONTROL_MASK); 
-#endif
-/* } FIH, SimonSSChang, 2010/02/26 */
-
         if( wifi_status == prev_status )
         {
             printk(KERN_ERR "%s: WIFI already turn %s\n", __func__,  (wifi_status?"ON":"OFF") );
@@ -921,13 +907,17 @@ static int bluetooth_power(int on)
         else if(!wifi_status && !bt_status)
             module_status = MODULE_TURN_OFF;
 
-    }else {
+    }else 
+#endif
+    {
         prev_status = bt_status;
         bt_status = on;
         if( bt_status == prev_status )
         {
             printk(KERN_ERR "%s: BT already turn %s\n", __func__,  (bt_status?"ON":"OFF") );
+#ifdef CONFIG_AR6K
             spin_unlock(&wif_bt_lock);
+#endif
             return 0;
         }
         if(bt_status && !wifi_status)
@@ -942,17 +932,13 @@ static int bluetooth_power(int on)
 		gpio_direction_output(27,0);    
     }else if(!bConfigWIFI &&  bt_status){     //Turn BT on        
         printk(KERN_DEBUG "%s : Turn BT on.\n", __func__);
+#ifdef CONFIG_AR6K
     }else if(bConfigWIFI && wifi_status) {  //Turn WIFI on
         printk(KERN_DEBUG "%s : Turn WIFI on.\n", __func__);
         gpio_direction_output(96,0);
         gpio_direction_output(35,0);
     }else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF
         printk(KERN_DEBUG "%s : Turn WIFI off.\n", __func__);
-
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-        if(!bConfigWIFI_suspend) {
         if(ar6k_wifi_status_cb) {
             wifi_power_on=0;
             ar6k_wifi_status_cb(0,ar6k_wifi_status_cb_devid);
@@ -961,19 +947,8 @@ static int bluetooth_power(int on)
 
         gpio_direction_output(96,0);
         gpio_direction_output(35,0);
-    }
-    }
-#else
-        if(ar6k_wifi_status_cb) {
-            wifi_power_on=0;
-            ar6k_wifi_status_cb(0,ar6k_wifi_status_cb_devid);
-        }else
-            printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
-
-        gpio_direction_output(96,0);
-        gpio_direction_output(35,0);
-    }
 #endif
+    }
 /* } FIH, SimonSSChang, 2010/02/26 */
 
     //Turn module on/off
@@ -1024,6 +999,7 @@ static int bluetooth_power(int on)
         value = gpio_get_value(27);
         printk(KERN_DEBUG "%s : GPIO 27 is %d.\n", __func__, value);
         mdelay(10);
+#ifdef CONFIG_AR6K
     }else if(bConfigWIFI && wifi_status) { //Turn WIFI on
         gpio_direction_output(96,1);
         value = 0;
@@ -1037,44 +1013,22 @@ static int bluetooth_power(int on)
 
 /* FIH, SimonSSChang, 2010/02/26 { */
 /* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-        if(!bConfigWIFI_suspend) {
         if(ar6k_wifi_status_cb) {
             wifi_power_on=1;
             ar6k_wifi_status_cb(1,ar6k_wifi_status_cb_devid);
         }else
             printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
-        }
-#else
-        if(ar6k_wifi_status_cb) {
-            wifi_power_on=1;
-            ar6k_wifi_status_cb(1,ar6k_wifi_status_cb_devid);
-        }else
-            printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
-#endif
 /* } FIH, SimonSSChang, 2010/02/26 */
     }else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF        
+#endif
     }
 
+#ifdef CONFIG_AR6K
     spin_unlock(&wif_bt_lock);
+#endif
 
 	return 0;
 }
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-#ifdef CONFIG_FIH_FXX
-int wifi_power(int on)
-{
-    int ret;
-    ret = bluetooth_power(on);
-    printk(KERN_INFO "wifi_power ret = %d\n", ret);
-    return ret;
-}
-EXPORT_SYMBOL(wifi_power);
-#endif
-/* } FIH, SimonSSChang, 2010/02/26 */
-
-/* } FIH, JamesKCTung, 2009/06/30 */
 
 static void __init bt_power_init(void)
 {
@@ -2089,31 +2043,6 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 	int rc = 0;
 	struct platform_device *pdev;
 
-	/* FIH, BillHJChang, 2009/07/22 { */
-	/* [FXX_CR], 7627 SD card power supply source changed*/
-	if (vreg_mmc == NULL)
-	{
-		int iHwid = 0;
-		iHwid = FIH_READ_HWID_FROM_SMEM();
-
-		if(iHwid >= CMCS_7627_EVB1)
-		{
-			vreg_mmc = vreg_get(NULL, "gp5");
-			printk(KERN_INFO"%s: vreg_get from VREG_GP5 !!!!!!!\n", __func__);			
-		}
-		else
-		{
-			vreg_mmc = vreg_get(NULL, "mmc");
-			printk(KERN_INFO"%s: vreg_get from VREG_MMC !!!!!!!\n", __func__);					
-		}
-
-		if (IS_ERR(vreg_mmc))
-			printk(KERN_ERR "%s: vreg get failed (%ld)\n",__func__, PTR_ERR(vreg_mmc));			
-	}
-	/* } FIH, BillHJChang, 2009/07/22 */	
-	
-	printk(KERN_DEBUG "%s: vdd: %d \n", __func__, vdd);
-
 	pdev = container_of(dv, struct platform_device, dev);
 	msm_sdcc_setup_gpio(pdev->id, !!vdd);
 
@@ -2218,6 +2147,28 @@ static struct mmc_platform_data ar6k_wifi_data = {
 
 static void __init msm7x2x_init_mmc(void)
 {
+	/* FIH, BillHJChang, 2009/07/22 { */
+	/* [FXX_CR], 7627 SD card power supply source changed*/
+	if (vreg_mmc == NULL)
+	{
+		int iHwid = 0;
+		iHwid = FIH_READ_HWID_FROM_SMEM();
+
+		if(iHwid >= CMCS_7627_EVB1)
+		{
+			vreg_mmc = vreg_get(NULL, "gp5");
+			printk(KERN_INFO"%s: vreg_get from VREG_GP5 !!!!!!!\n", __func__);			
+		}
+		else
+		{
+			vreg_mmc = vreg_get(NULL, "mmc");
+			printk(KERN_INFO"%s: vreg_get from VREG_MMC !!!!!!!\n", __func__);					
+		}
+
+		if (IS_ERR(vreg_mmc))
+			printk(KERN_ERR "%s: vreg get failed (%ld)\n",__func__, PTR_ERR(vreg_mmc));			
+	}
+	/* } FIH, BillHJChang, 2009/07/22 */	
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
         msm_add_sdcc(1, &msm7x2x_sdc1_data);
         gpio_tlmm_config(GPIO_CFG(18, 0, GPIO_CFG_INPUT,
