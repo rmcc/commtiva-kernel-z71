@@ -1235,6 +1235,43 @@ static struct i2c_board_info i2c_devices[] = {
 	//Added for capacitive touch panel, by Stanley-- 2009/06/03
 };
 
+static void config_gpio_table(uint32_t *table, int len)
+{
+	int n, rc;
+	for (n = 0; n < len; n++) {
+		rc = gpio_tlmm_config(table[n], GPIO_CFG_ENABLE);
+		if (rc) {
+			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
+				__func__, table[n], rc);
+			break;
+		}
+	}
+}
+
+/* FIH, PeterKCTseng, @20090521 { */
+/* Config GPIO for keypad         */
+#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
+static uint32_t keypad_gpio_table[] = {
+	/* parallel CAMERA interfaces */
+//	GPIO_CFG(41,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Volume Up Key    */
+//	GPIO_CFG(36,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Volume Down Key  */
+//	GPIO_CFG(28,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Send key         */
+//	GPIO_CFG(19,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* End Key          */
+/* FIH, PeterKCTseng, @20090525 { */
+/* Config GPIO for keypad         */
+	GPIO_CFG(41,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Volume Up Key    */
+	GPIO_CFG(36,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Volume Down Key  */
+	GPIO_CFG(28,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Send key         */
+	GPIO_CFG(19,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* End Key          */
+/* } FIH, PeterKCTseng, @20090525 */
+
+//	GPIO_CFG(20,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Camera Key1      */
+//	GPIO_CFG(29,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Camera Key2      */
+//	GPIO_CFG(94,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Hook Key         */
+};
+#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
+/* } FIH, PeterKCTseng, @20090521 */
+
 #ifdef CONFIG_MSM_CAMERA
 static uint32_t camera_off_gpio_table[] = {
 	/* parallel CAMERA interfaces */
@@ -1285,42 +1322,6 @@ static uint32_t camera_on_gpio_table[] = {
 	GPIO_CFG(14, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* VSYNC_IN */
 	GPIO_CFG(15, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_16MA), /* MCLK */
 	};
-/* FIH, PeterKCTseng, @20090521 { */
-/* Config GPIO for keypad         */
-#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
-static uint32_t keypad_gpio_table[] = {
-	/* parallel CAMERA interfaces */
-//	GPIO_CFG(41,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Volume Up Key    */
-//	GPIO_CFG(36,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Volume Down Key  */
-//	GPIO_CFG(28,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Send key         */
-//	GPIO_CFG(19,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* End Key          */
-/* FIH, PeterKCTseng, @20090525 { */
-/* Config GPIO for keypad         */
-	GPIO_CFG(41,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Volume Up Key    */
-	GPIO_CFG(36,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Volume Down Key  */
-	GPIO_CFG(28,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* Send key         */
-	GPIO_CFG(19,  0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA), /* End Key          */
-/* } FIH, PeterKCTseng, @20090525 */
-
-//	GPIO_CFG(20,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Camera Key1      */
-//	GPIO_CFG(29,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Camera Key2      */
-//	GPIO_CFG(94,  0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), /* Hook Key         */
-};
-#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
-/* } FIH, PeterKCTseng, @20090521 */
-
-static void config_gpio_table(uint32_t *table, int len)
-{
-	int n, rc;
-	for (n = 0; n < len; n++) {
-		rc = gpio_tlmm_config(table[n], GPIO_CFG_ENABLE);
-		if (rc) {
-			printk(KERN_ERR "%s: gpio_tlmm_config(%#x)=%d\n",
-				__func__, table[n], rc);
-			break;
-		}
-	}
-}
 
 static struct vreg *vreg_gp2;
 static struct vreg *vreg_gp3;
@@ -1411,55 +1412,6 @@ static void config_camera_off_gpios(void)
 	config_gpio_table(camera_off_gpio_table,
 		ARRAY_SIZE(camera_off_gpio_table));
 }
-/* FIH, PeterKCTseng, @20090521 { */
-/* Config GPIO for keypad         */
-#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
-static void config_keypad_gpios(void)
-{
-	config_gpio_table(keypad_gpio_table,
-		ARRAY_SIZE(keypad_gpio_table));
-}
-#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
-/* } FIH, PeterKCTseng, @20090521 */
-
-/* FIH, PeterKCTseng, @20090604 { */
-/* Config GPIO for keypad         */
-#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
-static struct Q7x27_kybd_platform_data q7x27_kybd_data = {
-	.keypad_gpio = config_keypad_gpios,
-	.volup_pin = 28,
-	.voldn_pin = 19,
-	.key_1_pin = 41,
-	.key_2_pin = 36,	
-	.cam_sw_t_pin = 20,
-	.cam_sw_f_pin = 29,
-	.hook_sw_pin = 94,
-};
-
-static struct platform_device q7x27_kybd_device = {
-        .name = "7x27_kybd",
-        .dev = {
-                .platform_data = &q7x27_kybd_data,
-        },
-};
-#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
-/* } FIH, PeterKCTseng, @20090521 */
-/* FIH, PeterKCTseng, @20090521 { */
-/* Config GPIO for keypad         */
-#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
-static void __init keypad_gpio_init(void)
-{
-	config_keypad_gpios();
-}
-#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
-/* } FIH, PeterKCTseng, @20090521 */
-/* FIH, Kenny Chu, 2009/06/04 {*/
-// add vibrator
-static struct platform_device pmic_rpc_device = {
-        .name	= "pmic_rpc",
-        .id		= -1,
-};
-/* } FIH, Kenny Chu, 2009/06/04 */
 
 static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.camera_gpio_on  = config_camera_on_gpios,
@@ -1671,7 +1623,57 @@ static struct platform_device msm_camera_sensor_vb6801 = {
 	},
 };
 #endif
-#endif
+#endif /* CAMERA */
+
+/* FIH, PeterKCTseng, @20090521 { */
+/* Config GPIO for keypad         */
+#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
+static void config_keypad_gpios(void)
+{
+	config_gpio_table(keypad_gpio_table,
+		ARRAY_SIZE(keypad_gpio_table));
+}
+#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
+/* } FIH, PeterKCTseng, @20090521 */
+
+/* FIH, PeterKCTseng, @20090604 { */
+/* Config GPIO for keypad         */
+#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
+static struct Q7x27_kybd_platform_data q7x27_kybd_data = {
+	.keypad_gpio = config_keypad_gpios,
+	.volup_pin = 28,
+	.voldn_pin = 19,
+	.key_1_pin = 41,
+	.key_2_pin = 36,	
+	.cam_sw_t_pin = 20,
+	.cam_sw_f_pin = 29,
+	.hook_sw_pin = 94,
+};
+
+static struct platform_device q7x27_kybd_device = {
+        .name = "7x27_kybd",
+        .dev = {
+                .platform_data = &q7x27_kybd_data,
+        },
+};
+#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
+/* } FIH, PeterKCTseng, @20090521 */
+/* FIH, PeterKCTseng, @20090521 { */
+/* Config GPIO for keypad         */
+#ifdef CONFIG_FIH_F9xx_GPIO_KEYPAD
+static void __init keypad_gpio_init(void)
+{
+	config_keypad_gpios();
+}
+#endif /* CONFIG_FIH_F9xx_GPIO_KEYPAD */
+/* } FIH, PeterKCTseng, @20090521 */
+/* FIH, Kenny Chu, 2009/06/04 {*/
+// add vibrator
+static struct platform_device pmic_rpc_device = {
+        .name	= "pmic_rpc",
+        .id		= -1,
+};
+/* } FIH, Kenny Chu, 2009/06/04 */
 
 #if (!defined(CONFIG_ARCH_MSM_FLASHLIGHT) && \
 	defined(CONFIG_FLASH_DRIVER_IC_AAT1272))

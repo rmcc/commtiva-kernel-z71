@@ -630,7 +630,7 @@ void hsusb_chg_connected(enum chg_type chgtype)
 			"DEDICATED CHARGER",
 			"INVALID"};
 
-#ifdef CONFIG_BATTERY_FIH_ZEUS_NOT
+#ifdef CONFIG_BATTERY_FIH_ZEUS
        /* I don't really like this, but there doesn't seem to be any
         * other way to get to this information from within the zeus/gasgauge
         * driver...  - RC */

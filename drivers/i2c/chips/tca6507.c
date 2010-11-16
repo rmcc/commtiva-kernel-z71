@@ -1132,9 +1132,11 @@ static int tca6507_resume(struct i2c_client *nLeds)
 	}
 	
 	mutex_unlock(&tca6507_drvdata.tca6507_lock);
+#ifdef CONFIG_BATTERY_FIH_ZEUS
 	/*FIH, MichaelKao, 2009/09/28 {*/
 	/*Modify for correctly update battery information in suspend mode*/
 	Battery_power_supply_change();
+#endif
 	/*FIH, MichaelKao, 2009/09/28 {*/
 	/*Add notify blink function for suspend resume*/
 	tca6507_notify_blink(tca6507_drvdata.is_notify_blink) ;
