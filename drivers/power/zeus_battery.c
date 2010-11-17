@@ -1,6 +1,6 @@
-/* drivers/power/goldfish_battery.c
+/* drivers/power/zeus_battery.c
  *
- * Power supply driver for the goldfish emulator
+ * Power supply driver for the zeus emulator
  *
  * Copyright (C) 2008 Google, Inc.
  * Author: Mike Lockwood <lockwood@android.com>
@@ -224,7 +224,6 @@ unsigned int Modem_mode;
 #define GOLDFISH_BATTERY_WRITE(data, addr, x)   (writel(x, data->reg_base + addr))
 ///extern int check_USB_type;
 
-/* temporary variable used between goldfish_battery_probe() and goldfish_battery_open() */
 #ifdef T_FIH    ///+T_FIH
 static int g_charging_state = CHARGER_STATE_NOT_CHARGING;
 #endif	// T_FIH	///-T_FIH
@@ -255,14 +254,6 @@ static enum power_supply_property zeus_battery_props[] = {
        POWER_SUPPLY_PROP_TEMP,
        POWER_SUPPLY_PROP_VOLTAGE_NOW,
 
-};
-
-static enum power_supply_property zeus_power_properties[] = {
-    POWER_SUPPLY_PROP_ONLINE,
-};
-
-static char *supply_list[] = {
-    "battery",
 };
 
 typedef enum {
@@ -309,56 +300,16 @@ static unsigned g_batt_data[10];
 static struct battery_info	PMIC_batt;
 static struct F9_device_state batt_state;
 
-static int zeus_power_get_property(struct power_supply *psy,
-                    enum power_supply_property psp,
-                    union power_supply_propval *val)
-{
-    switch (psp) {
-    case POWER_SUPPLY_PROP_ONLINE:
-        if (psy->type == POWER_SUPPLY_TYPE_MAINS)
-            val->intval = (current_charger ==  CHARGER_AC ? 1 : 0);
-        else if (psy->type == POWER_SUPPLY_TYPE_USB)
-            val->intval = (current_charger ==  CHARGER_USB ? 1 : 0);
-        else
-            val->intval = 0;
-        break;
-    default:
-        return -EINVAL;
-    }
-
-    return 0;
-}
-
 static int zeus_battery_get_property(struct power_supply *psy,
                enum power_supply_property psp,
                union power_supply_propval *val);
 
-static struct power_supply zeus_power_supplies[] = {
-    {
+static struct power_supply zeus_battery = {
         .name = "battery",
         .type = POWER_SUPPLY_TYPE_BATTERY,
         .properties = zeus_battery_props,
         .num_properties = ARRAY_SIZE(zeus_battery_props),
         .get_property = zeus_battery_get_property,
-    },
-    {
-        .name = "usb",
-        .type = POWER_SUPPLY_TYPE_USB,
-        .supplied_to = supply_list,
-        .num_supplicants = ARRAY_SIZE(supply_list),
-        .properties = zeus_power_properties,
-        .num_properties = ARRAY_SIZE(zeus_power_properties),
-        .get_property = zeus_power_get_property,
-    },
-    {
-        .name = "ac",
-        .type = POWER_SUPPLY_TYPE_MAINS,
-        .supplied_to = supply_list,
-        .num_supplicants = ARRAY_SIZE(supply_list),
-        .properties = zeus_power_properties,
-        .num_properties = ARRAY_SIZE(zeus_power_properties),
-        .get_property = zeus_power_get_property,
-    },
 };
 
 /* FIH, Michael Kao, 2009/08/14{ */
@@ -849,7 +800,7 @@ static void zeus_program_alarm(struct zeus_battery_update *zbu, int seconds)
 /* [FXX_CR], Add For Blink RED LED when battery low in suspend mode */
 void Battery_power_supply_change(void)
 {
-	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
+	power_supply_changed(&zeus_battery);
 }
 EXPORT_SYMBOL(Battery_power_supply_change);
 /* } FIH, Michael Kao, 2009/06/08 */
@@ -1253,7 +1204,7 @@ static void zeus_battery_work(struct work_struct *work)
 	zeus_battery_refresh_values(zbu);
 	/* Notify userspace */
 	if (capacity != zbu->data.capacity)
-		power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
+		power_supply_changed(&zeus_battery);
 
 	/* prevent suspend before starting the alarm */
 	local_irq_save(flags);
@@ -1281,7 +1232,7 @@ static irqreturn_t chgdet_irqhandler(int irq, void *dev_id)
 	charger_state_change=true;
 	system_time_second=get_seconds();
 	//power_supply_changed(g_ps_battery);
-	power_supply_changed(&zeus_power_supplies[CHARGER_BATTERY]);
+	power_supply_changed(&zeus_battery);
 	
 	/* FIH, Michael Kao, 2009/08/13{ */
 	return IRQ_HANDLED;
@@ -1360,9 +1311,9 @@ static struct miscdevice Zeus_battery_miscdev = {
 #endif
 
 
-static int goldfish_battery_probe(struct platform_device *pdev)
+static int zeus_battery_probe(struct platform_device *pdev)
 {
-       int ret, i;
+       int ret;
 	struct zeus_battery_update *zbu;
 
 	zbu = kzalloc(sizeof(*zbu), GFP_KERNEL);
@@ -1484,13 +1435,12 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 	}
 		
     /* init power supplier framework */
-    for (i = 0; i < ARRAY_SIZE(zeus_power_supplies); i++) {
-        ret = power_supply_register(&pdev->dev, &zeus_power_supplies[i]);
-        if (ret) {
-            printk(KERN_ERR "Failed to register power supply (%d)\n", ret);
-                   return ret;
-               }
-    }
+	ret = power_supply_register(&pdev->dev, &zeus_battery);
+	if (ret) {
+		printk(KERN_ERR "Failed to register power supply (%d)\n", ret);
+		return ret;
+	}
+
 
 	INIT_WORK(&zbu->zeus_batt_work, zeus_battery_work);
 	zbu->wqueue = create_freezeable_workqueue(dev_name(&pdev->dev));
@@ -1531,10 +1481,9 @@ static int goldfish_battery_probe(struct platform_device *pdev)
 
 }
 
-static int goldfish_battery_remove(struct platform_device *pdev)
+static int zeus_battery_remove(struct platform_device *pdev)
 {
 
-	int i;
 	struct zeus_battery_update *zbu = platform_get_drvdata(pdev);
 
 #ifdef T_FIH	///+T_FIH
@@ -1544,11 +1493,6 @@ static int goldfish_battery_remove(struct platform_device *pdev)
 #endif	// FLAG_CHARGER_DETECT
 
 #endif	// T_FIH	///-T_FIH
-
-	for (i = 0; i < ARRAY_SIZE(zeus_power_supplies); i++) {
-		power_supply_unregister(&zeus_power_supplies[i]);
-	}
-
 
 	kfree(zbu);
 	batt_update = NULL;
@@ -1607,21 +1551,21 @@ void zeus_update_usb_status(enum chg_type chgtype) {
        gpio_free(CHR_1A);
 
        zeus_battery_refresh_values(batt_update);
-       power_supply_changed(&zeus_power_supplies[current_charger]);
+       power_supply_changed(&zeus_battery);
 }
 EXPORT_SYMBOL(zeus_update_usb_status);
 #endif
 
 
-static struct platform_driver goldfish_battery_device = {
-	.probe		= goldfish_battery_probe,
-	.remove		= goldfish_battery_remove,
+static struct platform_driver zeus_battery_device = {
+	.probe		= zeus_battery_probe,
+	.remove		= zeus_battery_remove,
 	.driver = {
-		.name = "goldfish-battery",
+		.name = "zeus-battery",
 	}
 };
 
-static int __init goldfish_battery_init(void)
+static int __init zeus_battery_init(void)
 {
     int ret;
 
@@ -1629,7 +1573,7 @@ static int __init goldfish_battery_init(void)
      gpio_tlmm_config(GPIO_CFG(33, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
      gpio_tlmm_config(GPIO_CFG(123, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
 
-    ret = platform_driver_register(&goldfish_battery_device);
+    ret = platform_driver_register(&zeus_battery_device);
     if(ret)
     {
         goto ERROR;
@@ -1651,9 +1595,9 @@ static int __init goldfish_battery_init(void)
     
 }
 
-static void __exit goldfish_battery_exit(void)
+static void __exit zeus_battery_exit(void)
 {
-	platform_driver_unregister(&goldfish_battery_device);
+	platform_driver_unregister(&zeus_battery_device);
 
 	#ifdef CONFIG_FIH_FXX
     	/*new label name for remove misc device*/
@@ -1661,8 +1605,8 @@ static void __exit goldfish_battery_exit(void)
 	#endif
 }
 
-module_init(goldfish_battery_init);
-module_exit(goldfish_battery_exit);
+module_init(zeus_battery_init);
+module_exit(zeus_battery_exit);
 
 MODULE_AUTHOR("Mike Lockwood lockwood@android.com");
 MODULE_LICENSE("GPL");

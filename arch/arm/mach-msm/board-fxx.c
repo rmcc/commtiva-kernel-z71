@@ -94,6 +94,7 @@
 #include <mach/msm_smd.h>
 /* FIH, Debbie Sun, 2009/06/18 }*/
 
+void __init msm_power_register(void);
 
 #ifdef CONFIG_ARCH_MSM7X25
 #define MSM_PMEM_MDP_SIZE	0xb21000
@@ -355,11 +356,26 @@ static int msm_otg_rpc_phy_reset(void __iomem *regs)
        return msm_hsusb_phy_reset();
 }
 
+#ifdef CONFIG_BATTERY_FIH_ZEUS
+#define ZEUS_GPIO_BATTERY_USBSET 123
+
+extern void notify_usb_connected(int);
+void charger_connected(enum chg_type chgtype)
+{
+    notify_usb_connected(chgtype);
+    gpio_set_value(ZEUS_GPIO_BATTERY_USBSET, (chgtype != USB_CHG_TYPE__INVALID));
+    hsusb_chg_connected(chgtype);
+}
+
+#endif
+
 static struct msm_otg_platform_data msm_otg_pdata = {
     .rpc_connect    = hsusb_rpc_connect,
     .pmic_notif_init         = msm_hsusb_pmic_notif_init,
     .chg_vbus_draw       = hsusb_chg_vbus_draw,
-    .chg_connected       = hsusb_chg_connected,
+#ifdef CONFIG_BATTERY_FIH_ZEUS
+    .chg_connected       = charger_connected,
+#endif
     .chg_init        = hsusb_chg_init,
     .ldo_init       = msm_hsusb_ldo_init,
     .ldo_enable     = msm_hsusb_ldo_enable,
@@ -1885,9 +1901,6 @@ static void __init msm_fb_add_devices(void)
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("pmdh", 0);
 	msm_fb_register_device("lcdc", &lcdc_pdata);
-	/* [FXX_CR], Add For Battery Driver*/
-	msm_fb_register_device("batt", 0);
-	/* } FIH, Michael Kao, 2010/01/21 */
 }
 
 extern struct sys_timer msm_timer;
@@ -2407,6 +2420,7 @@ static void __init msm7x2x_init(void)
 	msm_device_i2c_init();
 	i2c_register_board_info(0, i2c_devices, ARRAY_SIZE(i2c_devices));
 
+	msm_power_register();
 	msm_fb_add_devices();
 	msm7x2x_init_mmc();
 
