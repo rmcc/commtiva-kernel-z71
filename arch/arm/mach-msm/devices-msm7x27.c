@@ -620,17 +620,19 @@ static struct platform_device msm_tvenc_device = {
 	.num_resources  = ARRAY_SIZE(msm_tvenc_resources),
 	.resource       = msm_tvenc_resources,
 };
-/* FIH, Michael Kao, 2009/07/02{ */
-/* [FXX_CR], Add For Battery Driver*/
+
 #ifdef CONFIG_FIH_FXX
-/* ZEUS_ANDROID_CR, register device for Battery Report */
-///+FIH_ADQ
-static struct platform_device goldfish_battery_device = {
-	.name		= "goldfish-battery",
+static struct platform_device zeus_battery_device = {
+	.name		= "zeus-battery",
 	.id		  = -1,
 };
+
+static struct platform_device zeus_power_device = {
+       .name       = "zeus-power",
+       .id       = -1,
+};
 #endif
-/* } FIH, Michael Kao, 2009/07/02 */
+
 /* TSIF begin */
 #if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
 
@@ -727,18 +729,20 @@ void __init msm_fb_register_device(char *name, void *data)
 		msm_register_device(&msm_ebi2_lcd_device, data);
 	else if (!strncmp(name, "tvenc", 5))
 		msm_register_device(&msm_tvenc_device, data);
-	/* FIH, Michael Kao, 2009/07/02{ */
-	/* [FXX_CR], Add For Battery Driver*/
-#ifdef CONFIG_FIH_FXX
-	else if (!strncmp(name, "batt", 4))
-		msm_register_device(&goldfish_battery_device, data);
-#endif
-	/* } FIH, Michael Kao, 2009/07/02 */
 	else if (!strncmp(name, "lcdc", 4))
 		msm_register_device(&msm_lcdc_device, data);
 	else
 		printk(KERN_ERR "%s: unknown device! %s\n", __func__, name);
 }
+
+#ifdef CONFIG_FIH_FXX
+void __init msm_power_register(void) {
+#ifdef CONFIG_BATTERY_FIH_ZEUS
+	msm_register_device(&zeus_battery_device, 0);
+#endif
+	msm_register_device(&zeus_power_device, 0);
+}
+#endif
 
 static struct platform_device msm_camera_device = {
 	.name	= "msm_camera",

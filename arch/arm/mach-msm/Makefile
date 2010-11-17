@@ -139,7 +139,8 @@ obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-rfkill.o msm_vibrator.o
 
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
 
-obj-$(CONFIG_FIH_FXX) += board-fxx.o board-fxx-info.o msm_vibrator.o devices-msm7x27.o
+obj-$(CONFIG_FIH_FXX) += board-fxx.o board-fxx-info.o
+obj-$(CONFIG_FIH_FXX) += msm_vibrator.o devices-msm7x27.o zeus_power_supply.o
 obj-$(CONFIG_FIH_F9xx_GPIO_KEYPAD) += 7x27_kybd.o
 
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
