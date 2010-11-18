@@ -1951,11 +1951,11 @@ static struct msm_gpio sdc2_cfg_data[] = {
 
 static struct msm_gpio sdc2_sleep_cfg_data[] = {
         {GPIO_CFG(62, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_clk"},
-        {GPIO_CFG(63, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_cmd"},
-        {GPIO_CFG(64, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_dat_3"},
-        {GPIO_CFG(65, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_dat_2"},
-        {GPIO_CFG(66, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_dat_1"},
-        {GPIO_CFG(67, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA), "sdc2_dat_0"},
+        {GPIO_CFG(63, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "sdc2_cmd"},
+        {GPIO_CFG(64, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "sdc2_dat_3"},
+        {GPIO_CFG(65, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "sdc2_dat_2"},
+        {GPIO_CFG(66, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "sdc2_dat_1"},
+        {GPIO_CFG(67, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA), "sdc2_dat_0"},
 };
 #endif
 
@@ -2047,6 +2047,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 
 	pdev = container_of(dv, struct platform_device, dev);
 	msm_sdcc_setup_gpio(pdev->id, !!vdd);
+	printk(KERN_INFO"%s: [MMC host %d power: %s]\n",__func__,pdev->id,vdd ? "on" : "off");	
 
 	if (vdd == 0) {
 		if (!vreg_sts)
@@ -2076,7 +2077,6 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 			     MPP_CFG(MPP_DLOGIC_LVL_MSMP,
 			     MPP_DLOGIC_OUT_CTRL_HIGH));
 		} else {
-			printk(KERN_INFO"%s: [SD card power: on]\r\n",__func__);	
 			
 			rc = vreg_set_level(vreg_mmc, 2850);
 			if (!rc)
@@ -2099,6 +2099,8 @@ static struct mmc_platform_data msm7x2x_sdc1_data = {
 	.msmsdcc_fmid   = 24576000,
 	.msmsdcc_fmax   = 49152000,
 	.nonremovable   = 0,
+	.status_irq	= MSM_GPIO_TO_INT(18),
+	.irq_flags	= IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,
 };
 #endif
 
