@@ -453,12 +453,8 @@ static int	GetPMICBatteryInfo(void)
 	//Read VBat from PMIC
 	for(countB=0;countB<smpnum;countB++)
 	{
-		unsigned bval = proc_comm_read_adc(&adc_read_id);
-		//battery_sum+=proc_comm_read_adc(&adc_read_id);
-		battery_sum+=bval;
-		printk("DEBUG: PMIC read %d returned %u mV\n",countB, bval);
+		battery_sum+=proc_comm_read_adc(&adc_read_id);
 	}
-	printk("DEBUG: My samples gave me %u mV\n",(battery_sum/smpnum));
 	if(charger_on==0)
 	{
 		if(!gpio_get_value(GPIO_CHR_DET)&&!over_temper&&!battery_full_flag&&!over_temper2)
