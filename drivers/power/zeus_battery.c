@@ -65,7 +65,6 @@
 /* FIH, Michael Kao, 2009/08/18 */
 /*Add misc device*/
 #ifdef CONFIG_FIH_FXX
-#include <linux/miscdevice.h>
 #include <asm/ioctl.h>
 #include <asm/fcntl.h>
 #include <asm/uaccess.h>
@@ -131,22 +130,6 @@ typedef struct _VOLT_TO_PERCENT
     u16 dwVolt;
     u16 dwPercent;
 } VOLT_TO_PERCENT;
-/* FIH, Michael Kao, 2009/08/26 */
-/* [FXX_CR], Modify for charging too fast in low power issue*/
-#if 0
-static VOLT_TO_PERCENT g_Volt2PercentMode[6] =
-{
-    { 3400, 0},		// empty,    Rx Table
-    { 3700, 20},    // level 1
-    { 3785, 40},    // level 2
-    { 3860, 60},    // level 3
-    { 3985, 80},    // level 4
-    /* FIH, Michaelkao, 2009/09/30 { */
-    /* Requirement to change battery full voltage to 4.10V*/
-    { 4100, 100},   // full
-    /* FIH, Michaelkao, 2009/09/30 { */
-};
-#endif
 /* FIH, Michael Kao, 2009/10/14 */
 /* [FXX_CR], Modofy for using different profile for different battery*/
 static VOLT_TO_PERCENT g_Volt2PercentMode[10] =
@@ -167,24 +150,6 @@ static VOLT_TO_PERCENT g_Volt2PercentMode[10] =
     { 3990, 85},    // level 8
     { 4100, 100},   // full
 };
-static VOLT_TO_PERCENT g_Volt2PercentMode2[10] =
-{
-    /* FIH, Michael Kao, 2010/01/11 */
-    /* [FXX_CR], Adjust power off voltage to 3.5V*/
-    { 3500, 0},	   // empty,    Rx Table
-    /* FIH, Michael Kao, 2010/01/11 */
-    { 3610, 15},    // level 1
-    { 3675, 25},    // level 2
-    { 3695, 35},    // level 3
-    { 3720, 45},    // level 4
-    { 3760, 55},    // level 5
-    { 3825, 65},    // level 6
-    { 3900, 75},    // level 7
-    { 3990, 85},    // level 8
-    { 4100, 100},   // full
-};
-/* FIH, Michael Kao, 2009/12/21 */
-/* FIH, Michael Kao, 2009/10/14 */
 
 /* FIH, Michael Kao, 2009/08/26 */
 extern void tca6507_charger_state_report(int state);
@@ -343,7 +308,6 @@ int pre_val;
 /* [FXX_CR], add for update battery information more accuracy in suspend mode*/
 bool suspend_update_flag;
 /* FIH, Michael Kao, 2009/09/30 */
-int VBAT_from_SMEM;
 int battery_low;
 /* FIH, Michael Kao, 2009/11/25 */
 /* [FXX_CR], add a retry mechanism to prevent the sudden high value*/
@@ -354,9 +318,6 @@ bool weird_retry_flag;
 /* [FXX_CR], add for update battery information more accuracy only for battery update in suspend mode*/
 int pre_suspend_time;
 int suspend_time_duration;
-/* FIH, Michael Kao, 2009/12/01 */
-int suspend_update_sample_gate;
-/* FIH, Michael Kao, 2009/12/25 */
 //New charging temperature protection scenario
 int high_vol;
 int charging_bat_vol;
@@ -432,10 +393,6 @@ static int	GetPMICBatteryInfo(void)
 	int smpnum=3;
 	int countB;
 	int weird_count_number;
-	/* FIH, Michael Kao, 2009/11/16 */
-	/* [FXX_CR], Create different thresholds in diffrerent voltage range to prevent voltage drop issue*/
-	int iC, Vbat_threshold;
-	/* FIH, Michael Kao, 2009/11/16 */
 
 	if(suspend_update_flag)
 		weird_count_number=3;
@@ -496,8 +453,12 @@ static int	GetPMICBatteryInfo(void)
 	//Read VBat from PMIC
 	for(countB=0;countB<smpnum;countB++)
 	{
-		battery_sum+=proc_comm_read_adc(&adc_read_id);
+		unsigned bval = proc_comm_read_adc(&adc_read_id);
+		//battery_sum+=proc_comm_read_adc(&adc_read_id);
+		battery_sum+=bval;
+		printk("DEBUG: PMIC read %d returned %u mV\n",countB, bval);
 	}
+	printk("DEBUG: My samples gave me %u mV\n",(battery_sum/smpnum));
 	if(charger_on==0)
 	{
 		if(!gpio_get_value(GPIO_CHR_DET)&&!over_temper&&!battery_full_flag&&!over_temper2)
@@ -515,7 +476,9 @@ static int	GetPMICBatteryInfo(void)
 	/* FIH, Michael Kao, 2010/05/14 */
 
 	PMIC_batt.new_batt_val=battery_sum/smpnum;
-	VBAT_from_SMEM=PMIC_batt.new_batt_val;
+	if (!PMIC_batt.pre_batt_val && PMIC_batt.new_batt_val)
+		PMIC_batt.pre_batt_val = PMIC_batt.new_batt_val;
+	
 	/* FIH, Michael Kao, 2009/11/16 */
 	/* [FXX_CR],update battery sample data when battery capacity is low*/
 	if(PMIC_batt.new_batt_val<=3600&&gpio_get_value(GPIO_CHR_DET))
@@ -546,8 +509,6 @@ static int	GetPMICBatteryInfo(void)
 		/* FIH, Michael Kao, 2009/11/25 */
 
 		//Voltage only can go up
-		/* FIH, Michael Kao, 2009/08/24 */
-		/* [FXX_CR], Avoid weird value*/
 		if(PMIC_batt.new_batt_val<PMIC_batt.pre_batt_val)
 		{
 			weird_count++;
@@ -565,70 +526,33 @@ static int	GetPMICBatteryInfo(void)
 		//if((PMIC_batt.new_batt_val>=3600)&&((PMIC_batt.new_batt_val -PMIC_batt.pre_batt_val)>300))
 		//return PMIC_batt.pre_batt_val;
 
-		PMIC_batt.pre_batt_val=PMIC_batt.new_batt_val;
+		/* Smooth out the variation */
+		PMIC_batt.pre_batt_val+=PMIC_batt.new_batt_val;
+		PMIC_batt.pre_batt_val/=2;
 	}
 	else//Charging unplug
 	{
-		if(PMIC_batt.pre_batt_val>3900)
-			suspend_update_sample_gate=0;
-		else if((PMIC_batt.pre_batt_val<=3900)&&(PMIC_batt.pre_batt_val>3700))
-			suspend_update_sample_gate=1;
-		else
-			suspend_update_sample_gate=2;
-		/* FIH, Michael Kao, 2009/11/16 */
-		/* [FXX_CR], Create different thresholds in diffrerent voltage range to prevent voltage drop issue*/
-		//get threshold value
-		for(iC=0;iC<10;iC++)
+		/* Avoid sudden low value, by trying once to 
+			ignore changes > 4% (in a 500 mV scale) */
+		if(!weird_retry_flag && (PMIC_batt.new_batt_val<(PMIC_batt.pre_batt_val-20)) )
 		{
-			if(Battery_HWID >= CMCS_7627_EVB1)
-			{
-				if(PMIC_batt.pre_batt_val <= g_Volt2PercentMode2[iC].dwVolt)
-					break;
-			}else
-			{
-				if(PMIC_batt.pre_batt_val <= g_Volt2PercentMode[iC].dwVolt)
-					break;
-			}
+			weird_retry_flag=true;
+			return PMIC_batt.pre_batt_val;
 		}
-		if(Battery_HWID >= CMCS_7627_EVB1)
-			Vbat_threshold=(g_Volt2PercentMode2[iC].dwVolt -g_Volt2PercentMode2[iC-1].dwVolt);
 		else
-			Vbat_threshold=(g_Volt2PercentMode[iC].dwVolt -g_Volt2PercentMode[iC-1].dwVolt);
-		if(iC==2)
-			Vbat_threshold=Vbat_threshold*6/5;
-		else if(iC==1)
-			Vbat_threshold=Vbat_threshold*3/2;
-		else if(iC==0)
-			Vbat_threshold=0;
-		/* FIH, Michael Kao, 2009/11/16 */
+			weird_retry_flag=false;
 
-		//Voltage only can go down
+		/* Voltage only can go down */
 		if(PMIC_batt.new_batt_val>PMIC_batt.pre_batt_val)
 		{
 			return PMIC_batt.pre_batt_val;
 		}
-		//Filter weird value
-		else if((PMIC_batt.pre_batt_val -PMIC_batt.new_batt_val)>300)
-		{
-			return PMIC_batt.pre_batt_val;
-		}
-		/* FIH, Michael Kao, 2009/10/14 */
-		/* [FXX_CR], Modofy for avoid voltage drop cause capacity drop too much*/
-		/* FIH, Michael Kao, 2009/11/16 */
-		/* [FXX_CR], use different thresholds in diffrerent voltage range to prevent voltage drop issue*/
 
-		/* FIH, Michael Kao, 2009/12/01 */
-		/* [FXX_CR], use different thresholds in diffrerent voltage range to prevent voltage drop issue in suspend mode*/
-		else 	if((PMIC_batt.pre_batt_val -PMIC_batt.new_batt_val)>Vbat_threshold)
-		{
-			/* FIH, Michael Kao, 2009/12/01 */
-			PMIC_batt.new_batt_val=PMIC_batt.pre_batt_val-Vbat_threshold;
-		}
-		/* FIH, Michael Kao, 2009/11/16 */
-
-		PMIC_batt.pre_batt_val=PMIC_batt.new_batt_val;
+		/* Smooth out the variation */
+		PMIC_batt.pre_batt_val+=PMIC_batt.new_batt_val;
+		PMIC_batt.pre_batt_val/=2;
 	}
-	return PMIC_batt.new_batt_val;			
+	return PMIC_batt.pre_batt_val;
 }
 
 static int	ChangeToVoltPercentage(unsigned Vbat)
@@ -640,15 +564,8 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 	/* [FXX_CR], Modofy for using different profile for different battery*/
 	for(iC=0;iC<10;iC++)//Michael modify, 2009/10/21
 	{
-		if(Battery_HWID >= CMCS_7627_EVB1)
-		{
-			if(Vbat <= g_Volt2PercentMode2[iC].dwVolt)
-           			break;
-		}else
-		{
-			if(Vbat <= g_Volt2PercentMode[iC].dwVolt)
-           			break;
-		}
+		if(Vbat <= g_Volt2PercentMode[iC].dwVolt)
+           		break;
 	}
 	if(iC==0)
 		Volt_pec=0;
@@ -656,15 +573,8 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 		Volt_pec=100;
 	else if((iC>=0)&&(iC<10))//Michael modify, 2009/10/21
 	{
-		if(Battery_HWID >= CMCS_7627_EVB1)
-		{
-			Volt_pec=g_Volt2PercentMode2[iC-1].dwPercent + 
-				( Vbat -g_Volt2PercentMode2[iC-1].dwVolt) * ( g_Volt2PercentMode2[iC].dwPercent -g_Volt2PercentMode2[iC-1].dwPercent)/( g_Volt2PercentMode2[iC].dwVolt -g_Volt2PercentMode2[iC-1].dwVolt);
-		}else
-		{
-			Volt_pec=g_Volt2PercentMode[iC-1].dwPercent + 
-				( Vbat -g_Volt2PercentMode[iC-1].dwVolt) * ( g_Volt2PercentMode[iC].dwPercent -g_Volt2PercentMode[iC-1].dwPercent)/( g_Volt2PercentMode[iC].dwVolt -g_Volt2PercentMode[iC-1].dwVolt);
-		}
+		Volt_pec=g_Volt2PercentMode[iC-1].dwPercent + 
+			( Vbat -g_Volt2PercentMode[iC-1].dwVolt) * ( g_Volt2PercentMode[iC].dwPercent -g_Volt2PercentMode[iC-1].dwPercent)/( g_Volt2PercentMode[iC].dwVolt -g_Volt2PercentMode[iC-1].dwVolt);
 	}
 	/* FIH, Michael Kao, 2009/10/14 */
 	/* FIH, Michael Kao, 2009/09/10 */
@@ -1005,113 +915,113 @@ static void zeus_battery_refresh_values(struct zeus_battery_update *zbu) {
 }
 
 static int zeus_battery_get_property(struct power_supply *psy,
-				 enum power_supply_property psp,
-				 union power_supply_propval *val)
+		enum power_supply_property psp,
+		union power_supply_propval *val)
 {
 	int ret = 0;
 
 	switch (psp) {
-	case POWER_SUPPLY_PROP_STATUS:
-		// "Unknown", "Charging", "Discharging", "Not charging", "Full"
-                	if (g_charging_state != CHARGER_STATE_LOW_POWER)
-			val->intval = g_charging_state;
-                	else 
-                		val->intval = CHARGER_STATE_NOT_CHARGING;
-		break;
-	case POWER_SUPPLY_PROP_HEALTH:
-		//GetBatteryInfo(BATT_AVCURRENT_INFO, &buf);
-		// "Unknown", "Good", "Overheat", "Dead", "Over voltage", "Unspecified failure"
-		#if GET_TEMPERATURE_FROM_BATTERY_THERMAL
-		//if ((g_orig_hw_id >= CMCS_125_CTP_GRE_PR1 && g_orig_hw_id <= CMCS_125_CTP_GRE_MP2)||
-		//(g_orig_hw_id >= CMCS_CTP_F917_PR2 && g_orig_hw_id <= CMCS_CTP_F917_MP3))
-		if (g_orig_hw_id >= CMCS_HW_EVB1 && g_orig_hw_id < CMCS_7627_ORIG_EVB1)
-		{
-            		if (g_use_battery_thermal)
-            		{
-               	 		if (g_cool_down_mode)
-                			{
-                    			if (msm_termal < BATTERY_TEMP_COOL_DOWN_FROM_EMGCY)
-                    			{
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
-                        				g_cool_down_mode = FALSE;
-                    			}
-                    			else
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
-                			}
-                			else
-                			{
-                    			if (msm_termal > BATTERY_TEMP_EMGCY_CALL_ONLY)
-                    			{
-                        				g_cool_down_mode = TRUE;    //Enter cool-down mode by moto's request
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
-                    			}
-                    			else if (msm_termal > BATTERY_TEMP_SHUTDOWN_AP && msm_termal <= BATTERY_TEMP_EMGCY_CALL_ONLY)
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_SHUTDOWN_AP;
-                    			else if (over_temper)   // (BATTERY_TEMP_HIGH_LIMIT + BATTERY_THERMAL_TEMP_OFFSET) <= msm_termal <= BATTERY_TEMP_LOW_LIMIT
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
-                    			else
-                        				val->intval = POWER_SUPPLY_HEALTH_GOOD;
-                			}
-           		 }
-            		else
-            		{   //  MSM thermistor case
-               			if (g_cool_down_mode)
-                			{
-                    			if (msm_termal < MSM_TEMP_COOL_DOWN_FROM_EMGCY)
-                    			{
-                        				g_cool_down_mode = FALSE;
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
-                    			}
-                    			else
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
-               			}
-                			else
-                			{
-                		
-                   			if (msm_termal > MSM_TEMP_EMGCY_CALL_ONLY)
-                    			{
-                        				g_cool_down_mode = TRUE;
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
-                    			}
-                    			else if (msm_termal > MSM_TEMP_SHUTDOWN_AP && msm_termal <= MSM_TEMP_EMGCY_CALL_ONLY)
-                        				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_SHUTDOWN_AP;
-                    			else if (over_temper||over_temper2)
-            					val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
-            				else
-            					val->intval = POWER_SUPPLY_HEALTH_GOOD;
-               			}
-            		}
-            		printk("battery_thermal=%d health=%d cool-down=%d msm_termal=%d\n", g_use_battery_thermal, val->intval, g_cool_down_mode,msm_termal);
-        		}
-        		else
-        		#endif
-        		{
-    			if(over_temper||over_temper2)
-    				val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
-    			else
-    				val->intval = POWER_SUPPLY_HEALTH_GOOD;
-        		}
-		break;
-	case POWER_SUPPLY_PROP_PRESENT:
-		//GetBatteryInfo(BATT_CURRENT_INFO, &buf);
-		val->intval = 1;
-		break;
-	case POWER_SUPPLY_PROP_TECHNOLOGY:
-		// "Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd", "LiMn"
-		val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
-		break;
-	case POWER_SUPPLY_PROP_TEMP:
-		val->intval = msm_termal*10;
-		break;
-	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = batt_update->data.voltage*1000;
-		break;
-	case POWER_SUPPLY_PROP_CAPACITY:
-		val->intval = batt_update->data.capacity;
-                break;
-	default:
-		ret = -EINVAL;
-		break;
+		case POWER_SUPPLY_PROP_STATUS:
+			// "Unknown", "Charging", "Discharging", "Not charging", "Full"
+			if (g_charging_state != CHARGER_STATE_LOW_POWER)
+				val->intval = g_charging_state;
+			else 
+				val->intval = CHARGER_STATE_NOT_CHARGING;
+			break;
+		case POWER_SUPPLY_PROP_HEALTH:
+			//GetBatteryInfo(BATT_AVCURRENT_INFO, &buf);
+			// "Unknown", "Good", "Overheat", "Dead", "Over voltage", "Unspecified failure"
+#if GET_TEMPERATURE_FROM_BATTERY_THERMAL
+			//if ((g_orig_hw_id >= CMCS_125_CTP_GRE_PR1 && g_orig_hw_id <= CMCS_125_CTP_GRE_MP2)||
+			//(g_orig_hw_id >= CMCS_CTP_F917_PR2 && g_orig_hw_id <= CMCS_CTP_F917_MP3))
+			if (g_orig_hw_id >= CMCS_HW_EVB1 && g_orig_hw_id < CMCS_7627_ORIG_EVB1)
+			{
+				if (g_use_battery_thermal)
+				{
+					if (g_cool_down_mode)
+					{
+						if (msm_termal < BATTERY_TEMP_COOL_DOWN_FROM_EMGCY)
+						{
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+							g_cool_down_mode = FALSE;
+						}
+						else
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
+					}
+					else
+					{
+						if (msm_termal > BATTERY_TEMP_EMGCY_CALL_ONLY)
+						{
+							g_cool_down_mode = TRUE;    //Enter cool-down mode by moto's request
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
+						}
+						else if (msm_termal > BATTERY_TEMP_SHUTDOWN_AP && msm_termal <= BATTERY_TEMP_EMGCY_CALL_ONLY)
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_SHUTDOWN_AP;
+						else if (over_temper)   // (BATTERY_TEMP_HIGH_LIMIT + BATTERY_THERMAL_TEMP_OFFSET) <= msm_termal <= BATTERY_TEMP_LOW_LIMIT
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+						else
+							val->intval = POWER_SUPPLY_HEALTH_GOOD;
+					}
+				}
+				else
+				{   //  MSM thermistor case
+					if (g_cool_down_mode)
+					{
+						if (msm_termal < MSM_TEMP_COOL_DOWN_FROM_EMGCY)
+						{
+							g_cool_down_mode = FALSE;
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+						}
+						else
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
+					}
+					else
+					{
+
+						if (msm_termal > MSM_TEMP_EMGCY_CALL_ONLY)
+						{
+							g_cool_down_mode = TRUE;
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_EMGCY_CALL_ONLY;
+						}
+						else if (msm_termal > MSM_TEMP_SHUTDOWN_AP && msm_termal <= MSM_TEMP_EMGCY_CALL_ONLY)
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT_SHUTDOWN_AP;
+						else if (over_temper||over_temper2)
+							val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+						else
+							val->intval = POWER_SUPPLY_HEALTH_GOOD;
+					}
+				}
+				printk("battery_thermal=%d health=%d cool-down=%d msm_termal=%d\n", g_use_battery_thermal, val->intval, g_cool_down_mode,msm_termal);
+			}
+			else
+#endif
+			{
+				if(over_temper||over_temper2)
+					val->intval = POWER_SUPPLY_HEALTH_OVERHEAT;
+				else
+					val->intval = POWER_SUPPLY_HEALTH_GOOD;
+			}
+			break;
+		case POWER_SUPPLY_PROP_PRESENT:
+			//GetBatteryInfo(BATT_CURRENT_INFO, &buf);
+			val->intval = 1;
+			break;
+		case POWER_SUPPLY_PROP_TECHNOLOGY:
+			// "Unknown", "NiMH", "Li-ion", "Li-poly", "LiFe", "NiCd", "LiMn"
+			val->intval = POWER_SUPPLY_TECHNOLOGY_LION;
+			break;
+		case POWER_SUPPLY_PROP_TEMP:
+			val->intval = msm_termal*10;
+			break;
+		case POWER_SUPPLY_PROP_VOLTAGE_NOW:
+			val->intval = batt_update->data.voltage*1000;
+			break;
+		case POWER_SUPPLY_PROP_CAPACITY:
+			val->intval = batt_update->data.capacity;
+			break;
+		default:
+			ret = -EINVAL;
+			break;
 	}
 
 	return ret;
@@ -1155,10 +1065,11 @@ static void zeus_battery_work(struct work_struct *work)
 
 	/* prevent suspend before starting the alarm */
 	local_irq_save(flags);
-	wake_unlock(&zbu->wakelock);
 
 	zeus_program_alarm(zbu, get_suspend_state() == PM_SUSPEND_MEM ? 
 			(BATTERY_POLLING_TIMER*3) : BATTERY_POLLING_TIMER);
+
+	wake_unlock(&zbu->wakelock);
 	local_irq_restore(flags);
 
 }
@@ -1186,76 +1097,6 @@ static irqreturn_t chgdet_irqhandler(int irq, void *dev_id)
 }
 #endif	// FLAG_CHARGER_DETECT
 #endif	// T_FIH	///-T_FIH
-#ifdef CONFIG_FIH_FXX
-/*Add misc device ioctl command functions*/
-/*******************File control function******************/
-// devfs
-static int Zeus_battery_miscdev_open( struct inode * inode, struct file * file )
-{
-	if( ( file->f_flags & O_ACCMODE ) == O_WRONLY )
-	{
-		return -1;
-	}
-	else
-		return 0;
-}
-
-static int Zeus_battery_miscdev_ioctl( struct inode * inode, struct file * filp, unsigned int cmd2, unsigned long arg )
-{
-    	int ret = 0;
-	int data=0;
-    	//uint8_t BatteryID;
-    	#if 1
-    	if(copy_from_user(&data, (int __user*)arg, sizeof(int)))
-    	{
-        		return -1;
-    	}
-    	#endif
-    
-    	if(cmd2 == FTMBATTERY_VOL)
-    	{
-		ret = 3800;
-    	}
-	else if(cmd2 ==FTMBATTERY_PRE_VOL)
-	{
-		ret =PMIC_batt.pre_batt_val;
-	}
-	else if(cmd2 == FTMBATTERY_VBAT)
-	{
-		ret=VBAT_from_SMEM;
-	}
-	else if(cmd2 == FTMBATTERY_BID || cmd2==FTMBATTERY_STA)
-	{
-		ret = 0;
-	}
-    	else
-    	{
-        	printk(KERN_DEBUG  "[%s:%d]Unknow ioctl cmd", __func__, __LINE__);
-        	ret = -1;
-    	}
-    	return ret;
-}
-
-
-static int Zeus_battery_miscdev_release( struct inode * inode, struct file * filp )
-{
-	return 0;
-}
-
-
-static const struct file_operations Zeus_battery_miscdev_fops = {
-	.open = Zeus_battery_miscdev_open,
-	.ioctl = Zeus_battery_miscdev_ioctl,
-	.release = Zeus_battery_miscdev_release,
-};
-
-
-static struct miscdevice Zeus_battery_miscdev = {
- 	.minor = MISC_DYNAMIC_MINOR,
-	.name = "ftmbattery",
-	.fops = &Zeus_battery_miscdev_fops,
-};
-#endif
 
 
 static int zeus_battery_probe(struct platform_device *pdev)
@@ -1299,7 +1140,6 @@ static int zeus_battery_probe(struct platform_device *pdev)
 	/* [FXX_CR], Add wake lock to avoid incompleted update battery information*/
 	/* FIH, Michael Kao, 2009/10/14 */
 	battery_low=false;
-	VBAT_from_SMEM=0;
 
 	/* FIH, Michael Kao, 2009/11/25 */
 	/* [FXX_CR], add a retry mechanism to prevent the sudden high value*/
@@ -1316,7 +1156,6 @@ static int zeus_battery_probe(struct platform_device *pdev)
 	high_vol=0;
 	charging_bat_vol=0;
 	over_temper2=false;
-	suspend_update_sample_gate=0;
 	charger_on=0;
 	/* FIH, Michael Kao, 2009/12/25 */
 
@@ -1526,17 +1365,6 @@ static int __init zeus_battery_init(void)
         goto ERROR;
     }
 	
-    #ifdef CONFIG_FIH_FXX
-        /*Use miscdev*/
-        //register and allocate device, it would create an device node automatically.
-        //use misc major number plus random minor number, and init device
-        ret = misc_register(&Zeus_battery_miscdev);
-        if (ret)
-        {
-            misc_deregister(&Zeus_battery_miscdev);
-        }        
-    #endif
-    
     ERROR:    
 	return ret;
     
@@ -1545,11 +1373,6 @@ static int __init zeus_battery_init(void)
 static void __exit zeus_battery_exit(void)
 {
 	platform_driver_unregister(&zeus_battery_device);
-
-	#ifdef CONFIG_FIH_FXX
-    	/*new label name for remove misc device*/
-		misc_deregister(&Zeus_battery_miscdev);	
-	#endif
 }
 
 module_init(zeus_battery_init);
