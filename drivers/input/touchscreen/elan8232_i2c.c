@@ -578,7 +578,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc != 0x30 && poc != 0x5) {
+			if (poc == 0x1000001) {
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
@@ -609,7 +609,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc != 0x30 && poc != 0x5) {
+			if (poc == 0x1000001) {
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
@@ -641,7 +641,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc != 0x30 && poc != 0x5) {
+			if (poc == 0x1000001) {
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsF913 && !bIsFST)  //Added for FST
@@ -675,7 +675,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_POSITION_Y, 3072);
 				input_mt_sync(input);
 			}
-			if (poc != 0x30 && poc != 0x5) {
+			if (poc == 0x1000001) {
 				if(!bIsKeyLock)  //Added for new behavior (2009/09/27)
 				{
 					if(bIsFST)
