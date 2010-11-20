@@ -1215,15 +1215,7 @@ static int zeus_battery_probe(struct platform_device *pdev)
 		/* } FIH; Tiger; 2009/8/15 */
 		gpio_set_value(GPIO_CHR_EN,1);//Disable chager
 	}
-
-	/* init power supplier framework */
-	ret = power_supply_register(&pdev->dev, &zeus_battery);
-	if (ret) {
-		printk(KERN_ERR "Failed to register power supply (%d)\n", ret);
-		return ret;
-	}
-
-
+		
 	INIT_WORK(&zbu->zeus_batt_work, zeus_battery_work);
 	zbu->wqueue = create_freezeable_workqueue(dev_name(&pdev->dev));
 	zbu->last_poll = alarm_get_elapsed_realtime();
@@ -1245,11 +1237,20 @@ static int zeus_battery_probe(struct platform_device *pdev)
 
 #ifdef T_FIH	///+T_FIH
 
+    	/* init power supplier framework */
+	ret = power_supply_register(&pdev->dev, &zeus_battery);
+	if (ret) {
+		printk(KERN_ERR "Failed to register power supply (%d)\n", ret);
+		return ret;
+	}
+
 #ifdef FLAG_CHARGER_DETECT
-	gpio_tlmm_config( GPIO_CFG(GPIO_CHR_DET, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA ), GPIO_CFG_ENABLE );
-	ret = gpio_request(GPIO_CHR_DET, "gpio_keybd_irq");
-	ret = gpio_direction_input(GPIO_CHR_DET);
-	ret = request_irq(MSM_GPIO_TO_INT(GPIO_CHR_DET), &chgdet_irqhandler, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, pdev->name, NULL);
+	ret = gpio_request(GPIO_CHR_DET, "zeus-charger");
+	if (!ret) {
+		gpio_tlmm_config( GPIO_CFG(GPIO_CHR_DET, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA ), GPIO_CFG_ENABLE );
+		ret = gpio_direction_input(GPIO_CHR_DET);
+		ret = request_irq(MSM_GPIO_TO_INT(GPIO_CHR_DET), &chgdet_irqhandler, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING, pdev->name, NULL);
+	}
 	/* FIH, Michael Kao, 2009/10/14 */
 	/* [FXX_CR], Add charger detect pin to wake up source*/
 	if (!ret)
@@ -1258,6 +1259,9 @@ static int zeus_battery_probe(struct platform_device *pdev)
 
 #endif	// FLAG_CHARGER_DETECT
 #endif	// T_FIH	///-T_FIH
+
+
+
 
 	return 0;
 

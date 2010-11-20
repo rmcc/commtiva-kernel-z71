@@ -1756,31 +1756,6 @@ static struct platform_device lcdc_spigpio_device = {
 #endif  //CONFIG_SPI_GPIO
 /* FIH, Chandler Kang, 2009/05/18 } */
 
-static u32 msm_calculate_batt_capacity(u32 current_voltage);
-
-static struct msm_psy_batt_pdata msm_psy_batt_data = {
-	.voltage_min_design 	= 2800,
-	.voltage_max_design	= 4300,
-	.avail_chg_sources   	= AC_CHG | USB_CHG ,
-	.batt_technology        = POWER_SUPPLY_TECHNOLOGY_LION,
-	.calculate_capacity	= &msm_calculate_batt_capacity,
-};
-
-static u32 msm_calculate_batt_capacity(u32 current_voltage)
-{
-	u32 low_voltage   = msm_psy_batt_data.voltage_min_design;
-	u32 high_voltage  = msm_psy_batt_data.voltage_max_design;
-
-	return (current_voltage - low_voltage) * 100
-		/ (high_voltage - low_voltage);
-}
-
-static struct platform_device msm_batt_device = {
-	.name 		    = "msm-battery",
-	.id		    = -1,
-	.dev.platform_data  = &msm_psy_batt_data,
-};
-
 /* FIH, SimonSSChang, 2009/02/26 { */
 /* ATHENV */
 static struct platform_device msm_wlan_ar6000_pm_device = {
@@ -1889,7 +1864,6 @@ static struct platform_device *devices[] __initdata = {
 	&mtb_platform_device,
 /* } FIH; Tiger; 2009/6/22 */
 	&hs_device,
-	&msm_batt_device,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
