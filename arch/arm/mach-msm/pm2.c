@@ -1709,8 +1709,7 @@ static struct platform_suspend_ops msm_pm_ops = {
  * Restart Definitions
  *****************************************************************************/
 
-//static uint32_t restart_reason = 0x776655AA;
-static uint32_t restart_reason = 0x77665502;
+static uint32_t restart_reason = 0x776655AA;
 
 static void msm_pm_power_off(void)
 {
