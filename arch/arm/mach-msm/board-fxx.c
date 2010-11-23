@@ -2330,6 +2330,7 @@ static void __init msm7x2x_init(void)
 
 	/* 7x27 doesn't allow graphics clocks to be run asynchronously to */
 	/* the AXI bus */
+	kgsl_pdata.high_axi_3d = 160000;
 	kgsl_pdata.max_grp2d_freq = 0;
 	kgsl_pdata.set_grp2d_async = NULL;
 	kgsl_pdata.max_grp3d_freq = 0;
