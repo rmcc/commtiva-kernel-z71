@@ -211,6 +211,14 @@ static struct clkctl_acpu_speed pll0_960_pll1_245_pll2_1200[] = {
 	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 122880 },
 	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 6, 122880 },
 	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
+#ifdef CONFIG_JESUS_PHONE
+	{ 1, 768000, ACPU_PLL_0, 4, 1, 192000, 3, 7, 192000 },
+	{ 1, 787200, ACPU_PLL_0, 4, 1, 196800, 3, 7, 196800 },
+	{ 1, 806400, ACPU_PLL_0, 4, 1, 201600, 3, 7, 201600 },
+	{ 1, 825600, ACPU_PLL_0, 4, 1, 206400, 3, 7, 206400 },
+	{ 1, 844800, ACPU_PLL_0, 4, 1, 211200, 3, 7, 211200 },
+	//{ 1, 864000, ACPU_PLL_0, 4, 1, 216000, 3, 7, 216000 },
+#endif
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
 
@@ -422,7 +430,7 @@ static int acpuclk_set_vdd_level(int vdd)
 /* Set proper dividers for the given clock speed. */
 static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s)
 {
-	uint32_t reg_clkctl, reg_clksel, clk_div, src_sel;
+	uint32_t reg_clkctl, reg_clksel, clk_div, src_sel, a11_div;
 
 	reg_clksel = readl(A11S_CLK_SEL_ADDR);
 
@@ -430,6 +438,24 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s)
 	clk_div = (reg_clksel >> 1) & 0x03;
 	/* CLK_SEL_SRC1NO */
 	src_sel = reg_clksel & 1;
+
+	a11_div = hunt_s->a11clk_src_div;
+
+#ifdef CONFIG_JESUS_PHONE
+ 	if (hunt_s->a11clk_khz > 600000) {
+		a11_div=0;
+		writel(hunt_s->a11clk_khz/19200, PLLn_L_VAL(0));
+		cpu_relax();
+		udelay(50);
+	} else if (hunt_s->pll == ACPU_PLL_0) {
+		if ((readl(PLLn_L_VAL(0)) & 0x3f) != PLL_960_MHZ) {
+			/* Restore PLL0 to standard config */
+			writel(PLL_960_MHZ, PLLn_L_VAL(0));
+		}
+		cpu_relax();
+		udelay(50);
+	}
+#endif
 
 	/*
 	 * If the new clock divider is higher than the previous, then
@@ -445,7 +471,7 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s)
 	reg_clkctl = readl(A11S_CLK_CNTL_ADDR);
 	reg_clkctl &= ~(0xFF << (8 * src_sel));
 	reg_clkctl |= hunt_s->a11clk_src_sel << (4 + 8 * src_sel);
-	reg_clkctl |= hunt_s->a11clk_src_div << (0 + 8 * src_sel);
+	reg_clkctl |= a11_div << (0 + 8 * src_sel);
 	writel(reg_clkctl, A11S_CLK_CNTL_ADDR);
 
 	/* Program clock source selection */
@@ -735,12 +761,6 @@ static void __init acpu_freq_tbl_fixup(void)
 		udelay(50);
 	} while (pll1_l == 0);
 	do {
-#if 0
-#ifdef CONFIG_FIH_FXX
-		pll2_l = writel(PLL_800_MHZ,PLLn_L_VAL(2));
-		cpu_relax();
-#endif
-#endif
 		pll2_l = readl(PLLn_L_VAL(2)) & 0x3f;
 		cpu_relax();
 		udelay(50);
@@ -926,50 +946,6 @@ static void shared_pll_control_init(void)
 	pr_warning("Falling back to proc_comm PLL control.\n");
 }
 
-//[+++][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
-#ifdef CONFIG_FIH_FXX
-void acpuclk_set_lcdcoff_wait_for_irq(int on)
-{
-	int rc = 0;
-
-	mutex_lock(&drv_state.lock);
-	if(on)
-	{
-		//panel status is on
-		acpu_freq_tbl[0].axiclk_khz = 200000;
-		acpu_freq_tbl[1].axiclk_khz = 200000;
-		acpu_freq_tbl[2].axiclk_khz = 200000;
-		acpu_freq_tbl[3].axiclk_khz = 200000;
-		acpu_freq_tbl[4].axiclk_khz = 200000;
-		acpu_freq_tbl[5].axiclk_khz = 200000;
-		acpu_freq_tbl[6].axiclk_khz = 200000;		
-		acpu_freq_tbl[7].axiclk_khz = 200000;
-		acpu_freq_tbl[8].axiclk_khz = 200000;
-
-		rc = ebi1_clk_set_min_rate(CLKVOTE_ACPUCLK,
-				200000 * 1000);
-
-		if (rc < 0)
-			pr_err("Setting AXI min rate failed!\n");
-	}
-	else
-	{
-		//panel status is off
-		acpu_freq_tbl[0].axiclk_khz = 30720;
-		acpu_freq_tbl[1].axiclk_khz = 61440;
-		acpu_freq_tbl[2].axiclk_khz = 61440;
-		acpu_freq_tbl[3].axiclk_khz = 61440;
-		acpu_freq_tbl[4].axiclk_khz = 122880;
-		acpu_freq_tbl[5].axiclk_khz = 160000;
-		acpu_freq_tbl[6].axiclk_khz = 160000;		
-		acpu_freq_tbl[7].axiclk_khz = 160000;
-		acpu_freq_tbl[8].axiclk_khz = 200000;
-	}
-	mutex_unlock(&drv_state.lock);
-
-}
-#endif
-//[---][ChiaYuan]Make a AXI change decision for RGB panel depend on panel state
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *clkdata)
 {
 	pr_info("acpu_clock_init()\n");

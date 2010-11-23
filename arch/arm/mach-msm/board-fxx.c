@@ -666,17 +666,6 @@ static struct msm_tsif_platform_data tsif_platform_data = {
 #define GPIO_OUT_88     88
 /* { FIH, Chandler, 2009/7/1*/
 
-static int msm_fb_lcdc_config(int on){
-    acpuclk_set_lcdcoff_wait_for_irq(on);
-    return 0;
-}
-
-
-static struct lcdc_platform_data lcdc_pdata = {
-	.lcdc_gpio_config = msm_fb_lcdc_config
-};
-
-
 static struct resource msm_fb_resources[] = {
 	{
 		.flags  = IORESOURCE_DMA,
@@ -1869,7 +1858,7 @@ static void __init msm_fb_add_devices(void)
 {
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("pmdh", 0);
-	msm_fb_register_device("lcdc", &lcdc_pdata);
+	msm_fb_register_device("lcdc", 0);
 }
 
 extern struct sys_timer msm_timer;
