@@ -24,20 +24,48 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
  */
+#ifndef _VCD_UTIL_H_
+#define _VCD_UTIL_H_
 
-#include <linux/types.h>
-#include <linux/skbuff.h>
+#include "vcd_api.h"
 
-#ifndef _MSM_RMNET_SDIO_H
-#define _MSM_RMNET_SDIO_H
+#if DEBUG
 
-int msm_rmnet_sdio_open(uint32_t id, void *priv,
-			void (*receive_cb)(void *, struct sk_buff *),
-			void (*write_done)(void *, struct sk_buff *));
+//TODO what a load of crap in here
+#define VCD_MSG_LOW(xx_fmt...) printk(KERN_INFO "\t* " xx_fmt)
+#define VCD_MSG_MED(xx_fmt...) printk(KERN_INFO "  * " xx_fmt)
+#define VCD_MSG_HIGH(xx_fmt...) printk(KERN_WARNING xx_fmt)
 
-int msm_rmnet_sdio_close(uint32_t id);
+#else
 
-int msm_rmnet_sdio_write(uint32_t id, struct sk_buff *skb);
+#define VCD_MSG_LOW(xx_fmt...)
+#define VCD_MSG_MED(xx_fmt...)
+#define VCD_MSG_HIGH(xx_fmt...)
 
-#endif /* _MSM_RMNET_SDIO_H */
+#endif
+
+#define VCD_MSG_ERROR(xx_fmt...) printk(KERN_ERR "err: " xx_fmt)
+#define VCD_MSG_FATAL(xx_fmt...) printk(KERN_ERR "<FATAL> " xx_fmt)
+
+#define VCD_FAILED_RETURN(rc, xx_fmt...)		\
+	do {						\
+		if (VCD_FAILED(rc)) {			\
+			printk(KERN_ERR  xx_fmt);	\
+			return rc;			\
+		}					\
+	} while	(0)
+
+#define VCD_FAILED_DEVICE_FATAL(rc) \
+	(rc == VCD_ERR_HW_FATAL ? true : false)
+#define VCD_FAILED_CLIENT_FATAL(rc) \
+	(rc == VCD_ERR_CLIENT_FATAL ? true : false)
+
+#define VCD_FAILED_FATAL(rc)  \
+	((VCD_FAILED_DEVICE_FATAL(rc) || VCD_FAILED_CLIENT_FATAL(rc)) \
+	? true : false)
+
+#define vcd_assert() VCD_MSG_FATAL("ASSERT")
+
+#endif

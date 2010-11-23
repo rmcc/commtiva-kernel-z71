@@ -25,4 +25,11 @@ config BACKLIGHT_LED_TCA6507
         depends on I2C=y && ARCH_MSM
         help
 
+config SENSORS_MT9T013
+	tristate "MT9T013 Camera Driver"
+	depends on I2C
+	default y
+	help
+	 MT9T013 Camera Driver implemented by HTC.
+
 endmenu

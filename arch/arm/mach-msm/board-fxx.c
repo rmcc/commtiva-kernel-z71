@@ -351,11 +351,6 @@ static int msm_hsusb_pmic_notif_init(void (*callback)(int online), int init)
     return ret;
 }
 
-static int msm_otg_rpc_phy_reset(void __iomem *regs)
-{
-       return msm_hsusb_phy_reset();
-}
-
 #ifdef CONFIG_BATTERY_FIH_ZEUS
 #define ZEUS_GPIO_BATTERY_USBSET 123
 

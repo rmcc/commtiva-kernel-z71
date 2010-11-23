@@ -432,14 +432,6 @@ static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR * 2] = {
 		.residency = 13000,
 	},
 
-	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_SHALLOW_VDD_MIN)] = {
-		.supported = 1,
-		.suspend_enabled = 0,
-		.idle_enabled = 0,
-		.latency = 1000,
-		.residency = 9000,
-	},
-
 	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE)] = {
 		.supported = 1,
 		.suspend_enabled = 0,
@@ -488,10 +480,7 @@ static struct msm_cpuidle_state msm_cstates[] __initdata = {
 	{0, 1, "C1", "STANDALONE_POWER_COLLAPSE",
 		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE},
 
-	{0, 2, "C2", "POWER_COLLAPSE_SHALLOW_VDD_MIN",
-		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_SHALLOW_VDD_MIN},
-
-	{0, 3, "C3", "POWER_COLLAPSE",
+	{0, 2, "C2", "POWER_COLLAPSE",
 		MSM_PM_SLEEP_MODE_POWER_COLLAPSE},
 
 	{1, 0, "C0", "WFI",
@@ -1806,6 +1795,8 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 	[RPM_VREG_ID_PM8058_S0] = REGULATOR_SUPPLY("8058_s0", NULL),
 	[RPM_VREG_ID_PM8058_S1] = REGULATOR_SUPPLY("8058_s1", NULL),
 	[RPM_VREG_ID_PM8058_S2] = REGULATOR_SUPPLY("8058_s2", NULL),
+	[RPM_VREG_ID_PM8058_S3] = REGULATOR_SUPPLY("8058_s3", NULL),
+	[RPM_VREG_ID_PM8058_S4] = REGULATOR_SUPPLY("8058_s4", NULL),
 
 	[RPM_VREG_ID_PM8058_LVS0] = REGULATOR_SUPPLY("8058_lvs0", NULL),
 	[RPM_VREG_ID_PM8058_LVS1] = REGULATOR_SUPPLY("8058_lvs1", NULL),
@@ -1918,7 +1909,7 @@ static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L13, 0, 1, 2050000, 2050000, 0),
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L14, 0, 1, 2850000, 2850000, 0),
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L15, 0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L16, 0, 1, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L16, 1, 1, 1800000, 1800000, 0),
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L17, 0, 1, 2600000, 2600000, 0),
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L18, 0, 1, 2200000, 2200000, 0),
 	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L19, 0, 1, 2500000, 2500000, 0),
@@ -1935,6 +1926,10 @@ static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
 		RPM_VREG_FREQ_1p75),
 	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S2, 1, 1, 1200000, 1400000,
 		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p75),
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S3, 1, 1, 1800000, 1800000, 0,
+		RPM_VREG_FREQ_1p75),
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S4, 1, 1, 2200000, 2200000, 0,
+		RPM_VREG_FREQ_1p75),
 
 	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS0, 0, 1,			  0),
 	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS1, 0, 1,			  0),
@@ -2002,6 +1997,8 @@ static struct platform_device rpm_vreg_device[RPM_VREG_ID_MAX] = {
 	RPM_VREG(RPM_VREG_ID_PM8058_S0),
 	RPM_VREG(RPM_VREG_ID_PM8058_S1),
 	RPM_VREG(RPM_VREG_ID_PM8058_S2),
+	RPM_VREG(RPM_VREG_ID_PM8058_S3),
+	RPM_VREG(RPM_VREG_ID_PM8058_S4),
 	RPM_VREG(RPM_VREG_ID_PM8058_LVS0),
 	RPM_VREG(RPM_VREG_ID_PM8058_LVS1),
 	RPM_VREG(RPM_VREG_ID_PM8058_NCP),
@@ -2491,6 +2488,8 @@ static struct platform_device *surf_devices[] __initdata = {
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_L24],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_L25],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_S2],
+	&rpm_vreg_device[RPM_VREG_ID_PM8058_S3],
+	&rpm_vreg_device[RPM_VREG_ID_PM8058_S4],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_LVS0],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_LVS1],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_NCP],
@@ -3311,42 +3310,6 @@ static struct pm8058_gpio_platform_data pm8058_mpp_data = {
 	.irq_base	= PM8058_MPP_IRQ(PM8058_IRQ_BASE, 0),
 };
 
-static struct regulator_consumer_supply pm8058_vreg_supply[PM8058_VREG_MAX] = {
-	[PM8058_VREG_ID_S3] = REGULATOR_SUPPLY("8058_s3", NULL),
-	[PM8058_VREG_ID_S4] = REGULATOR_SUPPLY("8058_s4", NULL),
-};
-
-#define PM8058_VREG_INIT(_id, _min_uV, _max_uV, _modes, _ops, _apply_uV) \
-	[_id] = { \
-		.constraints = { \
-			.valid_modes_mask = _modes, \
-			.valid_ops_mask = _ops, \
-			.min_uV = _min_uV, \
-			.max_uV = _max_uV, \
-			.apply_uV = _apply_uV, \
-		}, \
-		.num_consumer_supplies = 1, \
-		.consumer_supplies = &pm8058_vreg_supply[_id], \
-	}
-
-#define PM8058_VREG_INIT_SMPS(_id, _min_uV, _max_uV) \
-	PM8058_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_NORMAL | \
-			REGULATOR_MODE_IDLE | REGULATOR_MODE_STANDBY, \
-			REGULATOR_CHANGE_VOLTAGE | REGULATOR_CHANGE_STATUS | \
-			REGULATOR_CHANGE_MODE, 0)
-
-static struct regulator_init_data pm8058_vreg_init[PM8058_VREG_MAX] = {
-	PM8058_VREG_INIT_SMPS(PM8058_VREG_ID_S3, 1800000, 1800000),
-	PM8058_VREG_INIT_SMPS(PM8058_VREG_ID_S4, 2200000, 2200000),
-};
-
-#define PM8058_VREG(_id) { \
-	.name = "pm8058-regulator", \
-	.id = _id, \
-	.platform_data = &pm8058_vreg_init[_id], \
-	.data_size = sizeof(pm8058_vreg_init[_id]), \
-}
-
 static struct resource resources_rtc[] = {
        {
 		.start  = PM8058_RTC_IRQ(PM8058_IRQ_BASE),
@@ -3482,8 +3445,6 @@ static struct mfd_cell pm8058_subdevs[] = {
 		.num_resources  = ARRAY_SIZE(resources_temp_alarm),
 		.resources      = resources_temp_alarm,
 	},
-	PM8058_VREG(PM8058_VREG_ID_S3),
-	PM8058_VREG(PM8058_VREG_ID_S4),
 	{	.name = "pm8058-upl",
 		.id		= -1,
 	},
@@ -4824,8 +4785,6 @@ static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
 	} else {
 		status = !(gpio_get_value_cansleep(
 			PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1)));
-		pr_info("%s: WP Status for Slot %d = %d\n", __func__,
-							pdev->id, status);
 		gpio_free(PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_SDC3_DET - 1));
 	}
 	return (unsigned int) status;
@@ -5257,6 +5216,197 @@ static int lcdc_panel_power(int on)
 
 	return 0;
 }
+#ifdef CONFIG_MSM_BUS_SCALING
+static struct msm_bus_vectors mdp_init_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+
+static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
+	/* Default case static display/UI/2d/3d if FB SMI */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 147460000,
+		.ib = 184325000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+
+static struct msm_bus_vectors mdp_sd_ebi_vectors[] = {
+	/* Default case static display/UI/2d/3d if FB SMI */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 334080000,
+		.ib = 417600000,
+	},
+};
+static struct msm_bus_vectors mdp_vga_vectors[] = {
+	/* VGA and less video */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 175110000,
+		.ib = 218887500,
+	},
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 175110000,
+		.ib = 218887500,
+	},
+};
+
+static struct msm_bus_vectors mdp_720p_vectors[] = {
+	/* 720p and less video */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 230400000,
+		.ib = 288000000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 230400000,
+		.ib = 288000000,
+	},
+};
+
+static struct msm_bus_vectors mdp_1080p_vectors[] = {
+	/* 1080p and less video */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 334080000,
+		.ib = 417600000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 334080000,
+		.ib = 417600000,
+	},
+};
+static struct msm_bus_paths mdp_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(mdp_init_vectors),
+		mdp_init_vectors,
+	},
+	{
+		ARRAY_SIZE(mdp_sd_smi_vectors),
+		mdp_sd_smi_vectors,
+	},
+	{
+		ARRAY_SIZE(mdp_sd_ebi_vectors),
+		mdp_sd_ebi_vectors,
+	},
+	{
+		ARRAY_SIZE(mdp_vga_vectors),
+		mdp_vga_vectors,
+	},
+	{
+		ARRAY_SIZE(mdp_720p_vectors),
+		mdp_720p_vectors,
+	},
+	{
+		ARRAY_SIZE(mdp_1080p_vectors),
+		mdp_1080p_vectors,
+	},
+};
+static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
+	mdp_bus_scale_usecases,
+	ARRAY_SIZE(mdp_bus_scale_usecases),
+};
+
+#endif
+#ifdef CONFIG_MSM_BUS_SCALING
+static struct msm_bus_vectors dtv_bus_init_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+static struct msm_bus_vectors dtv_bus_def_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 435456000,
+		.ib = 544320000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 435456000,
+		.ib = 544320000,
+	},
+};
+static struct msm_bus_paths dtv_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(dtv_bus_init_vectors),
+		dtv_bus_init_vectors,
+	},
+	{
+		ARRAY_SIZE(dtv_bus_def_vectors),
+		dtv_bus_def_vectors,
+	},
+};
+static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
+	dtv_bus_scale_usecases,
+	ARRAY_SIZE(dtv_bus_scale_usecases),
+};
+
+static struct lcdc_platform_data dtv_pdata = {
+	.bus_scale_table = &dtv_bus_scale_pdata,
+};
+#endif
+
 
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_power_save   = lcdc_panel_power,
@@ -5310,12 +5460,32 @@ static int atv_dac_power(int on)
 #ifdef CONFIG_MSM8X60_AUDIO
 void msm_snddev_enable_amic_power(void)
 {
+
 #ifdef CONFIG_PMIC8058_OTHC
 	int ret;
 
-	ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_ALWAYS_ON);
-	if (ret)
-		pr_err("%s: Enabling amic power failed\n", __func__);
+	if (machine_is_msm8x60_fluid()) {
+
+		ret = pm8058_micbias_enable(OTHC_MICBIAS_0,
+				OTHC_SIGNAL_ALWAYS_ON);
+		if (ret)
+			pr_err("%s: Enabling amic power failed\n", __func__);
+
+		ret = gpio_request(GPIO_MIC2_ANCR_SEL, "MIC2_ANCR_SEL");
+		if (ret) {
+			pr_err("%s: spkr pamp gpio %d request"
+			"failed\n", __func__, GPIO_MIC2_ANCR_SEL);
+			return;
+		}
+		gpio_direction_output(GPIO_MIC2_ANCR_SEL, 0);
+		gpio_set_value_cansleep(GPIO_MIC2_ANCR_SEL, 0);
+
+	} else {
+		ret = pm8058_micbias_enable(OTHC_MICBIAS_2,
+				OTHC_SIGNAL_ALWAYS_ON);
+		if (ret)
+			pr_err("%s: Enabling amic power failed\n", __func__);
+	}
 #endif
 
 	msm_snddev_tx_route_config();
@@ -5325,8 +5495,12 @@ void msm_snddev_disable_amic_power(void)
 {
 #ifdef CONFIG_PMIC8058_OTHC
 	int ret;
-
-	ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_OFF);
+	if (machine_is_msm8x60_fluid()) {
+		ret = pm8058_micbias_enable(OTHC_MICBIAS_0,
+				OTHC_SIGNAL_OFF);
+	} else {
+		ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_OFF);
+	}
 	if (ret)
 		pr_err("%s: Disabling amic power failed\n", __func__);
 #endif
@@ -5587,12 +5761,72 @@ static struct msm_panel_common_pdata mdp_pdata = {
 	.mdp_core_clk_rate = 200000000,
 	.mdp_core_clk_table = mdp_core_clk_rate_table,
 	.num_mdp_clk = ARRAY_SIZE(mdp_core_clk_rate_table),
+#ifdef CONFIG_MSM_BUS_SCALING
+	.mdp_bus_scale_table = &mdp_bus_scale_pdata,
+#endif
 };
 
 #ifdef CONFIG_FB_MSM_TVOUT
+
+#ifdef CONFIG_MSM_BUS_SCALING
+static struct msm_bus_vectors atv_bus_init_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+static struct msm_bus_vectors atv_bus_def_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.ab = 236390400,
+		.ib = 265939200,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.ab = 236390400,
+		.ib = 265939200,
+	},
+};
+static struct msm_bus_paths atv_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(atv_bus_init_vectors),
+		atv_bus_init_vectors,
+	},
+	{
+		ARRAY_SIZE(atv_bus_def_vectors),
+		atv_bus_def_vectors,
+	},
+};
+static struct msm_bus_scale_pdata atv_bus_scale_pdata = {
+	atv_bus_scale_usecases,
+	ARRAY_SIZE(atv_bus_scale_usecases),
+};
+#endif
+
 static struct tvenc_platform_data atv_pdata = {
 	.poll		 = 0,
 	.pm_vid_en	 = atv_dac_power,
+#ifdef CONFIG_MSM_BUS_SCALING
+	.bus_scale_table = &atv_bus_scale_pdata,
+#endif
 };
 #endif
 
@@ -5605,6 +5839,9 @@ static void __init msm_fb_add_devices(void)
 
 	msm_fb_register_device("lcdc", &lcdc_pdata);
 	msm_fb_register_device("mipi_dsi", 0);
+#ifdef CONFIG_MSM_BUS_SCALING
+	msm_fb_register_device("dtv", &dtv_pdata);
+#endif
 #ifdef CONFIG_FB_MSM_TVOUT
 	msm_fb_register_device("tvenc", &atv_pdata);
 	msm_fb_register_device("tvout_device", NULL);
