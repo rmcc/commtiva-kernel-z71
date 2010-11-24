@@ -736,7 +736,7 @@ static int msm_read_serial_number_from_nvitem()
 
 	if(msm_proc_comm_oem(smem_proc_comm_oem_cmd1, &smem_proc_comm_oem_data1, product_id, &smem_proc_comm_oem_data2) == 0)
 	{      
-		printk(KERN_INFO"%s: [wilson product_id=%s]\r\n",__func__,(char *)product_id);
+		printk(KERN_INFO"%s: [product_id=%s]\r\n",__func__,(char *)product_id);
 		//memcpy(msm_hsusb_pdata.serial_number, product_id, 16);
 		memcpy(board_serial, product_id, 16);
 	} 	
@@ -869,12 +869,12 @@ static void init_Bluetooth_gpio_table(void)
 /* FIH, JamesKCTung, 2009/06/30 { */
 static int bluetooth_power(int on)
 {
-    int module_status=0,prev_status=0;
-    bool bConfigWIFI;
-    int value = 0;
-/* FIH, WilsonWHLee, 2009/07/30 { */
-/* [FXX_CR], re-configure GPIO when BT turn on/off */
-#if	CONFIG_FIH_FXX 
+	int module_status=0,prev_status=0;
+	bool bConfigWIFI;
+	int value = 0;
+	/* FIH, WilsonWHLee, 2009/07/30 { */
+	/* [FXX_CR], re-configure GPIO when BT turn on/off */
+#if CONFIG_BT
 	gpio_tlmm_config(GPIO_CFG(43, 2, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* RFR */
 	gpio_tlmm_config(GPIO_CFG(44, 2, GPIO_CFG_INPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	        /* CTS */
 	gpio_tlmm_config(GPIO_CFG(45, 2, GPIO_CFG_INPUT,  GPIO_CFG_NO_PULL, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	        /* Rx */
@@ -888,143 +888,110 @@ static int bluetooth_power(int on)
 #endif
 
 #ifdef CONFIG_AR6K
-    spin_lock(&wif_bt_lock);
+	spin_lock(&wif_bt_lock);
 
-    bConfigWIFI = (on & WIFI_CONTROL_MASK);
+	bConfigWIFI = (on & WIFI_CONTROL_MASK);
 
-    if(bConfigWIFI)
-    {
-        prev_status = wifi_status;
-        wifi_status = on & ~(WIFI_CONTROL_MASK); 
-        if( wifi_status == prev_status )
-        {
-            printk(KERN_ERR "%s: WIFI already turn %s\n", __func__,  (wifi_status?"ON":"OFF") );
-            spin_unlock(&wif_bt_lock);
-            return 0;
-        }
-        if(wifi_status && !bt_status)
-            module_status = MODULE_TURN_ON;
-        else if(!wifi_status && !bt_status)
-            module_status = MODULE_TURN_OFF;
+	if(bConfigWIFI)
+	{
+		prev_status = wifi_status;
+		wifi_status = on & ~(WIFI_CONTROL_MASK); 
+		if( wifi_status == prev_status )
+		{
+			printk(KERN_ERR "%s: WIFI already turn %s\n", __func__,  (wifi_status?"ON":"OFF") );
+			spin_unlock(&wif_bt_lock);
+			return 0;
+		}
+		if(wifi_status && !bt_status)
+			module_status = MODULE_TURN_ON;
+		else if(!wifi_status && !bt_status)
+			module_status = MODULE_TURN_OFF;
 
-    }else 
+	}else 
 #endif
-    {
-        prev_status = bt_status;
-        bt_status = on;
-        if( bt_status == prev_status )
-        {
-            printk(KERN_ERR "%s: BT already turn %s\n", __func__,  (bt_status?"ON":"OFF") );
+	{
+		prev_status = bt_status;
+		bt_status = on;
+		if( bt_status == prev_status )
+		{
+			printk(KERN_ERR "%s: BT already turn %s\n", __func__,  (bt_status?"ON":"OFF") );
 #ifdef CONFIG_AR6K
-            spin_unlock(&wif_bt_lock);
+			spin_unlock(&wif_bt_lock);
 #endif
-            return 0;
-        }
-        if(bt_status && !wifi_status)
-            module_status = MODULE_TURN_ON;
-        else if(!wifi_status && !bt_status)
-            module_status = MODULE_TURN_OFF;
-    }
+			return 0;
+		}
+		if(bt_status && !wifi_status)
+			module_status = MODULE_TURN_ON;
+		else if(!wifi_status && !bt_status)
+			module_status = MODULE_TURN_OFF;
+	}
 
-    //power control before module on/off
-    if(!bConfigWIFI &&  !bt_status) {     //Turn BT off
-        printk(KERN_DEBUG "%s : Turn BT off.\n", __func__);
+	//power control before module on/off
+	if(!bConfigWIFI &&  !bt_status) {     //Turn BT off
+		printk(KERN_DEBUG "%s : Turn BT off.\n", __func__);
 		gpio_direction_output(27,0);    
-    }else if(!bConfigWIFI &&  bt_status){     //Turn BT on        
-        printk(KERN_DEBUG "%s : Turn BT on.\n", __func__);
+		gpio_tlmm_config(GPIO_CFG(43, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* RFR */
+		gpio_tlmm_config(GPIO_CFG(44, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* CTS */
+		gpio_tlmm_config(GPIO_CFG(45, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* Rx */
+		gpio_tlmm_config(GPIO_CFG(46, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* Tx */
+		gpio_tlmm_config(GPIO_CFG(37, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE); /* HOST_WAKE_BT */
+		gpio_tlmm_config(GPIO_CFG(42, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE); /* BT_WAKE_HOST */
+	}else if(!bConfigWIFI &&  bt_status){     //Turn BT on        
+		printk(KERN_DEBUG "%s : Turn BT on.\n", __func__);
+		//FIH_ADQ.B.1741 turn on BT is too bad
+		//gpio_direction_output(27,1);
+		//mdelay(200);
+		gpio_direction_output(27,0);
+		mdelay(10);
+		gpio_direction_output(27,1);
+		mdelay(10);
 #ifdef CONFIG_AR6K
-    }else if(bConfigWIFI && wifi_status) {  //Turn WIFI on
-        printk(KERN_DEBUG "%s : Turn WIFI on.\n", __func__);
-        gpio_direction_output(96,0);
-        gpio_direction_output(35,0);
-    }else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF
-        printk(KERN_DEBUG "%s : Turn WIFI off.\n", __func__);
-        if(ar6k_wifi_status_cb) {
-            wifi_power_on=0;
-            ar6k_wifi_status_cb(0,ar6k_wifi_status_cb_devid);
-        }else
-            printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
+	}else if(bConfigWIFI && wifi_status) {  //Turn WIFI on
+		printk(KERN_DEBUG "%s : Turn WIFI on.\n", __func__);
+		gpio_direction_output(96,1);
+		mdelay(10);
+		gpio_direction_output(35,1);
+		mdelay(10);
+		/* FIH, SimonSSChang, 2010/02/26 { */
+		/* let ar6000 driver to turn on/off power when enter suspend/resume */
+		if(ar6k_wifi_status_cb) {
+			wifi_power_on=1;
+			ar6k_wifi_status_cb(1,ar6k_wifi_status_cb_devid);
+		}else
+			printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
+		/* } FIH, SimonSSChang, 2010/02/26 */
+	}else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF
+		printk(KERN_DEBUG "%s : Turn WIFI off.\n", __func__);
 
-        gpio_direction_output(96,0);
-        gpio_direction_output(35,0);
+		if(ar6k_wifi_status_cb) {
+			wifi_power_on=0;
+			ar6k_wifi_status_cb(0,ar6k_wifi_status_cb_devid);
+		}else
+			printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
+
+		gpio_direction_output(96,0);
+		gpio_direction_output(35,0);
+		mdelay(10);
 #endif
-    }
-/* } FIH, SimonSSChang, 2010/02/26 */
+	}
+	/* } FIH, SimonSSChang, 2010/02/26 */
 
-    //Turn module on/off
-    if(module_status == MODULE_TURN_ON) {   //turn module on
-        printk(KERN_DEBUG "%s : Turn module(A22) on.\n", __func__);
-        //FIH_ADQ.B.1741 turn on BT is too bad
-        gpio_direction_output(76,1);
-        value = 0;
-        value = gpio_get_value(76);
-        printk(KERN_DEBUG "%s : GPIO 76 is %d.\n", __func__, value);
-        //mdelay(10);
-        gpio_direction_output(77,1);
-        value = 0;
-        value = gpio_get_value(77);
-        printk(KERN_DEBUG "%s : GPIO 77 is %d.\n", __func__, value);
-        //mdelay(10);
-        gpio_direction_output(34,1);
-        value = 0;
-        value = gpio_get_value(34);
-        printk(KERN_DEBUG "%s : GPIO 34 is %d.\n", __func__, value);
-        //mdelay(10);
-    }else if(module_status == MODULE_TURN_OFF) { //turn module off
-        printk(KERN_DEBUG "%s : Turn module(A22) off.\n", __func__);
-        gpio_direction_output(34,0);
-        gpio_direction_output(77,0);
-        gpio_direction_output(76,0);
-    }
-
-    if(!bConfigWIFI &&  !bt_status) {  //Turn BT off
-/* FIH, WilsonWHLee, 2009/07/30 { */
-/* [FXX_CR], re-configure GPIO when BT turn on/off */
-#if	CONFIG_FIH_FXX  
-       gpio_tlmm_config(GPIO_CFG(43, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* RFR */
-	   gpio_tlmm_config(GPIO_CFG(44, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* CTS */
-	   gpio_tlmm_config(GPIO_CFG(45, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* Rx */
-	   gpio_tlmm_config(GPIO_CFG(46, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);	/* Tx */
-	   gpio_tlmm_config(GPIO_CFG(37, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE); /* HOST_WAKE_BT */
-	   gpio_tlmm_config(GPIO_CFG(42, 0, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE); /* BT_WAKE_HOST */
-#endif
-    }else if(!bConfigWIFI &&  bt_status){    //Turn BT on
-    	//FIH_ADQ.B.1741 turn on BT is too bad
-        //gpio_direction_output(27,1);
-        //mdelay(200);
-        gpio_direction_output(27,0);
-        mdelay(10);
-        gpio_direction_output(27,1);
-        value = 0;
-        value = gpio_get_value(27);
-        printk(KERN_DEBUG "%s : GPIO 27 is %d.\n", __func__, value);
-        mdelay(10);
-#ifdef CONFIG_AR6K
-    }else if(bConfigWIFI && wifi_status) { //Turn WIFI on
-        gpio_direction_output(96,1);
-        value = 0;
-        value = gpio_get_value(96);
-        printk(KERN_DEBUG "%s : GPIO 96 is %d.\n", __func__, value);
-        mdelay(10);
-        gpio_direction_output(35,1);
-        value = 0;
-        value = gpio_get_value(35);
-        printk(KERN_DEBUG "%s : GPIO 35 is %d.\n", __func__, value);
-
-/* FIH, SimonSSChang, 2010/02/26 { */
-/* let ar6000 driver to turn on/off power when enter suspend/resume */
-        if(ar6k_wifi_status_cb) {
-            wifi_power_on=1;
-            ar6k_wifi_status_cb(1,ar6k_wifi_status_cb_devid);
-        }else
-            printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
-/* } FIH, SimonSSChang, 2010/02/26 */
-    }else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF        
-#endif
-    }
+	//Turn module on/off
+	if(module_status == MODULE_TURN_ON) {   //turn module on
+		printk(KERN_DEBUG "%s : Turn module(A22) on.\n", __func__);
+		gpio_direction_output(76,1);
+		gpio_direction_output(77,1);
+		gpio_direction_output(34,1);
+		//mdelay(10);
+	}else if(module_status == MODULE_TURN_OFF) { //turn module off
+		printk(KERN_DEBUG "%s : Turn module(A22) off.\n", __func__);
+		gpio_direction_output(34,0);
+		gpio_direction_output(77,0);
+		gpio_direction_output(76,0);
+	}
 
 #ifdef CONFIG_AR6K
-    spin_unlock(&wif_bt_lock);
+	spin_unlock(&wif_bt_lock);
 #endif
 
 	return 0;
