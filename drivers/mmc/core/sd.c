@@ -492,18 +492,13 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	 * Compute bus speed.
 	 */
 	max_dtr = (unsigned int)-1;
-#ifdef CONFIG_FIX_FXX
-	if( FIH_READ_HWID_FROM_SMEM() == CMCS_HW_VER_EVB1)
-		max_dtr = card->csd.max_dtr;
-	else
-#endif
+
 	if (mmc_card_highspeed(card)) {
 		if (max_dtr > card->sw_caps.hs_max_dtr)
 			max_dtr = card->sw_caps.hs_max_dtr;
 	} else if (max_dtr > card->csd.max_dtr) {
 		max_dtr = card->csd.max_dtr;
 	}
-
 
 	mmc_set_clock(host, max_dtr);
 
