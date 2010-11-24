@@ -211,13 +211,13 @@ static struct clkctl_acpu_speed pll0_960_pll1_245_pll2_1200[] = {
 	{ 0, 400000, ACPU_PLL_2, 2, 2, 133333, 2, 5, 122880 },
 	{ 1, 480000, ACPU_PLL_0, 4, 1, 160000, 2, 6, 122880 },
 	{ 1, 600000, ACPU_PLL_2, 2, 1, 200000, 2, 7, 122880 },
-#ifdef CONFIG_JESUS_PHONE
 	{ 1, 768000, ACPU_PLL_0, 4, 1, 192000, 3, 7, 192000 },
 	{ 1, 787200, ACPU_PLL_0, 4, 1, 196800, 3, 7, 196800 },
 	{ 1, 806400, ACPU_PLL_0, 4, 1, 201600, 3, 7, 201600 },
+#ifdef CONFIG_JESUS_PHONE
 	{ 1, 825600, ACPU_PLL_0, 4, 1, 206400, 3, 7, 206400 },
 	{ 1, 844800, ACPU_PLL_0, 4, 1, 211200, 3, 7, 211200 },
-	//{ 1, 864000, ACPU_PLL_0, 4, 1, 216000, 3, 7, 216000 },
+	{ 1, 864000, ACPU_PLL_0, 4, 1, 216000, 3, 7, 216000 },
 #endif
 	{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, {0, 0, 0}, {0, 0, 0} }
 };
@@ -441,7 +441,6 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s)
 
 	a11_div = hunt_s->a11clk_src_div;
 
-#ifdef CONFIG_JESUS_PHONE
  	if (hunt_s->a11clk_khz > 600000) {
 		a11_div=0;
 		writel(hunt_s->a11clk_khz/19200, PLLn_L_VAL(0));
@@ -455,7 +454,6 @@ static void acpuclk_set_div(const struct clkctl_acpu_speed *hunt_s)
 		cpu_relax();
 		udelay(50);
 	}
-#endif
 
 	/*
 	 * If the new clock divider is higher than the previous, then
