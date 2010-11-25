@@ -871,7 +871,7 @@ static void ar6000_pwr_down(AR_SOFTC_T *ar)
      */
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND_DO_NOT_USE
+#ifdef CONFIG_HAS_EARLYSUSPEND
 
 static void android_early_suspend(struct early_suspend *h)
 {
@@ -1105,7 +1105,7 @@ ar6000_init_module(void)
     A_MEMZERO(&osdrvCallbacks,sizeof(osdrvCallbacks));
     osdrvCallbacks.deviceInsertedHandler = ar6000_avail_ev;
     osdrvCallbacks.deviceRemovedHandler = ar6000_unavail_ev;
-#if defined(CONFIG_PM) && !defined (CONFIG_HAS_EARLYSUSPEND_DO_NOT_USE)
+#if defined(CONFIG_PM) && !defined (CONFIG_HAS_EARLYSUSPEND)
     osdrvCallbacks.deviceSuspendHandler = ar6000_suspend_ev;
     osdrvCallbacks.deviceResumeHandler = ar6000_resume_ev;
 #endif
@@ -2109,7 +2109,7 @@ ar6000_avail_ev(void *context, void *hif_handle)
 
     is_netdev_registered = 1;
 
-#ifdef CONFIG_HAS_EARLYSUSPEND_DO_NOT_USE
+#ifdef CONFIG_HAS_EARLYSUSPEND
     ar->ar6k_early_suspend.suspend = android_early_suspend;
     ar->ar6k_early_suspend.resume  = android_late_resume;
     ar->ar6k_early_suspend.level   = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
@@ -2303,7 +2303,7 @@ ar6000_destroy(struct net_device *dev, unsigned int unregister)
 
     ar->bIsDestroyProgress = TRUE;
 
-#ifdef CONFIG_HAS_EARLYSUSPEND_DO_NOT_USE
+#ifdef CONFIG_HAS_EARLYSUSPEND
     unregister_early_suspend(&ar->ar6k_early_suspend);
 #endif
 
