@@ -86,7 +86,6 @@ int wow2mode = WLAN_PWR_CTRL_DEEP_SLEEP;
 int wowledon;
 #endif /* CONFIG_PM */
 
-
 unsigned int processDot11Hdr = 0;
 
 /* ATHENV */
@@ -917,7 +916,7 @@ wow_not_connected:
             ar->arWowState = WOW_STATE_SUSPENDED;
             //HIFMaskInterrupt((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
             /* leave for pm_device to setup wow */
-            status = A_OK;
+            status = A_EBUSY;
         } else {
             pmmode = wow2mode;
             goto wow_not_connected;
@@ -1074,8 +1073,8 @@ static struct platform_driver ar6000_pm_drv = {
 };
 
 static struct platform_device ar6000_pm_dev = {
-	.name	= "wlan_ar6000_pm_dev",
-	.id	= -1,
+	.name   = "wlan_ar6000_pm_dev",
+	.id     = -1,
 	.dev = {
 		.release = ar6000_pm_release,
 	},

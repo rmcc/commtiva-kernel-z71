@@ -888,7 +888,6 @@ static struct miscdevice bi8232_misc_dev = {
 #ifdef CONFIG_PM
 static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret, ret_gpio = 0;  //Add for VREG_WLAN power in, 07/08
 
@@ -896,26 +895,6 @@ static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
     printk(KERN_INFO "bi8232_suspend() disable IRQ: %d\n", client->irq);
     disable_irq(client->irq);
 
-    //Add for VREG_WLAN power in++
-    if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
-    {
-        vreg_wlan = vreg_get(0, "wlan");
-
-	    if (!vreg_wlan) {
-		    printk(KERN_ERR "%s: vreg WLAN get failed\n", __func__);
-		return -EIO;
-	    }
-
-	    ret = vreg_disable(vreg_wlan);
-	    if (ret) {
-		    printk(KERN_ERR "%s: vreg WLAN disable failed (%d)\n",
-		        __func__, ret);
-		return -EIO;
-	    }
-
-	    printk(KERN_INFO "%s: vote vreg WLAN to be closed\n", __func__);
-	}
-	//Add for VREG_WLAN power in--
 	//return bi8232_set_pw_state(0);
 	//Setting the configuration of GPIO 89++
 	ret_gpio = gpio_tlmm_config(GPIO_CFG(pdata->intr_gpio, 0, GPIO_CFG_INPUT,
@@ -932,7 +911,6 @@ static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
 
 static int bi8232_resume(struct i2c_client *client)
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     struct elan_i2c_sensitivity sen;  //Added for modify sensitivity, 0729
     struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret, i, ret_gpio = 0;  //Added for modify sensitivity, 0729
@@ -957,44 +935,6 @@ static int bi8232_resume(struct i2c_client *client)
     //printk(KERN_INFO "bi8232_resume() enable IRQ: %d\n", client->irq);
 	//enable_irq(client->irq);
 
-    //Add for VREG_WLAN power in++
-    if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
-    {
-        vreg_wlan = vreg_get(0, "wlan");
-
-	    if (!vreg_wlan) {
-		    printk(KERN_ERR "%s: vreg WLAN get failed\n", __func__);
-		return -EIO;
-	    }
-
-	    ret = vreg_enable(vreg_wlan);
-	    if (ret) {
-		    printk(KERN_ERR "%s: vreg WLAN enable failed (%d)\n",
-		        __func__, ret);
-		return -EIO;
-	    }
-
-	    //Added for receive hello packet during resuming++
-	    #if 0
-        if(bIsFxxPR2)
-        {
-	        msleep(300);
-	    	
-	        do {
-		        bi8232_recv((char *)&pkt, sizeof(int));
-		        pkt ^= 0x55555555;
-                bi8232_msg(ERR, "[TOUCH-CAP]Try to receive the hello packet!");
-		        if (--retry == 0) {
-			        bi8232_msg(ERR, "Detect timeout");
-			        break;
-			        //goto err1;
-		        }
-	        } while (pkt);
-	    }
-	    #endif
-	    //Added for receive hello packet during resuming--
-	}
-	//Add for VREG_WLAN power in--
 	//Add for modify sensitivity, 0729++
     sen.x = sensitivity_x;
     sen.y = sensitivity_y;
@@ -1039,7 +979,6 @@ static int bi8232_resume(struct i2c_client *client)
 #ifdef CONFIG_PM
 static int bi8232_fst_suspend(struct i2c_client *client, pm_message_t state)
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret = 0, ret_gpio = 0;  //Add for VREG_WLAN power in, 07/08
 
@@ -1056,31 +995,6 @@ static int bi8232_fst_suspend(struct i2c_client *client, pm_message_t state)
 	    }
 	}
 	
-    //Add for VREG_WLAN power in++
-    #if 1
-    if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1) && (!bPhoneCallState || (bPhoneCallState && bIsNeedSkipTouchEvent)))  //Don't apply VREG_WLAN power in on PR1++
-    {
-        vreg_wlan = vreg_get(0, "wlan");
-
-	    if (!vreg_wlan) {
-		    printk(KERN_ERR "%s: vreg WLAN get failed\n", __func__);
-		return -EIO;
-	    }
-
-        #if 1 
-	    ret = vreg_disable(vreg_wlan);
-	    if (ret) {
-		    printk(KERN_ERR "%s: vreg WLAN disable failed (%d)\n",
-		        __func__, ret);
-		return -EIO;
-	    }
-        #endif
-        bIsFSTDisableWLAN = 1;  //Added for VREG sync by Stanley
-        vreg_refcnt = vreg_refcnt - 1;  //Added for VREG sync by Stanley
-	    printk(KERN_INFO "%s: vote vreg WLAN to be closed. refcnt = %d\n", __func__, vreg_refcnt);  //Added for VREG sync by Stanley
-	}
-	#endif
-	//Add for VREG_WLAN power in--
 	//return bi8232_set_pw_state(0);
 	//Setting the configuration of GPIO 89++
 	if (!bPhoneCallState || (bPhoneCallState && bIsNeedSkipTouchEvent))
@@ -1111,7 +1025,6 @@ static int bi8232_fst_suspend(struct i2c_client *client, pm_message_t state)
 
 static int bi8232_fst_resume(struct i2c_client *client)
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     //struct elan_i2c_sensitivity sen;  //Added for modify sensitivity, 0729
     struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret = 0, ret_gpio = 0;  //Added for modify sensitivity, 0729
@@ -1123,30 +1036,6 @@ static int bi8232_fst_resume(struct i2c_client *client)
 	//enable_irq(client->irq);
 
     //Add for VREG_WLAN power in++
-    #if 1
-    if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1) && bIsFSTDisableWLAN)  //Added for VREG sync by Stanley
-    {
-        vreg_wlan = vreg_get(0, "wlan");
-
-	    if (!vreg_wlan) {
-		    printk(KERN_ERR "%s: vreg WLAN get failed\n", __func__);
-		return -EIO;
-	    }
-
-        #if 1
-	    ret = vreg_enable(vreg_wlan);
-	    if (ret) {
-		    printk(KERN_ERR "%s: vreg WLAN enable failed (%d)\n",
-		        __func__, ret);
-		return -EIO;
-	    }
-	    #endif
-	    bIsFSTDisableWLAN = 0; //Added for VREG sync by Stanley
-	    vreg_refcnt = vreg_refcnt + 1;  //Added for VREG sync by Stanley
-	    printk(KERN_INFO "%s: vote vreg WLAN to be enabled. refcnt = %d\n", __func__, vreg_refcnt);  //Added for VREG sync by Stanley
-	}
-	#endif
-	//Add for VREG_WLAN power in--
 	//Setting the configuration of GPIO 89++
 	ret_gpio = gpio_tlmm_config(GPIO_CFG(pdata->intr_gpio, 0, GPIO_CFG_INPUT,
 						GPIO_CFG_PULL_UP, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
@@ -1693,28 +1582,11 @@ to earlysuspend */
 
 static int __init bi8232_init( void )
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 09/10
     int ret;
 	
     //Dynamic to load RES or CAP touch driver++
     if(FIH_READ_HWID_FROM_SMEM() >= CMCS_CTP_PR1)
     {
-         //Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend +++
-         if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
-         {
-            vreg_wlan = vreg_get(0, "wlan");
-
-            if (!vreg_wlan) {
-	         printk(KERN_ERR "%s: init vreg WLAN get failed\n", __func__);
-            }
-
-            ret = vreg_enable(vreg_wlan);
-            if (ret) {
-	          printk(KERN_ERR "%s: init vreg WLAN enable failed (%d)\n", __func__, ret);
-            }
-            vreg_refcnt = vreg_refcnt + 1;  //Added for VREG sync by Stanley
-         }
-         //Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend ---
 
          //Added for FST by Stanley (F0X_2.B-414)++
          if((FIH_READ_ORIG_HWID_FROM_SMEM() >= CMCS_125_FST_PR1) && (FIH_READ_ORIG_HWID_FROM_SMEM() <= CMCS_128_FST_MP1))

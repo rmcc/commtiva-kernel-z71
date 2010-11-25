@@ -731,7 +731,7 @@ static void hifDeviceRemoved(struct sdio_func *func)
             device->is_suspend = FALSE;
             break;
         }
-        if (!IS_ERR(device->async_task)) {
+        if (device->async_task != NULL && !IS_ERR(device->async_task)) {
             init_completion(&device->async_completion);
             device->async_shutdown = 1;
             up(&device->sem_async);
@@ -779,7 +779,7 @@ int HIFDoDeviceSuspend(HIF_DEVICE *device)
     }
     if (status == A_OK) {
         /* Waiting for all pending request */
-        if (!IS_ERR(device->async_task)) {
+        if (device->async_task != NULL && !IS_ERR(device->async_task)) {
             init_completion(&device->async_completion);
             device->async_shutdown = 1;
             up(&device->sem_async);
