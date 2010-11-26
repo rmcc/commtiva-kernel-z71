@@ -950,10 +950,6 @@ static int bluetooth_power(int on)
 		struct vreg *wlan_vreg = vreg_get(0, "wlan");
 		vreg_enable(wlan_vreg);
 		printk(KERN_DEBUG "%s : Turn WIFI on.\n", __func__);
-		gpio_direction_output(96,1);
-		mdelay(10);
-		gpio_direction_output(35,1);
-		mdelay(10);
 		
 		/* FIH, SimonSSChang, 2010/02/26 { */
 		/* let ar6000 driver to turn on/off power when enter suspend/resume */
@@ -974,9 +970,6 @@ static int bluetooth_power(int on)
 		}else
 			printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
 
-		gpio_direction_output(96,0);
-		gpio_direction_output(35,0);
-		mdelay(10);
 #endif
 	}
 	/* } FIH, SimonSSChang, 2010/02/26 */
