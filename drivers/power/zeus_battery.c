@@ -1026,7 +1026,7 @@ static int zeus_battery_get_property(struct power_supply *psy,
 }
 
 #define BATTERY_POLLING_TIMER  60
-#define BATTERY_POLLING_TIMER_SLOW  BATTERY_POLLING_TIMER*15
+#define BATTERY_POLLING_TIMER_SLOW  BATTERY_POLLING_TIMER*5
 
 static void zeus_battery_alarm(struct alarm *alarm)
 {
@@ -1065,7 +1065,7 @@ static void zeus_battery_work(struct work_struct *work)
 	/* prevent suspend before starting the alarm */
 	local_irq_save(flags);
 
-	zeus_program_alarm(zbu, (zbu->slow_poll == 1 BATTERY_POLLING_TIMER_SLOW ? : BATTERY_POLLING_TIMER));
+	zeus_program_alarm(zbu, (zbu->slow_poll == 1 ? BATTERY_POLLING_TIMER_SLOW : BATTERY_POLLING_TIMER));
 	wake_unlock(&zbu->wakelock);
 
 	local_irq_restore(flags);
