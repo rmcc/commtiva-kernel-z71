@@ -25,15 +25,23 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __MACH_PERIPHERAL_RESET_H
-#define __MACH_PERIPHERAL_RESET_H
 
-#define PIL_MODEM	0
-#define PIL_Q6		1
-#define PIL_DSPS	2
+#include <linux/platform_device.h>
 
-extern int init_image(int id, const u8 *metadata, size_t size);
-extern int verify_blob(u32 phy_addr, size_t size);
-extern int auth_and_reset(int id);
-extern int peripheral_shutdown(int id);
+#ifdef CONFIG_SMMU_8X60
+extern struct platform_device msm_device_iommu_jpegd;
+extern struct platform_device msm_device_iommu_vfe;
+extern struct platform_device msm_device_iommu_vcodec_a;
+extern struct platform_device msm_device_iommu_vcodec_b;
+extern struct platform_device msm_device_iommu_gfx3d;
+extern struct platform_device msm_device_iommu_gfx2d0;
+extern struct platform_device msm_device_iommu_gfx2d1;
+#else
+struct platform_device msm_device_iommu_jpegd;
+struct platform_device msm_device_iommu_vfe;
+struct platform_device msm_device_iommu_vcodec_a;
+struct platform_device msm_device_iommu_vcodec_b;
+struct platform_device msm_device_iommu_gfx3d;
+struct platform_device msm_device_iommu_gfx2d0;
+struct platform_device msm_device_iommu_gfx2d1;
 #endif

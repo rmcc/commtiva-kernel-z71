@@ -29,10 +29,11 @@
 #include <linux/io.h>
 #include <linux/termios.h>
 #include <linux/ctype.h>
+#include <linux/remote_spinlock.h>
+#include <linux/uaccess.h>
 #include <mach/msm_smd.h>
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
-#include <linux/remote_spinlock.h>
 
 /* FIH, Debbie, 2009/12/07 { */
 /* add for F917 */
@@ -54,6 +55,7 @@
 #define MODULE_NAME "msm_smd"
 #define SMEM_VERSION 0x000B
 #define SMD_VERSION 0x00020000
+
 
 enum {
 	MSM_SMD_DEBUG = 1U << 0,
@@ -268,11 +270,13 @@ struct smd_channel {
 	void *priv;
 	void (*notify)(void *priv, unsigned flags);
 
-	int (*read)(smd_channel_t *ch, void *data, int len);
-	int (*write)(smd_channel_t *ch, const void *data, int len);
+	int (*read)(smd_channel_t *ch, void *data, int len, int user_buf);
+	int (*write)(smd_channel_t *ch, const void *data, int len,
+			int user_buf);
 	int (*read_avail)(smd_channel_t *ch);
 	int (*write_avail)(smd_channel_t *ch);
-	int (*read_from_cb)(smd_channel_t *ch, void *data, int len);
+	int (*read_from_cb)(smd_channel_t *ch, void *data, int len,
+			int user_buf);
 
 	void (*update_state)(smd_channel_t *ch);
 	unsigned last_state;
@@ -282,6 +286,8 @@ struct smd_channel {
 	struct platform_device pdev;
 	unsigned type;
 };
+
+static struct platform_device loopback_tty_pdev = {.name = "LOOPBACK_TTY"};
 
 static LIST_HEAD(smd_ch_closed_list);
 static LIST_HEAD(smd_ch_list_modem);
@@ -402,12 +408,13 @@ static void ch_read_done(struct smd_channel *ch, unsigned count)
  * by smd_*_read() and update_packet_state()
  * will read-and-discard if the _data pointer is null
  */
-static int ch_read(struct smd_channel *ch, void *_data, int len)
+static int ch_read(struct smd_channel *ch, void *_data, int len, int user_buf)
 {
 	void *ptr;
 	unsigned n;
 	unsigned char *data = _data;
 	int orig_len = len;
+	int r = 0;
 
 	while (len > 0) {
 		n = ch_read_buffer(ch, &ptr);
@@ -416,8 +423,19 @@ static int ch_read(struct smd_channel *ch, void *_data, int len)
 
 		if (n > len)
 			n = len;
-		if (_data)
-			memcpy(data, ptr, n);
+		if (_data) {
+			if (user_buf) {
+				r = copy_to_user(data, ptr, n);
+				if (r > 0) {
+					pr_err("%s: "
+						"copy_to_user could not copy "
+						"%i bytes.\n",
+						__func__,
+						r);
+				}
+			} else
+				memcpy(data, ptr, n);
+		}
 
 		data += n;
 		len -= n;
@@ -445,7 +463,7 @@ static void update_packet_state(struct smd_channel *ch)
 		if (smd_stream_read_avail(ch) < SMD_HEADER_SIZE)
 			return;
 
-		r = ch_read(ch, hdr, SMD_HEADER_SIZE);
+		r = ch_read(ch, hdr, SMD_HEADER_SIZE, 0);
 		BUG_ON(r != SMD_HEADER_SIZE);
 
 		ch->current_packet = hdr[0];
@@ -674,12 +692,14 @@ static int smd_is_packet(struct smd_alloc_elm *alloc_elm)
 		return 0;
 }
 
-static int smd_stream_write(smd_channel_t *ch, const void *_data, int len)
+static int smd_stream_write(smd_channel_t *ch, const void *_data, int len,
+				int user_buf)
 {
 	void *ptr;
 	const unsigned char *buf = _data;
 	unsigned xfer;
 	int orig_len = len;
+	int r = 0;
 
 	SMD_DBG("smd_stream_write() %d -> ch%d\n", len, ch->n);
 	if (len < 0)
@@ -692,7 +712,17 @@ static int smd_stream_write(smd_channel_t *ch, const void *_data, int len)
 			break;
 		if (xfer > len)
 			xfer = len;
-		memcpy(ptr, buf, xfer);
+		if (user_buf) {
+			r = copy_from_user(ptr, buf, xfer);
+			if (r > 0) {
+				pr_err("%s: "
+					"copy_from_user could not copy %i "
+					"bytes.\n",
+					__func__,
+					r);
+			}
+		} else
+			memcpy(ptr, buf, xfer);
 		ch_write_done(ch, xfer);
 		len -= xfer;
 		buf += xfer;
@@ -706,7 +736,8 @@ static int smd_stream_write(smd_channel_t *ch, const void *_data, int len)
 	return orig_len - len;
 }
 
-static int smd_packet_write(smd_channel_t *ch, const void *_data, int len)
+static int smd_packet_write(smd_channel_t *ch, const void *_data, int len,
+				int user_buf)
 {
 	int ret;
 	unsigned hdr[5];
@@ -724,7 +755,7 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len)
 	hdr[1] = hdr[2] = hdr[3] = hdr[4] = 0;
 
 
-	ret = smd_stream_write(ch, hdr, sizeof(hdr));
+	ret = smd_stream_write(ch, hdr, sizeof(hdr), 0);
 	if (ret < 0 || ret != sizeof(hdr)) {
 		SMD_DBG("%s failed to write pkt header: "
 			"%d returned\n", __func__, ret);
@@ -732,7 +763,7 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len)
 	}
 
 
-	ret = smd_stream_write(ch, _data, len);
+	ret = smd_stream_write(ch, _data, len, user_buf);
 	if (ret < 0 || ret != len) {
 		SMD_DBG("%s failed to write pkt data: "
 			"%d returned\n", __func__, ret);
@@ -742,14 +773,14 @@ static int smd_packet_write(smd_channel_t *ch, const void *_data, int len)
 	return len;
 }
 
-static int smd_stream_read(smd_channel_t *ch, void *data, int len)
+static int smd_stream_read(smd_channel_t *ch, void *data, int len, int user_buf)
 {
 	int r;
 
 	if (len < 0)
 		return -EINVAL;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu();
@@ -757,7 +788,7 @@ static int smd_stream_read(smd_channel_t *ch, void *data, int len)
 	return r;
 }
 
-static int smd_packet_read(smd_channel_t *ch, void *data, int len)
+static int smd_packet_read(smd_channel_t *ch, void *data, int len, int user_buf)
 {
 	unsigned long flags;
     // +++ FIH +++
@@ -773,7 +804,7 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 	if (len > ch->current_packet)
 		len = ch->current_packet;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu();
@@ -795,7 +826,8 @@ static int smd_packet_read(smd_channel_t *ch, void *data, int len)
 	return r;
 }
 
-static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len)
+static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len,
+					int user_buf)
 {
 	int r;
 
@@ -805,7 +837,7 @@ static int smd_packet_read_from_cb(smd_channel_t *ch, void *data, int len)
 	if (len > ch->current_packet)
 		len = ch->current_packet;
 
-	r = ch_read(ch, data, len);
+	r = ch_read(ch, data, len, user_buf);
 	if (r > 0)
 		if (!read_intr_blocked(ch))
 			ch->notify_other_cpu();
@@ -918,6 +950,13 @@ static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
 	mutex_unlock(&smd_creation_mutex);
 
 	platform_device_register(&ch->pdev);
+	if (!strcmp(ch->name, "LOOPBACK")) {
+		/* create a platform driver to be used by smd_tty driver
+		 * so that it can access the loopback port
+		 */
+		loopback_tty_pdev.id = ch->type;
+		platform_device_register(&loopback_tty_pdev);
+	}
 	return 0;
 }
 
@@ -1100,21 +1139,33 @@ EXPORT_SYMBOL(smd_close);
 
 int smd_read(smd_channel_t *ch, void *data, int len)
 {
-	return ch->read(ch, data, len);
+	return ch->read(ch, data, len, 0);
 }
 EXPORT_SYMBOL(smd_read);
 
+int smd_read_user_buffer(smd_channel_t *ch, void *data, int len)
+{
+	return ch->read(ch, data, len, 1);
+}
+EXPORT_SYMBOL(smd_read_user_buffer);
+
 int smd_read_from_cb(smd_channel_t *ch, void *data, int len)
 {
-	return ch->read_from_cb(ch, data, len);
+	return ch->read_from_cb(ch, data, len, 0);
 }
 EXPORT_SYMBOL(smd_read_from_cb);
 
 int smd_write(smd_channel_t *ch, const void *data, int len)
 {
-	return ch->write(ch, data, len);
+	return ch->write(ch, data, len, 0);
 }
 EXPORT_SYMBOL(smd_write);
+
+int smd_write_user_buffer(smd_channel_t *ch, const void *data, int len)
+{
+	return ch->write(ch, data, len, 1);
+}
+EXPORT_SYMBOL(smd_write_user_buffer);
 
 int smd_read_avail(smd_channel_t *ch)
 {
@@ -1414,6 +1465,10 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 
 		} else if (modm & SMSM_RESET) {
 			apps |= SMSM_RESET;
+
+			pr_err("\nSMSM: Modem SMSM state changed to SMSM_RESET.");
+			modem_queue_start_reset_notify();
+
 		} else if (modm & SMSM_INIT) {
 			if (!(apps & SMSM_INIT)) {
 				apps |= SMSM_INIT;
@@ -1425,6 +1480,9 @@ static irqreturn_t smsm_irq_handler(int irq, void *data)
 			if ((apps & (SMSM_INIT | SMSM_SMDINIT | SMSM_RPCINIT)) ==
 				(SMSM_INIT | SMSM_SMDINIT | SMSM_RPCINIT))
 				apps |= SMSM_RUN;
+		} else if (modm & SMSM_SYSTEM_DOWNLOAD) {
+			pr_err("\nSMSM: Modem SMSM state changed to SMSM_SYSTEM_DOWNLOAD.");
+			modem_queue_start_reset_notify();
 		}
 
 		if (old_apps != apps) {

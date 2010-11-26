@@ -20,44 +20,84 @@
 #include <linux/bitops.h>
 #include <linux/errno.h>
 
-#if defined(CONFIG_MSM_V2_TLMM)
-#include "gpiomux-v2.h"
-#else
-#include "gpiomux-v1.h"
-#endif
+enum msm_gpiomux_setting {
+	GPIOMUX_ACTIVE = 0,
+	GPIOMUX_SUSPENDED,
+	GPIOMUX_NSETTINGS
+};
+
+enum gpiomux_drv {
+	GPIOMUX_DRV_2MA = 0,
+	GPIOMUX_DRV_4MA,
+	GPIOMUX_DRV_6MA,
+	GPIOMUX_DRV_8MA,
+	GPIOMUX_DRV_10MA,
+	GPIOMUX_DRV_12MA,
+	GPIOMUX_DRV_14MA,
+	GPIOMUX_DRV_16MA,
+};
+
+enum gpiomux_func {
+	GPIOMUX_FUNC_GPIO = 0,
+	GPIOMUX_FUNC_1,
+	GPIOMUX_FUNC_2,
+	GPIOMUX_FUNC_3,
+	GPIOMUX_FUNC_4,
+	GPIOMUX_FUNC_5,
+	GPIOMUX_FUNC_6,
+	GPIOMUX_FUNC_7,
+	GPIOMUX_FUNC_8,
+	GPIOMUX_FUNC_9,
+	GPIOMUX_FUNC_A,
+	GPIOMUX_FUNC_B,
+	GPIOMUX_FUNC_C,
+	GPIOMUX_FUNC_D,
+	GPIOMUX_FUNC_E,
+	GPIOMUX_FUNC_F,
+};
+
+enum gpiomux_pull {
+	GPIOMUX_PULL_NONE = 0,
+	GPIOMUX_PULL_DOWN,
+	GPIOMUX_PULL_KEEPER,
+	GPIOMUX_PULL_UP,
+};
+
+/* Direction settings are only meaningful when GPIOMUX_FUNC_GPIO is selected.
+ * This element is ignored for all other FUNC selections, as the output-
+ * enable pin is not under software control in those cases.  See the SWI
+ * for your target for more details.
+ */
+enum gpiomux_dir {
+	GPIOMUX_IN = 0,
+	GPIOMUX_OUT_HIGH,
+	GPIOMUX_OUT_LOW,
+};
+
+struct gpiomux_setting {
+	enum gpiomux_func func;
+	enum gpiomux_drv  drv;
+	enum gpiomux_pull pull;
+	enum gpiomux_dir  dir;
+};
 
 /**
  * struct msm_gpiomux_config: gpiomux settings for one gpio line.
  *
- * A complete gpiomux config is the bitwise-or of a drive-strength,
- * function, and pull.  For functions other than GPIO, the OE
- * is hard-wired according to the function.  For GPIO mode,
- * OE is controlled by gpiolib.
- *
- * Available settings differ by target; see the gpiomux header
- * specific to your target arch for available configurations.
+ * A complete gpiomux config is the combination of a drive-strength,
+ * function, pull, and (sometimes) direction.  For functions other than GPIO,
+ * the input/output setting is hard-wired according to the function.
  *
  * @gpio: The index number of the gpio being described.
- * @active: The configuration to be installed when the line is
- * active, or its reference count is > 0.
- * @suspended: The configuration to be installed when the line
- * is suspended, or its reference count is 0.
+ * @settings: The settings to be installed, specifically:
+ *           GPIOMUX_ACTIVE: The setting to be installed when the
+ *           line is active, or its reference count is > 0.
+ *           GPIOMUX_SUSPENDED: The setting to be installed when
+ *           the line is suspended, or its reference count is 0.
  */
 struct msm_gpiomux_config {
-	unsigned         gpio;
-	gpiomux_config_t active;
-	gpiomux_config_t suspended;
-};
-
-/**
- * @GPIOMUX_VALID:	If set, the config field contains 'good data'.
- *                      The absence of this bit will prevent the gpiomux
- *			system from applying the configuration under all
- *			circumstances.
- */
-enum {
-	GPIOMUX_VALID	 = BIT(sizeof(gpiomux_config_t) * BITS_PER_BYTE - 1),
-	GPIOMUX_CTL_MASK = GPIOMUX_VALID,
+	unsigned gpio;
+	struct gpiomux_setting settings[GPIOMUX_NSETTINGS];
 };
 
 #ifdef CONFIG_MSM_GPIOMUX
@@ -79,12 +119,10 @@ int __must_check msm_gpiomux_get(unsigned gpio);
 /* Decrement a gpio's reference count, possibly suspending the line. */
 int msm_gpiomux_put(unsigned gpio);
 
-/* Install a new configuration to the gpio line.  To avoid overwriting
- * a configuration, leave the VALID bit out.
+/* Install a new setting in a gpio.  To erase a slot, use NULL.
  */
-int msm_gpiomux_write(unsigned gpio,
-		      gpiomux_config_t active,
-		      gpiomux_config_t suspended);
+int msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
+	struct gpiomux_setting *setting);
 
 /* Architecture-internal function for use by the framework only.
  * This function can assume the following:
@@ -94,7 +132,7 @@ int msm_gpiomux_write(unsigned gpio,
  * This function is not for public consumption.  External users
  * should use msm_gpiomux_write.
  */
-void __msm_gpiomux_write(unsigned gpio, gpiomux_config_t val);
+void __msm_gpiomux_write(unsigned gpio, struct gpiomux_setting val);
 #else
 static inline int msm_gpiomux_init(size_t ngpio)
 {
@@ -115,8 +153,7 @@ static inline int msm_gpiomux_put(unsigned gpio)
 }
 
 static inline int msm_gpiomux_write(unsigned gpio,
-				    gpiomux_config_t active,
-				    gpiomux_config_t suspended)
+	enum msm_gpiomux_setting which, struct gpiomux_setting *setting);
 {
 	return -ENOSYS;
 }

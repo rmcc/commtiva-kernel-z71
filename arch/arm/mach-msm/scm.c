@@ -108,7 +108,7 @@ static struct scm_command *alloc_scm_command(size_t cmd_size, size_t resp_size)
  *
  * Free an SCM command.
  */
-static void kfree_scm_command(struct scm_command *cmd)
+static void kfree_scm_command(const struct scm_command *cmd)
 {
 	kfree(cmd);
 }
@@ -120,7 +120,7 @@ static void kfree_scm_command(struct scm_command *cmd)
  * Returns a pointer to a response for a command.
  */
 static inline struct scm_response *scm_command_to_response(
-		struct scm_command *cmd)
+		const struct scm_command *cmd)
 {
 	return (void *)cmd + cmd->resp_hdr_offset;
 }
@@ -131,7 +131,7 @@ static inline struct scm_response *scm_command_to_response(
  *
  * Returns a pointer to the command buffer of a command.
  */
-static inline void *scm_get_command_buffer(struct scm_command *cmd)
+static inline void *scm_get_command_buffer(const struct scm_command *cmd)
 {
 	return (void *)cmd + cmd->buf_offset;
 }
@@ -142,7 +142,7 @@ static inline void *scm_get_command_buffer(struct scm_command *cmd)
  *
  * Returns a pointer to a response buffer of a response.
  */
-static inline void *scm_get_response_buffer(struct scm_response *rsp)
+static inline void *scm_get_response_buffer(const struct scm_response *rsp)
 {
 	return (void *)rsp + rsp->buf_offset;
 }
@@ -181,7 +181,7 @@ static u32 smc(u32 cmd_addr)
 	return r0;
 }
 
-static int __scm_call(struct scm_command *cmd)
+static int __scm_call(const struct scm_command *cmd)
 {
 	int ret;
 	u32 cmd_addr = virt_to_phys(cmd);
@@ -214,7 +214,7 @@ static int __scm_call(struct scm_command *cmd)
  *
  * Sends a command to the SCM and waits for the command to finish processing.
  */
-int scm_call(u32 svc_id, u32 cmd_id, void *cmd_buf, size_t cmd_len,
+int scm_call(u32 svc_id, u32 cmd_id, const void *cmd_buf, size_t cmd_len,
 		void *resp_buf, size_t resp_len)
 {
 	int ret;
@@ -249,11 +249,17 @@ out:
 }
 EXPORT_SYMBOL(scm_call);
 
-static u32 smc_get_version(void)
+u32 scm_get_version(void)
 {
 	int context_id;
+	static u32 version = -1;
 	register u32 r0 asm("r0") = 0x1 << 8;
 	register u32 r1 asm("r1") = (u32)&context_id;
+
+	if (version != -1)
+		return version;
+
+	mutex_lock(&scm_lock);
 	asm(
 		__asmeq("%0", "r1")
 		__asmeq("%1", "r0")
@@ -262,19 +268,17 @@ static u32 smc_get_version(void)
 		: "=r" (r1)
 		: "r" (r0), "r" (r1)
 		: "r2", "r3");
-	return r1;
+	version = r1;
+	mutex_unlock(&scm_lock);
+
+	return version;
 }
+EXPORT_SYMBOL(scm_get_version);
 
 static int __init scm_init(void)
 {
-	u32 scm_version;
-
-	mutex_lock(&scm_lock);
-	scm_version = smc_get_version();
-	mutex_unlock(&scm_lock);
-
-	pr_info("SCM Remote Version %d.%d\n", scm_version >> 16,
-			scm_version & 0xFF);
+	u32 version = scm_get_version();
+	pr_info("SCM Remote Version %d.%d\n", version >> 16, version & 0xFF);
 	return 0;
 }
 arch_initcall(scm_init);

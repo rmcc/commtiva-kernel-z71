@@ -831,7 +831,7 @@ static struct clk_freq_tbl clk_tbl_ijpeg[] = {
 	F_IJPEG(128000000, MM_GPERF, 3, 0,  0, NOMINAL),
 	F_IJPEG(153600000, MM_GPERF, 1, 2,  5, NOMINAL),
 	F_IJPEG(200000000, MM_PLL1,  4, 0,  0, NOMINAL),
-	F_IJPEG(228000000, MM_PLL1,  1, 2,  7, NOMINAL),
+	F_IJPEG(228571000, MM_PLL1,  1, 2,  7, NOMINAL),
 	F_END,
 };
 
@@ -988,10 +988,12 @@ static struct clk_freq_tbl clk_tbl_tv[] = {
 
 /* VCODEC */
 #define NS_MASK_VCODEC (BM(18, 11) | BM(2, 0))
+#define CC_MASK_VCODEC (BM(7, 6))
 #define CLK_VCODEC(id, ns, h_r, h_c, h_b, par, tv) \
 		CLK(id, MND, ns, (ns-8), (ns-4), NULL, 0, h_r, h_c, h_b, \
-				B(0), B(2), NS_MASK_VCODEC, 0, set_rate_mnd, \
-				clk_tbl_vcodec, NULL, par, NULL, tv)
+				B(0), B(2), NS_MASK_VCODEC, CC_MASK_VCODEC, \
+				set_rate_mnd, clk_tbl_vcodec, NULL, par, \
+				NULL, tv)
 #define F_VCODEC(f, s, m, n, v) \
 		F_RAW(f, SRC_##s, MD8(8, m, 0, n), \
 			NS_MM(18, 11, n, m, 0, 0, 1, 2, 0, s), \
@@ -1138,7 +1140,7 @@ static const uint32_t chld_csi_src[] = 		{C(CSI0), C(CSI1), C(NONE)};
 static const uint32_t chld_pixel_mdp[] = 	{C(PIXEL_LCDC), C(NONE)};
 static const uint32_t chld_tv_src[] =		{C(TV_ENC), C(TV_DAC),
 						 C(MDP_TV), C(HDMI_TV),
-						 C(DSUB_TV), C(NONE)};
+						 C(NONE)};
 static const uint32_t chld_vfe[] =		{C(CSI0_VFE), C(CSI1_VFE),
 						 C(NONE)};
 
@@ -1375,8 +1377,6 @@ struct clk_local soc_clk_local_tbl_mxo[] = {
 		DBG_BUS_VEC_D_REG, HALT, 11, TV_SRC, TEST_MM_HS(0x1F)),
 	CLK_SLAVE(HDMI_TV, TV_CC_REG,  B(12), NULL, 0,
 		DBG_BUS_VEC_D_REG, HALT, 10, TV_SRC, TEST_MM_HS(0x1E)),
-	CLK_SLAVE(DSUB_TV, TV_CC2_REG, B(11), NULL, 0,
-		DBG_BUS_VEC_E_REG, HALT, 31, TV_SRC, TEST_MM_HS(0x25)),
 
 	CLK_NORATE(HDMI_APP, MISC_CC2_REG, B(11), NULL, 0,
 		DBG_BUS_VEC_B_REG, HALT, 25, TEST_MM_LS(0x1F)),
@@ -1410,8 +1410,6 @@ struct clk_local soc_clk_local_tbl_mxo[] = {
 	/* AHB Interfaces */
 	CLK_NORATE(AMP_P,    AHB_EN_REG, B(24), NULL, 0,
 		DBG_BUS_VEC_F_REG, HALT, 18, TEST_MM_LS(0x06)),
-	CLK_NORATE(APU_P,    AHB_EN_REG, B(28), SW_RESET_AHB_REG, B(18),
-		DBG_BUS_VEC_F_REG, HALT,  8, TEST_MM_LS(0x24)),
 	CLK_NORATE(CSI0_P,   AHB_EN_REG, B(7),  SW_RESET_AHB_REG, B(17),
 		DBG_BUS_VEC_F_REG, HALT, 16, TEST_MM_LS(0x07)),
 	CLK_NORATE(CSI1_P,   AHB_EN_REG, B(20), SW_RESET_AHB_REG, B(16),
@@ -1440,8 +1438,6 @@ struct clk_local soc_clk_local_tbl_mxo[] = {
 		DBG_BUS_VEC_F_REG, HALT, 11, TEST_MM_LS(0x14)),
 	CLK_NORATE(ROT_P,    AHB_EN_REG, B(12), SW_RESET_AHB_REG, B(2),
 		DBG_BUS_VEC_F_REG, HALT, 13, TEST_MM_LS(0x16)),
-	CLK_NORATE(SMI0_P,   AHB_EN_REG, B(23), SW_RESET_AHB_REG, B(19),
-		DBG_BUS_VEC_F_REG, HALT, 21, TEST_MM_LS(0x17)),
 	CLK_NORATE(SMMU_P,   AHB_EN_REG, B(15), NULL, 0,
 		DBG_BUS_VEC_F_REG, HALT, 22, TEST_MM_LS(0x18)),
 	CLK_NORATE(TV_ENC_P, AHB_EN_REG, B(25), SW_RESET_AHB_REG, B(15),
@@ -1607,6 +1603,7 @@ struct clk_source soc_clk_sources[NUM_SRC] = {
 int soc_update_sys_vdd(enum sys_vdd_level level)
 {
 	static const int vdd_uv[] = {
+		[NONE]    =  750000,
 		[LOW]     = 1000000,
 		[NOMINAL] = 1100000,
 		[HIGH]    = 1200000,
@@ -1825,17 +1822,17 @@ static void reg_init(int use_pxo)
 	 * gating for all clocks. Also set VFE_AHB's FORCE_CORE_ON bit to
 	 * prevent its memory from being collapsed when the clock is halted.
 	 * The sleep and wake-up delays are set to safe values. */
-	rmwreg(0x00000003, AHB_EN_REG, 0x7FFFFFFF);
-	writel(0x000007F9, AHB_EN2_REG);
+	rmwreg(0x00000003, AHB_EN_REG,  0x0F7FFFFF);
+	rmwreg(0x000007F9, AHB_EN2_REG, 0x7FFFBFFF);
 
-	/* Deassert all MM AHB resets. */
-	writel(0, SW_RESET_AHB_REG);
+	/* Deassert all locally-owned MM AHB resets. */
+	rmwreg(0, SW_RESET_AHB_REG, 0xFFF7DFFF);
 
-	/* Initialize MM AXI registers: Enable AXI root and SMI clocks, and HW
-	 * gating for all clock that support it. Also set FORCE_CORE_ON bits,
-	 * and any sleep and wake-up delays to safe values. */
-	writel(0x10038FF9, MAXI_EN_REG);
-	writel(0x7A27FCFF, MAXI_EN2_REG);
+	/* Initialize MM AXI registers: Enable HW gating for all clocks that
+	 * support it. Also set FORCE_CORE_ON bits, and any sleep and wake-up
+	 * delays to safe values. */
+	rmwreg(0x00038FF9, MAXI_EN_REG,  0x0FFFFFFF);
+	rmwreg(0x1A27FCFF, MAXI_EN2_REG, 0x1FFFFFFF);
 	writel(0x3FE7FCFF, MAXI_EN3_REG);
 	writel(0x000001D8, SAXI_EN_REG);
 
@@ -1843,8 +1840,8 @@ static void reg_init(int use_pxo)
 	 * memories retain state even when not clocked. Also, set sleep and
 	 * wake-up delays to safe values. */
 	writel(0x00000000, CSI_CC_REG);
-	writel(0x00000000, MISC_CC_REG);
-	writel(0x000007FD, MISC_CC2_REG);
+	rmwreg(0x00000000, MISC_CC_REG,  0xFEFFF3FF);
+	rmwreg(0x000007FD, MISC_CC2_REG, 0xFFFF7FFF);
 	writel(0x80FF0000, GFX2D0_CC_REG);
 	writel(0x80FF0000, GFX2D1_CC_REG);
 	writel(0x80FF0000, GFX3D_CC_REG);
@@ -1915,6 +1912,7 @@ void __init msm_clk_soc_init(void)
 		soc_clk_sources[PXO].enable_func = NULL;
 	}
 
+	local_vote_sys_vdd(HIGH);
 	/* Initialize clock registers. */
 	reg_init(use_pxo);
 
@@ -1926,6 +1924,12 @@ void __init msm_clk_soc_init(void)
 	set_1rate(USB_FS1_SRC);
 	set_1rate(USB_FS2_SRC);
 }
+
+static int msm_clk_soc_late_init(void)
+{
+	return local_vote_sys_vdd(NONE);
+}
+late_initcall(msm_clk_soc_late_init);
 
 /*
  * Clock operation handler registration

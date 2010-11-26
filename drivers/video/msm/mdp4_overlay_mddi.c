@@ -44,9 +44,6 @@ static struct msm_fb_data_type *mddi_mfd;
 
 static int vsync_start_y_adjust = 4;
 
-static struct completion mddi_comp;
-
-#ifdef MDP4_MDDI_DMA_SWITCH
 static int dmap_vsync_enable;
 
 void mdp_dmap_vsync_set(int enable)
@@ -58,7 +55,6 @@ int mdp_dmap_vsync_get(void)
 {
 	return dmap_vsync_enable;
 }
-#endif
 
 void mdp4_mddi_vsync_enable(struct msm_fb_data_type *mfd,
 		struct mdp4_overlay_pipe *pipe, int which)
@@ -70,11 +66,13 @@ void mdp4_mddi_vsync_enable(struct msm_fb_data_type *mfd,
 	if ((mfd->use_mdp_vsync) && (mfd->ibuf.vsync_enable) &&
 		(mfd->panel_info.lcd.vsync_enable)) {
 
-#ifdef MDP4_MDDI_DMA_SWITCH
-		if (which == 0 && dmap_vsync_enable == 0 &&
-			mfd->panel_info.lcd.rev < 2) /* dma_p */
-			return;
-#endif
+		if (mdp_hw_revision < MDP4_REVISION_V2_1) {
+			/* need dmas dmap switch */
+			if (which == 0 && dmap_vsync_enable == 0 &&
+				mfd->panel_info.lcd.rev < 2) /* dma_p */
+				return;
+		}
+
 		if (vsync_start_y_adjust <= pipe->dst_y)
 			start_y = pipe->dst_y - vsync_start_y_adjust;
 		else
@@ -119,7 +117,7 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 		ptype = mdp4_overlay_format2type(mfd->fb_imgType);
 		if (ptype < 0)
 			printk(KERN_INFO "%s: format2type failed\n", __func__);
-		pipe = mdp4_overlay_pipe_alloc(ptype, FALSE);
+		pipe = mdp4_overlay_pipe_alloc(ptype, MDP4_MIXER0, 0);
 		if (pipe == NULL)
 			printk(KERN_INFO "%s: pipe_alloc failed\n", __func__);
 		pipe->pipe_used++;
@@ -132,7 +130,6 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 		mddi_pipe = pipe; /* keep it */
 
-		init_completion(&mddi_comp);
 		mddi_pipe->blt_end = 1;	/* mark as end */
 
 		mddi_ld_param = 0;
@@ -248,14 +245,18 @@ void mdp4_overlay_update_lcd(struct msm_fb_data_type *mfd)
 
 int mdp4_mddi_overlay_blt_offset(int *off)
 {
-#ifdef MDP4_MDDI_DMA_SWITCH
-	if (mddi_pipe->blt_end ||
-		(mdp4_overlay_pipe_staged(mddi_pipe->mixer_num) <= 1)) {
-#else
-	if (mddi_pipe->blt_end) {
-#endif
-		*off = -1;
-		return -EINVAL;
+	if (mdp_hw_revision < MDP4_REVISION_V2_1) { /* need dmas dmap switch */
+		if (mddi_pipe->blt_end ||
+			(mdp4_overlay_pipe_staged(mddi_pipe->mixer_num) <= 1)) {
+			*off = -1;
+			return -EINVAL;
+		}
+	} else {
+		/* no dmas dmap switch */
+		if (mddi_pipe->blt_end) {
+			*off = -1;
+			return -EINVAL;
+		}
 	}
 
 	if (mddi_pipe->blt_cnt & 0x01)
@@ -346,12 +347,9 @@ void mdp4_overlay0_done_mddi()
 
 #ifdef MDP4_NONBLOCKING
 	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
-
-	complete_all(&mddi_comp);
-#else
+#endif
 	if (pending_pipe)
 		complete(&pending_pipe->comp);
-#endif
 }
 
 void mdp4_mddi_overlay_restore(void)
@@ -367,66 +365,51 @@ void mdp4_mddi_overlay_restore(void)
 		return;
 #endif
 
-#ifdef MDP4_MDDI_DMA_SWITCH
-	mdp4_mddi_overlay_dmas_restore();
-#else
-	/* mutex holded by caller */
-	if (mddi_mfd && mddi_pipe) {
-		mdp4_overlay_update_lcd(mddi_mfd);
-		mdp4_mddi_overlay_kickoff(mddi_mfd, mddi_pipe);
-	}
-#endif
-}
-static ulong mddi_last_kick;
-static ulong mddi_kick_interval;
-
-void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
-				struct mdp4_overlay_pipe *pipe)
-{
-#ifdef MDP4_NONBLOCKING
-	unsigned long flag;
-
-
-	if (pipe == mddi_pipe) {	/* base layer */
-		if (mdp4_overlay_pipe_staged(pipe->mixer_num) > 1) {
-			if (time_before(jiffies,
-				(mddi_last_kick + mddi_kick_interval/2))) {
-				mdp4_stat.kickoff_mddi_skip++;
-				return; /* let other pipe to kickoff */
-			}
+	if (mdp_hw_revision < MDP4_REVISION_V2_1) /* need dmas dmap switch */
+		mdp4_mddi_overlay_dmas_restore();
+	else { /* no dmas dmap switch */
+		/* mutex holded by caller */
+		if (mddi_mfd && mddi_pipe) {
+			mdp4_mddi_dma_busy_wait(mddi_mfd, mddi_pipe);
+			mdp4_overlay_update_lcd(mddi_mfd);
+			mdp4_mddi_overlay_kickoff(mddi_mfd, mddi_pipe);
 		}
 	}
+}
+
+#ifdef MDP4_NONBLOCKING
+void mdp4_mddi_dma_busy_wait(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe)
+{
+	unsigned long flag;
+
+	if (pipe == NULL) /* first time since boot up */
+		return;
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
 	if (mfd->dma->busy == TRUE) {
-		INIT_COMPLETION(mddi_comp);
+		INIT_COMPLETION(pipe->comp);
 		pending_pipe = pipe;
 	}
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
 	if (pending_pipe != NULL) {
 		/* wait until DMA finishes the current job */
-		wait_for_completion_killable(&mddi_comp);
+		wait_for_completion_killable(&pipe->comp);
 		pending_pipe = NULL;
 	}
+}
+#endif
 
+void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe)
+{
+#ifdef MDP4_NONBLOCKING
 	down(&mfd->sem);
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
 	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
-	if (pipe != mddi_pipe) { /* non base layer */
-		int intv;
-
-		if (mddi_last_kick == 0)
-			intv = 0;
-		else
-			intv = jiffies - mddi_last_kick;
-
-		mddi_kick_interval += intv;
-		mddi_kick_interval /= 2;        /* average */
-		mddi_last_kick = jiffies;
-	}
 	up(&mfd->sem);
 #else
 	down(&mfd->sem);
@@ -444,9 +427,6 @@ void mdp4_mddi_overlay_kickoff(struct msm_fb_data_type *mfd,
 	mdp_disable_irq(MDP_OVERLAY0_TERM);
 #endif
 }
-
-
-#ifdef MDP4_MDDI_DMA_SWITCH
 
 void mdp4_dma_s_done_mddi()
 {
@@ -525,24 +505,6 @@ void mdp4_dma_s_update_lcd(struct msm_fb_data_type *mfd,
 void mdp4_mddi_dma_s_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
-#ifdef MDP4_NONBLOCKING
-	unsigned long flag;
-	boolean busy;
-
-	busy = FALSE;
-	spin_lock_irqsave(&mdp_spin_lock, flag);
-	if (mfd->dma->busy == TRUE) {
-		INIT_COMPLETION(mddi_comp);
-		busy = TRUE;
-	}
-	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-
-	if (busy == TRUE) {
-		/* wait until DMA finishes the current job */
-		wait_for_completion_killable(&mddi_comp);
-	}
-#endif
-
 	down(&mfd->sem);
 	mdp_enable_irq(MDP_DMA_S_TERM);
 	mfd->dma->busy = TRUE;
@@ -561,14 +523,13 @@ void mdp4_mddi_dma_s_kickoff(struct msm_fb_data_type *mfd,
 
 void mdp4_mddi_overlay_dmas_restore(void)
 {
-	/* mutex holded by caller */
+	/* mutex held by caller */
 	if (mddi_mfd && mddi_pipe) {
+		mdp4_mddi_dma_busy_wait(mddi_mfd, mddi_pipe);
 		mdp4_dma_s_update_lcd(mddi_mfd, mddi_pipe);
 		mdp4_mddi_dma_s_kickoff(mddi_mfd, mddi_pipe);
 	}
 }
-#endif
-
 
 void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 {
@@ -576,17 +537,21 @@ void mdp4_mddi_overlay(struct msm_fb_data_type *mfd)
 
 #ifdef MDP4_NONBLOCKING
 	if (mfd && mfd->panel_power_on) {
+		mdp4_mddi_dma_busy_wait(mfd, mddi_pipe);
 #else
 	if ((mfd) && (!mfd->dma->busy) && (mfd->panel_power_on)) {
 #endif
 		mdp4_overlay_update_lcd(mfd);
 
-#ifdef MDP4_MDDI_DMA_SWITCH
-		if (mdp4_overlay_pipe_staged(mddi_pipe->mixer_num) <= 1) {
-			mdp4_dma_s_update_lcd(mfd, mddi_pipe);
-			mdp4_mddi_dma_s_kickoff(mfd, mddi_pipe);
-		} else
-#endif
+		if (mdp_hw_revision < MDP4_REVISION_V2_1) {
+			/* dmas dmap switch */
+			if (mdp4_overlay_pipe_staged(mddi_pipe->mixer_num)
+						<= 1) {
+				mdp4_dma_s_update_lcd(mfd, mddi_pipe);
+				mdp4_mddi_dma_s_kickoff(mfd, mddi_pipe);
+			} else
+				mdp4_mddi_overlay_kickoff(mfd, mddi_pipe);
+		} else	/* no dams dmap switch  */
 			mdp4_mddi_overlay_kickoff(mfd, mddi_pipe);
 
 		mdp4_stat.kickoff_mddi++;

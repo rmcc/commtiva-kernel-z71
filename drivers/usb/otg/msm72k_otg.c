@@ -121,6 +121,20 @@ static int ulpi_write(struct msm_otg *dev, unsigned val, unsigned reg)
 	return 0;
 }
 
+static int usb_ulpi_write(struct otg_transceiver *xceiv, u32 val, u32 reg)
+{
+	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
+
+	return ulpi_write(dev, val, reg);
+}
+
+static int usb_ulpi_read(struct otg_transceiver *xceiv, u32 reg)
+{
+	struct msm_otg *dev = container_of(xceiv, struct msm_otg, otg);
+
+	return ulpi_read(dev, reg);
+}
+
 #ifdef CONFIG_USB_EHCI_MSM
 static void enable_idgnd(struct msm_otg *dev)
 {
@@ -318,18 +332,29 @@ static void otg_pm_qos_update_latency(struct msm_otg *dev, int vote)
 				PM_QOS_DEFAULT_VALUE);
 }
 
-/* Vote for max AXI frequency if pclk is derived from peripheral bus clock */
-static void otg_pm_qos_update_axi(struct msm_otg *dev, int vote)
+/* If USB Core is running its protocol engine based on PCLK,
+ * PCLK must be running at >60Mhz for correct HSUSB operation and
+ * USB core cannot tolerate frequency changes on PCLK. For such
+ * USB cores, vote for maximum clk frequency on pclk source
+ */
+static void msm_otg_vote_for_pclk_source(struct msm_otg *dev, int vote)
 {
-	struct msm_otg_platform_data *pdata = dev->pdata;
-	if (!depends_on_axi_freq(&dev->otg))
+	if (!pclk_requires_voting(&dev->otg))
 		return;
 
+	if (dev->pdata->usb_in_sps) {
+		if (vote)
+			clk_set_min_rate(dev->dfab_clk, 64000000);
+		else
+			clk_set_min_rate(dev->dfab_clk, 0);
+		return;
+	}
+
 	if (vote)
-		pm_qos_update_request(pdata->pm_qos_req_bus,
+		pm_qos_update_request(dev->pdata->pm_qos_req_bus,
 				MSM_AXI_MAX_FREQ);
 	else
-		pm_qos_update_request(pdata->pm_qos_req_bus,
+		pm_qos_update_request(dev->pdata->pm_qos_req_bus,
 				PM_QOS_DEFAULT_VALUE);
 }
 
@@ -664,6 +689,12 @@ static int msm_otg_suspend(struct msm_otg *dev)
 			goto out;
 		}
 		msleep(1);
+		/* check if there are any pending interrupts*/
+		if (((readl(USB_OTGSC) & OTGSC_INTR_MASK) >> 8) &
+				readl(USB_OTGSC)) {
+			enable_idabc(dev);
+			goto out;
+		}
 	}
 
 	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL | ULPI_STP_CTRL, USB_USBCMD);
@@ -683,8 +714,7 @@ static int msm_otg_suspend(struct msm_otg *dev)
 			enable_irq_wake(dev->vbus_on_irq);
 	}
 
-	/* Release vote for max AXI frequency */
-	otg_pm_qos_update_axi(dev, 0);
+	msm_otg_vote_for_pclk_source(dev, 0);
 
 	atomic_set(&dev->in_lpm, 1);
 
@@ -701,10 +731,6 @@ static int msm_otg_suspend(struct msm_otg *dev)
 
 out:
 	enable_irq(dev->irq);
-
-	/* TBD: as there is no bus suspend implemented as of now
-	 * it should be dummy check
-	 */
 
 	return 0;
 }
@@ -726,10 +752,7 @@ static int msm_otg_resume(struct msm_otg *dev)
 		pr_err("%s failed to vote for"
 			"TCXO D1 buffer%d\n", __func__, ret);
 
-	/* pclk might be derived from peripheral bus clock. If so then
-	 * vote for max AXI frequency before enabling pclk.
-	 */
-	otg_pm_qos_update_axi(dev, 1);
+	msm_otg_vote_for_pclk_source(dev, 1);
 
 	if (dev->hs_pclk)
 		clk_enable(dev->hs_pclk);
@@ -1019,8 +1042,10 @@ void msm_otg_set_vbus_state(int online)
 {
 	struct msm_otg *dev = the_msm_otg;
 
-	if (online)
-		msm_otg_set_suspend(&dev->otg, 0);
+	if (online) {
+		set_bit(B_SESS_VLD, &dev->inputs);
+		queue_work(dev->wq, &dev->sm_work);
+	}
 }
 
 
@@ -1557,7 +1582,11 @@ static void msm_otg_sm_work(struct work_struct *w)
 #endif
 			/* Workaround: Reset PHY in SE1 state */
 			otg_reset(&dev->otg, 1);
-
+			if (!is_b_sess_vld()) {
+				clear_bit(B_SESS_VLD, &dev->inputs);
+				work = 1;
+				break;
+			}
 			pr_debug("entering into lpm with wall-charger\n");
 			msm_otg_put_suspend(dev);
 			/* Allow idle power collapse */
@@ -2047,6 +2076,7 @@ out:
 	return;
 }
 #endif
+#ifdef CONFIG_USB_OTG
 static ssize_t
 set_pwr_down(struct device *_dev, struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -2128,6 +2158,7 @@ static struct attribute *msm_otg_attrs[] = {
 static struct attribute_group msm_otg_attr_grp = {
 	.attrs = msm_otg_attrs,
 };
+#endif
 
 #ifdef CONFIG_DEBUG_FS
 static int otg_open(struct inode *inode, struct file *file)
@@ -2206,6 +2237,11 @@ static void otg_debugfs_cleanup(void)
 #endif
 }
 
+struct otg_io_access_ops msm_otg_io_ops = {
+	.read = usb_ulpi_read,
+	.write = usb_ulpi_write,
+};
+
 static int __init msm_otg_probe(struct platform_device *pdev)
 {
 	int ret = 0;
@@ -2250,12 +2286,33 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	}
 	clk_set_rate(dev->hs_clk, 60000000);
 
-	if (!dev->pdata->usb_in_sps) {
+	if (dev->pdata->usb_in_sps) {
+		dev->dfab_clk = clk_get(0, "dfab_clk");
+		if (IS_ERR(dev->dfab_clk)) {
+			pr_err("%s: failed to get dfab clk\n", __func__);
+			ret = PTR_ERR(dev->dfab_clk);
+			goto put_hs_clk;
+		}
+	}
+
+	/* If USB Core is running its protocol engine based on PCLK,
+	 * PCLK must be running at >60Mhz for correct HSUSB operation and
+	 * USB core cannot tolerate frequency changes on PCLK. For such
+	 * USB cores, vote for maximum clk frequency on pclk source
+	 */
+	dev->pdata->pm_qos_req_dma = pm_qos_add_request(PM_QOS_CPU_DMA_LATENCY,
+					PM_QOS_DEFAULT_VALUE);
+	dev->pdata->pm_qos_req_bus = pm_qos_add_request(PM_QOS_SYSTEM_BUS_FREQ,
+					PM_QOS_DEFAULT_VALUE);
+	msm_otg_vote_for_pclk_source(dev, 1);
+
+
+	if (!dev->pdata->pclk_is_hw_gated) {
 		dev->hs_pclk = clk_get(&pdev->dev, "usb_hs_pclk");
 		if (IS_ERR(dev->hs_pclk)) {
 			pr_err("%s: failed to get usb_hs_pclk\n", __func__);
 			ret = PTR_ERR(dev->hs_pclk);
-			goto put_hs_clk;
+			goto put_dfab_clk;
 		}
 		clk_enable(dev->hs_pclk);
 	}
@@ -2326,15 +2383,6 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto free_wlock;
 	}
 
-	/* pclk might be derived from peripheral bus clock. If so then
-	 * vote for max AXI frequency before enabling pclk.
-	 */
-	dev->pdata->pm_qos_req_dma = pm_qos_add_request(PM_QOS_CPU_DMA_LATENCY,
-					PM_QOS_DEFAULT_VALUE);
-	dev->pdata->pm_qos_req_bus = pm_qos_add_request(PM_QOS_SYSTEM_BUS_FREQ,
-					PM_QOS_DEFAULT_VALUE);
-	otg_pm_qos_update_axi(dev, 1);
-
 	if (dev->pdata->init_gpio) {
 		ret = dev->pdata->init_gpio(1);
 		if (ret) {
@@ -2402,6 +2450,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	dev->otg.set_power = msm_otg_set_power;
 	dev->set_clk = msm_otg_set_clk;
 	dev->reset = otg_reset;
+	dev->otg.io_ops = &msm_otg_io_ops;
 	if (otg_set_transceiver(&dev->otg)) {
 		WARN_ON(1);
 		goto free_otg_irq;
@@ -2436,12 +2485,14 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto chg_deinit;
 	}
 
+#ifdef CONFIG_USB_OTG
 	ret = sysfs_create_group(&pdev->dev.kobj, &msm_otg_attr_grp);
 	if (ret < 0) {
 		pr_err("%s: Failed to create the sysfs entry\n", __func__);
 		otg_debugfs_cleanup();
 		goto chg_deinit;
 	}
+#endif
 
 
 	return 0;
@@ -2486,6 +2537,11 @@ put_hs_pclk:
 		clk_disable(dev->hs_pclk);
 		clk_put(dev->hs_pclk);
 	}
+put_dfab_clk:
+	if (dev->dfab_clk) {
+		clk_set_min_rate(dev->dfab_clk, 0);
+		clk_put(dev->dfab_clk);
+	}
 put_hs_clk:
 	if (dev->hs_clk)
 		clk_put(dev->hs_clk);
@@ -2501,7 +2557,9 @@ static int __exit msm_otg_remove(struct platform_device *pdev)
 	struct msm_otg *dev = the_msm_otg;
 
 	otg_debugfs_cleanup();
+#ifdef CONFIG_USB_OTG
 	sysfs_remove_group(&pdev->dev.kobj, &msm_otg_attr_grp);
+#endif
 	destroy_workqueue(dev->wq);
 	wake_lock_destroy(&dev->wlock);
 

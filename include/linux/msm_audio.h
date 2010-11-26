@@ -19,7 +19,6 @@
 
 #include <linux/types.h>
 #include <linux/ioctl.h>
-#include <asm/sizes.h>
 
 /* PCM Audio */
 
@@ -87,9 +86,9 @@
 					struct msm_audio_buf_cfg)
 #define AUDIO_SET_BUF_CFG    _IOW(AUDIO_IOCTL_MAGIC, 94, \
 					struct msm_audio_buf_cfg)
-#define AUDIO_SET_ACDB_BLK _IOR(AUDIO_IOCTL_MAGIC, 95,  \
+#define AUDIO_SET_ACDB_BLK _IOW(AUDIO_IOCTL_MAGIC, 95,  \
 					struct msm_acdb_cmd_device)
-#define AUDIO_GET_ACDB_BLK _IOR(AUDIO_IOCTL_MAGIC, 96,  \
+#define AUDIO_GET_ACDB_BLK _IOW(AUDIO_IOCTL_MAGIC, 96,  \
 					struct msm_acdb_cmd_device)
 
 #define	AUDIO_MAX_COMMON_IOCTL_NUM	100
@@ -135,6 +134,7 @@
 #define AGC_ENABLE		0x0001
 #define NS_ENABLE		0x0002
 #define TX_IIR_ENABLE		0x0004
+#define FLUENCE_ENABLE		0x0008
 
 #define VOC_REC_UPLINK		0x00
 #define VOC_REC_DOWNLINK	0x01

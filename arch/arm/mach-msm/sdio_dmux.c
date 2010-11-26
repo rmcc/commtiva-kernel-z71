@@ -97,6 +97,7 @@ struct sdio_ch_info {
 static struct sdio_channel *sdio_mux_ch;
 static struct sdio_ch_info sdio_ch[8];
 struct wake_lock sdio_mux_ch_wakelock;
+static int sdio_mux_initialized;
 
 struct sdio_mux_hdr {
 	uint16_t magic_num;
@@ -120,7 +121,8 @@ static DEFINE_MUTEX(sdio_mux_lock);
 static DECLARE_WORK(work_sdio_mux_read, sdio_mux_read_data);
 static DECLARE_WORK(work_sdio_mux_write, sdio_mux_write_data);
 
-static struct workqueue_struct *sdio_mux_workqueue;
+static struct workqueue_struct *sdio_mux_read_workqueue;
+static struct workqueue_struct *sdio_mux_write_workqueue;
 static struct sdio_partial_pkt_info sdio_partial_pkt;
 
 #define sdio_ch_is_open(x)						\
@@ -302,7 +304,7 @@ static void sdio_mux_read_data(struct work_struct *work)
 		pr_err("%s: sdio read failed %d\n", __func__, rc);
 		dev_kfree_skb_any(skb_mux);
 		mutex_unlock(&sdio_mux_lock);
-		queue_work(sdio_mux_workqueue, &work_sdio_mux_read);
+		queue_work(sdio_mux_read_workqueue, &work_sdio_mux_read);
 		return;
 	}
 	mutex_unlock(&sdio_mux_lock);
@@ -333,7 +335,7 @@ static void sdio_mux_read_data(struct work_struct *work)
 	dev_kfree_skb_any(skb_mux);
 
 	DBG("%s: read done\n", __func__);
-	queue_work(sdio_mux_workqueue, &work_sdio_mux_read);
+	queue_work(sdio_mux_read_workqueue, &work_sdio_mux_read);
 }
 
 static int sdio_mux_write(struct sk_buff *skb)
@@ -406,7 +408,7 @@ static void sdio_mux_write_data(struct work_struct *work)
 
 	/* probably should use delayed work */
 	if (reschedule)
-		queue_work(sdio_mux_workqueue, &work_sdio_mux_write);
+		queue_work(sdio_mux_write_workqueue, &work_sdio_mux_write);
 }
 
 int msm_sdio_dmux_write(uint32_t id, struct sk_buff *skb)
@@ -418,6 +420,8 @@ int msm_sdio_dmux_write(uint32_t id, struct sk_buff *skb)
 
 	if (!skb)
 		return -EINVAL;
+	if (!sdio_mux_initialized)
+		return -ENODEV;
 
 	DBG("%s: writing to ch %d len %d\n", __func__, id, skb->len);
 	spin_lock_irqsave(&sdio_ch[id].lock, flags);
@@ -467,7 +471,7 @@ int msm_sdio_dmux_write(uint32_t id, struct sk_buff *skb)
 	    __func__, skb->data, skb->tail, skb->len,
 	    hdr->pkt_len, hdr->pad_len);
 	sdio_ch[id].skb = skb;
-	queue_work(sdio_mux_workqueue, &work_sdio_mux_write);
+	queue_work(sdio_mux_write_workqueue, &work_sdio_mux_write);
 
 write_done:
 	spin_unlock_irqrestore(&sdio_ch[id].lock, flags);
@@ -482,6 +486,8 @@ int msm_sdio_dmux_open(uint32_t id, void *priv,
 	unsigned long flags;
 
 	DBG("%s: opening ch %d\n", __func__, id);
+	if (!sdio_mux_initialized)
+		return -ENODEV;
 	if (id >= 8)
 		return -EINVAL;
 
@@ -518,6 +524,8 @@ int msm_sdio_dmux_close(uint32_t id)
 	unsigned long flags;
 
 	DBG("%s: closing ch %d\n", __func__, id);
+	if (!sdio_mux_initialized)
+		return -ENODEV;
 	spin_lock_irqsave(&sdio_ch[id].lock, flags);
 
 	if (sdio_ch[id].skb) {
@@ -549,37 +557,44 @@ static void sdio_mux_notify(void *_dev, unsigned event)
 	/* write avail may not be enouogh for a packet, but should be fine */
 	if ((event == SDIO_EVENT_DATA_WRITE_AVAIL) &&
 	    sdio_write_avail(sdio_mux_ch))
-		queue_work(sdio_mux_workqueue, &work_sdio_mux_write);
+		queue_work(sdio_mux_write_workqueue, &work_sdio_mux_write);
 
 	if ((event == SDIO_EVENT_DATA_READ_AVAIL) &&
 	    sdio_read_avail(sdio_mux_ch))
-		queue_work(sdio_mux_workqueue, &work_sdio_mux_read);
+		queue_work(sdio_mux_read_workqueue, &work_sdio_mux_read);
 }
 
 static int sdio_dmux_probe(struct platform_device *pdev)
 {
 	int rc;
-	static int sdio_mux_initialized;
 
 	DBG("%s probe called\n", __func__);
 	if (sdio_mux_initialized)
 		return 0;
 
-	/* is one thread gud enough for read and write? */
-	sdio_mux_workqueue = create_singlethread_workqueue("sdio_dmux");
-	if (!sdio_mux_workqueue)
+	sdio_mux_read_workqueue = create_singlethread_workqueue(
+							"sdio_dmux_read");
+	if (!sdio_mux_read_workqueue)
 		return -ENOMEM;
+
+	sdio_mux_write_workqueue = create_singlethread_workqueue(
+							"sdio_dmux_write");
+	if (!sdio_mux_write_workqueue) {
+		destroy_workqueue(sdio_mux_read_workqueue);
+		return -ENOMEM;
+	}
 
 	for (rc = 0; rc < 8; rc++)
 		spin_lock_init(&sdio_ch[rc].lock);
 
 	wake_lock_init(&sdio_mux_ch_wakelock, WAKE_LOCK_SUSPEND,
 		       "sdio_dmux");
-	rc = sdio_open("SDIO_RMNET_DATA", &sdio_mux_ch, NULL, sdio_mux_notify);
+	rc = sdio_open("SDIO_RMNT", &sdio_mux_ch, NULL, sdio_mux_notify);
 	if (rc < 0) {
 		pr_err("%s: sido open failed %d\n", __func__, rc);
 		wake_lock_destroy(&sdio_mux_ch_wakelock);
-		destroy_workqueue(sdio_mux_workqueue);
+		destroy_workqueue(sdio_mux_read_workqueue);
+		destroy_workqueue(sdio_mux_write_workqueue);
 		return rc;
 	}
 
@@ -590,7 +605,7 @@ static int sdio_dmux_probe(struct platform_device *pdev)
 static struct platform_driver sdio_dmux_driver = {
 	.probe		= sdio_dmux_probe,
 	.driver		= {
-		.name	= "SDIO_RMNET_DATA",
+		.name	= "SDIO_RMNT",
 		.owner	= THIS_MODULE,
 	},
 };

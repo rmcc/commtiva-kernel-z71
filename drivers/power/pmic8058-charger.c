@@ -34,6 +34,7 @@
 
 /* Config Regs  and their bits*/
 #define PM8058_CHG_TEST			0x75
+#define IGNORE_LL			2
 #define PM8058_CHG_TEST_2		0xEA
 #define PM8058_CHG_TEST_3		0xEB
 #define PM8058_OVP_TEST_REG		0xF6
@@ -357,6 +358,22 @@ static inline void __dump_chg_regs(void)
 #endif
 
 /* SSBI register access helper functions */
+static int pm_chg_suspend(int value)
+{
+	u8 temp;
+	int ret;
+
+	ret = pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_CNTRL, &temp, 1);
+	if (ret)
+		return ret;
+	if (value)
+		temp |= BIT(CHG_USB_SUSPEND);
+	else
+		temp &= ~BIT(CHG_USB_SUSPEND);
+
+	return pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_CNTRL, &temp, 1);
+}
+
 static int pm_chg_auto_disable(int value)
 {
 	u8 temp;
@@ -512,6 +529,10 @@ static int __pm8058_start_charging(int chg_current, int termination_current,
 	if (ret)
 		goto out;
 
+	ret = pm_chg_suspend(0);
+	if (ret)
+		goto out;
+
 	ret = pm_chg_imaxsel_set(chg_current);
 	if (ret)
 		goto out;
@@ -607,6 +628,7 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 
 	ret = __pm8058_start_charging(chg_current, AUTO_CHARGING_IEOC_ITERM,
 				AUTO_CHARGING_FAST_TIME_MAX_MINUTES);
+	pm8058_chg.current_charger_current = chg_current;
 out:
 	return ret;
 }
@@ -661,6 +683,9 @@ static irqreturn_t pm8058_chg_chgval_handler(int irq, void *dev_id)
 					&temp, 1);
 		ret = pm8058_write(pm8058_chg.pm_chip, PM8058_OVP_TEST_REG,
 					&old, 1);
+
+		pm_chg_enum_done_enable(0);
+		pm_chg_auto_disable(1);
 		msm_charger_notify_event(&usb_hw_chg, CHG_REMOVED_EVENT);
 	}
 
@@ -674,6 +699,8 @@ static irqreturn_t pm8058_chg_chginval_handler(int irq, void *dev_id)
 
 	pm8058_chg_disable_irq(CHGINVAL_IRQ);
 
+	pm_chg_enum_done_enable(0);
+	pm_chg_auto_disable(1);
 	ret = pm8058_read(pm8058_chg.pm_chip, PM8058_OVP_TEST_REG, &old, 1);
 	temp = old | BIT(FORCE_OVP_OFF);
 	ret = pm8058_write(pm8058_chg.pm_chip, PM8058_OVP_TEST_REG, &temp, 1);
@@ -981,7 +1008,7 @@ static int __devinit request_irqs(struct platform_device *pdev)
 	} else {
 		ret = request_threaded_irq(res->start, NULL,
 				  pm8058_chg_auto_chgfail_handler,
-				  IRQF_TRIGGER_HIGH, res->name, NULL);
+				  IRQF_TRIGGER_RISING, res->name, NULL);
 		if (ret < 0) {
 			dev_err(pm8058_chg.dev, "%s:couldnt request %d %d\n",
 				__func__, res->start, ret);
@@ -1019,7 +1046,7 @@ static int __devinit request_irqs(struct platform_device *pdev)
 	} else {
 		ret = request_threaded_irq(res->start, NULL,
 				  pm8058_chg_fastchg_handler,
-				  IRQF_TRIGGER_HIGH, res->name, NULL);
+				  IRQF_TRIGGER_RISING, res->name, NULL);
 		if (ret < 0) {
 			dev_err(pm8058_chg.dev, "%s:couldnt request %d %d\n",
 				__func__, res->start, ret);
@@ -1130,11 +1157,19 @@ static void pm8058_chg_determine_initial_state(void)
 
 static int pm8058_stop_charging(struct msm_hardware_charger *hw_chg)
 {
+	int ret;
+
 	dev_info(pm8058_chg.dev, "%s stopping charging\n", __func__);
 	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
 	cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work);
 
-	pm_chg_enum_done_enable(0);
+	ret = pm_chg_get_rt_status(pm8058_chg.pmic_chg_irq[FASTCHG_IRQ]);
+	if (ret == 1)
+		pm_chg_suspend(1);
+	else
+		dev_err(pm8058_chg.dev,
+			"%s called when not fast-charging\n", __func__);
+
 	pm_chg_failed_clear(1);
 
 	pm8058_chg.waiting_for_veoc = 0;
@@ -1152,6 +1187,26 @@ static int pm8058_stop_charging(struct msm_hardware_charger *hw_chg)
 
 	return 0;
 }
+
+static int get_status(void *data, u64 * val)
+{
+	*val = pm8058_chg.current_charger_current;
+	return 0;
+}
+
+static int set_status(void *data, u64 val)
+{
+
+	pm8058_chg.current_charger_current = val;
+	if (pm8058_chg.current_charger_current)
+		pm8058_start_charging(NULL,
+			AUTO_CHARGING_VMAXSEL,
+			pm8058_chg.current_charger_current);
+	else
+		pm8058_stop_charging(NULL);
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(chg_fops, get_status, set_status, "%llu\n");
 
 static int pm8058_charging_switched(struct msm_hardware_charger *hw_chg)
 {
@@ -1231,6 +1286,9 @@ static void create_debugfs_entries(void)
 
 	debugfs_create_file("FSM_STATE", 0644, pm8058_chg.dent, NULL,
 			    &fsm_fops);
+
+	debugfs_create_file("stop", 0644, pm8058_chg.dent, NULL,
+			    &chg_fops);
 
 	if (pm8058_chg.pmic_chg_irq[CHGVAL_IRQ])
 		debugfs_create_file("CHGVAL", 0444, pm8058_chg.dent,
@@ -1474,6 +1532,21 @@ static struct msm_battery_gauge pm8058_batt_gauge = {
 	.is_battery_id_valid = pm8058_is_battery_id_valid,
 };
 
+static int pm8058_usb_voltage_lower_limit(void)
+{
+	u8 temp, old;
+	int ret = 0;
+
+	temp = 0x10;
+	ret |= pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_TEST, &temp, 1);
+	ret |= pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_TEST, &old, 1);
+	old = old & ~BIT(IGNORE_LL);
+	temp = 0x90  | (0xF & old);
+	ret |= pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_TEST, &temp, 1);
+
+	return ret;
+}
+
 static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 {
 	struct pm8058_chip *pm_chip;
@@ -1490,6 +1563,13 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 
 	if (request_irqs(pdev)) {
 		pr_err("%s: couldnt register interrupts\n", __func__);
+		return -EINVAL;
+	}
+
+	if (pm8058_usb_voltage_lower_limit()) {
+		pr_err("%s: couldnt set ignore lower limit bit to 0\n",
+								__func__);
+		free_irqs();
 		return -EINVAL;
 	}
 

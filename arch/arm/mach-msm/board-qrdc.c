@@ -61,6 +61,7 @@
 #include <mach/msm_battery.h>
 #include <mach/msm_hsusb.h>
 #include <mach/msm_xo.h>
+#include <mach/msm_bus_board.h>
 #include <mach/tpm_st_i2c.h>
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android_composite.h>
@@ -160,8 +161,6 @@ static struct msm_spm_platform_data msm_spm_data[] __initdata = {
 };
 
 static struct msm_acpu_clock_platform_data msm8x60_acpu_clock_data = {
-	/* SoC has no frequency step size constraints. */
-	.max_speed_delta_khz = UINT_MAX,
 };
 
 static struct regulator_consumer_supply saw_s0_supply =
@@ -937,6 +936,34 @@ static int msm_fb_detect_panel(const char *name)
 	return -ENODEV;
 }
 
+static void lcd_panel_power(int on);
+static int msm_fb_lcdc_gpio_config(int on);
+static int vga_enabled;
+static int vga_enable(int select_vga)
+{
+	int rc = 0;
+
+	vga_enabled = select_vga;
+	rc = msm_fb_lcdc_gpio_config(1);
+	if (rc)
+		return rc;
+	lcd_panel_power(1);
+
+	return 0;
+}
+
+static struct msm_panel_common_pdata lcdc_qrdc_panel_data = {
+	.vga_switch = vga_enable,
+};
+
+static struct platform_device lcdc_qrdc_panel_device = {
+	.name = "lcdc_qrdc",
+	.id = 0,
+	.dev = {
+		.platform_data = &lcdc_qrdc_panel_data,
+	}
+};
+
 static struct msm_fb_platform_data msm_fb_pdata = {
 	.detect_client = msm_fb_detect_panel,
 };
@@ -1242,7 +1269,8 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 
 #define RPM_VREG_INIT(_id, _min_uV, _max_uV, _modes, _ops, _apply_uV, \
 		      _default_uV, _peak_uA, _avg_uA, _pull_down, _pin_ctrl, \
-		      _freq, _pin_fn, _rpm_mode, _state, _always_on) \
+		      _freq, _pin_fn, _rpm_mode, _state, _sleep_selectable, \
+		      _always_on) \
 	[_id] = { \
 		.init_data = { \
 			.constraints = { \
@@ -1266,6 +1294,7 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 		.pin_fn = _pin_fn, \
 		.mode = _rpm_mode, \
 		.state = _state, \
+		.sleep_selectable = _sleep_selectable, \
 	}
 
 /*
@@ -1275,7 +1304,8 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
  */
 #define RPM_HPM_UV	(51000)
 
-#define RPM_VREG_INIT_LDO(_id, _always_on, _pd, _min_uV, _max_uV, _pin_ctrl) \
+#define RPM_VREG_INIT_LDO(_id, _always_on, _pd, _sleep_selectable, _min_uV, \
+			  _max_uV, _pin_ctrl) \
 	RPM_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_FAST | \
 		      REGULATOR_MODE_NORMAL | REGULATOR_MODE_IDLE | \
 		      REGULATOR_MODE_STANDBY, REGULATOR_CHANGE_VOLTAGE | \
@@ -1283,10 +1313,10 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 		      REGULATOR_CHANGE_DRMS, 0, _min_uV, RPM_HPM_UV, \
 		      RPM_HPM_UV, _pd, _pin_ctrl, RPM_VREG_FREQ_NONE, \
 		      RPM_VREG_PIN_FN_ENABLE, RPM_VREG_MODE_NONE, \
-		      RPM_VREG_STATE_OFF, _always_on)
+		      RPM_VREG_STATE_OFF, _sleep_selectable, _always_on)
 
-#define RPM_VREG_INIT_SMPS(_id, _always_on, _pd, _min_uV, _max_uV, _pin_ctrl, \
-			   _freq) \
+#define RPM_VREG_INIT_SMPS(_id, _always_on, _pd, _sleep_selectable, _min_uV, \
+			   _max_uV, _pin_ctrl, _freq) \
 	RPM_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_FAST | \
 		      REGULATOR_MODE_NORMAL | REGULATOR_MODE_IDLE | \
 		      REGULATOR_MODE_STANDBY, REGULATOR_CHANGE_VOLTAGE | \
@@ -1294,86 +1324,89 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 		      REGULATOR_CHANGE_DRMS, 0, _min_uV, RPM_HPM_UV, \
 		      RPM_HPM_UV, _pd, _pin_ctrl, _freq, \
 		      RPM_VREG_PIN_FN_ENABLE, RPM_VREG_MODE_NONE, \
-		      RPM_VREG_STATE_OFF, _always_on)
+		      RPM_VREG_STATE_OFF, _sleep_selectable, _always_on)
 
-#define RPM_VREG_INIT_VS(_id, _always_on, _pd, _pin_ctrl) \
+#define RPM_VREG_INIT_VS(_id, _always_on, _pd, _sleep_selectable, _pin_ctrl) \
 	RPM_VREG_INIT(_id, 0, 0, REGULATOR_MODE_NORMAL | REGULATOR_MODE_IDLE, \
 		      REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE, 0, 0, \
 		      RPM_HPM_UV, RPM_HPM_UV, _pd, _pin_ctrl, \
 		      RPM_VREG_FREQ_NONE, RPM_VREG_PIN_FN_ENABLE, \
-		      RPM_VREG_MODE_NONE, RPM_VREG_STATE_OFF, _always_on)
+		      RPM_VREG_MODE_NONE, RPM_VREG_STATE_OFF, \
+		      _sleep_selectable, _always_on)
 
-#define RPM_VREG_INIT_NCP(_id, _always_on, _pd, _min_uV, _max_uV, _pin_ctrl) \
+#define RPM_VREG_INIT_NCP(_id, _always_on, _pd, _sleep_selectable, _min_uV, \
+			  _max_uV, _pin_ctrl) \
 	RPM_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_NORMAL, \
 		      REGULATOR_CHANGE_VOLTAGE | REGULATOR_CHANGE_STATUS, 0, \
 		      _min_uV, RPM_HPM_UV, RPM_HPM_UV, _pd, _pin_ctrl, \
 		      RPM_VREG_FREQ_NONE, RPM_VREG_PIN_FN_ENABLE, \
-		      RPM_VREG_MODE_NONE, RPM_VREG_STATE_OFF, _always_on)
+		      RPM_VREG_MODE_NONE, RPM_VREG_STATE_OFF, \
+		      _sleep_selectable, _always_on)
 
 static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L0,  0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L1,  0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L2,  0, 1, 1800000, 2600000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L3,  0, 1, 1800000, 1800000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L4,  0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L5,  0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L6,  0, 1, 3000000, 3600000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L7,  0, 1, 1800000, 1800000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L8,  0, 1, 2900000, 2900000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L9,  0, 1, 1800000, 1800000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L10, 0, 1, 2600000, 2600000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L11, 0, 1, 1500000, 1500000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L12, 0, 1, 2900000, 2900000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L13, 0, 1, 2050000, 2050000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L14, 0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L15, 0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L16, 1, 1, 1800000, 1800000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L17, 0, 1, 2600000, 2600000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L18, 0, 1, 2200000, 2200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L19, 0, 1, 2500000, 2500000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L20, 0, 1, 1800000, 1800000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L21, 1, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L22, 0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L23, 0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L24, 0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L25, 0, 1, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L0,  1, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L1,  0, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L2,  0, 1, 0, 1800000, 2600000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L3,  0, 1, 0, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L4,  0, 1, 0, 2850000, 2850000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L5,  1, 1, 0, 2850000, 2850000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L6,  0, 1, 0, 3000000, 3600000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L7,  0, 1, 0, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L8,  0, 1, 0, 2900000, 2900000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L9,  0, 1, 0, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L10, 0, 1, 0, 2600000, 2600000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L11, 0, 1, 0, 1500000, 1500000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L12, 0, 1, 0, 2900000, 2900000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L13, 0, 1, 0, 2050000, 2050000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L14, 1, 0, 0, 2850000, 2850000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L15, 0, 1, 0, 2850000, 2850000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L16, 1, 1, 1, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L17, 0, 1, 0, 2600000, 2600000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L18, 0, 1, 1, 2200000, 2200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L19, 0, 1, 0, 2500000, 2500000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L20, 0, 1, 0, 1800000, 1800000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L21, 1, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L22, 0, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L23, 0, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L24, 0, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8058_L25, 0, 1, 0, 1200000, 1200000, 0),
 
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S0, 1, 1, 1000000, 1200000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S0, 1, 1, 1, 1000000, 1200000, 0,
 		RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S1, 1, 1, 1000000, 1200000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S1, 1, 1, 1, 1000000, 1200000, 0,
 		RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S2, 1, 1, 1200000, 1400000,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S2, 1, 1, 0, 1200000, 1400000,
 		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S3, 1, 1, 1800000, 1800000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S3, 1, 1, 0, 1800000, 1800000, 0,
 		RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S4, 1, 1, 2200000, 2200000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8058_S4, 1, 1, 0, 2200000, 2200000, 0,
 		RPM_VREG_FREQ_1p75),
 
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS0, 0, 1,			  0),
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS1, 0, 1,			  0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS0, 0, 1, 0,		     0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8058_LVS1, 0, 1, 0,		     0),
 
-	RPM_VREG_INIT_NCP(RPM_VREG_ID_PM8058_NCP, 0, 1, 1800000, 1800000, 0),
+	RPM_VREG_INIT_NCP(RPM_VREG_ID_PM8058_NCP, 0, 1, 0, 1800000, 1800000, 0),
 
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L0,  0, 1, 1200000, 1200000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L1,  0, 1, 3300000, 3300000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L2,  0, 1, 2850000, 3300000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L3,  0, 1, 3300000, 3300000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L4,  0, 1, 2600000, 2600000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L5,  0, 1, 2850000, 2850000, 0),
-	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L6,  0, 1, 2200000, 2200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L0,  0, 1, 0, 1200000, 1200000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L1,  0, 1, 0, 3300000, 3300000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L2,  0, 1, 0, 2850000, 3300000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L3,  0, 1, 0, 3300000, 3300000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L4,  0, 1, 0, 2600000, 2600000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L5,  0, 1, 0, 2850000, 2850000, 0),
+	RPM_VREG_INIT_LDO(RPM_VREG_ID_PM8901_L6,  0, 1, 0, 2200000, 2200000, 0),
 
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S2, 0, 1, 1300000, 1300000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S2, 0, 1, 0, 1300000, 1300000, 0,
 		RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S3, 0, 1, 1100000, 1100000, 0,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S3, 0, 1, 0, 1100000, 1100000, 0,
 		RPM_VREG_FREQ_1p75),
-	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S4, 0, 1, 1225000, 1225000,
+	RPM_VREG_INIT_SMPS(RPM_VREG_ID_PM8901_S4, 0, 1, 0, 1225000, 1225000,
 		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p75),
 
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS0, 0, 1,			  0),
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS1, 0, 1,			  0),
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS2, 0, 1,			  0),
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS3, 0, 1,			  0),
-	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_MVS0, 0, 1,			  0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS0, 0, 1, 0,		     0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS1, 0, 1, 0,		     0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS2, 0, 1, 0,		     0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_LVS3, 0, 1, 0,		     0),
+	RPM_VREG_INIT_VS(RPM_VREG_ID_PM8901_MVS0, 0, 1, 0,		     0),
 };
 
 #define RPM_VREG(_id) \
@@ -1437,12 +1470,22 @@ static struct platform_device rpm_vreg_device[RPM_VREG_ID_MAX] = {
 	RPM_VREG(RPM_VREG_ID_PM8901_MVS0),
 };
 
-static struct platform_device *early_devices[] __initdata = {
+static struct platform_device *early_regulators[] __initdata = {
 	&msm_device_saw_s0,
 	&msm_device_saw_s1,
 #ifdef CONFIG_PMIC8058
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_S0],
 	&rpm_vreg_device[RPM_VREG_ID_PM8058_S1],
+#endif
+};
+
+static struct platform_device *early_devices[] __initdata = {
+#ifdef CONFIG_MSM_BUS_SCALING
+	&msm_bus_apps_fabric,
+	&msm_bus_sys_fabric,
+	&msm_bus_mm_fabric,
+	&msm_bus_sys_fpb,
+	&msm_bus_cpss_fpb,
 #endif
 };
 
@@ -1533,6 +1576,7 @@ static struct platform_device *qrdc_devices[] __initdata = {
 	&msm_rotator_device,
 #endif
 	&msm_fb_device,
+	&lcdc_qrdc_panel_device,
 	&msm_device_kgsl,
 	&lcdc_samsung_panel_device,
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -2485,6 +2529,10 @@ static struct i2c_board_info msm_i2c_gsbi3_qci_input_info[] = {
 		I2C_BOARD_INFO("qci-i2cpad", 0x19),
 		.irq = 52,
 	},
+	{
+		I2C_BOARD_INFO("qci-i2cec", 0x1A),
+		.irq = 117,
+	},
 };
 
 #ifdef CONFIG_I2C
@@ -2589,6 +2637,23 @@ static void __init msm8x60_init_buses(void)
 	msm_uart_dm1_pdata.wakeup_irq = gpio_to_irq(54); /* GSBI6(2) */
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
 #endif
+#ifdef CONFIG_MSM_BUS_SCALING
+
+	/* RPM calls are only enabled on V2 */
+	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2) {
+		msm_bus_apps_fabric_pdata.rpm_enabled = 1;
+		msm_bus_sys_fabric_pdata.rpm_enabled = 1;
+		msm_bus_mm_fabric_pdata.rpm_enabled = 1;
+		msm_bus_sys_fpb_pdata.rpm_enabled = 1;
+		msm_bus_cpss_fpb_pdata.rpm_enabled = 1;
+	}
+
+	msm_bus_apps_fabric.dev.platform_data = &msm_bus_apps_fabric_pdata;
+	msm_bus_sys_fabric.dev.platform_data = &msm_bus_sys_fabric_pdata;
+	msm_bus_mm_fabric.dev.platform_data = &msm_bus_mm_fabric_pdata;
+	msm_bus_sys_fpb.dev.platform_data = &msm_bus_sys_fpb_pdata;
+	msm_bus_cpss_fpb.dev.platform_data = &msm_bus_cpss_fpb_pdata;
+#endif
 }
 
 static void __init msm8x60_map_io(void)
@@ -2657,17 +2722,6 @@ static uint32_t msm8x60_tlmm_cfgs[] = {
 	/* PMIC8901 */
 	GPIO_CFG(PM8901_GPIO_INT, 0, GPIO_CFG_INPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA),
 #endif
-
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-	/* gpio_cec_var */
-	GPIO_CFG(169, 1, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_UP, GPIO_CFG_2MA),
-	/* gpio_ddc_clk */
-	GPIO_CFG(170, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA),
-	/* gpio_ddc_data */
-	GPIO_CFG(171, 1, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_16MA),
-	/* gpio_hpd */
-	GPIO_CFG(172, 1, GPIO_CFG_INPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 };
 
 static void __init msm8x60_init_tlmm(void)
@@ -2822,7 +2876,7 @@ static struct msm_sdcc_pin_cfg sdcc_pin_cfg_data[5] = {
 #endif
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
 	[1] = {
-		.is_gpio = 1
+		.is_gpio = 1,
 		.gpio_data_size = ARRAY_SIZE(sdc2_gpio_cfg),
 		.gpio_data = sdc2_gpio_cfg
 	},
@@ -3350,11 +3404,63 @@ static uint32_t lcd_panel_gpios[] = {
 
 static struct regulator *reg_8901_l1;
 static struct regulator *reg_8901_l2;
+static struct regulator *vga_5v_reg;
+
+static int lcdc_onboard_panel_power(int on)
+{
+	int rc = 0;
+
+	if (on) {
+		rc = regulator_set_voltage(reg_8901_l2, 3300000, 3300000);
+		if (rc) {
+			pr_err("%s: error set 8901_l2 to 3.3V\n", __func__);
+			return rc;
+		}
+
+		rc = regulator_enable(reg_8901_l2);
+		if (rc) {
+			pr_err("%s: 8901_l2 enable failed, rc=%d\n",
+				__func__, rc);
+			return rc;
+		}
+	} else {
+		if (regulator_is_enabled(reg_8901_l2)) {
+			rc = regulator_disable(reg_8901_l2);
+			if (rc)
+				pr_warning("%s: 8901_l2 disable failed, "
+					"rc=%d\n", __func__, rc);
+		}
+	}
+
+	return rc;
+}
+
+static int lcdc_vga_panel_power(int on)
+{
+	int rc = 0;
+
+	if (on) {
+		rc = regulator_enable(vga_5v_reg);
+		if (rc) {
+			pr_err("%s: VGA 5v reg enable failed, rc=%d\n",
+				__func__, rc);
+			return rc;
+		}
+	} else
+		if (regulator_is_enabled(vga_5v_reg)) {
+			rc = regulator_disable(vga_5v_reg);
+			if (rc)
+				pr_warning("%s: VGA 5v reg disable failed, "
+					"rc=%d\n", __func__, rc);
+		}
+
+	return rc;
+}
 
 static void lcd_panel_power(int on)
 {
 	int n;
-	int rc;
+	int rc = 0;
 
 	if (!reg_8901_l1) {
 		reg_8901_l1 = regulator_get(NULL, "8901_l1");
@@ -3368,9 +3474,15 @@ static void lcd_panel_power(int on)
 		reg_8901_l2 = regulator_get(NULL, "8901_l2");
 		if (IS_ERR(reg_8901_l2)) {
 			pr_err("%s: Unable to get 8901_l2\n", __func__);
-			regulator_put(reg_8901_l1);
-			reg_8901_l1 = NULL;
-			return;
+			goto fail_get_l2;
+		}
+	}
+
+	if (!vga_5v_reg) {
+		vga_5v_reg = regulator_get(NULL, "8901_usb_otg");
+		if (IS_ERR(vga_5v_reg)) {
+			pr_err("%s: Unable to get 8901_usb_otg\n", __func__);
+			goto fail_get_vga_5v;
 		}
 	}
 
@@ -3378,28 +3490,28 @@ static void lcd_panel_power(int on)
 		rc = regulator_set_voltage(reg_8901_l1, 3300000, 3300000);
 		if (rc) {
 			pr_err("%s: error set 8901_l1 to 3.3V\n", __func__);
-			goto fail;
-		}
-
-		rc = regulator_set_voltage(reg_8901_l2, 3300000, 3300000);
-		if (rc) {
-			pr_err("%s: error set 8901_l2 to 3.3V\n", __func__);
-			goto fail;
+			goto fail_l1_enable;
 		}
 
 		rc = regulator_enable(reg_8901_l1);
 		if (rc) {
 			pr_err("%s: 8901_l1 enable failed, rc=%d\n",
 				__func__, rc);
-			goto fail;
+			goto fail_l1_enable;
 		}
 
-		rc = regulator_enable(reg_8901_l2);
-		if (rc) {
-			pr_err("%s: 8901_l2 enable failed, rc=%d\n",
-				__func__, rc);
-			rc = regulator_disable(reg_8901_l1);
-			goto fail;
+		if (vga_enabled) {
+			if (lcdc_vga_panel_power(1))
+				goto fail_vga_enable;
+			if (lcdc_onboard_panel_power(0))
+				pr_warning("%s: failed to turn off onboard "
+					   "display, rc=%d\n", __func__, rc);
+		} else {
+			if (lcdc_onboard_panel_power(1))
+				goto fail_vga_enable;
+			if (lcdc_vga_panel_power(0))
+				pr_warning("%s: failed to turn off VGA "
+					   "display, rc=%d\n", __func__, rc);
 		}
 	} else {
 		if (regulator_is_enabled(reg_8901_l1)) {
@@ -3409,12 +3521,8 @@ static void lcd_panel_power(int on)
 					"rc=%d\n", __func__, rc);
 		}
 
-		if (regulator_is_enabled(reg_8901_l2)) {
-			rc = regulator_disable(reg_8901_l2);
-			if (rc)
-				pr_warning("%s: 8901_l2 disable failed, "
-					"rc=%d\n", __func__, rc);
-		}
+		lcdc_vga_panel_power(0);
+		lcdc_onboard_panel_power(0);
 	}
 
 	/*TODO if on = 0 free the gpio's */
@@ -3423,11 +3531,27 @@ static void lcd_panel_power(int on)
 
 	return;
 
-fail:
+
+fail_get_vga_5v:
+	regulator_put(reg_8901_l2);
+	reg_8901_l2 = NULL;
+
+fail_get_l2:
+	regulator_put(reg_8901_l1);
+	reg_8901_l1 = NULL;
+
+	return;
+
+
+fail_vga_enable:
+	regulator_disable(reg_8901_l1);
+fail_l1_enable:
 	regulator_put(reg_8901_l1);
 	regulator_put(reg_8901_l2);
+	regulator_put(vga_5v_reg);
 	reg_8901_l1 = NULL;
 	reg_8901_l2 = NULL;
+	vga_5v_reg = NULL;
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -3487,8 +3611,29 @@ static int hdmi_core_power(int on)
 				"8058_l16", rc);
 			return rc;
 		}
+		rc = gpio_request(170, "HDMI_DDC_CLK");
+		if (rc) {
+			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
+				"HDMI_DDC_CLK", 170, rc);
+			goto error1;
+		}
+		rc = gpio_request(171, "HDMI_DDC_DATA");
+		if (rc) {
+			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
+				"HDMI_DDC_DATA", 171, rc);
+			goto error2;
+		}
+		rc = gpio_request(172, "HDMI_HPD");
+		if (rc) {
+			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
+				"HDMI_HPD", 172, rc);
+			goto error3;
+		}
 		pr_info("%s(on): success\n", __func__);
 	} else {
+		gpio_free(170);
+		gpio_free(171);
+		gpio_free(172);
 		rc = regulator_disable(reg_8058_l16);
 		if (rc)
 			pr_warning("'%s' regulator disable failed, rc=%d\n",
@@ -3497,6 +3642,14 @@ static int hdmi_core_power(int on)
 	}
 
 	return 0;
+
+error3:
+	gpio_free(171);
+error2:
+	gpio_free(170);
+error1:
+	regulator_disable(reg_8058_l16);
+	return rc;
 }
 
 static int hdmi_cec_power(int on)
@@ -3515,8 +3668,15 @@ static int hdmi_cec_power(int on)
 				"8901_l3", rc);
 			return rc;
 		}
+		rc = gpio_request(169, "HDMI_CEC_VAR");
+		if (rc) {
+			pr_err("'%s'(%d) gpio_request failed, rc=%d\n",
+				"HDMI_CEC_VAR", 169, rc);
+			goto error;
+		}
 		pr_info("%s(on): success\n", __func__);
 	} else {
+		gpio_free(169);
 		rc = regulator_disable(reg_8901_l3);
 		if (rc)
 			pr_warning("'%s' regulator disable failed, rc=%d\n",
@@ -3525,10 +3685,31 @@ static int hdmi_cec_power(int on)
 	}
 
 	return 0;
+error:
+	regulator_disable(reg_8901_l3);
+	return rc;
 }
 #undef _GET_REGULATOR
 
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
+
+#define GPIO_DAC_PWR_SAV 104
+static int msm_fb_lcdc_gpio_config(int on)
+{
+	if (vga_enabled) {
+		/* VGA DAC power save */
+		gpio_set_value_cansleep(GPIO_DAC_PWR_SAV, !on);
+		/* backlight */
+		gpio_set_value_cansleep(30, 0);
+	} else {
+		/* VGA DAC power save */
+		gpio_set_value_cansleep(GPIO_DAC_PWR_SAV, 1);
+		/* backlight */
+		gpio_set_value_cansleep(30, !!on);
+	}
+
+	return 0;
+}
 
 static int lcdc_panel_power(int on)
 {
@@ -3547,6 +3728,7 @@ static int lcdc_panel_power(int on)
 
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_power_save   = lcdc_panel_power,
+	.lcdc_gpio_config  = msm_fb_lcdc_gpio_config,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
@@ -3555,6 +3737,10 @@ static struct msm_panel_common_pdata mdp_pdata = {
 
 static void __init msm_fb_add_devices(void)
 {
+	gpio_request(GPIO_DAC_PWR_SAV, "DAC_PWR_SAV");
+	gpio_direction_output(GPIO_DAC_PWR_SAV, 1);
+	gpio_request(30, "BACKLIGHT_EN");
+	gpio_direction_output(30, 0);
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("lcdc", &lcdc_pdata);
 	msm_fb_register_device("mipi_dsi", 0);
@@ -3629,7 +3815,13 @@ static void enable_wlan_bt(void)
 }
 #endif
 
-static void __init msm8x60_init(void)
+struct msm_board_data {
+};
+
+static struct msm_board_data msm8x60_qrdc_board_data __initdata = {
+};
+
+static void __init msm8x60_init(struct msm_board_data *board_data)
 {
 	/*
 	 * Initialize RPM first as other drivers and devices may need
@@ -3645,12 +3837,28 @@ static void __init msm8x60_init(void)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
 
-	msm_clock_init(msm_clocks_8x60, msm_num_clocks_8x60);
-	msm_clock_temp_force_on();
+
 	/* initialize SPM before acpuclock as the latter calls into SPM
 	 * driver to set ACPU voltages.
 	 */
 	msm_spm_init(msm_spm_data, ARRAY_SIZE(msm_spm_data));
+
+	/*
+	 * Disable regulator info printing so that regulator registration
+	 * messages do not enter the kmsg log.
+	 */
+	regulator_suppress_info_printing();
+
+	/* Initialize regulators needed for clock_init. */
+	platform_add_devices(early_regulators, ARRAY_SIZE(early_regulators));
+
+	msm_clock_init(msm_clocks_8x60, msm_num_clocks_8x60);
+	msm_clock_temp_force_on();
+
+	/* Buses need to be initialized before early-device registration
+	 * to get the platform data for fabrics.
+	 */
+	msm8x60_init_buses();
 	platform_add_devices(early_devices, ARRAY_SIZE(early_devices));
 	msm_acpu_clock_init(&msm8x60_acpu_clock_data);
 
@@ -3658,7 +3866,6 @@ static void __init msm8x60_init(void)
 	msm8x60_init_tlmm();
 	msm8x60_init_uart12dm();
 	msm8x60_init_mmc();
-	msm8x60_init_buses();
 	msm8x60_cfg_smsc911x();
 	platform_add_devices(qrdc_devices,
 			     ARRAY_SIZE(qrdc_devices));
@@ -3667,12 +3874,6 @@ static void __init msm8x60_init(void)
 #endif
 	msm_fb_add_devices();
 	register_i2c_devices();
-	/* BACKLIGHT */
-	gpio_request(30, "BACKLIGHT_EN");
-	gpio_direction_output(30, 0);
-	msleep(20);
-	gpio_set_value_cansleep(30, 1);
-
 
 	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
 	msm_cpuidle_set_states(msm_cstates, ARRAY_SIZE(msm_cstates),
@@ -3685,6 +3886,11 @@ static void __init msm8x60_init(void)
 #endif
 }
 
+static void __init msm8x60_qrdc_init(void)
+{
+	msm8x60_init(&msm8x60_qrdc_board_data);
+}
+
 MACHINE_START(MSM8X60_QRDC, "QCT MSM8X60 QRDC")
 #ifdef CONFIG_MSM_DEBUG_UART
 	.phys_io = MSM_DEBUG_UART_PHYS,
@@ -3692,6 +3898,6 @@ MACHINE_START(MSM8X60_QRDC, "QCT MSM8X60 QRDC")
 #endif
 	.map_io = msm8x60_map_io,
 	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_init,
+	.init_machine = msm8x60_qrdc_init,
 	.timer = &msm_timer,
 MACHINE_END

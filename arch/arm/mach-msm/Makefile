@@ -45,8 +45,8 @@ $(obj)/smd_rpc_sym.c: $(src)/smd_rpc_sym $(src)/mkrpcsym.pl
 	$(call if_changed,mkrpcsym)
 
 obj-$(CONFIG_MSM_SCM) += scm.o scm-boot.o
-obj-$(CONFIG_MSM_PIL) += peripheral-reset.o
 obj-$(CONFIG_MSM_PIL) += peripheral-loader.o
+obj-$(CONFIG_MSM_PIL) += peripheral-reset.o
 obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
 obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
@@ -136,7 +136,7 @@ obj-$(CONFIG_TROUT_H2W) += board-trout-h2w.o
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
 obj-$(CONFIG_TROUT_PWRSINK) += htc_pwrsink.o
 #obj-$(CONFIG_ARCH_MSM7X27) += board-msm7x27.o devices-msm7x27.o
-obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o
+obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o memory_topology.o
 obj-$(CONFIG_ARCH_MSM7X30) += clock-local.o clock-7x30.o acpuclock-7x30.o
 obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o devices-msm7x25.o
 
@@ -156,13 +156,17 @@ obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
 obj-$(CONFIG_MSM_RMT_STORAGE_CLIENT) += rmt_storage_client.o
 obj-$(CONFIG_PMIC8058) += pmic8058-gpio.o pmic8058-mpp.o
 obj-$(CONFIG_ARCH_MSM7X30) += spm.o
-obj-$(CONFIG_MSM_RPM) += rpm.o rpm_resources.o
+obj-$(CONFIG_MSM_RPM) += rpm.o rpm_resources.o mpm.o
 obj-$(CONFIG_MSM_RPM_LOG) += rpm_log.o
 obj-$(CONFIG_MSM_XO) += msm_xo.o
-
-obj-$(CONFIG_SMMU)		+= smmu_driver.o smmu_driver_enum.o
-obj-$(CONFIG_SMMU_8X60)		+= board-msm8x60-smmu.o
 obj-$(CONFIG_MSM_BUS_SCALING)	+= msm_bus_core.o msm_bus_fabric.o msm_bus_board_8660.o
+obj-$(CONFIG_SMMU)		+= iommu.o iommu_dev.o
+obj-$(CONFIG_SMMU_8X60)		+= devices-msm8x60-iommu.o
+
+ifdef CONFIG_VCM
+obj-$(CONFIG_ARCH_MSM8X60) += board-msm8x60-vcm.o
+endif
+
 obj-$(CONFIG_ARCH_MSM7X27) += gpiomux-7x27.o gpiomux-v1.o gpiomux.o
 obj-$(CONFIG_ARCH_MSM7X30) += gpiomux-7x30.o gpiomux-v1.o gpiomux.o
 obj-$(CONFIG_ARCH_QSD8X50) += gpiomux-8x50.o gpiomux-v1.o gpiomux.o

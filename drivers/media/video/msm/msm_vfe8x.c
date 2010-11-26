@@ -741,9 +741,14 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 					__func__, __LINE__);
 			return -EFAULT;
 		}
+			/* Validate the data from user space */
+			if (axio.output2.fragmentCount <
+				VFE_MIN_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output2.fragmentCount >
+				VFE_MAX_NUM_FRAGMENTS_PER_FRAME)
+				return -EINVAL;
 
 			vfe_config_axi(OUTPUT_2, axid, &axio);
-
 			axio.outputDataSize = 0;
 			vfe_axi_output_config(&axio);
 	}
@@ -759,6 +764,16 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 					__func__, __LINE__);
 			return -EFAULT;
 		}
+			/* Validate the data from user space */
+			if (axio.output1.fragmentCount <
+				VFE_MIN_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output1.fragmentCount >
+				VFE_MAX_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output2.fragmentCount <
+				VFE_MIN_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output2.fragmentCount >
+				VFE_MAX_NUM_FRAGMENTS_PER_FRAME)
+				return -EINVAL;
 
 			vfe_config_axi(OUTPUT_1_AND_2, axid, &axio);
 			vfe_axi_output_config(&axio);
@@ -774,6 +789,17 @@ static int vfe_config(struct msm_vfe_cfg_cmd *cmd, void *data)
 					__func__, __LINE__);
 			return -EFAULT;
 		}
+			/* Validate the data from user space */
+			if (axio.output1.fragmentCount <
+				VFE_MIN_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output1.fragmentCount >
+				VFE_MAX_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output2.fragmentCount <
+				VFE_MIN_NUM_FRAGMENTS_PER_FRAME ||
+				axio.output2.fragmentCount >
+				VFE_MAX_NUM_FRAGMENTS_PER_FRAME)
+				return -EINVAL;
+
 			vfe_config_axi(OUTPUT_1_AND_3, axid, &axio);
 			axio.outputDataSize = 0;
 			vfe_axi_output_config(&axio);

@@ -28,6 +28,7 @@
 #include "clock-8x60.h"
 #include "clock-rpm.h"
 #include "devices-msm8x60.h"
+#include "devices-msm8x60-iommu.h"
 #include "socinfo.h"
 #include <linux/dma-mapping.h>
 #include <linux/irq.h>
@@ -363,12 +364,6 @@ static struct resource kgsl_resources[] = {
 static struct msm_bus_vectors grp3d_init_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_3D,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_3D,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
@@ -376,12 +371,6 @@ static struct msm_bus_vectors grp3d_init_vectors[] = {
 };
 
 static struct msm_bus_vectors grp3d_max_vectors[] = {
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_3D,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 264000000,
-		.ib = 264000000,
-	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_3D,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
@@ -409,12 +398,6 @@ static struct msm_bus_scale_pdata grp3d_bus_scale_pdata = {
 static struct msm_bus_vectors grp2d0_init_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE0,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
@@ -422,12 +405,6 @@ static struct msm_bus_vectors grp2d0_init_vectors[] = {
 };
 
 static struct msm_bus_vectors grp2d0_max_vectors[] = {
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 264000000,
-		.ib = 264000000,
-	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE0,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
@@ -455,12 +432,6 @@ struct msm_bus_scale_pdata grp2d0_bus_scale_pdata = {
 static struct msm_bus_vectors grp2d1_init_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE1,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE1,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
@@ -468,12 +439,6 @@ static struct msm_bus_vectors grp2d1_init_vectors[] = {
 };
 
 static struct msm_bus_vectors grp2d1_max_vectors[] = {
-	{
-		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE1,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab = 264000000,
-		.ib = 264000000,
-	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_GRAPHICS_2D_CORE1,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
@@ -516,10 +481,14 @@ struct kgsl_platform_data kgsl_pdata = {
 	.min_grp3d_freq = 266667000,
 	.set_grp3d_async = NULL,
 	.imem_clk_name = NULL,
+	.imem_pclk_name = "imem_pclk",
 	.grp3d_clk_name = "gfx3d_clk",
+	.grp3d_pclk_name = "gfx3d_pclk",
 #ifdef CONFIG_MSM_KGSL_2D
 	.grp2d0_clk_name = "gfx2d0_clk", /* note: 2d clocks disabled on v1 */
+	.grp2d0_pclk_name = "gfx2d0_pclk",
 	.grp2d1_clk_name = "gfx2d1_clk",
+	.grp2d1_pclk_name = "gfx2d1_pclk",
 #else
 	.grp2d0_clk_name = NULL,
 	.grp2d1_clk_name = NULL,
@@ -1238,23 +1207,6 @@ void __init msm_clock_temp_force_on(void)
 	 * they are turned on here and left on. Once their device
 	 * drivers implement support for them, they must be removed
 	 * from this list. */
-	clk_enable(clk_get(&msm_device_sdc1.dev, "sdc_pclk"));
-	clk_enable(clk_get(&msm_device_sdc2.dev, "sdc_pclk"));
-	clk_enable(clk_get(&msm_device_sdc2.dev, "sdc_pclk"));
-	clk_enable(clk_get(&msm_device_sdc3.dev, "sdc_pclk"));
-	clk_enable(clk_get(&msm_device_sdc4.dev, "sdc_pclk"));
-	clk_enable(clk_get(NULL, "usb_hs_pclk"));
-	clk_enable(clk_get(NULL, "apu_pclk"));
-	clk_enable(clk_get(NULL, "dsi_s_pclk"));
-	clk_enable(clk_get(NULL, "gfx2d0_pclk"));
-	clk_enable(clk_get(NULL, "gfx2d1_pclk"));
-	clk_enable(clk_get(NULL, "gfx3d_pclk"));
-	clk_enable(clk_get(NULL, "hdmi_m_pclk"));
-	clk_enable(clk_get(NULL, "hdmi_s_pclk"));
-	clk_enable(clk_get(NULL, "imem_pclk"));
-	clk_enable(clk_get(NULL, "smi_pclk"));
-	clk_enable(clk_get(NULL, "smmu_pclk"));
-	clk_enable(clk_get(NULL, "vcodec_pclk"));
 }
 
 struct clk msm_clocks_8x60[] = {
@@ -1391,7 +1343,6 @@ struct clk msm_clocks_8x60[] = {
 	CLK_8X60("vcodec_clk",		VCODEC_CLK,		NULL, OFF),
 	CLK_8X60("mdp_tv_clk",		MDP_TV_CLK,		NULL, OFF),
 	CLK_8X60("hdmi_clk",		HDMI_TV_CLK,		NULL, OFF),
-	CLK_8X60("dsub_tv_clk",		DSUB_TV_CLK,		NULL, OFF),
 	CLK_8X60("hdmi_app_clk",	HDMI_APP_CLK,		NULL, OFF),
 	CLK_8X60("vpe_clk",		VPE_CLK,		NULL, OFF),
 	CLK_8X60("vfe_clk",		VFE_CLK,		NULL, OFF),
@@ -1406,7 +1357,6 @@ struct clk msm_clocks_8x60[] = {
 	CLK_8X60("vcodec_axi_clk",	VCODEC_AXI_CLK,		NULL, OFF),
 	CLK_8X60("vpe_axi_clk",		VPE_AXI_CLK,		NULL, OFF),
 	CLK_8X60("amp_pclk",		AMP_P_CLK,		NULL, OFF),
-	CLK_8X60("apu_pclk",		APU_P_CLK,		NULL, OFF),
 	CLK_8X60("csi_pclk",		CSI0_P_CLK,		NULL, OFF),
 	CLK_8X60("csi_pclk",		CSI1_P_CLK,	  WEBCAM_DEV, OFF),
 	CLK_8X60("dsi_m_pclk",		DSI_M_P_CLK,		NULL, OFF),
@@ -1420,7 +1370,6 @@ struct clk msm_clocks_8x60[] = {
 	CLK_8X60("jpegd_pclk",		JPEGD_P_CLK,		NULL, OFF),
 	CLK_8X60("imem_pclk",		IMEM_P_CLK,		NULL, OFF),
 	CLK_8X60("mdp_pclk",		MDP_P_CLK,		NULL, OFF),
-	CLK_8X60("smi_pclk",		SMI0_P_CLK,		NULL, OFF),
 	CLK_8X60("smmu_pclk",		SMMU_P_CLK,		NULL, OFF),
 	CLK_8X60("rotator_pclk",	ROT_P_CLK,		NULL, OFF),
 	CLK_8X60("tv_enc_pclk",		TV_ENC_P_CLK,		NULL, OFF),
@@ -1438,6 +1387,20 @@ struct clk msm_clocks_8x60[] = {
 	CLK_8X60("i2s_spkr_osr_clk",	SPARE_I2S_SPKR_OSR_CLK,	NULL, OFF),
 	CLK_8X60("i2s_spkr_bit_clk",	SPARE_I2S_SPKR_BIT_CLK,	NULL, OFF),
 	CLK_8X60("pcm_clk",		PCM_CLK,		NULL, OFF),
+	CLK_8X60("iommu_clk",           JPEGD_AXI_CLK,
+					&msm_device_iommu_jpegd.dev, 0),
+	CLK_8X60("iommu_clk",           VFE_AXI_CLK,
+					&msm_device_iommu_vfe.dev, 0),
+	CLK_8X60("iommu_clk",           VCODEC_AXI_CLK,
+					&msm_device_iommu_vcodec_a.dev, 0),
+	CLK_8X60("iommu_clk",           VCODEC_AXI_CLK,
+					&msm_device_iommu_vcodec_b.dev, 0),
+	CLK_8X60("iommu_clk",           GFX3D_CLK,
+					&msm_device_iommu_gfx3d.dev, 0),
+	CLK_8X60("iommu_clk",           GFX2D0_CLK,
+					&msm_device_iommu_gfx2d0.dev, 0),
+	CLK_8X60("iommu_clk",           GFX2D1_CLK,
+					&msm_device_iommu_gfx2d1.dev, 0),
 };
 
 unsigned msm_num_clocks_8x60 = ARRAY_SIZE(msm_clocks_8x60);

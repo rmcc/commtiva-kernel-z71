@@ -86,6 +86,7 @@
 #include <mach/msm_reqs.h>
 #include <mach/qdsp5v2/mi2s.h>
 #include <mach/qdsp5v2/audio_dev_ctl.h>
+#include <mach/sdio_al.h>
 #include "smd_private.h"
 
 #define MSM_PMEM_SF_SIZE	0x1700000
@@ -221,10 +222,10 @@ static ssize_t tma300_vkeys_show(struct kobject *kobj,
 			struct kobj_attribute *attr, char *buf)
 {
 	return sprintf(buf,
-	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":60:879:120:80"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":180:879:120:80"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":300:879:120:80"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":420:879:120:80"
+	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":50:842:80:100"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":170:842:80:100"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":290:842:80:100"
+	":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":410:842:80:100"
 	"\n");
 }
 
@@ -343,8 +344,10 @@ static int cyttsp_platform_resume(struct i2c_client *client)
 static struct cyttsp_platform_data cyttsp_data = {
 	.panel_maxx = 479,
 	.panel_maxy = 799,
-	.disp_maxx = 479,
+	.disp_maxx = 469,
 	.disp_maxy = 799,
+	.disp_minx = 10,
+	.disp_miny = 0,
 	.flags = 0,
 	.gen = CY_GEN3,	/* or */
 	.use_st = CY_USE_ST,
@@ -1489,6 +1492,7 @@ static int __init buses_init(void)
 
 static struct vreg *vreg_marimba_1;
 static struct vreg *vreg_marimba_2;
+static struct vreg *vreg_marimba_3;
 
 static struct msm_gpio timpani_reset_gpio_cfg[] = {
 { GPIO_CFG(TIMPANI_RESET_GPIO, 0, GPIO_CFG_OUTPUT,
@@ -1572,6 +1576,34 @@ static void msm_timpani_shutdown_power(void)
 
 	msm_gpios_free(timpani_reset_gpio_cfg,
 				   ARRAY_SIZE(timpani_reset_gpio_cfg));
+};
+
+static unsigned int msm_bahama_setup_power(void)
+{
+	int rc;
+
+	rc = vreg_enable(vreg_marimba_3);
+	if (rc) {
+		printk(KERN_ERR "%s: vreg_enable() = %d\n",
+				__func__, rc);
+	}
+
+	return rc;
+};
+
+static unsigned int msm_bahama_shutdown_power(int value)
+{
+	int rc = 0;
+
+	if (value != BAHAMA_ID) {
+		rc = vreg_disable(vreg_marimba_3);
+		if (rc) {
+			printk(KERN_ERR "%s: return val: %d\n",
+					__func__, rc);
+		}
+	}
+
+	return rc;
 };
 
 static unsigned int msm_marimba_setup_power(void)
@@ -1708,6 +1740,9 @@ static struct marimba_fm_platform_data marimba_fm_pdata = {
 #define MARIMBA_SLAVE_ID_FM_ADDR	0x2A
 #define MARIMBA_SLAVE_ID_CDC_ADDR	0x77
 #define MARIMBA_SLAVE_ID_QMEMBIST_ADDR	0X66
+
+#define BAHAMA_SLAVE_ID_FM_ADDR         0x2A
+#define BAHAMA_SLAVE_ID_QMEMBIST_ADDR   0x7B
 
 static const char *tsadc_id = "MADC";
 static const char *vregs_tsadc_name[] = {
@@ -1892,20 +1927,27 @@ static struct marimba_platform_data marimba_pdata = {
 	.slave_id[MARIMBA_SLAVE_ID_FM]       = MARIMBA_SLAVE_ID_FM_ADDR,
 	.slave_id[MARIMBA_SLAVE_ID_CDC]	     = MARIMBA_SLAVE_ID_CDC_ADDR,
 	.slave_id[MARIMBA_SLAVE_ID_QMEMBIST] = MARIMBA_SLAVE_ID_QMEMBIST_ADDR,
+	.slave_id[SLAVE_ID_BAHAMA_FM]        = BAHAMA_SLAVE_ID_FM_ADDR,
+	.slave_id[SLAVE_ID_BAHAMA_QMEMBIST]  = BAHAMA_SLAVE_ID_QMEMBIST_ADDR,
 	.marimba_setup = msm_marimba_setup_power,
 	.marimba_shutdown = msm_marimba_shutdown_power,
+	.bahama_setup = msm_bahama_setup_power,
+	.bahama_shutdown = msm_bahama_shutdown_power,
 	.fm = &marimba_fm_pdata,
 	.codec = &mariba_codec_pdata,
 };
 
 static void __init msm7x30_init_marimba(void)
 {
+	int rc;
+
 	vreg_marimba_1 = vreg_get(NULL, "s3");
 	if (IS_ERR(vreg_marimba_1)) {
 		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
 			__func__, PTR_ERR(vreg_marimba_1));
 		return;
 	}
+	rc = vreg_set_level(vreg_marimba_1, 1800);
 
 	vreg_marimba_2 = vreg_get(NULL, "gp16");
 	if (IS_ERR(vreg_marimba_1)) {
@@ -1913,6 +1955,15 @@ static void __init msm7x30_init_marimba(void)
 			__func__, PTR_ERR(vreg_marimba_1));
 		return;
 	}
+	rc = vreg_set_level(vreg_marimba_2, 1200);
+
+	vreg_marimba_3 = vreg_get(NULL, "usb2");
+	if (IS_ERR(vreg_marimba_3)) {
+		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
+			__func__, PTR_ERR(vreg_marimba_3));
+		return;
+	}
+	rc = vreg_set_level(vreg_marimba_3, 1800);
 }
 
 static struct marimba_codec_platform_data timpani_codec_pdata = {
@@ -2978,11 +3029,22 @@ static int hsusb_rpc_connect(int connect)
 static struct vreg *vreg_3p3;
 static int msm_hsusb_ldo_init(int init)
 {
+	uint32_t version = 0;
+	int def_vol = 3400;
+
+	version = socinfo_get_version();
+
+	if (SOCINFO_VERSION_MAJOR(version) >= 2 &&
+			SOCINFO_VERSION_MINOR(version) >= 1) {
+		def_vol = 3075;
+		pr_debug("%s: default voltage:%d\n", __func__, def_vol);
+	}
+
 	if (init) {
 		vreg_3p3 = vreg_get(NULL, "usb");
 		if (IS_ERR(vreg_3p3))
 			return PTR_ERR(vreg_3p3);
-		vreg_set_level(vreg_3p3, 3400);
+		vreg_set_level(vreg_3p3, def_vol);
 	} else
 		vreg_put(vreg_3p3);
 
@@ -3465,13 +3527,15 @@ static struct kgsl_platform_data kgsl_pdata = {
 	.max_grp2d_freq = 0,
 	.min_grp2d_freq = 0,
 	.set_grp2d_async = NULL, /* HW workaround, run Z180 SYNC @ 192 MHZ */
-	.max_grp3d_freq = 245 * 1000*1000,
+	.max_grp3d_freq = 245760000,
 	.min_grp3d_freq = 192 * 1000*1000,
 	.set_grp3d_async = set_grp3d_async,
 	.imem_clk_name = "imem_clk",
 	.grp3d_clk_name = "grp_clk",
+	.grp3d_pclk_name = "grp_pclk",
 #ifdef CONFIG_MSM_KGSL_2D
 	.grp2d0_clk_name = "grp_2d_clk",
+	.grp2d0_pclk_name = "grp_2d_pclk",
 #else
 	.grp2d0_clk_name = NULL,
 #endif
@@ -3856,6 +3920,7 @@ int mdp_core_clk_rate_table[] = {
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
+	.hw_revision_addr = 0xac001270,
 	.gpio = 30,
 	.mdp_core_clk_rate = 122880000,
 	.mdp_core_clk_table = mdp_core_clk_rate_table,
@@ -4266,23 +4331,169 @@ static int marimba_bt(int on)
 	return 0;
 }
 
-static const char *vregs_bt_name[] = {
+static int bahama_bt(int on)
+{
+	int rc;
+	int i;
+	struct marimba config = { .mod_id = SLAVE_ID_BAHAMA };
+
+	struct bahama_config_register {
+		u8 reg;
+		u8 value;
+		u8 mask;
+	};
+
+	struct bahama_variant_register {
+		const size_t size;
+		const struct bahama_config_register *set;
+	};
+
+	const struct bahama_config_register *p;
+
+	u8 version;
+
+	const struct bahama_config_register v10_bt_on[] = {
+		{ 0xE9, 0x00, 0xFF },
+		{ 0xF4, 0x80, 0xFF },
+		{ 0xF0, 0x06, 0xFF },
+		{ 0xE4, 0x00, 0xFF },
+		{ 0xE5, 0x00, 0x0F },
+		{ 0xE6, 0x38, 0x7F },
+		{ 0xE7, 0x06, 0xFF },
+		{ 0x11, 0x13, 0xFF },
+		{ 0xE9, 0x21, 0xFF },
+		{ 0x01, 0x0C, 0x1F },
+		{ 0x01, 0x08, 0x1F },
+	};
+
+	const struct bahama_config_register v10_bt_off[] = {
+		{ 0xE9, 0x00, 0xFF },
+	};
+
+	const struct bahama_variant_register bt_bahama[2][1] = {
+		{
+			{ ARRAY_SIZE(v10_bt_off), v10_bt_off },
+		},
+		{
+			{ ARRAY_SIZE(v10_bt_on), v10_bt_on },
+		}
+	};
+
+	on = on ? 1 : 0;
+
+	rc = marimba_read_bit_mask(&config, 0x00,  &version, 1, 0x1F);
+	if (rc < 0) {
+		dev_err(&msm_bt_power_device.dev,
+			"%s: version read failed: %d\n",
+			__func__, rc);
+		return rc;
+	} else {
+		dev_info(&msm_bt_power_device.dev,
+			"%s: version read got: 0x%x\n",
+			__func__, version);
+	}
+
+	switch (version) {
+	case 0x08: /* varient of bahama vers zero, same software if */
+		version = 0x00;
+	case 0x00:
+		break;
+	default:
+		version = 0xFF;
+	}
+
+	if ((version >= ARRAY_SIZE(bt_bahama[on])) ||
+	    (bt_bahama[on][version].size == 0)) {
+		dev_err(&msm_bt_power_device.dev,
+			"%s: unsupported version\n",
+			__func__);
+		return -EIO;
+	}
+
+	p = bt_bahama[on][version].set;
+
+	dev_info(&msm_bt_power_device.dev,
+		"%s: found version %d\n", __func__, version);
+
+	for (i = 0; i < bt_bahama[on][version].size; i++) {
+		u8 value = (p+i)->value;
+		rc = marimba_write_bit_mask(&config,
+			(p+i)->reg,
+			&value,
+			sizeof((p+i)->value),
+			(p+i)->mask);
+		if (rc < 0) {
+			dev_err(&msm_bt_power_device.dev,
+				"%s: reg %d write failed: %d\n",
+				__func__, (p+i)->reg, rc);
+			return rc;
+		}
+		dev_info(&msm_bt_power_device.dev,
+			"%s: reg 0x%02x write value 0x%02x mask 0x%02x\n",
+				__func__, (p+i)->reg,
+				value, (p+i)->mask);
+	}
+	return 0;
+}
+
+static int bahama_present(void)
+{
+	int id;
+	switch (id = adie_get_detected_connectivity_type()) {
+	case BAHAMA_ID:
+		return 1;
+
+	case MARIMBA_ID:
+		return 0;
+
+	case TIMPANI_ID:
+	default:
+		dev_err(&msm_bt_power_device.dev,
+			"%s: unexpected adie connectivity type: %d\n",
+			__func__, id);
+		return -ENODEV;
+	}
+}
+
+static const char *vregs_bt_marimba_name[] = {
+	"s3",
+	"s2",
 	"gp16",
+	"wlan"
+};
+static struct vreg *vregs_bt_marimba[ARRAY_SIZE(vregs_bt_marimba_name)];
+
+static const char *vregs_bt_bahama_name[] = {
+	"s3",
+	"usb2",
 	"s2",
 	"wlan"
 };
-static struct vreg *vregs_bt[ARRAY_SIZE(vregs_bt_name)];
+static struct vreg *vregs_bt_bahama[ARRAY_SIZE(vregs_bt_bahama_name)];
 
-static int bluetooth_power_regulators(int on)
+static int bluetooth_power_regulators(int on, int bahama_not_marimba)
 {
 	int i, rc;
+	const char **vregs_name;
+	struct vreg **vregs;
+	int vregs_size;
 
-	for (i = 0; i < ARRAY_SIZE(vregs_bt_name); i++) {
-		rc = on ? vreg_enable(vregs_bt[i]) :
-			  vreg_disable(vregs_bt[i]);
+	if (bahama_not_marimba) {
+		vregs_name = vregs_bt_bahama_name;
+		vregs = vregs_bt_bahama;
+		vregs_size = ARRAY_SIZE(vregs_bt_bahama_name);
+	} else {
+		vregs_name = vregs_bt_marimba_name;
+		vregs = vregs_bt_marimba;
+		vregs_size = ARRAY_SIZE(vregs_bt_marimba_name);
+	}
+
+	for (i = 0; i < vregs_size; i++) {
+		rc = on ? vreg_enable(vregs[i]) :
+			  vreg_disable(vregs[i]);
 		if (rc < 0) {
 			printk(KERN_ERR "%s: vreg %s %s failed (%d)\n",
-				__func__, vregs_bt_name[i],
+				__func__, vregs_name[i],
 			       on ? "enable" : "disable", rc);
 			return -EIO;
 		}
@@ -4295,6 +4506,14 @@ static int bluetooth_power(int on)
 	int rc;
 	const char *id = "BTPW";
 
+	int bahama_not_marimba = bahama_present();
+
+	if (bahama_not_marimba == -1) {
+		printk(KERN_WARNING "%s: bahama_present: %d\n",
+				__func__, bahama_not_marimba);
+		return -ENODEV;
+	}
+
 	if (on) {
 		rc = pmapp_vreg_level_vote(id, PMAPP_VREG_S2, 1300);
 		if (rc < 0) {
@@ -4303,7 +4522,7 @@ static int bluetooth_power(int on)
 			return rc;
 		}
 
-		rc = bluetooth_power_regulators(on);
+		rc = bluetooth_power_regulators(on, bahama_not_marimba);
 		if (rc < 0)
 			return -EIO;
 
@@ -4317,7 +4536,7 @@ static int bluetooth_power(int on)
 			gpio_set_value(
 				GPIO_PIN(bt_config_clock->gpio_cfg), 1);
 
-		rc = marimba_bt(on);
+		rc = (bahama_not_marimba ? bahama_bt(on) : marimba_bt(on));
 		if (rc < 0)
 			return -EIO;
 
@@ -4349,7 +4568,7 @@ static int bluetooth_power(int on)
 		if (platform_get_drvdata(&msm_bt_power_device) == NULL)
 			goto out;
 
-		rc = marimba_bt(on);
+		rc = (bahama_not_marimba ? bahama_bt(on) : marimba_bt(on));
 		if (rc < 0)
 			return -EIO;
 
@@ -4358,7 +4577,7 @@ static int bluetooth_power(int on)
 		if (rc < 0)
 			return -EIO;
 
-		rc = bluetooth_power_regulators(on);
+		rc = bluetooth_power_regulators(on, bahama_not_marimba);
 		if (rc < 0)
 			return -EIO;
 
@@ -4379,12 +4598,22 @@ static void __init bt_power_init(void)
 {
 	int i, rc;
 
-	for (i = 0; i < ARRAY_SIZE(vregs_bt_name); i++) {
-		vregs_bt[i] = vreg_get(NULL, vregs_bt_name[i]);
-		if (IS_ERR(vregs_bt[i])) {
+	for (i = 0; i < ARRAY_SIZE(vregs_bt_marimba_name); i++) {
+		vregs_bt_marimba[i] = vreg_get(NULL, vregs_bt_marimba_name[i]);
+		if (IS_ERR(vregs_bt_marimba[i])) {
 			printk(KERN_ERR "%s: vreg get %s failed (%ld)\n",
-			       __func__, vregs_bt_name[i],
-			       PTR_ERR(vregs_bt[i]));
+			       __func__, vregs_bt_marimba_name[i],
+			       PTR_ERR(vregs_bt_marimba[i]));
+			return;
+		}
+	}
+
+	for (i = 0; i < ARRAY_SIZE(vregs_bt_bahama_name); i++) {
+		vregs_bt_bahama[i] = vreg_get(NULL, vregs_bt_bahama_name[i]);
+		if (IS_ERR(vregs_bt_bahama[i])) {
+			printk(KERN_ERR "%s: vreg get %s failed (%ld)\n",
+			       __func__, vregs_bt_bahama_name[i],
+			       PTR_ERR(vregs_bt_bahama[i]));
 			return;
 		}
 	}
@@ -4455,11 +4684,32 @@ static struct msm_gpio mdm2ap_status = {
 	"mdm2ap_status"
 };
 
+
+static int configure_mdm2ap_status(int on)
+{
+	if (on)
+		return msm_gpios_request_enable(&mdm2ap_status, 1);
+	else {
+		msm_gpios_disable_free(&mdm2ap_status, 1);
+		return 0;
+	}
+}
+
+static int get_mdm2ap_status(void)
+{
+	return gpio_get_value(GPIO_PIN(mdm2ap_status.gpio_cfg));
+}
+
+static struct sdio_al_platform_data sdio_al_pdata = {
+	.config_mdm2ap_status = configure_mdm2ap_status,
+	.get_mdm2ap_status = get_mdm2ap_status,
+};
+
 struct platform_device msm_device_sdio_al = {
 	.name = "msm_sdio_al",
 	.id = -1,
 	.dev		= {
-		.platform_data	= &mdm2ap_status,
+		.platform_data	= &sdio_al_pdata,
 	},
 };
 
@@ -4559,6 +4809,8 @@ static struct platform_device *devices[] __initdata = {
 #endif
 	&msm_batt_device,
 	&msm_adc_device,
+	&msm_ebi0_thermal,
+	&msm_ebi1_thermal
 };
 
 static struct msm_gpio msm_i2c_gpios_hw[] = {
@@ -6110,10 +6362,14 @@ static void __init msm7x30_init(void)
 						GPIO_CFG_OUTPUT,
 						GPIO_CFG_NO_PULL,
 						GPIO_CFG_2MA);
+	uint32_t soc_version = 0;
 
 	if (socinfo_init() < 0)
 		printk(KERN_ERR "%s: socinfo_init() failed!\n",
 		       __func__);
+
+	soc_version = socinfo_get_version();
+
 	msm_clock_init(msm_clocks_7x30, msm_num_clocks_7x30);
 #ifdef CONFIG_SERIAL_MSM_CONSOLE
 	msm7x30_init_uart2();
@@ -6130,6 +6386,12 @@ static void __init msm7x30_init(void)
 #endif
 
 #ifdef CONFIG_USB_MSM_OTG_72K
+	if (SOCINFO_VERSION_MAJOR(soc_version) >= 2 &&
+			SOCINFO_VERSION_MINOR(soc_version) >= 1) {
+		pr_debug("%s: SOC Version:2.(1 or more)\n", __func__);
+		msm_otg_pdata.ldo_set_voltage = 0;
+	}
+
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 #ifdef CONFIG_USB_GADGET
 	msm_otg_pdata.swfi_latency =

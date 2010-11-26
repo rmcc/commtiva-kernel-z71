@@ -320,8 +320,10 @@ void mdp4_clear_lcdc(void)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 
 	bits = inpdw(MDP_BASE + 0xc0000);
-	if (bits & 0x01) /* enabled already */
+	if (bits & 0x01) { /* enabled already */
+		mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 		return;
+	}
 
 	outpdw(MDP_BASE + 0xc0004, 0);	/* vsync ctrl out */
 	outpdw(MDP_BASE + 0xc0008, 0);	/* vsync period */
@@ -370,7 +372,13 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 			that histogram works.*/
 			MDP_OUTP(MDP_BASE + 0x95010, 1);
 			outpdw(MDP_BASE + 0x9501c, INTR_HIST_DONE);
+			if (mdp_is_hist_start == TRUE) {
+				MDP_OUTP(MDP_BASE + 0x95004,
+						mdp_hist.frame_cnt);
+				MDP_OUTP(MDP_BASE + 0x95000, 1);
+			}
 		}
+
 
 		if (isr & INTR_EXTERNAL_INTF_UDERRUN)
 			mdp4_stat.intr_underrun_e++;
@@ -409,7 +417,7 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		}
 		if (isr & INTR_DMA_S_DONE) {
 			mdp4_stat.intr_dma_s++;
-#ifdef MDP4_MDDI_DMA_SWITCH
+#if defined(CONFIG_FB_MSM_OVERLAY) && defined(CONFIG_FB_MSM_MDDI)
 			dma = &dma2_data;
 			dma->busy = FALSE;
 			mdp_pipe_ctrl(MDP_DMA_S_BLOCK,
@@ -456,6 +464,14 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 #endif
 #endif
 			}
+#ifdef CONFIG_FB_MSM_MIPI_DSI
+			else if (panel & MDP4_PANEL_DSI_CMD) {
+				dma->busy = FALSE;
+				mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK,
+					MDP_BLOCK_POWER_OFF, TRUE);
+				mdp4_overlay0_done_dsi_cmd();
+			}
+#endif
 #ifdef CONFIG_FB_MSM_MDDI
 			else {	/* MDDI */
 				dma->busy = FALSE;

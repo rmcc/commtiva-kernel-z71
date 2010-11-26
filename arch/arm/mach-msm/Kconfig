@@ -69,6 +69,7 @@ config ARCH_MSM8X60
 	select MSM_RPM
 	select MSM_XO
 	select MSM_GPIOMUX
+	select MSM_BUS_SCALING
 
 endchoice
 
@@ -343,6 +344,20 @@ config MACH_MSM8X60_FLUID
 	  8x60 target which has a form factor that is much closer to that
 	  of a phone than other targets. It also has a new display and
 	  touchscreen controller.
+
+config MACH_MSM8X60_CHARM_SURF
+	depends on ARCH_MSM8X60
+	default n
+	bool "MSM8x60 CHARM SURF"
+	help
+	  Support for the Qualcomm MSM8x60 Charm SURF device.
+
+config MACH_MSM8X60_CHARM_FFA
+	depends on ARCH_MSM8X60
+	default n
+	bool "MSM8x60 CHARM FFA"
+	help
+	  Support for the Qualcomm MSM8x60 Charm FFA device.
 
 endmenu
 
@@ -674,7 +689,7 @@ config MSM_SMD_DEBUG
 	  between the ARM9 and ARM11
 
 config MSM_SDIO_AL
-	depends on (ARCH_MSM7X30 && HAS_WAKELOCK)
+	depends on ((ARCH_MSM7X30 || ARCH_MSM8X60) && HAS_WAKELOCK)
 	default y
 	tristate "SDIO-Abstraction-Layer"
 	help
@@ -1133,6 +1148,14 @@ choice
 		bool "Reset the entire chip"
 endchoice
 
+config MSM_IDLE_WAIT_ON_MODEM
+	int "Wait for Modem to become ready for idle power collapse"
+	default 0
+	help
+	  If Modem is not ready to handle Application Processor's request
+	  for idle power collapse, wait the number of microseconds in case
+	  Modem becomes ready soon.
+
 config MSM_PIL
 	bool "Peripheral image loading"
 	select FW_LOADER
@@ -1178,26 +1201,32 @@ config MSM_RPM_LOG
 config SMMU
 	bool "System MMU support"
 	depends on MMU
-	select VCM_MM
+	select IOMMU_API
 	select SMMU_8X60 if ARCH_MSM8X60
 	depends on ARCH_MSM8X60
 	default n
 	help
 	  This is the System MMU driver for 8x60.
 
-config SMMU_PGTABLES_L2
+config IOMMU_PGTABLES_L2
 	bool "Allow SMMU page tables in the L2 cache (Experimental)"
 	depends on SMMU=y
 	depends on MMU
 	depends on CPU_DCACHE_DISABLE=n
+	depends on SMP
 	default y
 	help
-	 Improves page fault latency at the expense of potential L2 pollution.
+	 Improves TLB miss latency at the expense of potential L2 pollution.
+	 However, with large multimedia buffers, the TLB should mostly contain
+	 section mappings and TLB misses should be quite infrequent.
 	 Most people can probably say Y here.
 
 config MSM_DIRECT_SCLK_ACCESS
 	bool "Direct access to the SCLK timer"
 	default n
+
+config IOMMU_API
+       bool
 
 config MSM_GPIOMUX
 	bool

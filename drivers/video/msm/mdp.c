@@ -676,6 +676,11 @@ irqreturn_t mdp_isr(int irq, void *ptr)
 			 to normal.*/
 			MDP_OUTP(MDP_BASE + 0x94010, 1);
 			MDP_OUTP(MDP_BASE + 0x9401c, 2);
+			if (mdp_is_hist_start == TRUE) {
+				MDP_OUTP(MDP_BASE + 0x94004,
+						 mdp_hist.frame_cnt);
+				MDP_OUTP(MDP_BASE + 0x94000, 1);
+			}
 		}
 		/* LCDC Frame Start */
 		if (mdp_interrupt & LCDC_FRAME_START) {
@@ -920,11 +925,10 @@ static int pdev_list_cnt;
 static int mdp_resource_initialized;
 static struct msm_panel_common_pdata *mdp_pdata;
 
-#ifdef CONFIG_ARCH_MSM7X30
-uint32 mdp_revision;
+uint32 mdp_hw_revision;
 
 /*
- * mdp_revision:
+ * mdp_hw_revision:
  * 0 == V1
  * 1 == V2
  * 2 == V2.1
@@ -935,21 +939,29 @@ void mdp_hw_version(void)
 	char *cp;
 	uint32 *hp;
 
-	cp = (char *)ioremap(0xac001000, 0x400);/* tlmm gpio-1 shadow */
+	if (mdp_pdata == NULL)
+		return;
+
+	mdp_hw_revision = MDP4_REVISION_NONE;
+	if (mdp_pdata->hw_revision_addr == 0)
+		return;
+
+	/* tlmmgpio2 shadow */
+	cp = (char *)ioremap(mdp_pdata->hw_revision_addr, 0x16);
 
 	if (cp == NULL)
 		return;
 
-	hp = (uint32 *)(cp + 0x270);	/* HW_REVISION_NUMBER */
-	mdp_revision = *hp;
+	hp = (uint32 *)cp;	/* HW_REVISION_NUMBER */
+	mdp_hw_revision = *hp;
 	iounmap(cp);
 
-	mdp_revision >>= 28;	/* bit 31:28 */
-	mdp_revision &= 0x0f;
+	mdp_hw_revision >>= 28;	/* bit 31:28 */
+	mdp_hw_revision &= 0x0f;
 
-	printk(KERN_INFO "%s: mdp_revision=%x\n", __func__, mdp_revision);
+	printk(KERN_INFO "%s: mdp_hw_revision=%x\n",
+				__func__, mdp_hw_revision);
 }
-#endif
 
 #ifdef CONFIG_MSM_BUS_SCALING
 static uint32_t mdp_bus_scale_handle;
@@ -1068,13 +1080,12 @@ static int mdp_probe(struct platform_device *pdev)
 		if (rc)
 			return rc;
 
+		mdp_hw_version();
+
 		/* initializing mdp hw */
 #ifdef CONFIG_FB_MSM_MDP40
 		mdp4_hw_init();
 		mdp4_fetch_cfg(clk_get_rate(mdp_clk));
-#ifdef CONFIG_ARCH_MSM7X30
-		mdp_hw_version();
-#endif
 #else
 		mdp_hw_init();
 #endif
@@ -1196,9 +1207,6 @@ static int mdp_probe(struct platform_device *pdev)
 		break;
 
 	case MIPI_CMD_PANEL:
-		pdata->on = mdp4_dsi_cmd_on;
-		pdata->off = mdp4_dsi_cmd_off;
-		mfd->hw_refresh = TRUE;
 		mfd->dma_fnc = mdp4_dsi_cmd_overlay;
 		if (mfd->panel_info.pdest == DISPLAY_1) {
 			if_no = PRIMARY_INTF_SEL;

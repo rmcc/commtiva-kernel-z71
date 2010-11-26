@@ -1887,10 +1887,14 @@ FUNCTION:  tavarua_vidioc_querycap
 static int tavarua_vidioc_querycap(struct file *file, void *priv,
 		struct v4l2_capability *capability)
 {
+	struct tavarua_device *radio = video_get_drvdata(video_devdata(file));
+
 	strlcpy(capability->driver, DRIVER_NAME, sizeof(capability->driver));
 	strlcpy(capability->card, DRIVER_CARD, sizeof(capability->card));
 	sprintf(capability->bus_info, "I2C");
 	capability->capabilities = V4L2_CAP_TUNER | V4L2_CAP_RADIO;
+
+	capability->version = radio->chipID;
 
 	return 0;
 }
@@ -2958,6 +2962,8 @@ static int  __init tavarua_probe(struct platform_device *pdev)
 	radio->tune_req = 0;
 	/* initialize wait queue for event read */
 	init_waitqueue_head(&radio->event_queue);
+	/* initialize wait queue for raw rds read */
+	init_waitqueue_head(&radio->read_queue);
 
 	video_set_drvdata(radio->videodev, radio);
     /*Start the worker thread for event handling and register read_int_stat
@@ -3027,7 +3033,6 @@ static struct platform_driver tavarua_driver = {
 		.owner  = THIS_MODULE,
 		.name   = "marimba_fm",
 	},
-	.probe = tavarua_probe,
 	.remove = __devexit_p(tavarua_remove),
 	.suspend = tavarua_suspend,
 	.resume = tavarua_resume,
@@ -3050,7 +3055,7 @@ FUNCTION:  radio_module_init
 static int __init radio_module_init(void)
 {
 	printk(KERN_INFO DRIVER_DESC ", Version " DRIVER_VERSION "\n");
-	return platform_driver_register(&tavarua_driver);
+	return platform_driver_probe(&tavarua_driver, tavarua_probe);
 }
 
 /*==============================================================

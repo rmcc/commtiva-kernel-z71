@@ -35,6 +35,7 @@
 #include <mach/qdsp5v2/qdsp5audpreproccmdi.h>
 #include <mach/qdsp5v2/qdsp5audpreprocmsg.h>
 #include <mach/qdsp5v2/qdsp5audppmsg.h>
+#include <mach/qdsp5v2/afe.h>
 #include <mach/qdsp5v2/audio_acdbi.h>
 #include <mach/qdsp5v2/acdb_commands.h>
 #include <mach/qdsp5v2/audio_acdb_def.h>
@@ -139,7 +140,12 @@ static s32 acdb_set_calibration_blk(unsigned long arg)
 	s32 result = 0;
 
 	MM_DBG("acdb_set_calibration_blk\n");
-	memcpy(&acdb_cmd, (struct acdb_cmd_device *)arg, sizeof(acdb_cmd));
+	if (copy_from_user(&acdb_cmd, (struct acdb_cmd_device *)arg,
+			sizeof(acdb_cmd))) {
+		MM_ERR("Failed copy command struct from user in"
+			"acdb_set_calibration_blk\n");
+		return -EFAULT;
+	}
 	acdb_cmd.phys_buf = (u32 *)acdb_data.paddr;
 
 	MM_DBG("acdb_cmd.phys_buf %x\n", (u32)acdb_cmd.phys_buf);
@@ -174,7 +180,12 @@ static s32 acdb_get_calibration_blk(unsigned long arg)
 
 	MM_DBG("acdb_get_calibration_blk\n");
 
-	memcpy(&acdb_cmd, (struct acdb_cmd_device *)arg, sizeof(acdb_cmd));
+	if (copy_from_user(&acdb_cmd, (struct acdb_cmd_device *)arg,
+			sizeof(acdb_cmd))) {
+		MM_ERR("Failed copy command struct from user in"
+			"acdb_get_calibration_blk\n");
+		return -EFAULT;
+	}
 	acdb_cmd.phys_buf = (u32 *)acdb_data.paddr;
 	MM_ERR("acdb_cmd.phys_buf %x\n", (u32)acdb_cmd.phys_buf);
 
@@ -1031,9 +1042,37 @@ static s32 acdb_fill_audpreproc_cal_gain(void)
 	return 0;
 }
 
+static struct acdb_rmc_block *get_rmc_blk(void)
+{
+	struct header *prs_hdr;
+	u32 index = 0;
+
+	while (index < acdb_data.acdb_result.used_bytes) {
+		prs_hdr = (struct header *)(acdb_data.virt_addr + index);
+		if (prs_hdr->dbor_signature == DBOR_SIGNATURE) {
+			if (prs_hdr->abid == ABID_AUDIO_RMC_TX) {
+				if (prs_hdr->iid ==
+					IID_AUDIO_RMC_PARAM) {
+					MM_DBG("Got afe_rmc block\n");
+					return (struct acdb_rmc_block *)
+						(acdb_data.virt_addr + index
+						+ sizeof(struct header));
+				}
+			} else {
+				index += prs_hdr->data_len +
+					sizeof(struct header);
+			}
+		} else {
+			break;
+		}
+	}
+	return NULL;
+}
+
 s32 acdb_calibrate_audpreproc(void)
 {
 	s32	result = 0;
+	struct acdb_rmc_block *acdb_rmc = NULL;
 
 	result = acdb_fill_audpreproc_agc();
 	if (!IS_ERR_VALUE(result)) {
@@ -1075,11 +1114,25 @@ s32 acdb_calibrate_audpreproc(void)
 			goto done;
 		} else
 			MM_DBG("AUDPREPROC is calibrated"
-				" with calib_gain_tx \n");
+				" with calib_gain_tx\n");
 	}
+	acdb_rmc = get_rmc_blk();
+	if (acdb_rmc != NULL) {
+		result = afe_config_rmc_block(acdb_rmc);
+		if (result) {
+			MM_ERR("ACDB=> Failed to send rmc"
+				" data to afe\n");
+			result = -EINVAL;
+			goto done;
+		} else
+			MM_DBG("AFE is calibrated with rmc params\n");
+	} else
+		MM_DBG("RMC block was not found\n");
+
 done:
 	return result;
 }
+
 static s32 acdb_send_calibration(void)
 {
 	s32 result = 0;
