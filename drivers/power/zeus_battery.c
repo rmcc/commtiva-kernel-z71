@@ -47,6 +47,7 @@
 #include <mach/msm_hsusb.h>
 #endif
 
+#include <linux/earlysuspend.h>
 
 #define GPIO_CHR_DET 39		// Input power-good (USB port/adapter present indicator) pin
 #define GPIO_CHR_FLT 32		// Over-voltage fault flag
@@ -174,6 +175,7 @@ struct zeus_battery_update {
 	struct wake_lock wakelock;
 	struct work_struct zeus_batt_work;
 	struct workqueue_struct *wqueue;
+	struct early_suspend zeus_early_suspend;
 	ktime_t last_poll;
 	u8 slow_poll;
 };
@@ -1023,7 +1025,8 @@ static int zeus_battery_get_property(struct power_supply *psy,
 	return ret;
 }
 
-#define BATTERY_POLLING_TIMER  60//300000 10000
+#define BATTERY_POLLING_TIMER  60
+#define BATTERY_POLLING_TIMER_SLOW  BATTERY_POLLING_TIMER*15
 
 static void zeus_battery_alarm(struct alarm *alarm)
 {
@@ -1062,10 +1065,9 @@ static void zeus_battery_work(struct work_struct *work)
 	/* prevent suspend before starting the alarm */
 	local_irq_save(flags);
 
-	zeus_program_alarm(zbu, get_suspend_state() == PM_SUSPEND_MEM ? 
-			(BATTERY_POLLING_TIMER*3) : BATTERY_POLLING_TIMER);
-
+	zeus_program_alarm(zbu, (zbu->slow_poll == 1 BATTERY_POLLING_TIMER_SLOW ? : BATTERY_POLLING_TIMER));
 	wake_unlock(&zbu->wakelock);
+
 	local_irq_restore(flags);
 
 }
@@ -1094,6 +1096,27 @@ static irqreturn_t chgdet_irqhandler(int irq, void *dev_id)
 #endif	// FLAG_CHARGER_DETECT
 #endif	// T_FIH	///-T_FIH
 
+static void zeus_early_suspend(struct early_suspend *h)
+{
+	struct zeus_battery_update *zbu = container_of(h, struct zeus_battery_update, zeus_early_suspend);
+
+	if (!zbu->slow_poll) {
+		zbu->slow_poll = 1;
+		zeus_program_alarm(zbu, BATTERY_POLLING_TIMER_SLOW);
+	}
+	return;
+}
+
+static void zeus_late_resume(struct early_suspend *h)
+{
+	struct zeus_battery_update *zbu = container_of(h, struct zeus_battery_update, zeus_early_suspend);
+
+	if (zbu->slow_poll) {
+		zeus_program_alarm(zbu, BATTERY_POLLING_TIMER);
+		zbu->slow_poll = 0;
+	}
+	return;
+}
 
 static int zeus_battery_probe(struct platform_device *pdev)
 {
@@ -1215,7 +1238,7 @@ static int zeus_battery_probe(struct platform_device *pdev)
 		/* } FIH; Tiger; 2009/8/15 */
 		gpio_set_value(GPIO_CHR_EN,1);//Disable chager
 	}
-		
+
 	INIT_WORK(&zbu->zeus_batt_work, zeus_battery_work);
 	zbu->wqueue = create_freezeable_workqueue(dev_name(&pdev->dev));
 	zbu->last_poll = alarm_get_elapsed_realtime();
@@ -1237,7 +1260,7 @@ static int zeus_battery_probe(struct platform_device *pdev)
 
 #ifdef T_FIH	///+T_FIH
 
-    	/* init power supplier framework */
+	/* init power supplier framework */
 	ret = power_supply_register(&pdev->dev, &zeus_battery);
 	if (ret) {
 		printk(KERN_ERR "Failed to register power supply (%d)\n", ret);
@@ -1260,8 +1283,10 @@ static int zeus_battery_probe(struct platform_device *pdev)
 #endif	// FLAG_CHARGER_DETECT
 #endif	// T_FIH	///-T_FIH
 
-
-
+	zbu->zeus_early_suspend.suspend = zeus_early_suspend;
+	zbu->zeus_early_suspend.resume  = zeus_late_resume;
+	zbu->zeus_early_suspend.level   = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
+	register_early_suspend(&zbu->zeus_early_suspend);
 
 	return 0;
 
@@ -1271,6 +1296,8 @@ static int zeus_battery_remove(struct platform_device *pdev)
 {
 
 	struct zeus_battery_update *zbu = platform_get_drvdata(pdev);
+
+    	unregister_early_suspend(&zbu->zeus_early_suspend);
 
 #ifdef T_FIH	///+T_FIH
 #ifdef FLAG_CHARGER_DETECT
@@ -1341,7 +1368,6 @@ void zeus_update_usb_status(enum chg_type chgtype) {
 }
 EXPORT_SYMBOL(zeus_update_usb_status);
 #endif
-
 
 static struct platform_driver zeus_battery_device = {
 	.probe		= zeus_battery_probe,
