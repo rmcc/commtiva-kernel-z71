@@ -852,6 +852,13 @@ static void ar6000_pwr_on(AR_SOFTC_T *ar)
      *
      * the end of the sampe code.
      */
+     gpio_direction_output(35,0);
+     mdelay(10);
+     gpio_direction_output(96,1);
+     mdelay(10);
+     gpio_direction_output(35,1);
+     mdelay(10);
+
 }
 
 static void ar6000_pwr_down(AR_SOFTC_T *ar)
@@ -872,6 +879,10 @@ static void ar6000_pwr_down(AR_SOFTC_T *ar)
      *
      * the end of the sampe code.
      */
+	gpio_direction_output(96,0);
+	gpio_direction_output(35,0);
+	mdelay(10);
+
 }
 
 #ifdef CONFIG_HAS_EARLYSUSPEND

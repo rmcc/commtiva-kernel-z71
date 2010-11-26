@@ -801,11 +801,6 @@ int HIFDoDeviceResume(HIF_DEVICE *device)
     A_STATUS ret = A_OK;
 
     if (device->is_suspend) {
-        if (ret) {
-            AR_DEBUG_PRINTF(ATH_DEBUG_ERROR, ("AR6000: %s(), Unable to set block size 0x%x  AR6K: 0x%X\n",
-					  __FUNCTION__, HIF_MBOX_BLOCK_SIZE, ret));
-            return ret;
-        }
         device->is_suspend = FALSE;
         /* create async I/O thread */
         if (!device->async_task) {
