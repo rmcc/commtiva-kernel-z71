@@ -44,10 +44,9 @@ static DEFINE_SPINLOCK(bt_power_lock);
 static int bluetooth_toggle_radio(void *data, bool blocked)
 {
 	int ret;
-	int (*power_control)(int enable);
-
-	power_control = data;
+	spin_lock(&bt_power_lock);
 	ret = (*power_control)(!blocked);
+	spin_unlock(&bt_power_lock);
 	return ret;
 }
 
