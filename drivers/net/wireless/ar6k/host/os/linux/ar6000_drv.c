@@ -81,7 +81,7 @@ enum {
 #define WOW_ENABLE_MAX_INTERVAL 0
 #include <linux/platform_device.h>
 #include <linux/inetdevice.h>
-int buspm = WLAN_PWR_CTRL_WOW;
+int buspm = WLAN_PWR_CTRL_CUT_PWR;
 int wow2mode = WLAN_PWR_CTRL_DEEP_SLEEP;
 int wowledon;
 #endif /* CONFIG_PM */
