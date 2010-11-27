@@ -41,17 +41,13 @@ static int (*power_control)(int enable);
 
 static DEFINE_SPINLOCK(bt_power_lock);
 
-static bool previous;
-
 static int bluetooth_toggle_radio(void *data, bool blocked)
 {
-	int ret = 0;
+	int ret;
 	int (*power_control)(int enable);
 
 	power_control = data;
-	if (previous != blocked)
-		ret = (*power_control)(!blocked);
-	previous = blocked;
+	ret = (*power_control)(!blocked);
 	return ret;
 }
 
@@ -119,7 +115,6 @@ static int bluetooth_power_rfkill_probe(struct platform_device *pdev)
 
 	/* force Bluetooth off during init to allow for user control */
 	rfkill_init_sw_state(rfkill, 1);
-	previous = 1;
 
 	ret = rfkill_register(rfkill);
 	if (ret) {
