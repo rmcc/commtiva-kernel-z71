@@ -145,31 +145,17 @@ static int bt_status = 0;
 #ifdef CONFIG_USB_ANDROID
 static char *usb_functions_default[] = {
     "usb_mass_storage",
-#ifdef CONFIG_MODEM_SUPPORT
-    "modem",
-#endif
     "nmea",
     "rmnet",
-#ifdef CONFIG_USB_ANDROID_DIAG
     "diag",
-#endif
 };
 
 static char *usb_functions_default_adb[] = {
     "usb_mass_storage",
     "adb",
-#ifdef CONFIG_USB_F_SERIAL
-#ifdef CONFIG_MODEM_SUPPORT
-    "modem",
-#endif
     "nmea",
-#endif
-#ifdef CONFIG_USB_ANDROID_RMNET
     "rmnet",
-#endif
-#ifdef CONFIG_USB_ANDROID_DIAG
     "diag",
-#endif
 };
 
 static char *usb_functions_rndis[] = {
@@ -187,19 +173,16 @@ static char *usb_functions_all[] = {
        "usb_mass_storage",
        "adb",
 #ifdef CONFIG_USB_F_SERIAL
-#ifdef CONFIG_MODEM_SUPPORT
-       "modem",
-#endif
        "nmea",
 #endif
 #ifdef CONFIG_USB_ANDROID_RMNET
        "rmnet",
 #endif
-#ifdef CONFIG_USB_ANDROID_DIAG
-       "diag",
-#endif
 #ifdef CONFIG_USB_ANDROID_ACM
        "acm",
+#endif
+#ifdef CONFIG_USB_ANDROID_DIAG
+       "diag",
 #endif
 };
 
@@ -228,7 +211,7 @@ static struct android_usb_product usb_products[] = {
 
 static struct usb_mass_storage_platform_data mass_storage_pdata = {
     .nluns      = 1,
-    .vendor     = "Qualcomm Incorporated",
+    .vendor     = "Android",
     .product        = "Mass storage",
     .release    = 0x0100,
 };
@@ -257,7 +240,7 @@ static struct platform_device rndis_device = {
 
 static struct android_usb_platform_data android_usb_pdata = {
 	.vendor_id  = 0x489,
-	.product_id = 0xC001,
+	.product_id = 0xC004,
 	.version	= 0x0100,
 	.product_name	= "Z71 Phone",
 	.manufacturer_name = "Commtiva",
@@ -871,7 +854,6 @@ static int bluetooth_power(int on)
 {
 	int module_status=0,prev_status=0;
 	bool bConfigWIFI;
-	int value = 0;
 	/* FIH, WilsonWHLee, 2009/07/30 { */
 	/* [FXX_CR], re-configure GPIO when BT turn on/off */
 #if CONFIG_BT
@@ -1733,10 +1715,10 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_USB_ANDROID
 	&usb_mass_storage_device,
 	&rndis_device,
-	&android_usb_device,
 #ifdef CONFIG_USB_ANDROID_DIAG
 	&usb_diag_device,
 #endif
+	&android_usb_device,
 #endif
 	&msm_device_i2c,
 	&msm_device_tssc,
@@ -2223,10 +2205,11 @@ extern int  spi_gpio_init(void); //lcm_innolux
 /* FIH, Chandler Kang, 2009/05/18 } */
 
 // +++ FIH, KarenLiao, 20090518: Add for headset detection.
+/*
 static void __init init_headset_sensor(void)
 {	
 	gpio_direction_input(40);
-}
+}*/
 
 
 static ssize_t fxx_virtual_keys_show(struct kobject *kobj,
