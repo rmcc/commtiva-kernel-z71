@@ -81,7 +81,7 @@ enum {
 #define WOW_ENABLE_MAX_INTERVAL 0
 #include <linux/platform_device.h>
 #include <linux/inetdevice.h>
-int buspm = WLAN_PWR_CTRL_CUT_PWR;
+int buspm = WLAN_PWR_CTRL_WOW;
 int wow2mode = WLAN_PWR_CTRL_DEEP_SLEEP;
 int wowledon;
 #endif /* CONFIG_PM */
@@ -927,7 +927,7 @@ wow_not_connected:
             ar->arWowState = WOW_STATE_SUSPENDED;
             //HIFMaskInterrupt((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
             /* leave for pm_device to setup wow */
-            status = A_EBUSY;
+            status = A_OK;
         } else {
             pmmode = wow2mode;
             goto wow_not_connected;
