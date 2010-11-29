@@ -374,7 +374,6 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		 * programming mode even when things go wrong.
 		 */
 		if (brq.cmd.error || brq.data.error || brq.stop.error) {
-#ifndef CONFIG_FIH_FXX
 			if (brq.data.blocks > 1 && rq_data_dir(req) == READ) {
 				/* Redo read one sector at a time */
 				printk(KERN_WARNING "%s: retrying using single "
@@ -382,7 +381,6 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				disable_multi = 1;
 				continue;
 			}
-#endif
 			status = get_card_status(card, req);
 		} else if (disable_multi == 1) {
 			disable_multi = 0;
@@ -424,11 +422,7 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				if (err) {
 					printk(KERN_ERR "%s: error %d requesting status\n",
 					       req->rq_disk->disk_name, err);
-#ifdef CONFIG_FIH_FXX
-					break;
-#else
 					goto cmd_err;
-#endif
 				}
 				/*
 				 * Some cards mishandle the status bits,
@@ -448,12 +442,6 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 		}
 
 		if (brq.cmd.error || brq.stop.error || brq.data.error) {
-#ifdef CONFIG_FIH_FXX
-			spin_lock_irq(&md->lock);
-			ret = __blk_end_request(req, -EIO, brq.data.blksz);
-			spin_unlock_irq(&md->lock);
-			continue;
-#else
 			if (rq_data_dir(req) == READ) {
 				/*
 				 * After an error, we redo I/O one sector at a
@@ -465,7 +453,6 @@ static int mmc_blk_issue_rq(struct mmc_queue *mq, struct request *req)
 				spin_unlock_irq(&md->lock);
 				continue;
 			}
-#endif
 			goto cmd_err;
 		}
 
