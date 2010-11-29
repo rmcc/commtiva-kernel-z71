@@ -1813,6 +1813,8 @@ msmsdcc_runtime_suspend(struct device *dev)
 		 * the host so that any resume requests after this will
 		 * simple become pm usage counter increment operations.
 		 */
+		if (!((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
+				mmc->card->type == MMC_TYPE_SDIO)) {
 		pm_runtime_get_noresume(dev);
 		rc = mmc_suspend_host(mmc);
 		pm_runtime_put_noidle(dev);
@@ -1825,9 +1827,8 @@ msmsdcc_runtime_suspend(struct device *dev)
 			mmc->ios.clock = 0;
 			mmc->ops->set_ios(host->mmc, &host->mmc->ios);
 		}
+		} else {
 
-		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
-				mmc->card->type == MMC_TYPE_SDIO) {
 			host->sdio_irq_disabled = 0;
 			enable_irq_wake(host->plat->sdiowakeup_irq);
 			enable_irq(host->plat->sdiowakeup_irq);
@@ -1852,7 +1853,7 @@ msmsdcc_runtime_resume(struct device *dev)
 		spin_lock_irqsave(&host->lock, flags);
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
-		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) &&
+		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) &&
 				!host->sdio_irq_disabled) {
 			if (mmc->card && mmc->card->type == MMC_TYPE_SDIO) {
 				disable_irq_nosync(host->plat->sdiowakeup_irq);
@@ -1865,16 +1866,19 @@ msmsdcc_runtime_resume(struct device *dev)
 
 		spin_unlock_irqrestore(&host->lock, flags);
 
-		mmc_resume_host(mmc);
+		if (!((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
+					mmc->card->type == MMC_TYPE_SDIO)) {
+			mmc_resume_host(mmc);
+		}
 
 		/*
 		 * After resuming the host wait for sometime so that
 		 * the SDIO work will be processed.
 		 */
-		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) && release_lock)
+		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && release_lock)
 			wake_lock_timeout(&host->sdio_wlock, 1);
 
-		 wake_unlock(&host->sdio_suspend_wlock);
+		wake_unlock(&host->sdio_suspend_wlock);
 	}
 	return 0;
 }
