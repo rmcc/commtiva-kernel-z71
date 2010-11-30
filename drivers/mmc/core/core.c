@@ -71,7 +71,9 @@ MODULE_PARM_DESC(
 static int mmc_schedule_delayed_work(struct delayed_work *work,
 				     unsigned long delay)
 {
+#ifndef CONFIG_AR6K
 	wake_lock(&mmc_delayed_work_wake_lock);
+#endif
 	return queue_delayed_work(workqueue, work, delay);
 }
 
@@ -1125,7 +1127,9 @@ void mmc_rescan(struct work_struct *work)
 
 	mmc_bus_put(host);
 
-
+#ifdef CONFIG_AR6K
+	wake_lock(&mmc_delayed_work_wake_lock);
+#endif
 	mmc_bus_get(host);
 
 	/* if there still is a card present, stop here */

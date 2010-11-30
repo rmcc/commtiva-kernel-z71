@@ -277,6 +277,23 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
 
+#ifdef CONFIG_AR6K
+	{
+		struct mmc_card tempcard;
+		tempcard.host = host;
+		mmc_io_rw_direct(&tempcard, 1, 0, SDIO_CCCR_ABORT, 0x08, NULL);
+	}
+
+	/*
+	 * Since we're changing the OCR value, we seem to
+	 * need to tell some cards to go back to the idle
+	 * state.  We wait 1ms to give cards time to
+	 * respond.
+	 */
+	mmc_go_idle(host);
+#endif
+
+
 	/*
 	 * Inform the card of the voltage
 	 */
@@ -371,7 +388,11 @@ static int mmc_sdio_init_card(struct mmc_host *host, u32 ocr,
 			goto err;
 		}
 		card = oldcard;
+#ifdef CONFIG_AR6K
+		/* continue to setup high speed, wide and clock rate */
+#else
 		return 0;
+#endif
 	}
 
 	/*

@@ -1095,11 +1095,28 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 	else
 		clk |= MCI_CLK_WIDEBUS_1;
 
+#ifdef CONFIG_AR6K
+	if (host->pdev_id != 2) {
+		if (msmsdcc_is_pwrsave(host))
+			clk |= MCI_CLK_PWRSAVE;
+	} else {
+		clk &= ~((u32)MCI_CLK_PWRSAVE);
+	}
+#else
 	if (msmsdcc_is_pwrsave(host))
 		clk |= MCI_CLK_PWRSAVE;
+#endif
 
 	clk |= MCI_CLK_FLOWENA;
+#ifdef CONFIG_AR6K
+	if (host->pdev_id != 2) {
+		clk |= MCI_CLK_SELECTIN; /* feedback clock */
+	} else {
+		clk &= ~((u32)MCI_CLK_SELECTIN);
+	}
+#else
 	clk |= MCI_CLK_SELECTIN; /* feedback clock */
+#endif
 
 	if (host->plat->translate_vdd)
 		pwr |= host->plat->translate_vdd(mmc_dev(mmc), ios->vdd);
@@ -1653,10 +1670,16 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc_add_host(mmc);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
+#ifdef CONFIG_AR6K
+	if (host->pdev_id != 2) {
+#endif
 	host->early_suspend.suspend = msmsdcc_early_suspend;
 	host->early_suspend.resume  = msmsdcc_late_resume;
 	host->early_suspend.level   = EARLY_SUSPEND_LEVEL_DISABLE_FB;
 	register_early_suspend(&host->early_suspend);
+#ifdef CONFIG_AR6K
+	}
+#endif
 #endif
 
 	pr_info("%s: Qualcomm MSM SDCC at 0x%016llx irq %d,%d dma %d\n",
@@ -1780,7 +1803,13 @@ static int msmsdcc_remove(struct platform_device *pdev)
 	mmc_free_host(mmc);
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
+#ifdef CONFIG_AR6K
+	if (host->pdev_id != 2) {
+#endif
 	unregister_early_suspend(&host->early_suspend);
+#ifdef CONFIG_AR6K
+	}
+#endif
 #endif
 	pm_runtime_disable(&(pdev)->dev);
 	pm_runtime_set_suspended(&(pdev)->dev);
@@ -1813,12 +1842,14 @@ msmsdcc_runtime_suspend(struct device *dev)
 		 * the host so that any resume requests after this will
 		 * simple become pm usage counter increment operations.
 		 */
-		if (!((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
-				mmc->card->type == MMC_TYPE_SDIO)) {
 		pm_runtime_get_noresume(dev);
+#ifdef CONFIG_AR6K
+		if (host->pdev_id != 2)
+#endif
 		rc = mmc_suspend_host(mmc);
 		pm_runtime_put_noidle(dev);
 
+#ifndef CONFIG_AR6K
 		if (!rc) {
 			/*
 			 * If MMC core level suspend is not supported, turn
@@ -1827,14 +1858,17 @@ msmsdcc_runtime_suspend(struct device *dev)
 			mmc->ios.clock = 0;
 			mmc->ops->set_ios(host->mmc, &host->mmc->ios);
 		}
-		} else {
+#endif
 
+		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
+				mmc->card->type == MMC_TYPE_SDIO) {
 			host->sdio_irq_disabled = 0;
 			enable_irq_wake(host->plat->sdiowakeup_irq);
 			enable_irq(host->plat->sdiowakeup_irq);
 		}
 		host->sdcc_suspending = 0;
 	}
+
 	return rc;
 }
 
@@ -1847,10 +1881,13 @@ msmsdcc_runtime_resume(struct device *dev)
 	int release_lock = 0;
 
 	if (mmc) {
+#ifndef CONFIG_AR6K
 		mmc->ios.clock = host->clk_rate;
 		mmc->ops->set_ios(host->mmc, &host->mmc->ios);
+#endif
 
 		spin_lock_irqsave(&host->lock, flags);
+
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
 		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) &&
@@ -1866,10 +1903,10 @@ msmsdcc_runtime_resume(struct device *dev)
 
 		spin_unlock_irqrestore(&host->lock, flags);
 
-		if (!((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
-					mmc->card->type == MMC_TYPE_SDIO)) {
-			mmc_resume_host(mmc);
-		}
+#ifdef CONFIG_AR6K
+		if (host->pdev_id != 2)
+#endif
+		mmc_resume_host(mmc);
 
 		/*
 		 * After resuming the host wait for sometime so that
