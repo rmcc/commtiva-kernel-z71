@@ -62,7 +62,6 @@ A_TIMER dhcp_timer;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 #include <linux/wakelock.h>
 #endif
-#include <linux/earlysuspend.h>
 #endif
 #ifdef CONFIG_PM
 enum {
@@ -88,6 +87,7 @@ int wowledon;
 
 unsigned int processDot11Hdr = 0;
 
+#define AR_DEBUG_PRINTF(args...) printk(KERN_DEBUG args)
 /* ATHENV */
 #ifdef ANDROID_ENV
 
@@ -101,9 +101,6 @@ const char *def_ifname = "ath0";
 struct wake_lock ar6k_init_wake_lock;
 struct wake_lock ar6k_wow_wake_lock;
 static int screen_is_off;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static struct early_suspend ar6k_early_suspend;
-#endif
 
 char *fm_path = NULL;
 char *tgt_fw = "/system/etc/firmware/athwlan.bin.z77";
@@ -889,12 +886,20 @@ static void ar6000_pwr_down(AR_SOFTC_T *ar)
 
 static void android_early_suspend(struct early_suspend *h)
 {
+	AR_SOFTC_T *ar;
 	screen_is_off = 1;
+	ar = container_of(h, AR_SOFTC_T, ar6k_early_suspend);
+
+	ar6000_suspend_ev(ar);
 }
 
 static void android_late_resume(struct early_suspend *h)
 {
+	AR_SOFTC_T *ar;
 	screen_is_off = 0;
+	ar = container_of(h, AR_SOFTC_T, ar6k_early_suspend);
+
+	ar6000_resume_ev(ar);
 }
 
 #endif
@@ -916,7 +921,7 @@ wow_not_connected:
             ar->arOsPowerCtrl = WLAN_PWR_CTRL_DEEP_SLEEP;
             AR_DEBUG_PRINTF("%s:Suspend for deep sleep mode %d\n", __func__, ar->arOsPowerCtrl);
         }              
-        status = A_OK;
+        status = A_EBUSY;
         break;
     case WLAN_PWR_CTRL_WOW:
         if (ar->arWmiReady && ar->arWlanState==WLAN_ENABLED && ar->arConnected) {
@@ -924,10 +929,9 @@ wow_not_connected:
             AR_DEBUG_PRINTF("%s: Suspend for wow mode %d\n", __func__, ar->arOsPowerCtrl);
             ar6000_wow_suspend(ar);
             A_MDELAY(250);
-            ar->arWowState = WOW_STATE_SUSPENDED;
             //HIFMaskInterrupt((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
             /* leave for pm_device to setup wow */
-            status = A_OK;
+            status = A_EBUSY;
         } else {
             pmmode = wow2mode;
             goto wow_not_connected;
@@ -952,7 +956,6 @@ static A_STATUS ar6000_resume_ev(void *context)
     AR_SOFTC_T *ar = (AR_SOFTC_T *)context;
     A_UINT16 powerCtrl = ar->arOsPowerCtrl;
     AR_DEBUG_PRINTF("%s: enter previous state %d\n", __func__, powerCtrl);
-    ar->arOsPowerCtrl = WLAN_PWR_CTRL_UP;
     switch (powerCtrl) {
     case WLAN_PWR_CTRL_WOW:
         //HIFUnMaskInterrupt((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
@@ -969,7 +972,7 @@ static A_STATUS ar6000_resume_ev(void *context)
     case WLAN_PWR_CTRL_UP:
         break;
     default:
-        AR_DEBUG_PRINTF("%s: Strange SDIO bus power mode!!\n", __func__);
+        AR_DEBUG_PRINTF("%s: Strange SDIO bus power mode!!\n", __func__, powerCtrl);
         break; 
     }
     return A_OK;
@@ -977,7 +980,6 @@ static A_STATUS ar6000_resume_ev(void *context)
 
 static int ar6000_pm_suspend(struct platform_device *dev, pm_message_t state)
 {
-    A_STATUS status = A_OK;
     int i;
     for (i = 0; i < MAX_AR6000; i++) {
         AR_SOFTC_T *ar;
@@ -986,13 +988,6 @@ static int ar6000_pm_suspend(struct platform_device *dev, pm_message_t state)
             continue;
         ar = (AR_SOFTC_T*)netdev_priv(ar6000_devices[i]);
         AR_DEBUG_PRINTF("%s: enter status %d\n", __func__, ar->arOsPowerCtrl);
-
-        if(buspm == WLAN_PWR_CTRL_WOW) {
-            status = HIFDoDeviceSuspend((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
-            AR_DEBUG_PRINTF("AR6000: Setup WoW successfully\n");
-            return status;
-        }
-
         switch (ar->arOsPowerCtrl) {
         case WLAN_PWR_CTRL_CUT_PWR:
             ar6000_pwr_down(ar);
@@ -1021,7 +1016,6 @@ static int ar6000_pm_suspend(struct platform_device *dev, pm_message_t state)
 
 static int ar6000_pm_resume(struct platform_device *dev)
 {
-    A_STATUS status = A_OK;
     int i;
     for (i = 0; i < MAX_AR6000; i++) {
         AR_SOFTC_T *ar;
@@ -1030,13 +1024,6 @@ static int ar6000_pm_resume(struct platform_device *dev)
             continue;
         ar = (AR_SOFTC_T*)netdev_priv(ar6000_devices[i]);
         AR_DEBUG_PRINTF("%s: enter status %d\n", __func__, ar->arOsPowerCtrl);
-
-        if(buspm == WLAN_PWR_CTRL_WOW) {
-            status = HIFDoDeviceResume((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
-            AR_DEBUG_PRINTF("Ar6000: Resume from WoW successfully\n");
-            return status;
-        }
-
         switch (ar->arOsPowerCtrl) {
         case WLAN_PWR_CTRL_CUT_PWR:
             ar6000_pwr_on(ar);
@@ -1069,25 +1056,13 @@ static int ar6000_pm_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void ar6000_pm_release(struct device *dev)
-{
-}
-
-static struct platform_driver ar6000_pm_drv = {
+static struct platform_driver ar6000_pm_device = {
 	.probe		= ar6000_pm_probe,
 	.remove		= ar6000_pm_remove,
 	.suspend	= ar6000_pm_suspend,
 	.resume		= ar6000_pm_resume,
 	.driver		= {
 			.name = "wlan_ar6000_pm_dev",
-	},
-};
-
-static struct platform_device ar6000_pm_dev = {
-	.name   = "wlan_ar6000_pm_dev",
-	.id     = -1,
-	.dev = {
-		.release = ar6000_pm_release,
 	},
 };
 
@@ -1141,7 +1116,7 @@ ar6000_init_module(void)
     A_MEMZERO(&osdrvCallbacks,sizeof(osdrvCallbacks));
     osdrvCallbacks.deviceInsertedHandler = ar6000_avail_ev;
     osdrvCallbacks.deviceRemovedHandler = ar6000_unavail_ev;
-#if defined(CONFIG_PM)
+#if defined(CONFIG_PM) && !defined (CONFIG_HAS_EARLYSUSPEND)
     osdrvCallbacks.deviceSuspendHandler = ar6000_suspend_ev;
     osdrvCallbacks.deviceResumeHandler = ar6000_resume_ev;
 #endif
@@ -1170,29 +1145,17 @@ ar6000_init_module(void)
 #ifdef ANDROID_ENV
     wake_lock_init(&ar6k_init_wake_lock, WAKE_LOCK_SUSPEND, "ar6k_init");
     wake_lock_init(&ar6k_wow_wake_lock, WAKE_LOCK_SUSPEND, "ar6k_wow");
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    ar6k_early_suspend.suspend = android_early_suspend;
-    ar6k_early_suspend.resume  = android_late_resume;
-    ar6k_early_suspend.level   = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
-    register_early_suspend(&ar6k_early_suspend);
-#endif
-
 #endif
 /* ATHENV */
 
 /* ATHENV */
 #if defined(CONFIG_PM)
-    /* Register ar6000_pm_drv into system.
+    /* Register ar6000_pm_device into system.
      * We should also add platform_device into the first item of array devices[] in
      * file arch/xxx/mach-xxx/board-xxxx.c
      * Otherwise, WoW may not work properly since we may trigger WoW GPIO before system suspend
      */
-
-    if(platform_device_register(&ar6000_pm_dev))
-        printk("ar6000: fail to register the power control device.\n");
-
-    if (platform_driver_register(&ar6000_pm_drv))
+    if (platform_driver_register(&ar6000_pm_device))
         printk("ar6000: fail to register the power control driver.\n");
 #endif
 /* ATHENV */
@@ -1235,17 +1198,13 @@ ar6000_cleanup_module(void)
 
 /* ATHENV */
 #ifdef ANDROID_ENV
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    unregister_early_suspend(&ar6k_early_suspend);
-#endif
     wake_lock_destroy(&ar6k_wow_wake_lock);
     wake_lock_destroy(&ar6k_init_wake_lock);
 #endif
 /* ATHENV */
 
 #ifdef CONFIG_PM
-    platform_driver_unregister(&ar6000_pm_drv);
-    platform_device_unregister(&ar6000_pm_dev);
+    platform_driver_unregister(&ar6000_pm_device);
 #endif
     ar6000_enable_mmchost_detect_change(1);
 
@@ -1437,8 +1396,7 @@ void android_ar6k_check_wow_status(AR_SOFTC_T *ar, struct sk_buff *skb, A_BOOL i
         /* Wow resume from irq interrupt */
         AR_DEBUG_PRINTF("%s: WoW resume from irq thread status %d\n", 
                         __func__, ar->arOsPowerCtrl);
-        ar6000_wow_resume(ar);
-        ar->arOsPowerCtrl = WLAN_PWR_CTRL_UP;
+        ar6000_resume_ev(ar);
     } else if (screen_is_off && skb && ar->arConnected) {
         A_BOOL needWake = FALSE;
         if (isEvent) {
@@ -2161,6 +2119,13 @@ ar6000_avail_ev(void *context, void *hif_handle)
 
     is_netdev_registered = 1;
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    ar->ar6k_early_suspend.suspend = android_early_suspend;
+    ar->ar6k_early_suspend.resume  = android_late_resume;
+    ar->ar6k_early_suspend.level   = EARLY_SUSPEND_LEVEL_BLANK_SCREEN;
+    register_early_suspend(&ar->ar6k_early_suspend);
+#endif
+
     return A_OK;
 }
 
@@ -2347,6 +2312,10 @@ ar6000_destroy(struct net_device *dev, unsigned int unregister)
     }
 
     ar->bIsDestroyProgress = TRUE;
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+    unregister_early_suspend(&ar->ar6k_early_suspend);
+#endif
 
     if (down_interruptible(&ar->arSem)) {
         AR_DEBUG_PRINTF("%s(): down_interruptible failed \n", __func__);
