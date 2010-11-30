@@ -87,7 +87,6 @@ int wowledon;
 
 unsigned int processDot11Hdr = 0;
 
-#define AR_DEBUG_PRINTF(args...) printk(KERN_DEBUG args)
 /* ATHENV */
 #ifdef ANDROID_ENV
 
