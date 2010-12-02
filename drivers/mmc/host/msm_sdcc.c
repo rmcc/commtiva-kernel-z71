@@ -1849,16 +1849,17 @@ msmsdcc_runtime_suspend(struct device *dev)
 		rc = mmc_suspend_host(mmc);
 		pm_runtime_put_noidle(dev);
 
-#ifndef CONFIG_AR6K
 		if (!rc) {
 			/*
 			 * If MMC core level suspend is not supported, turn
 			 * off clocks to allow deep sleep (TCXO shutdown).
 			 */
+#ifdef CONFIG_FIH_FXX
+			if (host->pdev_id != 1)
+#endif
 			mmc->ios.clock = 0;
 			mmc->ops->set_ios(host->mmc, &host->mmc->ios);
 		}
-#endif
 
 		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
 				mmc->card->type == MMC_TYPE_SDIO) {
@@ -1881,10 +1882,11 @@ msmsdcc_runtime_resume(struct device *dev)
 	int release_lock = 0;
 
 	if (mmc) {
-#ifndef CONFIG_AR6K
+#ifdef CONFIG_FIH_FXX
+		if (host->pdev_id != 1)
+#endif
 		mmc->ios.clock = host->clk_rate;
 		mmc->ops->set_ios(host->mmc, &host->mmc->ios);
-#endif
 
 		spin_lock_irqsave(&host->lock, flags);
 
