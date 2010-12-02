@@ -995,9 +995,6 @@ static int ar6000_pm_suspend(struct platform_device *dev, pm_message_t state)
             if (ar->arTxPending[ar->arControlEp]) {
                 AR_DEBUG_PRINTF("Fail to setup WoW. Pending wmi control data %d\n", ar->arTxPending[ar->arControlEp]);
                 ar->arWowState = WOW_STATE_NONE;
-	    } else if (!ar->arConnected) {
-		ar6000_suspend_ev(ar);
-		return -EAGAIN;
             } else {
                 ar->arWowState = WOW_STATE_SUSPENDED;
                 AR_DEBUG_PRINTF("Setup WoW successfully\n");
