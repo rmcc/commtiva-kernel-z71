@@ -30,7 +30,6 @@
 //chandler_failon
 static int mddi_write_ret=0;
 extern u32 mddi_msg_level;
-extern void mddi_host_reinit(void);
 extern int mddi_host_register_write_non_block(uint32 reg_addr,uint32 reg_val,boolean wait, 
                                     mddi_llist_done_cb_type done_cb, mddi_host_type host);
 
@@ -89,26 +88,17 @@ EXPORT_SYMBOL(fih_lcm_is_mddi_type);
 /*  Add this flag to skip 1st lcd on, 
     because bootload has init before. 
 */
-static int panel_first_on=1; 
 
 static int wintek_lcd_on(struct platform_device *pdev)
 {
     // lcm_wintek
 	/* Set the MDP pixel data attributes for Primary Display */
     
-#if 1  //workaround for baseline release
-	if(panel_first_on==1) {
-        goto ignore;
-    }
-#endif 
-
     if( (FIH_READ_HWID_FROM_SMEM() >= CMCS_CTP_PR1 && FIH_READ_HWID_FROM_SMEM() <= CMCS_CTP_MP3 ) ||
         (FIH_READ_HWID_FROM_SMEM() >= CMCS_7627_PR1 && FIH_READ_HWID_FROM_SMEM() <= CMCS_HW_VER_MAX ))
     {
 /* FIH, ChandlerKang ,09.12.14 { */
         //chandler_failon
-        int retry=0;
-RETRY:    
 
 /* FIH, ChandlerKang, 10.2.10, for innolux mddi panel { */    
         if(mddi_panel_id == MDDI_ID_INL)
@@ -117,18 +107,18 @@ RETRY:
             panel_on_wintek_30pins();
 /* FIH, ChandlerKang, 10.2.10, for innolux mddi panel } */
 
+#if 0
         if(mddi_write_ret==-1 && !retry){
             mddi_write_ret=0;
     	    mddi_host_reinit();
     	    retry=1;
             goto RETRY;
     	}
+#endif
 /* FIH, ChandlerKang ,09.12.14 } */
     }else{
         panel_on_wintek_24pins();
     }
-ignore:    
-    panel_first_on=0;
     
 	return 0;
 }

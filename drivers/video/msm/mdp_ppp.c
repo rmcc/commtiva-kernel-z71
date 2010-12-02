@@ -1614,15 +1614,8 @@ int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req)
 				 */
 				iBuf.roi.width = tmp_v;
 			}
-#if 0				
-			printk(KERN_INFO "%s():  roi-final:(%d,%d)(%d,%d)\n", __func__, 
-			iBuf.roi.width, iBuf.roi.height, iBuf.roi.dst_width, iBuf.roi.dst_height);
-#endif		
-			if(iBuf.roi.width<=16)
-				mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);
-			else{
-				printk(KERN_ERR "%s(): roi.width(%d) > 16, skip ppp.\n",__func__,iBuf.roi.width);
-			}
+
+			mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);
 		}
 	} else {
 		mdp_start_ppp(mfd, &iBuf, req, p_src_file, p_dst_file);

@@ -770,14 +770,7 @@ struct clk msm_clocks_7x27[] = {
 	CLK_PCOM("imem_clk",	IMEM_CLK,	NULL, OFF),
 	CLK_PCOM("mdc_clk",	MDC_CLK,	NULL, 0),
 	CLK_PCOM("mddi_clk",	PMDH_CLK,	NULL, OFF | CLK_MINMAX),
-/* { FIH, ChandlerKang, chandler_porting, 09/9/24 */
-#ifdef CONFIG_FIH_FXX    
-    CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, 0),
-#else
 	CLK_PCOM("mdp_clk",	MDP_CLK,	NULL, OFF),
-#endif
-/* } FIH, ChandlerKang, 09/9/24 */
-
 	CLK_PCOM("mdp_lcdc_pclk_clk", MDP_LCDC_PCLK_CLK, NULL, 0),
 	CLK_PCOM("mdp_lcdc_pad_pclk_clk", MDP_LCDC_PAD_PCLK_CLK, NULL, 0),
 	CLK_PCOM("mdp_vsync_clk",	MDP_VSYNC_CLK,  NULL, OFF),
