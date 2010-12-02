@@ -853,7 +853,7 @@ static void init_Bluetooth_gpio_table(void)
 static int bluetooth_power(int on)
 {
 	int module_status=0,prev_status=0;
-	bool bConfigWIFI;
+	bool bConfigWIFI = false;
 	/* FIH, WilsonWHLee, 2009/07/30 { */
 	/* [FXX_CR], re-configure GPIO when BT turn on/off */
 #if CONFIG_BT
@@ -2016,8 +2016,7 @@ static struct mmc_platform_data msm7x2x_sdc1_data = {
 };
 #endif
 
-#if 0
-//not used mark it#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
+#if defined(CONFIG_MMC_MSM_SDC2_SUPPORT) && !defined(CONFIG_AR6K)
 static struct mmc_platform_data msm7x2x_sdc2_data = {
 	.ocr_mask	= MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
