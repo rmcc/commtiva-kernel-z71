@@ -939,6 +939,11 @@ static int bluetooth_power(int on)
 		}else
 			printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
 		/* } FIH, SimonSSChang, 2010/02/26 */
+
+		gpio_direction_output(96,1);
+		mdelay(10);
+		gpio_direction_output(35,1);
+		mdelay(10);
 	}else if(bConfigWIFI && !wifi_status) {  //Turn WIFI OFF
 		printk(KERN_DEBUG "%s : Turn WIFI off.\n", __func__);
 
@@ -948,6 +953,9 @@ static int bluetooth_power(int on)
 		}else
 			printk(KERN_ERR "!!!wifi_power Fail:  ar6k_wifi_status_cb_devid is NULL \n");
 
+		gpio_direction_output(96,0);
+		gpio_direction_output(35,0);
+		mdelay(10);
 #endif
 	}
 	/* } FIH, SimonSSChang, 2010/02/26 */
