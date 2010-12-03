@@ -152,8 +152,6 @@ static VOLT_TO_PERCENT g_Volt2PercentMode[10] =
     { 4100, 100},   // full
 };
 
-/* FIH, Michael Kao, 2009/08/26 */
-extern void tca6507_charger_state_report(int state);
 //static int g_charging_state_last = CHARGER_STATE_LOW_POWER;
 static int g_charging_state_last = CHARGER_STATE_NOT_CHARGING;
 
@@ -920,8 +918,6 @@ static void zeus_battery_refresh_values(struct zeus_battery_update *zbu) {
 	}
 
 	printk(KERN_DEBUG "batt : %d - %d, EN = %d, 1A = %d, SET = %d\n", percent_now, g_charging_state, gpio_get_value(GPIO_CHR_EN), gpio_get_value(CHR_1A), gpio_get_value(USBSET));
-	if ((g_charging_state_last != g_charging_state))
-		tca6507_charger_state_report(g_charging_state);   
 	zbu->data.capacity=percent_now;
 	g_charging_state_last = g_charging_state;
 
