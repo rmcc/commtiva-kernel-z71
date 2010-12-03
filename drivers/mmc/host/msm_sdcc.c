@@ -1855,7 +1855,7 @@ msmsdcc_runtime_suspend(struct device *dev)
 			 * off clocks to allow deep sleep (TCXO shutdown).
 			 */
 #ifdef CONFIG_FIH_FXX
-			if (host->pdev_id != 1)
+			if (host->pdev_id == 2)
 #endif
 			mmc->ios.clock = 0;
 			mmc->ops->set_ios(host->mmc, &host->mmc->ios);
@@ -1882,9 +1882,6 @@ msmsdcc_runtime_resume(struct device *dev)
 	int release_lock = 0;
 
 	if (mmc) {
-#ifdef CONFIG_FIH_FXX
-		if (host->pdev_id != 1)
-#endif
 		mmc->ios.clock = host->clk_rate;
 		mmc->ops->set_ios(host->mmc, &host->mmc->ios);
 

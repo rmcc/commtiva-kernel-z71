@@ -211,13 +211,6 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 		return -EBUSY;
 	}
 
-#ifdef CONFIG_AR6K
-	func->irq_handler = handler;
-	ret = sdio_card_irq_get(func->card);
-	if (ret)
-		func->irq_handler = NULL;
-#endif
-
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);
 	if (ret)
 		return ret;
@@ -230,12 +223,10 @@ int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 	if (ret)
 		return ret;
 
-#ifndef CONFIG_AR6K
 	func->irq_handler = handler;
 	ret = sdio_card_irq_get(func->card);
 	if (ret)
 		func->irq_handler = NULL;
-#endif
 
 	return ret;
 }
@@ -257,12 +248,10 @@ int sdio_release_irq(struct sdio_func *func)
 
 	pr_debug("SDIO: Disabling IRQ for %s...\n", sdio_func_id(func));
 
-#ifndef CONFIG_AR6K
 	if (func->irq_handler) {
 		func->irq_handler = NULL;
 		sdio_card_irq_put(func->card);
 	}
-#endif
 
 	ret = mmc_io_rw_direct(func->card, 0, 0, SDIO_CCCR_IENx, 0, &reg);
 	if (ret)
@@ -277,13 +266,6 @@ int sdio_release_irq(struct sdio_func *func)
 	ret = mmc_io_rw_direct(func->card, 1, 0, SDIO_CCCR_IENx, reg, NULL);
 	if (ret)
 		return ret;
-
-#ifdef CONFIG_AR6K
-	if (func->irq_handler) {
-		func->irq_handler = NULL;
-		sdio_card_irq_put(func->card);
-	}
-#endif
 
 	return 0;
 }
