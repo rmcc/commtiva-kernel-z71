@@ -18,6 +18,8 @@
 #include <mach/msm_iomap.h>
 #include <mach/msm_smd.h>
 
+#include <linux/leds.h>
+
 /*FIH_FTM, PinyCHWu, 2009/06/15 {*/
 /*Add misc device*/
 #ifdef CONFIG_FIH_FXX
@@ -48,6 +50,7 @@ struct tca6507_driver_data {
 	/*Add a Jogball enable function for Jogball driver*/
 	bool Jogball_enable;
 	/*FIH, MichaelKao, 2009/07/07 {*/
+	struct led_classdev leds[3];    /* green, white, red */
 };
 
 static struct tca6507_driver_data tca6507_drvdata;
@@ -142,6 +145,65 @@ static int gpio_init_setting(int value)
 static void gpio_release(void)
 {
 	gpio_free( tca6507_drvdata.reset_pin );
+}
+
+static ssize_t led_blink_solid_show(struct device *dev,
+                    struct device_attribute *attr, char *buf)
+{
+    return 0;
+}
+
+static int tca6507_set_led(void);
+
+static ssize_t led_blink_solid_store(struct device *dev,
+                     struct device_attribute *attr,
+                     const char *buf, size_t size)
+{
+    struct led_classdev *led_cdev = dev_get_drvdata(dev);
+    char *after;
+    unsigned long state;
+
+    state = simple_strtoul(buf, &after, 10);
+    mutex_lock(&tca6507_drvdata.tca6507_lock);
+
+    if (!strcmp(led_cdev->name, "green")) {
+           tca6507_drvdata.led_state[1] &= 0x1FFB;
+        tca6507_drvdata.led_state[TCA6507_LED_GFB] |= (state ? 1 : 0) << TCA6507_LED_BLINK;
+    } else if (!strcmp(led_cdev->name, "white")) {
+           tca6507_drvdata.led_state[2] &= 0x1FFB;
+        tca6507_drvdata.led_state[TCA6507_LED_KFB] |= (state ? 1 : 0) << TCA6507_LED_BLINK;
+    } else if (!strcmp(led_cdev->name, "red")) {
+           tca6507_drvdata.led_state[0] &= 0x1FFB;
+        tca6507_drvdata.led_state[TCA6507_LED_RFB] |= (state ? 1 : 0) << TCA6507_LED_BLINK;
+    }
+
+    tca6507_set_led();
+
+    mutex_unlock(&tca6507_drvdata.tca6507_lock);
+
+    return 0;
+}
+static DEVICE_ATTR(blink, 0644, led_blink_solid_show, led_blink_solid_store);
+
+static void led_brightness_set(struct led_classdev *led_cdev,
+                   enum led_brightness brightness)
+{
+    mutex_lock(&tca6507_drvdata.tca6507_lock);
+
+    if (!strcmp(led_cdev->name, "green")) {
+           tca6507_drvdata.led_state[1] &= 0x1FFC;
+        tca6507_drvdata.led_state[TCA6507_LED_GFB] |= 1 << (brightness ? TCA6507_LED_ON : TCA6507_LED_OFF);
+    } else if (!strcmp(led_cdev->name, "white")) {
+           tca6507_drvdata.led_state[2] &= 0x1FFC;
+        tca6507_drvdata.led_state[TCA6507_LED_KFB] |= 1 << (brightness ? TCA6507_LED_ON : TCA6507_LED_OFF);
+    } else if (!strcmp(led_cdev->name, "red")) {
+           tca6507_drvdata.led_state[0] &= 0x1FFC;
+        tca6507_drvdata.led_state[TCA6507_LED_RFB] |= 1 << (brightness ? TCA6507_LED_ON : TCA6507_LED_OFF);
+    }
+
+    tca6507_set_led();
+
+    mutex_unlock(&tca6507_drvdata.tca6507_lock);
 }
 
 void tca6507_led_turn_on(int led_selection, uint8_t *cmd)
@@ -1022,7 +1084,7 @@ static ssize_t btn_brightness_store(struct device *dev, struct device_attribute 
 	return count;
 }
 
-static ssize_t blink_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+static ssize_t powerbtn_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	unsigned enable;
 	
@@ -1069,7 +1131,7 @@ static ssize_t Charging_enable_store(struct device *dev, struct device_attribute
 /*FIH, MichaelKao, 2009/07/07 {*/
 DEVICE_ATTR(tca6507_debug, 0666, tca6507_debug_show, tca6507_debug_store);
 DEVICE_ATTR(btn_brightness, 0666, NULL, btn_brightness_store);//Michael
-DEVICE_ATTR(blink, 0666, NULL, blink_store);//Michael
+DEVICE_ATTR(powerbtn, 0666, NULL, powerbtn_store);//Michael
 /*FIH, MichaelKao, 2009/07/07 {*/
 /*Add a Jogball enable function for Jogball driver*/
 DEVICE_ATTR(jben, 0666, NULL, Jogball_enable_store);
@@ -1132,11 +1194,6 @@ static int tca6507_resume(struct i2c_client *nLeds)
 	}
 	
 	mutex_unlock(&tca6507_drvdata.tca6507_lock);
-#ifdef CONFIG_BATTERY_FIH_ZEUS
-	/*FIH, MichaelKao, 2009/09/28 {*/
-	/*Modify for correctly update battery information in suspend mode*/
-	Battery_power_supply_change();
-#endif
 	/*FIH, MichaelKao, 2009/09/28 {*/
 	/*Add notify blink function for suspend resume*/
 	tca6507_notify_blink(tca6507_drvdata.is_notify_blink) ;
@@ -1253,9 +1310,9 @@ static int __devinit tca6507_probe(struct i2c_client *client,
 		mutex_destroy(&tca6507_drvdata.tca6507_lock);
 		return ret; 
 	}
-	ret = device_create_file(&client->dev, &dev_attr_blink);
+	ret = device_create_file(&client->dev, &dev_attr_powerbtn);
 	if (ret < 0) {
-		dev_err(&client->dev, "%s: Create keyboard attribute \"blink\" failed!! <%d>", __func__, ret);
+		dev_err(&client->dev, "%s: Create keyboard attribute \"powerbtn\" failed!! <%d>", __func__, ret);
 		mutex_destroy(&tca6507_drvdata.tca6507_lock);
 		return ret; 
 	}
@@ -1281,6 +1338,34 @@ static int __devinit tca6507_probe(struct i2c_client *client,
 		tca6507_drvdata.LEDnum=5;
 	else if(tca6507_drvdata.HWID >= CMCS_7627_EVB1)
 		tca6507_drvdata.LEDnum=7;
+
+
+    tca6507_drvdata.leds[0].name = "red";
+    tca6507_drvdata.leds[0].brightness_set = led_brightness_set;
+
+    tca6507_drvdata.leds[2].name = "white";
+    tca6507_drvdata.leds[2].brightness_set = led_brightness_set;
+
+    tca6507_drvdata.leds[1].name = "green";
+    tca6507_drvdata.leds[1].brightness_set = led_brightness_set;
+
+    for (i = 0; i < 3; i++) {   /* red, white, green */
+        ret = led_classdev_register(&client->dev, &tca6507_drvdata.leds[i]);
+        if (ret) {
+            printk(KERN_ERR
+                   "tca6507: led_classdev_register failed\n");
+        }
+    }
+
+    for (i = 0; i < 3; i++) {
+        ret =
+            device_create_file(tca6507_drvdata.leds[i].dev, &dev_attr_blink);
+        if (ret) {
+            printk(KERN_ERR
+                   "tca6507: device_create_file failed\n");
+        }
+    }
+        
 	
 	return ret;
 }
