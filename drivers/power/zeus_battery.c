@@ -889,24 +889,9 @@ static void zeus_battery_refresh_values(struct zeus_battery_update *zbu) {
 	// +++ADQ_FIH+++
 	if ((percent_now == 100)&&(g_charging_state == CHARGER_STATE_CHARGING)){
 		g_charging_state = CHARGER_STATE_FULL;
-			
 	}
 	else if (g_charging_state == CHARGER_STATE_FULL) {
-		if (percent_now == 100) {
-			/* Disable USB interface */
-			if (!gpio_request(USBSET, "USBSET")) {
-				gpio_set_value(USBSET,0);
-				gpio_free(USBSET);
-			}
-		} else if (percent_now < 98) {
-			/* Top up */
-			if (!gpio_request(USBSET, "USBSET")) {
-				gpio_set_value(USBSET,1);
-				gpio_free(USBSET);
-			}
-		}
-
-		if (percent_now < 97) {
+		if (percent_now < 98) {
 			g_charging_state = CHARGER_STATE_CHARGING;
 		}
 	}
