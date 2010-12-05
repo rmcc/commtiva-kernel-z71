@@ -77,7 +77,8 @@ enum {
     WOW_STATE_SUSPENDED,
     WOW_STATE_SUSPENDING,
 };
-#define WOW_ENABLE_MAX_INTERVAL 0
+#define WOW_ENABLE_MAX_INTERVAL 1
+#define A_MAX_WOW_LISTEN_INTERVAL 1000
 #include <linux/platform_device.h>
 #include <linux/inetdevice.h>
 int buspm = WLAN_PWR_CTRL_WOW;
