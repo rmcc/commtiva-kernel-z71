@@ -910,7 +910,7 @@ wow_not_connected:
             ar->arOsPowerCtrl = WLAN_PWR_CTRL_DEEP_SLEEP;
             AR_DEBUG_PRINTF("%s:Suspend for deep sleep mode %d\n", __func__, ar->arOsPowerCtrl);
         }              
-        status = A_EBUSY;
+        status = A_OK;
         break;
     case WLAN_PWR_CTRL_WOW:
         if (ar->arWmiReady && ar->arWlanState==WLAN_ENABLED && ar->arConnected) {
@@ -920,7 +920,7 @@ wow_not_connected:
             A_MDELAY(250);
             //HIFMaskInterrupt((HIF_DEVICE*)HTCGetHifDevice(ar->arHtcTarget));
             /* leave for pm_device to setup wow */
-            status = A_EBUSY;
+            status = A_OK;
         } else {
             pmmode = wow2mode;
             goto wow_not_connected;
