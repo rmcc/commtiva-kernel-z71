@@ -835,8 +835,8 @@ msmsdcc_irq(int irq, void *dev_id)
 		data = host->curr.data;
 #ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
 		if (status & MCI_SDIOINTROPE) {
-			if (host->sdcc_suspending)
-				wake_lock(&host->sdio_suspend_wlock);
+			/*if (host->sdcc_suspending)
+				wake_lock(&host->sdio_suspend_wlock);*/
 			mmc_signal_sdio_irq(host->mmc);
 		}
 #endif
@@ -1854,14 +1854,11 @@ msmsdcc_runtime_suspend(struct device *dev)
 			 * If MMC core level suspend is not supported, turn
 			 * off clocks to allow deep sleep (TCXO shutdown).
 			 */
-#ifdef CONFIG_FIH_FXX
-			if (host->pdev_id == 2)
-#endif
 			mmc->ios.clock = 0;
 			mmc->ops->set_ios(host->mmc, &host->mmc->ios);
 		}
 
-		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
+		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) && mmc->card &&
 				mmc->card->type == MMC_TYPE_SDIO) {
 			host->sdio_irq_disabled = 0;
 			enable_irq_wake(host->plat->sdiowakeup_irq);
@@ -1889,7 +1886,7 @@ msmsdcc_runtime_resume(struct device *dev)
 
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
 
-		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) &&
+		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) &&
 				!host->sdio_irq_disabled) {
 			if (mmc->card && mmc->card->type == MMC_TYPE_SDIO) {
 				disable_irq_nosync(host->plat->sdiowakeup_irq);
@@ -1911,10 +1908,10 @@ msmsdcc_runtime_resume(struct device *dev)
 		 * After resuming the host wait for sometime so that
 		 * the SDIO work will be processed.
 		 */
-		if ((mmc->pm_caps & MMC_PM_WAKE_SDIO_IRQ) && release_lock)
+		if ((mmc->pm_flags & MMC_PM_WAKE_SDIO_IRQ) && release_lock)
 			wake_lock_timeout(&host->sdio_wlock, 1);
 
-		wake_unlock(&host->sdio_suspend_wlock);
+		//wake_unlock(&host->sdio_suspend_wlock);
 	}
 	return 0;
 }
