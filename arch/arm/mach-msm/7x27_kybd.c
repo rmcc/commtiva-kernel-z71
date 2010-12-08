@@ -324,8 +324,8 @@ static irqreturn_t Q7x27_kybd_irqhandler(int irq, void *dev_id)
 {
 	struct Q7x27_kybd_record *kbdrec = dev_id;
 	
-    printk(KERN_INFO "irqreturn_t Q7x27_kybd_irqhandler+, irq= %X\n", irq);
-
+    printk(KERN_INFO "irqreturn_t Q7x27_kybd_irqhandler+, irq= %X \n", irq);
+    
 /* FIH, NicoleWeng, @20100506 { */	//handle debounce time here and remove debonce time in work queue
 	if(lastTime!=0 && time_after(lastTime+KBD_DEBOUNCE_TIME, jiffies)){
 		return IRQ_HANDLED;
@@ -1499,16 +1499,9 @@ static void Q7x27_kybd_centerkey(struct work_struct *work)
             	if (state) {
             		input_report_key(idev, SELECT_INPUT_ENTER, KBD_IN_KEYPRESS); //report SELECT_INPUT_ENTER pressing
             		printk(KERN_INFO "FIH: keypress SELECT_INPUT_ENTER= %d\n", SELECT_INPUT_ENTER);
- 			if (get_suspend_state() == PM_SUSPEND_MEM)
-				disable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
-    
             	} else {
             		input_report_key(idev, SELECT_INPUT_ENTER, KBD_IN_KEYRELEASE); //report SELECT_INPUT_ENTER releasing
             		printk(KERN_INFO "FIH: keyrelease SELECT_INPUT_ENTER= %d\n", SELECT_INPUT_ENTER);
- 			if (get_suspend_state() == PM_SUSPEND_MEM) {
-				enable_irq_wake(MSM_GPIO_TO_INT(g_center_pin));
-				lastTime += 300; /* 3 seconds */
-			}
             	}
             
             	input_sync(idev);
