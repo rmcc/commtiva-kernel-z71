@@ -2083,7 +2083,7 @@ ar6000_avail_ev(void *context, void *hif_handle)
     }
 
     /* This runs the init function */
-    if (register_netdev(dev)) {
+    if (!is_netdev_registered && register_netdev(dev)) {
         AR_DEBUG_PRINTF("ar6000_avail: register_netdev failed\n");
                 ar6000_destroy(dev, 0);
                 return A_ERROR;
@@ -2303,7 +2303,8 @@ ar6000_destroy(struct net_device *dev, unsigned int unregister)
     ar->bIsDestroyProgress = TRUE;
 
 #ifdef CONFIG_HAS_EARLYSUSPEND
-    unregister_early_suspend(&ar->ar6k_early_suspend);
+    if (ar->ar6k_early_suspend.level)
+    	unregister_early_suspend(&ar->ar6k_early_suspend);
 #endif
 
     if (down_interruptible(&ar->arSem)) {
