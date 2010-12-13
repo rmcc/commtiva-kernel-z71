@@ -893,8 +893,8 @@ static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
     int ret, ret_gpio = 0;  //Add for VREG_WLAN power in, 07/08
 
 	cancel_work_sync(&bi8232->wqueue);
-    printk(KERN_INFO "bi8232_suspend() disable IRQ: %d\n", client->irq);
-    disable_irq(client->irq);
+    /*printk(KERN_INFO "bi8232_suspend() disable IRQ: %d\n", client->irq);
+    disable_irq(client->irq);*/
 
     //Add for VREG_WLAN power in++
     if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
@@ -1025,8 +1025,8 @@ static int bi8232_resume(struct i2c_client *client)
 	}
 	//Setting the configuration of GPIO 89--
 	//Modify the scheme for receive hello packet++
-	printk(KERN_INFO "bi8232_resume() enable IRQ: %d and GPIO89_PULL_UP\n", client->irq);
-	enable_irq(client->irq);
+	/*printk(KERN_INFO "bi8232_resume() enable IRQ: %d and GPIO89_PULL_UP\n", client->irq);
+	enable_irq(client->irq);*/
 	//Modify the scheme for receive hello packet--
 	return 0;
 }
