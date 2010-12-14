@@ -589,7 +589,7 @@ void panel_on_wintek_24pins(void)
 }
 
 
-static int __init wintek_probe(struct platform_device *pdev)
+static int __devinit wintek_probe(struct platform_device *pdev)
 {
 
     if(!fih_lcm_is_mddi_type()){
