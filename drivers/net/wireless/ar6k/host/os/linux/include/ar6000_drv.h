@@ -47,10 +47,6 @@
 #include <linux/module.h>
 #include <asm/io.h>
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-#endif
-
 #include <a_config.h>
 #include <athdefs.h>
 #include "a_types.h"
