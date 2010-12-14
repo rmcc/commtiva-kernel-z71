@@ -447,7 +447,7 @@ void mtb_late_resume(struct early_suspend *h)
 }
 #endif
 
-static int __init mtb_platform_probe(struct platform_device *pdev)
+static int __devinit mtb_platform_probe(struct platform_device *pdev)
 {
 	int err = 0;
 
