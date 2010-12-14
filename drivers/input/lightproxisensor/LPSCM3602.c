@@ -525,7 +525,7 @@ static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len
 	return len;
 }
 
-static int __init sensor_probe(struct platform_device *pdev)
+static int __devinit sensor_probe(struct platform_device *pdev)
 {
 	int ret;	
 #ifndef DISABLE_PROXIMITY
