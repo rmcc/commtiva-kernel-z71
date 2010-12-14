@@ -650,6 +650,10 @@ HIFUnMaskInterrupt(HIF_DEVICE *device)
     /* Register the IRQ Handler */
     sdio_claim_host(device->func);
     ret = sdio_claim_irq(device->func, hifIRQHandler);
+    if (!ret) {
+        sdio_set_host_pm_flags(device->func, MMC_PM_KEEP_POWER);
+        sdio_set_host_pm_flags(device->func, MMC_PM_WAKE_SDIO_IRQ);
+    }
     sdio_release_host(device->func);
     AR_DEBUG_ASSERT(ret == 0);
 }
@@ -756,8 +760,6 @@ static int hifDeviceSuspend(struct device *dev)
     A_STATUS status = A_OK;
     HIF_DEVICE *device;   
 
-    sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
-
     device = getHifDevice(func);
     if (device && device->claimedContext && osdrvCallbacks.deviceSuspendHandler) {
         status = osdrvCallbacks.deviceSuspendHandler(device->claimedContext);
@@ -791,7 +793,7 @@ static int hifDeviceSuspend(struct device *dev)
         return -EBUSY; /* Return -1 if customer use all android patch of mmc stack provided by us */ 
     }
 
-    return A_SUCCESS(status) ? sdio_set_host_pm_flags(func, MMC_PM_WAKE_SDIO_IRQ) : status;
+    return A_SUCCESS(status) ? 0 : status;
 }
 
 static int hifDeviceResume(struct device *dev)

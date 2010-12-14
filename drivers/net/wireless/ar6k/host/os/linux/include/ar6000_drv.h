@@ -372,11 +372,9 @@ typedef struct ar6_softc {
 #if CONFIG_PM
     A_UINT16                arOsPowerCtrl;
     A_UINT16                arWowState;
+    struct notifier_block   notify_pm;
 #endif
     WMI_SCAN_PARAMS_CMD scParams;
-#ifdef CONFIG_HAS_EARLYSUSPEND
-    struct early_suspend ar6k_early_suspend;
-#endif
 } AR_SOFTC_T;
 
 #define ATH_DHCP_PKT_SIZE             342
