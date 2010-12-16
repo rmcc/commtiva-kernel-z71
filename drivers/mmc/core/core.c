@@ -1201,8 +1201,8 @@ void mmc_rescan(struct work_struct *work)
 out:
 	if (extend_wakelock) {
 #ifdef CONFIG_FIH_FXX
-		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ * 2);
-		wake_lock_timeout(&sdcard_idle_wake_lock, HZ * 2);
+		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ);
+		wake_lock_timeout(&sdcard_idle_wake_lock, HZ);
 #else
 		wake_lock_timeout(&mmc_delayed_work_wake_lock, HZ / 2);
 #endif
