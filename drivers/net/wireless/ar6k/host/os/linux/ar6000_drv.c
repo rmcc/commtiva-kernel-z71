@@ -54,6 +54,7 @@ APTC_TRAFFIC_RECORD aptcTR;
 #endif /* ADAPTIVE_POWER_THROUGHPUT_CONTROL */
 
 A_TIMER dhcp_timer;
+A_TIMER restart_timer;
 
 #include <linux/fs.h>
 #include <linux/vmalloc.h>
@@ -384,6 +385,7 @@ static void deliver_frames_to_nw_stack(struct sk_buff *skb);
 
 static int checkforDHCPPacket(struct sk_buff *skb);
 static void dhcp_timer_handler(unsigned long ptr);
+static void restart_timer_handler(unsigned long arg);
 
 
 /*
@@ -1989,6 +1991,7 @@ ar6000_avail_ev(void *context, void *hif_handle)
     A_INIT_TIMER(&ar->disconnect_timer, disconnect_timer_handler, dev);
 
     A_INIT_TIMER(&dhcp_timer, dhcp_timer_handler, dev);
+    A_INIT_TIMER(&restart_timer, restart_timer_handler, ar);
     /*
      * If requested, perform some magic which requires no cooperation from
      * the Target.  It causes the Target to ignore flash and execute to the
@@ -2378,6 +2381,23 @@ static void dhcp_timer_handler(unsigned long ptr)
     A_UNTIMEOUT(&dhcp_timer);
     wmi_set_bt_status_cmd(ar->arWmi, BT_STREAM_ALL, BT_STATUS_START); 
     AR_DEBUG2_PRINTF("DHCP Time out\n"); 
+}
+
+static void restart_timer_handler(unsigned long arg)
+{
+    AR_SOFTC_T *ar = (AR_SOFTC_T *)arg;
+    union iwreq_data wrqu;
+
+    A_ASSERT(ar != NULL);
+    A_ASSERT(!timer_pending(&restart_timer));
+
+    ar = (AR_SOFTC_T *)arg;
+
+    A_UNTIMEOUT(&restart_timer);
+    A_MEMZERO(&wrqu, sizeof(wrqu));
+    wrqu.data.length = 5;
+    wireless_send_event(ar->arNetDev, IWEVCUSTOM, &wrqu, "START");
+    AR_DEBUG2_PRINTF("Restart timer sent START to userspace\n"); 
 }
 
 static void ar6000_detect_error(unsigned long ptr)
@@ -5499,6 +5519,8 @@ ar6000_set_wlan_state(struct ar6_softc *ar, AR6000_WLAN_STATE state)
     ar->arWlanState = state;
     do {
         if (ar->arWlanState == WLAN_ENABLED) {
+
+
             A_UINT16 fg_start_period = (ar->scParams.fg_start_period==0) ? 1 : ar->scParams.fg_start_period;
             WMI_SET_HOST_SLEEP_MODE_CMD hostSleepMode = { TRUE, FALSE};
             /*WMI_REPORT_SLEEP_STATE_EVENT  wmiSleepEvent ; */
@@ -5508,6 +5530,10 @@ ar6000_set_wlan_state(struct ar6_softc *ar, AR6000_WLAN_STATE state)
             if ((status=wmi_set_host_sleep_mode_cmd(ar->arWmi, &hostSleepMode)) != A_OK) {
                break;    
             }
+
+	    /* Send a "START" event to userspace in 5 seconds */
+            A_TIMEOUT_MS(&restart_timer, 5*1000, 0);
+
             /*ar6000_send_event_to_app(ar, WMI_REPORT_SLEEP_STATE_EVENTID, (A_UINT8*)&wmiSleepEvent,  */
             /*                        sizeof(WMI_REPORT_SLEEP_STATE_EVENTID)); */
             /* Enable foreground scanning */
@@ -5541,6 +5567,16 @@ ar6000_set_wlan_state(struct ar6_softc *ar, AR6000_WLAN_STATE state)
                 break;
             }
 
+	    /* No pending userspace timer, so first time in this state */
+	    if (!timer_pending(&restart_timer)) {
+		    union iwreq_data wrqu;
+		    A_MEMZERO(&wrqu, sizeof(wrqu));
+		    wrqu.data.length = 4;
+		    wireless_send_event(ar->arNetDev, IWEVCUSTOM, &wrqu, "STOP");
+	    } else {
+		    /* Pending timer, and disconnecting. Cancel it */
+		    A_UNTIMEOUT(&restart_timer);
+	    }
             /*ar6000_send_event_to_app(ar, WMI_REPORT_SLEEP_STATE_EVENTID, (A_UINT8*)&wmiSleepEvent,  */
             /*                        sizeof(WMI_REPORT_SLEEP_STATE_EVENTID)); */
 
