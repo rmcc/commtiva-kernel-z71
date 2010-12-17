@@ -2011,8 +2011,6 @@ static struct mmc_platform_data msm7x2x_sdc1_data = {
 	.msmsdcc_fmid   = 24576000,
 	.msmsdcc_fmax   = 49152000,
 	.nonremovable   = 0,
-	.status_irq	= MSM_GPIO_TO_INT(18),
-	.irq_flags	= IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING,
 };
 #endif
 
