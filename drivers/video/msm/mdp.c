@@ -274,6 +274,7 @@ int mdp_start_histogram(struct fb_info *info)
 	mdp_is_hist_start = TRUE;
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 	mdp_enable_irq(MDP_HISTOGRAM_TERM);
+	mdp_hist.frame_cnt = 1;
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 #ifdef CONFIG_FB_MSM_MDP40
 	MDP_OUTP(MDP_BASE + 0x95004, 1);
