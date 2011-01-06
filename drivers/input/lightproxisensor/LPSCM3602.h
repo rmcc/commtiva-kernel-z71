@@ -41,11 +41,6 @@ static int cm3602_proc_open(struct inode *inode, struct file *file);
 static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off);
 static int sensor_probe(struct platform_device *pdev);
 static int sensor_remove(struct platform_device *pdev);
-static int ALSPS_panic_handler(struct notifier_block *this, unsigned long event, void *unused);
-static struct notifier_block trace_panic_notifier = {
-	.notifier_call  = ALSPS_panic_handler,
-
-};
 static struct file_operations cm3602_fops = {
     .open    = cm3602_dev_open,
     .read    = cm3602_read_ps,

@@ -148,26 +148,6 @@ static void proximaty_cb(struct work_struct *w){
 #endif
 
 
-static int ALSPS_panic_handler(struct notifier_block *this,
-			       unsigned long event, void *unused)
-{
-	int level;
-	if (HWID == CMCS_HW_VER_EVB1)
-	{
-		gpio_direction_input(CM3602_EVB1_PS_GPIO_OUT);
-		level = gpio_get_value(CM3602_EVB1_PS_GPIO_OUT);
-	}
-	else
-	{
-		gpio_direction_input(CM3602_PR1_PS_GPIO_OUT);
-		level = gpio_get_value(CM3602_PR1_PS_GPIO_OUT);
-	}
-	return 0;
-}
-
-
-
-
 static int cm3602_ioctl(struct inode *inode, struct file *file, unsigned int cmd, unsigned long arg){
 	int value;
 	//int rc;	
@@ -542,7 +522,6 @@ static int __init cm3602_init(void)
 	else
 		gpio_direction_input(CM3602_PR1_PS_GPIO_OUT);
 #endif
-	atomic_notifier_chain_register(&panic_notifier_list, &trace_panic_notifier);
 	return 0;
 }
 
