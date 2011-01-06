@@ -41,8 +41,6 @@ static int cm3602_proc_open(struct inode *inode, struct file *file);
 static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off);
 static int sensor_probe(struct platform_device *pdev);
 static int sensor_remove(struct platform_device *pdev);
-static int sensor_suspend(struct platform_device *pdev, pm_message_t state);
-static int sensor_resume(struct platform_device *pdev);
 static int ALSPS_panic_handler(struct notifier_block *this, unsigned long event, void *unused);
 static struct notifier_block trace_panic_notifier = {
 	.notifier_call  = ALSPS_panic_handler,
@@ -71,8 +69,6 @@ static struct file_operations cm3602_proc_ops = {
 static struct platform_driver ALSPS_driver = {
 	.probe		= sensor_probe,
 	.remove		= sensor_remove,
-	.suspend    = sensor_suspend,
-	.resume     = sensor_resume,
 	.driver		= {
 		.name = "cm3602_alsps",
 	},

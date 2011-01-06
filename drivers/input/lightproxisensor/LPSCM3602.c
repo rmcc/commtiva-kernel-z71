@@ -439,39 +439,6 @@ static int sensor_remove(struct platform_device *pdev)
 {
 	return 0;
 }
-static int sensor_suspend(struct platform_device *pdev, pm_message_t state)
-{
-#ifndef DISABLE_PROXIMITY
-//FIH, HenryJuang 2009/11/11 ++
-/* Enable Proximaty wake source.*/
-	if (!((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
-	if (HWID == CMCS_HW_VER_EVB1)
-		enable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
-	else
-		enable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));	
-	isCM3602Suspend=1;
-	}
-//FIH, HenryJuang 2009/11/11 --
-#endif
-	return 0;
-}
-static int sensor_resume(struct platform_device *pdev)
-{
-#ifndef DISABLE_PROXIMITY
-//FIH, HenryJuang 2009/11/11 ++
-/* Enable Proximaty wake source.*/
-	if (!((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
-	if (HWID == CMCS_HW_VER_EVB1)
-		disable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
-	else
-		disable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));		
-	isCM3602Suspend=0;		
-	}	
-//FIH, HenryJuang 2009/11/11 --
-#endif
-	return 0;
-}
-
 
 /* cm3602_init: init cm3602 driver
  * Its major is the same as misc and the minor is randomly assigned.
