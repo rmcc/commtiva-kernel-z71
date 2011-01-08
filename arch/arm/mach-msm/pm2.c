@@ -1729,23 +1729,103 @@ static struct platform_suspend_ops msm_pm_ops = {
  * Restart Definitions
  *****************************************************************************/
 
+#ifdef CONFIG_FIH_FXX
+extern int fih_proc_pid_cmdline(struct task_struct *task, char * buffer);
+#endif
+
 static uint32_t restart_reason = 0x776655AA;
 
 static void msm_pm_power_off(void)
 {
+#ifdef CONFIG_FIH_FXX
+	uint32_t oem_cmd = SMEM_PROC_COMM_OEM_POWER_OFF;
+	uint32_t smem_response = 0;
+	struct thread_info *thread = current_thread_info();
+	char buffer[128];
+	char buf2[128];
+	memset(buffer, 0, sizeof(buffer));
+	memset(buf2, 0, sizeof(buf2));
+	fih_proc_pid_cmdline(thread->task, buffer);
+	snprintf(buf2, sizeof(buf2), "Caller process: %s cmdline: %s\n", thread->task->comm, buffer);
+	buf2[sizeof(buf2) - 1] = 0; //Add null ended.
+	printk(KERN_EMERG "%s\n", buf2);
+#endif
 	msm_rpcrouter_close();
+
+#ifdef CONFIG_FIH_FXX
+	oem_cmd = SMEM_PROC_COMM_OEM_POWER_OFF;
+	smem_response = 0;
+	msm_proc_comm_oem(PCOM_CUSTOMER_CMD1, &oem_cmd, &smem_response, (unsigned *)buf2 );
+#else
 	msm_proc_comm(PCOM_POWER_DOWN, 0, 0);
+#endif
 	for (;;)
 		;
 }
 
+#ifdef CONFIG_FIH_FXX
+uint32_t panic_enter_download = 0;
+#endif
 static void msm_pm_restart(char str, const char *cmd)
 {
 #ifdef CONFIG_FIH_FXX
 	uint32_t oem_cmd = SMEM_PROC_COMM_OEM_RESET_CHIP_EBOOT;
+	uint32_t ptr = (uint32_t)(IOMEM(0xFB4FF000));
 #endif
 	msm_rpcrouter_close();
 #ifdef CONFIG_FIH_FXX
+	if (panic_enter_download)
+	{
+		restart_reason = 0x46544443;
+		*(uint32_t *)ptr = 0x55AA55AA;
+		ptr+=4;
+		asm volatile("mov r4, %0, lsr #12" : "=r" (ptr));
+		asm volatile("mov r4, r4, lsl #12");
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("str r1, [r4, #4]!");
+		asm volatile("str r2, [r4, #4]!");
+		asm volatile("str r3, [r4, #4]!");
+		asm volatile("str r4, [r4, #4]!");
+		asm volatile("str r5, [r4, #4]!");
+		asm volatile("str r6, [r4, #4]!");
+		asm volatile("str r7, [r4, #4]!");
+		asm volatile("str r8, [r4, #4]!");
+		asm volatile("str r9, [r4, #4]!");
+		asm volatile("str r10, [r4, #4]!");
+		asm volatile("str r11, [r4, #4]!");
+		asm volatile("str r12, [r4, #4]!");
+		asm volatile("str r13, [r4, #4]!");
+		asm volatile("str r14, [r4, #4]!");
+		asm volatile("str r15, [r4, #4]!");
+		asm volatile("mrs r0, CPSR");
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrs r0, SPSR");
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c1, c0, 0");  //mmu Control register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c2, c0, 0");  //Read Translation Table Base Register 0
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c2, c0, 1");  //Read Translation Table Base Register 1
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c2, c0, 2");  //Read Translation Table Base Control Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c3, c0, 0");  //Read Domain Access Control Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c5, c0, 0");  //Read Data Fault Status Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c6, c0, 0");  //Read Watchpoint Fault Address Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c1, c0, 1");  //Read Instruction Fault Status Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c6, c0, 1");  //Read Instruction Fault Address Register
+		asm volatile("str r0, [r4, #4]!");
+		asm volatile("mrc p15, 0, r0, c13, c0, 1");  //Read Context ID Register
+		asm volatile("str r0, [r4, #4]!");
+
+		asm volatile("mov %0, r13" : "=r" (ptr));
+		memcpy((void*)(0xFB480000 - 0x40000), (void*)ptr, 0x40000);
+	}
+
 	msm_proc_comm_oem(PCOM_CUSTOMER_CMD1, &oem_cmd, 0, &restart_reason);
 #else
 	msm_proc_comm(PCOM_RESET_CHIP, &restart_reason, 0);

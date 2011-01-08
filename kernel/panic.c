@@ -43,6 +43,10 @@ EXPORT_SYMBOL(panic_notifier_list);
 long (*panic_blink)(long time);
 EXPORT_SYMBOL(panic_blink);
 
+#ifdef CONFIG_FIH_FXX
+extern uint32_t panic_enter_download;
+#endif
+
 static void panic_blink_one_second(void)
 {
 	static long i = 0, end;
@@ -136,6 +140,9 @@ NORET_TYPE void panic(const char * fmt, ...)
 		 * shutting down.  But if there is a chance of
 		 * rebooting the system it will be rebooted.
 		 */
+#ifdef CONFIG_FIH_FXX
+		panic_enter_download = 1;
+#endif
 		emergency_restart();
 	}
 #ifdef __sparc__
