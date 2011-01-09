@@ -92,7 +92,7 @@ void __init msm_power_register(void);
 #define MSM_PMEM_MDP_SIZE	0x92C000
 //For HVGA camera preview & SOC sensor (gain ~2 MB)
 //HVGA (420 x 320) preview + 5M (2592 x 1944) raw data + 512 x 384 thumbnail data
-#define MSM_PMEM_ADSP_SIZE	0x8DB000 // 0x156000 + 0x73D000 + 0x48000
+#define MSM_PMEM_ADSP_SIZE	0x986000 // 0x201000 + 0x73D000 + 0x48000
 
 #ifndef CONFIG_MSM_KGSL_MMU
 //Need to enable GPU MMU feature
