@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,53 +26,14 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __GSL_DRAWCTXT_G12_H
-#define __GSL_DRAWCTXT_G12_H
+#ifndef _LEIA_REG_H
+#define _LEIA_REG_H
 
-#include "kgsl_sharedmem.h"
+#define REG_LEIA_PC_INDX_OFFSET          REG_VGT_INDX_OFFSET
+#define REG_LEIA_PC_VERTEX_REUSE_BLOCK_CNTL REG_VGT_VERTEX_REUSE_BLOCK_CNTL
+#define REG_LEIA_PC_MAX_VTX_INDX         REG_VGT_MAX_VTX_INDX
+#define REG_LEIA_GRAS_CONTROL            0x2210
+#define REG_LEIA_VSC_BIN_SIZE            0x0C01
+#define REG_LEIA_VSC_PIPE_DATA_LENGTH_7  0x0C1D
 
-struct kgsl_device;
-struct kgsl_device_private;
-
-#define KGSL_G12_PACKET_SIZE 15
-#define KGSL_G12_MARKER_SIZE 10
-#define KGSL_G12_CALL_CMD     0x1000
-#define KGSL_G12_MARKER_CMD   0x8000
-#define KGSL_G12_STREAM_END_CMD 0x9000
-#define KGSL_G12_STREAM_PACKET 0x7C000176
-#define KGSL_G12_STREAM_PACKET_CALL 0x7C000275
-#define KGSL_G12_PACKET_COUNT 8
-#define KGSL_G12_RB_SIZE (KGSL_G12_PACKET_SIZE*KGSL_G12_PACKET_COUNT \
-			  *sizeof(uint32_t))
-
-#define ALIGN_IN_BYTES(dim, alignment) (((dim) + (alignment - 1)) & \
-		~(alignment - 1))
-
-
-#define NUMTEXUNITS             4
-#define TEXUNITREGCOUNT         25
-#define VG_REGCOUNT             0x39
-
-#define PACKETSIZE_BEGIN        3
-#define PACKETSIZE_G2DCOLOR     2
-#define PACKETSIZE_TEXUNIT      (TEXUNITREGCOUNT * 2)
-#define PACKETSIZE_REG          (VG_REGCOUNT * 2)
-#define PACKETSIZE_STATE        (PACKETSIZE_TEXUNIT * NUMTEXUNITS + \
-				 PACKETSIZE_REG + PACKETSIZE_BEGIN + \
-				 PACKETSIZE_G2DCOLOR)
-#define PACKETSIZE_STATESTREAM  (ALIGN_IN_BYTES((PACKETSIZE_STATE * \
-				 sizeof(unsigned int)), 32) / \
-				 sizeof(unsigned int))
-
-#define KGSL_G12_INVALID_CONTEXT UINT_MAX
-
-int
-kgsl_g12_drawctxt_create(struct kgsl_device_private *dev_priv,
-			uint32_t unused,
-			unsigned int *drawctxt_id);
-
-int
-kgsl_g12_drawctxt_destroy(struct kgsl_device *device,
-			unsigned int drawctxt_id);
-
-#endif  /* __GSL_DRAWCTXT_H */
+#endif /*_LEIA_REG_H*/

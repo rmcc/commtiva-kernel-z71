@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -26,53 +26,46 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
-#ifndef __GSL_DRAWCTXT_G12_H
-#define __GSL_DRAWCTXT_G12_H
+#ifndef _KGSL_G12_H
+#define _KGSL_G12_H
 
-#include "kgsl_sharedmem.h"
+#define IDX_2D(X) ((X)-KGSL_DEVICE_2D0)
 
-struct kgsl_device;
-struct kgsl_device_private;
+struct kgsl_g12_ringbuffer {
+	unsigned int prevctx;
+	unsigned int numcontext;
+	unsigned long ctxt_bitmap[BITS_TO_LONGS(KGSL_CONTEXT_MAX)];
+	struct kgsl_memdesc      cmdbufdesc;
+};
 
-#define KGSL_G12_PACKET_SIZE 15
-#define KGSL_G12_MARKER_SIZE 10
-#define KGSL_G12_CALL_CMD     0x1000
-#define KGSL_G12_MARKER_CMD   0x8000
-#define KGSL_G12_STREAM_END_CMD 0x9000
-#define KGSL_G12_STREAM_PACKET 0x7C000176
-#define KGSL_G12_STREAM_PACKET_CALL 0x7C000275
-#define KGSL_G12_PACKET_COUNT 8
-#define KGSL_G12_RB_SIZE (KGSL_G12_PACKET_SIZE*KGSL_G12_PACKET_COUNT \
-			  *sizeof(uint32_t))
+struct kgsl_g12_device {
+	struct kgsl_device dev;    /* Must be first field in this struct */
+	const char *iomemname;
+	const char *irqname;
+	const char *regulator;
+	int current_timestamp;
+	int timestamp;
+	wait_queue_head_t wait_timestamp_wq;
+	struct kgsl_g12_ringbuffer ringbuffer;
+};
 
-#define ALIGN_IN_BYTES(dim, alignment) (((dim) + (alignment - 1)) & \
-		~(alignment - 1))
+irqreturn_t kgsl_g12_isr(int irq, void *data);
+int kgsl_g12_setstate(struct kgsl_device *device, uint32_t flags);
+struct kgsl_device *kgsl_get_2d_device(enum kgsl_deviceid);
+int kgsl_g12_regread(struct kgsl_device *device, unsigned int offsetwords,
+				unsigned int *value);
+int kgsl_g12_regwrite(struct kgsl_device *device, unsigned int offsetwords,
+			unsigned int value);
+
+int __init kgsl_g12_config(struct kgsl_devconfig *,
+		      struct platform_device *pdev, enum kgsl_deviceid dev_id);
+
+int __init kgsl_g12_init(struct kgsl_device *device);
+int __init kgsl_g12_init_pwrctrl(struct kgsl_device *device);
+
+int kgsl_g12_close(struct kgsl_device *device);
+
+int kgsl_g12_getfunctable(struct kgsl_functable *ftbl);
 
 
-#define NUMTEXUNITS             4
-#define TEXUNITREGCOUNT         25
-#define VG_REGCOUNT             0x39
-
-#define PACKETSIZE_BEGIN        3
-#define PACKETSIZE_G2DCOLOR     2
-#define PACKETSIZE_TEXUNIT      (TEXUNITREGCOUNT * 2)
-#define PACKETSIZE_REG          (VG_REGCOUNT * 2)
-#define PACKETSIZE_STATE        (PACKETSIZE_TEXUNIT * NUMTEXUNITS + \
-				 PACKETSIZE_REG + PACKETSIZE_BEGIN + \
-				 PACKETSIZE_G2DCOLOR)
-#define PACKETSIZE_STATESTREAM  (ALIGN_IN_BYTES((PACKETSIZE_STATE * \
-				 sizeof(unsigned int)), 32) / \
-				 sizeof(unsigned int))
-
-#define KGSL_G12_INVALID_CONTEXT UINT_MAX
-
-int
-kgsl_g12_drawctxt_create(struct kgsl_device_private *dev_priv,
-			uint32_t unused,
-			unsigned int *drawctxt_id);
-
-int
-kgsl_g12_drawctxt_destroy(struct kgsl_device *device,
-			unsigned int drawctxt_id);
-
-#endif  /* __GSL_DRAWCTXT_H */
+#endif /* _KGSL_G12_H */

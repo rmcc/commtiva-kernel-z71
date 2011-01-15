@@ -1758,13 +1758,26 @@ static void __init msm7x2x_init(void)
 	msm_read_serial_number_from_nvitem();
 
 #ifdef CONFIG_MSM_KGSL
-	/* 7x27 doesn't allow graphics clocks to be run asynchronously to */
-	/* the AXI bus */
-	kgsl_pdata.high_axi_3d = 160000;
-	kgsl_pdata.max_grp2d_freq = 0;
-	kgsl_pdata.set_grp2d_async = NULL;
-	kgsl_pdata.max_grp3d_freq = 0;
-	kgsl_pdata.set_grp3d_async = NULL;
+        /* This value has been set to 160000 for power savings. */
+        /* OEMs may modify the value at their discretion for performance */
+        /* The appropriate maximum replacement for 160000 is: */
+        /* clk_get_max_axi_khz() */
+        kgsl_pdata.high_axi_3d = 160000;
+
+        /* 7x27 doesn't allow graphics clocks to be run asynchronously to */
+        /* the AXI bus */
+        kgsl_pdata.max_grp2d_freq = 0;
+        kgsl_pdata.min_grp2d_freq = 0;
+        kgsl_pdata.set_grp2d_async = NULL;
+        kgsl_pdata.max_grp3d_freq = 0;
+        kgsl_pdata.min_grp3d_freq = 0;
+        kgsl_pdata.set_grp3d_async = NULL;
+        kgsl_pdata.imem_clk_name = "imem_clk";
+        kgsl_pdata.grp3d_clk_name = "grp_clk";
+        kgsl_pdata.grp3d_pclk_name = "grp_pclk";
+        kgsl_pdata.grp2d0_clk_name = NULL;
+        kgsl_pdata.idle_timeout_3d = HZ/5;
+        kgsl_pdata.idle_timeout_2d = 0;
 #endif
 
 #ifdef CONFIG_USB_MSM_OTG_72K
