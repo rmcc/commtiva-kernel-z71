@@ -999,7 +999,17 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 
 	WARN_ON(host->curr.mrq != NULL);
 
+#ifndef CONFIG_FIH_FXX
         WARN_ON(host->pwr == 0);
+#else
+	if (host->pwr == 0) {
+		/*struct device *dev = mmc->parent;
+		pm_runtime_resume(dev);*/
+		printk(KERN_ERR "Returning DONE for request to an unpowered host (%d)\n",host->pdev_id);
+		mmc_request_done(mmc, mrq);
+		return;
+	}
+#endif
 
 	spin_lock_irqsave(&host->lock, flags);
 
