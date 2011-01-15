@@ -1600,7 +1600,7 @@ static struct mmc_platform_data ar6k_wifi_data = {
 	.msmsdcc_fmax   = 49152000,
 	.nonremovable   = 1,
 	.dummy52_required = 1,	
-	.sdiowakeup_irq = MSM_GPIO_TO_INT(66),
+	//.sdiowakeup_irq = MSM_GPIO_TO_INT(66),
 };
 #endif
 
