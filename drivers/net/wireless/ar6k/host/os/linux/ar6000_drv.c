@@ -5531,8 +5531,8 @@ ar6000_set_wlan_state(struct ar6_softc *ar, AR6000_WLAN_STATE state)
                break;    
             }
 
-	    /* Send a "START" event to userspace in 5 seconds */
-            A_TIMEOUT_MS(&restart_timer, 5*1000, 0);
+	    /* Send a "START" event to userspace in 10 seconds */
+            A_TIMEOUT_MS(&restart_timer, 10*1000, 0);
 
             /*ar6000_send_event_to_app(ar, WMI_REPORT_SLEEP_STATE_EVENTID, (A_UINT8*)&wmiSleepEvent,  */
             /*                        sizeof(WMI_REPORT_SLEEP_STATE_EVENTID)); */
