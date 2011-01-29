@@ -61,11 +61,6 @@ enum {
 	GPIO_LOW = 0,
 	GPIO_HIGH
 };
-/* FIH, Michael Kao, 2010/05/14{ */
-/* [FXX_CR], add for not to disable charger*/
-int charger_on;
-/* FIH, Michael Kao, 2010/05/14{ */
-
 
 /*************I2C functions*******************/
 static int tca6507_read( struct i2c_client *client, u8 *rxdata, int length )
@@ -1112,21 +1107,6 @@ static ssize_t Jogball_enable_store(struct device *dev, struct device_attribute 
 
 
 }
-/* FIH, Michael Kao, 2010/05/14{ */
-/* [FXX_CR], add for not to disable charger*/
-static ssize_t Charging_enable_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	unsigned enable;
-	
-	sscanf(buf, "%d\n", &enable);
-	
-	dev_dbg(dev, "%s: %d\n", __func__, enable);
-
-	charger_on=enable;
-	
-	return count;
-}
-/* FIH, Michael Kao, 2010/05/14{ */
 
 /*FIH, MichaelKao, 2009/07/07 {*/
 DEVICE_ATTR(tca6507_debug, 0666, tca6507_debug_show, tca6507_debug_store);
@@ -1136,10 +1116,6 @@ DEVICE_ATTR(powerbtn, 0666, NULL, powerbtn_store);//Michael
 /*Add a Jogball enable function for Jogball driver*/
 DEVICE_ATTR(jben, 0666, NULL, Jogball_enable_store);
 /*FIH, MichaelKao, 2009/07/07 {*/
-/* FIH, Michael Kao, 2010/05/14{ */
-/* [FXX_CR], add for not to disable charger*/
-DEVICE_ATTR(chgen, 0666, NULL, Charging_enable_store);
-/* FIH, Michael Kao, 2010/05/14{ */
 
 #ifdef CONFIG_PM
 static int tca6507_suspend(struct i2c_client *nLeds, pm_message_t mesg)
@@ -1286,7 +1262,6 @@ static int __devinit tca6507_probe(struct i2c_client *client,
 		tca6507_drvdata.prev_led_state[i] = TCA6507_LED_PREV_STATE_OFF;
 		tca6507_drvdata.is_fade_on[i] = true;
 	}
-	charger_on=0;
 	mutex_init(&tca6507_drvdata.tca6507_lock);
 	
 	ret = tca6507_led_init();
@@ -1324,15 +1299,6 @@ static int __devinit tca6507_probe(struct i2c_client *client,
 		mutex_destroy(&tca6507_drvdata.tca6507_lock);
 		return ret; 
 	}
-	/* FIH, Michael Kao, 2010/05/14{ */
-	/* [FXX_CR], add for not to disable charger*/
-	ret = device_create_file(&client->dev, &dev_attr_chgen);
-	if (ret < 0) {
-		dev_err(&client->dev, "%s: Create keyboard attribute \"chgen\" failed!! <%d>", __func__, ret);
-		mutex_destroy(&tca6507_drvdata.tca6507_lock);
-		return ret; 
-	}
-	/* FIH, Michael Kao, 2010/05/14{ */
 	/*FIH, MichaelKao, 2009/07/07 {*/
 	if ((tca6507_drvdata.HWID >= CMCS_HW_VER_EVB1) &&(tca6507_drvdata.HWID <= CMCS_CTP_MP3) )
 		tca6507_drvdata.LEDnum=5;
