@@ -78,7 +78,7 @@ endif
 ifneq ($(ATH_OS_SUB_TYPE),linux_2_4)
 # linux 2.6 and higher kernel module build settings
 EXTRA_CFLAGS += -DKERNEL_2_6
-obj-y += ar6000.o
+obj-$(CONFIG_AR6K) += ar6000.o
 #-include $(ATH_SRC_BASE)/hif/$(ATH_HIF_TYPE)/Makefile
 ar6000-objs := ../../hif/sdio/linux_sdio/src/hif.o
 ar6000-objs += ../../htc2/AR6000/ar6k.o        \

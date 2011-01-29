@@ -269,7 +269,7 @@ config MWL8K
 	  will be called mwl8k.  If unsure, say N.
 
 config AR6K
-    bool 'Atheros AR6002 SDIO driver'
+    tristate 'Atheros AR6002 SDIO driver'
     select WIRELESS_EXT
     ---help---
       Enable Atheros AR6002 driver.
