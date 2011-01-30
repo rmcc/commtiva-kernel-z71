@@ -1801,7 +1801,7 @@ void mddi_host_init(mddi_host_type host_idx)
 	pmhctl = &(mhctl[host_idx]);
 }
 
-#if 1
+#if defined(CONFIG_FB_MSM_MDDI_AUTO_DETECT) || defined(CONFIG_FB_MSM_MDDI_WINTEK_HVGA)
 static uint32 mddi_client_id;
 
 uint32 mddi_get_client_id(void)

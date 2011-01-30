@@ -219,19 +219,17 @@ int mddi_host_register_multiread(uint32 reg_addr,
 #define mddi_queue_register_write_extn(reg, val, pkt_size, wait, sig) \
 	mddi_host_register_write(reg, val, pkt_size, \
 	wait, NULL, MDDI_HOST_PRIM)
-/* { FIH,Chandler, lcm_wintek */
 void mddi_host_link_shutdown_write
-    ( boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host);
-
-#define mddi_queue_shutdown_write( wait, sig) \
-	mddi_host_link_shutdown_write( wait, NULL, MDDI_HOST_PRIM)
-/* } FIH,Chandler, lcm_wintek */
+	( boolean wait, mddi_llist_done_cb_type done_cb, mddi_host_type host);
 #define mddi_queue_register_write_int(reg, val) \
 	mddi_host_register_write_int(reg, val, NULL, MDDI_HOST_PRIM)
 #define mddi_queue_register_read_int(reg, val_ptr) \
 	mddi_host_register_read_int(reg, val_ptr, MDDI_HOST_PRIM)
 #define mddi_queue_register_writes(reg_ptr, val, wait, sig) \
 	mddi_host_register_writes(reg_ptr, val, wait, sig, MDDI_HOST_PRIM)
+#define mddi_queue_shutdown_write( wait, sig) \
+	mddi_host_link_shutdown_write( wait, NULL, MDDI_HOST_PRIM)
+
 
 void mddi_wait(uint16 time_ms);
 void mddi_assign_max_pkt_dimensions(uint16 image_cols,

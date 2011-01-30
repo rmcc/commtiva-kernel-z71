@@ -696,6 +696,7 @@ static int __init wintek_init(void)
 		pinfo = &wintek_panel_data.panel_info;
 		pinfo->xres = 320;
 		pinfo->yres = 480;
+		MSM_FB_SINGLE_MODE_PANEL(pinfo);
 		pinfo->type = MDDI_PANEL;
 		pinfo->pdest = DISPLAY_1;
 		pinfo->mddi.vdopkt = MDDI_DEFAULT_PRIM_PIX_ATTR;
