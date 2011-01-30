@@ -59,8 +59,6 @@ static void mddi_early_suspend(struct early_suspend *h);
 static void mddi_early_resume(struct early_suspend *h);
 #endif
 
-static void pmdh_clk_disable(void);
-static void pmdh_clk_enable(void);
 static struct platform_device *pdev_list[MSM_FB_MAX_DEV_LIST];
 static int pdev_list_cnt;
 static struct clk *mddi_clk;
@@ -91,9 +89,6 @@ static struct dev_pm_ops mddi_dev_pm_ops = {
 	.runtime_idle = mddi_runtime_idle,
 };
 
-static int pmdh_clk_status;
-int irq_enabled;
-
 static struct platform_driver mddi_driver = {
 	.probe = mddi_probe,
 	.remove = mddi_remove,
@@ -112,59 +107,6 @@ static struct platform_driver mddi_driver = {
 
 extern int int_mddi_pri_flag;
 
-void pmdh_clk_set(int enable)
-{
-	if (enable)
-		pmdh_clk_enable();
-	else
-		pmdh_clk_disable();
-}
-DEFINE_MUTEX(pmdh_clk_lock);
-static void pmdh_clk_disable()
-{
-	if (pmdh_clk_status == 0)
-		return;
-	mutex_lock(&pmdh_clk_lock);
-	if (mddi_host_timer.function)
-		del_timer_sync(&mddi_host_timer);
-	if (int_mddi_pri_flag && irq_enabled) {
-		disable_irq(INT_MDDI_PRI);
-		irq_enabled = 0;
-	}
-
-	if (mddi_clk) {
-		clk_disable(mddi_clk);
-		pmdh_clk_status = 0;
-	}
-	if (mddi_pclk)
-		clk_disable(mddi_pclk);
-	mutex_unlock(&pmdh_clk_lock);
-}
-
-static void pmdh_clk_enable()
-{
-	if (pmdh_clk_status == 1)
-		return;
-
-	mutex_lock(&pmdh_clk_lock);
-	if (mddi_clk) {
-		clk_enable(mddi_clk);
-		pmdh_clk_status = 1;
-	}
-	if (mddi_pclk)
-		clk_enable(mddi_pclk);
-
-	if (int_mddi_pri_flag && !irq_enabled) {
-		enable_irq(INT_MDDI_PRI);
-		irq_enabled = 1;
-	}
-
-	if (mddi_host_timer.function)
-		mddi_host_timer_service(0);
-
-	mutex_unlock(&pmdh_clk_lock);
-}
-
 static int mddi_off(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
@@ -181,12 +123,11 @@ static int mddi_off(struct platform_device *pdev)
 		msleep(5);
 	}
 
-	pmdh_clk_enable();
 	ret = panel_next_off(pdev);
-	pmdh_clk_disable();
 
 	if (mddi_pdata && mddi_pdata->mddi_power_save)
 		mddi_pdata->mddi_power_save(0);
+
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(0);
 #else
@@ -252,6 +193,7 @@ static int mddi_on(struct platform_device *pdev)
 	pm_qos_update_request(mfd->pm_qos_req, 65000);
 #endif
 	ret = panel_next_on(pdev);
+
 	return ret;
 }
 
@@ -326,7 +268,7 @@ static int mddi_probe(struct platform_device *pdev)
 	pdata->on = mddi_on;
 	pdata->off = mddi_off;
 	pdata->next = pdev;
-	pdata->clk_set = pmdh_clk_set;
+
 	/*
 	 * get/set panel specific fb info
 	 */
@@ -407,7 +349,9 @@ void mddi_disable(int lock)
 
 	if (lock)
 		mddi_power_locked = 1;
-	pmdh_clk_enable();
+
+	if (mddi_host_timer.function)
+		del_timer_sync(&mddi_host_timer);
 
 	mddi_pad_ctrl = mddi_host_reg_in(PAD_CTL);
 	mddi_host_reg_out(PAD_CTL, 0x0);
@@ -415,7 +359,10 @@ void mddi_disable(int lock)
 	if (clk_set_min_rate(mddi_clk, 0) < 0)
 		printk(KERN_ERR "%s: clk_set_min_rate failed\n", __func__);
 
-	pmdh_clk_disable();
+	clk_disable(mddi_clk);
+	if (mddi_pclk)
+		clk_disable(mddi_pclk);
+	disable_irq(INT_MDDI_PRI);
 
 	if (mddi_pdata && mddi_pdata->mddi_power_save)
 		mddi_pdata->mddi_power_save(0);
@@ -446,10 +393,14 @@ static int mddi_resume(struct platform_device *pdev)
 	if (mddi_power_locked)
 		return 0;
 
-	pmdh_clk_enable();
-
+	enable_irq(INT_MDDI_PRI);
+	clk_enable(mddi_clk);
+	if (mddi_pclk)
+		clk_enable(mddi_pclk);
 	mddi_host_reg_out(PAD_CTL, mddi_pad_ctrl);
 
+	if (mddi_host_timer.function)
+		mddi_host_timer_service(0);
 
 	return 0;
 }
@@ -493,25 +444,28 @@ static int mddi_register_driver(void)
 static int __init mddi_driver_init(void)
 {
 	int ret;
-	pmdh_clk_status = 0;
 
 	mddi_clk = clk_get(NULL, "mddi_clk");
 	if (IS_ERR(mddi_clk)) {
-		printk(KERN_ERR "can't find mddi_clk\n");
+		printk(KERN_ERR "can't find mddi_clk \n");
 		return PTR_ERR(mddi_clk);
 	}
+	clk_enable(mddi_clk);
 
 	mddi_pclk = clk_get(NULL, "mddi_pclk");
 	if (IS_ERR(mddi_pclk))
 		mddi_pclk = NULL;
-	pmdh_clk_enable();
+	else
+		clk_enable(mddi_pclk);
 
 	ret = mddi_register_driver();
 	if (ret) {
-		pmdh_clk_disable();
+		clk_disable(mddi_clk);
 		clk_put(mddi_clk);
-		if (mddi_pclk)
+		if (mddi_pclk) {
+			clk_disable(mddi_pclk);
 			clk_put(mddi_pclk);
+		}
 		printk(KERN_ERR "mddi_register_driver() failed!\n");
 		return ret;
 	}
