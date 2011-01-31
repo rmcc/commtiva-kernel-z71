@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -133,7 +133,8 @@ static u32 ddl_handle_client_fatal_errors(
 	break;
 	}
 	if (!status)
-		DDL_MSG_ERROR("VIDC_UNKNOWN_OP_FAILED");
+		DDL_MSG_ERROR("VIDC_UNKNOWN_OP_FAILED %d",
+				ddl_context->cmd_err_status);
 	ddl_client_fatal_cb(ddl);
 	return true;
 }
@@ -161,6 +162,8 @@ static void ddl_input_failed_cb(struct ddl_client_context *ddl,
 			ddl_get_state_string(ddl->client_state));
 		ddl->client_state = DDL_CLIENT_WAIT_FOR_FRAME;
 	}
+	if (vcd_status == VCD_ERR_IFRAME_EXPECTED)
+		vcd_status = VCD_S_SUCCESS;
 	ddl_context->ddl_callback(vcd_event, vcd_status, &ddl->input_frame,
 		payload_size, (u32 *)ddl, ddl->client_data);
 }
@@ -400,6 +403,13 @@ static u32 ddl_handle_dec_seq_hdr_fail_error(struct ddl_client_context *ddl)
 	case VIDC_1080P_ERROR_PPS_PARSE_ERROR:
 	{
 		struct ddl_decoder_data *decoder = &ddl->codec_data.decoder;
+		if (ddl_context->cmd_err_status ==
+			VIDC_1080P_ERROR_UNSUPPORTED_FEATURE_IN_PROFILE
+			&& decoder->codec.codec == VCD_CODEC_H264) {
+			DDL_MSG_ERROR("Unsupported Feature for H264");
+			ddl_client_fatal_cb(ddl);
+			return true;
+		}
 
 		DDL_MSG_ERROR("SEQHDR-FAILED");
 		if (decoder->header_in_start) {

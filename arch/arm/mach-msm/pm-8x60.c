@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -63,6 +63,7 @@ enum {
 	MSM_PM_DEBUG_RESET_VECTOR = BIT(4),
 	MSM_PM_DEBUG_IDLE = BIT(6),
 	MSM_PM_DEBUG_IDLE_LIMITS = BIT(7),
+	MSM_PM_DEBUG_HOTPLUG = BIT(8),
 };
 
 static int msm_pm_debug_mask = 1;
@@ -538,22 +539,6 @@ static void msm_pm_config_hw_before_swfi(void)
 	return;
 }
 
-/*
- * Configure RPM resources.
- */
-static int msm_pm_config_rpm_resources(
-	uint32_t sclk_count, struct msm_rpmrs_limits *rs_limits)
-{
-	int ret;
-
-	ret = msm_rpmrs_flush_buffer(sclk_count, rs_limits);
-	if (ret)
-		pr_err("%s: msm_rpmrs_flush_buffer failed: %d\n",
-			__func__, ret);
-
-	return ret;
-}
-
 
 /******************************************************************************
  * Suspend Max Sleep Time
@@ -609,6 +594,7 @@ EXPORT_SYMBOL(msm_pm_set_max_sleep_time);
 struct msm_pm_device {
 	unsigned int cpu;
 #ifdef CONFIG_HOTPLUG_CPU
+	unsigned long saved_acpu_rate;
 	struct completion cpu_killed;
 	unsigned int warm_boot;
 #endif
@@ -857,12 +843,15 @@ int msm_pm_idle_enter(enum msm_pm_sleep_mode sleep_mode)
 		if (sleep_delay == 0) /* 0 would mean infinite time */
 			sleep_delay = 1;
 
-		ret = msm_pm_config_rpm_resources(sleep_delay,
-				msm_pm_idle_rs_limits);
+		ret = msm_rpmrs_enter_sleep(
+				true, sleep_delay, msm_pm_idle_rs_limits);
 		if (!ret) {
 			msm_pm_power_collapse(true);
 			timer_halted = true;
+
+			msm_rpmrs_exit_sleep(true, msm_pm_idle_rs_limits);
 		}
+
 		msm_timer_exit_idle((int) timer_halted);
 #ifdef CONFIG_MSM_IDLE_STATS
 		exit_stat = MSM_PM_STAT_IDLE_POWER_COLLAPSE;
@@ -905,7 +894,6 @@ static int msm_pm_enter(suspend_state_t state)
 		goto enter_exit;
 	}
 
-	gic_suspend(0);
 
 	for (i = 0; i < MSM_PM_SLEEP_MODE_NR; i++) {
 		struct msm_pm_platform_data *mode;
@@ -930,6 +918,9 @@ static int msm_pm_enter(suspend_state_t state)
 		}
 #endif /* CONFIG_MSM_SLEEP_TIME_OVERRIDE */
 
+		if (MSM_PM_DEBUG_SUSPEND_LIMITS & msm_pm_debug_mask)
+			msm_rpmrs_show_resources();
+
 		rs_limits = msm_rpmrs_lowest_limits(
 				MSM_PM_SLEEP_MODE_POWER_COLLAPSE, -1, -1);
 
@@ -942,10 +933,12 @@ static int msm_pm_enter(suspend_state_t state)
 				rs_limits->vdd_mem, rs_limits->vdd_dig);
 
 		if (rs_limits) {
-			ret = msm_pm_config_rpm_resources(
-					msm_pm_max_sleep_time, rs_limits);
-			if (!ret)
+			ret = msm_rpmrs_enter_sleep(
+				false, msm_pm_max_sleep_time, rs_limits);
+			if (!ret) {
 				msm_pm_power_collapse(false);
+				msm_rpmrs_exit_sleep(false, rs_limits);
+			}
 		} else {
 			pr_err("%s: cannot find the lowest power limit\n",
 				__func__);
@@ -974,7 +967,6 @@ static int msm_pm_enter(suspend_state_t state)
 		msm_pm_swfi();
 	}
 
-	gic_resume(0);
 
 enter_exit:
 	if (MSM_PM_DEBUG_SUSPEND & msm_pm_debug_mask)
@@ -1018,14 +1010,19 @@ void platform_cpu_die(unsigned int cpu)
 		allow[i] = mode->supported && mode->suspend_enabled;
 	}
 
-	pr_notice("CPU%u: %s: shutting down cpu\n", cpu, __func__);
+	if (MSM_PM_DEBUG_HOTPLUG & msm_pm_debug_mask)
+		pr_notice("CPU%u: %s: shutting down cpu\n", cpu, __func__);
 	complete(&__get_cpu_var(msm_pm_devices).cpu_killed);
 
 	flush_cache_all();
 
 	for (;;) {
-		if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE])
+		if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE]) {
+			struct msm_pm_device *dev =
+				&__get_cpu_var(msm_pm_devices);
+			dev->saved_acpu_rate = acpuclk_get_rate(cpu);
 			msm_pm_power_collapse(false);
+		}
 		else if (allow[MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE])
 			msm_pm_power_collapse_standalone(false);
 		else if (allow[MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT])
@@ -1053,6 +1050,16 @@ int msm_pm_platform_secondary_init(unsigned int cpu)
 #ifdef CONFIG_VFP
 	vfp_reinit();
 #endif
+
+	if (dev->saved_acpu_rate) {
+		ret = acpuclk_set_rate(dev->cpu,
+				dev->saved_acpu_rate,
+				SETRATE_PC);
+		if (ret)
+			pr_err("CPU%u: %s: failed clock rate restore(%lu)\n",
+			dev->cpu, __func__, dev->saved_acpu_rate);
+		dev->saved_acpu_rate = 0;
+	}
 	ret = msm_spm_set_low_power_mode(MSM_SPM_MODE_CLOCK_GATING, false);
 
 	return ret;

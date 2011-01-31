@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,6 +28,7 @@
 #include "kgsl_pm4types.h"
 #include "kgsl_drawctxt.h"
 #include "kgsl_cmdstream.h"
+#include "kgsl_cffdump.h"
 
 /*
 *
@@ -1502,8 +1503,7 @@ int kgsl_drawctxt_init(struct kgsl_device *device)
 /* close draw context */
 int kgsl_drawctxt_close(struct kgsl_device *device)
 {
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 	yamato_device->drawctxt_active = NULL;
 	return 0;
 }
@@ -1516,8 +1516,7 @@ kgsl_drawctxt_create(struct kgsl_device_private *dev_priv,
 {
 	struct kgsl_drawctxt *drawctxt;
 	struct kgsl_device *device = dev_priv->device;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 	struct kgsl_pagetable *pagetable = dev_priv->process_priv->pagetable;
 	int index;
 	struct tmp_ctx ctx;
@@ -1584,8 +1583,7 @@ kgsl_drawctxt_create(struct kgsl_device_private *dev_priv,
 int kgsl_drawctxt_destroy(struct kgsl_device *device, unsigned int drawctxt_id)
 {
 	struct kgsl_drawctxt *drawctxt;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 
 	if (drawctxt_id >= KGSL_CONTEXT_MAX)
 		return -EINVAL;
@@ -1737,8 +1735,7 @@ int kgsl_drawctxt_set_bin_base_offset(struct kgsl_device *device,
 					unsigned int offset)
 {
 	struct kgsl_drawctxt *drawctxt;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-								device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 
 	drawctxt = yamato_device->drawctxt[drawctxt_id];
 	if (drawctxt == NULL)
@@ -1842,6 +1839,13 @@ kgsl_drawctxt_switch(struct kgsl_yamato_device *yamato_device,
 		KGSL_CTXT_INFO("drawctxt flags %08x\n", drawctxt->flags);
 		KGSL_CTXT_DBG("restore pagetable");
 		kgsl_mmu_setstate(device, drawctxt->pagetable);
+
+#ifndef CONFIG_MSM_KGSL_CFF_DUMP_NO_CONTEXT_MEM_DUMP
+		kgsl_cffdump_syncmem(NULL, &drawctxt->gpustate,
+			drawctxt->gpustate.gpuaddr, LCC_SHADOW_SIZE +
+			REG_SHADOW_SIZE + CMD_BUFFER_SIZE + TEX_SHADOW_SIZE,
+			false);
+#endif
 
 		/* restore gmem.
 		 *  (note: changes shader. shader must not already be restored.)

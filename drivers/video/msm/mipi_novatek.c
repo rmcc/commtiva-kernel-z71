@@ -97,16 +97,21 @@ static char display_config_set_threelane[] = {
 	0xae, 0x05, 0x15, 0x80
 };
 
-
 #else
 
 static char sw_reset[2] = {0x01, 0x00}; /* DTYPE_DCS_WRITE */
+static char enter_sleep[2] = {0x10, 0x00}; /* DTYPE_DCS_WRITE */
 static char exit_sleep[2] = {0x11, 0x00}; /* DTYPE_DCS_WRITE */
+static char display_off[2] = {0x28, 0x00}; /* DTYPE_DCS_WRITE */
 static char display_on[2] = {0x29, 0x00}; /* DTYPE_DCS_WRITE */
 
-static char set_onelane[2] = {0xae, 0x01}; /* DTYPE_DCS_WRITE1 */
 static char rgb_888[2] = {0x3A, 0x77}; /* DTYPE_DCS_WRITE1 */
 
+#if defined(NOVATEK_TWO_LANE)
+static char set_num_of_lanes[2] = {0xae, 0x03}; /* DTYPE_DCS_WRITE1 */
+#else  /* 1 lane */
+static char set_num_of_lanes[2] = {0xae, 0x01}; /* DTYPE_DCS_WRITE1 */
+#endif
 /* commands by Novatke */
 static char novatek_f4[2] = {0xf4, 0x55}; /* DTYPE_DCS_WRITE1 */
 static char novatek_8c[16] = { /* DTYPE_DCS_LWRITE */
@@ -128,7 +133,7 @@ static struct dsi_cmd_desc novatek_video_on_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 10,
 		sizeof(display_on), display_on},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
-		sizeof(set_onelane), set_onelane},
+		sizeof(set_num_of_lanes), set_num_of_lanes},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
 		sizeof(rgb_888), rgb_888}
 };
@@ -140,6 +145,8 @@ static struct dsi_cmd_desc novatek_cmd_on_cmds[] = {
 		sizeof(exit_sleep), exit_sleep},
 	{DTYPE_DCS_WRITE, 1, 0, 0, 10,
 		sizeof(display_on), display_on},
+	{DTYPE_MAX_PKTSIZE, 1, 0, 0, 0,
+		sizeof(max_pktsize), max_pktsize},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 50,
 		sizeof(novatek_f4), novatek_f4},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 50,
@@ -147,7 +154,7 @@ static struct dsi_cmd_desc novatek_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 50,
 		sizeof(novatek_ff), novatek_ff},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
-		sizeof(set_onelane), set_onelane},
+		sizeof(set_num_of_lanes), set_num_of_lanes},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 50,
 		sizeof(set_width), set_width},
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 50,
@@ -155,6 +162,39 @@ static struct dsi_cmd_desc novatek_cmd_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
 		sizeof(rgb_888), rgb_888}
 };
+
+static struct dsi_cmd_desc novatek_display_off_cmds[] = {
+	{DTYPE_DCS_WRITE, 1, 0, 0, 10,
+		sizeof(display_off), display_off},
+	{DTYPE_DCS_WRITE, 1, 0, 0, 120,
+		sizeof(enter_sleep), enter_sleep}
+};
+
+static char manufacture_id[2] = {0x04, 0x00}; /* DTYPE_DCS_READ */
+
+static struct dsi_cmd_desc novatek_manufacture_id_cmd = {
+	DTYPE_DCS_READ, 1, 0, 1, 5, sizeof(manufacture_id), manufacture_id};
+
+static uint32 mipi_novatek_manufacture_id(void)
+{
+	struct dsi_buf *rp, *tp;
+	struct dsi_cmd_desc *cmd;
+	uint32 *lp;
+
+	tp = &novatek_tx_buf;
+	rp = &novatek_rx_buf;
+	mipi_dsi_buf_init(rp);
+	mipi_dsi_buf_init(tp);
+
+	cmd = &novatek_manufacture_id_cmd;
+	mipi_dsi_cmds_rx(tp, rp, cmd, 3);
+
+	lp = (uint32 *)rp->data;
+
+	pr_info("%s: manufacture_id=%x", __func__, *lp);
+
+	return *lp;
+}
 
 static int mipi_novatek_lcd_on(struct platform_device *pdev)
 {
@@ -175,6 +215,10 @@ static int mipi_novatek_lcd_on(struct platform_device *pdev)
 	} else {
 		mipi_dsi_cmds_tx(&novatek_tx_buf, novatek_cmd_on_cmds,
 			ARRAY_SIZE(novatek_cmd_on_cmds));
+
+		mipi_dsi_cmd_bta_sw_trigger(); /* clean up ack_err_status */
+
+		mipi_novatek_manufacture_id();
 	}
 
 	return 0;
@@ -182,10 +226,27 @@ static int mipi_novatek_lcd_on(struct platform_device *pdev)
 
 static int mipi_novatek_lcd_off(struct platform_device *pdev)
 {
+	struct msm_fb_data_type *mfd;
+
+	mfd = platform_get_drvdata(pdev);
+
+	if (!mfd)
+		return -ENODEV;
+	if (mfd->key != MFD_KEY)
+		return -EINVAL;
+
+	/* change to DSI_CMD_MODE since it needed to
+	 * tx DCS dsiplay off comamnd to toshiba panel
+	 */
+	mipi_dsi_op_mode_config(DSI_CMD_MODE);
+
+	mipi_dsi_cmds_tx(&novatek_tx_buf, novatek_display_off_cmds,
+			ARRAY_SIZE(novatek_display_off_cmds));
+
 	return 0;
 }
 
-static int __init mipi_novatek_lcd_probe(struct platform_device *pdev)
+static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 {
 	if (pdev->id == 0) {
 		mipi_novatek_pdata = pdev->dev.platform_data;

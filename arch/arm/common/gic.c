@@ -28,10 +28,12 @@
 #include <linux/smp.h>
 #include <linux/cpumask.h>
 #include <linux/io.h>
+#include <linux/sysdev.h>
 
 #include <asm/irq.h>
 #include <asm/mach/irq.h>
 #include <asm/hardware/gic.h>
+#include <../mach-msm/mpm.h>
 
 static DEFINE_SPINLOCK(irq_controller_lock);
 
@@ -107,6 +109,8 @@ static void gic_mask_irq(unsigned int irq)
 	spin_lock(&irq_controller_lock);
 	writel(mask, gic_dist_base(irq) + GIC_DIST_ENABLE_CLEAR + (gic_irq(irq) / 32) * 4);
 	spin_unlock(&irq_controller_lock);
+
+	msm_mpm_enable_irq(irq, 0);
 }
 
 static void gic_unmask_irq(unsigned int irq)
@@ -116,6 +120,8 @@ static void gic_unmask_irq(unsigned int irq)
 	spin_lock(&irq_controller_lock);
 	writel(mask, gic_dist_base(irq) + GIC_DIST_ENABLE_SET + (gic_irq(irq) / 32) * 4);
 	spin_unlock(&irq_controller_lock);
+
+	msm_mpm_enable_irq(irq, 1);
 }
 
 #ifdef CONFIG_SMP
@@ -167,10 +173,12 @@ static void gic_handle_cascade_irq(unsigned int irq, struct irq_desc *desc)
 }
 
 #ifdef CONFIG_PM
-void gic_suspend(unsigned int gic_nr)
+static int gic_suspend(struct sys_device *sysdev, pm_message_t state)
 {
 	unsigned int i;
+	unsigned int gic_nr = sysdev->id;
 	void __iomem *base = gic_data[gic_nr].dist_base;
+
 	/* Dont disable STI's and PPI's. Assume they are quiesced
 	 * by the suspend framework */
 	for (i = 1; i * 32 < gic_data[gic_nr].max_irq; i++) {
@@ -182,12 +190,39 @@ void gic_suspend(unsigned int gic_nr)
 		writel(gic_data[gic_nr].wakeup_irqs[i],
 			base + GIC_DIST_ENABLE_SET + i * 4);
 	}
+	return 0;
 }
 
-void gic_resume(unsigned int gic_nr)
+void gic_show_resume_irq(unsigned int gic_nr)
 {
 	unsigned int i;
+	u32 enabled;
+	unsigned long pending[32];
 	void __iomem *base = gic_data[gic_nr].dist_base;
+
+	pending[0] = 0;
+	spin_lock(&irq_controller_lock);
+	for (i = 1; i * 32 < gic_data[gic_nr].max_irq; i++) {
+		enabled = readl(base + GIC_DIST_ENABLE_CLEAR + i * 4);
+		pending[i] = readl(base + GIC_DIST_PENDING_SET + i * 4);
+		pending[i] &= enabled;
+	}
+	spin_unlock(&irq_controller_lock);
+
+	for (i = find_first_bit(pending, gic_data[gic_nr].max_irq);
+	     i < gic_data[gic_nr].max_irq;
+	     i = find_next_bit(pending, gic_data[gic_nr].max_irq, i+1)) {
+		pr_warning("%s: %d triggered", __func__,
+					i + gic_data[gic_nr].irq_offset);
+	}
+}
+
+static int gic_resume(struct sys_device *sysdev)
+{
+	unsigned int i;
+	unsigned int gic_nr = sysdev->id;
+	void __iomem *base = gic_data[gic_nr].dist_base;
+
 	for (i = 1; i * 32 < gic_data[gic_nr].max_irq; i++) {
 		/* disable all of them */
 		writel(0xffffffff, base + GIC_DIST_ENABLE_CLEAR + i * 4);
@@ -195,6 +230,7 @@ void gic_resume(unsigned int gic_nr)
 		writel(gic_data[gic_nr].enabled_irqs[i],
 			base + GIC_DIST_ENABLE_SET + i * 4);
 	}
+	return 0;
 }
 
 static int gic_set_wake(unsigned int irq, unsigned int on)
@@ -214,11 +250,41 @@ static int gic_set_wake(unsigned int irq, unsigned int on)
 	else
 		gic_data->wakeup_irqs[reg_offset] &=  ~(1 << bit_offset);
 
+	msm_mpm_set_irq_wake(irq, on);
 	return 0;
 }
+
+static struct sysdev_class gic_sysdev_class = {
+	.name = "gic_irq",
+	.suspend = gic_suspend,
+	.resume = gic_resume,
+};
+
+static struct sys_device gic_sys_device[MAX_GIC_NR] = {
+	[0 ... MAX_GIC_NR-1] = {
+		.cls = &gic_sysdev_class
+	},
+};
+
+static int __init gic_init_sysdev(void)
+{
+	int i;
+	int rc = sysdev_class_register(&gic_sysdev_class);
+
+	if (!rc)
+		for (i = 0; i < MAX_GIC_NR; i++) {
+			gic_sys_device[i].id = i;
+			rc = sysdev_register(&gic_sys_device[i]);
+			if (rc) {
+				printk(KERN_ERR "%s sysdev_register for"
+						" %d failed err = %d\n",
+						__func__, i, rc);
+			}
+		}
+	return 0;
+}
+arch_initcall(gic_init_sysdev);
 #else
-void gic_suspend(unsigned int gic_nr) {}
-void gic_resume(unsigned int gic_nr) {}
 static int gic_set_wake(unsigned int irq, unsigned int on)
 {
 	return 0;
@@ -266,6 +332,11 @@ static int gic_set_type(unsigned int irq, unsigned int type)
 		writel(enablemask, base + GIC_DIST_ENABLE_SET + enableoff);
 
 	spin_unlock(&irq_controller_lock);
+
+	if ((type & IRQ_TYPE_EDGE_RISING) && gicirq > 31)
+		__set_irq_handler_unlocked(irq, handle_edge_irq);
+
+	msm_mpm_set_irq_type(irq, type);
 
 	return 0;
 }

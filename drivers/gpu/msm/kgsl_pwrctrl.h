@@ -26,6 +26,9 @@
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
+#ifndef _GSL_PWRCTRL_H
+#define _GSL_PWRCTRL_H
+
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/clk.h>
@@ -85,3 +88,7 @@ void kgsl_timer(unsigned long data);
 void kgsl_idle_check(struct work_struct *work);
 void kgsl_pre_hwaccess(struct kgsl_device *device);
 void kgsl_check_suspended(struct kgsl_device *device);
+int kgsl_pwrctrl_sleep(struct kgsl_device *device);
+int kgsl_pwrctrl_wake(struct kgsl_device *device);
+
+#endif /* _GSL_PWRCTRL_H */

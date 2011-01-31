@@ -97,7 +97,21 @@ struct gpiomux_setting {
  */
 struct msm_gpiomux_config {
 	unsigned gpio;
-	struct gpiomux_setting settings[GPIOMUX_NSETTINGS];
+	struct gpiomux_setting *settings[GPIOMUX_NSETTINGS];
+};
+
+/**
+ * struct msm_gpiomux_configs: a collection of gpiomux configs.
+ *
+ * It is so common to manage blocks of gpiomux configs that the data structure
+ * for doing so has been standardized here as a convenience.
+ *
+ * @cfg:  A pointer to the first config in an array of configs.
+ * @ncfg: The number of configs in the array.
+ */
+struct msm_gpiomux_configs {
+	struct msm_gpiomux_config *cfg;
+	size_t                     ncfg;
 };
 
 #ifdef CONFIG_MSM_GPIOMUX
@@ -120,9 +134,15 @@ int __must_check msm_gpiomux_get(unsigned gpio);
 int msm_gpiomux_put(unsigned gpio);
 
 /* Install a new setting in a gpio.  To erase a slot, use NULL.
+ * The old setting that was overwritten can be passed back to the caller
+ * old_setting can be NULL if the caller is not interested in the previous
+ * setting
+ * If a previous setting was not available to return (NULL configuration)
+ * - the function returns 1
+ * else function returns 0
  */
 int msm_gpiomux_write(unsigned gpio, enum msm_gpiomux_setting which,
-	struct gpiomux_setting *setting);
+	struct gpiomux_setting *setting, struct gpiomux_setting *old_setting);
 
 /* Architecture-internal function for use by the framework only.
  * This function can assume the following:
@@ -153,7 +173,8 @@ static inline int msm_gpiomux_put(unsigned gpio)
 }
 
 static inline int msm_gpiomux_write(unsigned gpio,
-	enum msm_gpiomux_setting which, struct gpiomux_setting *setting);
+	enum msm_gpiomux_setting which, struct gpiomux_setting *setting,
+	struct gpiomux_setting *old_setting);
 {
 	return -ENOSYS;
 }

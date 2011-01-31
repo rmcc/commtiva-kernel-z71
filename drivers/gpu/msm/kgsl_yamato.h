@@ -30,6 +30,7 @@
 #define _KGSL_YAMATO_H
 
 #include "kgsl_drawctxt.h"
+#include "kgsl_ringbuffer.h"
 
 struct kgsl_yamato_device {
 	struct kgsl_device dev;    /* Must be first field in this struct */
@@ -42,6 +43,7 @@ struct kgsl_yamato_device {
 	size_t pfp_fw_size;
 	unsigned int *pm4_fw;
 	size_t pm4_fw_size;
+	struct kgsl_ringbuffer ringbuffer;
 };
 
 

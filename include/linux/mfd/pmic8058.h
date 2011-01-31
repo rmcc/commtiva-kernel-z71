@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -87,6 +87,7 @@
 #define PM8058_RTC_ALARM_IRQ(base) 	((base) + PM8058_IRQ_BLOCK_BIT(4, 7))
 #define PM8058_ADC_IRQ(base)		((base) + PM8058_IRQ_BLOCK_BIT(9, 4))
 #define PM8058_TEMP_ALARM_IRQ(base)	((base) + PM8058_IRQ_BLOCK_BIT(6, 7))
+#define PM8058_OSCHALT_IRQ(base)	((base) + PM8058_IRQ_BLOCK_BIT(4, 6))
 
 struct pm8058_chip;
 
@@ -97,6 +98,7 @@ struct pm8058_platform_data {
 
 	int		num_subdevs;
 	struct mfd_cell *sub_devices;
+	int		irq_trigger_flags;
 };
 
 struct pm8058_gpio_platform_data {
@@ -188,3 +190,5 @@ int pm8058_irq_get_rt_status(struct pm8058_chip *pm_chip, int irq);
 int pm8058_misc_control(struct pm8058_chip *pm_chip, int mask, int flag);
 
 int pm8058_reset_pwr_off(int reset);
+
+void pm8058_show_resume_irq(void);

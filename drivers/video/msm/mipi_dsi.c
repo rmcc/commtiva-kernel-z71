@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -29,9 +29,6 @@
 #include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
-#ifndef CONFIG_MSM_BUS_SCALING
-#include <linux/pm_qos_params.h>
-#endif
 #include <asm/system.h>
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
@@ -71,6 +68,8 @@ static struct platform_driver mipi_dsi_driver = {
 
 struct device dsi_dev;
 
+/* MIPI_DSI_MRPS, Maximum Return Packet Size */
+char max_pktsize[2] = {MIPI_DSI_MRPS, 0x00}; /* LSB tx first, 16 bytes */
 
 /*
  * mipi_dsi_mxo_selected() -
@@ -351,8 +350,6 @@ static int mipi_dsi_off(struct platform_device *pdev)
 
 	mfd = platform_get_drvdata(pdev);
 
-#ifdef XXXXX
-
 	ret = panel_next_off(pdev);
 
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
@@ -360,7 +357,8 @@ static int mipi_dsi_off(struct platform_device *pdev)
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(0);
 #else
-	pm_qos_update_request(mfd->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+	if (mfd->ebi1_clk)
+		clk_disable(mfd->ebi1_clk);
 #endif
 
 	disable_irq(DSI_IRQ);
@@ -381,7 +379,6 @@ static int mipi_dsi_off(struct platform_device *pdev)
 
 	/* disbale dsi engine */
 	MIPI_OUTP(MIPI_DSI_BASE + 0x0000, 0);
-#endif
 
 	pr_debug("%s:\n", __func__);
 
@@ -476,6 +473,8 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	mipi_dsi_host_init(mipi);
 
+	mipi_dsi_cmd_bta_sw_trigger(); /* clean up ack_err_status */
+
 	ret = panel_next_on(pdev);
 
 	mipi_dsi_op_mode_config(mipi->mode);
@@ -483,7 +482,8 @@ static int mipi_dsi_on(struct platform_device *pdev)
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(2);
 #else
-	pm_qos_update_request(mfd->pm_qos_req, 122000);
+	if (mfd->ebi1_clk)
+		clk_enable(mfd->ebi1_clk);
 #endif
 
 	pr_debug("%s:\n", __func__);
@@ -628,10 +628,11 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 	pdev_list[pdev_list_cnt++] = pdev;
 
 #ifndef CONFIG_MSM_BUS_SCALING
-	mfd->pm_qos_req = pm_qos_add_request(PM_QOS_SYSTEM_BUS_FREQ,
-					       PM_QOS_DEFAULT_VALUE);
-	if (!mfd->pm_qos_req)
+	if (IS_ERR(mfd->ebi1_clk)) {
+		rc = PTR_ERR(mfd->ebi1_clk);
 		goto mipi_dsi_probe_err;
+	}
+	clk_set_rate(mfd->ebi1_clk, 122000000);
 #endif
 
 	return 0;
@@ -647,7 +648,7 @@ static int mipi_dsi_remove(struct platform_device *pdev)
 
 	mfd = platform_get_drvdata(pdev);
 #ifndef CONFIG_MSM_BUS_SCALING
-	pm_qos_remove_request(mfd->pm_qos_req);
+	clk_put(mfd->ebi1_clk);
 #endif
 
 	iounmap(msm_pmdh_base);

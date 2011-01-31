@@ -822,6 +822,7 @@ static int vpe_proc_general(struct msm_vpe_cmd *cmd)
 		qcmd = msm_dequeue_vpe(&sync->vpe_q, list_vpe_frame);
 		if (!qcmd) {
 			pr_err("%s: no video frame.\n", __func__);
+			kfree(cmdp);
 			return -EAGAIN;
 		}
 		vdata = (struct msm_vfe_resp *)(qcmd->command);
@@ -832,8 +833,10 @@ static int vpe_proc_general(struct msm_vpe_cmd *cmd)
 		msm_send_frame_to_vpe(vpe_buf->y_phy, vpe_buf->cbcr_phy,
 						&(vpe_buf->ts));
 
-		if (!qcmd || !atomic_read(&qcmd->on_heap))
+		if (!qcmd || !atomic_read(&qcmd->on_heap)) {
+			kfree(cmdp);
 			return -EAGAIN;
+		}
 		if (!atomic_sub_return(1, &qcmd->on_heap))
 			kfree(qcmd);
 		break;
@@ -956,12 +959,10 @@ int msm_vpe_config(struct msm_vpe_cfg_cmd *cmd, void *data)
 
 	case CMD_AXI_CFG_VPE: {
 		struct axidata *axid;
-		uint32_t *axio = NULL;
 		axid = data;
 		if (!axid)
 			return -EFAULT;
 		vpe_config_axi(axid);
-		kfree(axio);
 		break;
 	}
 	default:
@@ -1046,6 +1047,7 @@ static void vpe_do_tasklet(unsigned long data)
 		vpe_send_outmsg(MSG_ID_VPE_OUTPUT_V, pyaddr, pcbcraddr);
 		vpe_ctrl->state = 0;   /* put it back to idle. */
 	}
+	kfree(qcmd);
 }
 DECLARE_TASKLET(vpe_tasklet, vpe_do_tasklet, 0);
 
@@ -1131,13 +1133,14 @@ int msm_vpe_release(void)
 	/* don't change the order of clock and irq.*/
 	int rc = 0;
 
-	CDBG("%s: In \n", __func__);
+	pr_info("%s: In\n", __func__);
 
 	free_irq(vpe_device->vpeirq, 0);
+	tasklet_kill(&vpe_tasklet);
 	rc = msm_camio_vpe_clk_disable();
 	kfree(vpe_ctrl);
 
-	CDBG("%s: Out \n", __func__);
+	pr_info("%s: Out\n", __func__);
 	return rc;
 }
 

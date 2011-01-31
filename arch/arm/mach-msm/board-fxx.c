@@ -51,6 +51,7 @@
 
 #include <mach/rpc_server_handset.h>
 #include <mach/msm_tsif.h>
+#include <mach/socinfo.h>
 
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
@@ -61,7 +62,6 @@
 #include <linux/elan_i2c.h>  //Added for capacitive touch panel, by Stanley++ 2009/05/20
 #include <linux/switch.h> 
 #include "devices.h"
-#include "socinfo.h"
 #include "clock.h"
 #include "msm-keypad-devices.h"
 #include <mach/tca6507.h>
@@ -318,7 +318,7 @@ void charger_connected(enum chg_type chgtype)
 
 static struct msm_otg_platform_data msm_otg_pdata = {
     .rpc_connect    = hsusb_rpc_connect,
-    .pmic_notif_init         = msm_hsusb_pmic_notif_init,
+    .pmic_vbus_notif_init         = msm_hsusb_pmic_notif_init,
     .chg_vbus_draw       = hsusb_chg_vbus_draw,
 #ifdef CONFIG_BATTERY_FIH_ZEUS
     .chg_connected       = charger_connected,
@@ -327,6 +327,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
     .ldo_init       = msm_hsusb_ldo_init,
     .ldo_enable     = msm_hsusb_ldo_enable,
     .pclk_required_during_lpm = 1,
+    .pclk_src_name          = "ebi1_usb_clk",
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
@@ -1736,9 +1737,6 @@ static void __init msm7x2x_init(void)
 	fih_smem_alloc_for_host_used();
 	fih_smem_alloc();
 
-	if (socinfo_init() < 0)
-		BUG();
-
 	msm_clock_init(msm_clocks_7x27, msm_num_clocks_7x27);
 #ifdef CONFIG_AR6K
 	ar6k_wifi_status_cb=NULL; 
@@ -1929,12 +1927,21 @@ static void __init msm7x2x_map_io(void)
 
 	msm_msm7x2x_allocate_memory_regions();
 
+	if (socinfo_init() < 0)
+		BUG();
+
 #ifdef CONFIG_CACHE_L2X0
 	/* 7x27 has 256KB L2 cache:
 	   64Kb/Way and 4-Way Associativity;
-	   R/W latency: 3 cycles;
 	   evmon/parity/share disabled. */
-	l2x0_init(MSM_L2CC_BASE, 0x00068012, 0xfe000000);
+	if ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) > 1)
+			|| ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 1)
+				&& (SOCINFO_VERSION_MINOR(socinfo_get_version()) >= 3)))
+		/* R/W latency: 4 cycles; */
+		l2x0_init(MSM_L2CC_BASE, 0x0006801B, 0xfe000000);
+	else
+		/* R/W latency: 3 cycles; */
+		l2x0_init(MSM_L2CC_BASE, 0x00068012, 0xfe000000);
 #endif
 }
 

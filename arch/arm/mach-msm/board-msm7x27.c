@@ -50,6 +50,7 @@
 #include <mach/msm_battery.h>
 #include <mach/rpc_server_handset.h>
 #include <mach/msm_tsif.h>
+#include <mach/socinfo.h>
 
 #include <linux/mtd/nand.h>
 #include <linux/mtd/partitions.h>
@@ -58,7 +59,6 @@
 #include <mach/camera.h>
 
 #include "devices.h"
-#include "socinfo.h"
 #include "clock.h"
 #include "msm-keypad-devices.h"
 #include "pm.h"
@@ -433,7 +433,7 @@ static int msm_otg_rpc_phy_reset(void __iomem *regs)
 
 static struct msm_otg_platform_data msm_otg_pdata = {
 	.rpc_connect	= hsusb_rpc_connect,
-	.pmic_notif_init         = msm_hsusb_pmic_notif_init,
+	.pmic_vbus_notif_init         = msm_hsusb_pmic_notif_init,
 	.chg_vbus_draw		 = hsusb_chg_vbus_draw,
 	.chg_connected		 = hsusb_chg_connected,
 	.chg_init		 = hsusb_chg_init,
@@ -442,7 +442,8 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 #endif
 	.ldo_init		= msm_hsusb_ldo_init,
 	.ldo_enable		= msm_hsusb_ldo_enable,
-	.pclk_required_during_lpm = 1
+	.pclk_required_during_lpm = 1,
+	.pclk_src_name		= "ebi1_usb_clk",
 };
 
 #ifdef CONFIG_USB_GADGET
@@ -1901,8 +1902,7 @@ static void msm7x27_wlan_init(void)
 
 static void __init msm7x2x_init(void)
 {
-	if (socinfo_init() < 0)
-		BUG();
+
 #ifdef CONFIG_ARCH_MSM7X25
 	msm_clock_init(msm_clocks_7x25, msm_num_clocks_7x25);
 #elif defined(CONFIG_ARCH_MSM7X27)
@@ -2127,13 +2127,22 @@ static void __init msm7x2x_map_io(void)
 	msm_map_common_io();
 	msm_msm7x2x_allocate_memory_regions();
 
+	if (socinfo_init() < 0)
+		BUG();
+
 #ifdef CONFIG_CACHE_L2X0
 	if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa()) {
 		/* 7x27 has 256KB L2 cache:
 			64Kb/Way and 4-Way Associativity;
-			R/W latency: 3 cycles;
 			evmon/parity/share disabled. */
-		l2x0_init(MSM_L2CC_BASE, 0x00068012, 0xfe000000);
+		if ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) > 1)
+			|| ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 1)
+			&& (SOCINFO_VERSION_MINOR(socinfo_get_version()) >= 3)))
+			/* R/W latency: 4 cycles; */
+			l2x0_init(MSM_L2CC_BASE, 0x0006801B, 0xfe000000);
+		else
+			/* R/W latency: 3 cycles; */
+			l2x0_init(MSM_L2CC_BASE, 0x00068012, 0xfe000000);
 	}
 #endif
 }

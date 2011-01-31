@@ -28,7 +28,7 @@
 #ifndef __Q6_ASM_H__
 #define __Q6_ASM_H__
 
-#include "apr.h"
+#include <mach/qdsp6v2/apr.h>
 
 #define IN                      0x000
 #define OUT                     0x001
@@ -72,6 +72,8 @@
 
 #define ASYNC_IO_MODE	0x0002
 #define SYNC_IO_MODE	0x0001
+#define NO_TIMESTAMP    0xFF00
+#define SET_TIMESTAMP   0x0000
 
 typedef void (*app_cb)(uint32_t opcode, uint32_t token,
 			uint32_t *payload, void *priv);
@@ -91,6 +93,12 @@ struct audio_aio_write_param {
 	uint32_t msw_ts;
 	uint32_t lsw_ts;
 	uint32_t flags;
+};
+
+struct audio_aio_read_param {
+	unsigned long paddr;
+	uint32_t len;
+	uint32_t uid;
 };
 
 struct audio_port_data {
@@ -143,6 +151,9 @@ int q6asm_write(struct audio_client *ac, uint32_t len, uint32_t msw_ts,
 int q6asm_async_write(struct audio_client *ac,
 					  struct audio_aio_write_param *param);
 
+int q6asm_async_read(struct audio_client *ac,
+					  struct audio_aio_read_param *param);
+
 int q6asm_read(struct audio_client *ac);
 
 int q6asm_memory_map(struct audio_client *ac, uint32_t buf_add,
@@ -187,6 +198,13 @@ int q6asm_enc_cfg_blk_amrnb(struct audio_client *ac, uint32_t frames_per_buf,
 
 int q6asm_media_format_block_pcm(struct audio_client *ac,
 			uint32_t rate, uint32_t channels);
+
+int q6asm_media_format_block_wma(struct audio_client *ac,
+			void *cfg);
+
+int q6asm_media_format_block_wmapro(struct audio_client *ac,
+			void *cfg);
+
 /* PP specific */
 int q6asm_equalizer(struct audio_client *ac, void *eq);
 

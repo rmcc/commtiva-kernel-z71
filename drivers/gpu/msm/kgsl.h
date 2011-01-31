@@ -70,6 +70,14 @@
 #define KGSL_PAGETABLE_ENTRIES(_sz) (((_sz) >> KGSL_PAGESIZE_SHIFT) + \
 				     KGSL_PT_EXTRA_ENTRIES)
 
+/* Casting using container_of() for structures that kgsl owns. */
+#define KGSL_CONTAINER_OF(ptr, type, member) \
+		container_of(ptr, type, member)
+#define KGSL_YAMATO_DEVICE(device) \
+		KGSL_CONTAINER_OF(device, struct kgsl_yamato_device, dev)
+#define KGSL_G12_DEVICE(device) \
+		KGSL_CONTAINER_OF(device, struct kgsl_g12_device, dev)
+
 struct kgsl_driver {
 	struct cdev cdev;
 	dev_t dev_num;
@@ -138,6 +146,11 @@ enum kgsl_status {
 #endif
 
 void kgsl_destroy_mem_entry(struct kgsl_mem_entry *entry);
+uint8_t *kgsl_gpuaddr_to_vaddr(const struct kgsl_memdesc *memdesc,
+	unsigned int gpuaddr, unsigned int *size);
+struct kgsl_mem_entry *kgsl_sharedmem_find_region(
+	struct kgsl_process_private *private, unsigned int gpuaddr,
+	size_t size);
 uint8_t *kgsl_sharedmem_convertaddr(struct kgsl_device *device,
 	unsigned int pt_base, unsigned int gpuaddr, unsigned int *size);
 int kgsl_idle(struct kgsl_device *device, unsigned int timeout);

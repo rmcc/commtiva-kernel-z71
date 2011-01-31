@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -48,31 +48,38 @@
 #define PM8058_OTHC_HYST_PREDIV_SHIFT	0x3
 #define PM8058_OTHC_HYST_CLK_SHIFT	0x4
 
-enum {
-	NO_DEVICE,
-	MSM_HEADSET,
-};
+#define OTHC_GPIO_MAX_LEN		25
 
 struct pm8058_othc {
-	struct input_dev *othc_ipd;
-	struct switch_dev othc_sdev;
-	struct pmic8058_othc_config_pdata *othc_pdata;
+	bool othc_sw_state;
+	bool switch_reject;
+	bool othc_support_n_switch;
+	bool accessory_support;
+	bool accessories_adc_support;
 	int othc_base;
 	int othc_irq_sw;
 	int othc_irq_ir;
-	bool othc_sw_state;
-	bool othc_ir_state;
-	bool switch_reject;
-	bool othc_support_n_switch;
-	void *adc_handle;
+	int othc_ir_state;
+	int num_accessories;
+	int curr_accessory_code;
+	int curr_accessory;
+	int video_out_gpio;
 	u32 sw_key_code;
+	u32 accessories_adc_channel;
 	unsigned long switch_debounce_ms;
+	unsigned long detection_delay_ms;
+	void *adc_handle;
+	void *accessory_adc_handle;
 	spinlock_t lock;
+	struct input_dev *othc_ipd;
+	struct switch_dev othc_sdev;
+	struct pmic8058_othc_config_pdata *othc_pdata;
+	struct othc_accessory_info *accessory_info;
 	struct hrtimer timer;
 	struct othc_n_switch_config *switch_config;
 	struct pm8058_chip *pm_chip;
-	struct work_struct headset_work;
 	struct work_struct switch_work;
+	struct delayed_work detect_work;
 };
 
 static struct pm8058_othc *config[OTHC_MICBIAS_MAX];
@@ -120,14 +127,52 @@ int pm8058_micbias_enable(enum othc_micbias micbias,
 }
 EXPORT_SYMBOL(pm8058_micbias_enable);
 
+int pm8058_othc_svideo_enable(enum othc_micbias micbias, bool enable)
+{
+	struct pm8058_othc *dd = config[micbias];
+
+	if (dd == NULL) {
+		pr_err("MIC_BIAS not registered, cannot enable\n");
+		return -ENODEV;
+	}
+
+	if (dd->othc_pdata->micbias_capability != OTHC_MICBIAS_HSED) {
+		pr_err("MIC_BIAS enable capability not supported\n");
+		return -EINVAL;
+	}
+
+	if (dd->accessories_adc_support) {
+		/* GPIO state for MIC_IN = 0, SVIDEO = 1 */
+		gpio_set_value_cansleep(dd->video_out_gpio, !!enable);
+		if (enable) {
+			pr_debug("Enable the video path\n");
+			switch_set_state(&dd->othc_sdev, dd->curr_accessory);
+			input_report_switch(dd->othc_ipd,
+						dd->curr_accessory_code, 1);
+			input_sync(dd->othc_ipd);
+		} else {
+			pr_debug("Disable the video path\n");
+			switch_set_state(&dd->othc_sdev, 0);
+			input_report_switch(dd->othc_ipd,
+					dd->curr_accessory_code, 0);
+			input_sync(dd->othc_ipd);
+		}
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(pm8058_othc_svideo_enable);
+
 #ifdef CONFIG_PM
 static int pm8058_othc_suspend(struct device *dev)
 {
 	struct pm8058_othc *dd = dev_get_drvdata(dev);
 
-	if (device_may_wakeup(dev)) {
-		enable_irq_wake(dd->othc_irq_sw);
-		enable_irq_wake(dd->othc_irq_ir);
+	if (dd->othc_pdata->micbias_capability == OTHC_MICBIAS_HSED) {
+		if (device_may_wakeup(dev)) {
+			enable_irq_wake(dd->othc_irq_sw);
+			enable_irq_wake(dd->othc_irq_ir);
+		}
 	}
 
 	return 0;
@@ -137,9 +182,11 @@ static int pm8058_othc_resume(struct device *dev)
 {
 	struct pm8058_othc *dd = dev_get_drvdata(dev);
 
-	if (device_may_wakeup(dev)) {
-		disable_irq_wake(dd->othc_irq_sw);
-		disable_irq_wake(dd->othc_irq_ir);
+	if (dd->othc_pdata->micbias_capability == OTHC_MICBIAS_HSED) {
+		if (device_may_wakeup(dev)) {
+			disable_irq_wake(dd->othc_irq_sw);
+			disable_irq_wake(dd->othc_irq_ir);
+		}
 	}
 
 	return 0;
@@ -157,12 +204,27 @@ static int __devexit pm8058_othc_remove(struct platform_device *pd)
 
 	pm_runtime_set_suspended(&pd->dev);
 	pm_runtime_disable(&pd->dev);
-	device_init_wakeup(&pd->dev, 0);
 
-	free_irq(dd->othc_irq_sw, dd);
-	free_irq(dd->othc_irq_ir, dd);
+	if (dd->othc_pdata->micbias_capability == OTHC_MICBIAS_HSED) {
+		device_init_wakeup(&pd->dev, 0);
+		if (dd->othc_support_n_switch == true) {
+			adc_channel_close(dd->adc_handle);
+			cancel_work_sync(&dd->switch_work);
+		}
 
-	input_unregister_device(dd->othc_ipd);
+		if (dd->accessory_support == true) {
+			int i;
+			for (i = 0; i < dd->num_accessories; i++) {
+				if (dd->accessory_info[i].detect_flags &
+							OTHC_GPIO_DETECT)
+					gpio_free(dd->accessory_info[i].gpio);
+			}
+		}
+		cancel_delayed_work_sync(&dd->detect_work);
+		free_irq(dd->othc_irq_sw, dd);
+		free_irq(dd->othc_irq_ir, dd);
+		input_unregister_device(dd->othc_ipd);
+	}
 	kfree(dd);
 
 	return 0;
@@ -179,19 +241,6 @@ static enum hrtimer_restart pm8058_othc_timer(struct hrtimer *timer)
 	spin_unlock_irqrestore(&dd->lock, flags);
 
 	return HRTIMER_NORESTART;
-}
-
-static void headset_work_f(struct work_struct *work)
-{
-	struct pm8058_othc *dd =
-		container_of(work, struct pm8058_othc, headset_work);
-
-	if (dd->othc_ir_state == true)
-		switch_set_state(&dd->othc_sdev, 1);
-	else
-		switch_set_state(&dd->othc_sdev, 0);
-
-	enable_irq(dd->othc_irq_ir);
 }
 
 static void othc_report_switch(struct pm8058_othc *dd, u32 res)
@@ -252,13 +301,172 @@ bail_out:
 	enable_irq(dd->othc_irq_sw);
 }
 
-static void
-pm8058_headset_switch(struct input_dev *dev, int key, int value)
+static int accessory_adc_detect(struct pm8058_othc *dd, int accessory)
 {
-	struct pm8058_othc *dd = input_get_drvdata(dev);
+	int rc;
+	u32 res;
+	struct adc_chan_result accessory_adc_result;
+	DECLARE_COMPLETION_ONSTACK(accessory_adc_wait);
 
-	input_report_switch(dev, key, value);
-	schedule_work(&dd->headset_work);
+	rc = adc_channel_request_conv(dd->accessory_adc_handle,
+						&accessory_adc_wait);
+	if (rc) {
+		pr_err("adc_channel_request_conv failed\n");
+		goto adc_failed;
+	}
+	rc = wait_for_completion_interruptible(&accessory_adc_wait);
+	if (rc) {
+		pr_err("wait_for_completion_interruptible failed\n");
+		goto adc_failed;
+	}
+	rc = adc_channel_read_result(dd->accessory_adc_handle,
+						&accessory_adc_result);
+	if (rc) {
+		pr_err("adc_channel_read_result failed\n");
+		goto adc_failed;
+	}
+
+	res = accessory_adc_result.physical;
+
+	if (res >= dd->accessory_info[accessory].adc_thres.min_threshold &&
+		res <= dd->accessory_info[accessory].adc_thres.max_threshold) {
+		pr_debug("Accessory on ADC detected!, ADC Value = %u\n", res);
+		return 1;
+	}
+
+adc_failed:
+	return 0;
+}
+
+
+static int pm8058_accessory_report(struct pm8058_othc *dd, int status)
+{
+	int i, rc, detected = 0;
+	u8 micbias_status, switch_status;
+
+	if (dd->accessory_support == false) {
+		/* Report default headset */
+		switch_set_state(&dd->othc_sdev, !!status);
+		input_report_switch(dd->othc_ipd, SW_HEADPHONE_INSERT,
+							!!status);
+		input_sync(dd->othc_ipd);
+		return 0;
+	}
+
+	/* For accessory */
+	if (dd->accessory_support == true && status == 0) {
+		/* Report removal of the accessory. */
+
+		/*
+		 * If the current accessory is video cable, reject the removal
+		 * interrupt.
+		 */
+		if (dd->curr_accessory == OTHC_SVIDEO_OUT)
+			return 0;
+
+		switch_set_state(&dd->othc_sdev, 0);
+		input_report_switch(dd->othc_ipd, dd->curr_accessory_code, 0);
+		input_sync(dd->othc_ipd);
+		return 0;
+	}
+
+	/* Check the MIC_BIAS status */
+	rc = pm8058_irq_get_rt_status(dd->pm_chip, dd->othc_irq_ir);
+	if (rc < 0) {
+		pr_err("Unable to read IR status\n");
+		goto fail_ir_accessory;
+	}
+	micbias_status = !!rc;
+
+	/* Check the switch status */
+	rc = pm8058_irq_get_rt_status(dd->pm_chip, dd->othc_irq_sw);
+	if (rc < 0) {
+		pr_err("Unable to read SWITCH status\n");
+		goto fail_ir_accessory;
+	}
+	switch_status = !!rc;
+
+	/* Loop through to check which accessory is connected */
+	for (i = 0; i < dd->num_accessories; i++) {
+		detected = 0;
+		if (dd->accessory_info[i].enabled == false)
+			continue;
+
+		if (dd->accessory_info[i].detect_flags & OTHC_MICBIAS_DETECT) {
+			if (micbias_status)
+				detected = 1;
+			else
+				continue;
+		}
+		if (dd->accessory_info[i].detect_flags & OTHC_SWITCH_DETECT) {
+			if (switch_status)
+				detected = 1;
+			else
+				continue;
+		}
+		if (dd->accessory_info[i].detect_flags & OTHC_GPIO_DETECT) {
+			rc = gpio_get_value_cansleep(
+						dd->accessory_info[i].gpio);
+			if (rc < 0)
+				continue;
+
+			if (rc ^ dd->accessory_info[i].active_low)
+				detected = 1;
+			else
+				continue;
+		}
+		if (dd->accessory_info[i].detect_flags & OTHC_ADC_DETECT)
+			detected = accessory_adc_detect(dd, i);
+
+		if (detected)
+			break;
+	}
+
+	if (detected) {
+		dd->curr_accessory = dd->accessory_info[i].accessory;
+		dd->curr_accessory_code = dd->accessory_info[i].key_code;
+
+		/* if Video out cable detected enable the video path*/
+		if (dd->curr_accessory == OTHC_SVIDEO_OUT) {
+			pm8058_othc_svideo_enable(
+					dd->othc_pdata->micbias_select, true);
+
+		} else {
+			switch_set_state(&dd->othc_sdev, dd->curr_accessory);
+			input_report_switch(dd->othc_ipd,
+						dd->curr_accessory_code, 1);
+			input_sync(dd->othc_ipd);
+		}
+
+	} else
+		pr_info("Unable to detect accessory. False interrupt!\n");
+
+	return 0;
+
+fail_ir_accessory:
+	return rc;
+}
+
+static void detect_work_f(struct work_struct *work)
+{
+	int rc;
+	struct pm8058_othc *dd =
+		container_of(work, struct pm8058_othc, detect_work.work);
+
+	if (dd->othc_ir_state) {
+		/* inserted */
+		rc = pm8058_accessory_report(dd, 1);
+		if (rc)
+			pr_err("Accessory could not be detected\n");
+	} else {
+		/* removed */
+		rc = pm8058_accessory_report(dd, 0);
+		if (rc)
+			pr_err("Accessory could not be detected\n");
+		/* Clear existing switch state */
+		dd->othc_sw_state = false;
+	}
+	enable_irq(dd->othc_irq_ir);
 }
 
 /*
@@ -302,7 +510,6 @@ static irqreturn_t pm8058_no_sw(int irq, void *dev_id)
 	 * to make sure that the residual interrupt after the debounce time does
 	 * not disturb the software state machine.
 	 */
-
 	if (level == 1 && dd->othc_sw_state == false) {
 		/*  Switch has been pressed */
 		dd->othc_sw_state = true;
@@ -326,7 +533,7 @@ static irqreturn_t pm8058_no_sw(int irq, void *dev_id)
  */
 static irqreturn_t pm8058_nc_ir(int irq, void *dev_id)
 {
-	unsigned long flags;
+	unsigned long flags, rc;
 	struct pm8058_othc *dd = dev_id;
 
 	spin_lock_irqsave(&dd->lock, flags);
@@ -344,30 +551,30 @@ static irqreturn_t pm8058_nc_ir(int irq, void *dev_id)
 
 	/* disable irq, this gets enabled in the workqueue */
 	disable_irq_nosync(dd->othc_irq_ir);
-	/* Processing for NO type headset */
-	if (dd->othc_ir_state == false) {
-		/*  headset jack inserted */
-		dd->othc_ir_state = true;
-		pm8058_headset_switch(dd->othc_ipd,
-				SW_HEADPHONE_INSERT, 1);
-	} else {
-		/* headset jack removed */
-		dd->othc_ir_state = false;
-		pm8058_headset_switch(dd->othc_ipd,
-				SW_HEADPHONE_INSERT, 0);
-	}
-	input_sync(dd->othc_ipd);
 
+	/* Check the MIC_BIAS status, to check if inserted or removed */
+	rc = pm8058_irq_get_rt_status(dd->pm_chip, dd->othc_irq_ir);
+	if (rc < 0) {
+		pr_err("Unable to read IR status\n");
+		goto fail_ir;
+	}
+
+	dd->othc_ir_state = rc;
+	schedule_delayed_work(&dd->detect_work,
+				msecs_to_jiffies(dd->detection_delay_ms));
+
+fail_ir:
 	return IRQ_HANDLED;
 }
 
-static int pm8058_configure_othc(struct pm8058_othc *dd)
+static int pm8058_configure_micbias(struct pm8058_othc *dd)
 {
 	int rc;
 	u8 reg, value;
 	u32 value1;
 	u16 base_addr = dd->othc_base;
-	struct othc_hsed_config *hsed_config = dd->othc_pdata->hsed_config;
+	struct hsed_bias_config *hsed_config =
+			dd->othc_pdata->hsed_config->hsed_bias_config;
 
 	/* Intialize the OTHC module */
 	/* Control Register 1*/
@@ -459,35 +666,131 @@ static int pm8058_configure_othc(struct pm8058_othc *dd)
 		return rc;
 	}
 
-	/* Configure the ADC if n_switch_headset is supported */
-	if (dd->othc_support_n_switch == true) {
-		rc = adc_channel_open(dd->switch_config->adc_channel,
-							&dd->adc_handle);
-		if (rc) {
-			pr_err("Unable to open ADC channel\n");
-			return -ENODEV;
-		}
-		pr_debug("ADC channel open SUCCESS\n");
-	}
-
 	return 0;
 }
 
 static ssize_t othc_headset_print_name(struct switch_dev *sdev, char *buf)
 {
 	switch (switch_get_state(sdev)) {
-	case NO_DEVICE:
+	case OTHC_NO_DEVICE:
 		return sprintf(buf, "No Device\n");
-	case MSM_HEADSET:
+	case OTHC_HEADSET:
+	case OTHC_HEADPHONE:
+	case OTHC_MICROPHONE:
+	case OTHC_ANC_HEADSET:
+	case OTHC_ANC_HEADPHONE:
+	case OTHC_ANC_MICROPHONE:
 		return sprintf(buf, "Headset\n");
 	}
 	return -EINVAL;
 }
 
+static int pm8058_configure_switch(struct pm8058_othc *dd)
+{
+	int rc, i;
+
+	if (dd->othc_support_n_switch == true) {
+		/* n-switch support */
+		rc = adc_channel_open(dd->switch_config->adc_channel,
+							&dd->adc_handle);
+		if (rc) {
+			pr_err("Unable to open ADC channel\n");
+			return -ENODEV;
+		}
+
+		for (i = 0; i < dd->switch_config->num_keys; i++) {
+			input_set_capability(dd->othc_ipd, EV_KEY,
+				dd->switch_config->switch_info[i].key_code);
+		}
+	} else /* Only single switch supported */
+		input_set_capability(dd->othc_ipd, EV_KEY, KEY_MEDIA);
+
+	return 0;
+}
+
+static int
+pm8058_configure_accessory(struct pm8058_othc *dd)
+{
+	int i, rc;
+	char name[OTHC_GPIO_MAX_LEN];
+
+	/*
+	 * Not bailing out if the gpio_* configure calls fail. This is required
+	 * as multiple accessories are detected by the same gpio.
+	 */
+	for (i = 0; i < dd->num_accessories; i++) {
+		if (dd->accessory_info[i].enabled == false)
+			continue;
+		if (dd->accessory_info[i].detect_flags & OTHC_GPIO_DETECT) {
+			snprintf(name, OTHC_GPIO_MAX_LEN, "%s%d",
+							"othc_acc_gpio_", i);
+			rc = gpio_request(dd->accessory_info[i].gpio, name);
+			if (rc) {
+				pr_err("Unable to request GPIO [%d]\n",
+						dd->accessory_info[i].gpio);
+				continue;
+			}
+			rc = gpio_direction_input(dd->accessory_info[i].gpio);
+			if (rc) {
+				pr_err("Unable to set-direction GPIO [%d]\n",
+						dd->accessory_info[i].gpio);
+				gpio_free(dd->accessory_info[i].gpio);
+				continue;
+			}
+		}
+		input_set_capability(dd->othc_ipd, EV_SW,
+					dd->accessory_info[i].key_code);
+	}
+
+	if (dd->accessories_adc_support) {
+		/*
+		 * Check if 3 switch is supported. If both are using the same
+		 * ADC channel, the same handle can be used.
+		 */
+		if (dd->othc_support_n_switch) {
+			if (dd->adc_handle != NULL &&
+				(dd->accessories_adc_channel ==
+				 dd->switch_config->adc_channel))
+				dd->accessory_adc_handle = dd->adc_handle;
+		} else {
+			rc = adc_channel_open(dd->accessories_adc_channel,
+						&dd->accessory_adc_handle);
+			if (rc) {
+				pr_err("Unable to open ADC channel\n");
+				rc = -ENODEV;
+				goto accessory_adc_fail;
+			}
+		}
+		if (dd->video_out_gpio != 0) {
+			rc = gpio_request(dd->video_out_gpio, "vout_enable");
+			if (rc < 0) {
+				pr_err("request VOUT gpio failed (%d)\n", rc);
+				goto accessory_adc_fail;
+			}
+			rc = gpio_direction_output(dd->video_out_gpio, 0);
+			if (rc < 0) {
+				pr_err("direction_out failed (%d)\n", rc);
+				goto accessory_adc_fail;
+			}
+		}
+
+	}
+
+	return 0;
+
+accessory_adc_fail:
+	for (i = 0; i < dd->num_accessories; i++) {
+		if (dd->accessory_info[i].enabled == false)
+			continue;
+		gpio_free(dd->accessory_info[i].gpio);
+	}
+	return rc;
+}
+
 static int
 othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 {
-	int rc, i;
+	int rc;
 	struct input_dev *ipd;
 	struct pmic8058_othc_config_pdata *pdata = pd->dev.platform_data;
 	struct othc_hsed_config *hsed_config = pdata->hsed_config;
@@ -511,15 +814,10 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 	/* Get the IRQ for Headset Insert-remove and Switch-press */
 	dd->othc_irq_sw = platform_get_irq(pd, 0);
 	dd->othc_irq_ir = platform_get_irq(pd, 1);
-	if (dd->othc_irq_ir < 0) {
-		pr_err("othc resource:IRQ_IR absent\n");
+	if (dd->othc_irq_ir < 0 || dd->othc_irq_sw < 0) {
+		pr_err("othc resource:IRQs absent\n");
 		rc = -ENXIO;
-		goto fail_othc_config;
-	}
-	if (dd->othc_irq_sw < 0) {
-		pr_err("othc resource:IRQ_SW absent\n");
-		rc = -ENXIO;
-		goto fail_othc_config;
+		goto fail_micbias_config;
 	}
 
 	if (pdata->hsed_name != NULL)
@@ -532,58 +830,54 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 
 	dd->othc_ipd = ipd;
 	dd->othc_sw_state = false;
-	dd->othc_ir_state = false;
 	dd->switch_debounce_ms = hsed_config->switch_debounce_ms;
 	dd->othc_support_n_switch = hsed_config->othc_support_n_switch;
+	dd->accessory_support = pdata->hsed_config->accessories_support;
+	dd->detection_delay_ms = pdata->hsed_config->detection_delay_ms;
 
-	if (dd->othc_support_n_switch == true) {
-		pr_debug("OTHC 'n' switch supported\n");
-		if (!hsed_config->switch_config ||
-				!hsed_config->switch_config->switch_info) {
-			rc = -EINVAL;
-			pr_err("Switch pdata absent!\n");
-			goto fail_othc_config;
-		}
+	if (dd->othc_support_n_switch == true)
 		dd->switch_config = hsed_config->switch_config;
-		for (i = 0; i < dd->switch_config->num_keys; i++) {
-			input_set_capability(ipd, EV_KEY,
-				dd->switch_config->switch_info[i].key_code);
-		}
-	} else
-		input_set_capability(ipd, EV_KEY, KEY_MEDIA);
 
-	input_set_capability(ipd, EV_SW, SW_HEADPHONE_INSERT);
+	if (dd->accessory_support == true) {
+		dd->accessory_info = pdata->hsed_config->accessories;
+		dd->num_accessories = pdata->hsed_config->othc_num_accessories;
+		dd->accessories_adc_support =
+				pdata->hsed_config->accessories_adc_support;
+		dd->accessories_adc_channel =
+				pdata->hsed_config->accessories_adc_channel;
+		dd->video_out_gpio = pdata->hsed_config->video_out_gpio;
+	}
+
+	/* Configure the MIC_BIAS line for headset detection */
+	rc = pm8058_configure_micbias(dd);
+	if (rc < 0)
+		goto fail_micbias_config;
+
+	/* Configure for the switch events */
+	rc = pm8058_configure_switch(dd);
+	if (rc < 0)
+		goto fail_micbias_config;
+
+	/* Configure the accessory */
+	if (dd->accessory_support == true) {
+		rc = pm8058_configure_accessory(dd);
+		if (rc < 0)
+			goto fail_micbias_config;
+	}
+
 	input_set_drvdata(ipd, dd);
 	spin_lock_init(&dd->lock);
-
-	rc = pm8058_configure_othc(dd);
-	if (rc < 0)
-		goto fail_othc_config;
 
 	rc = input_register_device(ipd);
 	if (rc) {
 		pr_err("Unable to register OTHC device\n");
-		goto fail_othc_config;
-	}
-
-	/* Check if the headset is already inserted during boot up */
-	rc = pm8058_irq_get_rt_status(dd->pm_chip, dd->othc_irq_ir);
-	if (rc < 0) {
-		pr_err("Unable to get headset status at boot\n");
-		goto fail_ir_irq;
-	}
-	if (rc) {
-		pr_debug("Headset inserted during boot up\n");
-		/* Headset present */
-		dd->othc_ir_state = true;
-		switch_set_state(&dd->othc_sdev, 1);
-		input_report_switch(dd->othc_ipd, SW_HEADPHONE_INSERT, 1);
-		input_sync(dd->othc_ipd);
+		goto fail_micbias_config;
 	}
 
 	hrtimer_init(&dd->timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	dd->timer.function = pm8058_othc_timer;
 
+	/* Request the HEADSET IR interrupt */
 	rc = request_threaded_irq(dd->othc_irq_ir, NULL, pm8058_nc_ir,
 		IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_DISABLED,
 				"pm8058_othc_ir", dd);
@@ -592,7 +886,7 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 		goto fail_ir_irq;
 	}
 
-	/* This irq is used only for NO type headset */
+	/* Request the  SWITCH press/release interrupt */
 	rc = request_threaded_irq(dd->othc_irq_sw, NULL, pm8058_no_sw,
 	IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_DISABLED,
 			"pm8058_othc_sw", dd);
@@ -601,9 +895,24 @@ othc_configure_hsed(struct pm8058_othc *dd, struct platform_device *pd)
 		goto fail_sw_irq;
 	}
 
-	device_init_wakeup(&pd->dev, hsed_config->othc_wakeup);
+	/* Check if the accessory is already inserted during boot up */
+	rc = pm8058_irq_get_rt_status(dd->pm_chip, dd->othc_irq_ir);
+	if (rc < 0) {
+		pr_err("Unable to get accessory status at boot\n");
+		goto fail_ir_irq;
+	}
+	if (rc) {
+		pr_debug("Accessory inserted during boot up\n");
+		/* process the data and report the inserted accessory */
+		rc = pm8058_accessory_report(dd, 1);
+		if (rc)
+			pr_debug("Unabele to detect accessory at boot up\n");
+	}
 
-	INIT_WORK(&dd->headset_work, headset_work_f);
+	device_init_wakeup(&pd->dev,
+			hsed_config->hsed_bias_config->othc_wakeup);
+
+	INIT_DELAYED_WORK(&dd->detect_work, detect_work_f);
 
 	if (dd->othc_support_n_switch == true)
 		INIT_WORK(&dd->switch_work, switch_work_f);
@@ -615,7 +924,7 @@ fail_sw_irq:
 fail_ir_irq:
 	input_unregister_device(ipd);
 	dd->othc_ipd = NULL;
-fail_othc_config:
+fail_micbias_config:
 	input_free_device(ipd);
 fail_input_alloc:
 	switch_dev_unregister(&dd->othc_sdev);

@@ -2518,10 +2518,10 @@ static void scorpion_pre_vlpm(void)
 
 static void scorpion_post_vlpm(void)
 {
-	/* Restore CPACR*/
-	asm volatile("mcr p15, 0, %0, c1, c0, 2" : : "r" (venum_orig_val));
 	/* Restore FPEXC*/
 	asm volatile("mcr p10, 7, %0, c8, c0, 0" : : "r" (fp_orig_val));
+	/* Restore CPACR*/
+	asm volatile("mcr p15, 0, %0, c1, c0, 2" : : "r" (venum_orig_val));
 }
 
 struct scorpion_access_funcs {
@@ -2570,13 +2570,16 @@ static void scorpion_evt_setup(u32 gr, u32 setval)
 
 static void scorpion_clear_pmuregs(void)
 {
+	unsigned long flags;
 	scorpion_write_lpm0(0);
 	scorpion_write_lpm1(0);
 	scorpion_write_lpm2(0);
 	scorpion_write_l2lpm(0);
+	spin_lock_irqsave(&pmu_lock, flags);
 	scorpion_pre_vlpm();
 	scorpion_write_vlpm(0);
 	scorpion_post_vlpm();
+	spin_unlock_irqrestore(&pmu_lock, flags);
 }
 
 static void scorpion_clearpmu(u32 grp, u32 val)

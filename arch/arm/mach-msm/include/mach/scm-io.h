@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -25,19 +25,19 @@
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef __Q6AFE_H__
-#define __Q6AFE_H__
-#include "apr_audio.h"
+#ifndef __MACH_SCM_IO_H
+#define __MACH_SCM_IO_H
 
-#define MSM_AFE_MONO		0
-#define MSM_AFE_MONO_RIGHT	1
-#define MSM_AFE_MONO_LEFT	2
-#define MSM_AFE_STEREO		3
+#ifdef CONFIG_MSM_SECURE_IO
 
-int afe_open_pcmif(struct afe_port_pcm_cfg cfg);
-int afe_open(int port_id, int rate, int channel_mode);
-int afe_close(int port_id);
-int afe_loopback(u16 enable, u16 rx_port, u16 tx_port);
+extern u32 secure_readl(void __iomem *c);
+extern void secure_writel(u32 v, void __iomem *c);
 
+#else
 
-#endif /* __Q6AFE_H__ */
+#define secure_readl(c) readl(c)
+#define secure_writel(v, c) writel(v, c)
+
+#endif
+
+#endif

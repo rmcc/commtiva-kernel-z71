@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2007-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2007-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -28,6 +28,7 @@
 #include "kgsl_pm4types.h"
 #include "kgsl_ringbuffer.h"
 #include "kgsl_cmdstream.h"
+#include "kgsl_cffdump.h"
 
 #include "yamato_reg.h"
 
@@ -72,9 +73,8 @@ inline unsigned int kgsl_ringbuffer_sizelog2quadwords(unsigned int sizedwords)
 void kgsl_cp_intrcallback(struct kgsl_device *device)
 {
 	unsigned int status = 0, num_reads = 0, master_status = 0;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-								device;
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
+	struct kgsl_ringbuffer *rb = &yamato_device->ringbuffer;
 
 	KGSL_CMD_VDBG("enter (device=%p)\n", device);
 
@@ -184,6 +184,7 @@ kgsl_ringbuffer_waitspace(struct kgsl_ringbuffer *rb, unsigned int numcmds,
 	int nopcount;
 	unsigned int freecmds;
 	unsigned int *cmds;
+	uint cmds_gpu;
 
 	KGSL_CMD_VDBG("enter (rb=%p, numcmds=%d, wptr_ahead=%d)\n",
 		      rb, numcmds, wptr_ahead);
@@ -194,7 +195,9 @@ kgsl_ringbuffer_waitspace(struct kgsl_ringbuffer *rb, unsigned int numcmds,
 		nopcount = rb->sizedwords - rb->wptr - 1;
 
 		cmds = (unsigned int *)rb->buffer_desc.hostptr + rb->wptr;
-		GSL_RB_WRITE(cmds, pm4_nop_packet(nopcount));
+		cmds_gpu = rb->buffer_desc.gpuaddr + sizeof(uint)*rb->wptr;
+
+		GSL_RB_WRITE(cmds, cmds_gpu, pm4_nop_packet(nopcount));
 
 		/* Make sure that rptr is not 0 before submitting
 		 * commands at the end of ringbuffer. We do not
@@ -267,8 +270,7 @@ static int kgsl_ringbuffer_load_pm4_ucode(struct kgsl_device *device)
 	const struct firmware *fw = NULL;
 	unsigned int *fw_ptr = NULL;
 	size_t fw_word_size = 0;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 	if (yamato_device->pm4_fw == NULL) {
 		if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
 			status = request_firmware(&fw, LEIA_PM4_470_FW,
@@ -337,8 +339,7 @@ static int kgsl_ringbuffer_load_pfp_ucode(struct kgsl_device *device)
 	const struct firmware *fw = NULL;
 	unsigned int *fw_ptr = NULL;
 	size_t fw_word_size = 0;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 
 	if (yamato_device->pfp_fw == NULL) {
 		if (device->chip_id == KGSL_CHIPID_LEIA_REV470) {
@@ -405,6 +406,7 @@ int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb, unsigned int init_ram)
 	union reg_cp_rb_cntl cp_rb_cntl;
 	unsigned int *cmds, rb_cntl;
 	struct kgsl_device *device = rb->device;
+	uint cmds_gpu;
 
 	KGSL_CMD_VDBG("enter (rb=%p)\n", rb);
 
@@ -415,13 +417,14 @@ int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb, unsigned int init_ram)
 	if (init_ram) {
 		rb->timestamp = 0;
 		GSL_RB_INIT_TIMESTAMP(rb);
-
-		kgsl_sharedmem_set(&rb->memptrs_desc, 0, 0,
-					sizeof(struct kgsl_rbmemptrs));
-
-		kgsl_sharedmem_set(&rb->buffer_desc, 0, 0xAA,
-					(rb->sizedwords << 2));
 	}
+
+	kgsl_sharedmem_set(&rb->memptrs_desc, 0, 0,
+			   sizeof(struct kgsl_rbmemptrs));
+
+	kgsl_sharedmem_set(&rb->buffer_desc, 0, 0xAA,
+			   (rb->sizedwords << 2));
+
 	kgsl_yamato_regwrite(device, REG_CP_RB_WPTR_BASE,
 			     (rb->memptrs_desc.gpuaddr
 			      + GSL_RB_MEMPTRS_WPTRPOLL_OFFSET));
@@ -488,42 +491,50 @@ int kgsl_ringbuffer_start(struct kgsl_ringbuffer *rb, unsigned int init_ram)
 
 	/* ME_INIT */
 	cmds = kgsl_ringbuffer_allocspace(rb, 19);
+	cmds_gpu = rb->buffer_desc.gpuaddr + sizeof(uint)*(rb->wptr-19);
 
-	GSL_RB_WRITE(cmds, PM4_HDR_ME_INIT);
+	GSL_RB_WRITE(cmds, cmds_gpu, PM4_HDR_ME_INIT);
 	/* All fields present (bits 9:0) */
-	GSL_RB_WRITE(cmds, 0x000003ff);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x000003ff);
 	/* Disable/Enable Real-Time Stream processing (present but ignored) */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 	/* Enable (2D <-> 3D) implicit synchronization (present but ignored) */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_RB_SURFACE_INFO));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SC_WINDOW_OFFSET));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_VGT_MAX_VTX_INDX));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_SQ_PROGRAM_CNTL));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_RB_DEPTHCONTROL));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SU_POINT_SIZE));
-	GSL_RB_WRITE(cmds, GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SC_LINE_CNTL));
-	GSL_RB_WRITE(cmds,
-	     GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SU_POLY_OFFSET_FRONT_SCALE));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_RB_SURFACE_INFO));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SC_WINDOW_OFFSET));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_VGT_MAX_VTX_INDX));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_SQ_PROGRAM_CNTL));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_RB_DEPTHCONTROL));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SU_POINT_SIZE));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SC_LINE_CNTL));
+	GSL_RB_WRITE(cmds, cmds_gpu,
+		GSL_HAL_SUBBLOCK_OFFSET(REG_PA_SU_POLY_OFFSET_FRONT_SCALE));
 
 	/* Vertex and Pixel Shader Start Addresses in instructions
 	* (3 DWORDS per instruction) */
-	GSL_RB_WRITE(cmds, 0x80000180);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x80000180);
 	/* Maximum Contexts */
-	GSL_RB_WRITE(cmds, 0x00000001);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000001);
 	/* Write Confirm Interval and The CP will wait the
 	* wait_interval * 16 clocks between polling  */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 
 	/* NQ and External Memory Swap */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 	/* Protected mode error checking */
-	GSL_RB_WRITE(cmds, GSL_RB_PROTECTED_MODE_CONTROL);
+	GSL_RB_WRITE(cmds, cmds_gpu, GSL_RB_PROTECTED_MODE_CONTROL);
 	/* Disable header dumping and Header dump address */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 	/* Header dump size */
-	GSL_RB_WRITE(cmds, 0x00000000);
+	GSL_RB_WRITE(cmds, cmds_gpu, 0x00000000);
 
 	kgsl_ringbuffer_submit(rb);
 
@@ -562,7 +573,8 @@ int kgsl_ringbuffer_stop(struct kgsl_ringbuffer *rb)
 int kgsl_ringbuffer_init(struct kgsl_device *device)
 {
 	int status;
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
+	struct kgsl_ringbuffer *rb = &yamato_device->ringbuffer;
 
 	KGSL_CMD_VDBG("enter (device=%p)\n", device);
 
@@ -599,8 +611,8 @@ int kgsl_ringbuffer_init(struct kgsl_device *device)
 
 int kgsl_ringbuffer_close(struct kgsl_ringbuffer *rb)
 {
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							rb->device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(
+							rb->device);
 	KGSL_CMD_VDBG("enter (rb=%p)\n", rb);
 
 	if (rb->buffer_desc.hostptr)
@@ -631,6 +643,7 @@ kgsl_ringbuffer_addcmds(struct kgsl_ringbuffer *rb,
 	unsigned int timestamp;
 	unsigned int total_sizedwords = sizedwords + 6;
 	unsigned int i;
+	unsigned int rcmd_gpu;
 
 	/* reserve space to temporarily turn off protected mode
 	*  error checking if needed
@@ -639,51 +652,55 @@ kgsl_ringbuffer_addcmds(struct kgsl_ringbuffer *rb,
 	total_sizedwords += !(flags & KGSL_CMD_FLAGS_NO_TS_CMP) ? 7 : 0;
 
 	ringcmds = kgsl_ringbuffer_allocspace(rb, total_sizedwords);
+	rcmd_gpu = rb->buffer_desc.gpuaddr
+		+ sizeof(uint)*(rb->wptr-total_sizedwords);
 
 	if (flags & KGSL_CMD_FLAGS_PMODE) {
 		/* disable protected mode error checking */
-		GSL_RB_WRITE(ringcmds,
+		GSL_RB_WRITE(ringcmds, rcmd_gpu,
 			pm4_type3_packet(PM4_SET_PROTECTED_MODE, 1));
-		GSL_RB_WRITE(ringcmds, 0);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, 0);
 	}
 
 	for (i = 0; i < sizedwords; i++) {
-		GSL_RB_WRITE(ringcmds, *cmds);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, *cmds);
 		cmds++;
 	}
 
 	if (flags & KGSL_CMD_FLAGS_PMODE) {
 		/* re-enable protected mode error checking */
-		GSL_RB_WRITE(ringcmds,
+		GSL_RB_WRITE(ringcmds, rcmd_gpu,
 			pm4_type3_packet(PM4_SET_PROTECTED_MODE, 1));
-		GSL_RB_WRITE(ringcmds, 1);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, 1);
 	}
 
 	rb->timestamp++;
 	timestamp = rb->timestamp;
 
 	/* start-of-pipeline and end-of-pipeline timestamps */
-	GSL_RB_WRITE(ringcmds, pm4_type0_packet(REG_CP_TIMESTAMP, 1));
-	GSL_RB_WRITE(ringcmds, rb->timestamp);
-	GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_EVENT_WRITE, 3));
-	GSL_RB_WRITE(ringcmds, CACHE_FLUSH_TS);
-	GSL_RB_WRITE(ringcmds,
+	GSL_RB_WRITE(ringcmds, rcmd_gpu, pm4_type0_packet(REG_CP_TIMESTAMP, 1));
+	GSL_RB_WRITE(ringcmds, rcmd_gpu, rb->timestamp);
+	GSL_RB_WRITE(ringcmds, rcmd_gpu, pm4_type3_packet(PM4_EVENT_WRITE, 3));
+	GSL_RB_WRITE(ringcmds, rcmd_gpu, CACHE_FLUSH_TS);
+	GSL_RB_WRITE(ringcmds, rcmd_gpu,
 		     (rb->device->memstore.gpuaddr +
 		      KGSL_DEVICE_MEMSTORE_OFFSET(eoptimestamp)));
-	GSL_RB_WRITE(ringcmds, rb->timestamp);
+	GSL_RB_WRITE(ringcmds, rcmd_gpu, rb->timestamp);
 
 	if (!(flags & KGSL_CMD_FLAGS_NO_TS_CMP)) {
 		/* Conditional execution based on memory values */
-		GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_COND_EXEC, 4));
-		GSL_RB_WRITE(ringcmds, (rb->device->memstore.gpuaddr +
+		GSL_RB_WRITE(ringcmds, rcmd_gpu,
+			pm4_type3_packet(PM4_COND_EXEC, 4));
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, (rb->device->memstore.gpuaddr +
 			KGSL_DEVICE_MEMSTORE_OFFSET(ts_cmp_enable)) >> 2);
-		GSL_RB_WRITE(ringcmds, (rb->device->memstore.gpuaddr +
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, (rb->device->memstore.gpuaddr +
 			KGSL_DEVICE_MEMSTORE_OFFSET(ref_wait_ts)) >> 2);
-		GSL_RB_WRITE(ringcmds, rb->timestamp);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, rb->timestamp);
 		/* # of conditional command DWORDs */
-		GSL_RB_WRITE(ringcmds, 2);
-		GSL_RB_WRITE(ringcmds, pm4_type3_packet(PM4_INTERRUPT, 1));
-		GSL_RB_WRITE(ringcmds, CP_INT_CNTL__RB_INT_MASK);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, 2);
+		GSL_RB_WRITE(ringcmds, rcmd_gpu,
+			pm4_type3_packet(PM4_INTERRUPT, 1));
+		GSL_RB_WRITE(ringcmds, rcmd_gpu, CP_INT_CNTL__RB_INT_MASK);
 	}
 
 	kgsl_ringbuffer_submit(rb);
@@ -703,7 +720,8 @@ kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
 						unsigned int *cmds,
 						int sizedwords)
 {
-	struct kgsl_ringbuffer *rb = &device->ringbuffer;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
+	struct kgsl_ringbuffer *rb = &yamato_device->ringbuffer;
 
 	KGSL_CMD_VDBG("enter (device->id=%d, flags=%d, cmds=%p, "
 		"sizedwords=%d)\n", device->id, flags, cmds, sizedwords);
@@ -720,8 +738,7 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 				unsigned int flags)
 {
 	struct kgsl_device *device = dev_priv->device;
-	struct kgsl_yamato_device *yamato_device = (struct kgsl_yamato_device *)
-							device;
+	struct kgsl_yamato_device *yamato_device = KGSL_YAMATO_DEVICE(device);
 	unsigned int *link;
 	unsigned int *cmds;
 	unsigned int i;
@@ -731,7 +748,7 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 			device->id, drawctxt_index, (unsigned int)ibdesc,
 			numibs, timestamp);
 
-	if (!(device->ringbuffer.flags & KGSL_FLAGS_STARTED) ||
+	if (!(yamato_device->ringbuffer.flags & KGSL_FLAGS_STARTED) ||
 				(drawctxt_index >= KGSL_CONTEXT_MAX)) {
 		KGSL_CMD_VDBG("return %d\n", -EINVAL);
 		return -EINVAL;
@@ -749,6 +766,9 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	}
 
 	for (i = 0; i < numibs; i++) {
+		kgsl_cffdump_parse_ibs(dev_priv, NULL,
+			ibdesc[i].gpuaddr, ibdesc[i].sizedwords, false);
+
 		*cmds++ = PM4_HDR_INDIRECT_BUFFER_PFD;
 		*cmds++ = ibdesc[i].gpuaddr;
 		*cmds++ = ibdesc[i].sizedwords;
@@ -761,7 +781,7 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	kgsl_drawctxt_switch(yamato_device,
 			yamato_device->drawctxt[drawctxt_index], flags);
 
-	*timestamp = kgsl_ringbuffer_addcmds(&device->ringbuffer,
+	*timestamp = kgsl_ringbuffer_addcmds(&yamato_device->ringbuffer,
 					0, &link[0], (cmds - link));
 
 	KGSL_CMD_INFO("ctxt %d g %08x numibs %d ts %d\n",

@@ -23,7 +23,7 @@ obj-$(CONFIG_SND_MSM_SOC_MSM7KV2) += snd-soc-msm7kv2.o
 snd-soc-msm8x60-dai-objs := msm8x60-dai.o
 obj-$(CONFIG_SND_SOC_MSM8X60_DAI) += snd-soc-msm8x60-dai.o
 
-snd-soc-msm8x60-pcm-objs := msm8x60-dsp.o msm8x60-pcm.o
+snd-soc-msm8x60-pcm-objs := msm8x60-pcm.o
 obj-$(CONFIG_SND_SOC_MSM8X60_PCM) += snd-soc-msm8x60-pcm.o
 
 snd-soc-msm8x60-objs := msm8x60.o
@@ -50,3 +50,12 @@ obj-$(CONFIG_SND_SOC_MSM8660_PCM) += snd-soc-msm8660-pcm.o
 snd-soc-msm8660-objs := msm8660.o
 obj-$(CONFIG_SND_SOC_MSM8660) += snd-soc-msm8660.o
 
+#8660 VOIP Driver Support
+snd-soc-mvs8x60-objs := mvs8x60.o
+obj-$(CONFIG_MSM_8x60_VOIP) += snd-soc-mvs8x60.o
+
+snd-soc-msm-voip-objs := msm-voip.o
+obj-$(CONFIG_SND_VOIP_PCM) += snd-soc-msm-voip.o
+
+snd-soc-msm8660-qrdc-objs := msm8660-qrdc.o
+obj-$(CONFIG_SND_SOC_MSM8660_QRDC) += snd-soc-msm8660-qrdc.o

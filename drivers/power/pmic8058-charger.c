@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,6 +17,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/platform_device.h>
 #include <linux/errno.h>
 #include <linux/mfd/pmic8058.h>
@@ -185,9 +186,12 @@ struct pm8058_charger {
 	int waiting_for_veoc;
 	struct msm_hardware_charger hw_chg;
 	int current_charger_current;
+	int disabled;
 
 	struct msm_xo_voter *voter;
 	struct dentry *dent;
+
+	int inited;
 };
 
 static struct pm8058_charger pm8058_chg;
@@ -521,6 +525,9 @@ static int __pm8058_start_charging(int chg_current, int termination_current,
 				   int time)
 {
 	int ret = 0;
+
+	if (pm8058_chg.disabled)
+		goto out;
 
 	dev_info(pm8058_chg.dev, "%s %dmA %dmin\n",
 			__func__, chg_current, time);
@@ -956,6 +963,7 @@ static int __devinit request_irqs(struct platform_device *pdev)
 		} else {
 			pm8058_chg.pmic_chg_irq[CHGVAL_IRQ] = res->start;
 			pm8058_chg_disable_irq(CHGVAL_IRQ);
+			enable_irq_wake(pm8058_chg.pmic_chg_irq[CHGVAL_IRQ]);
 		}
 	}
 
@@ -1183,7 +1191,8 @@ static int pm8058_stop_charging(struct msm_hardware_charger *hw_chg)
 	pm8058_chg_disable_irq(CHG_END_IRQ);
 	pm8058_chg_disable_irq(VBATDET_IRQ);
 	pm8058_chg_disable_irq(VBATDET_LOW_IRQ);
-	msm_xo_mode_vote(pm8058_chg.voter, MSM_XO_MODE_OFF);
+	if (pm8058_chg.voter)
+		msm_xo_mode_vote(pm8058_chg.voter, MSM_XO_MODE_OFF);
 
 	return 0;
 }
@@ -1207,6 +1216,28 @@ static int set_status(void *data, u64 val)
 	return 0;
 }
 DEFINE_SIMPLE_ATTRIBUTE(chg_fops, get_status, set_status, "%llu\n");
+
+static int set_disable_status_param(const char *val, struct kernel_param *kp)
+{
+	int ret;
+
+	ret = param_set_int(val, kp);
+	if (ret)
+		return ret;
+
+	if (pm8058_chg.inited && pm8058_chg.disabled) {
+		/*
+		 * stop_charging is called during usb suspend
+		 * act as the usb is removed by disabling auto and enum
+		 */
+		pm_chg_enum_done_enable(0);
+		pm_chg_auto_disable(1);
+		pm8058_stop_charging(NULL);
+	}
+	return 0;
+}
+module_param_call(disabled, set_disable_status_param, param_get_uint,
+					&(pm8058_chg.disabled), 0644);
 
 static int pm8058_charging_switched(struct msm_hardware_charger *hw_chg)
 {
@@ -1550,6 +1581,7 @@ static int pm8058_usb_voltage_lower_limit(void)
 static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 {
 	struct pm8058_chip *pm_chip;
+	int rc = 0;
 
 	pm_chip = platform_get_drvdata(pdev);
 	if (pm_chip == NULL) {
@@ -1561,19 +1593,25 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 	pm8058_chg.pdata = pdev->dev.platform_data;
 	pm8058_chg.dev = &pdev->dev;
 
-	if (request_irqs(pdev)) {
+	rc = request_irqs(pdev);
+	if (rc) {
 		pr_err("%s: couldnt register interrupts\n", __func__);
-		return -EINVAL;
+		goto out;
 	}
 
-	if (pm8058_usb_voltage_lower_limit()) {
+	rc = pm8058_usb_voltage_lower_limit();
+	if (rc) {
 		pr_err("%s: couldnt set ignore lower limit bit to 0\n",
 								__func__);
-		free_irqs();
-		return -EINVAL;
+		goto free_irq;
 	}
 
-	msm_charger_register(&usb_hw_chg);
+	rc = msm_charger_register(&usb_hw_chg);
+	if (rc) {
+		pr_err("%s: msm_charger_register failed ret=%d\n",
+							__func__, rc);
+		goto free_irq;
+	}
 
 	pm_chg_batt_temp_disable(0);
 	msm_battery_gauge_register(&pm8058_batt_gauge);
@@ -1588,7 +1626,15 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 
 	pm8058_chg_enable_irq(BATTTEMP_IRQ);
 	pm8058_chg_enable_irq(BATTCONNECT_IRQ);
+
+	pm8058_chg.inited = 1;
+
 	return 0;
+
+free_irq:
+	free_irqs();
+out:
+	return rc;
 }
 
 static int __devexit pm8058_charger_remove(struct platform_device *pdev)

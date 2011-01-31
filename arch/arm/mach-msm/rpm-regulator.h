@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -130,6 +130,29 @@ enum rpm_vreg_id {
 	RPM_VREG_ID_MAX,
 };
 
+/* Minimum high power mode loads in uA. */
+#define RPM_VREG_LDO_50_HPM_MIN_LOAD	5000
+#define RPM_VREG_LDO_150_HPM_MIN_LOAD	10000
+#define RPM_VREG_LDO_300_HPM_MIN_LOAD	10000
+#define RPM_VREG_SMPS_HPM_MIN_LOAD	50000
+#define RPM_VREG_FTSMPS_HPM_MIN_LOAD	100000
+
+/*
+ * default_uV = initial voltage to set the regulator to if enable is called
+ *		before set_voltage (e.g. when boot_on or always_on is set).
+ * peak_uA    = initial load requirement sent in RPM request; used to determine
+ *		initial mode.
+ * avg_uA     = initial avg load requirement sent in RPM request; overwritten
+ *		along with peak_uA when regulator_set_mode or
+ *		regulator_set_optimum_mode is called.
+ * pin_fn     = RPM_VREG_PIN_FN_ENABLE - pin control ON/OFF
+ *	      = RPM_VREG_PIN_FN_MODE   - pin control LPM/HPM
+ * mode	      = used to specify a force mode which overrides the votes of other
+ *		RPM masters.
+ * state      = initial state sent in RPM request.
+ * sleep_selectable = flag which indicates that regulator should be accessable
+ *		by external private API and that spinlocks should be used.
+ */
 struct rpm_vreg_pdata {
 	struct regulator_init_data	init_data;
 	int				default_uV;
@@ -144,12 +167,6 @@ struct rpm_vreg_pdata {
 	int				sleep_selectable;
 };
 
-enum pm8058_s1_vote_client {
-	PM8058_S1_VOTE_REG_FRAMEWORK = 0, /* for internal use only */
-	PM8058_S1_VOTE_CLOCK,		  /* for use by the clock driver */
-	PM8058_S1_VOTE_NUM_VOTERS,
-};
-
 enum rpm_vreg_voter {
 	RPM_VREG_VOTER_REG_FRAMEWORK = 0, /* for internal use only */
 	RPM_VREG_VOTER1,		  /* for use by the acpu-clock driver */
@@ -157,8 +174,6 @@ enum rpm_vreg_voter {
 	RPM_VREG_VOTER3,		  /* for use by other drivers */
 	RPM_VREG_VOTER_COUNT,
 };
-
-int pm8058_s1_set_min_uv_noirq(enum pm8058_s1_vote_client voter, int min_uV);
 
 int rpm_vreg_set_voltage(enum rpm_vreg_id vreg_id, enum rpm_vreg_voter voter,
 			 int min_uV, int sleep_also);

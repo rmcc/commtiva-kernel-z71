@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -85,6 +85,12 @@ enum vpe_resp_msg {
 	VPE_MSG_OUTPUT_V,   /* video   (continuous mode ) */
 };
 
+enum msm_camera_type {
+	BACK_CAMERA_2D,
+	FRONT_CAMERA_2D,
+	BACK_CAMERA_3D,
+};
+
 struct msm_vpe_phy_info {
 	uint32_t sbuf_phy;
 	uint32_t y_phy;
@@ -165,6 +171,7 @@ struct msm_camvfe_fn {
 	int (*vfe_disable)(struct camera_enable_cmd *,
 		struct platform_device *dev);
 	void (*vfe_release)(struct platform_device *);
+	void (*vfe_stop)(void);
 };
 
 struct msm_camvpe_fn {
@@ -180,6 +187,8 @@ struct msm_sensor_ctrl {
 	int (*s_init)(const struct msm_camera_sensor_info *);
 	int (*s_release)(void);
 	int (*s_config)(void __user *);
+	enum msm_camera_type s_camera_type;
+	uint32_t s_mount_angle;
 };
 struct msm_strobe_flash_ctrl {
 	int (*strobe_flash_init)
@@ -250,6 +259,7 @@ struct msm_sync {
 	uint8_t opencnt;
 	void *cropinfo;
 	int  croplen;
+	int  core_powered_on;
 
 	struct fd_roi_info fdroiinfo;
 
@@ -266,7 +276,7 @@ struct msm_sync {
 	struct mutex lock;
 	struct list_head list;
 	uint8_t liveshot_enabled;
-
+	struct msm_cam_v4l2_device *pcam_sync;
 	spinlock_t pmem_frame_spinlock;
 	spinlock_t pmem_stats_spinlock;
 	spinlock_t abort_pict_lock;
@@ -344,7 +354,7 @@ int msm_flash_ctrl(struct msm_camera_sensor_info *sdata,
 /* Below functions are added for V4L2 kernel APIs */
 struct msm_v4l2_driver {
 	struct msm_sync *sync;
-	int (*open)(struct msm_sync *, const char *apps_id);
+	int (*open)(struct msm_sync *, const char *apps_id, int);
 	int (*release)(struct msm_sync *);
 	int (*ctrl)(struct msm_sync *, struct msm_ctrl_cmd *);
 	int (*reg_pmem)(struct msm_sync *, struct msm_pmem_info *);
@@ -447,6 +457,7 @@ int  msm_camio_clk_enable(enum msm_camio_clk_type clk);
 int  msm_camio_clk_disable(enum msm_camio_clk_type clk);
 int  msm_camio_clk_config(uint32_t freq);
 void msm_camio_clk_rate_set(int rate);
+void msm_camio_vfe_clk_rate_set(int rate);
 void msm_camio_clk_rate_set_2(struct clk *clk, int rate);
 void msm_camio_clk_set_min_rate(struct clk *clk, int rate);
 void msm_camio_clk_axi_rate_set(int rate);

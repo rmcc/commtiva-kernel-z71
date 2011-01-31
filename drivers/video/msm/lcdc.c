@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,9 +33,6 @@
 #include <linux/uaccess.h>
 #include <linux/clk.h>
 #include <linux/platform_device.h>
-#ifndef CONFIG_MSM_BUS_SCALING
-#include <linux/pm_qos_params.h>
-#endif
 #include <linux/regulator/consumer.h>
 #include <mach/msm_reqs.h>
 
@@ -52,7 +49,6 @@ static int pdev_list_cnt;
 
 static struct clk *pixel_mdp_clk; /* drives the lcdc block in mdp */
 static struct clk *pixel_lcdc_clk; /* drives the lcdc interface */
-struct regulator *mdp_footswitch;
 
 static struct platform_driver lcdc_driver = {
 	.probe = lcdc_probe,
@@ -75,9 +71,6 @@ static int lcdc_off(struct platform_device *pdev)
 	mfd = platform_get_drvdata(pdev);
 	ret = panel_next_off(pdev);
 
-	if (mdp_footswitch)
-		regulator_disable(mdp_footswitch);
-
 	clk_disable(pixel_mdp_clk);
 	clk_disable(pixel_lcdc_clk);
 
@@ -88,7 +81,8 @@ static int lcdc_off(struct platform_device *pdev)
 		ret = lcdc_pdata->lcdc_gpio_config(0);
 
 #ifndef CONFIG_MSM_BUS_SCALING
-	pm_qos_update_request(mfd->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+	if (mfd->ebi1_clk)
+		clk_disable(mfd->ebi1_clk);
 #else
 	mdp_bus_scale_update_request(0);
 #endif
@@ -124,7 +118,10 @@ static int lcdc_on(struct platform_device *pdev)
 		pm_qos_rate = 65000;
 #endif
 
-	pm_qos_update_request(mfd->pm_qos_req, pm_qos_rate);
+	if (mfd->ebi1_clk) {
+		clk_set_rate(mfd->ebi1_clk, pm_qos_rate * 1000);
+		clk_enable(mfd->ebi1_clk);
+	}
 #endif
 	mfd = platform_get_drvdata(pdev);
 
@@ -139,9 +136,6 @@ static int lcdc_on(struct platform_device *pdev)
 
 	clk_enable(pixel_mdp_clk);
 	clk_enable(pixel_lcdc_clk);
-
-	if (mdp_footswitch)
-		regulator_enable(mdp_footswitch);
 
 	if (lcdc_pdata && lcdc_pdata->lcdc_power_save)
 		lcdc_pdata->lcdc_power_save(1);
@@ -227,10 +221,9 @@ static int lcdc_probe(struct platform_device *pdev)
 	fbi->var.vsync_len = mfd->panel_info.lcdc.v_pulse_width;
 
 #ifndef CONFIG_MSM_BUS_SCALING
-	mfd->pm_qos_req = pm_qos_add_request(PM_QOS_SYSTEM_BUS_FREQ,
-					       PM_QOS_DEFAULT_VALUE);
-	if (!mfd->pm_qos_req)
-		return -ENOMEM;
+	mfd->ebi1_clk = clk_get(NULL, "ebi1_lcdc_clk");
+	if (IS_ERR(mfd->ebi1_clk))
+		return PTR_ERR(mfd->ebi1_clk);
 #endif
 	/*
 	 * set driver data
@@ -259,7 +252,7 @@ static int lcdc_remove(struct platform_device *pdev)
 
 	mfd = platform_get_drvdata(pdev);
 
-	pm_qos_remove_request(mfd->pm_qos_req);
+	clk_put(mfd->ebi1_clk);
 #endif
 	return 0;
 }
@@ -310,10 +303,6 @@ static int __init lcdc_driver_init(void)
 			return -EINVAL;
 		}
 	}
-
-	mdp_footswitch = regulator_get(NULL, "fs_mdp");
-	if (IS_ERR(mdp_footswitch))
-		mdp_footswitch = NULL;
 
 	return lcdc_register_driver();
 }

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -327,15 +327,15 @@ void vidc_1080p_set_encode_recon_buffers(u32 recon_buffer,
 			VIDC_1080P_BASE_OFFSET_SHIFT));
 	}
 	if (recon_buffer > 1) {
-		VIDC_HWIO_OUT(REG_61427, (pn_enc_luma[1] >>
+		VIDC_HWIO_OUT(REG_616802, (pn_enc_luma[1] >>
 			VIDC_1080P_BASE_OFFSET_SHIFT));
-		VIDC_HWIO_OUT(REG_68356, (pn_enc_chroma[1] >>
+		VIDC_HWIO_OUT(REG_833502, (pn_enc_chroma[1] >>
 			VIDC_1080P_BASE_OFFSET_SHIFT));
 	}
 	if (recon_buffer > 2) {
-		VIDC_HWIO_OUT(REG_616802, (pn_enc_luma[2] >>
+		VIDC_HWIO_OUT(REG_61427, (pn_enc_luma[2] >>
 			VIDC_1080P_BASE_OFFSET_SHIFT));
-		VIDC_HWIO_OUT(REG_833502, (pn_enc_chroma[2] >>
+		VIDC_HWIO_OUT(REG_68356, (pn_enc_chroma[2] >>
 			VIDC_1080P_BASE_OFFSET_SHIFT));
 	}
 	if (recon_buffer > 3) {
@@ -847,21 +847,25 @@ void vidc_1080p_encode_set_qp_params(u32 max_qp, u32 min_qp)
 	VIDC_HWIO_OUT(REG_109072, qbound);
 }
 
-void vidc_1080p_encode_set_mb_level_rc_params(u32 dark_region_as_flag,
-	u32 smooth_region_as_flag , u32 static_region_as_flag,
-	u32 activity_region_flag)
+void vidc_1080p_encode_set_mb_level_rc_params(u32 disable_dark_region_as_flag,
+	u32 disable_smooth_region_as_flag , u32 disable_static_region_as_flag,
+	u32 disable_activity_region_flag)
 {
-	u32 rc_active_feature = VIDC_SETFIELD(dark_region_as_flag ,
-					HWIO_REG_949086_DARK_DISABLE_SHFT ,
+	u32 rc_active_feature = VIDC_SETFIELD(
+					disable_dark_region_as_flag,
+					HWIO_REG_949086_DARK_DISABLE_SHFT,
 					HWIO_REG_949086_DARK_DISABLE_BMSK) |
-					VIDC_SETFIELD(smooth_region_as_flag ,
-					HWIO_REG_949086_SMOOTH_DISABLE_SHFT ,
+					VIDC_SETFIELD(
+					disable_smooth_region_as_flag,
+					HWIO_REG_949086_SMOOTH_DISABLE_SHFT,
 					HWIO_REG_949086_SMOOTH_DISABLE_BMSK) |
-					VIDC_SETFIELD(static_region_as_flag ,
-					HWIO_REG_949086_STATIC_DISABLE_SHFT ,
+					VIDC_SETFIELD(
+					disable_static_region_as_flag,
+					HWIO_REG_949086_STATIC_DISABLE_SHFT,
 					HWIO_REG_949086_STATIC_DISABLE_BMSK) |
-					VIDC_SETFIELD(activity_region_flag,
-					HWIO_REG_949086_ACT_DISABLE_SHFT ,
+					VIDC_SETFIELD(
+					disable_activity_region_flag,
+					HWIO_REG_949086_ACT_DISABLE_SHFT,
 					HWIO_REG_949086_ACT_DISABLE_BMSK);
 	VIDC_HWIO_OUT(REG_949086, rc_active_feature);
 }

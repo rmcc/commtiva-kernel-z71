@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -34,8 +34,8 @@
 #include <asm/atomic.h>
 #include <asm/ioctls.h>
 #include <mach/msm_adsp.h>
-#include "apr_audio.h"
-#include "q6asm.h"
+#include <mach/qdsp6v2/apr_audio.h>
+#include <mach/qdsp6v2/q6asm.h>
 #include "audio_lpa.h"
 
 #include <linux/msm_audio.h>
@@ -158,7 +158,7 @@ static void lpa_listner(u32 evt_id, union auddev_evt_data *evt_payload,
 /* must be called with audio->lock held */
 static int audio_enable(struct audio *audio)
 {
-	pr_info("%s\n", __func__);
+	pr_debug("%s\n", __func__);
 
 	return q6asm_run(audio->ac, 0, 0, 0);
 
@@ -171,10 +171,9 @@ static void audlpa_async_flush(struct audio *audio)
 	union msm_audio_event_payload payload;
 	int rc = 0;
 
-	pr_info("%s:out_enabled = %d, drv_status = 0x%x\n", __func__,
+	pr_debug("%s:out_enabled = %d, drv_status = 0x%x\n", __func__,
 			audio->out_enabled, audio->drv_status);
 	if (audio->out_enabled) {
-		wake_up(&audio->cmd_wait);
 		list_for_each_safe(ptr, next, &audio->out_queue) {
 			buf_node = list_entry(ptr, struct audlpa_buffer_node,
 						list);
@@ -199,7 +198,6 @@ static void audlpa_async_flush(struct audio *audio)
 
 		audio->drv_status &= ~ADRV_STATUS_OBUF_GIVEN;
 		audio->out_needed = 0;
-		atomic_set(&audio->out_bytes, 0);
 
 		if (audio->stopped == 0) {
 			rc = audio_enable(audio);
@@ -212,6 +210,7 @@ static void audlpa_async_flush(struct audio *audio)
 					audio->drv_status &= ~ADRV_STATUS_PAUSE;
 			}
 		}
+		wake_up(&audio->write_wait);
 	}
 }
 
@@ -220,14 +219,18 @@ static int audio_disable(struct audio *audio)
 {
 	int rc = 0;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:%d %d\n", __func__, audio->opened, audio->out_enabled);
 
-	if (audio->out_enabled) {
+	if (audio->opened) {
 		audio->out_enabled = 0;
+		audio->opened = 0;
 		rc = q6asm_cmd(audio->ac, CMD_CLOSE);
+		if (rc < 0)
+			pr_err("%s: CLOSE cmd failed\n", __func__);
+		else
+			pr_debug("%s: rxed CLOSE resp\n", __func__);
 		audio->drv_status &= ~ADRV_STATUS_OBUF_GIVEN;
 		wake_up(&audio->write_wait);
-		wake_up(&audio->cmd_wait);
 		audio->out_needed = 0;
 	}
 	return rc;
@@ -236,7 +239,7 @@ static int audlpa_pause(struct audio *audio)
 {
 	int rc = 0;
 
-	pr_info("%s, enabled = %d\n", __func__,
+	pr_debug("%s, enabled = %d\n", __func__,
 			audio->out_enabled);
 	if (audio->out_enabled) {
 		rc = q6asm_cmd(audio->ac, CMD_PAUSE);
@@ -256,7 +259,7 @@ static void audlpa_async_send_data(struct audio *audio, unsigned needed,
 	struct audio_client *ac;
 	int rc = 0;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	spin_lock_irqsave(&audio->dsp_lock, flags);
 
 	pr_debug("%s: needed = %d, out_needed = %d, token = 0x%x\n",
@@ -301,7 +304,8 @@ static void audlpa_async_send_data(struct audio *audio, unsigned needed,
 				param.len = next_buf->buf.data_len;
 				param.msw_ts = 0;
 				param.lsw_ts = 0;
-				param.flags = 0;
+				/* No time stamp valid */
+				param.flags = NO_TIMESTAMP;
 				param.uid = next_buf->paddr;
 				rc = q6asm_async_write(ac, &param);
 				if (rc < 0)
@@ -445,7 +449,7 @@ static int audlpa_pmem_add(struct audio *audio,
 	struct audlpa_pmem_region *region;
 	int rc = -EINVAL;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	region = kmalloc(sizeof(*region), GFP_KERNEL);
 
 	if (!region) {
@@ -646,7 +650,6 @@ void q6_audlpa_out_cb(uint32_t opcode, uint32_t token,
 		if (audio->teos == 0) {
 			audio->teos = 1;
 			wake_up(&audio->write_wait);
-			wake_up(&audio->cmd_wait);
 		}
 		break;
 
@@ -678,10 +681,10 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct audio *audio = file->private_data;
 	int rc = -EINVAL;
 
-	pr_info("%s: audio_ioctl() cmd = %d\n", __func__, cmd);
+	pr_debug("%s: audio_ioctl() cmd = %d\n", __func__, cmd);
 
 	if (cmd == AUDIO_GET_STATS)
-		pr_info("%s: audio_get_stats command\n", __func__);
+		pr_debug("%s: audio_get_stats command\n", __func__);
 
 	switch (cmd) {
 	case AUDIO_ENABLE_AUDPP:
@@ -717,7 +720,13 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	mutex_lock(&audio->lock);
 	switch (cmd) {
 	case AUDIO_START:
-		pr_info("%s: AUDIO_START\n", __func__);
+		pr_info("%s: AUDIO_START: Session %d\n", __func__,
+			audio->ac->session);
+		if (!audio->opened) {
+			pr_err("%s: Driver not opened\n", __func__);
+			rc = -EFAULT;
+			goto fail;
+		}
 		rc = config(audio);
 		if (rc) {
 			pr_err("%s: Out Configuration failed\n", __func__);
@@ -755,7 +764,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case AUDIO_STOP:
-		pr_info("%s: AUDIO_STOP\n", __func__);
+		pr_info("%s: AUDIO_STOP: session_id:%d\n", __func__,
+			audio->ac->session);
 		audio->stopped = 1;
 		audlpa_async_flush(audio);
 		audio->out_enabled = 0;
@@ -764,7 +774,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 
 	case AUDIO_FLUSH:
-		pr_info("%s: AUDIO_FLUSH\n", __func__);
+		pr_debug("%s: AUDIO_FLUSH: session_id:%d\n", __func__,
+			audio->ac->session);
 		audio->wflush = 1;
 		if (audio->out_enabled)
 			audlpa_async_flush(audio);
@@ -775,7 +786,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case AUDIO_SET_CONFIG:{
 		struct msm_audio_config config;
-		pr_info("%s: AUDIO_SET_CONFIG\n", __func__);
+		pr_debug("%s: AUDIO_SET_CONFIG\n", __func__);
 		if (copy_from_user(&config, (void *) arg, sizeof(config))) {
 			rc = -EFAULT;
 			pr_err("%s: ERROR: copy from user\n", __func__);
@@ -825,7 +836,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 
 	case AUDIO_PAUSE:
-		pr_info("%s: AUDIO_PAUSE %ld\n", __func__, arg);
+		pr_debug("%s: AUDIO_PAUSE %ld\n", __func__, arg);
 		if (arg == 1) {
 			rc = audlpa_pause(audio);
 			if (rc < 0)
@@ -848,7 +859,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case AUDIO_REGISTER_PMEM: {
 			struct msm_audio_pmem_info info;
-			pr_info("%s: AUDIO_REGISTER_PMEM\n", __func__);
+			pr_debug("%s: AUDIO_REGISTER_PMEM\n", __func__);
 			if (copy_from_user(&info, (void *) arg, sizeof(info)))
 				rc = -EFAULT;
 			else
@@ -858,7 +869,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	case AUDIO_DEREGISTER_PMEM: {
 			struct msm_audio_pmem_info info;
-			pr_info("%s: AUDIO_DEREGISTER_PMEM\n", __func__);
+			pr_debug("%s: AUDIO_DEREGISTER_PMEM\n", __func__);
 			if (copy_from_user(&info, (void *) arg, sizeof(info)))
 				rc = -EFAULT;
 			else
@@ -866,7 +877,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			break;
 		}
 	case AUDIO_ASYNC_WRITE:
-		pr_info("%s: AUDIO_ASYNC_WRITE\n", __func__);
+		pr_debug("%s: AUDIO_ASYNC_WRITE\n", __func__);
 		if (audio->drv_status & ADRV_STATUS_FSYNC)
 			rc = -EBUSY;
 		else
@@ -893,7 +904,7 @@ int audlpa_async_fsync(struct audio *audio)
 {
 	int rc = 0;
 
-	pr_info("%s:\n", __func__);
+	pr_info("%s:Session %d\n", __func__, audio->ac->session);
 
 	/* Blocking client sends more data */
 	mutex_lock(&audio->lock);
@@ -904,8 +915,11 @@ int audlpa_async_fsync(struct audio *audio)
 	audio->teos = 0;
 
 	rc = wait_event_interruptible(audio->write_wait,
-					(list_empty(&audio->out_queue)) ||
-					audio->wflush || audio->stopped);
+					((list_empty(&audio->out_queue)) ||
+					audio->wflush || audio->stopped));
+
+	if (audio->wflush || audio->stopped)
+		goto flush_event;
 
 	if (rc < 0) {
 		pr_err("%s: wait event for list_empty failed, rc = %d\n",
@@ -915,9 +929,10 @@ int audlpa_async_fsync(struct audio *audio)
 
 	rc = q6asm_cmd(audio->ac, CMD_EOS);
 
-	if (rc < 0)
+	if (rc < 0) {
 		pr_err("%s: q6asm_cmd failed, rc = %d", __func__, rc);
-
+		goto done;
+	}
 	rc = wait_event_interruptible(audio->write_wait,
 				  (audio->teos || audio->wflush ||
 				  audio->stopped));
@@ -938,6 +953,8 @@ int audlpa_async_fsync(struct audio *audio)
 			audio->out_needed = 1;
 		}
 	}
+
+flush_event:
 	if (audio->stopped || audio->wflush)
 		rc = -EBUSY;
 
@@ -978,10 +995,10 @@ static void audlpa_unmap_pmem_region(struct audio *audio)
 	struct list_head *ptr, *next;
 	int rc = -EINVAL;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	list_for_each_safe(ptr, next, &audio->pmem_region_queue) {
 		region = list_entry(ptr, struct audlpa_pmem_region, list);
-		pr_info("%s: phy_address = 0x%lx\n", __func__, region->paddr);
+		pr_debug("%s: phy_address = 0x%lx\n", __func__, region->paddr);
 		if (region != NULL) {
 			rc = q6asm_memory_unmap(audio->ac,
 						(uint32_t)region->paddr, IN);
@@ -995,14 +1012,16 @@ static int audio_release(struct inode *inode, struct file *file)
 {
 	struct audio *audio = file->private_data;
 
-	pr_info("%s: audio instance 0x%08x freeing\n", __func__, (int)audio);
+	pr_info("%s: audio instance 0x%08x freeing, session %d\n", __func__,
+		(int)audio, audio->ac->session);
 
 	mutex_lock(&audio->lock);
 	audlpa_unmap_pmem_region(audio);
-	audio_disable(audio);
-	q6asm_audio_client_free(audio->ac);
-	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->ac->session);
 	audlpa_async_flush(audio);
+	audio_disable(audio);
+	msm_clear_session_id(audio->ac->session);
+	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->ac->session);
+	q6asm_audio_client_free(audio->ac);
 	audlpa_reset_pmem_region(audio);
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	unregister_early_suspend(&audio->suspend_ctl.node);
@@ -1031,7 +1050,7 @@ static void audlpa_post_event(struct audio *audio, int type,
 
 	spin_lock(&audio->event_queue_lock);
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	if (!list_empty(&audio->free_event_queue)) {
 		e_node = list_first_entry(&audio->free_event_queue,
 			struct audlpa_event, list);
@@ -1059,7 +1078,7 @@ static void audlpa_suspend(struct early_suspend *h)
 		container_of(h, struct audlpa_suspend_ctl, node);
 	union msm_audio_event_payload payload;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	audlpa_post_event(ctl->audio, AUDIO_EVENT_SUSPEND, payload);
 }
 
@@ -1069,7 +1088,7 @@ static void audlpa_resume(struct early_suspend *h)
 		container_of(h, struct audlpa_suspend_ctl, node);
 	union msm_audio_event_payload payload;
 
-	pr_info("%s:\n", __func__);
+	pr_debug("%s:\n", __func__);
 	audlpa_post_event(ctl->audio, AUDIO_EVENT_RESUME, payload);
 }
 #endif
@@ -1141,10 +1160,9 @@ static int audio_open(struct inode *inode, struct file *file)
 		rc = -ENOMEM;
 		goto done;
 	}
-	pr_info("%s: audio instance 0x%08x created\n", __func__, (int)audio);
 
 	if ((file->f_mode & FMODE_WRITE) && !(file->f_mode & FMODE_READ)) {
-		pr_info("%s: Tunnel Mode playback\n", __func__);
+		pr_debug("%s: Tunnel Mode playback\n", __func__);
 	} else {
 		kfree(audio);
 		rc = -EACCES;
@@ -1169,11 +1187,13 @@ static int audio_open(struct inode *inode, struct file *file)
 	}
 	rc = q6asm_open_write(audio->ac, FORMAT_LINEAR_PCM);
 	if (rc < 0) {
-		pr_info("%s: lpa out open failed\n", __func__);
+		pr_err("%s: lpa out open failed\n", __func__);
 		goto err;
 	}
 
-	pr_debug("%s: Set io_mode to AIO\n", __func__);
+	pr_debug("%s: Set mode to AIO session[%d]\n",
+						__func__,
+						audio->ac->session);
 	rc = q6asm_set_io_mode(audio->ac, ASYNC_IO_MODE);
 	if (rc < 0)
 		pr_err("%s: Set IO mode failed\n", __func__);
@@ -1185,7 +1205,6 @@ static int audio_open(struct inode *inode, struct file *file)
 	mutex_init(&audio->get_event_lock);
 	spin_lock_init(&audio->dsp_lock);
 	init_waitqueue_head(&audio->write_wait);
-	init_waitqueue_head(&audio->cmd_wait);
 	INIT_LIST_HEAD(&audio->out_queue);
 	INIT_LIST_HEAD(&audio->pmem_region_queue);
 	INIT_LIST_HEAD(&audio->free_event_queue);
@@ -1223,7 +1242,7 @@ static int audio_open(struct inode *inode, struct file *file)
 			NULL, (void *) audio, &audlpa_debug_fops);
 
 	if (IS_ERR(audio->dentry))
-		pr_info("%s: debugfs_create_file failed\n", __func__);
+		pr_err("%s: debugfs_create_file failed\n", __func__);
 #endif
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	audio->suspend_ctl.node.level = EARLY_SUSPEND_LEVEL_DISABLE_FB;
@@ -1241,6 +1260,9 @@ static int audio_open(struct inode *inode, struct file *file)
 			break;
 		}
 	}
+	pr_info("%s: audio instance 0x%08x created session[%d]\n", __func__,
+						(int)audio,
+						audio->ac->session);
 done:
 	return rc;
 err:

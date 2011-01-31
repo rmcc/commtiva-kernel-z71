@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,9 +34,6 @@
 #include <linux/clk.h>
 #include <linux/platform_device.h>
 #include <linux/pm_runtime.h>
-#ifndef CONFIG_MSM_BUS_SCALING
-#include <linux/pm_qos_params.h>
-#endif
 #include "msm_fb.h"
 #include "mddihosti.h"
 #include "mddihost.h"
@@ -131,7 +128,8 @@ static int mddi_off(struct platform_device *pdev)
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(0);
 #else
-	pm_qos_update_request(mfd->pm_qos_req, PM_QOS_DEFAULT_VALUE);
+	if (mfd->ebi1_clk)
+		clk_disable(mfd->ebi1_clk);
 #endif
 	pm_runtime_put(&pdev->dev);
 	return ret;
@@ -155,7 +153,7 @@ static int mddi_on(struct platform_device *pdev)
 #ifdef ENABLE_FWD_LINK_SKEW_CALIBRATION
 	if (mddi_client_type < 2) {
 		/* For skew calibration, clock should be less than 50MHz */
-		if (!clk_set_rate(mddi_clk, 49150000)) {
+		if (!clk_set_min_rate(mddi_clk, 49000000)) {
 			stat_reg = mddi_host_reg_in(STAT);
 			printk(KERN_DEBUG "\n stat_reg = 0x%x", stat_reg);
 			mddi_host_reg_out(CMD, MDDI_CMD_HIBERNATE);
@@ -190,7 +188,8 @@ static int mddi_on(struct platform_device *pdev)
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(2);
 #else
-	pm_qos_update_request(mfd->pm_qos_req, 65000);
+	if (mfd->ebi1_clk)
+		clk_enable(mfd->ebi1_clk);
 #endif
 	ret = panel_next_on(pdev);
 
@@ -309,10 +308,10 @@ static int mddi_probe(struct platform_device *pdev)
 	rc = 0;
 	pm_runtime_enable(&pdev->dev);
 #ifndef CONFIG_MSM_BUS_SCALING
-	mfd->pm_qos_req = pm_qos_add_request(PM_QOS_SYSTEM_BUS_FREQ,
-					       PM_QOS_DEFAULT_VALUE);
-	if (!mfd->pm_qos_req)
-		return -ENOMEM;
+	mfd->ebi1_clk = clk_get(NULL, "ebi1_mddi_clk");
+	if (IS_ERR(mfd->ebi1_clk))
+		return PTR_ERR(mfd->ebi1_clk);
+	clk_set_rate(mfd->ebi1_clk, 65000000);
 #endif
 	/*
 	 * register in mdp driver
@@ -460,6 +459,12 @@ static int __init mddi_driver_init(void)
 	}
 	clk_enable(mddi_clk);
 
+	ret = clk_set_min_rate(mddi_clk, 49000000);
+	if (ret)
+		printk(KERN_ERR "Can't set mddi_clk min rate to 49000000\n");
+
+	printk(KERN_INFO "mddi_clk init rate is %lu\n",
+		clk_get_rate(mddi_clk));
 	mddi_pclk = clk_get(NULL, "mddi_pclk");
 	if (IS_ERR(mddi_pclk))
 		mddi_pclk = NULL;
@@ -471,7 +476,7 @@ static int __init mddi_driver_init(void)
 		clk_disable(mddi_clk);
 		clk_put(mddi_clk);
 		if (mddi_pclk) {
-			clk_disable(mddi_pclk);
+			 clk_disable(mddi_pclk);
 			clk_put(mddi_pclk);
 		}
 		printk(KERN_ERR "mddi_register_driver() failed!\n");

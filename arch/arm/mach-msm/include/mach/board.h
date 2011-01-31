@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/include/mach/board.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -25,6 +25,8 @@
 #ifdef CONFIG_MSM_BUS_SCALING
 #include <mach/msm_bus.h>
 #endif
+
+#include <asm/clkdev.h>
 
 /* platform device data structures */
 struct msm_acpu_clock_platform_data {
@@ -130,7 +132,9 @@ struct msm_camera_sensor_flash_data {
 };
 
 struct msm_camera_sensor_strobe_flash_data {
-	int flash_charge; /* pin for charge */
+	uint8_t flash_trigger;
+	uint8_t flash_charge; /* pin for charge */
+	uint8_t flash_charge_done;
 	uint32_t flash_recharge_duration;
 	uint32_t irq;
 	spinlock_t spin_lock;
@@ -238,6 +242,7 @@ struct msm_panel_common_pdata {
 struct lcdc_platform_data {
 	int (*lcdc_gpio_config)(int on);
 	int (*lcdc_power_save)(int);
+	unsigned int (*lcdc_get_clk)(void);
 #ifdef CONFIG_MSM_BUS_SCALING
 	struct msm_bus_scale_pdata *bus_scale_table;
 #endif
@@ -254,9 +259,11 @@ struct tvenc_platform_data {
 struct mddi_platform_data {
 	int (*mddi_power_save)(int on);
 	int (*mddi_sel_clk)(u32 *clk_rate);
+	int (*mddi_client_power)(u32 client_id);
 };
 
 struct mipi_dsi_platform_data {
+	int vsync_gpio;
 	int (*dsi_power_save)(int on);
 };
 
@@ -271,7 +278,7 @@ struct msm_hdmi_platform_data {
 	int (*cable_detect)(int insert);
 	int (*comm_power)(int on, int show);
 	int (*enable_5v)(int on);
-	int (*core_power)(int on);
+	int (*core_power)(int on, int show);
 	int (*cec_power)(int on);
 	int (*init_irq)(void);
 };
@@ -303,6 +310,12 @@ struct msm_ssbi_platform_data {
 	enum msm_ssbi_controller_type controller_type;
 };
 
+#ifdef CONFIG_USB_PEHCI_HCD
+struct isp1763_platform_data {
+	unsigned reset_gpio;
+	int (*setup_gpio)(int enable);
+};
+#endif
 /* common init routines for use by arch/arm/mach-msm/board-*.c */
 
 void __init msm_add_devices(void);
@@ -312,7 +325,7 @@ void __init msm_map_msm8x60_io(void);
 void __init msm_map_msm7x30_io(void);
 void __init msm_map_comet_io(void);
 void __init msm_init_irq(void);
-void __init msm_clock_init(struct clk *clock_tbl, unsigned num_clocks);
+void __init msm_clock_init(struct clk_lookup *clock_tbl, unsigned num_clocks);
 void __init msm_acpu_clock_init(struct msm_acpu_clock_platform_data *);
 
 struct mmc_platform_data;
@@ -339,20 +352,10 @@ void __init msm_snddev_init(void);
 void __init msm_snddev_init_timpani(void);
 void msm_snddev_poweramp_on(void);
 void msm_snddev_poweramp_off(void);
-void msm_snddev_voltage_on(void);
-void msm_snddev_voltage_off(void);
 void msm_snddev_hsed_voltage_on(void);
 void msm_snddev_hsed_voltage_off(void);
 void msm_snddev_tx_route_config(void);
 void msm_snddev_tx_route_deconfig(void);
-void msm_snddev_rx_route_config(void);
-void msm_snddev_rx_route_deconfig(void);
-void msm_snddev_enable_amic_power(void);
-void msm_snddev_disable_amic_power(void);
-void msm_snddev_enable_dmic_power(void);
-void msm_snddev_disable_dmic_power(void);
-void msm_snddev_enable_dmic_sec_power(void);
-void msm_snddev_disable_dmic_sec_power(void);
 
 extern unsigned int msm_shared_ram_phys; /* defined in arch/arm/mach-msm/io.c */
 

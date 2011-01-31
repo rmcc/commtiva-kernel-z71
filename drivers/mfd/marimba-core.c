@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,6 +38,12 @@ struct marimba marimba_modules[ADIE_ARRY_SIZE];
 
 #define MARIMBA_VERSION_REG		0x11
 #define MARIMBA_MODE_REG		0x00
+
+struct marimba_platform_data *marimba_pdata;
+
+static uint32_t marimba_gpio_count;
+static bool fm_status;
+static bool bt_status;
 
 #ifdef CONFIG_I2C_SSBI
 #define NUM_ADD	MARIMBA_NUM_CHILD
@@ -363,6 +369,81 @@ static int marimba_add_child(struct marimba_platform_data *pdata,
 	return 0;
 }
 
+int marimba_gpio_config(int gpio_value)
+{
+	struct marimba *marimba = &marimba_modules[MARIMBA_SLAVE_ID_MARIMBA];
+	struct marimba_platform_data *pdata = marimba_pdata;
+	int rc = 0;
+
+	/* Clients BT/FM need to manage GPIO 34 on Fusion for its clocks */
+
+	mutex_lock(&marimba->xfer_lock);
+
+	if (gpio_value) {
+		marimba_gpio_count++;
+		if (marimba_gpio_count == 1)
+			rc = pdata->marimba_gpio_config(1);
+	} else {
+		marimba_gpio_count--;
+		if (marimba_gpio_count == 0)
+			rc = pdata->marimba_gpio_config(0);
+	}
+
+	mutex_unlock(&marimba->xfer_lock);
+
+	return rc;
+
+}
+EXPORT_SYMBOL(marimba_gpio_config);
+
+bool marimba_get_fm_status(struct marimba *marimba)
+{
+	bool ret;
+
+	mutex_lock(&marimba->xfer_lock);
+
+	ret = fm_status;
+
+	mutex_unlock(&marimba->xfer_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(marimba_get_fm_status);
+
+void marimba_set_fm_status(struct marimba *marimba, bool value)
+{
+	mutex_lock(&marimba->xfer_lock);
+
+	fm_status = value;
+
+	mutex_unlock(&marimba->xfer_lock);
+}
+EXPORT_SYMBOL(marimba_set_fm_status);
+
+bool marimba_get_bt_status(struct marimba *marimba)
+{
+	bool ret;
+
+	mutex_lock(&marimba->xfer_lock);
+
+	ret = bt_status;
+
+	mutex_unlock(&marimba->xfer_lock);
+
+	return ret;
+}
+EXPORT_SYMBOL(marimba_get_bt_status);
+
+void marimba_set_bt_status(struct marimba *marimba, bool value)
+{
+	mutex_lock(&marimba->xfer_lock);
+
+	bt_status = value;
+
+	mutex_unlock(&marimba->xfer_lock);
+}
+EXPORT_SYMBOL(marimba_set_bt_status);
+
 static int get_adie_type(void)
 {
 	u8 rd_val;
@@ -516,6 +597,8 @@ static int marimba_probe(struct i2c_client *client,
 	marimba_init_reg(client, id->driver_data);
 
 	status = marimba_add_child(pdata, id->driver_data);
+
+	marimba_pdata = pdata;
 
 	return 0;
 

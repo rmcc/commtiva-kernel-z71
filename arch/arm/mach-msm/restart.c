@@ -31,13 +31,14 @@
 #define TCSR_BASE 0x16B00000
 #define TCSR_WDT_CFG 0x30
 
-#define WDT0_RST       (MSM_TMR_BASE + 0x38)
-#define WDT0_EN        (MSM_TMR_BASE + 0x40)
-#define WDT0_BARK_TIME (MSM_TMR_BASE + 0x4C)
+#define WDT0_RST       (MSM_TMR0_BASE + 0x38)
+#define WDT0_EN        (MSM_TMR0_BASE + 0x40)
+#define WDT0_BARK_TIME (MSM_TMR0_BASE + 0x4C)
+#define WDT0_BITE_TIME (MSM_TMR0_BASE + 0x5C)
 
 #define PSHOLD_CTL_SU (MSM_TLMM_BASE + 0x820)
 
-#define RESTART_REASON_ADDR 0x401FFFFC
+#define RESTART_REASON_ADDR 0x2A05F010
 
 static void *tcsr_base;
 
@@ -58,7 +59,7 @@ static struct notifier_block panic_blk = {
 static void set_dload_mode(int on)
 {
 	void *dload_mode_addr;
-	dload_mode_addr = ioremap_nocache(0x2A03E008, SZ_4K);
+	dload_mode_addr = ioremap_nocache(0x2A05F000, SZ_4K);
 	if (dload_mode_addr) {
 		writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		writel(on ? 0xCE14091A : 0,
@@ -93,6 +94,8 @@ void arch_reset(char mode, const char *cmd)
 
 	printk(KERN_NOTICE "Going down for restart now\n");
 
+	pm8058_reset_pwr_off(1);
+
 	if (cmd != NULL) {
 		restart_reason = ioremap_nocache(RESTART_REASON_ADDR, SZ_4K);
 		if (!strncmp(cmd, "bootloader", 10)) {
@@ -113,6 +116,7 @@ void arch_reset(char mode, const char *cmd)
 	writel(1, WDT0_RST);
 	writel(0, WDT0_EN);
 	writel(0x31F3, WDT0_BARK_TIME);
+	writel(0x31F3, WDT0_BITE_TIME);
 	writel(3, WDT0_EN);
 	dmb();
 	if (tcsr_base != NULL)

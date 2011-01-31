@@ -156,7 +156,7 @@ config BATTERY_FIH_ZEUS
 
 config BATTERY_MSM8X60
 	tristate "MSM8X60 battery"
-	depends on (MACH_MSM8X60_SURF|| MACH_MSM8X60_FFA)
+	depends on (MACH_MSM8X60_SURF|| MACH_MSM8X60_FFA || MACH_MSM8X60_CHARM_SURF || MACH_MSM8X60_CHARM_FFA)
 	help
 	  MSM8660 SURF has dual charging paths to charge the battery.
 	  Say Y to enable support for the battery charging in
@@ -174,13 +174,24 @@ config PM8058_CHARGER
 config ISL9519_CHARGER
 	tristate "isl9519 charger"
 	depends on BATTERY_MSM8X60
-	depends on (MACH_MSM8X60_SURF || MACH_MSM8X60_FFA)
 	default n
 	help
 	  The isl9519q charger chip from intersil is connected to an external
 	  charger cable and is preferred way of charging the battery because
 	  of its high current rating.
 	  Choose Y if you are compiling for Qualcomm's msm8x60 surf/ffa board.
+
+config SMB137B_CHARGER
+	tristate "smb137b charger"
+	default n
+	depends on I2C
+	help
+         The smb137b charger chip from summit is a switching mode based
+	 charging solution.
+
+         Choose Y if you are compiling for Qualcomm's msm8x60 fluid board.
+	 To compile this driver as a module, choose M here: the module will
+	 be called smb137b.
 
 config BATTERY_MSM_FAKE
 	tristate "Fake MSM battery"

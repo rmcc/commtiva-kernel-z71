@@ -172,8 +172,9 @@ static void vid_dec_input_frame_done(struct video_client_ctx *client_ctx,
 		vdec_msg->vdec_msg_info.msgcode = VDEC_MSG_RESP_INPUT_FLUSHED;
 		DBG("Send INPUT_FLUSHED message to client = %p\n", client_ctx);
 	} else {
-		ERR("vid_dec_input_frame_done(): invalid event type\n");
-		return;
+		ERR("vid_dec_input_frame_done(): invalid event type: "
+			"%d\n", event);
+		vdec_msg->vdec_msg_info.msgcode = VDEC_MSG_INVALID;
 	}
 
 	vdec_msg->vdec_msg_info.msgdata.input_frame_clientdata =
@@ -215,12 +216,12 @@ static void vid_dec_output_frame_done(struct video_client_ctx *client_ctx,
 	if (event == VCD_EVT_RESP_OUTPUT_DONE)
 		vdec_msg->vdec_msg_info.msgcode =
 		    VDEC_MSG_RESP_OUTPUT_BUFFER_DONE;
-
 	else if (event == VCD_EVT_RESP_OUTPUT_FLUSHED)
 		vdec_msg->vdec_msg_info.msgcode = VDEC_MSG_RESP_OUTPUT_FLUSHED;
 	else {
-		ERR("QVD: vid_dec_output_frame_done invalid cmd type\n");
-		return;
+		ERR("QVD: vid_dec_output_frame_done invalid cmd type: "
+			"%d\n", event);
+		vdec_msg->vdec_msg_info.msgcode = VDEC_MSG_INVALID;
 	}
 
 	kernel_vaddr = (unsigned long)vcd_frame_data->virtual;
@@ -1098,7 +1099,7 @@ static u32 vid_dec_msg_pending(struct video_client_ctx *client_ctx)
 	return !islist_empty;
 }
 
-static u32 vid_dec_get_next_msg(struct video_client_ctx *client_ctx,
+static int vid_dec_get_next_msg(struct video_client_ctx *client_ctx,
 				struct vdec_msginfo *vdec_msg_info)
 {
 	int rc;
@@ -1109,9 +1110,12 @@ static u32 vid_dec_get_next_msg(struct video_client_ctx *client_ctx,
 
 	rc = wait_event_interruptible(client_ctx->msg_wait,
 				      vid_dec_msg_pending(client_ctx));
-	if (rc < 0 || client_ctx->stop_msg) {
+	if (rc < 0) {
 		DBG("rc = %d, stop_msg = %u\n", rc, client_ctx->stop_msg);
-		return false;
+		return rc;
+	} else if (client_ctx->stop_msg) {
+		DBG("rc = %d, stop_msg = %u\n", rc, client_ctx->stop_msg);
+		return -EIO;
 	}
 
 	mutex_lock(&client_ctx->msg_queue_lock);
@@ -1125,7 +1129,7 @@ static u32 vid_dec_get_next_msg(struct video_client_ctx *client_ctx,
 		kfree(vid_dec_msg);
 	}
 	mutex_unlock(&client_ctx->msg_queue_lock);
-	return true;
+	return 0;
 }
 
 static int vid_dec_ioctl(struct inode *inode, struct file *file,
@@ -1387,8 +1391,8 @@ static int vid_dec_ioctl(struct inode *inode, struct file *file,
 		if (copy_from_user(&vdec_msg, arg, sizeof(vdec_msg)))
 			return -EFAULT;
 		result = vid_dec_get_next_msg(client_ctx, &vdec_msg_info);
-		if (!result)
-			return -EIO;
+		if (result)
+			return result;
 		if (copy_to_user(vdec_msg.out, &vdec_msg_info,
 					sizeof(vdec_msg_info)))
 			return -EFAULT;

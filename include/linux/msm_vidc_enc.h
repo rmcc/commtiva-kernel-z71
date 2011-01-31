@@ -460,6 +460,9 @@ struct venc_ioctl_msg{
 #define VEN_IOCTL_GET_QP_RANGE \
 	_IOR(VEN_IOCTLBASE_ENC, 45, struct venc_ioctl_msg)
 
+#define VEN_IOCTL_GET_NUMBER_INSTANCES \
+	_IOR(VEN_IOCTLBASE_ENC, 46, struct venc_ioctl_msg)
+
 struct venc_switch{
 	unsigned char	status;
 };
@@ -523,6 +526,7 @@ struct venc_qprange{
 };
 struct venc_intraperiod{
 	unsigned long	num_pframes;
+	unsigned long	num_bframes;
 };
 struct venc_seqheader{
 	unsigned char *hdrbufptr;

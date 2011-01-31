@@ -98,6 +98,7 @@ static struct regulator *fs_ijpeg;
 static struct regulator *fs_vpe;
 static struct regulator *ldo15;
 static struct regulator *lvs0;
+static struct regulator *ldo25;
 
 static struct msm_camera_io_ext camio_ext;
 static struct msm_camera_io_clk camio_clk;
@@ -136,14 +137,14 @@ static struct msm_bus_vectors cam_preview_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_VFE,
 		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab  = 28200000,
-		.ib  = 28200000,
+		.ab  = 1521190000,
+		.ib  = 1521190000,
 	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_VFE,
 		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
-		.ab  = 28200000,
-		.ib  = 28200000,
+		.ab  = 1521190000,
+		.ib  = 1521190000,
 	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_VPE,
@@ -190,8 +191,8 @@ static struct msm_bus_vectors cam_snapshot_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_VFE,
 		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab  = 559977600,
-		.ib  = 559977600,
+		.ab  = 1521190000,
+		.ib  = 1521190000,
 	},
 	{
 		.src = MSM_BUS_MMSS_MASTER_VFE,
@@ -208,8 +209,8 @@ static struct msm_bus_vectors cam_snapshot_vectors[] = {
 	{
 		.src = MSM_BUS_MMSS_MASTER_JPEG_ENC,
 		.dst = MSM_BUS_MMSS_SLAVE_SMI,
-		.ab  = 559977600,
-		.ib  = 559977600,
+		.ab  = 1521190000,
+		.ib  = 1521190000,
 	},
 };
 
@@ -235,6 +236,7 @@ static struct msm_bus_paths cam_bus_client_config[] = {
 static struct msm_bus_scale_pdata cam_bus_client_pdata = {
 		cam_bus_client_config,
 		ARRAY_SIZE(cam_bus_client_config),
+		.name = "msm_camera",
 };
 
 
@@ -342,6 +344,21 @@ static void msm_camera_vreg_enable(void)
 		goto lvs0_put;
 	}
 
+	ldo25 = regulator_get(NULL, "8058_l25");
+	if (IS_ERR(ldo25)) {
+		pr_err("%s: VREG LDO25 get failed\n", __func__);
+		ldo25 = NULL;
+		goto lvs0_disable;
+	}
+	if (regulator_set_voltage(ldo25, 1200000, 1200000)) {
+		pr_err("%s: VREG LDO25 set voltage failed\n",  __func__);
+		goto ldo25_disable;
+	}
+	if (regulator_enable(ldo25)) {
+		pr_err("%s: VREG LDO25 enable failed\n", __func__);
+		goto ldo25_put;
+	}
+
 	fs_vfe = regulator_get(NULL, "fs_vfe");
 	if (IS_ERR(fs_vfe)) {
 		CDBG("%s: Regulator FS_VFE get failed %ld\n", __func__,
@@ -353,6 +370,12 @@ static void msm_camera_vreg_enable(void)
 	}
 	return;
 
+ldo25_disable:
+	regulator_disable(ldo25);
+ldo25_put:
+	regulator_put(ldo25);
+lvs0_disable:
+	regulator_disable(lvs0);
 lvs0_put:
 	regulator_put(lvs0);
 ldo15_disable:
@@ -371,6 +394,11 @@ static void msm_camera_vreg_disable(void)
 	if (lvs0) {
 		regulator_disable(lvs0);
 		regulator_put(lvs0);
+	}
+
+	if (ldo25) {
+		regulator_disable(ldo25);
+		regulator_put(ldo25);
 	}
 
 	if (fs_vfe) {
@@ -574,19 +602,30 @@ int msm_camio_jpeg_clk_disable(void)
 {
 	int rc = 0;
 	if (fs_ijpeg) {
-		regulator_disable(fs_ijpeg);
+		rc = regulator_disable(fs_ijpeg);
+		if (rc < 0) {
+			CDBG("%s: Regulator disable failed %d\n", __func__, rc);
+			return rc;
+		}
 		regulator_put(fs_ijpeg);
 	}
-	rc = msm_camio_clk_disable(CAMIO_JPEG_CLK);
+	rc = msm_camio_clk_disable(CAMIO_JPEG_PCLK);
 	if (rc < 0)
 		return rc;
-	rc = msm_camio_clk_disable(CAMIO_JPEG_PCLK);
+	rc = msm_camio_clk_disable(CAMIO_JPEG_CLK);
+	CDBG("%s: exit %d\n", __func__, rc);
 	return rc;
 }
 
 int msm_camio_jpeg_clk_enable(void)
 {
 	int rc = 0;
+	rc = msm_camio_clk_enable(CAMIO_JPEG_CLK);
+	if (rc < 0)
+		return rc;
+	rc = msm_camio_clk_enable(CAMIO_JPEG_PCLK);
+	if (rc < 0)
+		return rc;
 	fs_ijpeg = regulator_get(NULL, "fs_ijpeg");
 	if (IS_ERR(fs_ijpeg)) {
 		CDBG("%s: Regulator FS_IJPEG get failed %ld\n", __func__,
@@ -596,11 +635,7 @@ int msm_camio_jpeg_clk_enable(void)
 		CDBG("%s: Regulator FS_IJPEG enable failed\n", __func__);
 		regulator_put(fs_ijpeg);
 	}
-
-	rc = msm_camio_clk_enable(CAMIO_JPEG_CLK);
-	if (rc < 0)
-		return rc;
-	rc = msm_camio_clk_enable(CAMIO_JPEG_PCLK);
+	CDBG("%s: exit %d\n", __func__, rc);
 	return rc;
 }
 
@@ -909,46 +944,46 @@ void msm_camio_set_perf_lvl(enum msm_bus_perf_setting perf_setting)
 		bus_perf_client =
 			msm_bus_scale_register_client(&cam_bus_client_pdata);
 		if (!bus_perf_client) {
-			CDBG("%s: Registration Failed!!!\n", __func__);
+			pr_err("%s: Registration Failed!!!\n", __func__);
 			bus_perf_client = 0;
 			return;
 		}
-		CDBG("%s: S_INIT rc = %u\n", __func__, bus_perf_client);
+		pr_info("%s: S_INIT rc = %u\n", __func__, bus_perf_client);
 		break;
 	case S_EXIT:
 		if (bus_perf_client) {
-			CDBG("%s: S_EXIT\n", __func__);
+			pr_info("%s: S_EXIT\n", __func__);
 			msm_bus_scale_unregister_client(bus_perf_client);
 		} else
-			CDBG("%s: Bus Client NOT Registered!!!\n", __func__);
+			pr_err("%s: Bus Client NOT Registered!!!\n", __func__);
 		break;
 	case S_PREVIEW:
 		if (bus_perf_client) {
 			rc = msm_bus_scale_client_update_request(
 				bus_perf_client, 1);
-			CDBG("%s: S_PREVIEW rc = %d\n", __func__, rc);
+			pr_info("%s: S_PREVIEW rc = %d\n", __func__, rc);
 		} else
-			CDBG("%s: Bus Client NOT Registered!!!\n", __func__);
+			pr_err("%s: Bus Client NOT Registered!!!\n", __func__);
 		break;
 	case S_VIDEO:
 		if (bus_perf_client) {
 			rc = msm_bus_scale_client_update_request(
 				bus_perf_client, 2);
-			CDBG("%s: S_VIDEO rc = %d\n", __func__, rc);
+			pr_info("%s: S_VIDEO rc = %d\n", __func__, rc);
 		} else
-			CDBG("%s: Bus Client NOT Registered!!!\n", __func__);
+			pr_err("%s: Bus Client NOT Registered!!!\n", __func__);
 		break;
 	case S_CAPTURE:
 		if (bus_perf_client) {
 			rc = msm_bus_scale_client_update_request(
 				bus_perf_client, 3);
-			CDBG("%s: S_CAPTURE rc = %d\n", __func__, rc);
+			pr_info("%s: S_CAPTURE rc = %d\n", __func__, rc);
 		} else
-			CDBG("%s: Bus Client NOT Registered!!!\n", __func__);
+			pr_err("%s: Bus Client NOT Registered!!!\n", __func__);
 		break;
 	case S_DEFAULT:
 		break;
 	default:
-		CDBG("%s: INVALID CASE\n", __func__);
+		pr_info("%s: INVALID CASE\n", __func__);
 	}
 }

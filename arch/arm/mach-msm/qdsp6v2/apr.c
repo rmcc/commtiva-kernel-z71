@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,8 +33,9 @@
 #include <linux/device.h>
 #include <mach/peripheral-loader.h>
 #include <mach/msm_smd.h>
+#include <mach/qdsp6v2/apr.h>
 
-#include "apr.h"
+#include "apr_tal.h"
 #include "dsp_debug.h"
 
 struct apr_q6 q6;
@@ -96,20 +97,21 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 	uint16_t dest_id;
 	uint16_t client_id;
 	uint16_t w_len;
+	unsigned long flags;
 
 	if (!handle || !buf) {
 		pr_err("APR: Wrong parameters\n");
 		return -EINVAL;
 	}
 
-	mutex_lock(&svc->m_lock);
+	spin_lock_irqsave(&svc->w_lock, flags);
 	dest_id = svc->dest_id;
 	client_id = svc->client_id;
 	clnt = &client[dest_id][client_id];
 
 	if (!client[dest_id][client_id].handle) {
 		pr_err("APR: Still service is not yet opened\n");
-		mutex_unlock(&svc->m_lock);
+		spin_unlock_irqrestore(&svc->w_lock, flags);
 		return -EINVAL;
 	}
 	hdr = (struct apr_hdr *)buf;
@@ -126,7 +128,7 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 	w_len = apr_tal_write(clnt->handle, buf, hdr->pkt_size);
 	if (w_len != hdr->pkt_size)
 		pr_err("Unable to write APR pkt successfully: %d\n", w_len);
-	mutex_unlock(&svc->m_lock);
+	spin_unlock_irqrestore(&svc->w_lock, flags);
 
 	return w_len;
 }
@@ -212,7 +214,8 @@ static void apr_cb_func(void *buf, int len, void *priv)
 		if (svc == APR_SVC_AFE || svc == APR_SVC_ASM ||
 			svc == APR_SVC_VSM || svc == APR_SVC_VPM ||
 			svc == APR_SVC_ADM || svc == APR_SVC_ADSP_CORE ||
-			svc == APR_SVC_TEST_CLIENT)
+			svc == APR_SVC_TEST_CLIENT || svc == APR_SVC_ADSP_MVM ||
+			svc == APR_SVC_ADSP_CVS || svc == APR_SVC_ADSP_CVP)
 			clnt = APR_CLIENT_AUDIO;
 		else {
 			pr_err("APR: Wrong svc :%d\n", svc);
@@ -319,17 +322,35 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 		svc_idx = 2;
 		svc_id = APR_SVC_MVS;
 	} else if (!strcmp(svc_name, "MVM")) {
-		client_id = APR_CLIENT_VOICE;
-		svc_idx = 3;
-		svc_id = APR_SVC_MVM;
+		if (dest_id == APR_DEST_MODEM) {
+			client_id = APR_CLIENT_VOICE;
+			svc_idx = 3;
+			svc_id = APR_SVC_MVM;
+		} else {
+			client_id = APR_CLIENT_AUDIO;
+			svc_idx = 5;
+			svc_id = APR_SVC_ADSP_MVM;
+		}
 	} else if (!strcmp(svc_name, "CVS")) {
-		client_id = APR_CLIENT_VOICE;
-		svc_idx = 4;
-		svc_id = APR_SVC_CVS;
+		if (dest_id == APR_DEST_MODEM) {
+			client_id = APR_CLIENT_VOICE;
+			svc_idx = 4;
+			svc_id = APR_SVC_CVS;
+		} else {
+			client_id = APR_CLIENT_AUDIO;
+			svc_idx = 6;
+			svc_id = APR_SVC_ADSP_CVS;
+		}
 	} else if (!strcmp(svc_name, "CVP")) {
-		client_id = APR_CLIENT_VOICE;
-		svc_idx = 5;
-		svc_id = APR_SVC_CVP;
+		if (dest_id == APR_DEST_MODEM) {
+			client_id = APR_CLIENT_VOICE;
+			svc_idx = 5;
+			svc_id = APR_SVC_CVP;
+		} else {
+			client_id = APR_CLIENT_AUDIO;
+			svc_idx = 7;
+			svc_id = APR_SVC_ADSP_CVP;
+		}
 	} else if (!strcmp(svc_name, "SRD")) {
 		client_id = APR_CLIENT_VOICE;
 		svc_idx = 6;
@@ -497,11 +518,12 @@ static int __init apr_init(void)
 {
 	int i, j, k;
 
-	pr_info("apr_probe\n");
 	for (i = 0; i < APR_DEST_MAX; i++)
 		for (j = 0; j < APR_CLIENT_MAX; j++)
-			for (k = 0; k < APR_SVC_MAX; k++)
+			for (k = 0; k < APR_SVC_MAX; k++) {
 				mutex_init(&client[i][j].svc[k].m_lock);
+				spin_lock_init(&client[i][j].svc[k].w_lock);
+			}
 	mutex_init(&q6.lock);
 	dsp_debug_register(adsp_state);
 	return 0;

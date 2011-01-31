@@ -1,19 +1,34 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, and the entire permission notice in its entirety,
+ *    including the disclaimer of warranties.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ * 3. The name of the author may not be used to endorse or promote
+ *    products derived from this software without specific prior
+ *    written permission.
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * ALTERNATIVELY, this product may be distributed under the terms of
+ * the GNU General Public License, version 2, in which case the provisions
+ * of the GPL version 2 are required INSTEAD OF the BSD license.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
- * 02110-1301, USA.
- *
+ * THIS SOFTWARE IS PROVIDED ``AS IS'' AND ANY EXPRESS OR IMPLIED
+ * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ * OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, ALL OF
+ * WHICH ARE HEREBY DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR BE
+ * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+ * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT
+ * OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+ * BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+ * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+ * USE OF THIS SOFTWARE, EVEN IF NOT ADVISED OF THE POSSIBILITY OF SUCH
+ * DAMAGE.
  */
 
 #ifndef __LINUX_MSM_CAMERA_H
@@ -23,7 +38,6 @@
 #include <sys/types.h>
 #endif
 #include <linux/types.h>
-#include <asm/sizes.h>
 #include <linux/ioctl.h>
 #ifdef MSM_CAMERA_GCC
 #include <time.h>
@@ -138,6 +152,9 @@
 #define MSM_CAM_IOCTL_SET_FD_ROI \
 	_IOW(MSM_CAM_IOCTL_MAGIC, 35, struct fd_roi_info *)
 
+#define MSM_CAM_IOCTL_GET_CAMERA_INFO \
+	_IOR(MSM_CAM_IOCTL_MAGIC, 36, struct msm_camera_info *)
+
 #define MSM_CAMERA_LED_OFF  0
 #define MSM_CAMERA_LED_LOW  1
 #define MSM_CAMERA_LED_HIGH 2
@@ -153,7 +170,7 @@
 #endif
 /* } FIH, Charles Huang, 2009/11/09 */
 
-#define MAX_SENSOR_NUM  3
+#define MSM_MAX_CAMERA_SENSORS  5
 #define MAX_SENSOR_NAME 32
 
 #define PP_SNAP  0x01
@@ -185,6 +202,17 @@ struct msm_ctrl_cmd {
 	int resp_fd; /* FIXME: to be used by the kernel, pass-through for now */
 };
 
+struct msm_isp_ctrl_cmd {
+	uint16_t type;
+	uint16_t length;
+	uint16_t status;
+	uint32_t timeout_ms;
+	int resp_fd; /* FIXME: to be used by the kernel, pass-through for now */
+	/* maximum possible data size that can be sent to user space is only
+		64 bytes */
+	char value[40];
+};
+
 struct msm_vfe_evt_msg {
 	unsigned short type;	/* 1 == event (RPC), 0 == message (adsp) */
 	unsigned short msg_id;
@@ -193,12 +221,28 @@ struct msm_vfe_evt_msg {
 	void *data;
 };
 
+struct msm_isp_evt_msg {
+	unsigned short type;	/* 1 == event (RPC), 0 == message (adsp) */
+	unsigned short msg_id;
+	unsigned int len;	/* size in, number of bytes out */
+	/* maximum possible data size that can be
+i	  sent to user space as v4l2 data structure
+	  is only of 64 bytes */
+	uint8_t data[48];
+};
 struct msm_vpe_evt_msg {
 	unsigned short type; /* 1 == event (RPC), 0 == message (adsp) */
 	unsigned short msg_id;
 	unsigned int len; /* size in, number of bytes out */
 	uint32_t frame_id;
 	void *data;
+};
+struct msm_isp_stats_event_ctrl {
+	unsigned short resptype;
+	union {
+		struct msm_isp_evt_msg isp_msg;
+		struct msm_isp_ctrl_cmd ctrl;
+	} isp_data;
 };
 
 #define MSM_CAM_RESP_CTRL         0
@@ -769,6 +813,13 @@ enum strobe_flash_ctrl_type {
 struct strobe_flash_ctrl_data {
 	enum strobe_flash_ctrl_type type;
 	int charge_en;
+};
+
+struct msm_camera_info {
+	int num_cameras;
+	uint8_t has_3d_support[MSM_MAX_CAMERA_SENSORS];
+	uint8_t is_internal_cam[MSM_MAX_CAMERA_SENSORS];
+	uint32_t s_mount_angle[MSM_MAX_CAMERA_SENSORS];
 };
 
 struct flash_ctrl_data {

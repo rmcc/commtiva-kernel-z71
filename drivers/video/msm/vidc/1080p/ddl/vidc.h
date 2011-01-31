@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -98,7 +98,6 @@
 #define VIDC_1080P_ERROR_VSP_NOT_READY            90
 #define VIDC_1080P_ERROR_BUFFER_FULL_STATE        91
 
-#define VIDC_1080P_ERROR_SYNC_POINT_NOT_RECEIVED  111
 #define VIDC_1080P_ERROR_RESOLUTION_MISMATCH      112
 #define VIDC_1080P_ERROR_NV_QUANT_ERR             113
 #define VIDC_1080P_ERROR_SYNC_MARKER_ERR          114
@@ -119,6 +118,7 @@
 #define VIDC_1080P_ERROR_SPS_PARSE_ERROR         129
 #define VIDC_1080P_ERROR_PPS_PARSE_ERROR         130
 #define VIDC_1080P_ERROR_SLICE_PARSE_ERROR       131
+#define VIDC_1080P_ERROR_SYNC_POINT_NOT_RECEIVED  171
 
 #define VIDC_1080P_WARN_COMMAND_FLUSHED                  145
 #define VIDC_1080P_WARN_METADATA_NO_SPACE_NUM_CONCEAL_MB 150
@@ -518,9 +518,9 @@ void vidc_1080p_encode_set_rc_config(u32 enable_frame_level_rc,
 void vidc_1080p_encode_set_frame_level_rc_params(u32 rc_frame_rate,
 	u32 target_bitrate, u32 reaction_coeff);
 void vidc_1080p_encode_set_qp_params(u32 max_qp, u32 min_qp);
-void vidc_1080p_encode_set_mb_level_rc_params(u32 dark_region_as_flag,
-	u32 smooth_region_as_flag, u32 static_region_as_flag,
-	u32 activity_region_flag);
+void vidc_1080p_encode_set_mb_level_rc_params(u32 disable_dark_region_as_flag,
+	u32 disable_smooth_region_as_flag , u32 disable_static_region_as_flag,
+	u32 disable_activity_region_flag);
 void vidc_1080p_get_qp(u32 *pn_frame_qp);
 void vidc_1080p_set_h264_encode_entropy(
 	enum vidc_1080p_entropy_sel entropy_sel);

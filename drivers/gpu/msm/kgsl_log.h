@@ -1,4 +1,4 @@
-/* Copyright (c) 2002,2008-2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2002,2008-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -29,15 +29,11 @@
 #ifndef _GSL_LOG_H
 #define _GSL_LOG_H
 
-#include <linux/bug.h>
-#include <linux/types.h>
-#include <linux/msm_kgsl.h>
-#include <linux/device.h>
-
 extern unsigned int kgsl_drv_log;
 extern unsigned int kgsl_cmd_log;
 extern unsigned int kgsl_ctxt_log;
 extern unsigned int kgsl_mem_log;
+extern unsigned int kgsl_cff_dump_enable;
 
 struct device *kgsl_driver_getdevnode(void);
 int kgsl_debug_init(void);

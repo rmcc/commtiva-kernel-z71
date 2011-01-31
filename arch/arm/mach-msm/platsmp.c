@@ -67,10 +67,13 @@ int boot_secondary(unsigned int cpu, struct task_struct *idle)
 	static int cold_boot_done;
 	int cnt = 0;
 	int ret;
-	printk(KERN_DEBUG "Starting secondary CPU %d\n", cpu);
+
+	pr_debug("Starting secondary CPU %d\n", cpu);
+
+	/* Set preset_lpj to avoid subsequent lpj recalculations */
+	preset_lpj = loops_per_jiffy;
 
 	if (cold_boot_done == false) {
-
 		ret = scm_set_boot_addr((void *)
 					virt_to_phys(msm_secondary_startup),
 					SCM_FLAG_COLDBOOT_CPU1);
@@ -116,7 +119,7 @@ int boot_secondary(unsigned int cpu, struct task_struct *idle)
 */
 void platform_secondary_init(unsigned int cpu)
 {
-	printk(KERN_DEBUG "%s: cpu:%d\n", __func__, cpu);
+	pr_debug("CPU%u: Booted secondary processor\n", cpu);
 
 #ifdef CONFIG_HOTPLUG_CPU
 	WARN_ON(msm_pm_platform_secondary_init(cpu));

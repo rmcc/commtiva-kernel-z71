@@ -34,6 +34,7 @@ static void (*pre_idle_cb)(int cpu, unsigned int microsec);
 static void (*post_idle_cb)(int cpu, unsigned int microsec);
 
 static DEFINE_PER_CPU(struct timespec, ts_busy);
+static DEFINE_PER_CPU(struct atomic_notifier_head, msm_cpuidle_notifiers);
 
 static int pre_idle(int cpu)
 {
@@ -69,21 +70,49 @@ int msm_idle_register_cb(void (*pre)(int, unsigned int),
 	return 0;
 }
 EXPORT_SYMBOL(msm_idle_register_cb);
+
+int msm_cpuidle_register_notifier(unsigned int cpu, struct notifier_block *nb)
+{
+	struct atomic_notifier_head *head =
+		&per_cpu(msm_cpuidle_notifiers, cpu);
+
+	return atomic_notifier_chain_register(head, nb);
+}
+EXPORT_SYMBOL(msm_cpuidle_register_notifier);
+
+int msm_cpuidle_unregister_notifier(unsigned int cpu, struct notifier_block *nb)
+{
+	struct atomic_notifier_head *head =
+		&per_cpu(msm_cpuidle_notifiers, cpu);
+
+	return atomic_notifier_chain_unregister(head, nb);
+}
+EXPORT_SYMBOL(msm_cpuidle_unregister_notifier);
 #endif
 
 static int msm_cpuidle_enter(
 	struct cpuidle_device *dev, struct cpuidle_state *state)
 {
 	int ret;
+#ifdef CONFIG_MSM_SLEEP_STATS
+	struct atomic_notifier_head *head =
+			&__get_cpu_var(msm_cpuidle_notifiers);
+#endif
 
 	local_irq_disable();
+
 #ifdef CONFIG_MSM_SLEEP_STATS
 	pre_idle(dev->cpu);
+	atomic_notifier_call_chain(head, MSM_CPUIDLE_STATE_ENTER, NULL);
 #endif
+
 	ret = msm_pm_idle_enter((enum msm_pm_sleep_mode) (state->driver_data));
+
 #ifdef CONFIG_MSM_SLEEP_STATS
 	post_idle(dev->cpu, ret);
+	atomic_notifier_call_chain(head, MSM_CPUIDLE_STATE_EXIT, NULL);
 #endif
+
 	local_irq_enable();
 
 	return ret;
@@ -153,3 +182,16 @@ int __init msm_cpuidle_init(void)
 
 	return 0;
 }
+
+static int __init msm_cpuidle_early_init(void)
+{
+#ifdef CONFIG_MSM_SLEEP_STATS
+	unsigned int cpu;
+
+	for_each_possible_cpu(cpu)
+		ATOMIC_INIT_NOTIFIER_HEAD(&per_cpu(msm_cpuidle_notifiers, cpu));
+#endif
+	return 0;
+}
+
+early_initcall(msm_cpuidle_early_init);

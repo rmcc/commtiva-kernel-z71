@@ -1,7 +1,7 @@
 
 /*
  *
- * Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,7 +23,7 @@
 #define _APR_AUDIO_H_
 
 /* ASM opcodes without APR payloads*/
-#include "apr.h"
+#include <mach/qdsp6v2/apr.h>
 
 /*
  * Audio Front End (AFE)
@@ -38,7 +38,7 @@ enum {
 	SECONDARY_I2S_RX = 4,
 	SECONDARY_I2S_TX = 5,
 	MI2S_RX = 6,
-	RSVD_1 = 7,
+	MI2S_TX = 7,
 	HDMI_RX = 8,
 	RSVD_2 = 9,
 	RSVD_3 = 10,
@@ -72,16 +72,16 @@ struct afe_port_gain_command {
 #define AFE_PORT_CMD_SIDETONE_CTL 0x000100cd
 struct afe_port_sidetone_command {
 	struct apr_hdr hdr;
-	u16 tx_port_id;		/* Primary i2s rx = 0 */
-				/* PCM rx = 2 */
-				/* Secondary i2s rx = 4 */
-				/* Mi2S rx = 6 */
-				/* HDMI rx = 8 */
 	u16 rx_port_id;		/* Primary i2s tx = 1 */
 				/* PCM tx = 3 */
 				/* Secondary i2s tx = 5 */
 				/* Mi2s tx = 7 */
 				/* Digital mic tx = 11 */
+	u16 tx_port_id;		/* Primary i2s rx = 0 */
+				/* PCM rx = 2 */
+				/* Secondary i2s rx = 4 */
+				/* Mi2S rx = 6 */
+				/* HDMI rx = 8 */
 	u16 gain;		/* Q13 */
 	u16 enable;		/* 1 = enable, 0 = disable */
 } __attribute__ ((packed));
@@ -152,7 +152,6 @@ struct afe_get_active_handles_command {
 #define AFE_PCM_CFG_CDATAOE_SHARE		0x1
 
 struct afe_port_pcm_cfg {
-	u16	port_id;
 	u16	mode;	/* PCM (short sync) = 0, AUXPCM (long sync) = 1 */
 	u16	sync;	/* external = 0 , internal = 1 */
 	u16	frame;	/* 8 bpf = 0 */
@@ -169,10 +168,27 @@ struct afe_port_pcm_cfg {
 	u16	reserved;
 } __attribute__ ((packed));
 
+enum {
+	AFE_I2S_SD0 = 1,
+	AFE_I2S_SD1,
+	AFE_I2S_SD2,
+	AFE_I2S_SD3,
+	AFE_I2S_QUAD01,
+	AFE_I2S_QUAD23,
+	AFE_I2S_6CHS,
+	AFE_I2S_8CHS,
+};
+
+#define AFE_MI2S_MONO 0
+#define AFE_MI2S_STEREO 3
+#define AFE_MI2S_4CHANNELS 4
+#define AFE_MI2S_6CHANNELS 6
+#define AFE_MI2S_8CHANNELS 8
+
 struct afe_port_mi2s_cfg {
-	u16	port_id;
 	u16	bitwidth;	/* 16,24,32 */
-	u16	line;		/* i2s_sd0 = 1 */
+	u16	line;		/* Called ChannelMode in documentation */
+				/* i2s_sd0 = 1 */
 				/* i2s_sd1 = 2 */
 				/* i2s_sd2 = 3 */
 				/* i2s_sd3 = 4 */
@@ -180,7 +196,8 @@ struct afe_port_mi2s_cfg {
 				/* i2s_quad23 = 6 */
 				/* i2s_6chs = 7 */
 				/* i2s_8chs = 8 */
-	u16	channel;	/* i2s mono = 0 */
+	u16	channel;	/* Called MonoStereo in documentation */
+				/* i2s mono = 0 */
 				/* i2s mono right = 1 */
 				/* i2s mono left = 2 */
 				/* i2s stereo = 3 */
@@ -190,7 +207,6 @@ struct afe_port_mi2s_cfg {
 } __attribute__ ((packed));
 
 struct afe_port_hdmi_cfg {
-	u16	port_id;
 	u16	bitwidth;	/* 16,24,32 */
 	u16	channel_mode;	/* HDMI Stereo = 0 */
 				/* HDMI_3Point1 (4-ch) = 1 */
@@ -201,16 +217,18 @@ struct afe_port_hdmi_cfg {
 } __attribute__ ((packed));
 
 #define AFE_PORT_AUDIO_IF_CONFIG 0x000100d3
+
+union afe_port_config {
+	struct afe_port_pcm_cfg         pcm;
+	struct afe_port_mi2s_cfg        mi2s;
+	struct afe_port_hdmi_cfg        hdmi;
+} __attribute__((packed));
+
 struct afe_audioif_config_command {
 	struct apr_hdr hdr;
-	union {
-		struct afe_port_pcm_cfg		pcm;
-		struct afe_port_mi2s_cfg	mi2s;
-		struct afe_port_hdmi_cfg	hdmi;
-	} __attribute__((packed)) port;
+	u16 port_id;
+	union afe_port_config port;
 } __attribute__ ((packed));
-
-
 
 #define AFE_TEST_CODEC_LOOPBACK_CTL 0x000100d5
 struct afe_codec_loopback_command {
@@ -376,24 +394,11 @@ struct asm_softvolume_params {
 	u32 rampingcurve;
 } __attribute__ ((packed));
 
-struct asm_volume_params {
-	union {
-		struct asm_master_gain_params m_gain;;
-		struct asm_lrchannel_gain_params lr_gain;
-		struct asm_mute_params mute;
-		struct asm_softvolume_params softvol;
-	} __attribute__ ((packed)) vparams;
-} __attribute__ ((packed));
-
 struct asm_pp_param_data_hdr {
 	u32 module_id;
 	u32 param_id;
 	u16 param_size;
 	u16 reserved;
-	union {
-		struct asm_equalizer_params eq_params;
-		struct asm_volume_params vol_params;
-	} __attribute__ ((packed)) pp_param;
 } __attribute__ ((packed));
 
 struct asm_pp_params_command {
@@ -512,13 +517,30 @@ struct asm_wma_cfg {
 	u16 format_tag;
 	u16 ch_cfg;
 	u32 sample_rate;
-	u32 ave_bytes_per_sec;
+	u32 avg_bytes_per_sec;
 	u16 block_align;
 	u16 valid_bits_per_sample;
 	u32 ch_mask;
 	u16 encode_opt;
 	u16 adv_encode_opt;
-	u16 adv_encode_opt2;
+	u32 adv_encode_opt2;
+	u32 drc_peak_ref;
+	u32 drc_peak_target;
+	u32 drc_ave_ref;
+	u32 drc_ave_target;
+};
+
+struct asm_wmapro_cfg {
+	u16 format_tag;
+	u16 ch_cfg;
+	u32 sample_rate;
+	u32 avg_bytes_per_sec;
+	u16 block_align;
+	u16 valid_bits_per_sample;
+	u32 ch_mask;
+	u16 encode_opt;
+	u16 adv_encode_opt;
+	u32 adv_encode_opt2;
 	u32 drc_peak_ref;
 	u32 drc_peak_target;
 	u32 drc_ave_ref;
@@ -602,8 +624,7 @@ struct asm_sbc_bitrate {
 };
 
 struct asm_immed_decode {
-	u16 mode;
-	u16 padding;
+	u32 mode;
 };
 
 struct asm_encode_cfg_blk {
@@ -795,10 +816,10 @@ struct asm_stream_cmd_write{
 	struct apr_hdr     hdr;
 	u32	buf_add;
 	u32	avail_bytes;
+	u32	uid;
 	u32	msw_ts;
 	u32	lsw_ts;
 	u32	uflags;
-	u32	uid;
 } __attribute__((packed));
 
 #define ASM_DATA_CMD_READ                                0x00010BDA
@@ -821,6 +842,7 @@ struct asm_stream_media_format_update{
 		struct asm_yadpcm_cfg      yadpcm_cfg;
 		struct asm_midi_cfg        midi_cfg;
 		struct asm_wma_cfg         wma_cfg;
+		struct asm_wmapro_cfg      wmapro_cfg;
 		struct asm_aac_cfg         aac_cfg;
 		struct asm_flac_cfg        flac_cfg;
 		struct asm_vorbis_cfg      vorbis_cfg;

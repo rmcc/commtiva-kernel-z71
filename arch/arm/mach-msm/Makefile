@@ -51,7 +51,8 @@ obj-$(CONFIG_ARCH_QSD8X50) += sirc.o
 obj-$(CONFIG_MSM_FIQ_SUPPORT) += fiq_glue.o
 obj-$(CONFIG_MACH_TROUT) += board-trout-rfkill.o
 obj-$(CONFIG_MSM_SDIO_AL) += sdio_al.o
-obj-$(CONFIG_MSM_SDIO_AL_TEST) += sdio_al_test.o
+obj-$(CONFIG_MSM_SDIO_AL) += sdio_al_test.o
+obj-$(CONFIG_MSM_SDIO_AL) += sdio_al_dloader.o
 obj-$(CONFIG_MSM_SDIO_DMUX) += sdio_dmux.o
 obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o socinfo.o
@@ -63,6 +64,7 @@ obj-$(CONFIG_MSM_SMD_TTY) += smd_tty.o
 obj-$(CONFIG_MSM_SMD_QMI) += smd_qmi.o
 obj-$(CONFIG_MSM_SMD_PKT) += smd_pkt.o
 obj-$(CONFIG_MSM_SDIO_CMUX) += sdio_cmux.o
+obj-$(CONFIG_MSM_DSPS) += msm_dsps.o
 obj-$(CONFIG_MSM_SDIO_CTL) += sdio_ctl.o
 obj-$(CONFIG_MSM_SMD_NMEA) += smd_nmea.o
 obj-$(CONFIG_MSM_RESET_MODEM) += reset_modem.o
@@ -120,6 +122,7 @@ obj-$(CONFIG_ARCH_MSM8X60) += clock-8x60_mxo.o clock-rpm.o spm.o restart.o
 obj-$(CONFIG_ARCH_MSM8X60) += subsystem-fatal-8x60.o
 obj-$(CONFIG_ARCH_MSM8X60) += saw-regulator.o
 obj-$(CONFIG_ARCH_MSM8X60) += rpm-regulator.o
+obj-$(CONFIG_ARCH_MSM8X60) += footswitch-8x60.o
 
 ifdef CONFIG_ARCH_MSM8X60
 	obj-$(CONFIG_CPU_IDLE) += cpuidle.o
@@ -131,6 +134,8 @@ obj-$(CONFIG_MACH_MSM8X60_SIM) += board-msm8x60.o
 obj-$(CONFIG_MACH_MSM8X60_SURF) += board-msm8x60.o
 obj-$(CONFIG_MACH_MSM8X60_FFA) += board-msm8x60.o
 obj-$(CONFIG_MACH_MSM8X60_FLUID) += board-msm8x60.o
+obj-$(CONFIG_MACH_MSM8X60_CHARM_SURF) += board-msm8x60.o mdm.o
+obj-$(CONFIG_MACH_MSM8X60_CHARM_FFA) += board-msm8x60.o mdm.o
 obj-$(CONFIG_MACH_MSM8X60_QRDC) += board-qrdc.o
 obj-$(CONFIG_TROUT_H2W) += board-trout-h2w.o
 obj-$(CONFIG_TROUT_BATTCHG) += htc_battery.o
@@ -154,12 +159,17 @@ obj-$(CONFIG_FIH_F9xx_GPIO_KEYPAD) += 7x27_kybd.o
 obj-$(CONFIG_HTC_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_HTC_HEADSET) += htc_headset.o
 obj-$(CONFIG_MSM_RMT_STORAGE_CLIENT) += rmt_storage_client.o
+obj-$(CONFIG_MSM_SDIO_SMEM) += sdio_smem.o
 obj-$(CONFIG_PMIC8058) += pmic8058-gpio.o pmic8058-mpp.o
 obj-$(CONFIG_ARCH_MSM7X30) += spm.o
 obj-$(CONFIG_MSM_RPM) += rpm.o rpm_resources.o mpm.o
 obj-$(CONFIG_MSM_RPM_LOG) += rpm_log.o
 obj-$(CONFIG_MSM_XO) += msm_xo.o
 obj-$(CONFIG_MSM_BUS_SCALING)	+= msm_bus_core.o msm_bus_fabric.o msm_bus_board_8660.o
+ifdef CONFIG_MSM_BUS_SCALING
+obj-$(CONFIG_DEBUG_FS) += msm_bus_dbg.o
+endif
+
 obj-$(CONFIG_SMMU)		+= iommu.o iommu_dev.o
 obj-$(CONFIG_SMMU_8X60)		+= devices-msm8x60-iommu.o
 
@@ -176,4 +186,6 @@ obj-y	+= gpio-v2.o
 else
 obj-y	+= gpio.o
 endif
-obj-$(CONFIG_MSM_SLEEP_STATS) += msm_sleep_stats.o
+obj-$(CONFIG_MSM_SLEEP_STATS) += msm_sleep_stats.o idle_stats.o
+obj-$(CONFIG_MSM_SHOW_RESUME_IRQ) += msm_show_resume_irq.o
+obj-$(CONFIG_BT_MSM_PINTEST)  += btpintest.o

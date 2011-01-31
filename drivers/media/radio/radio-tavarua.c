@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -52,7 +52,7 @@
 #include <linux/mfd/marimba.h>
 #include <linux/platform_device.h>
 #include <linux/workqueue.h>
-
+#include <linux/slab.h>
 /*
 regional parameters for radio device
 */
@@ -129,6 +129,8 @@ static int radio_nr = -1;
 module_param(radio_nr, int, 0);
 MODULE_PARM_DESC(radio_nr, "Radio Nr");
 static int wait_timeout = WAIT_TIMEOUT;
+/* Bahama's version*/
+static u8 bahama_version;
 /* RDS buffer blocks */
 static unsigned int rds_buf = 100;
 module_param(rds_buf, uint, 0);
@@ -145,6 +147,40 @@ static int tavarua_request_irq(struct tavarua_device *radio);
 static void start_pending_xfr(struct tavarua_device *radio);
 /* work function */
 static void read_int_stat(struct work_struct *work);
+
+static int is_bahama(void)
+{
+	int id = 0;
+
+	switch (id = adie_get_detected_connectivity_type()) {
+	case BAHAMA_ID:
+		FMDBG("It is Bahama\n");
+		return 1;
+
+	case MARIMBA_ID:
+		FMDBG("It is Marimba\n");
+		return 0;
+	default:
+		printk(KERN_ERR "%s: unexpected adie connectivity type: %d\n",
+			__func__, id);
+		return -ENODEV;
+	}
+}
+
+static int set_fm_slave_id(struct tavarua_device *radio)
+{
+	int bahama_present = is_bahama();
+
+	if (bahama_present == -ENODEV)
+		return -ENODEV;
+
+	if (bahama_present)
+		radio->marimba->mod_id = SLAVE_ID_BAHAMA_FM;
+	else
+		radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
+
+	return 0;
+}
 
 /*=============================================================================
 FUNCTION:  tavarua_isr
@@ -196,7 +232,11 @@ static int tavarua_read_registers(struct tavarua_device *radio,
 				unsigned char offset, int len)
 {
 	int retval = 0, i = 0;
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
+	retval = set_fm_slave_id(radio);
+
+	if (retval == -ENODEV)
+		return retval;
+
 	FMDBG_I2C("I2C Slave: %x, Read Offset(%x): Data [",
 						radio->marimba->mod_id,
 						offset);
@@ -231,7 +271,11 @@ static int tavarua_write_register(struct tavarua_device *radio,
 			unsigned char offset, unsigned char value)
 {
 	int retval;
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
+	retval = set_fm_slave_id(radio);
+
+	if (retval == -ENODEV)
+		return retval;
+
 	FMDBG_I2C("I2C Slave: %x, Write Offset(%x): Data[",
 						radio->marimba->mod_id,
 						offset);
@@ -267,7 +311,11 @@ static int tavarua_write_registers(struct tavarua_device *radio,
 
 	int i;
 	int retval;
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
+	retval = set_fm_slave_id(radio);
+
+	if (retval == -ENODEV)
+		return retval;
+
 	FMDBG_I2C("I2C Slave: %x, Write Offset(%x): Data[",
 						radio->marimba->mod_id,
 						offset);
@@ -1018,8 +1066,11 @@ static int tavarua_request_irq(struct tavarua_device *radio)
 	-ENXIO The m68k returns this value for  an  invalid
 		IRQ number.
   */
-	retval = request_irq(irq, tavarua_isr, IRQ_TYPE_EDGE_FALLING,
-				"fm interrupt", radio);
+	/* Use request_any_context_irq, So that it might work for nested or
+	nested interrupts. in MSM8x60, FM is connected to PMIC GPIO and it
+	is a nested interrupt*/
+	retval = request_any_context_irq(irq, tavarua_isr,
+				IRQ_TYPE_EDGE_FALLING, "fm interrupt", radio);
 	if (retval < 0) {
 		FMDERR("Couldn't acquire FM gpio %d\n", irq);
 		return retval;
@@ -1507,7 +1558,12 @@ static int tavarua_fops_open(struct file *file)
 	int retval = -ENODEV;
 	unsigned char value;
 	/* FM core bring up */
+	int i = 0;
+	char fm_ctl0_part1[] = { 0xCA, 0xCE, 0xD6 };
+	char fm_ctl1[] = { 0x03 };
+	char fm_ctl0_part2[] = { 0xB6, 0xB7 };
 	char buffer[] = {0x00, 0x48, 0x8A, 0x8E, 0x97, 0xB7};
+	int bahama_present = -ENODEV;
 
 	mutex_lock(&radio->lock);
 	if (radio->users) {
@@ -1532,7 +1588,17 @@ static int tavarua_fops_open(struct file *file)
 	}
 	/* call top level marimba interface here to enable FM core */
 	FMDBG("initializing SoC\n");
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+
+	bahama_present = is_bahama();
+
+	if (bahama_present == -ENODEV)
+		return -ENODEV;
+
+	if (bahama_present)
+		radio->marimba->mod_id = SLAVE_ID_BAHAMA;
+	else
+		radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+
 	value = FM_ENABLE;
 	retval = marimba_write_bit_mask(radio->marimba,
 			MARIMBA_XO_BUFF_CNTRL, &value, 1, value);
@@ -1542,14 +1608,90 @@ static int tavarua_fops_open(struct file *file)
 		goto open_err_all;
 	}
 
+
 	/* Bring up FM core */
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_FM;
-	retval = tavarua_write_registers(radio, LEAKAGE_CNTRL,
+	if (bahama_present)	{
+
+		radio->marimba->mod_id = SLAVE_ID_BAHAMA;
+		/* Read the Bahama version*/
+		retval = marimba_read_bit_mask(radio->marimba,
+				0x00,  &bahama_version, 1, 0x1F);
+		if (retval < 0) {
+			printk(KERN_ERR "%s: version read failed",
+				__func__);
+			goto open_err_all;
+		}
+		/* Check for Bahama V2 variant*/
+		if (bahama_version == 0x09)	{
+
+			/* In case of Bahama v2, forcefully enable the
+			 * internal analog and digital voltage controllers
+			 */
+			value = 0x06;
+			/* value itself used as mask in these writes*/
+			retval = marimba_write_bit_mask(radio->marimba,
+			BAHAMA_LDO_DREG_CTL0, &value, 1, value);
+			if (retval < 0) {
+				printk(KERN_ERR "%s:0xF0 write failed\n",
+					__func__);
+				goto open_err_all;
+			}
+			value = 0x86;
+			retval = marimba_write_bit_mask(radio->marimba,
+				BAHAMA_LDO_AREG_CTL0, &value, 1, value);
+			if (retval < 0) {
+				printk(KERN_ERR "%s:0xF4 write failed\n",
+					__func__);
+				goto open_err_all;
+			}
+		}
+
+		/*write FM mode*/
+		retval = tavarua_write_register(radio, BAHAMA_FM_MODE_REG,
+					BAHAMA_FM_MODE_NORMAL);
+		if (retval < 0) {
+			printk(KERN_ERR "failed to set the FM mode: %d\n",
+					retval);
+			goto open_err_all;
+		}
+		/*Write first sequence of bytes to FM_CTL0*/
+		for (i = 0; i < 3; i++)  {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL0_REG, fm_ctl0_part1[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL0:set-1 failure: %d\n",
+							retval);
+				goto open_err_all;
+			}
+		}
+		/*Write the FM_CTL1 sequence*/
+		for (i = 0; i < 1; i++)  {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL1_REG, fm_ctl1[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL1 write failure: %d\n",
+							retval);
+				goto open_err_all;
+			}
+		}
+		/*Write second sequence of bytes to FM_CTL0*/
+		for (i = 0; i < 2; i++)  {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL0_REG, fm_ctl0_part2[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL0:set-2 failure: %d\n",
+					retval);
+			goto open_err_all;
+			}
+		}
+	} else {
+		retval = tavarua_write_registers(radio, LEAKAGE_CNTRL,
 						buffer, 6);
-	if (retval < 0) {
-		printk(KERN_ERR "%s: failed to bring up FM Core\n",
+		if (retval < 0) {
+			printk(KERN_ERR "%s: failed to bring up FM Core\n",
 						__func__);
-		goto open_err_all;
+			goto open_err_all;
+		}
 	}
 	/* Wait for interrupt i.e. complete(&radio->sync_req_done); call */
 	/*Initialize the completion variable for
@@ -1584,6 +1726,7 @@ static int tavarua_fops_open(struct file *file)
 	}
 
 	radio->handle_irq = 0;
+	marimba_set_fm_status(radio->marimba, true);
 	return 0;
 
 
@@ -1617,6 +1760,26 @@ static int tavarua_fops_release(struct file *file)
 	int retval;
 	struct tavarua_device *radio = video_get_drvdata(video_devdata(file));
 	unsigned char value;
+	int i = 0;
+	/*FM Core shutdown sequence for Bahama*/
+	char fm_ctl0_part1[] = { 0xB7 };
+	char fm_ctl1[] = { 0x03 };
+	char fm_ctl0_part2[] = { 0x9F, 0x48, 0x02 };
+	int bahama_present = -ENODEV;
+	/*FM Core shutdown sequence for Marimba*/
+	char buffer[] = {0x18, 0xB7, 0x48};
+	bool bt_status = false;
+	int index;
+	/* internal regulator controllers DREG_CTL0, AREG_CTL0
+	 * has to be kept in the valid state based on the bt status.
+	 * 1st row is the state when no clients are active,
+	 * and the second when bt is in on state.
+	 */
+	char internal_vreg_ctl[2][2] = {
+		{ 0x04, 0x84 },
+		{ 0x00, 0x80 }
+	};
+
 	if (!radio)
 		return -ENODEV;
 	FMDBG("In %s", __func__);
@@ -1632,8 +1795,80 @@ static int tavarua_fops_release(struct file *file)
 		return retval;
 	}
 
-	/* disable fm core */
-	radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+	bahama_present = is_bahama();
+
+	if (bahama_present == -ENODEV)
+		return -ENODEV;
+
+	if (bahama_present)	{
+		/*Write first sequence of bytes to FM_CTL0*/
+		for (i = 0; i < 1; i++) {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL0_REG, fm_ctl0_part1[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL0:Set-1 failure: %d\n",
+						retval);
+				break;
+			}
+		}
+		/*Write the FM_CTL1 sequence*/
+		for (i = 0; i < 1; i++)  {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL1_REG, fm_ctl1[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL1 failure: %d\n",
+						retval);
+				break;
+			}
+		}
+		/*Write second sequence of bytes to FM_CTL0*/
+		for (i = 0; i < 3; i++)   {
+			retval = tavarua_write_register(radio,
+					BAHAMA_FM_CTL0_REG, fm_ctl0_part2[i]);
+			if (retval < 0) {
+				printk(KERN_ERR "FM_CTL0:Set-2 failure: %d\n",
+						retval);
+			break;
+			}
+		}
+	}	else	{
+
+		retval = tavarua_write_registers(radio, FM_CTL0,
+				buffer, sizeof(buffer)/sizeof(buffer[0]));
+		if (retval < 0) {
+			printk(KERN_ERR "%s: failed to bring down the  FM Core\n",
+							__func__);
+			return retval;
+		}
+	}
+
+	bt_status = marimba_get_bt_status(radio->marimba);
+	/* Set the index based on the bt status*/
+	index = bt_status ?  1 : 0;
+	/* Check for Bahama's existance and Bahama V2 variant*/
+	if (bahama_present && (bahama_version == 0x09))   {
+		radio->marimba->mod_id = SLAVE_ID_BAHAMA;
+		/* actual value itself used as mask*/
+		retval = marimba_write_bit_mask(radio->marimba,
+			BAHAMA_LDO_DREG_CTL0, &internal_vreg_ctl[bt_status][0],
+			 1, internal_vreg_ctl[index][0]);
+		if (retval < 0) {
+			printk(KERN_ERR "%s:0xF0 write failed\n", __func__);
+			return retval;
+		}
+		/* actual value itself used as mask*/
+		retval = marimba_write_bit_mask(radio->marimba,
+			BAHAMA_LDO_AREG_CTL0, &internal_vreg_ctl[bt_status][1],
+			1, internal_vreg_ctl[index][1]);
+		if (retval < 0) {
+			printk(KERN_ERR "%s:0xF4 write failed\n", __func__);
+			return retval;
+		}
+	} else    {
+		/* disable fm core */
+		radio->marimba->mod_id = MARIMBA_SLAVE_ID_MARIMBA;
+	}
+
 	value = 0x00;
 	retval = marimba_write_bit_mask(radio->marimba, MARIMBA_XO_BUFF_CNTRL,
 							&value, 1, FM_ENABLE);
@@ -1646,6 +1881,7 @@ static int tavarua_fops_release(struct file *file)
 	radio->pdata->fm_shutdown(radio->pdata);
 	radio->handle_irq = 1;
 	radio->users = 0;
+	marimba_set_fm_status(radio->marimba, false);
 	return 0;
 }
 
@@ -2646,7 +2882,9 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 	int_ctrl[STATUS_REG3] = TRANSFER | ERROR;
 
 	/* use xfr for interrupt setup */
-	if (radio->chipID == MARIMBA_2_1) {
+    if (radio->chipID == MARIMBA_2_1 || radio->chipID == BAHAMA_1_0
+		|| radio->chipID == BAHAMA_2_0) {
+		FMDBG("Setting interrupts\n");
 		retval =  sync_write_xfr(radio, INT_CTRL, int_ctrl);
 	/* use register write to setup interrupts */
 	} else {
@@ -2670,7 +2908,8 @@ static int tavarua_setup_interrupts(struct tavarua_device *radio,
 	/* tavarua_handle_interrupts force reads all the interrupt status
 	*  registers and it is not valid for MBA 2.1
 	*/
-	if (radio->chipID != MARIMBA_2_1)
+	if ((radio->chipID != MARIMBA_2_1) && (radio->chipID != BAHAMA_1_0)
+		&& (radio->chipID != BAHAMA_2_0))
 		tavarua_handle_interrupts(radio);
 
 	return retval;
@@ -2702,7 +2941,8 @@ static int tavarua_disable_interrupts(struct tavarua_device *radio)
 	lpm_buf[STATUS_REG3] = TRANSFER;
 	/* use xfr for interrupt setup */
 	wait_timeout = 100;
-	if (radio->chipID == MARIMBA_2_1)
+	if (radio->chipID == MARIMBA_2_1 || radio->chipID == BAHAMA_1_0
+		|| radio->chipID == BAHAMA_2_0)
 		retval = sync_write_xfr(radio, INT_CTRL, lpm_buf);
 	/* use register write to setup interrupts */
 	else

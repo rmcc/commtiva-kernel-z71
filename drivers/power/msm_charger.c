@@ -28,6 +28,9 @@
 #include <linux/msm-charger.h>
 #include <linux/time.h>
 #include <linux/slab.h>
+#ifdef CONFIG_HAS_WAKELOCK
+#include <linux/wakelock.h>
+#endif
 
 #include <asm/atomic.h>
 
@@ -73,6 +76,9 @@ struct msm_hardware_charger_priv {
 	enum msm_hardware_charger_state hw_chg_state;
 	unsigned int max_source_current;
 	struct power_supply psy;
+#ifdef CONFIG_HAS_WAKELOCK
+	struct wake_lock wl;
+#endif
 };
 
 struct msm_charger_event {
@@ -785,6 +791,7 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 			priv->hw_chg_state = CHG_READY_STATE;
 			handle_charger_ready(priv);
 		}
+		wake_lock(&priv->wl);
 		break;
 	case CHG_ENUMERATED_EVENT:	/* only in USB types */
 		if (priv->hw_chg_state == CHG_ABSENT_STATE) {
@@ -818,6 +825,7 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 		if (hw_chg->type == CHG_TYPE_USB)
 			notify_usb_of_the_plugin_event(priv, 0);
 		handle_charger_removed(priv, CHG_ABSENT_STATE);
+		wake_unlock(&priv->wl);
 		break;
 	case CHG_DONE_EVENT:
 		if (priv->hw_chg_state == CHG_CHARGING_STATE)
@@ -1063,7 +1071,7 @@ EXPORT_SYMBOL(msm_charger_notify_event);
 int msm_charger_register(struct msm_hardware_charger *hw_chg)
 {
 	struct msm_hardware_charger_priv *priv;
-	int rc;
+	int rc = 0;
 
 	if (!msm_chg.inited) {
 		pr_err("%s: msm_chg is NULL,Too early to register\n", __func__);
@@ -1096,9 +1104,15 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	priv->psy.num_properties = ARRAY_SIZE(msm_power_props);
 	priv->psy.get_property = msm_power_get_property;
 
+#ifdef CONFIG_HAS_WAKELOCK
+	wake_lock_init(&priv->wl, WAKE_LOCK_SUSPEND, priv->psy.name);
+#endif
 	rc = power_supply_register(NULL, &priv->psy);
-	if (rc)
-		return rc;
+	if (rc) {
+		dev_err(msm_chg.dev, "%s power_supply_register failed\n",
+			__func__);
+		goto out;
+	}
 
 	priv->hw_chg = hw_chg;
 	priv->hw_chg_state = CHG_ABSENT_STATE;
@@ -1107,8 +1121,12 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	list_add_tail(&priv->list, &msm_chg.msm_hardware_chargers);
 	mutex_unlock(&msm_chg.msm_hardware_chargers_lock);
 	hw_chg->charger_private = (void *)priv;
-
 	return 0;
+
+out:
+	wake_lock_destroy(&priv->wl);
+	kfree(priv);
+	return rc;
 }
 EXPORT_SYMBOL(msm_charger_register);
 
@@ -1139,7 +1157,9 @@ int msm_charger_unregister(struct msm_hardware_charger *hw_chg)
 	mutex_lock(&msm_chg.msm_hardware_chargers_lock);
 	list_del(&priv->list);
 	mutex_unlock(&msm_chg.msm_hardware_chargers_lock);
+	wake_lock_destroy(&priv->wl);
 	power_supply_unregister(&priv->psy);
+	kfree(priv);
 	return 0;
 }
 EXPORT_SYMBOL(msm_charger_unregister);
@@ -1149,6 +1169,11 @@ static int msm_charger_suspend(struct device *dev)
 	dev_dbg(msm_chg.dev, "%s suspended\n", __func__);
 	msm_chg.stop_update = 1;
 	cancel_delayed_work(&msm_chg.update_heartbeat_work);
+	/*
+	 * we wont be charging in the suspend sequence, act as if the
+	 * battery is removed - this will stop the resume delayed work
+	 */
+	handle_battery_removed();
 	return 0;
 }
 
@@ -1162,6 +1187,7 @@ static int msm_charger_resume(struct device *dev)
 				&msm_chg.update_heartbeat_work,
 			      round_jiffies_relative(msecs_to_jiffies
 						     (msm_chg.update_time)));
+	handle_battery_inserted();
 	return 0;
 }
 

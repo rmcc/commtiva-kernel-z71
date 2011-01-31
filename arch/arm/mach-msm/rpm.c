@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -374,13 +374,23 @@ static irqreturn_t msm_rpm_ack_interrupt(int irq, void *dev_id)
 /*
  * Note: assumes caller has acquired <msm_rpm_irq_lock>.
  */
-static void msm_rpm_busy_wait_for_request_completion(void)
+static void msm_rpm_busy_wait_for_request_completion(
+	bool allow_async_completion)
 {
 	int rc;
 
 	do {
-		while (!gic_is_spi_pending(msm_rpm_platform->irq_ack))
+		while (!gic_is_spi_pending(msm_rpm_platform->irq_ack) &&
+				msm_rpm_request) {
+			if (allow_async_completion)
+				spin_unlock(&msm_rpm_irq_lock);
 			udelay(1);
+			if (allow_async_completion)
+				spin_lock(&msm_rpm_irq_lock);
+		}
+
+		if (!msm_rpm_request)
+			break;
 
 		rc = msm_rpm_process_ack_interrupt();
 		gic_clear_spi_pending(msm_rpm_platform->irq_ack);
@@ -411,7 +421,9 @@ static int msm_rpm_set_exclusive(int ctx,
 	msm_rpm_request_irq_mode.sel_masks_ack = sel_masks_ack;
 	msm_rpm_request_irq_mode.done = &ack;
 
+	spin_lock(&msm_rpm_lock);
 	spin_lock_irqsave(&msm_rpm_irq_lock, flags);
+
 	BUG_ON(msm_rpm_request);
 	msm_rpm_request = &msm_rpm_request_irq_mode;
 
@@ -426,7 +438,10 @@ static int msm_rpm_set_exclusive(int ctx,
 
 	msm_rpm_write_barrier();
 	msm_rpm_send_req_interrupt();
+
 	spin_unlock_irqrestore(&msm_rpm_irq_lock, flags);
+	spin_unlock(&msm_rpm_lock);
+
 	wait_for_completion(&ack);
 
 	BUG_ON((ctx_mask_ack & ~(msm_rpm_get_ctx_mask(MSM_RPM_CTX_REJECTED)))
@@ -465,7 +480,7 @@ static int msm_rpm_set_exclusive_noirq(int ctx,
 	get_irq_chip(irq)->mask(irq);
 
 	if (msm_rpm_request) {
-		msm_rpm_busy_wait_for_request_completion();
+		msm_rpm_busy_wait_for_request_completion(true);
 		BUG_ON(msm_rpm_request);
 	}
 
@@ -482,9 +497,10 @@ static int msm_rpm_set_exclusive_noirq(int ctx,
 
 	msm_rpm_write_barrier();
 	msm_rpm_send_req_interrupt();
-	msm_rpm_busy_wait_for_request_completion();
 
+	msm_rpm_busy_wait_for_request_completion(false);
 	BUG_ON(msm_rpm_request);
+
 	get_irq_chip(irq)->unmask(irq);
 	spin_unlock_irqrestore(&msm_rpm_irq_lock, flags);
 
@@ -737,6 +753,9 @@ EXPORT_SYMBOL(msm_rpm_set);
  */
 int msm_rpm_set_noirq(int ctx, struct msm_rpm_iv_pair *req, int count)
 {
+	WARN(!irqs_disabled(), "msm_rpm_set_noirq can only be called "
+		"safely when local irqs are disabled.  Consider using "
+		"msm_rpm_set or msm_rpm_set_nosleep instead.");
 	return msm_rpm_set_common(ctx, req, count, true);
 }
 EXPORT_SYMBOL(msm_rpm_set_noirq);
@@ -773,6 +792,9 @@ EXPORT_SYMBOL(msm_rpm_clear);
  */
 int msm_rpm_clear_noirq(int ctx, struct msm_rpm_iv_pair *req, int count)
 {
+	WARN(!irqs_disabled(), "msm_rpm_clear_noirq can only be called "
+		"safely when local irqs are disabled.  Consider using "
+		"msm_rpm_clear or msm_rpm_clear_nosleep instead.");
 	return msm_rpm_clear_common(ctx, req, count, true);
 }
 EXPORT_SYMBOL(msm_rpm_clear_noirq);
@@ -910,7 +932,8 @@ int __init msm_rpm_init(struct msm_rpm_platform_data *data)
 	irq = msm_rpm_platform->irq_ack;
 
 	rc = request_irq(irq, msm_rpm_ack_interrupt,
-			IRQF_TRIGGER_RISING, "rpm_drv", msm_rpm_ack_interrupt);
+			IRQF_TRIGGER_RISING | IRQF_NO_SUSPEND,
+			"rpm_drv", msm_rpm_ack_interrupt);
 	if (rc) {
 		pr_err("%s: failed to request irq %d: %d\n",
 			__func__, irq, rc);

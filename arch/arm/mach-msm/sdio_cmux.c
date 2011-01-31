@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,6 +15,8 @@
  * 02110-1301, USA.
  */
 
+#define DEBUG
+
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/delay.h>
@@ -24,14 +26,17 @@
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
-#include <mach/sdio_al.h>
-#include "modem_notifier.h"
 #include <linux/slab.h>
+#include <linux/termios.h>
+#include <linux/debugfs.h>
+
+#include <mach/sdio_al.h>
+#include <mach/sdio_cmux.h>
+
+#include "modem_notifier.h"
 
 #define MAX_WRITE_RETRY 5
 #define MAGIC_NO_V1 0x33FC
-#define NUM_SDIO_CMUX_PORTS 8
-#define DEBUG
 
 static int msm_sdio_cmux_debug_mask;
 module_param_named(debug_mask, msm_sdio_cmux_debug_mask,
@@ -41,7 +46,14 @@ enum cmd_type {
 	DATA = 0,
 	OPEN,
 	CLOSE,
+	STATUS,
+	NUM_CMDS
 };
+
+#define DSR_POS 0x1
+#define CTS_POS 0x2
+#define RI_POS 0x4
+#define CD_POS 0x8
 
 struct sdio_cmux_ch {
 	int lc_id;
@@ -51,17 +63,22 @@ struct sdio_cmux_ch {
 	int is_remote_open;
 	int is_local_open;
 
+	char local_status;
+	char remote_status;
+
 	struct mutex tx_lock;
 	struct list_head tx_list;
 
 	void *priv;
-	void (*receive_cb)(int , void *, int);
-	void (*write_done)(int , void *, int);
-} logical_ch[NUM_SDIO_CMUX_PORTS];
+	void (*receive_cb)(void *, int, void *);
+	void (*write_done)(void *, int, void *);
+	void (*status_callback)(int, void *);
+} logical_ch[SDIO_CMUX_NUM_CHANNELS];
 
 struct sdio_cmux_hdr {
 	uint16_t magic_no;
-	uint8_t reserved;
+	uint8_t status;         /* This field is reserved for commands other
+				 * than STATUS */
 	uint8_t cmd;
 	uint8_t pad_bytes;
 	uint8_t lc_id;
@@ -77,6 +94,12 @@ struct sdio_cmux_list_elem {
 	struct list_head list;
 	struct sdio_cmux_pkt cmux_pkt;
 };
+
+#define logical_ch_is_local_open(x)                        \
+	(logical_ch[(x)].is_local_open)
+
+#define logical_ch_is_remote_open(x)                       \
+	(logical_ch[(x)].is_remote_open)
 
 static void sdio_cdemux_fn(struct work_struct *work);
 static DECLARE_WORK(sdio_cdemux_work, sdio_cdemux_fn);
@@ -109,17 +132,17 @@ static struct platform_device sdio_ctl_dev = {
 do { \
 	if (msm_sdio_cmux_debug_mask & MSM_SDIO_CMUX_DUMP_BUFFER) { \
 		int i; \
-		pr_info("%s", prestr); \
+		pr_debug("%s", prestr); \
 		for (i = 0; i < cnt; i++) \
 			pr_info("%.2x", buf[i]); \
-		pr_info("\n"); \
+		pr_debug("\n"); \
 	} \
 } while (0)
 
 #define D(x...) \
 do { \
 	if (msm_sdio_cmux_debug_mask & MSM_SDIO_CMUX_DEBUG) \
-		pr_info(x); \
+		pr_debug(x); \
 } while (0)
 
 #else
@@ -129,7 +152,7 @@ do { \
 
 static int sdio_cmux_ch_alloc(int id)
 {
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid lc_id - %d\n", __func__, id);
 		return -EINVAL;
 	}
@@ -153,7 +176,7 @@ static int sdio_cmux_ch_clear_and_signal(int id)
 {
 	struct sdio_cmux_list_elem *list_elem;
 
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid lc_id - %d\n", __func__, id);
 		return -EINVAL;
 	}
@@ -172,14 +195,8 @@ static int sdio_cmux_ch_clear_and_signal(int id)
 	}
 	mutex_unlock(&logical_ch[id].tx_lock);
 	logical_ch[id].priv = NULL;
-	if (logical_ch[id].receive_cb) {
-		logical_ch[id].receive_cb(id, NULL, 0);
-		logical_ch[id].receive_cb = NULL;
-	}
-	if (logical_ch[id].write_done) {
-		logical_ch[id].write_done(id, NULL, 0);
-		logical_ch[id].write_done = NULL;
-	}
+	logical_ch[id].receive_cb = NULL;
+	logical_ch[id].write_done = NULL;
 	mutex_unlock(&logical_ch[id].lc_lock);
 	wake_up(&logical_ch[id].open_wait_queue);
 	return 0;
@@ -191,12 +208,12 @@ static int sdio_cmux_write_cmd(const int id, enum cmd_type type)
 	void *write_data = NULL;
 	struct sdio_cmux_list_elem *list_elem;
 
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid lc_id - %d\n", __func__, id);
 		return -EINVAL;
 	}
 
-	if (type < OPEN || type > CLOSE) {
+	if (type < 0 || type > NUM_CMDS) {
 		pr_err("%s: Invalid cmd - %d\n", __func__, type);
 		return -EINVAL;
 	}
@@ -221,7 +238,9 @@ static int sdio_cmux_write_cmd(const int id, enum cmd_type type)
 	list_elem->cmux_pkt.hdr->lc_id = (uint8_t)id;
 	list_elem->cmux_pkt.hdr->pkt_len = (uint16_t)0;
 	list_elem->cmux_pkt.hdr->cmd = (uint8_t)type;
-	list_elem->cmux_pkt.hdr->reserved = (uint8_t)0;
+	list_elem->cmux_pkt.hdr->status = (uint8_t)0;
+	if (type == STATUS)
+		list_elem->cmux_pkt.hdr->status = logical_ch[id].local_status;
 	list_elem->cmux_pkt.hdr->pad_bytes = (uint8_t)0;
 	list_elem->cmux_pkt.hdr->magic_no = (uint16_t)MAGIC_NO_V1;
 
@@ -238,8 +257,9 @@ static int sdio_cmux_write_cmd(const int id, enum cmd_type type)
 }
 
 int sdio_cmux_open(const int id,
-		   void (*receive_cb)(int , void *, int),
-		   void (*write_done)(int , void *, int),
+		   void (*receive_cb)(void *, int, void *),
+		   void (*write_done)(void *, int, void *),
+		   void (*status_callback)(int, void *),
 		   void *priv)
 {
 	int r;
@@ -247,7 +267,7 @@ int sdio_cmux_open(const int id,
 
 	if (!sdio_cmux_inited)
 		return -ENODEV;
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid id - %d\n", __func__, id);
 		return -EINVAL;
 	}
@@ -278,14 +298,16 @@ int sdio_cmux_open(const int id,
 	logical_ch[id].priv = priv;
 	logical_ch[id].receive_cb = receive_cb;
 	logical_ch[id].write_done = write_done;
+	logical_ch[id].status_callback = status_callback;
 	if (logical_ch[id].receive_cb) {
 		mutex_lock(&temp_rx_lock);
 		list_for_each_entry_safe(list_elem, list_elem_tmp,
 					 &temp_rx_list, list) {
 			if ((int)list_elem->cmux_pkt.hdr->lc_id == id) {
-				logical_ch[id].receive_cb(id,
+				logical_ch[id].receive_cb(
 					list_elem->cmux_pkt.data,
-					(int)list_elem->cmux_pkt.hdr->pkt_len);
+					(int)list_elem->cmux_pkt.hdr->pkt_len,
+					logical_ch[id].priv);
 				list_del(&list_elem->list);
 				kfree(list_elem->cmux_pkt.hdr);
 				kfree(list_elem);
@@ -305,7 +327,7 @@ int sdio_cmux_close(int id)
 
 	if (!sdio_cmux_inited)
 		return -ENODEV;
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid channel close\n", __func__);
 		return -EINVAL;
 	}
@@ -339,7 +361,7 @@ int sdio_cmux_write(int id, void *data, int len)
 
 	if (!sdio_cmux_inited)
 		return -ENODEV;
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS) {
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS) {
 		pr_err("%s: Invalid channel id %d\n", __func__, id);
 		return -ENODEV;
 	}
@@ -373,7 +395,7 @@ int sdio_cmux_write(int id, void *data, int len)
 	list_elem->cmux_pkt.hdr->lc_id = (uint8_t)ch->lc_id;
 	list_elem->cmux_pkt.hdr->pkt_len = (uint16_t)len;
 	list_elem->cmux_pkt.hdr->cmd = (uint8_t)DATA;
-	list_elem->cmux_pkt.hdr->reserved = (uint8_t)0;
+	list_elem->cmux_pkt.hdr->status = (uint8_t)0;
 	list_elem->cmux_pkt.hdr->pad_bytes = (uint8_t)0;
 	list_elem->cmux_pkt.hdr->magic_no = (uint16_t)MAGIC_NO_V1;
 
@@ -402,12 +424,43 @@ EXPORT_SYMBOL(sdio_cmux_write);
 
 int is_remote_open(int id)
 {
-	if (id < 0 || id >= NUM_SDIO_CMUX_PORTS)
+	if (id < 0 || id >= SDIO_CMUX_NUM_CHANNELS)
 		return -ENODEV;
 
-	return logical_ch[id].is_remote_open;
+	return logical_ch_is_remote_open(id);
 }
 EXPORT_SYMBOL(is_remote_open);
+
+int sdio_cmux_tiocmget(int id)
+{
+	int ret =  (logical_ch[id].remote_status & DSR_POS ? TIOCM_DSR : 0) |
+		(logical_ch[id].remote_status & CTS_POS ? TIOCM_CTS : 0) |
+		(logical_ch[id].remote_status & CD_POS ? TIOCM_CD : 0) |
+		(logical_ch[id].remote_status & RI_POS ? TIOCM_RI : 0) |
+		(logical_ch[id].local_status & CTS_POS ? TIOCM_RTS : 0) |
+		(logical_ch[id].local_status & DSR_POS ? TIOCM_DTR : 0);
+	return ret;
+}
+EXPORT_SYMBOL(sdio_cmux_tiocmget);
+
+int sdio_cmux_tiocmset(int id, unsigned int set, unsigned int clear)
+{
+	if (set & TIOCM_DTR)
+		logical_ch[id].local_status |= DSR_POS;
+
+	if (set & TIOCM_RTS)
+		logical_ch[id].local_status |= CTS_POS;
+
+	if (clear & TIOCM_DTR)
+		logical_ch[id].local_status &= ~DSR_POS;
+
+	if (clear & TIOCM_RTS)
+		logical_ch[id].local_status &= ~CTS_POS;
+
+	sdio_cmux_write_cmd(id, STATUS);
+	return 0;
+}
+EXPORT_SYMBOL(sdio_cmux_tiocmset);
 
 static int copy_packet(void *pkt, int size)
 {
@@ -477,10 +530,25 @@ static int process_cmux_pkt(void *pkt, int size)
 		data = (void *)((char *)pkt + sizeof(struct sdio_cmux_hdr));
 		data_size = (int)(((struct sdio_cmux_hdr *)pkt)->pkt_len);
 		if (logical_ch[id].receive_cb)
-			logical_ch[id].receive_cb(id, data, data_size);
+			logical_ch[id].receive_cb(data, data_size,
+						logical_ch[id].priv);
 		else
 			copy_packet(pkt, size);
 		mutex_unlock(&logical_ch[id].lc_lock);
+		break;
+
+	case STATUS:
+		id = (uint32_t)(mux_hdr->lc_id);
+		D("%s: Received STATUS command for ch%d\n", __func__, id);
+		if (logical_ch[id].remote_status != mux_hdr->status) {
+			mutex_lock(&logical_ch[id].lc_lock);
+			logical_ch[id].remote_status = mux_hdr->status;
+			mutex_unlock(&logical_ch[id].lc_lock);
+			if (logical_ch[id].status_callback)
+				logical_ch[id].status_callback(
+							sdio_cmux_tiocmget(id),
+							logical_ch[id].priv);
+		}
 		break;
 	}
 	return 0;
@@ -554,7 +622,7 @@ static void sdio_cmux_fn(struct work_struct *work)
 	struct sdio_cmux_list_elem *list_elem = NULL;
 	struct sdio_cmux_ch *ch;
 
-	for (i = 0; i < NUM_SDIO_CMUX_PORTS; i++) {
+	for (i = 0; i < SDIO_CMUX_NUM_CHANNELS; ++i) {
 		ch = &logical_ch[i];
 		bytes_written = 0;
 		mutex_lock(&ch->tx_lock);
@@ -596,7 +664,7 @@ static void sdio_cmux_fn(struct work_struct *work)
 			mutex_lock(&ch->tx_lock);
 		}
 		if (ch->write_done)
-			ch->write_done(i, NULL, bytes_written);
+			ch->write_done(NULL, bytes_written, ch->priv);
 		mutex_unlock(&ch->tx_lock);
 	}
 	return;
@@ -610,12 +678,61 @@ static void sdio_qmi_chl_notify(void *priv, unsigned event)
 	}
 }
 
+#ifdef CONFIG_DEBUG_FS
+
+static int debug_tbl(char *buf, int max)
+{
+	int i = 0;
+	int j;
+
+	for (j = 0; j < SDIO_CMUX_NUM_CHANNELS; ++j) {
+		i += scnprintf(buf + i, max - i,
+			"ch%02d  local open=%s  remote open=%s\n",
+			j, logical_ch_is_local_open(j) ? "Y" : "N",
+			logical_ch_is_remote_open(j) ? "Y" : "N");
+	}
+
+	return i;
+}
+
+#define DEBUG_BUFMAX 4096
+static char debug_buffer[DEBUG_BUFMAX];
+
+static ssize_t debug_read(struct file *file, char __user *buf,
+				size_t count, loff_t *ppos)
+{
+	int (*fill)(char *buf, int max) = file->private_data;
+	int bsize = fill(debug_buffer, DEBUG_BUFMAX);
+	return simple_read_from_buffer(buf, count, ppos, debug_buffer, bsize);
+}
+
+static int debug_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+
+static const struct file_operations debug_ops = {
+	.read = debug_read,
+	.open = debug_open,
+};
+
+static void debug_create(const char *name, mode_t mode,
+				struct dentry *dent,
+				int (*fill)(char *buf, int max))
+{
+	debugfs_create_file(name, mode, dent, fill, &debug_ops);
+}
+
+#endif
+
 static int sdio_cmux_probe(struct platform_device *pdev)
 {
 	int i, r;
 
-	pr_info("%s Begins\n", __func__);
-	for (i = 0; i < NUM_SDIO_CMUX_PORTS; ++i)
+	D("%s Begins\n", __func__);
+	for (i = 0; i < SDIO_CMUX_NUM_CHANNELS; ++i)
 		sdio_cmux_ch_alloc(i);
 	INIT_LIST_HEAD(&temp_rx_list);
 
@@ -658,7 +775,7 @@ static int sdio_cmux_remove(struct platform_device *pdev)
 {
 	int i;
 
-	for (i = 0; i < NUM_SDIO_CMUX_PORTS; ++i)
+	for (i = 0; i < SDIO_CMUX_NUM_CHANNELS; ++i)
 		sdio_cmux_ch_clear_and_signal(i);
 
 	destroy_workqueue(sdio_cmux_wq);
@@ -680,6 +797,14 @@ static struct platform_driver sdio_cmux_driver = {
 
 static int __init sdio_cmux_init(void)
 {
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dent;
+
+	dent = debugfs_create_dir("sdio_cmux", 0);
+	if (!IS_ERR(dent))
+		debug_create("tbl", 0444, dent, debug_tbl);
+#endif
+
 	msm_sdio_cmux_debug_mask = 0;
 	return platform_driver_register(&sdio_cmux_driver);
 }

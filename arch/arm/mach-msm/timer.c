@@ -31,6 +31,7 @@
 #include "smd_private.h"
 #endif
 #include "timer.h"
+#include "clock-8x60.h"
 
 enum {
 	MSM_TIMER_DEBUG_SYNC = 1U << 0,
@@ -95,8 +96,11 @@ enum {
 
 #if defined(CONFIG_ARCH_QSD8X50)
 #define DGT_HZ 4800000	/* Uses TCXO/4 (19.2 MHz / 4) */
-#elif defined(CONFIG_ARCH_MSM7X30) || defined(CONFIG_ARCH_MSM8X60)
+#elif defined(CONFIG_ARCH_MSM7X30)
 #define DGT_HZ 6144000	/* Uses LPXO/4 (24.576 MHz / 4) */
+#elif defined(CONFIG_ARCH_MSM8X60)
+/* Uses PXO/4 (24.576 MHz / 4) on V1, (27 MHz / 4) on V2 */
+#define DGT_HZ 6750000
 #else
 #define DGT_HZ 19200000	/* Uses TCXO (19.2 MHz) */
 #endif
@@ -943,6 +947,7 @@ int __init msm_timer_init_time_sync(void (*timeout)(void))
 unsigned long long sched_clock(void)
 {
 	static cycle_t last_ticks;
+	static unsigned long long last_ns;
 	static DEFINE_SPINLOCK(msm_timer_sched_clock_lock);
 
 	struct msm_clock *clock;
@@ -958,13 +963,15 @@ unsigned long long sched_clock(void)
 	spin_lock_irqsave(&msm_timer_sched_clock_lock, irq_flags);
 	delta = (ticks - last_ticks) & cs->mask;
 
-	if (delta < cs->mask/2)
+	if (delta < cs->mask/2) {
 		last_ticks += delta;
+		last_ns += clocksource_cyc2ns(delta, cs->mult, cs->shift);
+	}
 
 	ticks = last_ticks;
 	spin_unlock_irqrestore(&msm_timer_sched_clock_lock, irq_flags);
 
-	return clocksource_cyc2ns(ticks, cs->mult, cs->shift);
+	return last_ns;
 }
 
 #ifdef CONFIG_ARCH_MSM_SCORPIONMP
@@ -983,6 +990,9 @@ static void __init msm_timer_init(void)
 
 #ifdef CONFIG_ARCH_MSM8X60
 	writel(DGT_CLK_CTL_DIV_4, MSM_TMR_BASE + DGT_CLK_CTL);
+
+	msm_clocks[MSM_CLOCK_DGT].freq =
+	  pxo_is_27mhz() ? 6750000 >> MSM_DGT_SHIFT : 6144000 >> MSM_DGT_SHIFT;
 #endif
 
 	for (i = 0; i < ARRAY_SIZE(msm_clocks); i++) {

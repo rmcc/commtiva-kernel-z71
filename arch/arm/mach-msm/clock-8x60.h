@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,6 +34,7 @@
 
 enum {
 	/* Peripheral Clocks */
+	L_CE2_CLK,
 	L_GSBI1_UART_CLK,
 	L_GSBI2_UART_CLK,
 	L_GSBI3_UART_CLK,
@@ -59,6 +60,7 @@ enum {
 	L_GSBI11_QUP_CLK,
 	L_GSBI12_QUP_CLK,
 	L_PDM_CLK,
+	L_PMEM_CLK,
 	L_PRNG_CLK,
 	L_SDC1_CLK,
 	L_SDC2_CLK,
@@ -101,6 +103,7 @@ enum {
 	L_GSBI10_P_CLK,
 	L_GSBI11_P_CLK,
 	L_GSBI12_P_CLK,
+	L_PPSS_P_CLK,
 	L_TSIF_P_CLK,
 	L_USB_FS1_P_CLK,
 	L_USB_FS2_P_CLK,
@@ -112,6 +115,7 @@ enum {
 	L_SDC5_P_CLK,
 
 	/* Multimedia Clocks */
+	L_AMP_CLK,
 	L_CAM_CLK,
 	L_CSI_SRC_CLK,
 	L_CSI0_CLK,
@@ -122,6 +126,7 @@ enum {
 	L_GFX2D1_CLK,
 	L_GFX3D_CLK,
 	L_IJPEG_CLK,
+	L_IMEM_CLK,
 	L_JPEGD_CLK,
 	L_MDP_CLK,
 	L_MDP_VSYNC_CLK,
@@ -213,16 +218,20 @@ struct pll_rate {
 	const uint32_t	n_val;
 	const uint32_t	vco;
 	const uint32_t	post_div;
+	const uint32_t	i_bits;
 };
+#define PLL_RATE(l, m, n, v, d, i) { l, m, n, v, (d>>1), i }
 
 extern struct clk_ops soc_clk_ops_8x60;
 #define CLK_8X60(clk_name, clk_id, clk_dev, clk_flags) {	\
-	.name = clk_name, \
-	.id = L_##clk_id, \
-	.ops = &soc_clk_ops_8x60, \
-	.flags = clk_flags, \
-	.dev = clk_dev, \
-	.dbg_name = #clk_id, \
+	.con_id = clk_name, \
+	.dev_id = clk_dev, \
+	.clk = &(struct clk){ \
+		.id = L_##clk_id, \
+		.ops = &soc_clk_ops_8x60, \
+		.flags = clk_flags, \
+		.dbg_name = #clk_id, \
+	}, \
 	}
 
 #endif

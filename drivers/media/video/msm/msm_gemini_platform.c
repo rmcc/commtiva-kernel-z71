@@ -26,6 +26,7 @@
 
 #include "msm_gemini_platform.h"
 #include "msm_gemini_common.h"
+#include "msm_gemini_hw.h"
 
 #ifdef CONFIG_MSM_NPA_SYSTEM_BUS
 /* NPA Flow ID */
@@ -102,17 +103,18 @@ int msm_gemini_platform_init(struct platform_device *pdev,
 		goto fail1;
 	}
 
+	rc = msm_camio_jpeg_clk_enable();
+	if (rc) {
+		GMN_PR_ERR("%s: clk failed rc = %d\n", __func__, rc);
+		goto fail2;
+	}
+
+	msm_gemini_hw_init(gemini_base, resource_size(gemini_mem));
 	rc = request_irq(gemini_irq, handler, IRQF_TRIGGER_RISING, "gemini",
 		context);
 	if (rc) {
 		GMN_PR_ERR("%s: request_irq failed, %d, JPEG = %d\n", __func__,
 			gemini_irq, INT_JPEG);
-		goto fail2;
-	}
-
-	rc = msm_camio_jpeg_clk_enable();
-	if (rc) {
-		GMN_PR_ERR("%s: clk failed rc = %d\n", __func__, rc);
 		goto fail3;
 	}
 
@@ -124,7 +126,7 @@ int msm_gemini_platform_init(struct platform_device *pdev,
 	return rc;
 
 fail3:
-	free_irq(gemini_irq, context);
+	msm_camio_jpeg_clk_disable();
 fail2:
 	iounmap(gemini_base);
 fail1:
@@ -138,10 +140,8 @@ int msm_gemini_platform_release(struct resource *mem, void *base, int irq,
 {
 	int result;
 
-	result = msm_camio_jpeg_clk_disable();
-
 	free_irq(irq, context);
-
+	result = msm_camio_jpeg_clk_disable();
 	iounmap(base);
 	release_mem_region(mem->start, resource_size(mem));
 

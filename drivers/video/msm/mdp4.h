@@ -41,8 +41,6 @@ extern uint32 mdp_intr_mask;
 extern spinlock_t mdp_spin_lock;
 extern struct mdp4_statistic mdp4_stat;
 
-#define MDP4_NONBLOCKING
-
 #define MDP4_OVERLAYPROC0_BASE	0x10000
 #define MDP4_OVERLAYPROC1_BASE	0x18000
 
@@ -116,6 +114,7 @@ enum {
 #define INTR_PRIMARY_INTF_UDERRUN	BIT(8)
 #define INTR_EXTERNAL_VSYNC		BIT(9)
 #define INTR_EXTERNAL_INTF_UDERRUN	BIT(10)
+#define INTR_PRIMARY_READ_PTR		BIT(11)
 #define INTR_DMA_P_HISTOGRAM		BIT(17)
 
 /* histogram interrupts */
@@ -244,6 +243,7 @@ struct mdp4_overlay_pipe {
 	uint32 dst_h;		/* roi */
 	uint32 dst_x;		/* roi */
 	uint32 dst_y;		/* roi */
+	uint32 flags;
 	uint32 op_mode;
 	uint32 transp;
 	uint32 blend_op;
@@ -314,7 +314,7 @@ struct mdp4_statistic {
 	ulong intr_underrun_p;	/* Primary interface */
 	ulong intr_underrun_e;	/* external interface */
 	ulong kickoff_mddi;
-	ulong kickoff_mddi_skip;
+	ulong kickoff_piggy;
 	ulong kickoff_lcdc;
 	ulong kickoff_dtv;
 	ulong kickoff_atv;
@@ -413,7 +413,11 @@ void mdp4_dma_s_done_mddi(void);
 void mdp4_dma_p_done_mddi(void);
 void mdp4_overlay1_done_dtv(void);
 void mdp4_overlay1_done_atv(void);
+void mdp4_primary_vsync_lcdc(void);
 void mdp4_mddi_overlay_restore(void);
+void mdp4_overlay_lcdc_wait4vsync(struct msm_fb_data_type *mfd);
+void mdp4_overlay_vsync_push(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
 void mdp4_mddi_overlay_dmas_restore(void);
 void mdp4_mddi_dma_busy_wait(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);
@@ -437,6 +441,21 @@ int mdp4_overlay_mixer_play(int mixer_num);
 uint32 mdp4_overlay_panel_list(void);
 void mdp4_lcdc_overlay_kickoff(struct msm_fb_data_type *mfd,
 			struct mdp4_overlay_pipe *pipe);
+
+void mdp4_mddi_kickoff_video(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+
+void mdp4_mddi_read_ptr_intr(void);
+
+void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+void mdp4_dsi_cmd_kickoff_ui(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+void mdp4_dsi_cmd_kickoff_video(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+void mdp4_dsi_cmd_overlay_restore(void);
 
 void mdp_dmap_vsync_set(int enable);
 int mdp_dmap_vsync_get(void);

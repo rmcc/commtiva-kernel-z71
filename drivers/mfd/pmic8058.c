@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -275,15 +275,23 @@ int pm8058_reset_pwr_off(int reset)
 
 	mutex_lock(&pmic_chip->pm_lock);
 
-	if (!reset) {
-		/* Set regulator L22 to 1.225V in high power mode. */
-		ctrl = 0xD3;
-		rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_L22_CTRL, &ctrl,
-				1);
-		if (rc)
-			pr_err("%s: FAIL ssbi_write(0x%x)=0x%x: rc=%d\n",
-			       __func__, SSBI_REG_ADDR_L22_CTRL, ctrl, rc);
+	/* Set regulator L22 to 1.225V in high power mode. */
+	rc = ssbi_read(pmic_chip->dev, SSBI_REG_ADDR_L22_CTRL, &ctrl, 1);
+	if (rc) {
+		pr_err("%s: FAIL ssbi_read(0x%x): rc=%d\n", __func__,
+			SSBI_REG_ADDR_L22_CTRL, rc);
+		goto get_out3;
+	}
+	/* Leave pull-down state intact. */
+	ctrl &= 0x40;
+	ctrl |= 0x93;
+	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_L22_CTRL, &ctrl, 1);
+	if (rc)
+		pr_err("%s: FAIL ssbi_write(0x%x)=0x%x: rc=%d\n", __func__,
+			SSBI_REG_ADDR_L22_CTRL, ctrl, rc);
 
+get_out3:
+	if (!reset) {
 		/* Only modify the SLEEP_CNTL reg if shutdown is desired. */
 		rc = ssbi_read(pmic_chip->dev, SSBI_REG_ADDR_SLEEP_CNTL,
 			       &smpl, 1);
@@ -951,7 +959,7 @@ static int pm8058_probe(struct i2c_client *client,
 	}
 
 	rc = request_threaded_irq(chip->dev->irq, NULL, pm8058_isr_thread,
-			IRQF_ONESHOT | IRQF_DISABLED | IRQF_TRIGGER_LOW,
+			IRQF_ONESHOT | IRQF_DISABLED | pdata->irq_trigger_flags,
 			"pm8058-irq", chip);
 	if (rc < 0)
 		pr_err("%s: could not request irq %d: %d\n", __func__,
@@ -990,19 +998,21 @@ static int pm8058_suspend(struct device *dev)
 {
 	struct i2c_client *client;
 	struct	pm8058_chip *chip;
-	int	i;
+	int	i, irq;
 
 	client = to_i2c_client(dev);
 	chip = i2c_get_clientdata(client);
 
 	for (i = 0; i < MAX_PM_IRQ; i++) {
-		mutex_lock(&chip->pm_lock);
 		if (chip->config[i] && !chip->wake_enable[i]) {
 			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
-			      == PM8058_IRQF_MASK_ALL))
-				pm8058_irq_mask(i + chip->pdata.irq_base);
+			      == PM8058_IRQF_MASK_ALL)) {
+				irq = i + chip->pdata.irq_base;
+				pm8058_irq_bus_lock(irq);
+				pm8058_irq_mask(irq);
+				pm8058_irq_bus_sync_unlock(irq);
+			}
 		}
-		mutex_unlock(&chip->pm_lock);
 	}
 
 	if (!chip->count_wakeable)
@@ -1011,23 +1021,43 @@ static int pm8058_suspend(struct device *dev)
 	return 0;
 }
 
+void pm8058_show_resume_irq(void)
+{
+	u8	block, bits;
+	int i;
+	struct pm8058_chip *chip = pmic_chip;
+
+	for (i = 0; i < MAX_PM_IRQ; i++) {
+		if (chip->wake_enable[i]) {
+			block = i / 8;
+			if (!pm8058_read_block(chip, &block, &bits)) {
+				if (bits & (1 << (i & 0x7)))
+					pr_warning("%s:%d triggered\n",
+					__func__, i + chip->pdata.irq_base);
+			}
+		}
+	}
+}
+
 static int pm8058_resume(struct device *dev)
 {
 	struct i2c_client *client;
 	struct	pm8058_chip *chip;
-	int	i;
+	int	i, irq;
 
 	client = to_i2c_client(dev);
 	chip = i2c_get_clientdata(client);
 
 	for (i = 0; i < MAX_PM_IRQ; i++) {
-		mutex_lock(&chip->pm_lock);
 		if (chip->config[i] && !chip->wake_enable[i]) {
 			if (!((chip->config[i] & PM8058_IRQF_MASK_ALL)
-			      == PM8058_IRQF_MASK_ALL))
-				pm8058_irq_unmask(i + chip->pdata.irq_base);
+			      == PM8058_IRQF_MASK_ALL)) {
+				irq = i + chip->pdata.irq_base;
+				pm8058_irq_bus_lock(irq);
+				pm8058_irq_unmask(irq);
+				pm8058_irq_bus_sync_unlock(irq);
+			}
 		}
-		mutex_unlock(&chip->pm_lock);
 	}
 
 	if (!chip->count_wakeable)

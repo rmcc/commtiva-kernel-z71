@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 2007 Google Inc,
  *  Copyright (C) 2003 Deep Blue Solutions, Ltd, All Rights Reserved.
- *  Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ *  Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -138,7 +138,8 @@ static void msmsdcc_reset_and_restore(struct msmsdcc_host *host)
 		pr_err("%s: Clock deassert failed at %u Hz with err %d\n",
 				mmc_hostname(host->mmc), host->clk_rate, ret);
 
-	pr_info("%s: Controller has been reset\n", mmc_hostname(host->mmc));
+	pr_debug("%s: Controller has been reinitialized\n",
+			mmc_hostname(host->mmc));
 
 	/* Restore the contoller state */
 	writel(host->pwr, host->base + MMCIPOWER);
@@ -288,10 +289,6 @@ msmsdcc_dma_complete_tlet(unsigned long data)
 
 	if (host->curr.got_dataend || mrq->data->error) {
 
-		if (mrq->data->error && !(host->curr.got_dataend)) {
-			pr_info("%s: Worked around bug 1535304\n",
-			       mmc_hostname(host->mmc));
-		}
 		/*
 		 * If we've already gotten our DATAEND / DATABLKEND
 		 * for this request, then complete it through here.
@@ -1068,6 +1065,8 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 
 		spin_lock_irqsave(&host->lock, flags);
 		if (!host->clks_on) {
+			if (!IS_ERR_OR_NULL(host->dfab_pclk))
+				clk_enable(host->dfab_pclk);
 			if (!IS_ERR(host->pclk))
 				clk_enable(host->pclk);
 			clk_enable(host->clk);
@@ -1163,6 +1162,8 @@ msmsdcc_set_ios(struct mmc_host *mmc, struct mmc_ios *ios)
 		clk_disable(host->clk);
 		if (!IS_ERR(host->pclk))
 			clk_disable(host->pclk);
+		if (!IS_ERR_OR_NULL(host->dfab_pclk))
+			clk_disable(host->dfab_pclk);
 		host->clks_on = 0;
 	}
 	spin_unlock_irqrestore(&host->lock, flags);
@@ -1516,6 +1517,24 @@ msmsdcc_probe(struct platform_device *pdev)
 		goto ioremap_free;
 
 	/*
+	 * Setup SDCC clock if derived from Dayatona
+	 * fabric core clock.
+	 */
+	if (plat->pclk_src_dfab) {
+		host->dfab_pclk = clk_get(&pdev->dev, "dfab_sdc_clk");
+		if (!IS_ERR(host->dfab_pclk)) {
+			/* Set the clock rate to 64MHz for max. performance */
+			ret = clk_set_rate(host->dfab_pclk, 64000000);
+			if (ret)
+				goto dfab_pclk_put;
+			ret = clk_enable(host->dfab_pclk);
+			if (ret)
+				goto dfab_pclk_put;
+		} else
+			goto dma_free;
+	}
+
+	/*
 	 * Setup main peripheral bus clock
 	 */
 	host->pclk = clk_get(&pdev->dev, "sdc_pclk");
@@ -1760,7 +1779,12 @@ msmsdcc_probe(struct platform_device *pdev)
  pclk_put:
 	if (!IS_ERR(host->pclk))
 		clk_put(host->pclk);
-
+	if (!IS_ERR_OR_NULL(host->dfab_pclk))
+		clk_disable(host->dfab_pclk);
+ dfab_pclk_put:
+	if (!IS_ERR_OR_NULL(host->dfab_pclk))
+		clk_put(host->dfab_pclk);
+ dma_free:
 	dma_free_coherent(NULL, sizeof(struct msmsdcc_nc_dmadata),
 			host->dma.nc, host->dma.nc_busaddr);
  ioremap_free:
@@ -1810,6 +1834,8 @@ static int msmsdcc_remove(struct platform_device *pdev)
 	clk_put(host->clk);
 	if (!IS_ERR(host->pclk))
 		clk_put(host->pclk);
+	if (!IS_ERR_OR_NULL(host->dfab_pclk))
+		clk_put(host->dfab_pclk);
 
 	dma_free_coherent(NULL, sizeof(struct msmsdcc_nc_dmadata),
 			host->dma.nc, host->dma.nc_busaddr);

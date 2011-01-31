@@ -165,7 +165,7 @@ static void msm_fb_set_bl_brightness(struct led_classdev *led_cdev,
 	if (!bl_lvl && value)
 		bl_lvl = 1;
 
-	msm_fb_set_backlight(mfd, bl_lvl, 1);
+	msm_fb_set_backlight(mfd, bl_lvl);
 }
 
 static struct led_classdev backlight_led = {
@@ -322,7 +322,7 @@ static int msm_fb_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	mfd->panel_info.frame_count = 0;
-	mfd->bl_level = mfd->panel_info.bl_max;
+	mfd->bl_level = 0;
 #ifdef CONFIG_FB_MSM_OVERLAY
 	mfd->overlay_play_enable = 1;
 #endif
@@ -583,11 +583,36 @@ static struct platform_driver msm_fb_driver = {
 		   },
 };
 
+#if defined(CONFIG_HAS_EARLYSUSPEND) && defined(CONFIG_FB_MSM_OVERLAY)
+static void memset32_io(u32 __iomem *_ptr, u32 val, size_t count)
+{
+	count >>= 2;
+	while (count--)
+		writel(val, _ptr++);
+}
+#endif
+
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void msmfb_early_suspend(struct early_suspend *h)
 {
 	struct msm_fb_data_type *mfd = container_of(h, struct msm_fb_data_type,
 						    early_suspend);
+#ifdef CONFIG_FB_MSM_OVERLAY
+	/*
+	* For MDP with overlay, set framebuffer with black pixels
+	* to show black screen on HDMI.
+	*/
+	struct fb_info *fbi = mfd->fbi;
+	switch (mfd->fbi->var.bits_per_pixel) {
+	case 32:
+		memset32_io((void *)fbi->screen_base, 0xFF000000,
+							fbi->fix.smem_len);
+		break;
+	default:
+		memset_io(fbi->screen_base, 0x00, fbi->fix.smem_len);
+		break;
+	}
+#endif
 	msm_fb_suspend_sub(mfd);
 }
 
@@ -599,7 +624,7 @@ static void msmfb_early_resume(struct early_suspend *h)
 }
 #endif
 
-void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl, u32 save)
+void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl)
 {
 	struct msm_fb_panel_data *pdata;
 
@@ -607,16 +632,8 @@ void msm_fb_set_backlight(struct msm_fb_data_type *mfd, __u32 bkl_lvl, u32 save)
 
 	if ((pdata) && (pdata->set_backlight)) {
 		down(&mfd->sem);
-		if ((bkl_lvl != mfd->bl_level) || (!save)) {
-			u32 old_lvl;
-
-			old_lvl = mfd->bl_level;
-			mfd->bl_level = bkl_lvl;
-			pdata->set_backlight(mfd);
-
-			if (!save)
-				mfd->bl_level = old_lvl;
-		}
+		mfd->bl_level = bkl_lvl;
+		pdata->set_backlight(mfd);
 		up(&mfd->sem);
 	}
 }
@@ -644,9 +661,6 @@ static int msm_fb_blank_sub(int blank_mode, struct fb_info *info,
 			ret = pdata->on(mfd->pdev);
 			if (ret == 0) {
 				mfd->panel_power_on = TRUE;
-
-				msm_fb_set_backlight(mfd,
-						     mfd->bl_level, 0);
 
 /* ToDo: possible conflict with android which doesn't expect sw refresher */
 /*
@@ -679,7 +693,6 @@ static int msm_fb_blank_sub(int blank_mode, struct fb_info *info,
 			if (ret)
 				mfd->panel_power_on = curr_pwr_state;
 
-			msm_fb_set_backlight(mfd, 0, 0);
 			mfd->op_enable = TRUE;
 		}
 		break;
@@ -999,14 +1012,14 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	fix->line_length = msm_fb_line_length(mfd->index, panel_info->xres,
 					      bpp);
 	/* calculate smem_len based on max size of two supplied modes */
-	fix->smem_len = MAX(msm_fb_line_length(mfd->index,
+	fix->smem_len = roundup(MAX(msm_fb_line_length(mfd->index,
 					       panel_info->xres,
 					       bpp) *
 			    panel_info->yres * mfd->fb_page,
 			    msm_fb_line_length(mfd->index,
 					       panel_info->mode2_xres,
 					       (panel_info->mode2_bpp+7)/8) *
-			    panel_info->mode2_yres * mfd->fb_page);
+			    panel_info->mode2_yres * mfd->fb_page), PAGE_SIZE);
 
 
 

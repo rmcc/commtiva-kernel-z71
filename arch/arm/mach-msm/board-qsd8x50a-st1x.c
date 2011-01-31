@@ -59,10 +59,10 @@
 #include <mach/clk.h>
 #include <mach/tpm_st_i2c.h>
 #include <mach/rpc_server_handset.h>
+#include <mach/socinfo.h>
 
 #include "devices.h"
 #include "timer.h"
-#include "socinfo.h"
 #include "msm-keypad-devices.h"
 #include "pm.h"
 #include <linux/msm_kgsl.h>
@@ -72,7 +72,7 @@
 #endif
 #include "smd_private.h"
 
-#define MSM_PMEM_MDP_SIZE	0x204000
+#define MSM_PMEM_MDP_SIZE	0x408000
 
 #define SMEM_SPINLOCK_I2C	"D:I2C02000021"
 
@@ -1081,6 +1081,12 @@ static int st15_hdmi_power(int on)
 	return 0;
 }
 
+static unsigned int msm_fb_lcdc_get_clk(void)
+{
+	/* Return 160MHz(in Hz) as the AXI clock for st1x device */
+	return 192000000;
+}
+
 static int msm_fb_lcdc_gpio_config(int on)
 {
 
@@ -1122,6 +1128,7 @@ static struct msm_gpio msm_fb_st15_gpio_config_data[] = {
 
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_gpio_config = msm_fb_lcdc_gpio_config,
+	.lcdc_get_clk = msm_fb_lcdc_get_clk,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
@@ -1745,6 +1752,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.chg_init	= hsusb_chg_init,
 	.ldo_enable	= msm_hsusb_ldo_enable,
 	.ldo_init	= msm_hsusb_ldo_init,
+	.pclk_src_name	= "ebi1_usb_clk",
 };
 
 static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;

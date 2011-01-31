@@ -404,7 +404,7 @@ static int ov7692_probe_init_sensor(const struct msm_camera_sensor_info *data)
 	}
 	goto init_probe_done;
 init_probe_fail:
-	printk(KERN_INFO " ov7692_probe_init_sensor fails_kalyani\n");
+	printk(KERN_INFO " ov7692_probe_init_sensor fails\n");
 	gpio_set_value_cansleep(data->sensor_reset, 0);
 init_probe_done:
 	printk(KERN_INFO " ov7692_probe_init_sensor finishes\n");
@@ -581,6 +581,8 @@ static int ov7692_sensor_probe(const struct msm_camera_sensor_info *info,
 	s->s_init = ov7692_sensor_open_init;
 	s->s_release = ov7692_sensor_release;
 	s->s_config  = ov7692_sensor_config;
+	s->s_camera_type = FRONT_CAMERA_2D;
+	s->s_mount_angle = 0;
 	ov7692_probe_init_done(info);
 
 	return rc;

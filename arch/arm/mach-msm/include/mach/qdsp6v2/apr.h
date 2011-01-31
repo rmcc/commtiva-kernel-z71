@@ -29,8 +29,6 @@
 #ifndef __APR_H_
 #define __APR_H_
 
-#include "apr_tal.h"
-
 #define APR_Q6_NOIMG   0
 #define APR_Q6_LOADING 1
 #define APR_Q6_LOADED  2
@@ -91,7 +89,10 @@ struct apr_hdr {
 #define APR_SVC_VPM		0x6
 #define APR_SVC_ASM		0x7
 #define APR_SVC_ADM		0x8
-#define APR_SVC_MAX		0x9
+#define APR_SVC_ADSP_MVM	0x09
+#define APR_SVC_ADSP_CVS	0x0A
+#define APR_SVC_ADSP_CVP	0x0B
+#define APR_SVC_MAX		0x0C
 
 /* Modem Service IDs */
 #define APR_SVC_MVS		0x3
@@ -132,6 +133,7 @@ struct apr_svc {
 	apr_fn fn;
 	void *priv;
 	struct mutex m_lock;
+	spinlock_t w_lock;
 };
 
 struct apr_client {
@@ -141,6 +143,26 @@ struct apr_client {
 	struct apr_svc_ch_dev *handle;
 	struct apr_svc svc[APR_SVC_MAX];
 };
+
+#define ADSP_GET_VERSION     0x00011152
+#define ADSP_GET_VERSION_RSP 0x00011153
+
+struct adsp_get_version {
+	uint32_t build_id;
+	uint32_t svc_cnt;
+};
+
+struct adsp_service_info {
+	uint32_t svc_id;
+	uint32_t svc_ver;
+};
+
+#define ADSP_CMD_SET_POWER_COLLAPSE_STATE 0x0001115C
+struct adsp_power_collapse {
+	struct apr_hdr hdr;
+	uint32_t power_collapse;
+};
+
 struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 					uint32_t src_port, void *priv);
 inline int apr_fill_hdr(void *handle, uint32_t *buf, uint16_t src_port,

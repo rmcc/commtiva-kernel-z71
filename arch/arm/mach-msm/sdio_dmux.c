@@ -20,6 +20,8 @@
  *  SDIO DMUX module.
  */
 
+#define DEBUG
+
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/netdevice.h>
@@ -27,8 +29,10 @@
 #include <linux/sched.h>
 #include <linux/skbuff.h>
 #include <linux/wakelock.h>
+#include <linux/debugfs.h>
 
 #include <mach/sdio_al.h>
+#include <mach/sdio_dmux.h>
 
 #define SDIO_CH_LOCAL_OPEN       0x1
 #define SDIO_CH_REMOTE_OPEN      0x2
@@ -39,7 +43,6 @@
 #define SDIO_MUX_HDR_CMD_OPEN    1
 #define SDIO_MUX_HDR_CMD_CLOSE   2
 
-#define DEBUG
 
 static int msm_sdio_dmux_debug_enable;
 module_param_named(debug_enable, msm_sdio_dmux_debug_enable,
@@ -95,7 +98,7 @@ struct sdio_ch_info {
 };
 
 static struct sdio_channel *sdio_mux_ch;
-static struct sdio_ch_info sdio_ch[8];
+static struct sdio_ch_info sdio_ch[SDIO_DMUX_NUM_CHANNELS];
 struct wake_lock sdio_mux_ch_wakelock;
 static int sdio_mux_initialized;
 
@@ -130,6 +133,9 @@ static struct sdio_partial_pkt_info sdio_partial_pkt;
 
 #define sdio_ch_is_local_open(x)			\
 	(sdio_ch[(x)].status & SDIO_CH_LOCAL_OPEN)
+
+#define sdio_ch_is_remote_open(x)			\
+	(sdio_ch[(x)].status & SDIO_CH_REMOTE_OPEN)
 
 static inline void skb_set_data(struct sk_buff *skb,
 				unsigned char *data,
@@ -286,12 +292,28 @@ static void sdio_mux_read_data(struct work_struct *work)
 	/* net_ip_aling is probably not required */
 	if (sdio_partial_pkt.valid)
 		len = sdio_partial_pkt.skb->len;
-	skb_mux = dev_alloc_skb(sz + NET_IP_ALIGN + len);
-	if (skb_mux == NULL) {
-		pr_err("%s: cannot allocate skb\n", __func__);
-		mutex_unlock(&sdio_mux_lock);
-		return;
-	}
+
+	/* If allocation fails attempt to get a smaller chunk of mem */
+	do {
+		skb_mux = __dev_alloc_skb(sz + NET_IP_ALIGN + len, GFP_KERNEL);
+		if (skb_mux)
+			break;
+
+		pr_err("%s: cannot allocate skb of size:%d + "
+			"%d (NET_SKB_PAD)\n", __func__,
+			sz + NET_IP_ALIGN + len, NET_SKB_PAD);
+		/* the skb structure adds NET_SKB_PAD bytes to the memory
+		 * request, which may push the actual request above PAGE_SIZE
+		 * in that case, we need to iterate one more time to make sure
+		 * we get the memory request under PAGE_SIZE
+		 */
+		if (sz + NET_IP_ALIGN + len + NET_SKB_PAD <= PAGE_SIZE) {
+			pr_err("%s: allocation failed\n", __func__);
+			mutex_unlock(&sdio_mux_lock);
+			return;
+		}
+		sz /= 2;
+	} while (1);
 
 	skb_reserve(skb_mux, NET_IP_ALIGN + len);
 	ptr = skb_put(skb_mux, sz);
@@ -387,7 +409,7 @@ static void sdio_mux_write_data(struct work_struct *work)
 	struct sk_buff *skb;
 	unsigned long flags;
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < SDIO_DMUX_NUM_CHANNELS; ++i) {
 		spin_lock_irqsave(&sdio_ch[i].lock, flags);
 		if (sdio_ch_is_local_open(i) && sdio_ch[i].skb) {
 			skb = sdio_ch[i].skb;
@@ -418,6 +440,8 @@ int msm_sdio_dmux_write(uint32_t id, struct sk_buff *skb)
 	unsigned long flags;
 	struct sk_buff *new_skb;
 
+	if (id >= SDIO_DMUX_NUM_CHANNELS)
+		return -EINVAL;
 	if (!skb)
 		return -EINVAL;
 	if (!sdio_mux_initialized)
@@ -488,7 +512,7 @@ int msm_sdio_dmux_open(uint32_t id, void *priv,
 	DBG("%s: opening ch %d\n", __func__, id);
 	if (!sdio_mux_initialized)
 		return -ENODEV;
-	if (id >= 8)
+	if (id >= SDIO_DMUX_NUM_CHANNELS)
 		return -EINVAL;
 
 	spin_lock_irqsave(&sdio_ch[id].lock, flags);
@@ -523,6 +547,8 @@ int msm_sdio_dmux_close(uint32_t id)
 	struct sdio_mux_hdr hdr;
 	unsigned long flags;
 
+	if (id >= SDIO_DMUX_NUM_CHANNELS)
+		return -EINVAL;
 	DBG("%s: closing ch %d\n", __func__, id);
 	if (!sdio_mux_initialized)
 		return -ENODEV;
@@ -564,6 +590,55 @@ static void sdio_mux_notify(void *_dev, unsigned event)
 		queue_work(sdio_mux_read_workqueue, &work_sdio_mux_read);
 }
 
+#ifdef CONFIG_DEBUG_FS
+
+static int debug_tbl(char *buf, int max)
+{
+	int i = 0;
+	int j;
+
+	for (j = 0; j < SDIO_DMUX_NUM_CHANNELS; ++j) {
+		i += scnprintf(buf + i, max - i,
+			"ch%02d  local open=%s  remote open=%s\n",
+			j, sdio_ch_is_local_open(j) ? "Y" : "N",
+			sdio_ch_is_remote_open(j) ? "Y" : "N");
+	}
+
+	return i;
+}
+
+#define DEBUG_BUFMAX 4096
+static char debug_buffer[DEBUG_BUFMAX];
+
+static ssize_t debug_read(struct file *file, char __user *buf,
+				size_t count, loff_t *ppos)
+{
+	int (*fill)(char *buf, int max) = file->private_data;
+	int bsize = fill(debug_buffer, DEBUG_BUFMAX);
+	return simple_read_from_buffer(buf, count, ppos, debug_buffer, bsize);
+}
+
+static int debug_open(struct inode *inode, struct file *file)
+{
+	file->private_data = inode->i_private;
+	return 0;
+}
+
+
+static const struct file_operations debug_ops = {
+	.read = debug_read,
+	.open = debug_open,
+};
+
+static void debug_create(const char *name, mode_t mode,
+				struct dentry *dent,
+				int (*fill)(char *buf, int max))
+{
+	debugfs_create_file(name, mode, dent, fill, &debug_ops);
+}
+
+#endif
+
 static int sdio_dmux_probe(struct platform_device *pdev)
 {
 	int rc;
@@ -584,7 +659,7 @@ static int sdio_dmux_probe(struct platform_device *pdev)
 		return -ENOMEM;
 	}
 
-	for (rc = 0; rc < 8; rc++)
+	for (rc = 0; rc < SDIO_DMUX_NUM_CHANNELS; ++rc)
 		spin_lock_init(&sdio_ch[rc].lock);
 
 	wake_lock_init(&sdio_mux_ch_wakelock, WAKE_LOCK_SUSPEND,
@@ -612,6 +687,13 @@ static struct platform_driver sdio_dmux_driver = {
 
 static int __init sdio_dmux_init(void)
 {
+#ifdef CONFIG_DEBUG_FS
+	struct dentry *dent;
+
+	dent = debugfs_create_dir("sdio_dmux", 0);
+	if (!IS_ERR(dent))
+		debug_create("tbl", 0444, dent, debug_tbl);
+#endif
 	return platform_driver_register(&sdio_dmux_driver);
 }
 
