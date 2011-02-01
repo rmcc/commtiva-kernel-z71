@@ -999,7 +999,7 @@ static struct i2c_board_info i2c_devices[] = {
 #endif
 #ifdef CONFIG_BACKLIGHT_LED_TCA6507
 	{
-		I2C_BOARD_INFO("tca6507", 0x8A >> 1),
+		I2C_BOARD_INFO("tca6507", 0x8A >> 1), // 0x45
 		.platform_data = &tca6507_data,
 	},
 #endif
@@ -1614,8 +1614,8 @@ static void __init msm7x2x_init_mmc(void)
 	}
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
 	msm_add_sdcc(1, &msm7x2x_sdc1_data);
-	gpio_tlmm_config(GPIO_CFG(18, 0, GPIO_CFG_INPUT,
-				GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+	/*gpio_tlmm_config(GPIO_CFG(18, 0, GPIO_CFG_INPUT,
+				GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);*/
 #endif
 
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT

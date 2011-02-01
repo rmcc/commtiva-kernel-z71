@@ -30,6 +30,13 @@
 #include <mach/msm_iomap.h>
 #include <mach/msm_smd.h>
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
+#include <linux/earlysuspend.h>
+
+struct early_suspend stat_early_suspend;
+
+#endif
+
 #define DEBUG 0
 /* FIH; Tiger; 2009/6/10 { */
 /* implement suspend/resume */
@@ -112,6 +119,9 @@ static int compass_read_reg(struct i2c_client *clnt, unsigned char reg, unsigned
 {
 	unsigned char tmp[10];
 	
+	if(fihsensor_ctx.bIsIdle == true)
+		return -EIO;
+
 	if(10 < count)
 		return -1;
 	
@@ -134,6 +144,9 @@ static int compass_read_reg(struct i2c_client *clnt, unsigned char reg, unsigned
 static int compass_write_reg(struct i2c_client *clnt, unsigned char reg, unsigned char *data, unsigned char count)
 {
 	unsigned char tmp[2];
+
+	if(fihsensor_ctx.bIsIdle == true)
+		return -EIO;
 
 	while(count)
 	{
@@ -179,14 +192,21 @@ static int enter_mode(unsigned char mode)
 
 static int start_suspend(void)
 {
-
-	return enter_mode(SMB380_MODE_SLEEP);
+	if (!fihsensor_ctx.bIsIdle || !enter_mode(SMB380_MODE_SLEEP)) {
+		fihsensor_ctx.bIsIdle = true;
+		return 0;
+	}
+	return -EIO;
 }
 
 static int start_resume(void)
 {
 
-	return enter_mode(SMB380_MODE_NORMAL);
+	if (fihsensor_ctx.bIsIdle || !enter_mode(SMB380_MODE_NORMAL)) {
+		fihsensor_ctx.bIsIdle = false;
+		return 0;
+	}
+	return -EIO;
 }
 #endif	
 /* } FIH; Tiger; 2009/6/10 */
@@ -209,14 +229,10 @@ static int compass_open(struct inode *inode, struct file *file)
 /* FIH; Tiger; 2009/6/10 { */
 /* implement suspend/resume */
 #if FEATURE_SLEEP
-	//if(fihsensor_ctx.bIsIdle == true)
 	{
 		if(start_resume()) {
 			fihsensor_ctx.depth--;
 			return -EIO;
-		}
-		else {
-			fihsensor_ctx.bIsIdle = false;
 		}
 	}
 #endif
@@ -247,13 +263,9 @@ static int compass_release(struct inode *inode, struct file *file)
 /* FIH; Tiger; 2009/6/10 { */
 /* implement suspend/resume */
 #if FEATURE_SLEEP
-	//if(fihsensor_ctx.bIsIdle == false)
 	{
 		if(start_suspend()) {
-			printk(KERN_ERR "fihsensor: start_suspend() fail\r\n");
-		}
-		else {
-			fihsensor_ctx.bIsIdle = true;
+			printk(KERN_ERR "fihsensor: start_suspend() fail\n");
 		}
 	}
 #endif
@@ -336,8 +348,6 @@ compass_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 	case IOCTL_GET_SENSOR_CONTROL_INFO:
 		{
 			int controlInfo = 0;
-			//printk(KERN_INFO "Compass: check_USB_type=%d\r\n", check_USB_type);
-			//printk(KERN_INFO "Compass: USB_Connect=%d\r\n", USB_Connect);
 
 			if(bMagnetManualCalibration) {
 				controlInfo |= MAGNET_MANUAL_CALIBRATION;
@@ -601,10 +611,11 @@ static int smb380_probe(
 /* implement suspend/resume */
 #if FEATURE_SLEEP
 	if(start_suspend()) {
-		printk(KERN_ERR "fihsensor: start_suspend() fail\r\n");
-	}
-	else {
-		fihsensor_ctx.bIsIdle = true;
+		printk(KERN_ERR "fihsensor: start_suspend() fail\n");
+	} else {
+		/* Unset idle after init, or else the setup
+                 * i2c commands will fail */
+		fihsensor_ctx.bIsIdle = false;
 	}
 #endif
 /* } FIH; Tiger; 2009/6/10 */
@@ -630,12 +641,11 @@ static int smb380_suspend(struct i2c_client *client, pm_message_t mesg)
 	/* always execute it to recover state error */
 	//if(fihsensor_ctx.bIsIdle == false)
 	{
+#ifndef CONFIG_HAS_EARLYSUSPEND
 		if(start_suspend()) {
-			printk(KERN_ERR "fihsensor: start_suspend() fail\r\n");
+			printk(KERN_ERR "fihsensor: start_suspend() fail\n");
 		}
-		else {
-			fihsensor_ctx.bIsIdle = true;
-		}
+#endif
 	}
 #endif
 /* } FIH; Tiger; 2009/6/10 */
@@ -651,20 +661,31 @@ static int smb380_resume(struct i2c_client *client)
 
 	/* always execute it to recover state error */
 	if(fihsensor_ctx.activeSlave)
-	//if(fihsensor_ctx.activeSlave && fihsensor_ctx.bIsIdle==true)
 	{
+#ifndef CONFIG_HAS_EARLYSUSPEND
 		if(start_resume()) {
-			printk(KERN_ERR "fihsensor: start_resume() fail\r\n");
+			printk(KERN_ERR "fihsensor: start_resume() fail\n");
 		}
-		else {
-			fihsensor_ctx.bIsIdle = false;
-		}	
+#endif
 	}
 #endif
 /* } FIH; Tiger; 2009/6/10 */
 
 	return 0;
 }
+#ifdef CONFIG_HAS_EARLYSUSPEND
+static void sensor_early_suspend(struct early_suspend *h)
+{
+	printk(KERN_INFO "Begin early suspension of sensors\n");
+        start_suspend();
+}
+
+static void sensor_late_resume(struct early_suspend *h)
+{
+	printk(KERN_INFO "Begin late resume of sensors\n");
+        start_resume();
+}
+#endif
 
 static const struct i2c_device_id smb380_id[] = {
 	{ "SMB380", 0 },
@@ -703,12 +724,19 @@ static int __init fihsensor_init(void)
 	
 	if((ret=i2c_add_driver(&ms3c_driver)))
 	{
-		printk(KERN_ERR "YAMAHA MS-3C compass driver init fail\r\n");	
+		printk(KERN_ERR "YAMAHA MS-3C compass driver init fail\n");	
 	}
 	else if((ret=i2c_add_driver(&smb380_driver)))
 	{
 		i2c_del_driver(&ms3c_driver);
 	}
+
+#ifdef CONFIG_HAS_EARLYSUSPEND
+	stat_early_suspend.level     = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
+	stat_early_suspend.suspend   = sensor_early_suspend;
+	stat_early_suspend.resume    = sensor_late_resume;
+	register_early_suspend(&stat_early_suspend);
+#endif
 	
 	return ret;
 }
