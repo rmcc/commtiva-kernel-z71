@@ -440,6 +440,7 @@ static struct i2c_driver aat1272_driver = {
 
 #ifndef CONFIG_ARCH_MSM_FLASHLIGHT
 struct led_classdev fl_lcdev;
+static int prev_brightness = 0;
 
 static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
                         int brightness)
@@ -449,6 +450,11 @@ static void fl_lcdev_brightness_set(struct led_classdev *led_cdev,
 	uint8_t write_cmd_R01[2];
 	uint8_t param1;
 	uint8_t param2;
+
+	if (prev_brightness == brightness)
+		return;
+
+	prev_brightness = brightness;
 
 	if (brightness > 0 && brightness <=128) {
 		param2 = 51;
@@ -481,7 +487,7 @@ static int flashlight_probe(struct platform_device *pdev)
 {
 	fl_lcdev.name = pdev->name;
 	fl_lcdev.brightness_set = fl_lcdev_brightness_set;
-	fl_lcdev.brightness = 0;
+	fl_lcdev.brightness = prev_brightness;
 	return led_classdev_register(&pdev->dev, &fl_lcdev);
 }
 
