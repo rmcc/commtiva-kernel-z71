@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -24,19 +24,20 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
  */
-#ifndef __MACH_SCM_H
-#define __MACH_SCM_H
 
-#define SCM_SVC_BOOT			0x1
-#define SCM_SVC_PIL			0x2
-#define SCM_SVC_UTIL			0x3
+#ifndef _ASM_ARCH_MSM_RESTART_H_
+#define _ASM_ARCH_MSM_RESTART_H_
 
-extern int scm_call(u32 svc_id, u32 cmd_id, const void *cmd_buf, size_t cmd_len,
-		void *resp_buf, size_t resp_len);
+#define RESTART_NORMAL 0x0
+#define RESTART_DLOAD  0x1
 
-#define SCM_VERSION(major, minor) (((major) << 16) | ((minor) & 0xFF))
-
-extern u32 scm_get_version(void);
+#if defined(CONFIG_ARCH_MSM8X60)
+void msm_set_restart_mode(int mode);
+#else
+#define msm_set_restart_mode(mode)
+#endif
 
 #endif
+

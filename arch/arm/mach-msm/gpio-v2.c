@@ -264,8 +264,18 @@ static void msm_gpio_update_dual_edge_pos(unsigned gpio)
 			set_gpio_bits(INTR_POL_CTL_HI, GPIO_INTR_CFG(gpio));
 		val2 = readl(GPIO_IN_OUT(gpio)) & BIT(GPIO_IN_BIT);
 		intstat = readl(GPIO_INTR_STATUS(gpio)) & BIT(INTR_STATUS_BIT);
-		if (intstat || val == val2)
+		if (intstat || val == val2) {
+			/* switch the configuration in the mpm as well*/
+			if (val)
+				msm_mpm_set_irq_type(msm_gpio_to_irq(
+						&msm_gpio.gpio_chip, gpio),
+						IRQF_TRIGGER_FALLING);
+			else
+				msm_mpm_set_irq_type(msm_gpio_to_irq(
+						&msm_gpio.gpio_chip, gpio),
+						IRQF_TRIGGER_RISING);
 			return;
+		}
 	} while (loop_limit-- > 0);
 	pr_err("%s: dual-edge irq failed to stabilize, "
 	       "interrupts dropped. %#08x != %#08x\n",
@@ -371,8 +381,6 @@ static void msm_summary_irq_handler(unsigned int irq, struct irq_desc *desc)
 static int msm_gpio_irq_set_wake(unsigned int irq, unsigned int on)
 {
 	int gpio = msm_irq_to_gpio(&msm_gpio.gpio_chip, irq);
-
-	WARN(on, "TLMM summary wont wakeup in XO shutdown, use a direct line");
 
 	if (on) {
 		if (bitmap_empty(msm_gpio.wake_irqs, NR_MSM_GPIOS))

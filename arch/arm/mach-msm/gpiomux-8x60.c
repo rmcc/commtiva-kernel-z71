@@ -444,7 +444,7 @@ static struct gpiomux_setting ap2mdm_cfg = {
 static struct gpiomux_setting mdm2ap_status_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
-	.pull = GPIOMUX_PULL_UP,
+	.pull = GPIOMUX_PULL_NONE,
 };
 
 static struct gpiomux_setting mdm2ap_vfr_active_cfg = {
@@ -462,12 +462,25 @@ static struct gpiomux_setting mdm2ap_vfr_suspend_cfg = {
 static struct gpiomux_setting mdm2ap_errfatal_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_16MA,
-	.pull = GPIOMUX_PULL_DOWN,
+	.pull = GPIOMUX_PULL_NONE,
 };
 
 static struct gpiomux_setting ap2mdm_kpdpwr_n_cfg = {
 	.func = GPIOMUX_FUNC_GPIO,
 	.drv = GPIOMUX_DRV_8MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+
+static struct gpiomux_setting mdm2ap_vddmin_active_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
+	.pull = GPIOMUX_PULL_NONE,
+};
+
+static struct gpiomux_setting mdm2ap_vddmin_suspend_cfg = {
+	.func = GPIOMUX_FUNC_GPIO,
+	.drv = GPIOMUX_DRV_2MA,
 	.pull = GPIOMUX_PULL_NONE,
 };
 
@@ -1074,6 +1087,15 @@ static struct msm_gpiomux_config msm8x60_charm_sdc_configs[] __initdata = {
 		.settings = {
 			[GPIOMUX_ACTIVE]    = &mdm2ap_sync_active_cfg,
 			[GPIOMUX_SUSPENDED] = &mdm2ap_sync_suspend_cfg,
+		},
+	},
+
+	/* MDM2AP_VDDMIN */
+	{
+		.gpio = 140,
+		.settings = {
+			[GPIOMUX_ACTIVE]    = &mdm2ap_vddmin_active_cfg,
+			[GPIOMUX_SUSPENDED] = &mdm2ap_vddmin_suspend_cfg,
 		},
 	},
 	/* SDCC2 data[0] */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -43,6 +43,7 @@
 #include "mdp4.h"
 #endif
 
+uint32 mdp4_extn_disp;
 static struct clk *mdp_clk;
 static struct clk *mdp_pclk;
 struct regulator *footswitch;
@@ -907,25 +908,15 @@ static int mdp_off(struct platform_device *pdev)
 {
 	int ret = 0;
 
-#ifdef MDP_HW_VSYNC
-	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
-#endif
-
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	ret = panel_next_off(pdev);
-
-#ifdef MDP_HW_VSYNC
-	mdp_hw_vsync_clk_disable(mfd);
-#endif
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	return ret;
 }
 
 static int mdp_on(struct platform_device *pdev)
 {
-#ifdef MDP_HW_VSYNC
-	struct msm_fb_data_type *mfd = platform_get_drvdata(pdev);
-#endif
-
 	int ret = 0;
 #ifdef CONFIG_FB_MSM_MDP40
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
@@ -936,12 +927,9 @@ static int mdp_on(struct platform_device *pdev)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 #endif
 
-#ifdef MDP_HW_VSYNC
-	mdp_hw_vsync_clk_enable(mfd);
-#endif
-
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	ret = panel_next_on(pdev);
-
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 	return ret;
 }
 
@@ -1013,6 +1001,8 @@ int mdp_set_core_clk(uint16 perf_level)
 			printk(KERN_ERR "%s invalid perf level\n", __func__);
 		else {
 			mutex_lock(&mdp_clk_lock);
+			if (mdp4_extn_disp)
+				perf_level = 1;
 			ret = clk_set_rate(mdp_clk,
 				mdp_pdata->
 				mdp_core_clk_table[mdp_pdata->num_mdp_clk
@@ -1181,6 +1171,7 @@ static int mdp_probe(struct platform_device *pdev)
 		if (mfd->panel_info.pdest == DISPLAY_1) {
 #if defined(CONFIG_FB_MSM_OVERLAY) && defined(CONFIG_FB_MSM_MDDI)
 			mfd->dma_fnc = mdp4_mddi_overlay;
+			mfd->cursor_update = mdp4_mddi_overlay_cursor;
 #else
 			mfd->dma_fnc = mdp_dma2_update;
 #endif
@@ -1239,6 +1230,8 @@ static int mdp_probe(struct platform_device *pdev)
 			mfd->dma = &dma_s_data;
 		}
 		mdp4_display_intf_sel(if_no, DSI_CMD_INTF);
+
+		mdp_config_vsync(mfd);
 		break;
 #endif
 
@@ -1342,6 +1335,7 @@ static int mdp_probe(struct platform_device *pdev)
 	pm_runtime_enable(&pdev->dev);
 
 	pdev_list[pdev_list_cnt++] = pdev;
+	mdp4_extn_disp = 0;
 	return 0;
 
       mdp_probe_err:

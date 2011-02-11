@@ -173,6 +173,7 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 	struct ddl_decoder_data *decoder = &ddl->codec_data.decoder;
 	struct vidc_1080p_seq_hdr_info seq_hdr_info;
 	u32 process_further = true;
+	u32 idc_value = VIDC_1080P_IDCFORMAT_32BIT;
 
 	DDL_MSG_MED("ddl_decoder_seq_done_callback");
 	if (!ddl->decoding ||
@@ -209,9 +210,17 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 		}
 		vidc_sm_get_profile_info(&ddl->shared_mem
 			[ddl->command_channel],
-			&seq_hdr_info.profile, &seq_hdr_info.level);
+			&seq_hdr_info.profile, &seq_hdr_info.level, &idc_value);
 		ddl_get_dec_profile_level(decoder, seq_hdr_info.profile,
 			seq_hdr_info.level);
+		if (decoder->codec.codec == VCD_CODEC_H264)
+			if (decoder->profile.profile == VCD_PROFILE_H264_HIGH ||
+				decoder->profile.profile == VCD_PROFILE_UNKNOWN)
+				if (idc_value > VIDC_1080P_IDCFORMAT_420) {
+					DDL_MSG_ERROR("Unsupported IDC format");
+					ddl_client_fatal_cb(ddl);
+					return process_further;
+				}
 		ddl_calculate_stride(&decoder->frame_size,
 			!decoder->progressive_only);
 		if (seq_hdr_info.crop_exists) {
@@ -285,13 +294,12 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 				VCD_FRAME_FLAG_CODECCONFIG) &&
 				(!(input_vcd_frm->flags &
 				VCD_FRAME_FLAG_SYNCFRAME))) ||
-				input_vcd_frm->data_len ==
+				input_vcd_frm->data_len <=
 				seq_hdr_info.dec_frm_size) {
 				seq_hdr_only_frame = true;
 				input_vcd_frm->offset +=
 					seq_hdr_info.dec_frm_size;
-				input_vcd_frm->data_len -=
-					seq_hdr_info.dec_frm_size;
+				input_vcd_frm->data_len = 0;
 				input_vcd_frm->flags |=
 					VCD_FRAME_FLAG_CODECCONFIG;
 				ddl->input_frame.frm_trans_end =
@@ -546,8 +554,11 @@ static u32 ddl_decoder_frame_run_callback(struct ddl_client_context *ddl)
 		vidc_1080p_get_display_frame_result(dec_disp_info);
 		ddl_vidc_decode_dynamic_property(ddl, false);
 		if (dec_disp_info->resl_change) {
-			DDL_MSG_ERROR("DEC_RECONFIG_NOT_SUPPORTED");
-			ddl_client_fatal_cb(ddl);
+			DDL_MSG_HIGH("DEC_FRM_RUN_DONE: DEC_RECONFIG");
+			ddl->client_state = DDL_CLIENT_WAIT_FOR_EOS_DONE;
+			ddl->cmd_state = DDL_CMD_EOS;
+			vidc_1080p_frame_start_realloc(ddl->instance_id);
+			ret_status = false;
 		} else {
 			if ((VCD_FRAME_FLAG_EOS &
 				ddl->input_frame.vcd_frm.flags)) {
@@ -608,7 +619,7 @@ static u32 ddl_eos_frame_done_callback(
 	struct vidc_1080p_dec_disp_info *dec_disp_info =
 		&decoder->dec_disp_info;
 	struct ddl_mask *dpb_mask = &decoder->dpb_mask;
-	u32 ret_status = true;
+	u32 ret_status = true, rsl_chg;
 
 	if (!DDLCLIENT_STATE_IS(ddl, DDL_CLIENT_WAIT_FOR_EOS_DONE)) {
 		DDL_MSG_ERROR("STATE-CRITICAL-EOSFRMRUN");
@@ -617,10 +628,20 @@ static u32 ddl_eos_frame_done_callback(
 		DDL_MSG_LOW("EOS_FRM_RUN_DONE");
 		ddl->cmd_state = DDL_CMD_INVALID;
 		vidc_1080p_get_display_frame_result(dec_disp_info);
+		vidc_sm_get_extended_decode_status(
+			&ddl->shared_mem[ddl->command_channel], &rsl_chg);
 		ddl_vidc_decode_dynamic_property(ddl, false);
 		if (dec_disp_info->display_status ==
 			VIDC_1080P_DISPLAY_STATUS_DPB_EMPTY) {
-			ddl_decoder_eos_done_callback(ddl);
+			if (rsl_chg) {
+				decoder->header_in_start = false;
+				decoder->decode_config.sequence_header =
+					ddl->input_frame.vcd_frm.physical;
+				decoder->decode_config.sequence_header_len =
+					ddl->input_frame.vcd_frm.data_len;
+				ddl_vidc_decode_init_codec(ddl);
+			} else
+				ddl_decoder_eos_done_callback(ddl);
 		} else {
 			struct vidc_1080p_dec_frame_start_param dec_param;
 			if (dec_disp_info->display_status ==

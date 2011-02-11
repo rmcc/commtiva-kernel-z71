@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -100,6 +100,8 @@ struct mdp4_overlay_ctrl {
 };
 
 static struct mdp4_overlay_ctrl *ctrl = &mdp4_overlay_db;
+static uint32 perf_level;
+static uint32 mdp4_del_res_rel;
 
 int mdp4_overlay_mixer_play(int mixer_num)
 {
@@ -1051,8 +1053,8 @@ void mdp4_mixer_stage_down(struct mdp4_overlay_pipe *pipe)
 void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 {
 	struct mdp4_overlay_pipe *bg_pipe;
-	unsigned char *overlay_base;
-	uint32 c0, c1, c2, blend_op;
+	unsigned char *overlay_base, *rgb_base;
+	uint32 c0, c1, c2, blend_op, constant_color = 0, rgb_src_format;
 	int off;
 
 	if (pipe->mixer_num) 	/* mixer number, /dev/fb0, /dev/fb1 */
@@ -1079,6 +1081,14 @@ void mdp4_mixer_blend_setup(struct mdp4_overlay_pipe *pipe)
 				MDP4_BLEND_BG_ALPHA_BG_CONST);
 		outpdw(overlay_base + off + 0x108, pipe->alpha);
 		outpdw(overlay_base + off + 0x10c, 0xff - pipe->alpha);
+		if (pipe->alpha == 0xff) {
+			rgb_base = MDP_BASE + MDP4_RGB_BASE;
+			rgb_base += MDP4_RGB_OFF * bg_pipe->pipe_num;
+			rgb_src_format = inpdw(rgb_base + 0x50);
+			rgb_src_format |= MDP4_FORMAT_SOLID_FILL;
+			outpdw(rgb_base + 0x50, rgb_src_format);
+			outpdw(rgb_base + 0x1008, constant_color);
+		}
 	} else {
 		if (bg_pipe->alpha_enable && pipe->alpha_enable) {
 			/* both pipe have alpha */
@@ -1604,22 +1614,35 @@ int mdp4_overlay_get(struct fb_info *info, struct mdp_overlay *req)
 #define OVERLAY_PERF_LEVEL4	4
 
 #ifdef CONFIG_MSM_BUS_SCALING
-#define OVERLAY_BUS_SCALE_TABLE_BASE	6
+#define OVERLAY_BUS_SCALE_TABLE_BASE	7
 #endif
 
 static uint32 mdp4_overlay_get_perf_level(uint32 width, uint32 height,
 					  uint32 format)
 {
 	uint32 size_720p = OVERLAY_720P_SIZE;
+
+	switch (format) {
+	case MDP_RGB_565:
+	case MDP_RGB_888:
+	case MDP_BGR_565:
+	case MDP_XRGB_8888:
+	case MDP_ARGB_8888:
+	case MDP_RGBA_8888:
+	case MDP_BGRA_8888:
+	case MDP_RGBX_8888:
+		return OVERLAY_PERF_LEVEL1;
+	}
+
 	if (format == MDP_Y_CRCB_H2V2_TILE ||
 		format == MDP_Y_CBCR_H2V2_TILE)
 		size_720p = OVERLAY_720P_TILE_SIZE;
 	if (width*height <= OVERLAY_VGA_SIZE)
+		return OVERLAY_PERF_LEVEL4;
+	else if (width*height <= size_720p)
 		return OVERLAY_PERF_LEVEL3;
-	else if (width*height < size_720p)
-		return OVERLAY_PERF_LEVEL2;
 	else
-		return OVERLAY_PERF_LEVEL1;
+		return OVERLAY_PERF_LEVEL2;
 }
 
 int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
@@ -1627,7 +1650,6 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
 	int ret, mixer;
 	struct mdp4_overlay_pipe *pipe;
-	uint32 perf_level;
 
 	if (mfd == NULL) {
 		pr_err("%s: mfd == NULL, -ENODEV\n", __func__);
@@ -1658,11 +1680,12 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 	pipe->flags = req->flags;
 
 	mdp4_stat.overlay_set[pipe->mixer_num]++;
-	mutex_unlock(&mfd->dma->ov_mutex);
 	perf_level = mdp4_overlay_get_perf_level(req->src.width,
 						req->src.height,
 						req->src.format);
-
+	mdp4_del_res_rel = 0;
+	mutex_unlock(&mfd->dma->ov_mutex);
+	mdp_set_core_clk(perf_level);
 
 #ifdef CONFIG_MSM_BUS_SCALING
 	if (pipe->mixer_num == MDP4_MIXER0) {
@@ -1672,6 +1695,14 @@ int mdp4_overlay_set(struct fb_info *info, struct mdp_overlay *req)
 #endif
 
 	return 0;
+}
+
+void  mdp4_overlay_resource_release(void)
+{
+	if (mdp4_del_res_rel) {
+		mdp_set_core_clk(OVERLAY_PERF_LEVEL4);
+		mdp4_del_res_rel = 0;
+	}
 }
 
 int mdp4_overlay_unset(struct fb_info *info, int ndx)
@@ -1697,6 +1728,18 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 	else
 		ctrl->mixer0_played = 0;
 
+#ifdef CONFIG_FB_MSM_MIPI_DSI
+	if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD) {
+		if (mfd->panel_power_on)
+			mdp4_dsi_cmd_dma_busy_wait(mfd, pipe);
+	}
+#else
+	if (ctrl->panel_mode & MDP4_PANEL_MDDI) {
+		if (mfd->panel_power_on)
+			mdp4_mddi_dma_busy_wait(mfd, pipe);
+	}
+#endif
+
 	mdp4_mixer_stage_down(pipe);
 
 #ifdef CONFIG_FB_MSM_MDDI
@@ -1716,6 +1759,8 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 	mdp4_stat.overlay_unset[pipe->mixer_num]++;
 
 	mdp4_overlay_pipe_free(pipe);
+
+	mdp4_del_res_rel = 1;
 
 	mutex_unlock(&mfd->dma->ov_mutex);
 

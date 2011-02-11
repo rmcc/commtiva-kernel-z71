@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,9 +38,10 @@ int kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag)
 				clk_disable(pwr->imem_clk);
 			if (pwr->imem_pclk != NULL)
 				clk_disable(pwr->imem_pclk);
-			if (pwr->clk_freq[KGSL_MIN_FREQ])
+			if (pwr->pwrlevels[0].gpu_freq > 0)
 				clk_set_rate(pwr->grp_src_clk,
-					pwr->clk_freq[KGSL_MIN_FREQ]);
+					pwr->pwrlevels[KGSL_DEFAULT_PWRLEVEL].
+						gpu_freq);
 			pwr->power_flags &=
 					~(KGSL_PWRFLAGS_CLK_ON);
 			pwr->power_flags |= KGSL_PWRFLAGS_CLK_OFF;
@@ -48,9 +49,10 @@ int kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag)
 		return KGSL_SUCCESS;
 	case KGSL_PWRFLAGS_CLK_ON:
 		if (pwr->power_flags & KGSL_PWRFLAGS_CLK_OFF) {
-			if (pwr->clk_freq[KGSL_MAX_FREQ])
+			if (pwr->pwrlevels[0].gpu_freq > 0)
 				clk_set_rate(pwr->grp_src_clk,
-					pwr->clk_freq[KGSL_MAX_FREQ]);
+					pwr->pwrlevels[pwr->active_pwrlevel].
+						gpu_freq);
 			if (pwr->grp_pclk)
 				clk_enable(pwr->grp_pclk);
 			clk_enable(pwr->grp_clk);
@@ -76,7 +78,7 @@ int kgsl_pwrctrl_axi(struct kgsl_device *device, unsigned int pwrflag)
 	switch (pwrflag) {
 	case KGSL_PWRFLAGS_AXI_OFF:
 		if (pwr->power_flags & KGSL_PWRFLAGS_AXI_ON) {
-			if (pwr->clk_freq[KGSL_AXI_HIGH] && pwr->ebi1_clk)
+			if (pwr->ebi1_clk)
 				clk_disable(pwr->ebi1_clk);
 			if (pwr->pcl)
 				msm_bus_scale_client_update_request(pwr->pcl,
@@ -88,7 +90,7 @@ int kgsl_pwrctrl_axi(struct kgsl_device *device, unsigned int pwrflag)
 		return KGSL_SUCCESS;
 	case KGSL_PWRFLAGS_AXI_ON:
 		if (pwr->power_flags & KGSL_PWRFLAGS_AXI_OFF) {
-			if (pwr->clk_freq[KGSL_AXI_HIGH] && pwr->ebi1_clk)
+			if (pwr->ebi1_clk)
 				clk_enable(pwr->ebi1_clk);
 			if (pwr->pcl)
 				msm_bus_scale_client_update_request(pwr->pcl,
@@ -219,12 +221,17 @@ void kgsl_idle_check(struct work_struct *work)
 							idle_check_ws);
 
 	mutex_lock(&device->mutex);
+	if (device->state & KGSL_STATE_HUNG) {
+		device->requested_state = KGSL_STATE_NONE;
+		goto done;
+	}
 	if (device->state & (KGSL_STATE_ACTIVE | KGSL_STATE_NAP)) {
 		if (kgsl_pwrctrl_sleep(device) == KGSL_FAILURE)
 			mod_timer(&device->idle_timer,
 					jiffies +
 					device->pwrctrl.interval_timeout);
 	}
+done:
 	mutex_unlock(&device->mutex);
 }
 
@@ -235,7 +242,7 @@ void kgsl_timer(unsigned long data)
 	if (device->requested_state != KGSL_STATE_SUSPEND) {
 		device->requested_state = KGSL_STATE_SLEEP;
 		/* Have work run in a non-interrupt context. */
-		schedule_work(&device->idle_check_ws);
+		queue_work(device->work_queue, &device->idle_check_ws);
 	}
 }
 

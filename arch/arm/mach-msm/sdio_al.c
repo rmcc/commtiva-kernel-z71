@@ -265,9 +265,9 @@ struct peer_sdioc_channel_config {
 #define PEER_SDIOC_SW_MAILBOX_BOOT_SIGNATURE 0xDEADBEEF
 
 /* Identifies if there are new features released */
-#define PEER_SDIOC_VERSION_MINOR	0x0002
+#define PEER_SDIOC_VERSION_MINOR	0x0001
 /* Identifies if there is backward compatibility */
-#define PEER_SDIOC_VERSION_MAJOR	0x0002
+#define PEER_SDIOC_VERSION_MAJOR	0x0003
 
 
 /* Identifies if there are new features released */
@@ -846,8 +846,11 @@ static int read_mailbox(struct sdio_al_device *sdio_al_dev, int from_isr)
 
 		/* There is not enough write avail for this channel.
 		   We need to keep reading mailbox to wait for the appropriate
-		   write avail and cannot sleep */
-		any_no_write_avail |= (new_write_avail <= ch->min_write_avail);
+		   write avail and cannot sleep. Ignore SMEM channel that has
+		   only one direction. */
+		if (strcmp(ch->name, "SDIO_SMEM"))
+			any_no_write_avail |=
+				(new_write_avail <= ch->min_write_avail);
 	}
 
 	if ((rx_notify_bitmask == 0) && (tx_notify_bitmask == 0) &&
@@ -2026,7 +2029,7 @@ static int sdio_al_wake_up(struct sdio_al_device *sdio_al_dev,
 			break;
 		udelay(TIME_TO_WAIT_US);
 	}
-	pr_info(MODULE_NAME ":GPIO mdm2ap_status(77)=%d\n",
+	pr_info(MODULE_NAME ":GPIO mdm2ap_status=%d\n",
 		       sdio_al->pdata->get_mdm2ap_status());
 
 	if (enable_wake_up_func) {
@@ -2754,8 +2757,14 @@ static int init_channels(struct sdio_al_device *sdio_al_dev)
 	if (ret)
 		goto exit;
 
-	if (sdio_al->unittest_mode)
+	if (sdio_al->unittest_mode) {
 		pr_info(MODULE_NAME ":==== SDIO-AL UNIT-TEST ====\n");
+		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
+			if (!sdio_al_dev->channel[i].is_valid)
+				continue;
+			test_channel_init(sdio_al_dev->channel[i].name);
+		}
+	}
 	else
 		/* Allow clients to probe for this driver */
 		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
@@ -2843,7 +2852,7 @@ static int mmc_probe(struct mmc_card *card)
 
 	if ((card->cis.vendor != 0x70) ||
 	    ((card->cis.device != 0x2460) && (card->cis.device != 0x0460)
-	     && (card->cis.device != 0x23F1))) {
+	     && (card->cis.device != 0x23F1) && (card->cis.device != 0x23F0))) {
 		dev_info(&card->dev,
 			 "ignore card vendor id 0x%x, device id 0x%x",
 			 card->cis.vendor, card->cis.device);
@@ -3105,6 +3114,8 @@ static int sdio_al_sdio_resume(struct device *dev)
 static struct sdio_device_id sdio_al_sdioid[] = {
     {.class = 0, .vendor = 0x70, .device = 0x2460},
     {.class = 0, .vendor = 0x70, .device = 0x0460},
+    {.class = 0, .vendor = 0x70, .device = 0x23F1},
+    {.class = 0, .vendor = 0x70, .device = 0x23F0},
     {}
 };
 

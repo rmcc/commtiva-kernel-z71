@@ -92,6 +92,19 @@ static struct kgsl_yamato_device yamato_device = {
 			.mpu_range =  0xFFFFF000,
 			.va_base = 0x66000000,
 			/* va_range is set by the platform file */
+			.reg = {
+				.config = REG_MH_MMU_CONFIG,
+				.mpu_base = REG_MH_MMU_MPU_BASE,
+				.mpu_end = REG_MH_MMU_MPU_END,
+				.va_range = REG_MH_MMU_VA_RANGE,
+				.pt_page = REG_MH_MMU_PT_BASE,
+				.page_fault = REG_MH_MMU_PAGE_FAULT,
+				.tran_error = REG_MH_MMU_TRAN_ERROR,
+				.invalidate = REG_MH_MMU_INVALIDATE,
+				.interrupt_mask = REG_MH_INTERRUPT_MASK,
+				.interrupt_status = REG_MH_INTERRUPT_STATUS,
+				.interrupt_clear = REG_MH_INTERRUPT_CLEAR
+			},
 		},
 		.mutex = __MUTEX_INITIALIZER(yamato_device.dev.mutex),
 		.state = KGSL_STATE_INIT,
@@ -475,7 +488,7 @@ kgsl_yamato_getchipid(struct kgsl_device *device)
 int __init
 kgsl_yamato_init_pwrctrl(struct kgsl_device *device)
 {
-	int result = 0;
+	int i, result = 0;
 	struct clk *clk, *grp_clk;
 	struct platform_device *pdev = kgsl_driver.pdev;
 	struct kgsl_platform_data *pdata = pdev->dev.platform_data;
@@ -510,13 +523,25 @@ kgsl_yamato_init_pwrctrl(struct kgsl_device *device)
 	/* put the AXI bus into asynchronous mode with the graphics cores */
 	if (pdata->set_grp3d_async != NULL)
 		pdata->set_grp3d_async();
-	if (pdata->max_grp3d_freq) {
-		device->pwrctrl.clk_freq[KGSL_MIN_FREQ] =
-			clk_round_rate(clk, pdata->min_grp3d_freq);
-		device->pwrctrl.clk_freq[KGSL_MAX_FREQ] =
-			clk_round_rate(clk, pdata->max_grp3d_freq);
-		clk_set_rate(clk, device->pwrctrl.clk_freq[KGSL_MIN_FREQ]);
+
+	if (pdata->num_levels_3d > KGSL_MAX_PWRLEVELS) {
+		result = -EINVAL;
+		goto done;
 	}
+	device->pwrctrl.num_pwrlevels = pdata->num_levels_3d;
+	device->pwrctrl.active_pwrlevel = pdata->init_level_3d;
+	for (i = 0; i < pdata->num_levels_3d; i++) {
+		device->pwrctrl.pwrlevels[i].gpu_freq =
+			(pdata->pwrlevel_3d[i].gpu_freq > 0) ?
+			clk_round_rate(clk, pdata->pwrlevel_3d[i].
+				gpu_freq) : 0;
+		device->pwrctrl.pwrlevels[i].bus_freq =
+			pdata->pwrlevel_3d[i].bus_freq;
+	}
+	/* Do not set_rate for targets in sync with AXI */
+	if (pdata->pwrlevel_3d[0].gpu_freq > 0)
+		clk_set_rate(clk, device->pwrctrl.
+			pwrlevels[KGSL_DEFAULT_PWRLEVEL].gpu_freq);
 
 	if (pdata->imem_clk_name != NULL) {
 		clk = clk_get(&pdev->dev, pdata->imem_clk_name);
@@ -548,13 +573,14 @@ kgsl_yamato_init_pwrctrl(struct kgsl_device *device)
 		KGSL_PWRFLAGS_AXI_OFF | KGSL_PWRFLAGS_POWER_OFF |
 		KGSL_PWRFLAGS_IRQ_OFF;
 	device->pwrctrl.nap_allowed = pdata->nap_allowed;
-	device->pwrctrl.clk_freq[KGSL_AXI_HIGH] = pdata->high_axi_3d;
 	device->pwrctrl.ebi1_clk = clk_get(NULL, "ebi1_kgsl_clk");
 	if (IS_ERR(device->pwrctrl.ebi1_clk))
 		device->pwrctrl.ebi1_clk = NULL;
 	else
 		clk_set_rate(device->pwrctrl.ebi1_clk,
-				device->pwrctrl.clk_freq[KGSL_AXI_HIGH] * 1000);
+			device->pwrctrl.
+				pwrlevels[device->pwrctrl.active_pwrlevel].
+					 bus_freq);
 	if (pdata->grp3d_bus_scale_table != NULL) {
 		device->pwrctrl.pcl =
 		msm_bus_scale_register_client(pdata->grp3d_bus_scale_table);
@@ -605,6 +631,9 @@ kgsl_yamato_init(struct kgsl_device *device)
 
 	init_waitqueue_head(&yamato_device->ib1_wq);
 	setup_timer(&device->idle_timer, kgsl_timer, (unsigned long)device);
+	status = kgsl_create_device_workqueue(device);
+	if (status)
+		goto error;
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
 
 	res = platform_get_resource_byname(kgsl_driver.pdev,
@@ -613,12 +642,12 @@ kgsl_yamato_init(struct kgsl_device *device)
 
 	if (res == NULL) {
 		KGSL_DRV_ERR("platform_get_resource_byname failed\n");
-		goto error;
+		goto error_dest_work_q;
 	}
 
 	if (res->start == 0 || resource_size(res) == 0) {
 		KGSL_DRV_ERR("dev %d invalid regspace\n", device->id);
-		goto error;
+		goto error_dest_work_q;
 	}
 
 	regspace->mmio_phys_base = res->start;
@@ -628,7 +657,7 @@ kgsl_yamato_init(struct kgsl_device *device)
 				regspace->sizebytes, DRIVER_NAME)) {
 		KGSL_DRV_ERR("request_mem_region failed for register memory\n");
 		status = -ENODEV;
-		goto error;
+		goto error_dest_work_q;
 	}
 
 	regspace->mmio_virt_base = ioremap(regspace->mmio_phys_base,
@@ -713,6 +742,9 @@ error_iounmap:
 	regspace->mmio_virt_base = NULL;
 error_release_mem:
 	release_mem_region(regspace->mmio_phys_base, regspace->sizebytes);
+error_dest_work_q:
+	destroy_workqueue(device->work_queue);
+	device->work_queue = NULL;
 error:
 	return status;
 }
@@ -740,6 +772,11 @@ int kgsl_yamato_close(struct kgsl_device *device)
 	kgsl_pwrctrl_close(device);
 	kgsl_cffdump_close(device->id);
 
+	if (device->work_queue) {
+		destroy_workqueue(device->work_queue);
+		device->work_queue = NULL;
+	}
+
 	KGSL_DRV_VDBG("return %d\n", 0);
 	return 0;
 }
@@ -752,6 +789,8 @@ static int kgsl_yamato_start(struct kgsl_device *device, unsigned int init_ram)
 
 	KGSL_DRV_VDBG("enter (device=%p)\n", device);
 
+	device->state = KGSL_STATE_INIT;
+	device->requested_state = KGSL_STATE_NONE;
 	/* Turn the clocks on before the power.  Required for some platforms,
 	   has no adverse effect on the others */
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_ON);
@@ -1183,15 +1222,15 @@ static int kgsl_check_interrupt_timestamp(struct kgsl_device *device,
 }
 
 /*
- wait_event_interruptible_timeout checks for the exit condition before
+ wait_io_event_interruptible_timeout checks for the exit condition before
  placing a process in wait q. For conditional interrupts we expect the
  process to already be in its wait q when its exit condition checking
  function is called.
 */
-#define kgsl_wait_event_interruptible_timeout(wq, condition, timeout)	\
+#define kgsl_wait_io_event_interruptible_timeout(wq, condition, timeout)\
 ({									\
 	long __ret = timeout;						\
-	__wait_event_interruptible_timeout(wq, condition, __ret); 	\
+	__wait_io_event_interruptible_timeout(wq, condition, __ret);	\
 	__ret;								\
 })
 
@@ -1207,7 +1246,7 @@ static int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 		mutex_unlock(&device->mutex);
 		/* We need to make sure that the process is placed in wait-q
 		 * before its condition is called */
-		status = kgsl_wait_event_interruptible_timeout(
+		status = kgsl_wait_io_event_interruptible_timeout(
 				yamato_device->ib1_wq,
 				kgsl_check_interrupt_timestamp(device,
 					timestamp), msecs_to_jiffies(msecs));
@@ -1218,6 +1257,12 @@ static int kgsl_yamato_waittimestamp(struct kgsl_device *device,
 		else if (status == 0) {
 			if (!kgsl_check_timestamp(device, timestamp)) {
 				status = -ETIMEDOUT;
+				KGSL_DRV_ERR(
+				"Device hang detected while waiting for "
+				"timestamp: %x, last submitted(rb->timestamp): "
+				"%x, wptr: %x\n", timestamp,
+				yamato_device->ringbuffer.timestamp,
+				yamato_device->ringbuffer.wptr);
 				kgsl_postmortem_dump(device);
 			}
 		}

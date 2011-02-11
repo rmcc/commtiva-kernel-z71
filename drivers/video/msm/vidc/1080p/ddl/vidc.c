@@ -101,6 +101,15 @@ void vidc_1080p_release_sw_reset(void)
 	u32 nAxiCtl;
 	u32 nAxiStatus;
 	u32 nRdWrBurst;
+	u32 nOut_Order;
+
+	nOut_Order = VIDC_SETFIELD(1, HWIO_REG_5519_AXI_AOOORD_SHFT,
+					HWIO_REG_5519_AXI_AOOORD_BMSK);
+	VIDC_HWIO_OUT(REG_5519, nOut_Order);
+
+	nOut_Order = VIDC_SETFIELD(1, HWIO_REG_606364_AXI_AOOOWR_SHFT,
+					HWIO_REG_606364_AXI_AOOOWR_BMSK);
+	VIDC_HWIO_OUT(REG_606364, nOut_Order);
 
 	nAxiCtl = VIDC_SETFIELD(1, HWIO_REG_471159_AXI_HALT_REQ_SHFT,
 				HWIO_REG_471159_AXI_HALT_REQ_BMSK);
@@ -964,4 +973,12 @@ void vidc_1080p_get_intermedia_stage_debug_counter(
 void vidc_1080p_get_exception_status(u32 *exception_status)
 {
 	VIDC_HWIO_IN(REG_493355, exception_status);
+}
+
+void vidc_1080p_frame_start_realloc(u32 instance_id)
+{
+	VIDC_HWIO_OUT(REG_695082, VIDC_1080P_RISC2HOST_CMD_EMPTY);
+	VIDC_HWIO_OUT(REG_666957, VIDC_1080P_INIT_CH_INST_ID);
+	VIDC_HWIO_OUT(REG_666957,
+		VIDC_1080P_DEC_TYPE_FRAME_START_REALLOC | instance_id);
 }

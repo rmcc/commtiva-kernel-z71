@@ -3,6 +3,7 @@ obj-y += clock.o clock-voter.o
 obj-y += modem_notifier.o
 obj-$(CONFIG_CPU_FREQ_MSM) += cpufreq.o
 obj-$(CONFIG_DEBUG_FS) += nohlt.o clock-debug.o
+obj-$(CONFIG_KEXEC) += msm_kexec.o
 
 obj-$(CONFIG_MSM_PROC_COMM) += proc_comm.o
 ifndef CONFIG_ARCH_MSM8X60
@@ -17,7 +18,9 @@ obj-$(CONFIG_ARCH_MSM_ARM11) += acpuclock.o timer.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += timer.o
 obj-$(CONFIG_ARCH_MSM_SCORPION) += pmu.o
 obj-$(CONFIG_ARCH_MSM_SCORPIONMP) += timer.o
+ifndef CONFIG_ARCH_MSM8960
 obj-$(CONFIG_ARCH_MSM_SCORPIONMP) += pmu.o
+endif
 
 obj-$(CONFIG_ARCH_MSM_SCORPION) += msm_fault_handlers.o
 
@@ -118,7 +121,7 @@ obj-$(CONFIG_MACH_QSD8X50A_SURF) += board-qsd8x50.o
 obj-$(CONFIG_MACH_QSD8X50A_FFA) += board-qsd8x50.o
 obj-$(CONFIG_MACH_QSD8X50A_ST1_5) += board-qsd8x50a-st1x.o
 obj-$(CONFIG_ARCH_MSM8X60) += devices-msm8x60.o clock-local.o clock-8x60.o acpuclock-8x60.o
-obj-$(CONFIG_ARCH_MSM8X60) += clock-8x60_mxo.o clock-rpm.o spm.o restart.o
+obj-$(CONFIG_ARCH_MSM8X60) += clock-rpm.o spm.o restart.o
 obj-$(CONFIG_ARCH_MSM8X60) += subsystem-fatal-8x60.o
 obj-$(CONFIG_ARCH_MSM8X60) += saw-regulator.o
 obj-$(CONFIG_ARCH_MSM8X60) += rpm-regulator.o
@@ -144,6 +147,7 @@ obj-$(CONFIG_TROUT_PWRSINK) += htc_pwrsink.o
 obj-$(CONFIG_ARCH_MSM7X30) += board-msm7x30.o devices-msm7x30.o memory_topology.o
 obj-$(CONFIG_ARCH_MSM7X30) += clock-local.o clock-7x30.o acpuclock-7x30.o
 obj-$(CONFIG_ARCH_MSM7X25) += board-msm7x27.o devices-msm7x25.o
+obj-$(CONFIG_ARCH_MSM8960) += board-msm8960.o devices-8960.o clock-dummy.o
 
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire.o board-sapphire-gpio.o
 obj-$(CONFIG_MACH_SAPPHIRE) += board-sapphire-keypad.o board-sapphire-panel.o
@@ -182,10 +186,15 @@ obj-$(CONFIG_ARCH_MSM7X30) += gpiomux-7x30.o gpiomux-v1.o gpiomux.o
 obj-$(CONFIG_ARCH_QSD8X50) += gpiomux-8x50.o gpiomux-v1.o gpiomux.o
 obj-$(CONFIG_ARCH_MSM8X60) += gpiomux-8x60.o gpiomux-v2.o gpiomux.o
 ifdef CONFIG_MSM_V2_TLMM
+ifndef CONFIG_ARCH_MSM8960
 obj-y	+= gpio-v2.o
+endif
 else
 obj-y	+= gpio.o
 endif
 obj-$(CONFIG_MSM_SLEEP_STATS) += msm_sleep_stats.o idle_stats.o
 obj-$(CONFIG_MSM_SHOW_RESUME_IRQ) += msm_show_resume_irq.o
 obj-$(CONFIG_BT_MSM_PINTEST)  += btpintest.o
+obj-$(CONFIG_ENABLE_ROMLITE)  += romlite_sec.o
+romlite_sec-objs := msm_romlite_sec.o msm_romlite_pa.o
+

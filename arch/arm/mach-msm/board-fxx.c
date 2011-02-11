@@ -260,34 +260,23 @@ struct vreg *vreg_3p3;
 static int msm_hsusb_ldo_init(int init)
 {
     if (init) {
+        /*
+         * PHY 3.3V analog domain(VDDA33) is powered up by
+         * an always enabled power supply (LP5900TL-3.3).
+         * USB VREG default source is VBUS line. Turning
+         * on USB VREG has a side effect on the USB suspend
+         * current. Hence USB VREG is explicitly turned
+         * off here.
+         */
         vreg_3p3 = vreg_get(NULL, "usb");
         if (IS_ERR(vreg_3p3))
             return PTR_ERR(vreg_3p3);
-        vreg_set_level(vreg_3p3, 3300);
-    } else
+        vreg_enable(vreg_3p3);         
+        vreg_disable(vreg_3p3);  
         vreg_put(vreg_3p3);
+    }
 
     return 0;
-}
-
-static int msm_hsusb_ldo_enable(int enable)
-{
-    static int ldo_status;
-
-    if (!vreg_3p3 || IS_ERR(vreg_3p3))
-        return -ENODEV;
-
-    if (ldo_status == enable)
-        return 0;
-
-    ldo_status = enable;
-
-    pr_info("%s: %d", __func__, enable);
-
-    if (enable)
-        return vreg_enable(vreg_3p3);
-
-    return vreg_disable(vreg_3p3);
 }
 
 static int msm_hsusb_pmic_notif_init(void (*callback)(int online), int init)
@@ -325,7 +314,6 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 #endif
     .chg_init        = hsusb_chg_init,
     .ldo_init       = msm_hsusb_ldo_init,
-    .ldo_enable     = msm_hsusb_ldo_enable,
     .pclk_required_during_lpm = 1,
     .pclk_src_name          = "ebi1_usb_clk",
 };
@@ -1357,6 +1345,9 @@ static struct platform_device *devices[] __initdata = {
 #ifdef CONFIG_USB_ANDROID_DIAG
 	&usb_diag_device,
 #endif
+#ifdef CONFIG_USB_F_SERIAL
+	&usb_gadget_fserial_device,
+#endif
 	&android_usb_device,
 #endif
 	&msm_device_i2c,
@@ -1752,16 +1743,14 @@ static void __init msm7x2x_init(void)
         /* This value has been set to 160000 for power savings. */
         /* OEMs may modify the value at their discretion for performance */
         /* The appropriate maximum replacement for 160000 is: */
-        /* clk_get_max_axi_khz() */
-        kgsl_pdata.high_axi_3d = 160000;
-
+        /* msm7x2x_clock_data.max_axi_khz */
+	kgsl_pdata.pwrlevel_3d[0].gpu_freq = 0;
+	kgsl_pdata.pwrlevel_3d[0].bus_freq = 160000000;
+	kgsl_pdata.init_level_3d = 0;
+	kgsl_pdata.num_levels_3d = 1;
         /* 7x27 doesn't allow graphics clocks to be run asynchronously to */
         /* the AXI bus */
-        kgsl_pdata.max_grp2d_freq = 0;
-        kgsl_pdata.min_grp2d_freq = 0;
         kgsl_pdata.set_grp2d_async = NULL;
-        kgsl_pdata.max_grp3d_freq = 0;
-        kgsl_pdata.min_grp3d_freq = 0;
         kgsl_pdata.set_grp3d_async = NULL;
         kgsl_pdata.imem_clk_name = "imem_clk";
         kgsl_pdata.grp3d_clk_name = "grp_clk";

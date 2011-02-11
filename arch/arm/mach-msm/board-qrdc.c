@@ -30,6 +30,7 @@
 #include <linux/pmic8058-othc.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/regulator/pmic8901-regulator.h>
+#include <linux/regulator/fixed.h>
 #include <linux/bootmem.h>
 #include <linux/pwm.h>
 #include <linux/pmic8058-pwm.h>
@@ -77,7 +78,6 @@
 #include "cpuidle.h"
 #include "pm.h"
 #include "rpm.h"
-#include "mpm.h"
 #include "spm.h"
 #include "rpm_log.h"
 #include "timer.h"
@@ -1330,6 +1330,17 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 		      RPM_VREG_PIN_FN_ENABLE, RPM_VREG_MODE_NONE, \
 		      RPM_VREG_STATE_OFF, _sleep_selectable, _always_on)
 
+#define RPM_VREG_INIT_LDO_PF(_id, _always_on, _pd, _sleep_selectable, _min_uV, \
+			  _max_uV, _init_peak_uA, _pin_ctrl, _pin_fn) \
+	RPM_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_FAST | \
+		      REGULATOR_MODE_NORMAL | REGULATOR_MODE_IDLE | \
+		      REGULATOR_MODE_STANDBY, REGULATOR_CHANGE_VOLTAGE | \
+		      REGULATOR_CHANGE_STATUS | REGULATOR_CHANGE_MODE | \
+		      REGULATOR_CHANGE_DRMS, 0, _min_uV, _init_peak_uA, \
+		      _init_peak_uA, _pd, _pin_ctrl, RPM_VREG_FREQ_NONE, \
+		      _pin_fn, RPM_VREG_MODE_NONE, RPM_VREG_STATE_OFF, \
+		      _sleep_selectable, _always_on)
+
 #define RPM_VREG_INIT_SMPS(_id, _always_on, _pd, _sleep_selectable, _min_uV, \
 			   _max_uV, _init_peak_uA, _pin_ctrl, _freq) \
 	RPM_VREG_INIT(_id, _min_uV, _max_uV, REGULATOR_MODE_FAST | \
@@ -1363,7 +1374,8 @@ static struct regulator_consumer_supply rpm_vreg_supply[RPM_VREG_ID_MAX] = {
 #define FTS_HMIN	RPM_VREG_FTSMPS_HPM_MIN_LOAD
 
 static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
-	RPM_VREG_INIT_LDO(PM8058_L0,  0, 1, 0, 1200000, 1200000, LDO150HMIN, 0),
+	RPM_VREG_INIT_LDO_PF(PM8058_L0,  0, 1, 0, 1200000, 1200000, LDO150HMIN,
+		RPM_VREG_PIN_CTRL_NONE, RPM_VREG_PIN_FN_SLEEP_B),
 	RPM_VREG_INIT_LDO(PM8058_L1,  0, 1, 0, 1200000, 1200000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L2,  0, 1, 0, 1800000, 2600000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L3,  0, 1, 0, 1800000, 1800000, LDO150HMIN, 0),
@@ -1384,29 +1396,31 @@ static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
 	RPM_VREG_INIT_LDO(PM8058_L18, 0, 1, 1, 2200000, 2200000, LDO150HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L19, 0, 1, 0, 2500000, 2500000, LDO150HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L20, 0, 1, 0, 1800000, 1800000, LDO150HMIN, 0),
-	RPM_VREG_INIT_LDO(PM8058_L21, 1, 1, 0, 1200000, 1200000, LDO150HMIN, 0),
+	RPM_VREG_INIT_LDO_PF(PM8058_L21, 1, 1, 0, 1200000, 1200000, LDO150HMIN,
+		RPM_VREG_PIN_CTRL_NONE, RPM_VREG_PIN_FN_SLEEP_B),
 	RPM_VREG_INIT_LDO(PM8058_L22, 0, 1, 0, 1200000, 1200000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L23, 0, 1, 0, 1200000, 1200000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L24, 0, 1, 0, 1200000, 1200000, LDO150HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8058_L25, 0, 1, 0, 1200000, 1200000, LDO150HMIN, 0),
 
 	RPM_VREG_INIT_SMPS(PM8058_S0, 0, 1, 1,  500000, 1200000,  SMPS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8058_S1, 0, 1, 1,  500000, 1200000,  SMPS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8058_S2, 0, 1, 0, 1200000, 1400000,  SMPS_HMIN,
-		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p75),
+		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8058_S3, 1, 1, 0, 1800000, 1800000,  SMPS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8058_S4, 1, 1, 0, 2200000, 2200000,  SMPS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 
 	RPM_VREG_INIT_VS(PM8058_LVS0, 0, 1, 0,				 0),
 	RPM_VREG_INIT_VS(PM8058_LVS1, 0, 1, 0,				 0),
 
 	RPM_VREG_INIT_NCP(PM8058_NCP, 0, 1, 0, 1800000, 1800000,	 0),
 
-	RPM_VREG_INIT_LDO(PM8901_L0,  0, 1, 0, 1200000, 1200000, LDO300HMIN, 0),
+	RPM_VREG_INIT_LDO(PM8901_L0,  0, 1, 0, 1200000, 1200000, LDO300HMIN,
+		RPM_VREG_PIN_CTRL_A0),
 	RPM_VREG_INIT_LDO(PM8901_L1,  0, 1, 0, 3300000, 3300000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8901_L2,  0, 1, 0, 2850000, 3300000, LDO300HMIN, 0),
 	RPM_VREG_INIT_LDO(PM8901_L3,  0, 1, 0, 3300000, 3300000, LDO300HMIN, 0),
@@ -1415,11 +1429,11 @@ static struct rpm_vreg_pdata rpm_vreg_init_pdata[RPM_VREG_ID_MAX] = {
 	RPM_VREG_INIT_LDO(PM8901_L6,  0, 1, 0, 2200000, 2200000, LDO300HMIN, 0),
 
 	RPM_VREG_INIT_SMPS(PM8901_S2, 0, 1, 0, 1300000, 1300000,   FTS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8901_S3, 0, 1, 0, 1100000, 1100000,   FTS_HMIN, 0,
-		RPM_VREG_FREQ_1p75),
+		RPM_VREG_FREQ_1p60),
 	RPM_VREG_INIT_SMPS(PM8901_S4, 0, 1, 0, 1225000, 1225000,   FTS_HMIN,
-		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p75),
+		RPM_VREG_PIN_CTRL_A0, RPM_VREG_FREQ_1p60),
 
 	RPM_VREG_INIT_VS(PM8901_LVS0, 1, 1, 0,				 0),
 	RPM_VREG_INIT_VS(PM8901_LVS1, 0, 1, 0,				 0),
@@ -1487,6 +1501,112 @@ static struct platform_device rpm_vreg_device[RPM_VREG_ID_MAX] = {
 	RPM_VREG(RPM_VREG_ID_PM8901_LVS2),
 	RPM_VREG(RPM_VREG_ID_PM8901_LVS3),
 	RPM_VREG(RPM_VREG_ID_PM8901_MVS0),
+};
+
+enum {
+	VREG_FIXED_ID_DBVDD,
+	VREG_FIXED_ID_DCVDD,
+	VREG_FIXED_ID_AVDD1,
+	VREG_FIXED_ID_AVDD2,
+	VREG_FIXED_ID_CPVDD,
+	VREG_FIXED_ID_SPKVDD1,
+	VREG_FIXED_ID_SPKVDD2,
+	MAX_FIXED_SUPPLIES,
+};
+
+static struct regulator_consumer_supply fixed_vreg_supply[MAX_FIXED_SUPPLIES]
+= {
+	[VREG_FIXED_ID_DBVDD]  = REGULATOR_SUPPLY("DBVDD",  NULL),
+	[VREG_FIXED_ID_DCVDD]  = REGULATOR_SUPPLY("DCVDD",  NULL),
+	[VREG_FIXED_ID_AVDD1]  = REGULATOR_SUPPLY("AVDD1",  NULL),
+	[VREG_FIXED_ID_AVDD2]  = REGULATOR_SUPPLY("AVDD2",  NULL),
+	[VREG_FIXED_ID_CPVDD]  = REGULATOR_SUPPLY("CPVDD",  NULL),
+	[VREG_FIXED_ID_SPKVDD1]  = REGULATOR_SUPPLY("SPKVDD1",  NULL),
+	[VREG_FIXED_ID_SPKVDD2]  = REGULATOR_SUPPLY("SPKVDD2",  NULL),
+};
+
+#define VREG_FIXED_INIT_DATA(_id, _modes, _ops, _min_uV, _max_uV, _apply_uV) \
+	[_id] = { \
+		.constraints = { \
+			.valid_modes_mask = _modes, \
+			.valid_ops_mask = _ops, \
+			.min_uV = _min_uV, \
+			.max_uV = _max_uV, \
+			.apply_uV = _apply_uV, \
+		}, \
+		.num_consumer_supplies = 1, \
+		.consumer_supplies = &fixed_vreg_supply[_id], \
+	}
+
+#define VREG_FIXED_VOLTAGE_MICROVOLTS 1800000
+
+#define VREG_FIXED_INIT_DATA_STANDARD(_id) \
+	VREG_FIXED_INIT_DATA(_id, REGULATOR_MODE_NORMAL | \
+			REGULATOR_MODE_IDLE | REGULATOR_MODE_STANDBY, \
+			REGULATOR_CHANGE_VOLTAGE | REGULATOR_CHANGE_STATUS | \
+			REGULATOR_CHANGE_MODE, VREG_FIXED_VOLTAGE_MICROVOLTS,\
+			VREG_FIXED_VOLTAGE_MICROVOLTS, 1)
+
+#define INVALID_GPIO -1
+
+#define VREG_FIXED_CONFIG(_id, _name) \
+	[_id] = { \
+			.supply_name = _name, \
+			.gpio = INVALID_GPIO, \
+			.microvolts = VREG_FIXED_VOLTAGE_MICROVOLTS, \
+			.enable_high = 1, \
+			.enabled_at_boot = 1, \
+			.init_data = &vreg_fixed_init_data[_id], \
+		} \
+
+#define VREG_FIXED_DEVICE(_id) \
+	[_id] = { \
+			.name	  = "reg-fixed-voltage",\
+			.id	    = _id,\
+			.dev	   = {\
+				.platform_data = &vreg_fixed_config_data[_id],\
+			},\
+		} \
+
+static struct regulator_init_data vreg_fixed_init_data[MAX_FIXED_SUPPLIES] = {
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_DBVDD),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_DCVDD),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_AVDD1),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_AVDD2),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_CPVDD),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_SPKVDD1),
+	VREG_FIXED_INIT_DATA_STANDARD(VREG_FIXED_ID_SPKVDD2),
+};
+
+static struct fixed_voltage_config vreg_fixed_config_data[MAX_FIXED_SUPPLIES]
+= {
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_DBVDD, "DBVDD"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_DCVDD, "DCVDD"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_AVDD1, "AVDD1"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_AVDD2, "AVDD2"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_CPVDD, "CPVDD"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_SPKVDD1, "SPKVDD1"),
+	VREG_FIXED_CONFIG(VREG_FIXED_ID_SPKVDD2, "SPKVDD2"),
+};
+
+static struct platform_device msm_vreg_fixed_devices[MAX_FIXED_SUPPLIES] = {
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_DBVDD),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_DCVDD),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_AVDD1),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_AVDD2),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_CPVDD),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_SPKVDD1),
+	VREG_FIXED_DEVICE(VREG_FIXED_ID_SPKVDD2),
+};
+
+static struct platform_device *fixed_regulators[MAX_FIXED_SUPPLIES] = {
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_DBVDD],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_DCVDD],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_AVDD1],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_AVDD2],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_CPVDD],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_SPKVDD1],
+	&msm_vreg_fixed_devices[VREG_FIXED_ID_SPKVDD2],
 };
 
 static struct platform_device *early_regulators[] __initdata = {
@@ -2506,13 +2626,13 @@ static struct pm8901_platform_data pm8901_platform_data = {
 	.irq_base = PM8901_IRQ_BASE,
 	.num_subdevs = ARRAY_SIZE(pm8901_subdevs),
 	.sub_devices = pm8901_subdevs,
-	.irq_trigger_flags = IRQF_TRIGGER_HIGH,
+	.irq_trigger_flags = IRQF_TRIGGER_LOW,
 };
 
 static struct i2c_board_info pm8901_boardinfo[] __initdata = {
 	{
 		I2C_BOARD_INFO("pm8901-core", 0x55),
-		.irq = TLMM_SCSS_DIR_CONN_IRQ_2,
+		.irq = MSM_GPIO_TO_INT(PM8901_GPIO_INT),
 		.platform_data = &pm8901_platform_data,
 	},
 };
@@ -2785,14 +2905,6 @@ static void __init msm8x60_init_tlmm(void)
 
 	for (n = 0; n < ARRAY_SIZE(msm8x60_tlmm_cfgs); ++n)
 		gpio_tlmm_config(msm8x60_tlmm_cfgs[n], 0);
-
-	msm_gpio_install_direct_irq(PM8058_GPIO_INT, 1, 0);
-	msm_set_direct_connect(TLMM_SCSS_DIR_CONN_IRQ_1,
-			MSM_GPIO_TO_INT(PM8058_GPIO_INT), 1);
-	msm_gpio_install_direct_irq(PM8901_GPIO_INT, 2, 0);
-	msm_set_direct_connect(TLMM_SCSS_DIR_CONN_IRQ_2,
-			MSM_GPIO_TO_INT(PM8901_GPIO_INT), 1);
-
 }
 
 #define GPIO_SDC3_WP_SWITCH (GPIO_EXPANDER_GPIO_BASE + (16 * 1) + 6)
@@ -3814,15 +3926,15 @@ static struct msm_bus_vectors mdp_init_vectors[] = {
 	 * Please leave 0 as is and don't use it
 	 */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 0,
 		.ib = 0,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
 	},
@@ -3831,15 +3943,15 @@ static struct msm_bus_vectors mdp_init_vectors[] = {
 static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
 	/* Default case static display/UI/2d/3d if FB SMI */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 147460000,
 		.ib = 184325000,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
 	},
@@ -3848,15 +3960,15 @@ static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
 static struct msm_bus_vectors mdp_sd_ebi_vectors[] = {
 	/* Default case static display/UI/2d/3d if FB SMI */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 0,
 		.ib = 0,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 334080000,
 		.ib = 417600000,
 	},
@@ -3864,14 +3976,14 @@ static struct msm_bus_vectors mdp_sd_ebi_vectors[] = {
 static struct msm_bus_vectors mdp_vga_vectors[] = {
 	/* VGA and less video */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 175110000,
 		.ib = 218887500,
 	},
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 175110000,
 		.ib = 218887500,
 	},
@@ -3880,15 +3992,15 @@ static struct msm_bus_vectors mdp_vga_vectors[] = {
 static struct msm_bus_vectors mdp_720p_vectors[] = {
 	/* 720p and less video */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 230400000,
 		.ib = 288000000,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 230400000,
 		.ib = 288000000,
 	},
@@ -3897,15 +4009,15 @@ static struct msm_bus_vectors mdp_720p_vectors[] = {
 static struct msm_bus_vectors mdp_1080p_vectors[] = {
 	/* 1080p and less video */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 334080000,
 		.ib = 417600000,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 334080000,
 		.ib = 417600000,
 	},
@@ -3948,15 +4060,15 @@ static struct msm_bus_vectors dtv_bus_init_vectors[] = {
 	 * Please leave 0 as is and don't use it
 	 */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 0,
 		.ib = 0,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 0,
 		.ib = 0,
 	},
@@ -3966,15 +4078,15 @@ static struct msm_bus_vectors dtv_bus_def_vectors[] = {
 	 * Please leave 0 as is and don't use it
 	 */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_MMSS_SLAVE_SMI,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
 		.ab = 435456000,
 		.ib = 544320000,
 	},
 	/* Master and slaves can be from different fabrics */
 	{
-		.src = MSM_BUS_MMSS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_APPSS_SLAVE_EBI_CH0,
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
 		.ab = 435456000,
 		.ib = 544320000,
 	},
@@ -4009,6 +4121,7 @@ static int mdp_core_clk_rate_table[] = {
 	59080000,
 	128000000,
 	160000000,
+	200000000,
 	200000000,
 };
 static struct msm_panel_common_pdata mdp_pdata = {
@@ -4141,6 +4254,8 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 
 	/* Initialize regulators needed for clock_init. */
 	platform_add_devices(early_regulators, ARRAY_SIZE(early_regulators));
+
+	platform_add_devices(fixed_regulators, ARRAY_SIZE(fixed_regulators));
 
 	msm_clock_init(msm_clocks_8x60, msm_num_clocks_8x60);
 

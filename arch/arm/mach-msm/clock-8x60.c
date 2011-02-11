@@ -129,17 +129,9 @@
 #define PIXEL_CC_REG				REG_MM(0x00D4)
 #define PIXEL_CC2_REG				REG_MM(0x0120)
 #define PIXEL_NS_REG				REG_MM(0x00DC)
-#define MM_PLL0_CONFIG_REG			REG_MM(0x0310)
-#define MM_PLL0_L_VAL_REG			REG_MM(0x0304)
-#define MM_PLL0_M_VAL_REG			REG_MM(0x0308)
 #define MM_PLL0_MODE_REG			REG_MM(0x0300)
-#define MM_PLL0_N_VAL_REG			REG_MM(0x030C)
 #define MM_PLL0_STATUS_REG			REG_MM(0x0318)
-#define MM_PLL1_CONFIG_REG			REG_MM(0x032C)
-#define MM_PLL1_L_VAL_REG			REG_MM(0x0320)
-#define MM_PLL1_M_VAL_REG			REG_MM(0x0324)
 #define MM_PLL1_MODE_REG			REG_MM(0x031C)
-#define MM_PLL1_N_VAL_REG			REG_MM(0x0328)
 #define MM_PLL1_STATUS_REG			REG_MM(0x0334)
 #define MM_PLL2_CONFIG_REG			REG_MM(0x0348)
 #define MM_PLL2_L_VAL_REG			REG_MM(0x033C)
@@ -188,12 +180,6 @@
 #define LCC_SPARE_I2S_SPKR_NS_REG		REG_LPA(0x0084)
 #define LCC_SPARE_I2S_SPKR_STATUS_REG		REG_LPA(0x008C)
 
-/* Assumptions for PXO_PLAN:
- *	PXO = 27.000 MHz
- *	CXO = 19.200 MHz
- *	MXO = Unsupported
- */
-#ifndef _MXO_PLAN
 /* MUX source input identifiers. */
 #define SRC_SEL_BB_PXO		0
 #define SRC_SEL_BB_MXO		1
@@ -214,9 +200,6 @@
 #define SRC_SEL_LPA_PXO		0
 #define SRC_SEL_LPA_CXO		1
 #define SRC_SEL_LPA_PLL0	2
-
-struct clk_local *soc_clk_local_tbl;
-#endif /* !_MXO_PLAN */
 
 /* Source name mapping. */
 #define SRC_BB_PXO		PXO
@@ -942,6 +925,8 @@ static struct clk_freq_tbl clk_tbl_pixel_mdp[] = {
 	F_PIXEL_MDP( 53990000, MM_GPERF, 2, 169, 601, LOW),
 	F_PIXEL_MDP( 64000000, MM_GPERF, 2,   1,   3, LOW),
 	F_PIXEL_MDP( 76800000, MM_GPERF, 1,   1,   5, LOW),
+	F_PIXEL_MDP( 85333000, MM_GPERF, 1,   2,   9, LOW),
+	F_PIXEL_MDP(106500000, MM_GPERF, 1,  71, 256, NOMINAL),
 	F_PIXEL_MDP(109714000, MM_GPERF, 1,   2,   7, NOMINAL),
 	F_END,
 };
@@ -987,7 +972,7 @@ static struct clk_freq_tbl clk_tbl_rot[] = {
 static struct pll_rate mm_pll2_rate[] = {
 	[0] = PLL_RATE( 7, 6301, 13500, 0, 4, 0x4248B), /*  50400500 Hz */
 	[1] = PLL_RATE( 8,    0,     0, 0, 4, 0x4248B), /*  54000000 Hz */
-	[2] = PLL_RATE(16,    2,   125, 0, 4, 0x4248F), /* 108108000 Hz */
+	[2] = PLL_RATE(16,    2,   125, 0, 4, 0x5248F), /* 108108000 Hz */
 	[3] = PLL_RATE(22,    0,     0, 2, 4, 0x6248B), /* 148500000 Hz */
 	[4] = PLL_RATE(44,    0,     0, 2, 4, 0x6248F), /* 297000000 Hz */
 };
@@ -1162,11 +1147,7 @@ static const uint32_t chld_vfe[] =		{C(CSI0_VFE), C(CSI1_VFE),
 /*
  * Clock table
  */
-#ifndef _MXO_PLAN
-struct clk_local soc_clk_local_tbl_pxo[] = {
-#else
-struct clk_local soc_clk_local_tbl_mxo[] = {
-#endif
+struct clk_local soc_clk_local_tbl[] = {
 	/*
 	 * Peripheral Clocks
 	 */
@@ -1514,7 +1495,6 @@ struct clk_local soc_clk_local_tbl_mxo[] = {
 		TEST_LPA(0x14)),
 };
 
-#ifndef _MXO_PLAN
 static struct msm_xo_voter *xo_pxo;
 /*
  * SoC-specific functions required by clock-local driver
@@ -1788,33 +1768,9 @@ int soc_clk_reset(unsigned id, enum clk_reset_action action)
 	return ret;
 }
 
-/* SoC-specific clk_ops initialization. */
-void __init msm_clk_soc_set_ops(struct clk *clk)
-{
-	return;
-}
-
 /*
  * Miscellaneous clock register initializations
  */
-
-/* Return true if PXO is 27MHz. */
-int __init pxo_is_27mhz(void)
-{
-	uint32_t xo_sel;
-	int pll8_ref_is_27mhz = 0;
-
-	/* PLL8 is assumed to be at 384MHz. Check if the 384/(L+M/N) == 27. */
-	if (readl(BB_PLL8_L_VAL_REG) == 14 && readl(BB_PLL8_M_VAL_REG) == 2
-	 && readl(BB_PLL8_N_VAL_REG) == 9)
-		pll8_ref_is_27mhz = 1;
-
-	/* Check which source is used with above L, M, N vals.
-	 * xo_sel: 0=PXO, else MXO */
-	xo_sel = readl(BB_PLL8_MODE_REG) & B(4);
-
-	return (xo_sel == 0 && pll8_ref_is_27mhz);
-}
 
 /* Read, modify, then write-back a register. */
 static void rmwreg(uint32_t val, void *reg, uint32_t mask)
@@ -1825,27 +1781,12 @@ static void rmwreg(uint32_t val, void *reg, uint32_t mask)
 	writel(regval, reg);
 }
 
-static void reg_init(int use_pxo)
+static void reg_init(void)
 {
-	/* Set MM_PLL1 (PLL2) @ 800 MHz but leave it off. */
-	rmwreg(0,  MM_PLL1_MODE_REG, B(0)); /* Disable output */
-	writel(29, MM_PLL1_L_VAL_REG);
-	writel(17, MM_PLL1_M_VAL_REG);
-	writel(27, MM_PLL1_N_VAL_REG);
-	/* Set ref, bypass, assert reset, disable output, disable test mode. */
-	if (use_pxo)
-		writel(0,    MM_PLL1_MODE_REG); /* PXO */
-	else
-		writel(B(4), MM_PLL1_MODE_REG); /* MXO */
-	writel(0x00C22080, MM_PLL1_CONFIG_REG); /* Enable MN, set VCO, misc */
-
 	/* Setup MM_PLL2 (PLL3), but turn it off. Rate set by set_rate_tv(). */
 	rmwreg(0, MM_PLL2_MODE_REG, B(0)); /* Disable output */
 	/* Set ref, bypass, assert reset, disable output, disable test mode */
-	if (use_pxo)
-		writel(0, MM_PLL2_MODE_REG); /* PXO */
-	else
-		writel(B(4), MM_PLL2_MODE_REG); /* MXO */
+	writel(0, MM_PLL2_MODE_REG); /* PXO */
 	writel(0x00800000, MM_PLL2_CONFIG_REG); /* Enable main out. */
 
 	/* Deassert MM SW_RESET_ALL signal. */
@@ -1906,45 +1847,26 @@ static void reg_init(int use_pxo)
 	writel(0, SW_RESET_CORE_REG);
 	local_clk_disable(C(GFX3D));
 
-	if (use_pxo) {
-		/* Enable TSSC and PDM PXO sources. */
-		writel(B(11), TSSC_CLK_CTL_REG);
-		writel(B(15), PDM_CLK_NS_REG);
-		/* Set the dsi_byte_clk src to the DSI PHY PLL,
-		 * dsi_esc_clk to PXO/2, and the hdmi_app_clk src to PXO */
-		rmwreg(0x400001, MISC_CC2_REG, 0x424003);
-	} else {
-		/* Enable TSSC and PDM MXO sources. */
-		writel(B(13), TSSC_CLK_CTL_REG);
-		writel(B(17), PDM_CLK_NS_REG);
-		/* Set the dsi_byte_clk src to the DSI PHY PLL,
-		 * dsi_esc_clk to MXO/2, and the hdmi_app_clk src to MXO */
-		rmwreg(0x424001, MISC_CC2_REG, 0x424003);
-	}
+	/* Enable TSSC and PDM PXO sources. */
+	writel(B(11), TSSC_CLK_CTL_REG);
+	writel(B(15), PDM_CLK_NS_REG);
+	/* Set the dsi_byte_clk src to the DSI PHY PLL,
+	 * dsi_esc_clk to PXO/2, and the hdmi_app_clk src to PXO */
+	rmwreg(0x400001, MISC_CC2_REG, 0x424003);
 }
 
 /* Local clock driver initialization. */
 void __init msm_clk_soc_init(void)
 {
-	int use_pxo;
-
-	/* Select correct frequency table for hardware XO configuration. */
-	use_pxo = pxo_is_27mhz();
-	if (use_pxo) {
-		soc_clk_local_tbl = soc_clk_local_tbl_pxo;
-		xo_pxo = msm_xo_get(MSM_XO_PXO, "clock-8x60");
-		if (IS_ERR(xo_pxo)) {
-			pr_err("%s: msm_xo_get(PXO) failed.\n", __func__);
-			BUG();
-		}
-	} else {
-		soc_clk_local_tbl = soc_clk_local_tbl_mxo;
-		soc_clk_sources[PXO].enable_func = NULL;
+	xo_pxo = msm_xo_get(MSM_XO_PXO, "clock-8x60");
+	if (IS_ERR(xo_pxo)) {
+		pr_err("%s: msm_xo_get(PXO) failed.\n", __func__);
+		BUG();
 	}
 
 	local_vote_sys_vdd(HIGH);
 	/* Initialize clock registers. */
-	reg_init(use_pxo);
+	reg_init();
 
 	/* Initialize rates for clocks that only support one. */
 	set_1rate(PRNG);
@@ -1980,4 +1902,3 @@ struct clk_ops soc_clk_ops_8x60 = {
 	.set_flags = soc_clk_set_flags,
 	.measure_rate = soc_clk_measure_rate,
 };
-#endif /* !_MXO_PLAN */

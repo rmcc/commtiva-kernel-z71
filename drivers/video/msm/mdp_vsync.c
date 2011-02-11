@@ -104,14 +104,20 @@ void mdp_vsync_clk_enable(void)
 {
 	if (vsync_mfd) {
 		mdp_hw_vsync_clk_enable(vsync_mfd);
-		mdp_set_vsync((unsigned long) vsync_mfd);
+		if (!vsync_mfd->vsync_resync_timer.function) {
+			mdp_set_vsync((unsigned long) vsync_mfd);
+		}
 	}
 }
 
 void mdp_vsync_clk_disable(void)
 {
 	if (vsync_mfd) {
-		del_timer(&vsync_mfd->vsync_resync_timer);
+		if (vsync_mfd->vsync_resync_timer.function) {
+			del_timer_sync(&vsync_mfd->vsync_resync_timer);
+			vsync_mfd->vsync_resync_timer.function = NULL;
+		}
+
 		mdp_hw_vsync_clk_disable(vsync_mfd);
 	}
 }
@@ -124,11 +130,12 @@ static void mdp_set_vsync(unsigned long data)
 
 	pdata = (struct msm_fb_panel_data *)mfd->pdev->dev.platform_data;
 
+	vsync_mfd = mfd;
+	init_timer(&mfd->vsync_resync_timer);
+
 	if ((pdata) && (pdata->set_vsync_notifier == NULL))
 		return;
 
-	vsync_mfd = mfd;
-	init_timer(&mfd->vsync_resync_timer);
 	mfd->vsync_resync_timer.function = mdp_set_vsync;
 	mfd->vsync_resync_timer.data = data;
 	mfd->vsync_resync_timer.expires =
@@ -156,6 +163,7 @@ static void mdp_vsync_handler(void *data)
 
 	if (vsync_clk_status == 0) {
 		printk(KERN_ERR "Warning: vsync clk is disabled\n");
+		mfd->vsync_handler_pending = FALSE;
 		return;
 	}
 
@@ -223,7 +231,6 @@ static void mdp_set_sync_cfg_1(struct msm_fb_data_type *mfd, int vsync_cnt)
 
 void mdp_config_vsync(struct msm_fb_data_type *mfd)
 {
-
 	/* vsync on primary lcd only for now */
 	if ((mfd->dest != DISPLAY_LCD) || (mfd->panel_info.pdest != DISPLAY_1)
 	    || (!vsync_mode)) {
@@ -336,6 +343,7 @@ void mdp_config_vsync(struct msm_fb_data_type *mfd)
 		mfd->vsync_width_boundary = vmalloc(mfd->panel_info.xres * 4);
 #endif
 
+#ifdef CONFIG_FB_MSM_MDDI
 		mfd->channel_irq = 0;
 		if (mfd->panel_info.lcd.hw_vsync_mode) {
 			u32 vsync_gpio = mfd->vsync_gpio;
@@ -356,6 +364,12 @@ void mdp_config_vsync(struct msm_fb_data_type *mfd)
 			if (ret)
 				goto err_handle;
 
+			/*
+			 * if use_mdp_vsync, then no interrupt need since
+			 * mdp_vsync is feed directly to mdp to reset the
+			 * write pointer counter. therefore no irq_handler
+			 * need to reset write pointer counter.
+			 */
 			if (!mfd->use_mdp_vsync) {
 				mfd->channel_irq = MSM_GPIO_TO_INT(vsync_gpio);
 				if (request_irq
@@ -371,7 +385,8 @@ void mdp_config_vsync(struct msm_fb_data_type *mfd)
 				}
 			}
 		}
-
+#endif
+		mdp_hw_vsync_clk_enable(mfd);
 		mdp_set_vsync((unsigned long)mfd);
 	}
 

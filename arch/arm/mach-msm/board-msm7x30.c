@@ -2643,8 +2643,8 @@ static char *usb_functions_rndis_diag[] = {
 
 static char *usb_functions_rndis_adb_diag[] = {
 	"rndis",
-	"adb",
 	"diag",
+	"adb",
 };
 
 static char *usb_functions_all[] = {
@@ -3762,20 +3762,27 @@ static struct platform_device android_pmem_audio_device = {
 };
 
 static struct kgsl_platform_data kgsl_pdata = {
-#ifdef CONFIG_MSM_NPA_SYSTEM_BUS
-	/* NPA Flow IDs */
-	.high_axi_3d = MSM_AXI_FLOW_3D_GPU_HIGH,
-	.high_axi_2d = MSM_AXI_FLOW_2D_GPU_HIGH,
-#else
-	/* AXI rates in KHz */
-	.high_axi_3d = 192000,
-	.high_axi_2d = 192000,
-#endif
-	.max_grp2d_freq = 0,
-	.min_grp2d_freq = 0,
+	.pwrlevel_2d = {
+		{
+			.gpu_freq = 0,
+			.bus_freq = 192000000,
+		},
+	},
+	.init_level_2d = 0,
+	.num_levels_2d = 1,
+	.pwrlevel_3d = {
+		{
+			.gpu_freq = 245760000,
+			.bus_freq = 192000000,
+		},
+		{
+			.gpu_freq = 192000000,
+			.bus_freq = 0,
+		},
+	},
+	.init_level_3d = 0,
+	.num_levels_3d = 2,
 	.set_grp2d_async = NULL, /* HW workaround, run Z180 SYNC @ 192 MHZ */
-	.max_grp3d_freq = 245760000,
-	.min_grp3d_freq = 192 * 1000*1000,
 	.set_grp3d_async = set_grp3d_async,
 	.imem_clk_name = "imem_clk",
 	.grp3d_clk_name = "grp_clk",
@@ -3846,6 +3853,11 @@ static struct platform_device msm_device_kgsl = {
 #define QCE_SIZE		0x10000
 #define QCE_0_BASE		0xA8400000
 
+#define QCE_HW_KEY_SUPPORT	1
+
+#define QCE_SHARE_CE_RESOURCE	0
+#define QCE_CE_SHARED		0
+
 #define ADM_CHANNEL_CE_0_IN	DMOV_CE_CHAN_IN
 #define ADM_CHANNEL_CE_0_OUT	DMOV_CE_CHAN_OUT
 
@@ -3889,6 +3901,13 @@ static struct resource qce_resources[] = {
 
 #if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
 		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE)
+
+static struct msm_ce_hw_support qcrypto_ce_hw_suppport = {
+	.ce_shared = QCE_CE_SHARED,
+	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
+	.hw_key_support = QCE_HW_KEY_SUPPORT,
+};
+
 static struct platform_device qcrypto_device = {
 	.name		= "qcrypto",
 	.id		= 0,
@@ -3896,12 +3915,19 @@ static struct platform_device qcrypto_device = {
 	.resource	= qce_resources,
 	.dev		= {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
+		.platform_data = &qcrypto_ce_hw_suppport,
 	},
 };
 #endif
 
 #if defined(CONFIG_CRYPTO_DEV_QCEDEV) || \
 		defined(CONFIG_CRYPTO_DEV_QCEDEV_MODULE)
+
+static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
+	.ce_shared = QCE_CE_SHARED,
+	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
+	.hw_key_support = QCE_HW_KEY_SUPPORT,
+};
 static struct platform_device qcedev_device = {
 	.name		= "qce",
 	.id		= 0,
@@ -3909,6 +3935,7 @@ static struct platform_device qcedev_device = {
 	.resource	= qce_resources,
 	.dev		= {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
+		.platform_data = &qcedev_ce_hw_suppport,
 	},
 };
 #endif
@@ -4295,6 +4322,7 @@ int mdp_core_clk_rate_table[] = {
 	122880000,
 	122880000,
 	192000000,
+	192000000,
 };
 
 static struct msm_panel_common_pdata mdp_pdata = {
@@ -4577,6 +4605,24 @@ static struct msm_gpio bt_config_power_off[] = {
 		"UART1DM_Tx" }
 };
 
+static const char *vregs_bt_marimba_name[] = {
+	"s3",
+	"s2",
+	"gp16",
+	"wlan"
+};
+static struct vreg *vregs_bt_marimba[ARRAY_SIZE(vregs_bt_marimba_name)];
+
+static const char *vregs_bt_bahama_name[] = {
+	"s3",
+	"usb2",
+	"s2",
+	"wlan"
+};
+static struct vreg *vregs_bt_bahama[ARRAY_SIZE(vregs_bt_bahama_name)];
+
+static u8 bha_version;
+
 static int marimba_bt(int on)
 {
 	int rc;
@@ -4724,7 +4770,6 @@ static int bahama_bt(int on)
 
 	const struct bahama_config_register *p;
 
-	u8 version;
 
 	const struct bahama_config_register v10_bt_on[] = {
 		{ 0xE9, 0x00, 0xFF },
@@ -4806,7 +4851,10 @@ static int bahama_bt(int on)
 
 	on = on ? 1 : 0;
 
-	rc = marimba_read_bit_mask(&config, 0x00,  &version, 1, 0x1F);
+	/* Reset version */
+	bha_version = 0xFF;
+
+	rc = marimba_read_bit_mask(&config, 0x00,  &bha_version, 1, 0x1F);
 	if (rc < 0) {
 		dev_err(&msm_bt_power_device.dev,
 			"%s: version read failed: %d\n",
@@ -4815,38 +4863,38 @@ static int bahama_bt(int on)
 	} else {
 		dev_info(&msm_bt_power_device.dev,
 			"%s: version read got: 0x%x\n",
-			__func__, version);
+			__func__, bha_version);
 	}
 
-	switch (version) {
+	switch (bha_version) {
 	case 0x08: /* varients of bahama v1 */
 	case 0x10:
 	case 0x00:
-		version = 0x00;
+		bha_version = 0x00;
 		break;
 	case 0x09: /* variant of bahama v2 */
 		/* bahama v2 has different bring-up & shutdown sequence */
 		/* based on FM status */
-		version = marimba_get_fm_status(&config) ? 0x02 : 0x01;
+		bha_version = marimba_get_fm_status(&config) ? 0x02 : 0x01;
 		break;
 	default:
-		version = 0xFF;
+		bha_version = 0xFF;
 	}
 
-	if ((version >= ARRAY_SIZE(bt_bahama[on])) ||
-	    (bt_bahama[on][version].size == 0)) {
+	if ((bha_version >= ARRAY_SIZE(bt_bahama[on])) ||
+	    (bt_bahama[on][bha_version].size == 0)) {
 		dev_err(&msm_bt_power_device.dev,
 			"%s: unsupported version\n",
 			__func__);
 		return -EIO;
 	}
 
-	p = bt_bahama[on][version].set;
+	p = bt_bahama[on][bha_version].set;
 
 	dev_info(&msm_bt_power_device.dev,
-		"%s: found version %d\n", __func__, version);
+		"%s: found version %d\n", __func__, bha_version);
 
-	for (i = 0; i < bt_bahama[on][version].size; i++) {
+	for (i = 0; i < bt_bahama[on][bha_version].size; i++) {
 		u8 value = (p+i)->value;
 		rc = marimba_write_bit_mask(&config,
 			(p+i)->reg,
@@ -4870,28 +4918,41 @@ static int bahama_bt(int on)
 	else
 		marimba_set_bt_status(&config, false);
 
-
 	/* Destory mutex */
 	mutex_destroy(&config.xfer_lock);
 
+	if ((bha_version == 0x01 || bha_version == 0x02)
+		&& on) { /*variant of bahama v2 */
+		/* Disable s2 as bahama v2 uses internal LDO regulator */
+		for (i = 0; i < ARRAY_SIZE(vregs_bt_bahama_name); i++) {
+			if (!strcmp(vregs_bt_bahama_name[i], "s2")) {
+				vreg_disable(vregs_bt_bahama[i]);
+				if (rc < 0) {
+					printk(KERN_ERR
+						"%s: vreg %s disable "
+						"failed (%d)\n",
+						__func__,
+						vregs_bt_bahama_name[i], rc);
+					return -EIO;
+				}
+				rc = pmapp_vreg_level_vote("BTPW",
+								PMAPP_VREG_S2,
+								0);
+				if (rc < 0) {
+					printk(KERN_ERR "%s: vreg "
+						"level off failed (%d)\n",
+						__func__, rc);
+					return -EIO;
+				}
+				printk(KERN_INFO "%s: vreg disable & "
+					"level off successful (%d)\n",
+					__func__, rc);
+			}
+		}
+	}
+
 	return 0;
 }
-
-static const char *vregs_bt_marimba_name[] = {
-	"s3",
-	"s2",
-	"gp16",
-	"wlan"
-};
-static struct vreg *vregs_bt_marimba[ARRAY_SIZE(vregs_bt_marimba_name)];
-
-static const char *vregs_bt_bahama_name[] = {
-	"s3",
-	"usb2",
-	"s2",
-	"wlan"
-};
-static struct vreg *vregs_bt_bahama[ARRAY_SIZE(vregs_bt_bahama_name)];
 
 static int bluetooth_power_regulators(int on, int bahama_not_marimba)
 {
@@ -4911,6 +4972,10 @@ static int bluetooth_power_regulators(int on, int bahama_not_marimba)
 	}
 
 	for (i = 0; i < vregs_size; i++) {
+		if (bahama_not_marimba &&
+			(bha_version == 0x01 || bha_version == 0x02) &&
+			!on && !strcmp(vregs_bt_bahama_name[i], "s2"))
+			continue;
 		rc = on ? vreg_enable(vregs[i]) :
 			  vreg_disable(vregs[i]);
 		if (rc < 0) {
@@ -5007,10 +5072,15 @@ static int bluetooth_power(int on)
 		if (rc < 0)
 			return -EIO;
 
-		rc = pmapp_vreg_level_vote(id, PMAPP_VREG_S2, 0);
-		if (rc < 0) {
-			printk(KERN_INFO "%s: vreg level off failed (%d)\n",
-				__func__, rc);
+		if (bha_version != 0x01 && bha_version != 0x02) {
+			rc = pmapp_vreg_level_vote(id, PMAPP_VREG_S2, 0);
+			if (rc < 0) {
+				printk(KERN_ERR "%s: vreg level off failed "
+				"(%d)\n", __func__, rc);
+				return -EIO;
+			}
+			/* Reset version */
+			bha_version = 0xFF;
 		}
 	}
 
@@ -5144,6 +5214,9 @@ static struct platform_device *devices[] __initdata = {
 	&rndis_device,
 #ifdef CONFIG_USB_ANDROID_DIAG
 	&usb_diag_device,
+#endif
+#ifdef CONFIG_USB_F_SERIAL
+	&usb_gadget_fserial_device,
 #endif
 	&android_usb_device,
 #endif

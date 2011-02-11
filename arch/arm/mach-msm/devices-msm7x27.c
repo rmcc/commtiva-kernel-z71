@@ -31,6 +31,7 @@
 #include <asm/mach/mmc.h>
 #include <mach/msm_hsusb.h>
 #include <mach/usbdiag.h>
+#include <mach/usb_gadget_fserial.h>
 #include <mach/rpc_hsusb.h>
 
 #include "clock-pcom.h"
@@ -310,6 +311,20 @@ struct platform_device usb_diag_device = {
 	.id	= -1,
 	.dev	= {
 		.platform_data = &usb_diag_pdata,
+	},
+};
+#endif
+
+#ifdef CONFIG_USB_F_SERIAL
+static struct usb_gadget_fserial_platform_data fserial_pdata = {
+	.no_ports	= 2,
+};
+
+struct platform_device usb_gadget_fserial_device = {
+	.name	= "usb_fserial",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &fserial_pdata,
 	},
 };
 #endif
@@ -810,7 +825,6 @@ struct clk_lookup msm_clocks_7x27[] = {
 	CLK_VOTER("ebi1_mddi_clk",	EBI_MDDI_CLK,	"ebi1_clk", NULL, 0),
 	CLK_VOTER("ebi1_usb_clk",	EBI_USB_CLK,	"ebi1_clk", NULL, 0),
 	CLK_VOTER("ebi1_vfe_clk",	EBI_VFE_CLK,	"ebi1_clk", NULL, 0),
-	CLK_VOTER("ebi1_pm_qos_clk",	EBI_PM_QOS_CLK,	"ebi1_clk", NULL, 0),
 };
 
 unsigned msm_num_clocks_7x27 = ARRAY_SIZE(msm_clocks_7x27);

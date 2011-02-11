@@ -726,6 +726,8 @@ kgsl_ringbuffer_issuecmds(struct kgsl_device *device,
 	KGSL_CMD_VDBG("enter (device->id=%d, flags=%d, cmds=%p, "
 		"sizedwords=%d)\n", device->id, flags, cmds, sizedwords);
 
+	if (device->state & KGSL_STATE_HUNG)
+		return;
 	kgsl_ringbuffer_addcmds(rb, flags, cmds, sizedwords);
 }
 
@@ -748,6 +750,8 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 			device->id, drawctxt_index, (unsigned int)ibdesc,
 			numibs, timestamp);
 
+	if (device->state & KGSL_STATE_HUNG)
+		return -EINVAL;
 	if (!(yamato_device->ringbuffer.flags & KGSL_FLAGS_STARTED) ||
 				(drawctxt_index >= KGSL_CONTEXT_MAX)) {
 		KGSL_CMD_VDBG("return %d\n", -EINVAL);
@@ -766,7 +770,7 @@ kgsl_ringbuffer_issueibcmds(struct kgsl_device_private *dev_priv,
 	}
 
 	for (i = 0; i < numibs; i++) {
-		kgsl_cffdump_parse_ibs(dev_priv, NULL,
+		(void)kgsl_cffdump_parse_ibs(dev_priv, NULL,
 			ibdesc[i].gpuaddr, ibdesc[i].sizedwords, false);
 
 		*cmds++ = PM4_HDR_INDIRECT_BUFFER_PFD;

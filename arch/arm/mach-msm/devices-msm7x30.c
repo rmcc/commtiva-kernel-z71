@@ -38,6 +38,7 @@
 #include <linux/mfd/pmic8058.h>
 #endif
 #include <mach/usbdiag.h>
+#include <mach/usb_gadget_fserial.h>
 #include <mach/rpc_hsusb.h>
 
 /* EBI THERMAL DRIVER */
@@ -468,6 +469,20 @@ struct platform_device usb_diag_device = {
 	.id	= -1,
 	.dev	= {
 		.platform_data = &usb_diag_pdata,
+	},
+};
+#endif
+
+#ifdef CONFIG_USB_F_SERIAL
+static struct usb_gadget_fserial_platform_data fserial_pdata = {
+	.no_ports	= 2,
+};
+
+struct platform_device usb_gadget_fserial_device = {
+	.name	= "usb_fserial",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &fserial_pdata,
 	},
 };
 #endif
@@ -1031,7 +1046,6 @@ struct clk_lookup msm_clocks_7x30[] = {
 	CLK_VOTER("ebi1_usb_clk",	EBI_USB_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_vcd_clk",	EBI_VCD_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_vfe_clk",	EBI_VFE_CLK,	"pbus_clk", NULL, 0),
-	CLK_VOTER("ebi1_pm_qos_clk",	EBI_PM_QOS_CLK,	"pbus_clk", NULL, 0),
 
 	CLK_7X30("adm_clk",	ADM_CLK,	NULL, 0),
 	CLK_7X30L("adm_pclk",   ADM_P_CLK,       NULL, 0),

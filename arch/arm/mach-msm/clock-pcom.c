@@ -19,6 +19,7 @@
 #include <linux/spinlock.h>
 
 #include <mach/clk.h>
+#include <mach/socinfo.h>
 
 #include "proc_comm.h"
 #include "clock.h"
@@ -124,9 +125,15 @@ int pc_clk_set_rate(unsigned id, unsigned rate)
 
 int pc_clk_set_min_rate(unsigned id, unsigned rate)
 {
-	int rc = msm_proc_comm(PCOM_CLKCTL_RPC_MIN_RATE, &id, &rate);
+	int rc;
+	bool ignore_error = (cpu_is_msm7x27() && id == P_EBI1_CLK &&
+				rate >= INT_MAX);
+
+	rc = msm_proc_comm(PCOM_CLKCTL_RPC_MIN_RATE, &id, &rate);
 	if (rc < 0)
 		return rc;
+	else if (ignore_error)
+		return 0;
 	else
 		return (int)id < 0 ? -EINVAL : 0;
 }
@@ -157,12 +164,6 @@ unsigned pc_clk_get_rate(unsigned id)
 		return id;
 }
 
-signed pc_clk_measure_rate(unsigned id)
-{
-	/* Not supported. */
-	return -EPERM;
-}
-
 unsigned pc_clk_is_enabled(unsigned id)
 {
 	if (msm_proc_comm(PCOM_CLKCTL_RPC_ENABLED, &id, NULL))
@@ -188,7 +189,6 @@ struct clk_ops clk_ops_remote = {
 	.set_max_rate = pc_clk_set_max_rate,
 	.set_flags = pc_clk_set_flags,
 	.get_rate = pc_clk_get_rate,
-	.measure_rate = pc_clk_measure_rate,
 	.is_enabled = pc_clk_is_enabled,
 	.round_rate = pc_clk_round_rate,
 };
@@ -217,7 +217,6 @@ struct clk_ops clk_ops_pcom_div2 = {
 	.set_min_rate = pc_clk_set_min_rate2,
 	.set_flags = pc_clk_set_flags,
 	.get_rate = pc_clk_get_rate2,
-	.measure_rate = pc_clk_measure_rate,
 	.is_enabled = pc_clk_is_enabled,
 	.round_rate = pc_clk_round_rate,
 };

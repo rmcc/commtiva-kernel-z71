@@ -434,7 +434,7 @@ static uint32_t const chld_vfe[] =	{C(VFE_MDC), C(VFE_CAMIF), C(CSI0_VFE),
 /*
  * Clock table
  */
-static struct clk_local soc_clk_local_tbl_7x30[] = {
+struct clk_local soc_clk_local_tbl[] = {
 	CLK_NORATE(MDC,	MDC_NS_REG, B(9), B(11),
 			CLK_HALT_STATEA_REG, HALT, 10, 0x4D56),
 	CLK_NORATE(LPA_CORE, LPA_NS_REG, B(5), 0,
@@ -661,7 +661,6 @@ static struct clk_local soc_clk_local_tbl_7x30[] = {
 	CLK_BRIDGE(AXI_VPE,	GLBL_CLK_ENA_2_SC_REG,	B(21),	AXI_LI_VG,
 			GLBL_CLK_STATE_2_REG, HALT_VOTED, 21, 0x6700),
 };
-struct clk_local *soc_clk_local_tbl = soc_clk_local_tbl_7x30;
 
 /*
  * SoC-specific functions required by clock-local driver
@@ -1072,24 +1071,22 @@ static const struct clk_local_ownership {
 	[C(ROTATOR_P)]			= { O(SH2_OWN_GLBL), B(13) },
 };
 
-static struct clk_ops * __init clk_is_local(uint32_t id)
+static bool __init clk_is_local(uint32_t id)
 {
-	uint32_t local, bit = ownership_map[id].bit;
+	uint32_t bit = ownership_map[id].bit;
 	const uint32_t *reg = ownership_map[id].reg;
 
 	BUG_ON(id >= ARRAY_SIZE(ownership_map) || !reg);
 
-	local = *reg & bit;
-	return local ? &soc_clk_ops_7x30 : NULL;
+	return *reg & bit;
 }
 
 /* SoC-specific clk_ops initialization. */
 void __init msm_clk_soc_set_ops(struct clk *clk)
 {
 	if (!clk->ops) {
-		struct clk_ops *ops = clk_is_local(clk->id);
-		if (ops)
-			clk->ops = ops;
+		if (clk_is_local(clk->id))
+			clk->ops = &soc_clk_ops_7x30;
 		else {
 			clk->ops = &clk_ops_remote;
 			clk->id = clk->remote_id;

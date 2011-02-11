@@ -67,7 +67,6 @@
 
 static int kgsl_g12_start(struct kgsl_device *device, unsigned int init_ram);
 static int kgsl_g12_stop(struct kgsl_device *device);
-static int kgsl_g12_idle(struct kgsl_device *device, unsigned int timeout);
 static int kgsl_g12_waittimestamp(struct kgsl_device *device,
 				unsigned int timestamp,
 				unsigned int msecs);
@@ -99,6 +98,19 @@ static struct kgsl_g12_device device_2d0 = {
 			.mpu_range =  0xFFFFF000,
 			.va_base = 0x66000000,
 			/* va_range is set by the platform driver */
+			.reg = {
+				.config = ADDR_MH_MMU_CONFIG,
+				.mpu_base = ADDR_MH_MMU_MPU_BASE,
+				.mpu_end = ADDR_MH_MMU_MPU_END,
+				.va_range = ADDR_MH_MMU_VA_RANGE,
+				.pt_page = ADDR_MH_MMU_PT_BASE,
+				.page_fault = ADDR_MH_MMU_PAGE_FAULT,
+				.tran_error = ADDR_MH_MMU_TRAN_ERROR,
+				.invalidate = ADDR_MH_MMU_INVALIDATE,
+				.interrupt_mask = ADDR_MH_INTERRUPT_MASK,
+				.interrupt_status = ADDR_MH_INTERRUPT_STATUS,
+				.interrupt_clear = ADDR_MH_INTERRUPT_CLEAR
+			},
 		},
 		.mutex = __MUTEX_INITIALIZER(device_2d0.dev.mutex),
 		.state = KGSL_STATE_INIT,
@@ -124,6 +136,19 @@ static struct kgsl_g12_device device_2d1 = {
 			   device */
 			.va_base = 0x66000000,
 			/* va_range is set by the platform driver */
+			.reg = {
+				.config = ADDR_MH_MMU_CONFIG,
+				.mpu_base = ADDR_MH_MMU_MPU_BASE,
+				.mpu_end = ADDR_MH_MMU_MPU_END,
+				.va_range = ADDR_MH_MMU_VA_RANGE,
+				.pt_page = ADDR_MH_MMU_PT_BASE,
+				.page_fault = ADDR_MH_MMU_PAGE_FAULT,
+				.tran_error = ADDR_MH_MMU_TRAN_ERROR,
+				.invalidate = ADDR_MH_MMU_INVALIDATE,
+				.interrupt_mask = ADDR_MH_INTERRUPT_MASK,
+				.interrupt_status = ADDR_MH_INTERRUPT_STATUS,
+				.interrupt_clear = ADDR_MH_INTERRUPT_CLEAR
+			},
 		},
 		.mutex = __MUTEX_INITIALIZER(device_2d1.dev.mutex),
 		.state = KGSL_STATE_INIT,
@@ -266,7 +291,7 @@ int kgsl_g12_setstate(struct kgsl_device *device, uint32_t flags)
 int __init
 kgsl_g12_init_pwrctrl(struct kgsl_device *device)
 {
-	int result = 0;
+	int i, result = 0;
 	const char *pclk_name;
 	struct clk *clk, *pclk;
 	struct platform_device *pdev = kgsl_driver.pdev;
@@ -322,19 +347,28 @@ kgsl_g12_init_pwrctrl(struct kgsl_device *device)
 	if (pdata->set_grp2d_async != NULL)
 		pdata->set_grp2d_async();
 
-	if (pdata->max_grp2d_freq) {
-		device->pwrctrl.clk_freq[KGSL_MIN_FREQ] =
-			clk_round_rate(clk, pdata->min_grp2d_freq);
-		device->pwrctrl.clk_freq[KGSL_MAX_FREQ] =
-			clk_round_rate(clk, pdata->max_grp2d_freq);
-		clk_set_rate(clk, device->pwrctrl.clk_freq[KGSL_MIN_FREQ]);
+	if (pdata->num_levels_2d > KGSL_MAX_PWRLEVELS) {
+		result = -EINVAL;
+		goto done;
 	}
+	device->pwrctrl.num_pwrlevels = pdata->num_levels_2d;
+	device->pwrctrl.active_pwrlevel = pdata->init_level_2d;
+	for (i = 0; i < pdata->num_levels_2d; i++) {
+		device->pwrctrl.pwrlevels[i].gpu_freq =
+			(pdata->pwrlevel_2d[i].gpu_freq > 0) ?
+			clk_round_rate(clk, pdata->pwrlevel_2d[i].gpu_freq) : 0;
+		device->pwrctrl.pwrlevels[i].bus_freq =
+			pdata->pwrlevel_2d[i].bus_freq;
+	}
+	/* Do not set_rate for cores in sync with AXI. */
+	if (pdata->pwrlevel_2d[0].gpu_freq > 0)
+		clk_set_rate(clk, device->pwrctrl.
+			pwrlevels[KGSL_DEFAULT_PWRLEVEL]. gpu_freq);
 
 	device->pwrctrl.power_flags = KGSL_PWRFLAGS_CLK_OFF |
 		KGSL_PWRFLAGS_AXI_OFF | KGSL_PWRFLAGS_POWER_OFF |
 		KGSL_PWRFLAGS_IRQ_OFF;
 	device->pwrctrl.nap_allowed = pdata->nap_allowed;
-	device->pwrctrl.clk_freq[KGSL_AXI_HIGH] = pdata->high_axi_2d;
 	device->pwrctrl.grp_clk = clk;
 	device->pwrctrl.grp_src_clk = clk;
 	device->pwrctrl.grp_pclk = pclk;
@@ -352,7 +386,10 @@ kgsl_g12_init_pwrctrl(struct kgsl_device *device)
 	if (IS_ERR(clk))
 		clk = NULL;
 	else
-		clk_set_rate(clk, device->pwrctrl.clk_freq[KGSL_AXI_HIGH]*1000);
+		clk_set_rate(clk,
+			device->pwrctrl.
+				pwrlevels[device->pwrctrl.active_pwrlevel].
+					 bus_freq);
 	device->pwrctrl.ebi1_clk = clk;
 
 	if (bus_table) {
@@ -439,12 +476,16 @@ kgsl_g12_init(struct kgsl_device *device)
 	ATOMIC_INIT_NOTIFIER_HEAD(&device->ts_notifier_list);
 
 	setup_timer(&device->idle_timer, kgsl_timer, (unsigned long) device);
+	status = kgsl_create_device_workqueue(device);
+	if (status)
+		goto error_free_irq;
+
 	INIT_WORK(&device->idle_check_ws, kgsl_idle_check);
 
 	INIT_LIST_HEAD(&device->memqueue);
 	status = kgsl_g12_cmdstream_init(device);
 	if (status != 0)
-		goto error_free_irq;
+		goto error_dest_work_q;
 
 	pdata = kgsl_driver.pdev->dev.platform_data;
 	device->mmu.va_range = pdata->pt_va_size;
@@ -466,6 +507,9 @@ error_close_mmu:
 	kgsl_mmu_close(device);
 error_close_cmdstream:
 	kgsl_g12_cmdstream_close(device);
+error_dest_work_q:
+	destroy_workqueue(device->work_queue);
+	device->work_queue = NULL;
 error_free_irq:
 	free_irq(device->pwrctrl.interrupt_num, NULL);
 	device->pwrctrl.have_irq = 0;
@@ -501,6 +545,11 @@ int kgsl_g12_close(struct kgsl_device *device)
 	kgsl_pwrctrl_close(device);
 	kgsl_cffdump_close(device->id);
 
+	if (device->work_queue) {
+		destroy_workqueue(device->work_queue);
+		device->work_queue = NULL;
+	}
+
 	KGSL_DRV_VDBG("return %d\n", 0);
 	return 0;
 }
@@ -509,6 +558,9 @@ static int kgsl_g12_start(struct kgsl_device *device, unsigned int init_ram)
 {
 	int status = 0;
 	KGSL_DRV_VDBG("enter (device=%p)\n", device);
+
+	device->state = KGSL_STATE_INIT;
+	device->requested_state = KGSL_STATE_NONE;
 
 	kgsl_pwrctrl_pwrrail(device, KGSL_PWRFLAGS_POWER_ON);
 	kgsl_pwrctrl_clk(device, KGSL_PWRFLAGS_CLK_ON);
@@ -630,7 +682,7 @@ static int kgsl_g12_getproperty(struct kgsl_device *device,
 	return status;
 }
 
-static int kgsl_g12_idle(struct kgsl_device *device, unsigned int timeout)
+int kgsl_g12_idle(struct kgsl_device *device, unsigned int timeout)
 {
 	int status = KGSL_SUCCESS;
 	struct kgsl_g12_device *g12_device = KGSL_G12_DEVICE(device);
@@ -758,7 +810,7 @@ static int kgsl_g12_waittimestamp(struct kgsl_device *device,
 			device, g12_device->timestamp);
 
 	mutex_unlock(&device->mutex);
-	timeout = wait_event_interruptible_timeout(
+	timeout = wait_io_event_interruptible_timeout(
 			g12_device->wait_timestamp_wq,
 			kgsl_check_timestamp(device, timestamp),
 			msecs_to_jiffies(msecs));
@@ -766,8 +818,10 @@ static int kgsl_g12_waittimestamp(struct kgsl_device *device,
 
 	if (timeout > 0)
 		status = 0;
-	else if (timeout == 0)
+	else if (timeout == 0) {
 		status = -ETIMEDOUT;
+		device->state = KGSL_STATE_HUNG;
+	}
 	else
 		status = timeout;
 
