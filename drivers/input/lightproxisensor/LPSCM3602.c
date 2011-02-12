@@ -96,13 +96,12 @@ static int isCM3602Suspend=0;
 // [FXX_CR], Add for proximity driver to turn on/off BL and TP. 
 #include <linux/workqueue.h>
 extern int Q7x27_kybd_proximity_irqsetup(void);
-extern int Proximity_Flag_Set(int flag);
 struct workqueue_struct *proximity_wq;
 struct work_struct proximity_work;
 
 static int touch_last_flag=1;
 
-static void proximaty_cb(struct work_struct *w){
+static void proximity_cb(struct work_struct *w){
 	int level;
 	
 	if (HWID == CMCS_HW_VER_EVB1)
@@ -116,32 +115,10 @@ static void proximaty_cb(struct work_struct *w){
 		level = gpio_get_value(CM3602_PR1_PS_GPIO_OUT);
 	}	
 	
-//#if 1
-	if(level==0 && touch_last_flag==1){
-	//Call Stanley
-		if(!Proximity_Flag_Set(1)){
-			printk(KERN_ERR "*******CM3602: ALS notifies BL failed.\n");
-		}
-		if(!notify_from_proximity(1)){
-			printk(KERN_ERR "*******CM3602: ALS notifies TP failed.\n");
-		}
-	}
-
 	if(level==1 && touch_last_flag==0){
-	//Call Stanley
-		if(!Proximity_Flag_Set(0)){
-			printk(KERN_ERR "*******CM3602: ALS notifies BL failed.\n");
-		}
-		if(!notify_from_proximity(0)){
-			printk(KERN_ERR "*******CM3602: ALS notifies Touch panel failed.\n");
-		}
-//		Q7x27_kybd_hookswitch_irqsetup(0);
 		Q7x27_kybd_proximity_irqsetup();
 	}
 	touch_last_flag=level;
-//#endif
-
-	printk("proximaty_cb finish.\n");
 
 }
 // FIH, Henry Juang, 2009/11/20 --
@@ -164,12 +141,6 @@ static int cm3602_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 			{				
 				disable_irq(cm3602_irq);
 				flag_cm3602_irq=0;
-			}
-			if(!Proximity_Flag_Set(0)){
-				printk(KERN_ERR "*******CM3602: ALS notifies BL failed.\n");
-			}
-			if(!notify_from_proximity(0)){
-				printk(KERN_ERR "*******CM3602: ALS notifies Touch panel failed.\n");
 			}
 #endif
 			return 0;			
@@ -236,6 +207,7 @@ static int cm3602_ioctl(struct inode *inode, struct file *file, unsigned int cmd
 				value = gpio_get_value(CM3602_EVB1_PS_GPIO_OUT);
 			else
 				value = gpio_get_value(CM3602_PR1_PS_GPIO_OUT);
+
 			return value;
 #endif
 			break;
@@ -321,7 +293,7 @@ static ssize_t cm3602_read_ps(struct file *file, char *buf, size_t count, loff_t
 	else {
 		st[0] = (char)-1;		
 	}
-	
+
 	if(enablePS) {
 		st[1] = level;
 	}
@@ -401,11 +373,8 @@ static int __devinit sensor_probe(struct platform_device *pdev)
 {
 	int ret;	
 #ifndef DISABLE_PROXIMITY
-//FIH, HenryJuang 2009/11/11 ++
-/* Enable Proximaty wake source.*/
-	proximity_wq = create_singlethread_workqueue("proximaty_work");
-	INIT_WORK(&proximity_work, proximaty_cb);
-//FIH, HenryJuang 2009/11/11 --
+	proximity_wq = create_singlethread_workqueue("proximity_work");
+	INIT_WORK(&proximity_work, proximity_cb);
 #endif
 	ret = misc_register(&cm3602_alsps_dev);
 	if (ret){

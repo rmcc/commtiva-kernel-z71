@@ -404,19 +404,6 @@ static int bi8232_set_sensitivity(struct elan_i2c_sensitivity *sen)
 	return 0;
 }
 
-/* FIH, Henry Juang, 2009/11/20 ++*/
-/* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
-int notify_from_proximity(bool bFlag)
-{
-	bIsNeedSkipTouchEvent = bFlag;
-    	bi8232_msg(ERR, "[TOUCH]notify_from_proximity = %d\r\n", bIsNeedSkipTouchEvent);
-    	printk("[TOUCH]notify_from_proximity = %d\r\n", bIsNeedSkipTouchEvent);
-    
-	return 1;
-}
-EXPORT_SYMBOL(notify_from_proximity);
-/* FIH, Henry Juang, 2009/11/20 --*/
-
 #define XCORD1(x) ((((int)((x)[1]) & 0xF0) << 4) + ((int)((x)[2])))
 #define YCORD1(y) ((((int)((y)[1]) & 0x0F) << 8) + ((int)((y)[3])))
 #define XCORD2(x) ((((int)((x)[4]) & 0xF0) << 4) + ((int)((x)[5])))
