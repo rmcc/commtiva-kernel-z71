@@ -176,7 +176,7 @@ static ssize_t led_blink_solid_store(struct device *dev,
 
     mutex_unlock(&tca6507_drvdata.tca6507_lock);
 
-    return 0;
+    return size;
 }
 static DEVICE_ATTR(blink, 0644, led_blink_solid_show, led_blink_solid_store);
 
