@@ -32,6 +32,8 @@
 #include <mach/qdsp6v2/q6voice.h>
 #include "audio_acdb.h"
 #include "rtac.h"
+#include "q6core.h"
+
 
 #define TIMEOUT_MS 3000
 #define SNDDEV_CAP_TTY 0x20
@@ -230,7 +232,6 @@ static int voice_apr_register(struct voice_data *v)
 	void *apr_cvp;
 
 	if (v->adsp_version == 0) {
-		core_open();
 		v->adsp_version = core_get_adsp_version();
 		pr_info("adsp_ver fetched:%x\n", v->adsp_version);
 	}

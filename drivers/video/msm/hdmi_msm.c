@@ -26,6 +26,7 @@
 #include <linux/clk.h>
 #include <linux/mutex.h>
 #include <mach/clk.h>
+#include <mach/msm_hdmi_audio.h>
 
 #include "msm_fb.h"
 #include "external_common.h"
@@ -2107,7 +2108,47 @@ static void hdmi_msm_rmw32or(uint32 offset, uint32 data)
 	hdmi_msm_outpdw_chk(offset, reg_data | data);
 }
 
-/* Audio info packet parameters */
+
+#define HDMI_AUDIO_CFG				0x01D0
+#define HDMI_AUDIO_ENGINE_ENABLE		1
+#define HDMI_AUDIO_FIFO_MASK			0x000000F0
+#define HDMI_AUDIO_FIFO_WATERMARK_SHIFT		4
+#define HDMI_AUDIO_FIFO_MAX_WATER_MARK		8
+
+
+int hdmi_audio_enable(bool on , u32 fifo_water_mark)
+{
+	u32 hdmi_audio_config;
+
+	hdmi_audio_config = HDMI_INP(HDMI_AUDIO_CFG);
+
+	if (on) {
+
+		if (fifo_water_mark > HDMI_AUDIO_FIFO_MAX_WATER_MARK) {
+			pr_err("%s : HDMI audio fifo water mark can not be more"
+				" than %u\n", __func__,
+				HDMI_AUDIO_FIFO_MAX_WATER_MARK);
+			return -EINVAL;
+		}
+
+		/*
+		*  Enable HDMI Audio engine.
+		*  MUST be enabled after Audio DMA is enabled.
+		*/
+		hdmi_audio_config &= ~(HDMI_AUDIO_FIFO_MASK);
+
+		hdmi_audio_config |= (HDMI_AUDIO_ENGINE_ENABLE |
+			 (fifo_water_mark << HDMI_AUDIO_FIFO_WATERMARK_SHIFT));
+
+	} else
+		 hdmi_audio_config &= ~(HDMI_AUDIO_ENGINE_ENABLE);
+
+	HDMI_OUTP(HDMI_AUDIO_CFG, hdmi_audio_config);
+
+	return 0;
+}
+EXPORT_SYMBOL(hdmi_audio_enable);
+
 static void hdmi_msm_audio_info_setup(boolean enabled, int num_of_channels,
 	int level_shift, boolean down_mix)
 {

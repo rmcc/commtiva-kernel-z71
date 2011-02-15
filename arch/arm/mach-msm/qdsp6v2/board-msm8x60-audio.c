@@ -2287,6 +2287,19 @@ static struct platform_device msm_uplink_rx_device = {
 	.dev = { .platform_data = &snddev_uplink_rx_data },
 };
 
+static struct snddev_hdmi_data snddev_hdmi_non_linear_pcm_rx_data = {
+	.capability = SNDDEV_CAP_RX ,
+	.name = "hdmi_pass_through",
+	.default_sample_rate = 48000,
+	.on_apps = 1,
+};
+
+static struct platform_device msm_snddev_hdmi_non_linear_pcm_rx_device = {
+	.name = "snddev_hdmi",
+	.dev = { .platform_data = &snddev_hdmi_non_linear_pcm_rx_data },
+};
+
+
 #ifdef CONFIG_DEBUG_FS
 static struct adie_codec_action_unit
 	ihs_stereo_rx_class_d_legacy_48KHz_osr256_actions[] =
@@ -2430,6 +2443,7 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
 	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_surf[] __initdata = {
@@ -2451,6 +2465,7 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
 	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_fluid[] __initdata = {
@@ -2469,6 +2484,7 @@ static struct platform_device *snd_devices_fluid[] __initdata = {
 	&msm_auxpga_lp_hs_device,
 	&msm_auxpga_lp_lo_device,
 	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_qt[] __initdata = {
