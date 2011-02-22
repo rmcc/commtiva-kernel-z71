@@ -22,7 +22,6 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/mfd/pmic8058.h>
-#include <linux/mfd/bahama.h>
 #include <linux/input/pmic8058-keypad.h>
 #include <linux/pmic8058-pwrkey.h>
 #include <linux/pmic8058-vibrator.h>
@@ -1668,6 +1667,8 @@ static struct platform_device *qrdc_devices[] __initdata = {
 	&msm_device_smd,
 	&smsc911x_device,
 	&msm_device_uart_dm3,
+	&msm_device_dmov_adm0,
+	&msm_device_dmov_adm1,
 #ifdef CONFIG_I2C_QUP
 	&msm_gsbi3_qup_i2c_device,
 	&msm_gsbi4_qup_i2c_device,
@@ -1931,11 +1932,18 @@ static struct pmic8058_vibrator_pdata pmic_vib_pdata = {
 #define PM8058_OTHC_CNTR_BASE1	0x134
 #define PM8058_OTHC_CNTR_BASE2	0x137
 
+static struct othc_regulator_config othc_reg = {
+	.regulator	 = "8058_l5",
+	.max_uV		 = 2850000,
+	.min_uV		 = 2850000,
+};
+
 /* MIC_BIAS0 is configured as normal MIC BIAS */
 static struct pmic8058_othc_config_pdata othc_config_pdata_0 = {
 	.micbias_select = OTHC_MICBIAS_0,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
+	.micbias_regulator = &othc_reg,
 };
 
 /* MIC_BIAS1 is configured as HSED_BIAS for OTHC */
@@ -1943,6 +1951,7 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_1 = {
 	.micbias_select = OTHC_MICBIAS_1,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
+	.micbias_regulator = &othc_reg,
 };
 
 /* MIC_BIAS2 is configured as normal MIC BIAS */
@@ -1950,6 +1959,7 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_2 = {
 	.micbias_select = OTHC_MICBIAS_2,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
+	.micbias_regulator = &othc_reg,
 };
 
 static struct resource resources_othc_0[] = {

@@ -3361,7 +3361,9 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 };
 
 #ifdef CONFIG_USB_GADGET
-static struct msm_hsusb_gadget_platform_data msm_gadget_pdata;
+static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
+	.is_phy_status_timer_on = 1,
+};
 #endif
 #ifndef CONFIG_USB_EHCI_MSM
 typedef void (*notify_vbus_state) (int);
@@ -3858,14 +3860,7 @@ static struct platform_device msm_device_kgsl = {
 #define QCE_SHARE_CE_RESOURCE	0
 #define QCE_CE_SHARED		0
 
-#define ADM_CHANNEL_CE_0_IN	DMOV_CE_CHAN_IN
-#define ADM_CHANNEL_CE_0_OUT	DMOV_CE_CHAN_OUT
-
-#define ADM_CRCI_0_IN		DMOV_CE_CRCI_IN
-#define ADM_CRCI_0_OUT		DMOV_CE_CRCI_OUT
-#define ADM_CRCI_0_HASH		DMOV_CE_CRCI_HASH
-
-static struct resource qce_resources[] = {
+static struct resource qcrypto_resources[] = {
 	[0] = {
 		.start = QCE_0_BASE,
 		.end = QCE_0_BASE + QCE_SIZE - 1,
@@ -3873,26 +3868,58 @@ static struct resource qce_resources[] = {
 	},
 	[1] = {
 		.name = "crypto_channels",
-		.start = ADM_CHANNEL_CE_0_IN,
-		.end = ADM_CHANNEL_CE_0_OUT,
+		.start = DMOV_CE_IN_CHAN,
+		.end = DMOV_CE_OUT_CHAN,
 		.flags = IORESOURCE_DMA,
 	},
 	[2] = {
 		.name = "crypto_crci_in",
-		.start = ADM_CRCI_0_IN,
-		.end = ADM_CRCI_0_IN,
+		.start = DMOV_CE_IN_CRCI,
+		.end = DMOV_CE_IN_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 	[3] = {
 		.name = "crypto_crci_out",
-		.start = ADM_CRCI_0_OUT,
-		.end = ADM_CRCI_0_OUT,
+		.start = DMOV_CE_OUT_CRCI,
+		.end = DMOV_CE_OUT_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 	[4] = {
 		.name = "crypto_crci_hash",
-		.start = ADM_CRCI_0_HASH,
-		.end = ADM_CRCI_0_HASH,
+		.start = DMOV_CE_HASH_CRCI,
+		.end = DMOV_CE_HASH_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+};
+
+static struct resource qcedev_resources[] = {
+	[0] = {
+		.start = QCE_0_BASE,
+		.end = QCE_0_BASE + QCE_SIZE - 1,
+		.flags = IORESOURCE_MEM,
+	},
+	[1] = {
+		.name = "crypto_channels",
+		.start = DMOV_CE_IN_CHAN,
+		.end = DMOV_CE_OUT_CHAN,
+		.flags = IORESOURCE_DMA,
+	},
+	[2] = {
+		.name = "crypto_crci_in",
+		.start = DMOV_CE_IN_CRCI,
+		.end = DMOV_CE_IN_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+	[3] = {
+		.name = "crypto_crci_out",
+		.start = DMOV_CE_OUT_CRCI,
+		.end = DMOV_CE_OUT_CRCI,
+		.flags = IORESOURCE_DMA,
+	},
+	[4] = {
+		.name = "crypto_crci_hash",
+		.start = DMOV_CE_HASH_CRCI,
+		.end = DMOV_CE_HASH_CRCI,
 		.flags = IORESOURCE_DMA,
 	},
 };
@@ -3911,8 +3938,8 @@ static struct msm_ce_hw_support qcrypto_ce_hw_suppport = {
 static struct platform_device qcrypto_device = {
 	.name		= "qcrypto",
 	.id		= 0,
-	.num_resources	= ARRAY_SIZE(qce_resources),
-	.resource	= qce_resources,
+	.num_resources	= ARRAY_SIZE(qcrypto_resources),
+	.resource	= qcrypto_resources,
 	.dev		= {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
 		.platform_data = &qcrypto_ce_hw_suppport,
@@ -3931,8 +3958,8 @@ static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
 static struct platform_device qcedev_device = {
 	.name		= "qce",
 	.id		= 0,
-	.num_resources	= ARRAY_SIZE(qce_resources),
-	.resource	= qce_resources,
+	.num_resources	= ARRAY_SIZE(qcedev_resources),
+	.resource	= qcedev_resources,
 	.dev		= {
 		.coherent_dma_mask = DMA_BIT_MASK(32),
 		.platform_data = &qcedev_ce_hw_suppport,
@@ -3971,7 +3998,8 @@ static struct msm_gpio fluid_vee_reset_gpio[] = {
 	{ GPIO_CFG(20, 0, GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), "vee_reset" },
 };
 
-static unsigned char quickvx_mddi_client = 1;
+static unsigned char quickvx_mddi_client = 1, other_mddi_client = 1;
+static unsigned char quickvx_ldo_enabled;
 
 static unsigned quickvx_vlp_gpio =
 	GPIO_CFG(97, 0, GPIO_CFG_OUTPUT,  GPIO_CFG_NO_PULL,	GPIO_CFG_2MA);
@@ -3990,7 +4018,7 @@ static int display_common_power(int on)
 {
 	int rc = 0, flag_on = !!on;
 	static int display_common_power_save_on;
-	struct vreg *vreg_ldo12, *vreg_ldo15 = NULL;
+	struct vreg *vreg_ldo12, *vreg_ldo15 = NULL, *vreg_ldo6;
 	struct vreg *vreg_ldo20, *vreg_ldo16, *vreg_ldo8 = NULL;
 
 	if (display_common_power_save_on == flag_on)
@@ -4064,7 +4092,17 @@ static int display_common_power(int on)
 	if (IS_ERR(vreg_ldo16)) {
 		rc = PTR_ERR(vreg_ldo16);
 		pr_err("%s: gp10 vreg get failed (%d)\n",
-		       __func__, rc);
+			   __func__, rc);
+		return rc;
+	}
+
+	/* 3.075V -- LDO6 */
+	vreg_ldo6 = vreg_get(NULL, "usb");
+
+	if (IS_ERR(vreg_ldo6)) {
+		rc = PTR_ERR(vreg_ldo6);
+		pr_err("%s: usb vreg get failed (%d)\n",
+			   __func__, rc);
 		return rc;
 	}
 
@@ -4110,11 +4148,22 @@ static int display_common_power(int on)
 		return rc;
 	}
 
-	rc = vreg_set_level(vreg_ldo16, 2600);
-	if (rc) {
-		pr_err("%s: vreg LDO16 set level failed (%d)\n",
-		       __func__, rc);
-		return rc;
+	if (other_mddi_client) {
+		rc = vreg_set_level(vreg_ldo16, 2600);
+		if (rc) {
+			pr_err("%s: vreg LDO16 set level failed (%d)\n",
+				   __func__, rc);
+			return rc;
+		}
+	}
+
+	if (quickvx_mddi_client) {
+		rc = vreg_set_level(vreg_ldo6, 3075);
+		if (rc) {
+			pr_err("%s: vreg LDO6 set level failed (%d)\n",
+				   __func__, rc);
+			return rc;
+		}
 	}
 
 	if (machine_is_msm7x30_fluid()) {
@@ -4148,11 +4197,24 @@ static int display_common_power(int on)
 			return rc;
 		}
 
-		rc = vreg_enable(vreg_ldo16);
-		if (rc) {
-			pr_err("%s: LDO16 vreg enable failed (%d)\n",
-			       __func__, rc);
-			return rc;
+		if (other_mddi_client) {
+			rc = vreg_enable(vreg_ldo16);
+			if (rc) {
+				pr_err("%s: LDO16 vreg enable failed (%d)\n",
+					   __func__, rc);
+				return rc;
+			}
+		}
+
+		if (quickvx_mddi_client && quickvx_ldo_enabled) {
+			/* Disable LDO6 during display ON */
+			rc = vreg_disable(vreg_ldo6);
+			if (rc) {
+				pr_err("%s: LDO6 vreg disable failed (%d)\n",
+					   __func__, rc);
+				return rc;
+			}
+			quickvx_ldo_enabled = 0;
 		}
 
 		if (machine_is_msm7x30_fluid()) {
@@ -4209,17 +4271,31 @@ static int display_common_power(int on)
 	} else {
 		rc = vreg_disable(vreg_ldo20);
 		if (rc) {
-			pr_err("%s: LDO20 vreg enable failed (%d)\n",
+			pr_err("%s: LDO20 vreg disable failed (%d)\n",
 			       __func__, rc);
 			return rc;
 		}
 
 
-		rc = vreg_disable(vreg_ldo16);
-		if (rc) {
-			pr_err("%s: LDO16 vreg enable failed (%d)\n",
-			       __func__, rc);
-			return rc;
+		if (other_mddi_client) {
+			rc = vreg_disable(vreg_ldo16);
+			if (rc) {
+				pr_err("%s: LDO16 vreg disable failed (%d)\n",
+					   __func__, rc);
+				return rc;
+			}
+		}
+
+		if (quickvx_mddi_client && !quickvx_ldo_enabled) {
+			/* Enable LDO6 during display OFF for
+			   Quicklogic chip to sleep with data retention */
+			rc = vreg_enable(vreg_ldo6);
+			if (rc) {
+				pr_err("%s: LDO6 vreg enable failed (%d)\n",
+					   __func__, rc);
+				return rc;
+			}
+			quickvx_ldo_enabled = 1;
 		}
 
 		gpio_set_value(180, 0); /* bring reset line low */
@@ -4233,14 +4309,14 @@ static int display_common_power(int on)
 		if (machine_is_msm7x30_fluid()) {
 			rc = vreg_disable(vreg_ldo8);
 			if (rc) {
-				pr_err("%s: LDO8 vreg enable failed (%d)\n",
+				pr_err("%s: LDO8 vreg disable failed (%d)\n",
 					__func__, rc);
 				return rc;
 			}
 		} else {
 			rc = vreg_disable(vreg_ldo15);
 			if (rc) {
-				pr_err("%s: LDO15 vreg enable failed (%d)\n",
+				pr_err("%s: LDO15 vreg disable failed (%d)\n",
 					__func__, rc);
 				return rc;
 			}
@@ -4250,7 +4326,7 @@ static int display_common_power(int on)
 
 		rc = vreg_disable(vreg_ldo12);
 		if (rc) {
-			pr_err("%s: LDO12 vreg enable failed (%d)\n",
+			pr_err("%s: LDO12 vreg disable failed (%d)\n",
 			       __func__, rc);
 			return rc;
 		}
@@ -4279,14 +4355,30 @@ static int msm_fb_mddi_sel_clk(u32 *clk_rate)
 
 static int msm_fb_mddi_client_power(u32 client_id)
 {
-	struct vreg *vreg_ldo20;
+	struct vreg *vreg_ldo20, *vreg_ldo16;
 	int rc;
 
 	printk(KERN_NOTICE "\n client_id = 0x%x", client_id);
 	/* Check if it is Quicklogic client */
-	if (client_id == 0xc5835800)
+	if (client_id == 0xc5835800) {
 		printk(KERN_NOTICE "\n Quicklogic MDDI client");
-	else {
+		other_mddi_client = 0;
+		vreg_ldo16 = vreg_get(NULL, "gp10");
+
+		if (IS_ERR(vreg_ldo16)) {
+			rc = PTR_ERR(vreg_ldo16);
+			pr_err("%s: gp10 vreg get failed (%d)\n",
+				   __func__, rc);
+			return rc;
+		}
+
+		rc = vreg_disable(vreg_ldo16);
+		if (rc) {
+			pr_err("%s: LDO16 vreg enable failed (%d)\n",
+				   __func__, rc);
+			return rc;
+		}
+	} else {
 		printk(KERN_NOTICE "\n Non-Quicklogic MDDI client");
 		quickvx_mddi_client = 0;
 		gpio_set_value(97, 0);
@@ -6957,7 +7049,7 @@ static void __init msm7x30_init(void)
 	i2c_register_board_info(0, msm_i2c_board_info,
 			ARRAY_SIZE(msm_i2c_board_info));
 
-	if (!machine_is_msm8x55_svlte_ffa())
+	if (!machine_is_msm8x55_svlte_ffa() && !machine_is_msm7x30_fluid())
 		marimba_pdata.tsadc = &marimba_tsadc_pdata;
 
 	if (machine_is_msm7x30_fluid())

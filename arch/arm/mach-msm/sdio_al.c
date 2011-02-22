@@ -135,7 +135,7 @@
 #define PIPE_TX_FIFO_ADDR   0x00
 
 /** Inactivity time to go to sleep in mseconds */
-#define INACTIVITY_TIME_MSEC 100
+#define INACTIVITY_TIME_MSEC 30
 #define INITIAL_INACTIVITY_TIME_MSEC 5000
 
 /** Context validity check */
@@ -273,7 +273,7 @@ struct peer_sdioc_channel_config {
 /* Identifies if there are new features released */
 #define PEER_SDIOC_BOOT_VERSION_MINOR	0x0001
 /* Identifies if there is backward compatibility */
-#define PEER_SDIOC_BOOT_VERSION_MAJOR	0x0001
+#define PEER_SDIOC_BOOT_VERSION_MAJOR	0x0003
 
 #define PEER_CHANNEL_NAME_SIZE		4
 
@@ -923,7 +923,7 @@ static int read_mailbox(struct sdio_al_device *sdio_al_dev, int from_isr)
 		/* Disable clocks here */
 		host->ios.clock = 0;
 		host->ops->set_ios(host, &host->ios);
-		pr_info(MODULE_NAME ":Finished sleep sequence for card %d. "
+		LPM_DEBUG(MODULE_NAME ":Finished sleep sequence for card %d. "
 				    "Sleep now.\n",
 			sdio_al_dev->card->host->index);
 		/* Release wakelock */
@@ -1061,8 +1061,8 @@ static void boot_worker(struct work_struct *work)
 	}
 	func1 = sdio_al_dev->card->sdio_func[0];
 
-	pr_info(MODULE_NAME ":Bootloader Worker Started..\n");
-	pr_info(MODULE_NAME ":Wait for bootloader_done event..\n");
+	pr_info(MODULE_NAME ":Bootloader Worker Started, "
+			    "wait for bootloader_done event..\n");
 	wait_event(sdio_al_dev->wait_mbox,
 		   sdio_al_dev->bootloader_done);
 	pr_info(MODULE_NAME ":Got bootloader_done event..\n");
@@ -1091,7 +1091,7 @@ static void boot_worker(struct work_struct *work)
 	sdio_al_dev->is_err = true;
 
 done:
-	pr_info(MODULE_NAME ":Boot Worker for card %d Exit!\n",
+	pr_debug(MODULE_NAME ":Boot Worker for card %d Exit!\n",
 		sdio_al_dev->card->host->index);
 }
 
@@ -1209,12 +1209,18 @@ static int sdio_write_cmd54(struct mmc_card *card, unsigned fn,
 	if (mmc_host_is_spi(card->host)) {
 		/* host driver already reported errors */
 	} else {
-		if (cmd.resp[0] & R5_ERROR)
+		if (cmd.resp[0] & R5_ERROR) {
+			pr_err(MODULE_NAME ":%s: R5_ERROR", __func__);
 			return -EIO;
-		if (cmd.resp[0] & R5_FUNCTION_NUMBER)
+		}
+		if (cmd.resp[0] & R5_FUNCTION_NUMBER) {
+			pr_err(MODULE_NAME ":%s: R5_FUNCTION_NUMBER", __func__);
 			return -EINVAL;
-		if (cmd.resp[0] & R5_OUT_OF_RANGE)
+		}
+		if (cmd.resp[0] & R5_OUT_OF_RANGE) {
+			pr_err(MODULE_NAME ":%s: R5_OUT_OF_RANGE", __func__);
 			return -ERANGE;
+		}
 	}
 
 	return 0;
@@ -1235,8 +1241,11 @@ static int sdio_ch_write(struct sdio_channel *ch, const u8 *buf, u32 len)
 	struct mmc_card *card = NULL;
 	u32 fn = ch->func->num;
 
-	if (len == 0)
+	if (len == 0) {
+		pr_err(MODULE_NAME ":channel %s tryint to write 0 bytes\n",
+			ch->name);
 		return -EINVAL;
+	}
 
 	card = ch->func->card;
 
@@ -1324,7 +1333,7 @@ static int sdio_al_bootloader_completed(void)
 {
 	int i;
 
-	pr_info(MODULE_NAME ":sdio_al_bootloader_completed was called\n");
+	pr_debug(MODULE_NAME ":sdio_al_bootloader_completed was called\n");
 
 	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
 		struct sdio_al_device *dev = NULL;
@@ -1631,6 +1640,8 @@ static int read_sdioc_channel_config(struct sdio_channel *ch)
 
 	ch->def_read_threshold = ch->read_threshold;
 
+	ch->min_write_avail = ch_config->max_packet_size;
+
 	if (ch->min_write_avail > ch->write_threshold)
 		ch->min_write_avail = ch->write_threshold;
 
@@ -1749,7 +1760,7 @@ static int enable_mask_irq(struct sdio_al_device *sdio_al_dev,
 	else
 		mask |= (func_mask);  /* 1 = disable */
 
-	pr_info(MODULE_NAME ":enable_mask_irq,  writing mask = 0x%x\n", mask);
+	pr_debug(MODULE_NAME ":enable_mask_irq,  writing mask = 0x%x\n", mask);
 
 	sdio_writel(func1, mask, addr, &ret);
 
@@ -2002,12 +2013,13 @@ static int sdio_al_wake_up(struct sdio_al_device *sdio_al_dev,
 
 	/* Wake up sequence */
 	wake_lock(&sdio_al_dev->wake_lock);
-	if (enable_wake_up_func)
-		pr_info(MODULE_NAME ": Wake up card %d (not by interrupt)",
+	if (enable_wake_up_func) {
+		LPM_DEBUG(MODULE_NAME ": Wake up card %d (not by interrupt)",
 			sdio_al_dev->card->host->index);
-	else
-		pr_info(MODULE_NAME ": Wake up card %d by interrupt",
+	} else {
+		LPM_DEBUG(MODULE_NAME ": Wake up card %d by interrupt",
 			sdio_al_dev->card->host->index);
+	}
 
 	if (!sdio_al_dev->is_ok_to_sleep) {
 		LPM_DEBUG(MODULE_NAME ":card %d already awake, "
@@ -2029,7 +2041,7 @@ static int sdio_al_wake_up(struct sdio_al_device *sdio_al_dev,
 			break;
 		udelay(TIME_TO_WAIT_US);
 	}
-	pr_info(MODULE_NAME ":GPIO mdm2ap_status=%d\n",
+	LPM_DEBUG(MODULE_NAME ":GPIO mdm2ap_status=%d\n",
 		       sdio_al->pdata->get_mdm2ap_status());
 
 	if (enable_wake_up_func) {
@@ -2573,7 +2585,8 @@ int sdio_write(struct sdio_channel *ch, const void *data, int len)
 		ch->name, len, ch->write_avail, ch->total_tx_bytes);
 
 	if (ret) {
-		pr_info(MODULE_NAME ":sdio_write err=%d\n", -ret);
+		pr_err(MODULE_NAME ":sdio_write on channel %s err=%d\n",
+			ch->name, -ret);
 	} else {
 		/* Round up to whole buffer size */
 		len = ROUND_UP(len, ch->peer_tx_buf_size);

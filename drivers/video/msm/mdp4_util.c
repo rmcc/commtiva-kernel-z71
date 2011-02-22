@@ -65,7 +65,7 @@ void mdp4_sw_reset(ulong bits)
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
-	MSM_FB_INFO("mdp4_sw_reset: 0x%x\n", (int)bits);
+	MSM_FB_DEBUG("mdp4_sw_reset: 0x%x\n", (int)bits);
 }
 
 void mdp4_overlay_cfg(int overlayer, int blt_mode, int refresh, int direct_out)
@@ -87,7 +87,8 @@ void mdp4_overlay_cfg(int overlayer, int blt_mode, int refresh, int direct_out)
 	else
 		outpdw(MDP_BASE + 0x18004, bits); /* MDP_OVERLAY1_CFG */
 
-	MSM_FB_INFO("mdp4_overlay_cfg: 0x%x\n", (int)inpdw(MDP_BASE + 0x10004));
+	MSM_FB_DEBUG("mdp4_overlay_cfg: 0x%x\n",
+		(int)inpdw(MDP_BASE + 0x10004));
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
@@ -104,14 +105,14 @@ void mdp4_display_intf_sel(int output, ulong intf)
 		data = 0x40;	/* bit 6 */
 		intf = MDDI_LCDC_INTF;
 		if (output == SECONDARY_INTF_SEL) {
-			printk(KERN_INFO "%s: Illegal INTF selected, output=%d \
+			MSM_FB_INFO("%s: Illegal INTF selected, output=%d \
 				intf=%d\n", __func__, output, (int)intf);
 		}
 	} else if (intf == DSI_CMD_INTF) {
 		data = 0x80;	/* bit 7 */
 		intf = MDDI_INTF;
 		if (output == EXTERNAL_INTF_SEL) {
-			printk(KERN_INFO "%s: Illegal INTF selected, output=%d \
+			MSM_FB_INFO("%s: Illegal INTF selected, output=%d \
 				intf=%d\n", __func__, output, (int)intf);
 		}
 	} else
@@ -144,7 +145,7 @@ void mdp4_display_intf_sel(int output, ulong intf)
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
-  MSM_FB_INFO("mdp4_display_intf_sel: 0x%x\n", (int)inpdw(MDP_BASE + 0x0038));
+  MSM_FB_DEBUG("mdp4_display_intf_sel: 0x%x\n", (int)inpdw(MDP_BASE + 0x0038));
 }
 
 unsigned long mdp4_display_status(void)
@@ -224,7 +225,7 @@ void mdp4_fetch_cfg(uint32 core_clk)
 		vg_data = 0x43; /* 16 bytes-burst x 4 req */
 	}
 
-	printk(KERN_INFO "mdp4_fetch_cfg: dmap=%x vg=%x\n",
+	MSM_FB_DEBUG("mdp4_fetch_cfg: dmap=%x vg=%x\n",
 			dmap_data, vg_data);
 
 	/* dma_p fetch config */
@@ -361,50 +362,6 @@ void mdp4_clear_lcdc(void)
 
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
-void mdp4_block_reset(unsigned char block)
-{
-	switch (block) {
-	case 1: /* mixer0 */
-		mdp4_sw_reset(0x01);
-		mdp4_mixer_blend_init(0);
-		mdp4_vg_qseed_init(0);
-		mdp4_vg_csc_mv_setup(0);
-		mdp4_vg_csc_pre_bv_setup(0);
-		mdp4_vg_csc_post_bv_setup(0);
-		mdp4_vg_csc_pre_lv_setup(0);
-		mdp4_vg_csc_post_lv_setup(0);
-		mdp4_mixer_gc_lut_setup(0);
-		mdp4_vg_igc_lut_setup(0);
-		mdp4_rgb_igc_lut_setup(0);
-		break;
-	case 2: /* mixer1 */
-		mdp4_sw_reset(0x04);
-		mdp4_mixer_blend_init(1);
-		mdp4_vg_qseed_init(1);
-		mdp4_vg_csc_mv_setup(1);
-		mdp4_vg_csc_pre_bv_setup(1);
-		mdp4_vg_csc_post_bv_setup(1);
-		mdp4_vg_csc_pre_lv_setup(1);
-		mdp4_vg_csc_post_lv_setup(1);
-		mdp4_mixer1_csc_mv_setup();
-		mdp4_mixer1_csc_pre_bv_setup();
-		mdp4_mixer1_csc_post_bv_setup();
-		mdp4_mixer1_csc_pre_lv_setup();
-		mdp4_mixer1_csc_post_lv_setup();
-		mdp4_mixer_gc_lut_setup(1);
-		mdp4_vg_igc_lut_setup(1);
-		mdp4_rgb_igc_lut_setup(1);
-		break;
-	case 3: /* DMA_P */
-		break;
-	case 4: /* DMA_S */
-		break;
-	case 5: /* DMA_E */
-		break;
-	default:
-		break;
-	}
-}
 
 irqreturn_t mdp4_isr(int irq, void *ptr)
 {
@@ -443,10 +400,8 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		}
 
 
-		if (isr & INTR_EXTERNAL_INTF_UDERRUN) {
-			mdp4_block_reset(2);
+		if (isr & INTR_EXTERNAL_INTF_UDERRUN)
 			mdp4_stat.intr_underrun_e++;
-		}
 
 		isr &= mask;
 
@@ -597,10 +552,6 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 				}
 			}
 		}
-#ifdef CONFIG_FB_MSM_MDDI
-		if (isr & INTR_PRIMARY_READ_PTR)
-			mdp4_mddi_read_ptr_intr();
-#endif
 	}
 
 	mdp_is_in_isr = FALSE;

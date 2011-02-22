@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,10 +23,7 @@
 #include <linux/io.h>
 #include <linux/mfd/pmic8058.h>
 
-#include <linux/input/pmic8058-keypad.h>
 #include <linux/pmic8058-pwrkey.h>
-#include <linux/pmic8058-vibrator.h>
-#include <linux/leds.h>
 #include <linux/pmic8058-othc.h>
 #include <linux/mfd/pmic8901.h>
 #include <linux/regulator/pmic8058-regulator.h>
@@ -34,30 +31,18 @@
 #include <linux/bootmem.h>
 #include <linux/pwm.h>
 #include <linux/pmic8058-pwm.h>
-#include <linux/leds-pmic8058.h>
 #include <linux/pmic8058-xoadc.h>
 #include <linux/m_adc.h>
 #include <linux/m_adcproc.h>
 #include <linux/mfd/marimba.h>
-#include <linux/msm-charger.h>
 #include <linux/i2c.h>
-#include <linux/i2c/sx150x.h>
-#include <linux/smsc911x.h>
 #include <linux/spi/spi.h>
-#include <linux/input/tdisc_shinetsu.h>
-#include <linux/input/cy8c_ts.h>
-#include <linux/cyttsp.h>
-#include <linux/i2c/isa1200.h>
 #include <linux/dma-mapping.h>
-#include <linux/i2c/bq27520.h>
 
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
 #endif
 
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-#include <linux/i2c/smb137b.h>
-#endif
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
 #include <asm/setup.h>
@@ -71,30 +56,23 @@
 #include <mach/msm_serial_hs_lite.h>
 #include <mach/msm_iomap.h>
 #include <asm/mach/mmc.h>
-#include <mach/msm_battery.h>
 #include <mach/msm_hsusb.h>
-#ifdef CONFIG_MSM_DSPS
-#include <mach/msm_dsps.h>
-#endif
 #include <mach/msm_xo.h>
 #include <mach/msm_bus_board.h>
 #include <mach/msm_tsif.h>
 #include <mach/socinfo.h>
-#include <linux/i2c/isl9519.h>
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android_composite.h>
 #endif
 #include <mach/usb_gadget_fserial.h>
 #include <linux/regulator/consumer.h>
 #include <linux/regulator/machine.h>
-#include <mach/sdio_al.h>
 
 #include "devices.h"
 #include "devices-msm8x60.h"
 #include "cpuidle.h"
 #include "pm.h"
 #include "rpm.h"
-#include "mpm.h"
 #include "spm.h"
 #include "rpm_log.h"
 #include "timer.h"
@@ -123,108 +101,9 @@
 
 #define MDM2AP_SYNC 129
 
-enum {
-	GPIO_EXPANDER_IRQ_BASE  = PM8901_IRQ_BASE + NR_PMIC8901_IRQS,
-	GPIO_EXPANDER_GPIO_BASE = PM8901_GPIO_BASE + PM8901_MPPS,
-	/* CORE expander */
-	GPIO_CORE_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE,
-	GPIO_CLASS_D1_EN        = GPIO_CORE_EXPANDER_BASE,
-	GPIO_WLAN_DEEP_SLEEP_N,
-	GPIO_LVDS_SHUTDOWN_N,
-	GPIO_DISP_RESX_N        = GPIO_LVDS_SHUTDOWN_N,
-	GPIO_MS_SYS_RESET_N,
-	GPIO_CAP_TS_RESOUT_N,
-	GPIO_CAP_GAUGE_BI_TOUT,
-	GPIO_ETHERNET_PME,
-	GPIO_EXT_GPS_LNA_EN,
-	GPIO_MSM_WAKES_BT,
-	GPIO_ETHERNET_RESET_N,
-	GPIO_HEADSET_DET_N,
-	GPIO_USB_UICC_EN,
-	GPIO_BACKLIGHT_EN,
-	GPIO_EXT_CAMIF_PWR_EN,
-	GPIO_BATT_GAUGE_INT_N,
-	GPIO_BATT_GAUGE_EN,
-	/* DOCKING expander */
-	GPIO_DOCKING_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE + 16,
-	GPIO_MIPI_DSI_RST_N        = GPIO_DOCKING_EXPANDER_BASE,
-	GPIO_AUX_JTAG_DET_N,
-	GPIO_DONGLE_DET_N,
-	GPIO_SVIDEO_LOAD_DET,
-	GPIO_SVID_AMP_SHUTDOWN1_N,
-	GPIO_SVID_AMP_SHUTDOWN0_N,
-	GPIO_SDC_WP,
-	GPIO_IRDA_PWDN,
-	GPIO_IRDA_RESET_N,
-	GPIO_DONGLE_GPIO0,
-	GPIO_DONGLE_GPIO1,
-	GPIO_DONGLE_GPIO2,
-	GPIO_DONGLE_GPIO3,
-	GPIO_DONGLE_PWR_EN,
-	GPIO_EMMC_RESET_N,
-	GPIO_TP_EXP2_IO15,
-	/* SURF expander */
-	GPIO_SURF_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE + (16 * 2),
-	GPIO_SD_CARD_DET_1      = GPIO_SURF_EXPANDER_BASE,
-	GPIO_SD_CARD_DET_2,
-	GPIO_SD_CARD_DET_4,
-	GPIO_SD_CARD_DET_5,
-	GPIO_UIM3_RST,
-	GPIO_SURF_EXPANDER_IO5,
-	GPIO_SURF_EXPANDER_IO6,
-	GPIO_ADC_I2C_EN,
-	GPIO_SURF_EXPANDER_IO8,
-	GPIO_SURF_EXPANDER_IO9,
-	GPIO_SURF_EXPANDER_IO10,
-	GPIO_SURF_EXPANDER_IO11,
-	GPIO_SURF_EXPANDER_IO12,
-	GPIO_SURF_EXPANDER_IO13,
-	GPIO_SURF_EXPANDER_IO14,
-	GPIO_SURF_EXPANDER_IO15,
-	/* LEFT KB IO expander */
-	GPIO_LEFT_KB_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE + (16 * 3),
-	GPIO_LEFT_LED_1            = GPIO_LEFT_KB_EXPANDER_BASE,
-	GPIO_LEFT_LED_2,
-	GPIO_LEFT_LED_3,
-	GPIO_LEFT_LED_WLAN,
-	GPIO_JOYSTICK_EN,
-	GPIO_CAP_TS_SLEEP,
-	GPIO_LEFT_KB_IO6,
-	GPIO_LEFT_LED_5,
-	/* RIGHT KB IO expander */
-	GPIO_RIGHT_KB_EXPANDER_BASE = GPIO_EXPANDER_GPIO_BASE + (16 * 3) + 8,
-	GPIO_RIGHT_LED_1            = GPIO_RIGHT_KB_EXPANDER_BASE,
-	GPIO_RIGHT_LED_2,
-	GPIO_RIGHT_LED_3,
-	GPIO_RIGHT_LED_BT,
-	GPIO_WEB_CAMIF_STANDBY,
-	GPIO_COMPASS_RST_N,
-	GPIO_WEB_CAMIF_RESET_N,
-	GPIO_RIGHT_LED_5,
-	GPIO_R_ALTIMETER_RESET_N,
-	/* FLUID S IO expander */
-	GPIO_SOUTH_EXPANDER_BASE,
-	GPIO_MIC2_ANCR_SEL = GPIO_SOUTH_EXPANDER_BASE,
-	GPIO_MIC1_ANCL_SEL,
-	GPIO_HS_MIC4_SEL,
-	GPIO_FML_MIC3_SEL,
-	GPIO_FMR_MIC5_SEL,
-	GPIO_TS_SLEEP,
-	GPIO_HAP_SHIFT_LVL_OE,
-	GPIO_HS_SW_DIR,
-	/* FLUID N IO expander */
-	GPIO_NORTH_EXPANDER_BASE,
-	GPIO_EPM_3_3V_EN = GPIO_NORTH_EXPANDER_BASE,
-	GPIO_EPM_5V_BOOST_EN,
-	GPIO_AUX_CAM_2P7_EN,
-	GPIO_LED_FLASH_EN,
-	GPIO_LED1_GREEN_N,
-	GPIO_LED2_RED_N,
-	GPIO_FRONT_CAM_RESET_N,
-	GPIO_EPM_LVLSFT_EN,
-	GPIO_N_ALTIMETER_RESET_N,
-};
-
+#define GPIO_AUX_CAM_2P7_EN	94
+#define GPIO_WEB_CAMIF_STANDBY	105
+#define GPIO_MS_SYS_RESET_N	PM8058_GPIO_PM_TO_SYS(3)
 /*
  * The UI_INTx_N lines are pmic gpio lines which connect i2c
  * gpio expanders to the pm8058.
@@ -238,16 +117,6 @@ As the index starts from 0 in the PMIC driver, and hence 17
 corresponds to GPIO 18 on PMIC 8058.
 */
 #define FM_GPIO 17
-
-#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-static void (*sdc2_status_notify_cb)(int card_present, void *dev_id);
-static void *sdc2_status_notify_cb_devid;
-#endif
-
-#ifdef CONFIG_MMC_MSM_SDC5_SUPPORT
-static void (*sdc5_status_notify_cb)(int card_present, void *dev_id);
-static void *sdc5_status_notify_cb_devid;
-#endif
 
 static struct msm_spm_platform_data msm_spm_data_v1[] __initdata = {
 	[0] = {
@@ -409,384 +278,6 @@ static struct platform_device msm_device_saw_s1 = {
 	},
 };
 
-/* TSIF begin */
-#if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
-#define MSM_TSIF_PHYS        (0x18200000)
-#define MSM_TSIF_SIZE        (0x200)
-#define TSIF_B_SYNC      GPIO_CFG(96, 1, GPIO_CFG_INPUT, \
-	GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA)
-#define TSIF_B_DATA      GPIO_CFG(95, 1, GPIO_CFG_INPUT, \
-	GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA)
-#define TSIF_B_EN        GPIO_CFG(94, 1, GPIO_CFG_INPUT, \
-	GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA)
-#define TSIF_B_CLK       GPIO_CFG(93, 1, GPIO_CFG_INPUT, \
-	GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA)
-
-static const struct msm_gpio tsif_gpios[] = {
-	{ .gpio_cfg = TSIF_B_CLK,  .label =  "tsif_clk", },
-	{ .gpio_cfg = TSIF_B_EN,   .label =  "tsif_en", },
-	{ .gpio_cfg = TSIF_B_DATA, .label =  "tsif_data", },
-	{ .gpio_cfg = TSIF_B_SYNC, .label =  "tsif_sync", },
-};
-
-static struct resource tsif_resources[] = {
-	[0] = {
-		.flags = IORESOURCE_IRQ,
-		.start = TSIF1_IRQ,
-		.end   = TSIF2_IRQ,
-	},
-	[1] = {
-		.flags = IORESOURCE_MEM,
-		.start = MSM_TSIF_PHYS,
-		.end   = MSM_TSIF_PHYS + MSM_TSIF_SIZE - 1,
-	},
-	[2] = {
-		.flags = IORESOURCE_DMA,
-		.start = DMOV_TSIF_CHAN,
-		.end   = DMOV_TSIF_CRCI,
-	},
-};
-
-static struct msm_tsif_platform_data tsif_platform_data = {
-	.num_gpios = ARRAY_SIZE(tsif_gpios),
-	.gpios = tsif_gpios,
-	/* .tsif_clk = "tsif_clk", */
-	.tsif_pclk = "tsif_pclk",
-	.tsif_ref_clk = "tsif_ref_clk",
-};
-
-static void tsif_release(struct device *dev)
-{
-	dev_info(dev, "release\n");
-}
-
-struct platform_device msm_device_tsif = {
-	.name          = "msm_tsif",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(tsif_resources),
-	.resource      = tsif_resources,
-	.dev = {
-		.release       = tsif_release,
-		.platform_data = &tsif_platform_data
-	},
-};
-#endif /* defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE) */
-/* TSIF end   */
-
-/*
- * The smc91x configuration varies depending on platform.
- * The resources data structure is filled in at runtime.
- */
-static struct resource smc91x_resources[] = {
-	[0] = {
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.flags = IORESOURCE_IRQ,
-	},
-};
-
-static struct platform_device smc91x_device = {
-	.name          = "smc91x",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(smc91x_resources),
-	.resource      = smc91x_resources,
-};
-
-static struct resource smsc911x_resources[] = {
-	[0] = {
-		.flags = IORESOURCE_MEM,
-		.start = 0x1b800000,
-		.end   = 0x1b8000ff
-	},
-	[1] = {
-		.flags = IORESOURCE_IRQ | IORESOURCE_IRQ_LOWLEVEL,
-	},
-};
-
-static struct smsc911x_platform_config smsc911x_config = {
-	.irq_polarity	= SMSC911X_IRQ_POLARITY_ACTIVE_LOW,
-	.irq_type	= SMSC911X_IRQ_TYPE_PUSH_PULL,
-	.flags		= SMSC911X_USE_16BIT,
-	.has_reset_gpio	= 1,
-	.reset_gpio	= GPIO_ETHERNET_RESET_N
-};
-
-static struct platform_device smsc911x_device = {
-	.name          = "smsc911x",
-	.id            = 0,
-	.num_resources = ARRAY_SIZE(smsc911x_resources),
-	.resource      = smsc911x_resources,
-	.dev           = {
-		.platform_data = &smsc911x_config
-	}
-};
-
-#if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
-		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE) || \
-		defined(CONFIG_CRYPTO_DEV_QCEDEV) || \
-		defined(CONFIG_CRYPTO_DEV_QCEDEV_MODULE)
-
-#define QCE_SIZE		0x10000
-#define QCE_0_BASE		0x18500000
-
-#define QCE_HW_KEY_SUPPORT	0
-
-#define QCE_SHARE_CE_RESOURCE	2
-#define QCE_CE_SHARED		1
-
-static struct resource qcrypto_resources[] = {
-	[0] = {
-		.start = QCE_0_BASE,
-		.end = QCE_0_BASE + QCE_SIZE - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.name = "crypto_channels",
-		.start = DMOV_CE_IN_CHAN,
-		.end = DMOV_CE_OUT_CHAN,
-		.flags = IORESOURCE_DMA,
-	},
-	[2] = {
-		.name = "crypto_crci_in",
-		.start = DMOV_CE_IN_CRCI,
-		.end = DMOV_CE_IN_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[3] = {
-		.name = "crypto_crci_out",
-		.start = DMOV_CE_OUT_CRCI,
-		.end = DMOV_CE_OUT_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[4] = {
-		.name = "crypto_crci_hash",
-		.start = DMOV_CE_HASH_CRCI,
-		.end = DMOV_CE_HASH_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-};
-
-static struct resource qcedev_resources[] = {
-	[0] = {
-		.start = QCE_0_BASE,
-		.end = QCE_0_BASE + QCE_SIZE - 1,
-		.flags = IORESOURCE_MEM,
-	},
-	[1] = {
-		.name = "crypto_channels",
-		.start = DMOV_CE_IN_CHAN,
-		.end = DMOV_CE_OUT_CHAN,
-		.flags = IORESOURCE_DMA,
-	},
-	[2] = {
-		.name = "crypto_crci_in",
-		.start = DMOV_CE_IN_CRCI,
-		.end = DMOV_CE_IN_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[3] = {
-		.name = "crypto_crci_out",
-		.start = DMOV_CE_OUT_CRCI,
-		.end = DMOV_CE_OUT_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-	[4] = {
-		.name = "crypto_crci_hash",
-		.start = DMOV_CE_HASH_CRCI,
-		.end = DMOV_CE_HASH_CRCI,
-		.flags = IORESOURCE_DMA,
-	},
-};
-
-#endif
-
-#if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
-		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE)
-
-static struct msm_ce_hw_support qcrypto_ce_hw_suppport = {
-	.ce_shared = QCE_CE_SHARED,
-	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
-	.hw_key_support = QCE_HW_KEY_SUPPORT,
-};
-
-static struct platform_device qcrypto_device = {
-	.name		= "qcrypto",
-	.id		= 0,
-	.num_resources	= ARRAY_SIZE(qcrypto_resources),
-	.resource	= qcrypto_resources,
-	.dev		= {
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-		.platform_data = &qcrypto_ce_hw_suppport,
-	},
-};
-#endif
-
-#if defined(CONFIG_CRYPTO_DEV_QCEDEV) || \
-		defined(CONFIG_CRYPTO_DEV_QCEDEV_MODULE)
-
-static struct msm_ce_hw_support qcedev_ce_hw_suppport = {
-	.ce_shared = QCE_CE_SHARED,
-	.shared_ce_resource = QCE_SHARE_CE_RESOURCE,
-	.hw_key_support = QCE_HW_KEY_SUPPORT,
-};
-
-static struct platform_device qcedev_device = {
-	.name		= "qce",
-	.id		= 0,
-	.num_resources	= ARRAY_SIZE(qcedev_resources),
-	.resource	= qcedev_resources,
-	.dev		= {
-		.coherent_dma_mask = DMA_BIT_MASK(32),
-		.platform_data = &qcedev_ce_hw_suppport,
-	},
-};
-#endif
-
-#if defined(CONFIG_HAPTIC_ISA1200) || \
-		defined(CONFIG_HAPTIC_ISA1200_MODULE)
-
-static const char *vregs_isa1200_name[] = {
-	"8058_s3",
-	"8901_l4",
-};
-
-static const int vregs_isa1200_val[] = {
-	1800000,/* uV */
-	2600000,
-};
-static struct regulator *vregs_isa1200[ARRAY_SIZE(vregs_isa1200_name)];
-
-static int isa1200_power(int vreg_on)
-{
-	int i, rc = 0;
-
-	for (i = 0; i < ARRAY_SIZE(vregs_isa1200_name); i++) {
-		rc = vreg_on ? regulator_enable(vregs_isa1200[i]) :
-			regulator_disable(vregs_isa1200[i]);
-		if (rc < 0) {
-			pr_err("%s: vreg %s %s failed (%d)\n",
-				__func__, vregs_isa1200_name[i],
-				vreg_on ? "enable" : "disable", rc);
-			goto vreg_fail;
-		}
-	}
-	return 0;
-
-vreg_fail:
-	while (i) {
-		int ret;
-		ret = !vreg_on ? regulator_enable(vregs_isa1200[i]) :
-			regulator_disable(vregs_isa1200[i]);
-		if (ret < 0) {
-			pr_err("%s: vreg %s %s failed (%d) in err path\n",
-				__func__, vregs_isa1200_name[i],
-				!vreg_on ? "enable" : "disable", ret);
-		}
-		i--;
-	}
-
-	return rc;
-}
-
-static int isa1200_dev_setup(bool enable)
-{
-	int i, rc;
-
-	if (enable == true) {
-		for (i = 0; i < ARRAY_SIZE(vregs_isa1200_name); i++) {
-			vregs_isa1200[i] = regulator_get(NULL,
-						vregs_isa1200_name[i]);
-			if (IS_ERR(vregs_isa1200[i])) {
-				pr_err("%s: regulator get of %s failed (%ld)\n",
-					__func__, vregs_isa1200_name[i],
-					PTR_ERR(vregs_isa1200[i]));
-				rc = PTR_ERR(vregs_isa1200[i]);
-				goto vreg_get_fail;
-			}
-			rc = regulator_set_voltage(vregs_isa1200[i],
-				vregs_isa1200_val[i], vregs_isa1200_val[i]);
-			if (rc) {
-				pr_err("%s: regulator_set_voltage(%s) failed\n",
-					__func__, vregs_isa1200_name[i]);
-				goto vreg_get_fail;
-			}
-		}
-
-		rc = gpio_request(GPIO_HAP_SHIFT_LVL_OE, "haptics_shft_lvl_oe");
-		if (rc) {
-			pr_err("%s: unable to request gpio %d (%d)\n",
-					__func__, GPIO_HAP_SHIFT_LVL_OE, rc);
-			goto vreg_get_fail;
-		}
-
-		rc = gpio_direction_output(GPIO_HAP_SHIFT_LVL_OE, 1);
-		if (rc) {
-			pr_err("%s: Unable to set direction\n", __func__);;
-			goto free_gpio;
-		}
-	} else {
-		gpio_set_value(GPIO_HAP_SHIFT_LVL_OE, 0);
-		gpio_free(GPIO_HAP_SHIFT_LVL_OE);
-
-		for (i = 0; i < ARRAY_SIZE(vregs_isa1200_name); i++)
-			regulator_put(vregs_isa1200[i]);
-	}
-
-	return 0;
-free_gpio:
-	gpio_free(GPIO_HAP_SHIFT_LVL_OE);
-vreg_get_fail:
-	while (i)
-		regulator_put(vregs_isa1200[--i]);
-	return rc;
-}
-
-#define PMIC_GPIO_HAP_ENABLE   18  /* PMIC GPIO Number 19 */
-static struct isa1200_platform_data isa1200_1_pdata = {
-	.name = "vibrator",
-	.power_on = isa1200_power,
-	.dev_setup = isa1200_dev_setup,
-	/*gpio to enable haptic*/
-	.hap_en_gpio = PM8058_GPIO_PM_TO_SYS(PMIC_GPIO_HAP_ENABLE),
-	.max_timeout = 15000,
-	.mode_ctrl = PWM_GEN_MODE,
-	.pwm_fd = {
-		.pwm_div = 256,
-	},
-	.is_erm = false,
-	.smart_en = true,
-	.ext_clk_en = true,
-	.chip_en = 1,
-};
-
-static struct i2c_board_info msm_isa1200_board_info[] = {
-	{
-		I2C_BOARD_INFO("isa1200_1", 0x90>>1),
-		.platform_data = &isa1200_1_pdata,
-	},
-};
-#endif
-
-#if defined(CONFIG_BATTERY_BQ27520) || \
-		defined(CONFIG_BATTERY_BQ27520_MODULE)
-static struct bq27520_platform_data bq27520_pdata = {
-	.name = "fuel-gauge",
-	.vreg_name = "8058_s3",
-	.vreg_value = 1800000,
-	.soc_int = GPIO_BATT_GAUGE_INT_N,
-	.bi_tout = GPIO_CAP_GAUGE_BI_TOUT,
-	.chip_en = GPIO_BATT_GAUGE_EN,
-};
-
-static struct i2c_board_info msm_bq27520_board_info[] = {
-	{
-		I2C_BOARD_INFO("bq27520", 0xaa>>1),
-		.platform_data = &bq27520_pdata,
-	},
-};
-#endif
-
 static struct msm_pm_platform_data msm_pm_data[MSM_PM_SLEEP_MODE_NR * 2] = {
 	[MSM_PM_MODE(0, MSM_PM_SLEEP_MODE_POWER_COLLAPSE)] = {
 		.supported = 1,
@@ -853,183 +344,12 @@ static struct msm_cpuidle_state msm_cstates[] __initdata = {
 	{1, 1, "C1", "STANDALONE_POWER_COLLAPSE",
 		MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE},
 };
-#ifdef CONFIG_USB_PEHCI_HCD
-
-#define ISP1763_INT_GPIO		117
-#define ISP1763_RST_GPIO		152
-static struct resource isp1763_resources[] = {
-	[0] = {
-		.flags	= IORESOURCE_MEM,
-		.start	= 0x1D000000,
-		.end	= 0x1D005FFF,		/* 24KB */
-	},
-	[1] = {
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-static void __init msm8x60_cfg_isp1763(void)
-{
-	isp1763_resources[1].start = gpio_to_irq(ISP1763_INT_GPIO);
-	isp1763_resources[1].end = gpio_to_irq(ISP1763_INT_GPIO);
-}
-
-static int isp1763_setup_gpio(int enable)
-{
-	int status = 0;
-
-	if (enable) {
-		status = gpio_request(ISP1763_INT_GPIO, "isp1763_usb");
-		if (status) {
-			pr_err("%s:Failed to request GPIO %d\n",
-						__func__, ISP1763_INT_GPIO);
-			return status;
-		}
-		status = gpio_direction_input(ISP1763_INT_GPIO);
-		if (status) {
-			pr_err("%s:Failed to configure GPIO %d\n",
-					__func__, ISP1763_INT_GPIO);
-			goto gpio_free_int;
-		}
-		status = gpio_request(ISP1763_RST_GPIO, "isp1763_usb");
-		if (status) {
-			pr_err("%s:Failed to request GPIO %d\n",
-						__func__, ISP1763_RST_GPIO);
-			goto gpio_free_int;
-		}
-		status = gpio_direction_output(ISP1763_RST_GPIO, 1);
-		if (status) {
-			pr_err("%s:Failed to configure GPIO %d\n",
-					__func__, ISP1763_RST_GPIO);
-			goto gpio_free_rst;
-		}
-		pr_debug("\nISP GPIO configuration done\n");
-		return status;
-	}
-
-gpio_free_rst:
-	gpio_free(ISP1763_RST_GPIO);
-gpio_free_int:
-	gpio_free(ISP1763_INT_GPIO);
-
-	return status;
-}
-static struct isp1763_platform_data isp1763_pdata = {
-	.reset_gpio	= ISP1763_RST_GPIO,
-	.setup_gpio	= isp1763_setup_gpio
-};
-
-static struct platform_device isp1763_device = {
-	.name          = "isp1763_usb",
-	.num_resources = ARRAY_SIZE(isp1763_resources),
-	.resource      = isp1763_resources,
-	.dev           = {
-		.platform_data = &isp1763_pdata
-	}
-};
-#endif
 
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_MSM)
 static struct regulator *ldo6_3p3;
 static struct regulator *ldo7_1p8;
 static struct regulator *vdd_cx;
-#define PMICID_INT		PM8058_GPIO_IRQ(PM8058_IRQ_BASE, 36)
-notify_vbus_state notify_vbus_state_func_ptr;
-
-#ifdef CONFIG_USB_EHCI_MSM
-#define USB_PMIC_ID_DET_DELAY	msecs_to_jiffies(100)
-struct delayed_work pmic_id_det;
-static int pmic_id_notif_supported;
 static int usb_phy_susp_dig_vol = 750000;
-
-static int __init usb_id_pin_rework_setup(char *support)
-{
-	if (strncmp(support, "true", 4) == 0)
-		pmic_id_notif_supported = 1;
-
-	return 1;
-}
-__setup("usb_id_pin_rework=", usb_id_pin_rework_setup);
-
-static void pmic_id_detect(struct work_struct *w)
-{
-	int val = gpio_get_value_cansleep(PM8058_GPIO_PM_TO_SYS(36));
-	pr_info("%s(): gpio_read_value = %d\n", __func__, val);
-
-	if (notify_vbus_state_func_ptr)
-		(*notify_vbus_state_func_ptr) (val);
-}
-
-static irqreturn_t pmic_id_on_irq(int irq, void *data)
-{
-	/*
-	 * Spurious interrupts are observed on pmic gpio line
-	 * even though there is no state change on USB ID. Schedule the
-	 * work to to allow debounce on gpio
-	 */
-	schedule_delayed_work(&pmic_id_det, USB_PMIC_ID_DET_DELAY);
-
-	return IRQ_HANDLED;
-}
-
-static int msm_hsusb_pmic_id_notif_init(void (*callback)(int online), int init)
-{
-	unsigned ret = -ENODEV;
-
-	if (!callback)
-		return -EINVAL;
-
-	if (machine_is_msm8x60_fluid())
-		return -ENOTSUPP;
-
-	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) != 2) {
-		pr_debug("%s: USB_ID pin is not routed to PMIC"
-					"on V1 surf/ffa\n", __func__);
-		return -ENOTSUPP;
-	}
-
-	if (machine_is_msm8x60_ffa() && !pmic_id_notif_supported) {
-		pr_debug("%s: USB_ID is not routed to PMIC"
-			"on V2 ffa\n", __func__);
-		return -ENOTSUPP;
-	}
-
-	usb_phy_susp_dig_vol = 500000;
-
-	if (init) {
-		notify_vbus_state_func_ptr = callback;
-		ret = pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 1);
-		if (ret) {
-			pr_err("%s: MPP2 configuration failed\n", __func__);
-			return -ENODEV;
-		}
-		INIT_DELAYED_WORK(&pmic_id_det, pmic_id_detect);
-		ret = request_threaded_irq(PMICID_INT, NULL, pmic_id_on_irq,
-			(IRQF_TRIGGER_RISING|IRQF_TRIGGER_FALLING),
-						"msm_otg_id", NULL);
-		if (ret) {
-			pm8901_mpp_config_digital_out(1,
-					PM8901_MPP_DIG_LEVEL_L5, 0);
-			pr_err("%s:pmic_usb_id interrupt registration failed",
-					__func__);
-			return ret;
-		}
-		/* Notify the initial Id status */
-		pmic_id_detect(&pmic_id_det.work);
-	} else {
-		free_irq(PMICID_INT, 0);
-		cancel_delayed_work_sync(&pmic_id_det);
-		notify_vbus_state_func_ptr = NULL;
-		ret = pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 0);
-		if (ret) {
-			pr_err("%s:MPP2 configuration failed\n", __func__);
-			return -ENODEV;
-		}
-	}
-	return 0;
-}
-#endif
 
 #define USB_PHY_OPERATIONAL_MIN_VDD_DIG_VOL	1000000
 #define USB_PHY_MAX_VDD_DIG_VOL			1320000
@@ -1039,9 +359,8 @@ static int msm_hsusb_init_vddcx(int init)
 
 	if (init) {
 		vdd_cx = regulator_get(NULL, "8058_s1");
-		if (IS_ERR(vdd_cx)) {
+		if (IS_ERR(vdd_cx))
 			return PTR_ERR(vdd_cx);
-		}
 
 		ret = regulator_set_voltage(vdd_cx,
 				USB_PHY_OPERATIONAL_MIN_VDD_DIG_VOL,
@@ -1209,18 +528,6 @@ static int msm_hsusb_ldo_enable(int on)
  }
 #endif
 #ifdef CONFIG_USB_EHCI_MSM
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-static void msm_hsusb_smb137b_vbus_power(unsigned phy_info, int on)
-{
-	static int vbus_is_on;
-
-	/* If VBUS is already on (or off), do nothing. */
-	if (on == vbus_is_on)
-		return;
-	smb137b_otg_power(on);
-	vbus_is_on = on;
-}
-#endif
 static void msm_hsusb_vbus_power(unsigned phy_info, int on)
 {
 	static struct regulator *votg_5v_switch;
@@ -1274,50 +581,99 @@ static struct msm_usb_host_platform_data msm_usb_host_pdata = {
 };
 #endif
 
-#ifdef CONFIG_BATTERY_MSM8X60
-static int msm_hsusb_pmic_vbus_notif_init(void (*callback)(int online),
-								int init)
-{
-	int ret = -ENOTSUPP;
-
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-	if (machine_is_msm8x60_fluid()) {
-		if (init)
-			smb137b_register_vbus_sn(callback);
-		else
-			smb137b_unregister_vbus_sn(callback);
-		return  0;
-	}
-#endif
-	/* ID and VBUS lines are connected to pmic on 8660.V2.SURF,
-	 * hence, irrespective of either peripheral only mode or
-	 * OTG (host and peripheral) modes, can depend on pmic for
-	 * vbus notifications
-	 */
-	if ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2)
-			&& (machine_is_msm8x60_surf() ||
-				pmic_id_notif_supported)) {
-		if (init)
-			ret = msm_charger_register_vbus_sn(callback);
-		else {
-			msm_charger_unregister_vbus_sn(callback);
-			ret = 0;
-		}
-	} else {
-#if !defined(CONFIG_USB_EHCI_MSM)
-	if (init)
-		ret = msm_charger_register_vbus_sn(callback);
-	else {
-		msm_charger_unregister_vbus_sn(callback);
-		ret = 0;
-	}
-#endif
-	}
-	return ret;
-}
-#endif
-
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_MSM)
+
+#define USB_SWITCH_EN_GPIO	132		/* !CS of analog switch */
+#define USB_SWITCH_CNTL_GPIO	131		/* 0: Host, 1: Peripheral */
+#define USB_HUB_RESET_GPIO	63		/* 0: HUB is RESET */
+
+static int msm_otg_init_analog_switch_gpio(int on)
+{
+	int rc = 0;
+
+	if (on) {
+		/* USB SWITCH ENABLE*/
+		rc = gpio_request(USB_SWITCH_EN_GPIO, "USB_SWITCH_ENABLE");
+		if (rc) {
+			pr_err("%s: SW_EN gpio %d request failed\n", __func__,
+					USB_SWITCH_EN_GPIO);
+			return rc;
+		}
+
+		/* USB SWITCH CONTROL */
+		rc = gpio_request(USB_SWITCH_CNTL_GPIO, "USB_SWITCH_CONTROL");
+		if (rc) {
+			pr_err("%s: SW_CNTL gpio %d request failed\n", __func__,
+					USB_SWITCH_CNTL_GPIO);
+			goto fail_gpio_usb_switch_en;
+		}
+
+		/* USB HUB RESET */
+		rc = gpio_request(USB_HUB_RESET_GPIO, "USB_HUB_RESET");
+		if (rc) {
+			pr_err("%s: HUB_RESET gpio %d request failed\n",
+					__func__, USB_HUB_RESET_GPIO);
+			goto fail_gpio_usb_switch_cntl;
+		}
+		/* Set direction of USB SWITCH ENABLE gpio */
+		rc = gpio_direction_output(USB_SWITCH_EN_GPIO, 0);
+		if (rc) {
+			pr_err("%s: gpio_direction_output failed for %d\n",
+					__func__, USB_SWITCH_EN_GPIO);
+			goto fail_gpio_usb_hub_reset;
+		}
+		/* Set direction of USB SWITCH CONTROL gpio */
+		rc = gpio_direction_output(USB_SWITCH_CNTL_GPIO, 0);
+		if (rc) {
+			pr_err("%s: gpio_direction_output failed for %d\n",
+					__func__, USB_SWITCH_CNTL_GPIO);
+			goto fail_gpio_usb_hub_reset;
+		}
+		/* Set direction of USB HUB RESET gpio */
+		rc = gpio_direction_output(USB_HUB_RESET_GPIO, 0);
+		if (rc) {
+			pr_err("%s: gpio_direction_output failed for %d\n",
+					__func__, USB_HUB_RESET_GPIO);
+			goto fail_gpio_usb_hub_reset;
+		}
+		return rc;
+	}
+
+fail_gpio_usb_hub_reset:
+	gpio_free(USB_HUB_RESET_GPIO);
+fail_gpio_usb_switch_cntl:
+	gpio_free(USB_SWITCH_CNTL_GPIO);
+fail_gpio_usb_switch_en:
+	gpio_free(USB_SWITCH_EN_GPIO);
+
+	return rc;
+}
+
+static void msm_otg_setup_analog_switch_gpio(enum usb_switch_control mode)
+{
+	switch (mode) {
+	case USB_SWITCH_HOST:
+		/* Configure analog switch as USB host. */
+		gpio_set_value(USB_SWITCH_EN_GPIO, 0);
+		gpio_set_value(USB_SWITCH_CNTL_GPIO, 0);
+		/* Bring HUB out of RESET */
+		gpio_set_value(USB_HUB_RESET_GPIO, 1);
+		break;
+
+	case USB_SWITCH_PERIPHERAL:
+		/* Configure analog switch as USB peripheral. */
+		gpio_set_value(USB_SWITCH_EN_GPIO, 0);
+		gpio_set_value(USB_SWITCH_CNTL_GPIO, 1);
+		gpio_set_value(USB_HUB_RESET_GPIO, 0);
+		break;
+
+	case USB_SWITCH_DISABLE:
+	default:
+		/* Disable Switch */
+		gpio_set_value(USB_SWITCH_EN_GPIO, 1);
+		gpio_set_value(USB_HUB_RESET_GPIO, 0);
+	}
+}
 static struct msm_otg_platform_data msm_otg_pdata = {
 	/* if usb link is in sps there is no need for
 	 * usb pclk as dayatona fabric clock will be
@@ -1328,27 +684,17 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 	.cdr_autoreset		 = CDR_AUTO_RESET_DISABLE,
 	.se1_gating		 = SE1_GATING_DISABLE,
 #ifdef CONFIG_USB_EHCI_MSM
-	.pmic_id_notif_init = msm_hsusb_pmic_id_notif_init,
-#endif
-#ifdef CONFIG_USB_EHCI_MSM
 	.vbus_power = msm_hsusb_vbus_power,
-#endif
-#ifdef CONFIG_BATTERY_MSM8X60
-	.pmic_vbus_notif_init	= msm_hsusb_pmic_vbus_notif_init,
 #endif
 	.ldo_init		 = msm_hsusb_ldo_init,
 	.ldo_enable		 = msm_hsusb_ldo_enable,
 	.config_vddcx            = msm_hsusb_config_vddcx,
 	.init_vddcx              = msm_hsusb_init_vddcx,
-#ifdef CONFIG_BATTERY_MSM8X60
-	.chg_vbus_draw = msm_charger_vbus_draw,
-#endif
-};
-#endif
 
-#ifdef CONFIG_USB_GADGET_MSM_72K
-static struct msm_hsusb_gadget_platform_data msm_gadget_pdata = {
-	.is_phy_status_timer_on = 1,
+	.otg_mode		= OTG_USER_CONTROL,
+	.usb_mode		= USB_PERIPHERAL_MODE,
+	.init_gpio		 = msm_otg_init_analog_switch_gpio,
+	.setup_gpio		 = msm_otg_setup_analog_switch_gpio,
 };
 #endif
 
@@ -1368,25 +714,6 @@ static char *usb_functions_default_adb[] = {
 	"modem",
 	"nmea",
 	"rmnet",
-	"usb_mass_storage",
-};
-
-static char *charm_usb_functions_default[] = {
-	"diag",
-	"diag_mdm",
-	"modem",
-	"nmea",
-	"rmnet_sdio",
-	"usb_mass_storage",
-};
-
-static char *charm_usb_functions_default_adb[] = {
-	"diag",
-	"diag_mdm",
-	"adb",
-	"modem",
-	"nmea",
-	"rmnet_sdio",
 	"usb_mass_storage",
 };
 
@@ -1420,31 +747,6 @@ static char *usb_functions_all[] = {
 #endif
 };
 
-static char *charm_usb_functions_all[] = {
-#ifdef CONFIG_USB_ANDROID_RNDIS
-	"rndis",
-#endif
-#ifdef CONFIG_USB_ANDROID_DIAG
-	"diag",
-	"diag_mdm",
-#endif
-	"adb",
-#ifdef CONFIG_USB_F_SERIAL
-	"modem",
-	"nmea",
-#endif
-#ifdef CONFIG_USB_ANDROID_RMNET
-	"rmnet",
-#endif
-#ifdef CONFIG_USB_ANDROID_RMNET_SDIO
-	"rmnet_sdio",
-#endif
-	"usb_mass_storage",
-#ifdef CONFIG_USB_ANDROID_ACM
-	"acm",
-#endif
-};
-
 static struct android_usb_product usb_products[] = {
 	{
 		.product_id	= 0x9026,
@@ -1455,29 +757,6 @@ static struct android_usb_product usb_products[] = {
 		.product_id	= 0x9025,
 		.num_functions	= ARRAY_SIZE(usb_functions_default_adb),
 		.functions	= usb_functions_default_adb,
-	},
-	{
-		.product_id	= 0xf00e,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis),
-		.functions	= usb_functions_rndis,
-	},
-	{
-		.product_id	= 0x9024,
-		.num_functions	= ARRAY_SIZE(usb_functions_rndis_adb),
-		.functions	= usb_functions_rndis_adb,
-	},
-};
-
-static struct android_usb_product charm_usb_products[] = {
-	{
-		.product_id	= 0x9032,
-		.num_functions	= ARRAY_SIZE(charm_usb_functions_default),
-		.functions	= charm_usb_functions_default,
-	},
-	{
-		.product_id	= 0x9031,
-		.num_functions	= ARRAY_SIZE(charm_usb_functions_default_adb),
-		.functions	= charm_usb_functions_default_adb,
 	},
 	{
 		.product_id	= 0xf00e,
@@ -1586,7 +865,7 @@ static struct platform_device msm_vpe_device = {
 #define VFE_CAMIF_TIMER2_GPIO 30
 #define VFE_CAMIF_TIMER3_GPIO_INT 31
 
-int msm_cam_gpio_tbl[] = {
+static int msm_cam_gpio_tbl[] = {
 	32,/*CAMIF_MCLK*/
 	47,/*CAMIF_I2C_DATA*/
 	48,/*CAMIF_I2C_CLK*/
@@ -1627,26 +906,12 @@ static int config_camera_on_gpios(void)
 		"failed\n", __func__);
 		return rc;
 	}
-
-	rc = gpio_request(GPIO_EXT_CAMIF_PWR_EN, "CAM_EN");
-	if (rc < 0) {
-		config_gpio_table(MSM_CAM_OFF);
-		printk(KERN_ERR "%s: CAMSENSOR gpio %d request"
-			"failed\n", __func__, GPIO_EXT_CAMIF_PWR_EN);
-		return rc;
-	}
-	gpio_direction_output(GPIO_EXT_CAMIF_PWR_EN, 0);
-	mdelay(20);
-	gpio_set_value_cansleep(GPIO_EXT_CAMIF_PWR_EN, 1);
 	return rc;
 }
 
 static void config_camera_off_gpios(void)
 {
 	config_gpio_table(MSM_CAM_OFF);
-
-	gpio_set_value_cansleep(GPIO_EXT_CAMIF_PWR_EN, 0);
-	gpio_free(GPIO_EXT_CAMIF_PWR_EN);
 }
 
 static int config_camera_on_gpios_web_cam(void)
@@ -1659,34 +924,26 @@ static int config_camera_on_gpios_web_cam(void)
 		return rc;
 	}
 
-	if (!machine_is_msm8x60_fluid()) {
-		rc = gpio_request(GPIO_WEB_CAMIF_STANDBY, "CAM_EN");
-		if (rc < 0) {
-			config_gpio_table(MSM_CAM_OFF);
-			pr_err(KERN_ERR "%s: CAMSENSOR gpio %d request"
-				"failed\n", __func__, GPIO_WEB_CAMIF_STANDBY);
-			return rc;
-		}
-		gpio_direction_output(GPIO_WEB_CAMIF_STANDBY, 0);
+	rc = gpio_request(GPIO_WEB_CAMIF_STANDBY, "CAM_EN");
+	if (rc < 0) {
+		config_gpio_table(MSM_CAM_OFF);
+		pr_err(KERN_ERR "%s: CAMSENSOR gpio %d request"
+			"failed\n", __func__, GPIO_WEB_CAMIF_STANDBY);
+		return rc;
 	}
+	gpio_direction_output(GPIO_WEB_CAMIF_STANDBY, 0);
 	return rc;
 }
 
 static void config_camera_off_gpios_web_cam(void)
 {
 	config_gpio_table(MSM_CAM_OFF);
-	if (machine_is_msm8x60_fluid()) {
-		gpio_set_value(GPIO_FRONT_CAM_RESET_N, 0);
-		msleep(2);
-		gpio_free(GPIO_FRONT_CAM_RESET_N);
-	} else {
-		gpio_set_value_cansleep(GPIO_WEB_CAMIF_STANDBY, 1);
-		gpio_free(GPIO_WEB_CAMIF_STANDBY);
-	}
-	return;
+
+	gpio_set_value_cansleep(GPIO_WEB_CAMIF_STANDBY, 1);
+	gpio_free(GPIO_WEB_CAMIF_STANDBY);
 }
 
-struct msm_camera_device_platform_data msm_camera_device_data = {
+static struct msm_camera_device_platform_data msm_camera_device_data = {
 	.camera_gpio_on  = config_camera_on_gpios,
 	.camera_gpio_off = config_camera_off_gpios,
 	.ioext.csiphy = 0x04800000,
@@ -1696,7 +953,7 @@ struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioclk.vfe_clk_rate  = 228570000,
 };
 
-struct msm_camera_device_platform_data msm_camera_device_data_web_cam = {
+static struct msm_camera_device_platform_data msm_camera_device_data_web_cam = {
 	.camera_gpio_on  = config_camera_on_gpios_web_cam,
 	.camera_gpio_off = config_camera_off_gpios_web_cam,
 	.ioext.csiphy = 0x04900000,
@@ -1706,7 +963,7 @@ struct msm_camera_device_platform_data msm_camera_device_data_web_cam = {
 	.ioclk.vfe_clk_rate  = 228570000,
 };
 
-struct resource msm_camera_resources[] = {
+static struct resource msm_camera_resources[] = {
 	{
 		.start	= 0x04500000,
 		.end	= 0x04500000 + SZ_1M - 1,
@@ -1757,7 +1014,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_imx074_data = {
 	.strobe_flash_data	= &strobe_flash_xenon,
 	.csi_if			= 1
 };
-struct platform_device msm_camera_sensor_imx074 = {
+static struct platform_device msm_camera_sensor_imx074 = {
 	.name	= "msm_camera_imx074",
 	.dev	= {
 		.platform_data = &msm_camera_sensor_imx074_data,
@@ -1914,12 +1171,6 @@ static struct msm_spi_platform_data msm_gsbi1_qup_spi_pdata = {
 	.clk_name = "gsbi_qup_clk",
 	.pclk_name = "gsbi_pclk",
 };
-
-static struct msm_spi_platform_data msm_gsbi10_qup_spi_pdata = {
-	.max_clock_speed = 24000000,
-	.clk_name = "gsbi_qup_clk",
-	.pclk_name = "gsbi_pclk",
-};
 #endif
 
 #ifdef CONFIG_I2C_SSBI
@@ -1939,19 +1190,6 @@ static struct msm_ssbi_platform_data msm_ssbi3_pdata = {
 };
 #endif
 
-#ifdef CONFIG_BATTERY_MSM
-/* Use basic value for fake MSM battery */
-static struct msm_psy_batt_pdata msm_psy_batt_data = {
-	.avail_chg_sources = AC_CHG,
-};
-
-static struct platform_device msm_batt_device = {
-	.name              = "msm-battery",
-	.id                = -1,
-	.dev.platform_data = &msm_psy_batt_data,
-};
-#endif
-
 #ifdef CONFIG_FB_MSM_LCDC_DSUB
 /* VGA = 1440 x 900 x 4(bpp) x 2(pages)
    prim = 1024 x 600 x 4(bpp) x 2(pages)
@@ -1961,64 +1199,13 @@ static struct platform_device msm_batt_device = {
 #define MSM_FB_DSUB_PMEM_ADDER (0)
 #endif
 
-/* Sensors DSPS platform data */
-#ifdef CONFIG_MSM_DSPS
-
-static struct dsps_gpio_info dsps_surf_gpios[] = {
-	{
-		.name = "compass_rst_n",
-		.num = GPIO_COMPASS_RST_N,
-		.on_val = 1,	/* device not in reset */
-		.off_val = 0,	/* device in reset */
-	},
-	{
-		.name = "gpio_r_altimeter_reset_n",
-		.num = GPIO_R_ALTIMETER_RESET_N,
-		.on_val = 1,	/* device not in reset */
-		.off_val = 0,	/* device in reset */
-	}
-};
-
-static struct dsps_gpio_info dsps_fluid_gpios[] = {
-	{
-		.name = "gpio_n_altimeter_reset_n",
-		.num = GPIO_N_ALTIMETER_RESET_N,
-		.on_val = 1,	/* device not in reset */
-		.off_val = 0,	/* device in reset */
-	}
-};
-
-static void __init msm8x60_init_dsps(void)
-{
-	struct msm_dsps_platform_data *pdata =
-		msm_dsps_device.dev.platform_data;
-	/*
-	 * On Fluid the Compass sensor Chip-Select (CS) is directly connected
-	 * to the power supply and not controled via GPIOs. Fluid uses a
-	 * different IO-Expender (north) than used on surf/ffa.
-	 */
-	if (machine_is_msm8x60_fluid()) {
-		pdata->gpios = dsps_fluid_gpios;
-		pdata->gpios_num = ARRAY_SIZE(dsps_fluid_gpios);
-	} else {
-		pdata->gpios = dsps_surf_gpios;
-		pdata->gpios_num = ARRAY_SIZE(dsps_surf_gpios);
-	}
-}
-#endif /* CONFIG_MSM_DSPS */
-
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-/* prim = 1024 x 600 x 4(bpp) x 2(pages)
+/* prim = 1376 x 768 x 4(bpp) x 2(pages)
  * hdmi = 1920 x 1080 x 2(bpp) x 1(page)
  * Note: must be multiple of 4096 */
-#define MSM_FB_SIZE roundup(0x4B0000 + 0x3F4800 + MSM_FB_DSUB_PMEM_ADDER, 4096)
-#elif defined(CONFIG_FB_MSM_TVOUT)
-/* prim = 1024 x 600 x 4(bpp) x 2(pages)
- * tvout = 720 x 576 x 2(bpp) x 2(pages)
- * Note: must be multiple of 4096 */
-#define MSM_FB_SIZE roundup(0x4B0000 + 0x195000 + MSM_FB_DSUB_PMEM_ADDER, 4096)
+#define MSM_FB_SIZE roundup(0x810000 + 0x3F4800 + MSM_FB_DSUB_PMEM_ADDER, 4096)
 #else /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
-#define MSM_FB_SIZE roundup(0x4B0000 + MSM_FB_DSUB_PMEM_ADDER, 4096)
+#define MSM_FB_SIZE roundup(0x810000 + MSM_FB_DSUB_PMEM_ADDER, 4096)
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 #define MSM_PMEM_SF_SIZE 0x4000000 /* 64 Mbytes */
 
@@ -2093,7 +1280,7 @@ static struct resource msm_fb_resources[] = {
 
 static int msm_fb_detect_panel(const char *name)
 {
-	if (!strcmp(name, "lcdc_samsung_wsvga"))
+	if (!strcmp(name, "lcdc_chimei_lvds_wxga"))
 		return 0;
 	pr_warning("%s: not supported '%s'", __func__, name);
 	return -ENODEV;
@@ -2189,35 +1376,25 @@ static struct platform_device android_pmem_smipool_device = {
 
 #endif
 
-#define GPIO_DONGLE_PWR_EN 258
-static void setup_display_power(void);
-static int lcdc_vga_enabled;
-static int vga_enable_request(int enable)
-{
-	if (enable)
-		lcdc_vga_enabled = 1;
-	else
-		lcdc_vga_enabled = 0;
-	setup_display_power();
+#define GPIO_PM8058_LED_PWM	0	/* pm8058, gpio-24, channel 0  */
+#define GPIO_PM8058_LED_EN	0	/* pm8058, gpio-1 */
+#define GPIO_LVDS_PWR_DOWN	30	/* msm  */
 
-	return 0;
-}
-
-#define GPIO_BACKLIGHT_PWM0 0
-#define GPIO_BACKLIGHT_PWM1 1
-
-static int pmic_backlight_gpio[2]
-	= { GPIO_BACKLIGHT_PWM0, GPIO_BACKLIGHT_PWM1 };
-static struct msm_panel_common_pdata lcdc_samsung_panel_data = {
-	.gpio_num = pmic_backlight_gpio, /* two LPG CHANNELS for backlight */
-	.vga_switch = vga_enable_request,
+static int chimei_gpios[3] = {
+		GPIO_PM8058_LED_PWM,
+		PM8058_GPIO_PM_TO_SYS(GPIO_PM8058_LED_EN),
+		GPIO_LVDS_PWR_DOWN
 };
 
-static struct platform_device lcdc_samsung_panel_device = {
-	.name = "lcdc_samsung_wsvga",
+static struct msm_panel_common_pdata lcdc_chimei_panel_data = {
+	.gpio_num = chimei_gpios,
+};
+
+static struct platform_device lcdc_chimei_panel_device = {
+	.name = "lcdc_chimei_lvds_wxga",
 	.id = 0,
 	.dev = {
-		.platform_data = &lcdc_samsung_panel_data,
+		.platform_data = &lcdc_chimei_panel_data,
 	}
 };
 
@@ -2262,13 +1439,6 @@ static struct platform_device hdmi_msm_device = {
 	.dev.platform_data = &hdmi_msm_data,
 };
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
-
-#ifdef CONFIG_FB_MSM_MIPI_DSI
-static struct platform_device mipi_dsi_toshiba_panel_device = {
-	.name = "mipi_toshiba",
-	.id = 0,
-};
-#endif
 
 static void __init msm8x60_allocate_memory_regions(void)
 {
@@ -2343,232 +1513,6 @@ static void __init msm8x60_allocate_memory_regions(void)
 #endif
 }
 
-#if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C) || \
-		defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C_MODULE)
-/*virtual key support */
-static ssize_t tma300_vkeys_show(struct kobject *kobj,
-			struct kobj_attribute *attr, char *buf)
-{
-	return sprintf(buf,
-	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":60:875:90:120"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_MENU) ":180:875:90:120"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_HOME) ":300:875:90:120"
-	":" __stringify(EV_KEY) ":" __stringify(KEY_SEARCH) ":420:875:90:120"
-	"\n");
-}
-
-static struct kobj_attribute tma300_vkeys_attr = {
-	.attr = {
-		.mode = S_IRUGO,
-	},
-	.show = &tma300_vkeys_show,
-};
-
-static struct attribute *tma300_properties_attrs[] = {
-	&tma300_vkeys_attr.attr,
-	NULL
-};
-
-static struct attribute_group tma300_properties_attr_group = {
-	.attrs = tma300_properties_attrs,
-};
-
-static struct kobject *properties_kobj;
-
-#define FLUID_CYTTSP_TS_GPIO_IRQ	61
-static int cyttsp_fluid_platform_init(struct i2c_client *client)
-{
-	int rc = -EINVAL;
-	struct regulator *pm8058_l5;
-
-	pm8058_l5 = regulator_get(NULL, "8058_l5");
-	if (IS_ERR(pm8058_l5)) {
-		pr_err("%s: regulator get of 8058_l5 failed (%ld)\n",
-			__func__, PTR_ERR(pm8058_l5));
-		rc = PTR_ERR(pm8058_l5);
-		return rc;
-	}
-	rc = regulator_set_voltage(pm8058_l5, 2850000, 2850000);
-	if (rc) {
-		pr_err("%s: regulator_set_voltage of 8058_l5 failed(%d)\n",
-			__func__, rc);
-		goto reg_put;
-	}
-
-	rc = regulator_enable(pm8058_l5);
-	if (rc) {
-		pr_err("%s: regulator_enable of 8058_l5 failed(%d)\n",
-			__func__, rc);
-		goto reg_put;
-	}
-
-	/* check this device active by reading first byte/register */
-	rc = i2c_smbus_read_byte_data(client, 0x01);
-	if (rc < 0) {
-		pr_err("%s: i2c sanity check failed\n", __func__);
-		goto reg_disable;
-	}
-
-	/* configure touchscreen interrupt gpio */
-	rc = gpio_request(FLUID_CYTTSP_TS_GPIO_IRQ, "cyttsp_irq_gpio");
-	if (rc) {
-		pr_err("%s: unable to request gpio %d\n",
-			__func__, FLUID_CYTTSP_TS_GPIO_IRQ);
-		goto reg_disable;
-	}
-
-	/* virtual keys */
-	tma300_vkeys_attr.attr.name = "virtualkeys.cyttsp-i2c";
-	properties_kobj = kobject_create_and_add("board_properties",
-				NULL);
-	if (properties_kobj)
-		rc = sysfs_create_group(properties_kobj,
-			&tma300_properties_attr_group);
-	if (!properties_kobj || rc)
-		pr_err("%s: failed to create board_properties\n",
-				__func__);
-
-	return CY_OK;
-
-reg_disable:
-	regulator_disable(pm8058_l5);
-reg_put:
-	regulator_put(pm8058_l5);
-	return rc;
-}
-
-static int cyttsp_fluid_platform_resume(struct i2c_client *client)
-{
-	/* add any special code to strobe a wakeup pin or chip reset */
-	msleep(10);
-
-	return CY_OK;
-}
-
-static struct cyttsp_platform_data cyttsp_fluid_pdata = {
-	.panel_maxx = 539,
-	.panel_maxy = 994,
-	.disp_minx = 30,
-	.disp_maxx = 509,
-	.disp_miny = 60,
-	.disp_maxy = 859,
-	.flags = 0x04,
-	.gen = CY_GEN3,	/* or */
-	.use_st = CY_USE_ST,
-	.use_mt = CY_USE_MT,
-	.use_hndshk = CY_SEND_HNDSHK,
-	.use_trk_id = CY_USE_TRACKING_ID,
-	.use_sleep = CY_USE_SLEEP,
-	.use_gestures = CY_USE_GESTURES,
-	/* activate up to 4 groups
-	 * and set active distance
-	 */
-	.gest_set = CY_GEST_GRP1 | CY_GEST_GRP2 |
-				CY_GEST_GRP3 | CY_GEST_GRP4 |
-				CY_ACT_DIST,
-	/* change act_intrvl to customize the Active power state
-	 * scanning/processing refresh interval for Operating mode
-	 */
-	.act_intrvl = CY_ACT_INTRVL_DFLT,
-	/* change tch_tmout to customize the touch timeout for the
-	 * Active power state for Operating mode
-	 */
-	.tch_tmout = CY_TCH_TMOUT_DFLT,
-	/* change lp_intrvl to customize the Low Power power state
-	 * scanning/processing refresh interval for Operating mode
-	 */
-	.lp_intrvl = CY_LP_INTRVL_DFLT,
-	.resume = cyttsp_fluid_platform_resume,
-	.init = cyttsp_fluid_platform_init,
-};
-
-static struct i2c_board_info cyttsp_fluid_info[] __initdata = {
-	{
-		I2C_BOARD_INFO(CY_I2C_NAME, 0x24),
-		.platform_data = &cyttsp_fluid_pdata,
-#ifndef CY_USE_TIMER
-		.irq = MSM_GPIO_TO_INT(FLUID_CYTTSP_TS_GPIO_IRQ),
-#endif /* CY_USE_TIMER */
-	},
-};
-#endif
-
-static struct regulator *vreg_tmg200;
-
-#define TS_PEN_IRQ_GPIO 61
-static int tmg200_power(int vreg_on)
-{
-	int rc = -EINVAL;
-
-	if (!vreg_tmg200) {
-		printk(KERN_ERR "%s: regulator 8058_s3 not found (%d)\n",
-			__func__, rc);
-		return rc;
-	}
-
-	rc = vreg_on ? regulator_enable(vreg_tmg200) :
-		  regulator_disable(vreg_tmg200);
-	if (rc < 0)
-		printk(KERN_ERR "%s: vreg 8058_s3 %s failed (%d)\n",
-				__func__, vreg_on ? "enable" : "disable", rc);
-	return rc;
-}
-
-static int tmg200_dev_setup(bool enable)
-{
-	int rc;
-
-	if (enable) {
-		vreg_tmg200 = regulator_get(NULL, "8058_s3");
-		if (IS_ERR(vreg_tmg200)) {
-			pr_err("%s: regulator get of 8058_s3 failed (%ld)\n",
-				__func__, PTR_ERR(vreg_tmg200));
-			rc = PTR_ERR(vreg_tmg200);
-			return rc;
-		}
-
-		rc = regulator_set_voltage(vreg_tmg200, 1800000, 1800000);
-		if (rc) {
-			pr_err("%s: regulator_set_voltage() = %d\n",
-				__func__, rc);
-			goto reg_put;
-		}
-	} else {
-		/* put voltage sources */
-		regulator_put(vreg_tmg200);
-	}
-	return 0;
-reg_put:
-	regulator_put(vreg_tmg200);
-	return rc;
-}
-
-static struct cy8c_ts_platform_data cy8ctmg200_pdata = {
-	.ts_name = "msm_tmg200_ts",
-	.dis_min_x = 0,
-	.dis_max_x = 1023,
-	.dis_min_y = 0,
-	.dis_max_y = 599,
-	.min_tid = 1,
-	.max_tid = 255,
-	.min_touch = 0,
-	.max_touch = 255,
-	.min_width = 0,
-	.max_width = 255,
-	.power_on = tmg200_power,
-	.dev_setup = tmg200_dev_setup,
-	.nfingers = 2,
-	.irq_gpio = TS_PEN_IRQ_GPIO,
-	.resout_gpio = GPIO_CAP_TS_RESOUT_N,
-};
-
-static struct i2c_board_info cy8ctmg200_board_info[] = {
-	{
-		I2C_BOARD_INFO("cy8ctmg200", 0x2),
-		.platform_data = &cy8ctmg200_pdata,
-	}
-};
-
 #ifdef CONFIG_SERIAL_MSM_HS
 static int configure_uart_gpios(int on)
 {
@@ -2597,134 +1541,6 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
 };
 #endif
 
-#ifdef CONFIG_MSM_GSBI9_UART
-static struct msm_serial_hslite_platform_data msm_uart_gsbi9_pdata = {
-	.config_gpio	= 1,
-	.uart_tx_gpio	= 67,
-	.uart_rx_gpio	= 66,
-};
-#endif
-
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-
-static struct gpio_led gpio_exp_leds_config[] = {
-	{
-		.name = "left_led1:green",
-		.gpio = GPIO_LEFT_LED_1,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "left_led2:red",
-		.gpio = GPIO_LEFT_LED_2,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "left_led3:green",
-		.gpio = GPIO_LEFT_LED_3,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "wlan_led:orange",
-		.gpio = GPIO_LEFT_LED_WLAN,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "left_led5:green",
-		.gpio = GPIO_LEFT_LED_5,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "right_led1:green",
-		.gpio = GPIO_RIGHT_LED_1,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "right_led2:red",
-		.gpio = GPIO_RIGHT_LED_2,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "right_led3:green",
-		.gpio = GPIO_RIGHT_LED_3,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "bt_led:blue",
-		.gpio = GPIO_RIGHT_LED_BT,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-	{
-		.name = "right_led5:green",
-		.gpio = GPIO_RIGHT_LED_5,
-		.active_low = 1,
-		.retain_state_suspended = 0,
-		.default_state = LEDS_GPIO_DEFSTATE_OFF,
-	},
-};
-
-static struct gpio_led_platform_data gpio_leds_pdata = {
-	.num_leds = ARRAY_SIZE(gpio_exp_leds_config),
-	.leds = gpio_exp_leds_config,
-};
-
-static struct platform_device gpio_leds = {
-	.name          = "leds-gpio",
-	.id            = -1,
-	.dev           = {
-		.platform_data = &gpio_leds_pdata,
-	},
-};
-
-static struct gpio_led fluid_gpio_leds[] = {
-	{
-		.name			= "dual_led:green",
-		.gpio			= GPIO_LED1_GREEN_N,
-		.default_state		= LEDS_GPIO_DEFSTATE_OFF,
-		.active_low		= 1,
-		.retain_state_suspended = 0,
-	},
-	{
-		.name			= "dual_led:red",
-		.gpio			= GPIO_LED2_RED_N,
-		.default_state		= LEDS_GPIO_DEFSTATE_OFF,
-		.active_low		= 1,
-		.retain_state_suspended = 0,
-	},
-};
-
-static struct gpio_led_platform_data gpio_led_pdata = {
-	.leds		= fluid_gpio_leds,
-	.num_leds	= ARRAY_SIZE(fluid_gpio_leds),
-};
-
-static struct platform_device fluid_leds_gpio = {
-	.name	= "leds-gpio",
-	.id	= -1,
-	.dev	= {
-		.platform_data	= &gpio_led_pdata,
-	},
-};
-
-#endif
-
 #if defined(CONFIG_MSM_RPM_LOG) || defined(CONFIG_MSM_RPM_LOG_MODULE)
 
 static struct msm_rpm_log_platform_data msm_rpm_log_pdata = {
@@ -2744,24 +1560,6 @@ static struct platform_device msm_rpm_log_device = {
 	.dev	= {
 		.platform_data = &msm_rpm_log_pdata,
 	},
-};
-#endif
-
-#ifdef CONFIG_BATTERY_MSM8X60
-static struct msm_charger_platform_data msm_charger_data = {
-	.safety_time = 180,
-	.update_time = 1,
-	.max_voltage = 4200,
-	.min_voltage = 3200,
-	.resume_voltage = 4100,
-};
-
-static struct platform_device msm_charger_device = {
-	.name = "msm-charger",
-	.id = -1,
-	.dev = {
-		.platform_data = &msm_charger_data,
-	}
 };
 #endif
 
@@ -3085,66 +1883,6 @@ static struct platform_device msm_tsens_device = {
 	.id = -1,
 };
 
-static struct platform_device *rumi_sim_devices[] __initdata = {
-	&smc91x_device,
-	&msm_device_uart_dm12,
-#ifdef CONFIG_I2C_QUP
-	&msm_gsbi3_qup_i2c_device,
-	&msm_gsbi4_qup_i2c_device,
-	&msm_gsbi7_qup_i2c_device,
-	&msm_gsbi8_qup_i2c_device,
-	&msm_gsbi9_qup_i2c_device,
-	&msm_gsbi12_qup_i2c_device,
-#endif
-#if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
-	&msm_gsbi1_qup_spi_device,
-#endif
-#ifdef CONFIG_I2C_SSBI
-	&msm_device_ssbi1,
-	&msm_device_ssbi2,
-	&msm_device_ssbi3,
-#endif
-#ifdef CONFIG_KERNEL_PMEM_EBI_REGION
-	&android_pmem_kernel_ebi1_device,
-#endif
-#ifdef CONFIG_KERNEL_PMEM_SMI_REGION
-	&android_pmem_kernel_smi_device,
-#endif
-#ifdef CONFIG_ANDROID_PMEM
-	&android_pmem_device,
-	&android_pmem_adsp_device,
-	&android_pmem_audio_device,
-	&android_pmem_smipool_device,
-#endif
-#ifdef CONFIG_MSM_ROTATOR
-	&msm_rotator_device,
-#endif
-	&msm_fb_device,
-	&msm_device_kgsl,
-	&lcdc_samsung_panel_device,
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
-	&hdmi_msm_device,
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
-#ifdef CONFIG_MSM_CAMERA
-#ifdef CONFIG_IMX074
-	&msm_camera_sensor_imx074,
-#endif
-#ifdef CONFIG_WEBCAM_OV7692
-	&msm_camera_sensor_webcam_ov7692,
-#endif
-#ifdef CONFIG_WEBCAM_OV9726
-	&msm_camera_sensor_webcam_ov9726,
-#endif
-#endif
-#ifdef CONFIG_MSM_GEMINI
-	&msm_gemini_device,
-#endif
-#ifdef CONFIG_MSM_VPE
-	&msm_vpe_device,
-#endif
-	&msm_device_vidc,
-};
-
 #ifdef CONFIG_SENSORS_M_ADC
 static struct resource resources_adc[] = {
 	{
@@ -3248,54 +1986,14 @@ static void pmic8058_xoadc_mpp_config(void)
 		pr_err("%s: Config mpp10 on pmic 8058 failed\n", __func__);
 }
 
-static struct regulator *vreg_ldo18_adc;
-
-static int pmic8058_xoadc_vreg_config(int on)
+static int pmic8058_xoadc_rpm_vreg_config(int on)
 {
 	int rc;
 
-	if (on) {
-		rc = regulator_enable(vreg_ldo18_adc);
-		if (rc)
-			pr_err("%s: Enable of regulator ldo18_adc "
-						"failed\n", __func__);
-	} else {
-		rc = regulator_disable(vreg_ldo18_adc);
-		if (rc)
-			pr_err("%s: Disable of regulator ldo18_adc "
-						"failed\n", __func__);
-	}
+	rc = rpm_vreg_set_voltage(RPM_VREG_ID_PM8058_L18,
+				RPM_VREG_VOTER3, (on ? 2200000 : 0), 0);
 
 	return rc;
-}
-
-static int pmic8058_xoadc_vreg_setup(void)
-{
-	int rc;
-
-	vreg_ldo18_adc = regulator_get(NULL, "8058_l18");
-	if (IS_ERR(vreg_ldo18_adc)) {
-		printk(KERN_ERR "%s: vreg get failed (%ld)\n",
-			__func__, PTR_ERR(vreg_ldo18_adc));
-		rc = PTR_ERR(vreg_ldo18_adc);
-		goto fail;
-	}
-
-	rc = regulator_set_voltage(vreg_ldo18_adc, 2200000, 2200000);
-	if (rc) {
-		pr_err("%s: unable to set ldo18 voltage to 2.2V\n", __func__);
-		goto fail;
-	}
-
-	return rc;
-fail:
-	regulator_put(vreg_ldo18_adc);
-	return rc;
-}
-
-static void pmic8058_xoadc_vreg_shutdown(void)
-{
-	regulator_put(vreg_ldo18_adc);
 }
 
 /* usec. For this ADC,
@@ -3313,75 +2011,20 @@ static struct adc_properties pm8058_xoadc_data = {
 static struct xoadc_platform_data xoadc_pdata = {
 	.xoadc_prop = &pm8058_xoadc_data,
 	.xoadc_mpp_config = pmic8058_xoadc_mpp_config,
-	.xoadc_vreg_set = pmic8058_xoadc_vreg_config,
+	.xoadc_vreg_set = pmic8058_xoadc_rpm_vreg_config,
 	.xoadc_num = XOADC_PMIC_0,
-	.xoadc_vreg_setup = pmic8058_xoadc_vreg_setup,
-	.xoadc_vreg_shutdown = pmic8058_xoadc_vreg_shutdown,
 };
 #endif
 
-
-#ifdef CONFIG_MSM_SDIO_AL
-
-static unsigned mdm2ap_status = 140;
-
-static int configure_mdm2ap_status(int on)
-{
-	int ret = 0;
-	if (on)
-		ret = msm_gpiomux_get(mdm2ap_status);
-	else
-		ret = msm_gpiomux_put(mdm2ap_status);
-
-	if (ret)
-		pr_err("%s: mdm2ap_status config failed, on = %d\n", __func__,
-		       on);
-
-	return ret;
-}
-
-
-static int get_mdm2ap_status(void)
-{
-	return gpio_get_value(mdm2ap_status);
-}
-
-static struct sdio_al_platform_data sdio_al_pdata = {
-	.config_mdm2ap_status = configure_mdm2ap_status,
-	.get_mdm2ap_status = get_mdm2ap_status,
-};
-
-struct platform_device msm_device_sdio_al = {
-	.name = "msm_sdio_al",
-	.id = -1,
-	.dev		= {
-		.platform_data	= &sdio_al_pdata,
-	},
-};
-
-#endif /* CONFIG_MSM_SDIO_AL */
-
-static struct platform_device *charm_devices[] __initdata = {
-	&msm_charm_modem,
-#ifdef CONFIG_USB_ANDROID
-	&usb_diag_mdm_device,
-#endif
-};
-
-static struct platform_device *surf_devices[] __initdata = {
+static struct platform_device *qt_devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_uart_dm12,
-	&msm_device_dmov_adm0,
-	&msm_device_dmov_adm1,
 #ifdef CONFIG_I2C_QUP
 	&msm_gsbi3_qup_i2c_device,
 	&msm_gsbi4_qup_i2c_device,
 	&msm_gsbi7_qup_i2c_device,
 	&msm_gsbi8_qup_i2c_device,
 	&msm_gsbi9_qup_i2c_device,
-#ifndef CONFIG_MSM_DSPS
-	&msm_gsbi12_qup_i2c_device,
-#endif
 #endif
 #if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
 	&msm_gsbi1_qup_spi_device,
@@ -3396,10 +2039,6 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 #ifdef CONFIG_USB_PEHCI_HCD
 	&isp1763_device,
-#endif
-
-#ifdef CONFIG_MSM_DSPS
-	&msm_dsps_device,
 #endif
 
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
@@ -3419,9 +2058,6 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 	&android_usb_device,
 #endif
-#ifdef CONFIG_BATTERY_MSM
-	&msm_batt_device,
-#endif
 #ifdef CONFIG_KERNEL_PMEM_EBI_REGION
 	&android_pmem_kernel_ebi1_device,
 #endif
@@ -3439,13 +2075,10 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 	&msm_fb_device,
 	&msm_device_kgsl,
-	&lcdc_samsung_panel_device,
+	&lcdc_chimei_panel_device,
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
 	&hdmi_msm_device,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
-#ifdef CONFIG_FB_MSM_MIPI_DSI
-	&mipi_dsi_toshiba_panel_device,
-#endif
 #ifdef CONFIG_MSM_CAMERA
 #ifdef CONFIG_IMX074
 	&msm_camera_sensor_imx074,
@@ -3527,24 +2160,6 @@ static struct platform_device *surf_devices[] __initdata = {
 	&rpm_vreg_device[RPM_VREG_ID_PM8901_MVS0],
 #endif
 
-#if defined(CONFIG_CRYPTO_DEV_QCRYPTO) || \
-		defined(CONFIG_CRYPTO_DEV_QCRYPTO_MODULE)
-	&qcrypto_device,
-#endif
-
-#if defined(CONFIG_CRYPTO_DEV_QCEDEV) || \
-		defined(CONFIG_CRYPTO_DEV_QCEDEV_MODULE)
-	&qcedev_device,
-#endif
-
-#ifdef CONFIG_MSM_SDIO_AL
-	&msm_device_sdio_al,
-#endif
-
-#if defined(CONFIG_TSIF) || defined(CONFIG_TSIF_MODULE)
-	&msm_device_tsif,
-#endif
-
 #ifdef CONFIG_HW_RANDOM_MSM
 	&msm_device_rng,
 #endif
@@ -3552,293 +2167,6 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_tsens_device,
 
 };
-
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-enum {
-	SX150X_CORE,
-	SX150X_DOCKING,
-	SX150X_SURF,
-	SX150X_LEFT_FHA,
-	SX150X_RIGHT_FHA,
-	SX150X_SOUTH,
-	SX150X_NORTH,
-	SX150X_CORE_FLUID,
-};
-
-static struct sx150x_platform_data sx150x_data[] __initdata = {
-	[SX150X_CORE] = {
-		.gpio_base         = GPIO_CORE_EXPANDER_BASE,
-		.oscio_is_gpo      = false,
-		.io_pullup_ena     = 0x0408,
-		.io_pulldn_ena     = 0x4060,
-		.io_open_drain_ena = 0x000c,
-		.io_polarity       = 0,
-		.irq_summary       = -1, /* see fixup_i2c_configs() */
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE,
-	},
-	[SX150X_DOCKING] = {
-		.gpio_base         = GPIO_DOCKING_EXPANDER_BASE,
-		.oscio_is_gpo      = false,
-		.io_pullup_ena     = 0x5e06,
-		.io_pulldn_ena     = 0x81b8,
-		.io_open_drain_ena = 0,
-		.io_polarity       = 0,
-		.irq_summary       = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
-						     UI_INT2_N),
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE +
-				     GPIO_DOCKING_EXPANDER_BASE -
-				     GPIO_EXPANDER_GPIO_BASE,
-	},
-	[SX150X_SURF] = {
-		.gpio_base         = GPIO_SURF_EXPANDER_BASE,
-		.oscio_is_gpo      = false,
-		.io_pullup_ena     = 0,
-		.io_pulldn_ena     = 0,
-		.io_open_drain_ena = 0,
-		.io_polarity       = 0,
-		.irq_summary       = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
-						     UI_INT1_N),
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE +
-				     GPIO_SURF_EXPANDER_BASE -
-				     GPIO_EXPANDER_GPIO_BASE,
-	},
-	[SX150X_LEFT_FHA] = {
-		.gpio_base         = GPIO_LEFT_KB_EXPANDER_BASE,
-		.oscio_is_gpo      = false,
-		.io_pullup_ena     = 0,
-		.io_pulldn_ena     = 0x40,
-		.io_open_drain_ena = 0,
-		.io_polarity       = 0,
-		.irq_summary       = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
-						     UI_INT3_N),
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE +
-				     GPIO_LEFT_KB_EXPANDER_BASE -
-				     GPIO_EXPANDER_GPIO_BASE,
-	},
-	[SX150X_RIGHT_FHA] = {
-		.gpio_base         = GPIO_RIGHT_KB_EXPANDER_BASE,
-		.oscio_is_gpo      = true,
-		.io_pullup_ena     = 0,
-		.io_pulldn_ena     = 0,
-		.io_open_drain_ena = 0,
-		.io_polarity       = 0,
-		.irq_summary       = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
-						     UI_INT3_N),
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE +
-				     GPIO_RIGHT_KB_EXPANDER_BASE -
-				     GPIO_EXPANDER_GPIO_BASE,
-	},
-	[SX150X_SOUTH] = {
-		.gpio_base    = GPIO_SOUTH_EXPANDER_BASE,
-		.irq_base     = GPIO_EXPANDER_IRQ_BASE +
-				GPIO_SOUTH_EXPANDER_BASE -
-				GPIO_EXPANDER_GPIO_BASE,
-		.irq_summary  = PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT3_N),
-	},
-	[SX150X_NORTH] = {
-		.gpio_base    = GPIO_NORTH_EXPANDER_BASE,
-		.irq_base     = GPIO_EXPANDER_IRQ_BASE +
-				GPIO_NORTH_EXPANDER_BASE -
-				GPIO_EXPANDER_GPIO_BASE,
-		.irq_summary  = PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT3_N),
-		.oscio_is_gpo = true,
-		.io_open_drain_ena = 0x30,
-	},
-	[SX150X_CORE_FLUID] = {
-		.gpio_base         = GPIO_CORE_EXPANDER_BASE,
-		.oscio_is_gpo      = false,
-		.io_pullup_ena     = 0x0408,
-		.io_pulldn_ena     = 0x4060,
-		.io_open_drain_ena = 0x0008,
-		.io_polarity       = 0,
-		.irq_summary       = -1, /* see fixup_i2c_configs() */
-		.irq_base          = GPIO_EXPANDER_IRQ_BASE,
-	},
-};
-
-/* sx150x_low_power_cfg
- *
- * This data and init function are used to put unused gpio-expander output
- * lines into their low-power states at boot. The init
- * function must be deferred until a later init stage because the i2c
- * gpio expander drivers do not probe until after they are registered
- * (see register_i2c_devices) and the work-queues for those registrations
- * are processed.  Because these lines are unused, there is no risk of
- * competing with a device driver for the gpio.
- *
- * gpio lines whose low-power states are input are naturally in their low-
- * power configurations once probed, see the platform data structures above.
- */
-struct sx150x_low_power_cfg {
-	unsigned gpio;
-	unsigned val;
-};
-
-static struct sx150x_low_power_cfg
-common_sx150x_lp_cfgs[] __initdata = {
-	{GPIO_WLAN_DEEP_SLEEP_N, 0},
-	{GPIO_EXT_GPS_LNA_EN,    0},
-	{GPIO_MSM_WAKES_BT,      0},
-	{GPIO_USB_UICC_EN,       0},
-	{GPIO_BATT_GAUGE_EN,     0},
-};
-
-static struct sx150x_low_power_cfg
-surf_ffa_sx150x_lp_cfgs[] __initdata = {
-	{GPIO_MIPI_DSI_RST_N,      0},
-	{GPIO_DONGLE_PWR_EN,       0},
-	{GPIO_CAP_TS_SLEEP,        1},
-	{GPIO_WEB_CAMIF_RESET_N,   0},
-};
-
-static void __init
-cfg_gpio_low_power(struct sx150x_low_power_cfg *cfgs, unsigned nelems)
-{
-	unsigned n;
-	int rc;
-
-	for (n = 0; n < nelems; ++n) {
-		rc = gpio_request(cfgs[n].gpio, NULL);
-		if (!rc) {
-			rc = gpio_direction_output(cfgs[n].gpio, cfgs[n].val);
-			gpio_free(cfgs[n].gpio);
-		}
-
-		if (rc) {
-			printk(KERN_NOTICE "%s: failed to sleep gpio %d: %d\n",
-			       __func__, cfgs[n].gpio, rc);
-		}
-	}
-}
-
-static int __init cfg_sx150xs_low_power(void)
-{
-	cfg_gpio_low_power(common_sx150x_lp_cfgs,
-		ARRAY_SIZE(common_sx150x_lp_cfgs));
-	if (!machine_is_msm8x60_fluid())
-		cfg_gpio_low_power(surf_ffa_sx150x_lp_cfgs,
-			ARRAY_SIZE(surf_ffa_sx150x_lp_cfgs));
-	return 0;
-}
-module_init(cfg_sx150xs_low_power);
-
-#ifdef CONFIG_I2C
-static struct i2c_board_info core_expander_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1509q", 0x3e),
-		.platform_data = &sx150x_data[SX150X_CORE]
-	},
-};
-
-static struct i2c_board_info docking_expander_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1509q", 0x3f),
-		.platform_data = &sx150x_data[SX150X_DOCKING]
-	},
-};
-
-static struct i2c_board_info surf_expanders_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1509q", 0x70),
-		.platform_data = &sx150x_data[SX150X_SURF]
-	}
-};
-
-static struct i2c_board_info fha_expanders_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1508q", 0x21),
-		.platform_data = &sx150x_data[SX150X_LEFT_FHA]
-	},
-	{
-		I2C_BOARD_INFO("sx1508q", 0x22),
-		.platform_data = &sx150x_data[SX150X_RIGHT_FHA]
-	}
-};
-
-static struct i2c_board_info fluid_expanders_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1508q", 0x23),
-		.platform_data = &sx150x_data[SX150X_SOUTH]
-	},
-	{
-		I2C_BOARD_INFO("sx1508q", 0x20),
-		.platform_data = &sx150x_data[SX150X_NORTH]
-	}
-};
-
-static struct i2c_board_info fluid_core_expander_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("sx1509q", 0x3e),
-		.platform_data = &sx150x_data[SX150X_CORE_FLUID]
-	},
-};
-#endif
-#endif
-
-#define EXT_CHG_VALID_MPP 10
-#define EXT_CHG_VALID_MPP_2 11
-
-#ifdef CONFIG_ISL9519_CHARGER
-static int isl_detection_setup(void)
-{
-	int ret = 0;
-
-	ret = pm8058_mpp_config_digital_in(EXT_CHG_VALID_MPP,
-					   PM8058_MPP_DIG_LEVEL_S3,
-					   PM_MPP_DIN_TO_INT);
-	ret |=  pm8058_mpp_config_bi_dir(EXT_CHG_VALID_MPP_2,
-					   PM8058_MPP_DIG_LEVEL_S3,
-					   PM_MPP_BI_PULLUP_10KOHM
-					   );
-	return ret;
-}
-
-static struct isl_platform_data isl_data __initdata = {
-	.chgcurrent = 700,
-	.valid_n_gpio = PM8058_MPP_PM_TO_SYS(10),
-	.chg_detection_config = isl_detection_setup,
-	.max_system_voltage = 4200,
-	.min_system_voltage = 3200,
-	.term_current = 120,
-};
-
-static struct i2c_board_info isl_charger_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("isl9519q", 0x9),
-		.irq = PM8058_CBLPWR_IRQ(PM8058_IRQ_BASE),
-		.platform_data = &isl_data,
-	},
-};
-#endif
-
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-static int smb137b_detection_setup(void)
-{
-	int ret = 0;
-
-	ret = pm8058_mpp_config_digital_in(EXT_CHG_VALID_MPP,
-					PM8058_MPP_DIG_LEVEL_S3,
-					PM_MPP_DIN_TO_INT);
-	ret |=  pm8058_mpp_config_bi_dir(EXT_CHG_VALID_MPP_2,
-					PM8058_MPP_DIG_LEVEL_S3,
-					PM_MPP_BI_PULLUP_10KOHM);
-	return ret;
-}
-
-static struct smb137b_platform_data smb137b_data __initdata = {
-	.chg_detection_config = smb137b_detection_setup,
-	.valid_n_gpio = PM8058_MPP_PM_TO_SYS(10),
-	.batt_mah_rating = 950,
-};
-
-static struct i2c_board_info smb137b_charger_i2c_info[] __initdata = {
-	{
-		I2C_BOARD_INFO("smb137b", 0x08),
-		.irq = PM8058_CBLPWR_IRQ(PM8058_IRQ_BASE),
-		.platform_data = &smb137b_data,
-	},
-};
-#endif
 
 #ifdef CONFIG_PMIC8058
 #define PMIC_GPIO_SDC3_DET 22
@@ -3853,6 +2181,19 @@ static int pm8058_gpios_init(void)
 	};
 
 	struct pm8058_gpio_cfg gpio_cfgs[] = {
+		{ /* chimei panel, led_en */
+			0,
+			{
+				.direction	= PM_GPIO_DIR_OUT,
+				.output_value	= 1,
+				.output_buffer	= PM_GPIO_OUT_BUF_CMOS,
+				.pull		= PM_GPIO_PULL_UP_30,
+				.out_strength	= PM_GPIO_STRENGTH_HIGH,
+				.function	= PM_GPIO_FUNC_NORMAL,
+				.vin_sel	= 2,
+				.inv_int_pol	= 0,
+			}
+		},
 		{ /* FFA ethernet */
 			6,
 			{
@@ -3940,35 +2281,6 @@ static int pm8058_gpios_init(void)
 		},
 	};
 
-#if defined(CONFIG_HAPTIC_ISA1200) || \
-		defined(CONFIG_HAPTIC_ISA1200_MODULE)
-
-	struct pm8058_gpio_cfg en_hap_gpio_cfg = {
-			PMIC_GPIO_HAP_ENABLE,
-			{
-				.direction      = PM_GPIO_DIR_OUT,
-				.pull           = PM_GPIO_PULL_NO,
-				.out_strength   = PM_GPIO_STRENGTH_HIGH,
-				.function       = PM_GPIO_FUNC_NORMAL,
-				.inv_int_pol    = 0,
-				.vin_sel        = 2,
-				.output_buffer  = PM_GPIO_OUT_BUF_CMOS,
-				.output_value   = 0,
-			}
-
-	};
-
-	if (machine_is_msm8x60_fluid()) {
-		rc = pm8058_gpio_config(en_hap_gpio_cfg.gpio,
-				&en_hap_gpio_cfg.cfg);
-		if (rc < 0) {
-			pr_err("%s pmic haptics gpio config failed\n",
-							__func__);
-			return rc;
-		}
-	}
-#endif
-
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	struct pm8058_gpio_cfg line_in_gpio_cfg = {
 			18,
@@ -3980,17 +2292,13 @@ static int pm8058_gpios_init(void)
 				.inv_int_pol    = 0,
 			}
 	};
-	/* Line_in only for 8660 ffa & surf */
-	if (machine_is_msm8x60_ffa() || machine_is_msm8x60_surf() ||
-		machine_is_msm8x60_charm_surf() ||
-		machine_is_msm8x60_charm_ffa()) {
-		rc = pm8058_gpio_config(line_in_gpio_cfg.gpio,
-				&line_in_gpio_cfg.cfg);
-		if (rc < 0) {
-			pr_err("%s pmic line_in gpio config failed\n",
-							__func__);
-			return rc;
-		}
+
+	rc = pm8058_gpio_config(line_in_gpio_cfg.gpio,
+			&line_in_gpio_cfg.cfg);
+	if (rc < 0) {
+		pr_err("%s pmic line_in gpio config failed\n",
+						__func__);
+		return rc;
 	}
 #endif
 
@@ -4006,109 +2314,6 @@ static int pm8058_gpios_init(void)
 
 	return 0;
 }
-
-static const unsigned int ffa_keymap[] = {
-	KEY(0, 0, KEY_FN_F1),	 /* LS - PUSH1 */
-	KEY(0, 1, KEY_UP),	 /* NAV - UP */
-	KEY(0, 2, KEY_LEFT),	 /* NAV - LEFT */
-	KEY(0, 3, KEY_VOLUMEUP), /* Shuttle SW_UP */
-
-	KEY(1, 0, KEY_FN_F2), 	 /* LS - PUSH2 */
-	KEY(1, 1, KEY_RIGHT),    /* NAV - RIGHT */
-	KEY(1, 2, KEY_DOWN),     /* NAV - DOWN */
-	KEY(1, 3, KEY_VOLUMEDOWN),
-
-	KEY(2, 3, KEY_ENTER),     /* SW_PUSH key */
-
-	KEY(4, 0, KEY_CAMERA_FOCUS), /* RS - PUSH1 */
-	KEY(4, 1, KEY_UP),	  /* USER_UP */
-	KEY(4, 2, KEY_LEFT),	  /* USER_LEFT */
-	KEY(4, 3, KEY_HOME),	  /* Right switch: MIC Bd */
-	KEY(4, 4, KEY_FN_F3),	  /* Reserved MIC */
-
-	KEY(5, 0, KEY_CAMERA_SNAPSHOT), /* RS - PUSH2 */
-	KEY(5, 1, KEY_RIGHT),	  /* USER_RIGHT */
-	KEY(5, 2, KEY_DOWN),	  /* USER_DOWN */
-	KEY(5, 3, KEY_BACK),	  /* Left switch: MIC */
-	KEY(5, 4, KEY_MENU),	  /* Center switch: MIC */
-};
-
-static struct resource resources_keypad[] = {
-	{
-		.start	= PM8058_KEYPAD_IRQ(PM8058_IRQ_BASE),
-		.end	= PM8058_KEYPAD_IRQ(PM8058_IRQ_BASE),
-		.flags	= IORESOURCE_IRQ,
-	},
-	{
-		.start	= PM8058_KEYSTUCK_IRQ(PM8058_IRQ_BASE),
-		.end	= PM8058_KEYSTUCK_IRQ(PM8058_IRQ_BASE),
-		.flags	= IORESOURCE_IRQ,
-	},
-};
-
-static struct matrix_keymap_data ffa_keymap_data = {
-	.keymap_size	= ARRAY_SIZE(ffa_keymap),
-	.keymap		= ffa_keymap,
-};
-
-static struct pmic8058_keypad_data ffa_keypad_data = {
-	.input_name		= "ffa-keypad",
-	.input_phys_device	= "ffa-keypad/input0",
-	.num_rows		= 6,
-	.num_cols		= 5,
-	.rows_gpio_start	= 8,
-	.cols_gpio_start	= 0,
-	.debounce_ms		= {8, 10},
-	.scan_delay_ms		= 32,
-	.row_hold_ns            = 91500,
-	.wakeup			= 1,
-	.keymap_data		= &ffa_keymap_data,
-};
-
-static const unsigned int fluid_keymap[] = {
-	KEY(0, 0, KEY_FN_F1),	 /* LS - PUSH1 */
-	KEY(0, 1, KEY_UP),	 /* NAV - UP */
-	KEY(0, 2, KEY_LEFT),	 /* NAV - LEFT */
-	KEY(0, 3, KEY_VOLUMEDOWN), /* Shuttle SW_UP */
-
-	KEY(1, 0, KEY_FN_F2),	 /* LS - PUSH2 */
-	KEY(1, 1, KEY_RIGHT),    /* NAV - RIGHT */
-	KEY(1, 2, KEY_DOWN),     /* NAV - DOWN */
-	KEY(1, 3, KEY_VOLUMEUP),
-
-	KEY(2, 3, KEY_ENTER),     /* SW_PUSH key */
-
-	KEY(4, 0, KEY_CAMERA_FOCUS), /* RS - PUSH1 */
-	KEY(4, 1, KEY_UP),	  /* USER_UP */
-	KEY(4, 2, KEY_LEFT),	  /* USER_LEFT */
-	KEY(4, 3, KEY_HOME),	  /* Right switch: MIC Bd */
-	KEY(4, 4, KEY_FN_F3),	  /* Reserved MIC */
-
-	KEY(5, 0, KEY_CAMERA_SNAPSHOT), /* RS - PUSH2 */
-	KEY(5, 1, KEY_RIGHT),	  /* USER_RIGHT */
-	KEY(5, 2, KEY_DOWN),	  /* USER_DOWN */
-	KEY(5, 3, KEY_BACK),	  /* Left switch: MIC */
-	KEY(5, 4, KEY_MENU),	  /* Center switch: MIC */
-};
-
-static struct matrix_keymap_data fluid_keymap_data = {
-	.keymap_size	= ARRAY_SIZE(fluid_keymap),
-	.keymap		= fluid_keymap,
-};
-
-static struct pmic8058_keypad_data fluid_keypad_data = {
-	.input_name		= "fluid-keypad",
-	.input_phys_device	= "fluid-keypad/input0",
-	.num_rows		= 6,
-	.num_cols		= 5,
-	.rows_gpio_start	= 8,
-	.cols_gpio_start	= 0,
-	.debounce_ms		= {8, 10},
-	.scan_delay_ms		= 32,
-	.row_hold_ns            = 91500,
-	.wakeup			= 1,
-	.keymap_data		= &fluid_keymap_data,
-};
 
 static struct resource resources_pwrkey[] = {
 	{
@@ -4128,12 +2333,6 @@ static struct pmic8058_pwrkey_pdata pwrkey_pdata = {
 	.kpd_trigger_delay_us   = 970,
 	.wakeup			= 1,
 	.pwrkey_time_ms		= 500,
-};
-
-static struct pmic8058_vibrator_pdata pmic_vib_pdata = {
-	.initial_vibrate_ms  = 500,
-	.level_mV = 3000,
-	.max_timeout_ms = 15000,
 };
 
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
@@ -4233,16 +2432,9 @@ static struct hsed_bias_config hsed_bias_config = {
 
 static struct othc_hsed_config hsed_config_1 = {
 	.hsed_bias_config = &hsed_bias_config,
-	/*
-	 * The detection delay and switch reporting delay are
-	 * required to encounter a hardware bug (spurious switch
-	 * interrupts on slow insertion/removal of the headset).
-	 * This will introduce a delay in reporting the accessory
-	 * insertion and removal to the userspace.
-	 */
-	.detection_delay_ms = 1500,
+	.detection_delay_ms = 200,
 	/* Switch info */
-	.switch_debounce_ms = 1500,
+	.switch_debounce_ms = 1000,
 	.othc_support_n_switch = false,
 	.switch_config = &switch_config,
 	/* Accessory info */
@@ -4251,18 +2443,11 @@ static struct othc_hsed_config hsed_config_1 = {
 	.othc_num_accessories = ARRAY_SIZE(othc_accessories),
 };
 
-static struct othc_regulator_config othc_reg = {
-	.regulator	 = "8058_l5",
-	.max_uV		 = 2850000,
-	.min_uV		 = 2850000,
-};
-
 /* MIC_BIAS0 is configured as normal MIC BIAS */
 static struct pmic8058_othc_config_pdata othc_config_pdata_0 = {
 	.micbias_select = OTHC_MICBIAS_0,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
-	.micbias_regulator = &othc_reg,
 };
 
 /* MIC_BIAS1 is configured as HSED_BIAS for OTHC */
@@ -4270,7 +2455,6 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_1 = {
 	.micbias_select = OTHC_MICBIAS_1,
 	.micbias_capability = OTHC_MICBIAS_HSED,
 	.micbias_enable = OTHC_SIGNAL_PWM_TCXO,
-	.micbias_regulator = &othc_reg,
 	.hsed_config = &hsed_config_1,
 	.hsed_name = "8660_handset",
 };
@@ -4280,7 +2464,6 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_2 = {
 	.micbias_select = OTHC_MICBIAS_2,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
-	.micbias_regulator = &othc_reg,
 };
 
 static struct resource resources_othc_0[] = {
@@ -4322,164 +2505,15 @@ static struct resource resources_othc_2[] = {
 
 static void __init msm8x60_init_pm8058_othc(void)
 {
-	int i;
-
-	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2 ||
-		machine_is_msm8x60_fluid() || machine_is_msm8x60_charm_surf() ||
-		machine_is_msm8x60_charm_ffa()) {
+	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2) {
 		/* 3-switch headset supported only by V2 FFA and FLUID */
 		hsed_config_1.accessories_adc_support = true,
 		/* ADC based accessory detection works only on V2 and FLUID */
 		hsed_config_1.accessories_adc_channel = CHANNEL_ADC_HDSET,
 		hsed_config_1.othc_support_n_switch = true;
 	}
-
-	for (i = 0; i < ARRAY_SIZE(othc_accessories); i++) {
-		if (machine_is_msm8x60_fluid()) {
-			switch (othc_accessories[i].accessory) {
-			case OTHC_ANC_HEADPHONE:
-			case OTHC_ANC_HEADSET:
-				othc_accessories[i].gpio = GPIO_HEADSET_DET_N;
-				break;
-			case OTHC_MICROPHONE:
-				othc_accessories[i].enabled = false;
-				break;
-			case OTHC_SVIDEO_OUT:
-				othc_accessories[i].enabled = true;
-				hsed_config_1.video_out_gpio = GPIO_HS_SW_DIR;
-				break;
-			}
-		}
-	}
 }
 #endif
-
-static struct resource resources_pm8058_charger[] = {
-	{	.name = "CHGVAL",
-		.start = PM8058_CHGVAL_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGVAL_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{	.name = "CHGINVAL",
-		.start = PM8058_CHGINVAL_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGINVAL_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHGILIM",
-		.start = PM8058_CHGILIM_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGILIM_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "VCP",
-		.start = PM8058_VCP_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_VCP_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-		{
-		.name = "ATC_DONE",
-		.start = PM8058_ATC_DONE_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_ATC_DONE_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "ATCFAIL",
-		.start = PM8058_ATCFAIL_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_ATCFAIL_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "AUTO_CHGDONE",
-		 .start = PM8058_AUTO_CHGDONE_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_AUTO_CHGDONE_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "AUTO_CHGFAIL",
-		.start = PM8058_AUTO_CHGFAIL_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_AUTO_CHGFAIL_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHGSTATE",
-		.start = PM8058_CHGSTATE_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGSTATE_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "FASTCHG",
-		.start = PM8058_FASTCHG_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_FASTCHG_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHG_END",
-		 .start = PM8058_CHG_END_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_CHG_END_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "BATTTEMP",
-		.start = PM8058_BATTTEMP_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_BATTTEMP_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHGHOT",
-		.start = PM8058_CHGHOT_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGHOT_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHGTLIMIT",
-		.start = PM8058_CHGTLIMIT_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_CHGTLIMIT_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "CHG_GONE",
-		 .start = PM8058_CHG_GONE_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_CHG_GONE_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "VCPMAJOR",
-		 .start = PM8058_VCPMAJOR_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_VCPMAJOR_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "VBATDET",
-		 .start = PM8058_VBATDET_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_VBATDET_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "BATFET",
-		 .start = PM8058_BATFET_IRQ(PM8058_IRQ_BASE),
-		 .end = PM8058_BATFET_IRQ(PM8058_IRQ_BASE),
-		 .flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "BATT_REPLACE",
-		.start = PM8058_BATT_REPLACE_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_BATT_REPLACE_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "BATTCONNECT",
-		.start = PM8058_BATTCONNECT_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_BATTCONNECT_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-	{
-		.name = "VBATDET_LOW",
-		.start = PM8058_VBATDET_LOW_IRQ(PM8058_IRQ_BASE),
-		.end = PM8058_VBATDET_LOW_IRQ(PM8058_IRQ_BASE),
-		.flags = IORESOURCE_IRQ,
-	},
-};
 
 static int pm8058_pwm_config(struct pwm_device *pwm, int ch, int on)
 {
@@ -4570,52 +2604,6 @@ static struct resource resources_rtc[] = {
        },
 };
 
-static struct pmic8058_led pmic8058_flash_leds[] = {
-	[0] = {
-		.name		= "camera:flash0",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_FLASH_LED_0,
-	},
-	[1] = {
-		.name		= "camera:flash1",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_FLASH_LED_1,
-	},
-};
-
-static struct pmic8058_leds_platform_data pm8058_flash_leds_data = {
-	.num_leds = ARRAY_SIZE(pmic8058_flash_leds),
-	.leds	= pmic8058_flash_leds,
-};
-
-static struct pmic8058_led pmic8058_fluid_flash_leds[] = {
-	[0] = {
-		.name		= "led:drv0",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_FLASH_LED_0,
-	},/* 300 mA flash led0 drv sink */
-	[1] = {
-		.name		= "led:drv1",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_FLASH_LED_1,
-	},/* 300 mA flash led1 sink */
-	[2] = {
-		.name		= "led:drv2",
-		.max_brightness = 20,
-		.id		= PMIC8058_ID_LED_0,
-	},/* 40 mA led0 sink */
-	[3] = {
-		.name		= "keypad:drv",
-		.max_brightness = 15,
-		.id		= PMIC8058_ID_LED_KB_LIGHT,
-	},/* 300 mA keypad drv sink */
-};
-
-static struct pmic8058_leds_platform_data pm8058_fluid_flash_leds_data = {
-	.num_leds = ARRAY_SIZE(pmic8058_fluid_flash_leds),
-	.leds	= pmic8058_fluid_flash_leds,
-};
-
 static struct resource resources_temp_alarm[] = {
        {
 		.start  = PM8058_TEMP_ALARM_IRQ(PM8058_IRQ_BASE),
@@ -4632,19 +2620,7 @@ static struct resource resources_pm8058_misc[] = {
        },
 };
 
-#define PM8058_SUBDEV_KPD 0
-#define PM8058_SUBDEV_LED 1
-
 static struct mfd_cell pm8058_subdevs[] = {
-	{
-		.name = "pm8058-keypad",
-		.id		= -1,
-		.num_resources	= ARRAY_SIZE(resources_keypad),
-		.resources	= resources_keypad,
-	},
-	{	.name = "pm8058-led",
-		.id		= -1,
-	},
 	{	.name = "pm8058-gpio",
 		.id		= -1,
 		.platform_data	= &pm8058_gpio_data,
@@ -4661,12 +2637,6 @@ static struct mfd_cell pm8058_subdevs[] = {
 		.num_resources = ARRAY_SIZE(resources_pwrkey),
 		.platform_data = &pwrkey_pdata,
 		.data_size = sizeof(pwrkey_pdata),
-	},
-	{
-		.name = "pm8058-vib",
-		.id = -1,
-		.platform_data = &pmic_vib_pdata,
-		.data_size     = sizeof(pmic_vib_pdata),
 	},
 	{
 		.name = "pm8058-pwm",
@@ -4734,13 +2704,6 @@ static struct mfd_cell pm8058_subdevs[] = {
 	},
 };
 
-static struct mfd_cell pm8058_charger_sub_dev = {
-		.name = "pm8058-charger",
-		.id = -1,
-		.num_resources = ARRAY_SIZE(resources_pm8058_charger),
-		.resources = resources_pm8058_charger,
-};
-
 static struct pm8058_platform_data pm8058_platform_data = {
 	.irq_base = PM8058_IRQ_BASE,
 
@@ -4757,173 +2720,6 @@ static struct i2c_board_info pm8058_boardinfo[] __initdata = {
 	},
 };
 #endif /* CONFIG_PMIC8058 */
-
-#if defined(CONFIG_TOUCHDISC_VTD518_SHINETSU) || \
-		defined(CONFIG_TOUCHDISC_VTD518_SHINETSU_MODULE)
-#define TDISC_I2C_SLAVE_ADDR	0x67
-#define PMIC_GPIO_TDISC		PM8058_GPIO_PM_TO_SYS(5)
-#define TDISC_INT		PM8058_GPIO_IRQ(PM8058_IRQ_BASE, 5)
-
-static const char *vregs_tdisc_name[] = {
-	"8058_l5",
-	"8058_s3",
-};
-
-static const int vregs_tdisc_val[] = {
-	2850000,/* uV */
-	1800000,
-};
-static struct regulator *vregs_tdisc[ARRAY_SIZE(vregs_tdisc_name)];
-
-static int tdisc_shinetsu_setup(void)
-{
-	int rc, i;
-
-	rc = gpio_request(PMIC_GPIO_TDISC, "tdisc_interrupt");
-	if (rc) {
-		pr_err("%s: gpio_request failed for PMIC_GPIO_TDISC\n",
-								__func__);
-		return rc;
-	}
-
-	rc = gpio_request(GPIO_JOYSTICK_EN, "tdisc_oe");
-	if (rc) {
-		pr_err("%s: gpio_request failed for GPIO_JOYSTICK_EN\n",
-							__func__);
-		goto fail_gpio_oe;
-	}
-
-	rc = gpio_direction_output(GPIO_JOYSTICK_EN, 1);
-	if (rc) {
-		pr_err("%s: gpio_direction_output failed for GPIO_JOYSTICK_EN\n",
-								__func__);
-		gpio_free(GPIO_JOYSTICK_EN);
-		goto fail_gpio_oe;
-	}
-
-	for (i = 0; i < ARRAY_SIZE(vregs_tdisc_name); i++) {
-		vregs_tdisc[i] = regulator_get(NULL, vregs_tdisc_name[i]);
-		if (IS_ERR(vregs_tdisc[i])) {
-			printk(KERN_ERR "%s: regulator get %s failed (%ld)\n",
-				__func__, vregs_tdisc_name[i],
-				PTR_ERR(vregs_tdisc[i]));
-			rc = PTR_ERR(vregs_tdisc[i]);
-			goto vreg_get_fail;
-		}
-
-		rc = regulator_set_voltage(vregs_tdisc[i],
-				vregs_tdisc_val[i], vregs_tdisc_val[i]);
-		if (rc) {
-			printk(KERN_ERR "%s: regulator_set_voltage() = %d\n",
-				__func__, rc);
-			goto vreg_set_voltage_fail;
-		}
-	}
-
-	return rc;
-vreg_set_voltage_fail:
-	i++;
-vreg_get_fail:
-	while (i)
-		regulator_put(vregs_tdisc[--i]);
-fail_gpio_oe:
-	gpio_free(PMIC_GPIO_TDISC);
-	return rc;
-}
-
-static void tdisc_shinetsu_release(void)
-{
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(vregs_tdisc_name); i++)
-		regulator_put(vregs_tdisc[i]);
-
-	gpio_free(PMIC_GPIO_TDISC);
-	gpio_free(GPIO_JOYSTICK_EN);
-}
-
-static int tdisc_shinetsu_enable(void)
-{
-	int i, rc = -EINVAL;
-
-	for (i = 0; i < ARRAY_SIZE(vregs_tdisc_name); i++) {
-		rc = regulator_enable(vregs_tdisc[i]);
-		if (rc < 0) {
-			printk(KERN_ERR "%s: vreg %s enable failed (%d)\n",
-				__func__, vregs_tdisc_name[i], rc);
-			goto vreg_fail;
-		}
-	}
-
-	/* Enable the OE (output enable) gpio */
-	gpio_set_value_cansleep(GPIO_JOYSTICK_EN, 1);
-	/* voltage and gpio stabilization delay */
-	msleep(50);
-
-	return 0;
-vreg_fail:
-	while (i)
-		regulator_disable(vregs_tdisc[--i]);
-	return rc;
-}
-
-static int tdisc_shinetsu_disable(void)
-{
-	int i, rc;
-
-	for (i = 0; i < ARRAY_SIZE(vregs_tdisc_name); i++) {
-		rc = regulator_disable(vregs_tdisc[i]);
-		if (rc < 0) {
-			printk(KERN_ERR "%s: vreg %s disable failed (%d)\n",
-				__func__, vregs_tdisc_name[i], rc);
-			goto tdisc_reg_fail;
-		}
-	}
-
-	/* Disable the OE (output enable) gpio */
-	gpio_set_value_cansleep(GPIO_JOYSTICK_EN, 0);
-
-	return 0;
-
-tdisc_reg_fail:
-	while (i)
-		regulator_enable(vregs_tdisc[--i]);
-	return rc;
-}
-
-static struct tdisc_abs_values tdisc_abs = {
-	.x_max = 32,
-	.y_max = 32,
-	.x_min = -32,
-	.y_min = -32,
-	.pressure_max = 32,
-	.pressure_min = 0,
-};
-
-static struct tdisc_platform_data tdisc_data = {
-	.tdisc_setup = tdisc_shinetsu_setup,
-	.tdisc_release = tdisc_shinetsu_release,
-	.tdisc_enable = tdisc_shinetsu_enable,
-	.tdisc_disable = tdisc_shinetsu_disable,
-	.tdisc_wakeup  = 0,
-	.tdisc_gpio = PMIC_GPIO_TDISC,
-	.tdisc_report_keys = true,
-	.tdisc_report_relative = true,
-	.tdisc_report_absolute = false,
-	.tdisc_report_wheel = false,
-	.tdisc_reverse_x = false,
-	.tdisc_reverse_y = true,
-	.tdisc_abs  = &tdisc_abs,
-};
-
-static struct i2c_board_info msm_i2c_gsbi3_tdisc_info[] = {
-	{
-		I2C_BOARD_INFO("vtd518", TDISC_I2C_SLAVE_ADDR),
-		.irq =  TDISC_INT,
-		.platform_data = &tdisc_data,
-	},
-};
-#endif
 
 #define PM_GPIO_CDC_RST_N 20
 #define GPIO_CDC_RST_N PM8058_GPIO_PM_TO_SYS(PM_GPIO_CDC_RST_N)
@@ -4963,14 +2759,6 @@ static unsigned int msm_timpani_setup_power(void)
 	rc = regulator_enable(vreg_timpani_1);
 	if (rc) {
 		pr_err("%s: Enable regulator 8058_l0 failed\n", __func__);
-		goto fail;
-	}
-
-	/* The settings for LDO0 should be set such that
-	*  it doesn't require to reset the timpani. */
-	rc = regulator_set_optimum_mode(vreg_timpani_1, 5000);
-	if (rc < 0) {
-		pr_err("Timpani regulator optimum mode setting failed\n");
 		goto fail;
 	}
 
@@ -5202,8 +2990,6 @@ static struct i2c_board_info pm8901_boardinfo[] __initdata = {
 
 static struct regulator *vreg_bahama;
 static unsigned int msm_bahama_setup_power(void)
-
-
 {
 	int rc = 0;
 	const char *msm_bahama_regulator = "8058_s3";
@@ -5213,35 +2999,32 @@ static unsigned int msm_bahama_setup_power(void)
 		rc = PTR_ERR(vreg_bahama);
 		pr_err("%s: regulator_get %s = %d\n", __func__,
 			msm_bahama_regulator, rc);
+		goto unget;
 	}
 
-	if (!rc)
-		rc = regulator_set_voltage(vreg_bahama, 1800000, 1800000);
-	else {
+	rc = regulator_set_voltage(vreg_bahama, 1800000, 1800000);
+	if (rc) {
 		pr_err("%s: regulator_set_voltage %s = %d\n", __func__,
 			msm_bahama_regulator, rc);
 		goto unget;
 	}
 
-	if (!rc)
-		rc = regulator_enable(vreg_bahama);
-	else {
+	rc = regulator_enable(vreg_bahama);
+	if (rc) {
 		pr_err("%s: regulator_enable %s = %d\n", __func__,
 			msm_bahama_regulator, rc);
 		goto unget;
 	}
 
-	if (!rc)
-		rc = gpio_request(GPIO_MS_SYS_RESET_N, "bahama sys_rst_n");
-	else {
+	rc = gpio_request(GPIO_MS_SYS_RESET_N, "bahama sys_rst_n");
+	if (rc) {
 		pr_err("%s: gpio_request %d = %d\n", __func__,
 			GPIO_MS_SYS_RESET_N, rc);
 		goto unenable;
 	}
 
-	if (!rc)
-		rc = gpio_direction_output(GPIO_MS_SYS_RESET_N, 1);
-	else {
+	rc = gpio_direction_output(GPIO_MS_SYS_RESET_N, 1);
+	if (rc) {
 		pr_err("%s: gpio_direction_output %d = %d\n", __func__,
 			GPIO_MS_SYS_RESET_N, rc);
 		goto unrequest;
@@ -5255,20 +3038,18 @@ unenable:
 	regulator_disable(vreg_bahama);
 unget:
 	regulator_put(vreg_bahama);
+	vreg_bahama = NULL;
 	return rc;
 };
+
 static unsigned int msm_bahama_shutdown_power(int value)
-
-
 {
-	gpio_set_value(GPIO_MS_SYS_RESET_N, 0);
-
-	gpio_free(GPIO_MS_SYS_RESET_N);
-
-	regulator_disable(vreg_bahama);
-
-	regulator_put(vreg_bahama);
-
+	if (vreg_bahama) {
+		gpio_set_value(GPIO_MS_SYS_RESET_N, 0);
+		gpio_free(GPIO_MS_SYS_RESET_N);
+		regulator_disable(vreg_bahama);
+		regulator_put(vreg_bahama);
+	}
 	return 0;
 };
 static struct regulator *fm_regulator_s3;
@@ -5407,14 +3188,8 @@ static struct i2c_board_info msm_marimba_board_info[] = {
 #endif /* CONFIG_MAIMBA_CORE */
 
 #ifdef CONFIG_I2C
-#define I2C_SURF 1
-#define I2C_FFA  (1 << 1)
-#define I2C_RUMI (1 << 2)
-#define I2C_SIM  (1 << 3)
-#define I2C_FLUID (1 << 4)
 
 struct i2c_registry {
-	u8                     machs;
 	int                    bus;
 	struct i2c_board_info *info;
 	int                    len;
@@ -5423,7 +3198,6 @@ struct i2c_registry {
 static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 #ifdef CONFIG_PMIC8058
 	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_SSBI1_I2C_BUS_ID,
 		pm8058_boardinfo,
 		ARRAY_SIZE(pm8058_boardinfo),
@@ -5431,209 +3205,58 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 #endif
 #ifdef CONFIG_PMIC8901
 	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_SSBI2_I2C_BUS_ID,
 		pm8901_boardinfo,
 		ARRAY_SIZE(pm8901_boardinfo),
 	},
 #endif
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-	{
-		I2C_SURF | I2C_FFA,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		core_expander_i2c_info,
-		ARRAY_SIZE(core_expander_i2c_info),
-	},
-	{
-		I2C_SURF | I2C_FFA,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		docking_expander_i2c_info,
-		ARRAY_SIZE(docking_expander_i2c_info),
-	},
-	{
-		I2C_SURF,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		surf_expanders_i2c_info,
-		ARRAY_SIZE(surf_expanders_i2c_info),
-	},
-	{
-		I2C_SURF | I2C_FFA,
-		MSM_GSBI3_QUP_I2C_BUS_ID,
-		fha_expanders_i2c_info,
-		ARRAY_SIZE(fha_expanders_i2c_info),
-	},
-	{
-		I2C_FLUID,
-		MSM_GSBI3_QUP_I2C_BUS_ID,
-		fluid_expanders_i2c_info,
-		ARRAY_SIZE(fluid_expanders_i2c_info),
-	},
-	{
-		I2C_FLUID,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		fluid_core_expander_i2c_info,
-		ARRAY_SIZE(fluid_core_expander_i2c_info),
-	},
-#endif
-#if defined(CONFIG_TOUCHDISC_VTD518_SHINETSU) || \
-		defined(CONFIG_TOUCHDISC_VTD518_SHINETSU_MODULE)
-	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
-		MSM_GSBI3_QUP_I2C_BUS_ID,
-		msm_i2c_gsbi3_tdisc_info,
-		ARRAY_SIZE(msm_i2c_gsbi3_tdisc_info),
-	},
-#endif
-	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
-		MSM_GSBI3_QUP_I2C_BUS_ID,
-		cy8ctmg200_board_info,
-		ARRAY_SIZE(cy8ctmg200_board_info),
-	},
-#if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C) || \
-		defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C_MODULE)
-	{
-		I2C_FLUID,
-		MSM_GSBI3_QUP_I2C_BUS_ID,
-		cyttsp_fluid_info,
-		ARRAY_SIZE(cyttsp_fluid_info),
-	},
-#endif
 #ifdef CONFIG_MSM_CAMERA
     {
-		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_GSBI4_QUP_I2C_BUS_ID,
 		msm_camera_boardinfo,
 		ARRAY_SIZE(msm_camera_boardinfo),
 	},
 #endif
 	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_GSBI7_QUP_I2C_BUS_ID,
 		msm_i2c_gsbi7_timpani_info,
 		ARRAY_SIZE(msm_i2c_gsbi7_timpani_info),
 	},
 #if defined(CONFIG_MARIMBA_CORE)
 	{
-		I2C_SURF | I2C_FFA | I2C_FLUID,
 		MSM_GSBI7_QUP_I2C_BUS_ID,
 		msm_marimba_board_info,
 		ARRAY_SIZE(msm_marimba_board_info),
 	},
 #endif /* CONFIG_MARIMBA_CORE */
-#ifdef CONFIG_ISL9519_CHARGER
-	{
-		I2C_SURF | I2C_FFA,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		isl_charger_i2c_info,
-		ARRAY_SIZE(isl_charger_i2c_info),
-	},
-#endif
-#if defined(CONFIG_HAPTIC_ISA1200) || \
-		defined(CONFIG_HAPTIC_ISA1200_MODULE)
-	{
-		I2C_FLUID,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		msm_isa1200_board_info,
-		ARRAY_SIZE(msm_isa1200_board_info),
-	},
-#endif
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-	{
-		I2C_FLUID,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		smb137b_charger_i2c_info,
-		ARRAY_SIZE(smb137b_charger_i2c_info),
-	},
-#endif
-#if defined(CONFIG_BATTERY_BQ27520) || \
-		defined(CONFIG_BATTERY_BQ27520_MODULE)
-	{
-		I2C_FLUID,
-		MSM_GSBI8_QUP_I2C_BUS_ID,
-		msm_bq27520_board_info,
-		ARRAY_SIZE(msm_bq27520_board_info),
-	},
-#endif
 };
 #endif /* CONFIG_I2C */
 
 static void fixup_i2c_configs(void)
 {
 #ifdef CONFIG_I2C
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_charm_surf())
-		sx150x_data[SX150X_CORE].irq_summary =
-			PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT2_N);
-	else if (machine_is_msm8x60_ffa() || machine_is_msm8x60_charm_ffa())
-		sx150x_data[SX150X_CORE].irq_summary =
-			PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT1_N);
-	else if (machine_is_msm8x60_fluid())
-		sx150x_data[SX150X_CORE_FLUID].irq_summary =
-			PM8058_GPIO_IRQ(PM8058_IRQ_BASE, UI_INT1_N);
-#endif
 	/*
 	 * Set PMIC 8901 MPP0 active_high to 0 for surf and charm_surf. This
 	 * implies that the regulator connected to MPP0 is enabled when
 	 * MPP0 is low.
 	 */
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_charm_surf())
-		pm8901_vreg_init_pdata[PM8901_VREG_ID_MPP0].active_high = 0;
-	else
-		pm8901_vreg_init_pdata[PM8901_VREG_ID_MPP0].active_high = 1;
+	pm8901_vreg_init_pdata[PM8901_VREG_ID_MPP0].active_high = 1;
 #endif
 }
 
 static void register_i2c_devices(void)
 {
 #ifdef CONFIG_I2C
-	u8 mach_mask = 0;
 	int i;
-
-	/* Build the matching 'supported_machs' bitmask */
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_charm_surf())
-		mach_mask = I2C_SURF;
-	else if (machine_is_msm8x60_ffa() || machine_is_msm8x60_charm_ffa())
-		mach_mask = I2C_FFA;
-	else if (machine_is_msm8x60_rumi3())
-		mach_mask = I2C_RUMI;
-	else if (machine_is_msm8x60_sim())
-		mach_mask = I2C_SIM;
-	else if (machine_is_msm8x60_fluid())
-		mach_mask = I2C_FLUID;
-	else
-		pr_err("unmatched machine ID in register_i2c_devices\n");
 
 	/* Run the array and install devices as appropriate */
 	for (i = 0; i < ARRAY_SIZE(msm8x60_i2c_devices); ++i) {
-		if (msm8x60_i2c_devices[i].machs & mach_mask)
-			i2c_register_board_info(msm8x60_i2c_devices[i].bus,
-						msm8x60_i2c_devices[i].info,
-						msm8x60_i2c_devices[i].len);
+		i2c_register_board_info(msm8x60_i2c_devices[i].bus,
+					msm8x60_i2c_devices[i].info,
+					msm8x60_i2c_devices[i].len);
 	}
 #endif
 }
-
-static void __init msm8x60_init_uart12dm(void)
-{
-#ifndef CONFIG_USB_PEHCI_HCD
-	/* 0x1D000000 now belongs to EBI2:CS3 i.e. USB ISP Controller */
-	void *fpga_mem = ioremap_nocache(0x1D000000, SZ_4K);
-	/* Advanced mode */
-	writew(0xFFFF, fpga_mem + 0x15C);
-	/* FPGA_UART_SEL */
-	writew(0, fpga_mem + 0x172);
-	/* FPGA_GPIO_CONFIG_117 */
-	writew(1, fpga_mem + 0xEA);
-	/* FPGA_GPIO_CONFIG_118 */
-	writew(1, fpga_mem + 0xEC);
-	dmb();
-	iounmap(fpga_mem);
-#endif
-}
-
-#define MSM_GSBI9_PHYS		0x19900000
-#define GSBI_DUAL_MODE_CODE	0x60
 
 static void __init msm8x60_init_buses(void)
 {
@@ -5648,15 +3271,6 @@ static void __init msm8x60_init_buses(void)
 	msm_gsbi7_qup_i2c_device.dev.platform_data = &msm_gsbi7_qup_i2c_pdata;
 	msm_gsbi8_qup_i2c_device.dev.platform_data = &msm_gsbi8_qup_i2c_pdata;
 
-#ifdef CONFIG_MSM_GSBI9_UART
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa()) {
-		/* Setting protocol code to 0x60 for dual UART/I2C in GSBI9 */
-		gsbi_mem = ioremap_nocache(MSM_GSBI9_PHYS, 4);
-		writel(GSBI_DUAL_MODE_CODE, gsbi_mem);
-		iounmap(gsbi_mem);
-		msm_gsbi9_qup_i2c_pdata.use_gsbi_shared_mode = 1;
-	}
-#endif
 	msm_gsbi9_qup_i2c_device.dev.platform_data = &msm_gsbi9_qup_i2c_pdata;
 	msm_gsbi12_qup_i2c_device.dev.platform_data = &msm_gsbi12_qup_i2c_pdata;
 #endif
@@ -5669,55 +3283,13 @@ static void __init msm8x60_init_buses(void)
 	msm_device_ssbi3.dev.platform_data = &msm_ssbi3_pdata;
 #endif
 
-	if (machine_is_msm8x60_fluid()) {
-#if defined(CONFIG_SMB137B_CHARGER) || defined(CONFIG_SMB137B_CHARGER_MODULE)
-		msm_otg_pdata.vbus_power = msm_hsusb_smb137b_vbus_power;
-		msm_otg_pdata.chg_vbus_draw = smb137b_vbus_draw;
-#endif
-#if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
-		msm_gsbi10_qup_spi_device.dev.platform_data =
-					&msm_gsbi10_qup_spi_pdata;
-#endif
-	}
-
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
-	/*
-	 * We can not put USB regulators (8058_l6 and 8058_l7) in LPM
-	 * when we depend on USB PHY for VBUS/ID notifications. VBUS
-	 * and ID notifications are available only on V2 surf and FFA
-	 * with a hardware workaround.
-	 */
-	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 2 &&
-			(machine_is_msm8x60_surf() ||
-			(machine_is_msm8x60_ffa() &&
-			pmic_id_notif_supported)))
-		msm_otg_pdata.phy_can_powercollapse = 1;
+	msm_otg_pdata.phy_can_powercollapse = 0;
 	msm_device_otg.dev.platform_data = &msm_otg_pdata;
 #endif
-
-#ifdef CONFIG_USB_GADGET_MSM_72K
-	msm_device_gadget_peripheral.dev.platform_data = &msm_gadget_pdata;
-#endif
-
-#ifdef CONFIG_USB_F_SERIAL_SDIO
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa()) {
-		struct usb_gadget_fserial_platform_data *fserial_pdata =
-			usb_gadget_fserial_device.dev.platform_data;
-
-		fserial_pdata->transport = USB_GADGET_FSERIAL_TRANSPORT_SDIO;
-	}
-#endif
-
 #ifdef CONFIG_SERIAL_MSM_HS
 	msm_uart_dm1_pdata.wakeup_irq = gpio_to_irq(54); /* GSBI6(2) */
 	msm_device_uart_dm1.dev.platform_data = &msm_uart_dm1_pdata;
-#endif
-#ifdef CONFIG_MSM_GSBI9_UART
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa()) {
-		msm_device_uart_gsbi9.dev.platform_data =
-					&msm_uart_gsbi9_pdata;
-		platform_device_register(&msm_device_uart_gsbi9);
-	}
 #endif
 
 #ifdef CONFIG_MSM_BUS_SCALING
@@ -5746,89 +3318,8 @@ static void __init msm8x60_map_io(void)
 	msm8x60_allocate_memory_regions();
 }
 
-/*
- * Most segments of the EBI2 bus are disabled by default.
- */
-static void __init msm8x60_init_ebi2(void)
-{
-	uint32_t ebi2_cfg;
-	void *ebi2_cfg_ptr;
-
-	ebi2_cfg_ptr = ioremap_nocache(0x1a100000, sizeof(uint32_t));
-	if (ebi2_cfg_ptr != 0) {
-		ebi2_cfg = readl(ebi2_cfg_ptr);
-
-		if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
-			machine_is_msm8x60_fluid())
-				ebi2_cfg |= (1 << 4) | (1 << 5); /* CS2, CS3 */
-		else if (machine_is_msm8x60_sim())
-			ebi2_cfg |= (1 << 4); /* CS2 */
-		else if (machine_is_msm8x60_rumi3())
-			ebi2_cfg |= (1 << 5); /* CS3 */
-
-		writel(ebi2_cfg, ebi2_cfg_ptr);
-		iounmap(ebi2_cfg_ptr);
-	}
-
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
-	    machine_is_msm8x60_fluid()) {
-		ebi2_cfg_ptr = ioremap_nocache(0x1a110000, SZ_4K);
-		if (ebi2_cfg_ptr != 0) {
-			/* EBI2_XMEM_CFG:PWRSAVE_MODE off */
-			writel(0UL, ebi2_cfg_ptr);
-
-			/* CS2: Delay 9 cycles (140ns@64MHz) between SMSC
-			 * LAN9221 Ethernet controller reads and writes.
-			 * The lowest 4 bits are the read delay, the next
-			 * 4 are the write delay. */
-			writel(0x031F1C99, ebi2_cfg_ptr + 0x10);
-#ifdef CONFIG_USB_PEHCI_HCD
-			/*
-			 * RECOVERY=5, HOLD_WR=1
-			 * INIT_LATENCY_WR=1, INIT_LATENCY_RD=1
-			 * WAIT_WR=1, WAIT_RD=2
-			 */
-			writel(0x51010112, ebi2_cfg_ptr + 0x14);
-			/*
-			 * HOLD_RD=1
-			 * ADV_OE_RECOVERY=0, ADDR_HOLD_ENA=1
-			 */
-			writel(0x01000020, ebi2_cfg_ptr + 0x34);
-#else
-			/* EBI2 CS3 muxed address/data,
-			* two cyc addr enable */
-			writel(0xA3030020, ebi2_cfg_ptr + 0x34);
-
-#endif
-			iounmap(ebi2_cfg_ptr);
-		}
-	}
-}
-
-static void __init msm8x60_configure_smc91x(void)
-{
-	if (machine_is_msm8x60_sim()) {
-
-		smc91x_resources[0].start = 0x1b800300;
-		smc91x_resources[0].end   = 0x1b8003ff;
-
-		smc91x_resources[1].start = (NR_MSM_IRQS + 40);
-		smc91x_resources[1].end   = (NR_MSM_IRQS + 40);
-
-	} else if (machine_is_msm8x60_rumi3()) {
-
-		smc91x_resources[0].start = 0x1d000300;
-		smc91x_resources[0].end   = 0x1d0003ff;
-
-		smc91x_resources[1].start = TLMM_SCSS_DIR_CONN_IRQ_0;
-		smc91x_resources[1].end   = TLMM_SCSS_DIR_CONN_IRQ_0;
-	}
-}
-
 static void __init msm8x60_init_tlmm(void)
 {
-	if (machine_is_msm8x60_rumi3())
-		msm_gpio_install_direct_irq(0, 0, 1);
 }
 
 #if (defined(CONFIG_MMC_MSM_SDC1_SUPPORT)\
@@ -6381,110 +3872,6 @@ setup_vreg:
 	return rc;
 }
 
-static int msm_sdc3_get_wpswitch(struct device *dev)
-{
-	struct platform_device *pdev;
-	int status;
-	pdev = container_of(dev, struct platform_device, dev);
-
-	status = gpio_request(GPIO_SDC_WP, "SD_WP_Switch");
-	if (status) {
-		pr_err("%s:Failed to request GPIO %d\n",
-					__func__, GPIO_SDC_WP);
-	} else {
-		status = gpio_direction_input(GPIO_SDC_WP);
-		if (!status) {
-			status = gpio_get_value_cansleep(GPIO_SDC_WP);
-			pr_info("%s: WP Status for Slot %d = %d\n",
-				 __func__, pdev->id, status);
-		}
-		gpio_free(GPIO_SDC_WP);
-	}
-	return status;
-}
-
-#ifdef CONFIG_MMC_MSM_SDC5_SUPPORT
-int sdc5_register_status_notify(void (*callback)(int, void *),
-	void *dev_id)
-{
-	sdc5_status_notify_cb = callback;
-	sdc5_status_notify_cb_devid = dev_id;
-	return 0;
-}
-#endif
-
-#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-int sdc2_register_status_notify(void (*callback)(int, void *),
-	void *dev_id)
-{
-	sdc2_status_notify_cb = callback;
-	sdc2_status_notify_cb_devid = dev_id;
-	return 0;
-}
-#endif
-
-/* Interrupt handler for SDC2 and SDC5 detection */
-static irqreturn_t msm8x60_multi_sdio_slot_status_irq(int irq, void *dev_id)
-{
-	int status;
-
-	if (!machine_is_msm8x60_charm_surf() &&
-	    !machine_is_msm8x60_charm_ffa())
-		return IRQ_NONE;
-
-	status = gpio_get_value(MDM2AP_SYNC);
-	pr_info("%s: MDM2AP_SYNC Status = %d\n",
-		 __func__, status);
-
-#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-	if (sdc2_status_notify_cb) {
-		pr_info("%s: calling sdc2_status_notify_cb\n", __func__);
-		sdc2_status_notify_cb(status,
-			sdc2_status_notify_cb_devid);
-	}
-#endif
-
-#ifdef CONFIG_MMC_MSM_SDC5_SUPPORT
-	if (sdc5_status_notify_cb) {
-		pr_info("%s: calling sdc5_status_notify_cb\n", __func__);
-		sdc5_status_notify_cb(status,
-			sdc5_status_notify_cb_devid);
-	}
-#endif
-	return IRQ_HANDLED;
-}
-
-static int msm8x60_multi_sdio_init(void)
-{
-	int ret, irq_num;
-
-	if (!machine_is_msm8x60_charm_surf() &&
-	    !machine_is_msm8x60_charm_ffa())
-		return 0;
-
-	ret = msm_gpiomux_get(MDM2AP_SYNC);
-	if (ret) {
-		pr_err("%s:Failed to request GPIO %d, ret=%d\n",
-					__func__, MDM2AP_SYNC, ret);
-		return ret;
-	}
-
-	irq_num = gpio_to_irq(MDM2AP_SYNC);
-
-	ret = request_irq(irq_num,
-		msm8x60_multi_sdio_slot_status_irq,
-		IRQF_TRIGGER_RISING,
-		"sdio_multidetection", NULL);
-
-	if (ret) {
-		pr_err("%s:Failed to request irq, ret=%d\n",
-					__func__, ret);
-		return ret;
-	}
-
-	return ret;
-}
-
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
@@ -6508,30 +3895,6 @@ static unsigned int msm8x60_sdcc_slot_status(struct device *dev)
 }
 #endif
 #endif
-
-#ifdef	CONFIG_MMC_MSM_SDC4_SUPPORT
-static int msm_sdcc_cfg_mpm_sdiowakeup(struct device *dev, bool is_wake_up)
-{
-	struct platform_device *pdev;
-	enum msm_mpm_pin pin;
-
-	pdev = container_of(dev, struct platform_device, dev);
-
-	/* Only SDCC4 slot connected to WLAN chip has wakeup capability */
-	if (pdev->id == 4)
-		pin = MSM_MPM_PIN_SDC4_DAT1;
-	else
-		return -EINVAL;
-
-	if (is_wake_up) {
-		msm_mpm_set_pin_type(pin, IRQ_TYPE_LEVEL_LOW);
-		msm_mpm_set_pin_wake(pin, 1);
-	} else
-		msm_mpm_set_pin_wake(pin, 0);
-
-	return 0;
-}
-#endif
 #endif
 
 #ifdef CONFIG_MMC_MSM_SDC1_SUPPORT
@@ -6551,26 +3914,11 @@ static struct mmc_platform_data msm8x60_sdc1_data = {
 };
 #endif
 
-#ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-static struct mmc_platform_data msm8x60_sdc2_data = {
-	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_165_195,
-	.translate_vdd  = msm_sdcc_setup_power,
-	.mmc_bus_width  = MMC_CAP_8_BIT_DATA,
-	.msmsdcc_fmin	= 400000,
-	.msmsdcc_fmid	= 24000000,
-	.msmsdcc_fmax	= 48000000,
-	.nonremovable	= 1,
-	.pclk_src_dfab  = 1,
-	.register_status_notify = sdc2_register_status_notify,
-};
-#endif
-
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 static struct mmc_platform_data msm8x60_sdc3_data = {
 	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29,
 	.translate_vdd  = msm_sdcc_setup_power,
 	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
-	.wpswitch  	= msm_sdc3_get_wpswitch,
 #ifdef CONFIG_MMC_MSM_CARD_HW_DETECTION
 	.status      = msm8x60_sdcc_slot_status,
 	.status_irq  = PM8058_GPIO_IRQ(PM8058_IRQ_BASE,
@@ -6595,21 +3943,6 @@ static struct mmc_platform_data msm8x60_sdc4_data = {
 	.msmsdcc_fmax	= 48000000,
 	.nonremovable	= 1,
 	.pclk_src_dfab  = 1,
-	.cfg_mpm_sdiowakeup = msm_sdcc_cfg_mpm_sdiowakeup,
-};
-#endif
-
-#ifdef CONFIG_MMC_MSM_SDC5_SUPPORT
-static struct mmc_platform_data msm8x60_sdc5_data = {
-	.ocr_mask       = MMC_VDD_27_28 | MMC_VDD_28_29 | MMC_VDD_165_195,
-	.translate_vdd  = msm_sdcc_setup_power,
-	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
-	.msmsdcc_fmin	= 400000,
-	.msmsdcc_fmid	= 24000000,
-	.msmsdcc_fmax	= 48000000,
-	.nonremovable	= 1,
-	.pclk_src_dfab  = 1,
-	.register_status_notify = sdc5_register_status_notify,
 };
 #endif
 
@@ -6643,11 +3976,6 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[1].vdd_data->level = 1800000;
 
 	sdcc_vreg_data[1].vccq_data = NULL;
-
-	if (machine_is_msm8x60_charm_surf())
-		msm8x60_sdc2_data.msmsdcc_fmax = 24000000;
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
-		msm_add_sdcc(2, &msm8x60_sdc2_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC3_SUPPORT
 	/* SDCC3 : External card slot connected */
@@ -6676,8 +4004,6 @@ static void __init msm8x60_init_mmc(void)
 	/* Max. Active current required is 16 mA */
 	sdcc_vreg_data[2].vddp_data->hpm_uA = 16000;
 
-	if (machine_is_msm8x60_fluid())
-		msm8x60_sdc3_data.wpswitch = NULL;
 	msm_add_sdcc(3, &msm8x60_sdc3_data);
 #endif
 #ifdef CONFIG_MMC_MSM_SDC4_SUPPORT
@@ -6702,215 +4028,45 @@ static void __init msm8x60_init_mmc(void)
 	sdcc_vreg_data[4].vdd_data->level = 1800000;
 
 	sdcc_vreg_data[4].vccq_data = NULL;
-
-	if (machine_is_msm8x60_charm_surf())
-		msm8x60_sdc5_data.msmsdcc_fmax = 24000000;
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
-		msm_add_sdcc(5, &msm8x60_sdc5_data);
 #endif
 }
-
-#if !defined(CONFIG_GPIO_SX150X) && !defined(CONFIG_GPIO_SX150X_MODULE)
-static inline void display_common_power(int on) {}
-#else
-
-#define _GET_REGULATOR(var, name) do {					\
-	if (var == NULL) {						\
-		var = regulator_get(NULL, name);			\
-		if (IS_ERR(var)) {					\
-			pr_err("'%s' regulator not found, rc=%ld\n",	\
-				name, PTR_ERR(var));			\
-			var = NULL;					\
-		}							\
-	}								\
-} while (0)
-
-static int dsub_regulator(int on)
-{
-	static struct regulator *dsub_reg;
-	static struct regulator *mpp0_reg;
-	static int dsub_reg_enabled;
-	int rc = 0;
-
-	_GET_REGULATOR(dsub_reg, "8901_l3");
-	if (IS_ERR(dsub_reg)) {
-		printk(KERN_ERR "%s: failed to get reg 8901_l3 err=%ld",
-		       __func__, PTR_ERR(dsub_reg));
-		return PTR_ERR(dsub_reg);
-	}
-
-	_GET_REGULATOR(mpp0_reg, "8901_mpp0");
-	if (IS_ERR(mpp0_reg)) {
-		printk(KERN_ERR "%s: failed to get reg 8901_mpp0 err=%ld",
-		       __func__, PTR_ERR(mpp0_reg));
-		return PTR_ERR(mpp0_reg);
-	}
-
-	if (on && !dsub_reg_enabled) {
-		rc = regulator_set_voltage(dsub_reg, 3300000, 3300000);
-		if (rc) {
-			printk(KERN_ERR "%s: failed to set reg 8901_l3 voltage"
-			       " err=%d", __func__, rc);
-			goto dsub_regulator_err;
-		}
-		rc = regulator_enable(dsub_reg);
-		if (rc) {
-			printk(KERN_ERR "%s: failed to enable reg 8901_l3"
-			       " err=%d", __func__, rc);
-			goto dsub_regulator_err;
-		}
-		rc = regulator_enable(mpp0_reg);
-		if (rc) {
-			printk(KERN_ERR "%s: failed to enable reg 8901_mpp0"
-			       " err=%d", __func__, rc);
-			goto dsub_regulator_err;
-		}
-		dsub_reg_enabled = 1;
-	} else if (!on && dsub_reg_enabled) {
-		rc = regulator_disable(dsub_reg);
-		if (rc)
-			printk(KERN_WARNING "%s: failed to disable reg 8901_l3"
-			       " err=%d", __func__, rc);
-		rc = regulator_disable(mpp0_reg);
-		if (rc)
-			printk(KERN_WARNING "%s: failed to disable reg "
-			       "8901_mpp0 err=%d", __func__, rc);
-		dsub_reg_enabled = 0;
-	}
-
-	return rc;
-
-dsub_regulator_err:
-	regulator_put(mpp0_reg);
-	regulator_put(dsub_reg);
-	return rc;
-}
-
-static int display_power_on;
-static void setup_display_power(void)
-{
-	if (display_power_on)
-		if (lcdc_vga_enabled) {
-			dsub_regulator(1);
-			gpio_set_value_cansleep(GPIO_LVDS_SHUTDOWN_N, 0);
-			gpio_set_value_cansleep(GPIO_BACKLIGHT_EN, 0);
-			if (machine_is_msm8x60_ffa() ||
-			    machine_is_msm8x60_charm_ffa())
-				gpio_set_value_cansleep(GPIO_DONGLE_PWR_EN, 1);
-		} else {
-			dsub_regulator(0);
-			gpio_set_value_cansleep(GPIO_LVDS_SHUTDOWN_N, 1);
-			gpio_set_value_cansleep(GPIO_BACKLIGHT_EN, 1);
-			if (machine_is_msm8x60_ffa() ||
-			    machine_is_msm8x60_charm_ffa())
-				gpio_set_value_cansleep(GPIO_DONGLE_PWR_EN, 0);
-		}
-	else {
-		dsub_regulator(0);
-		if (machine_is_msm8x60_ffa() || machine_is_msm8x60_charm_ffa())
-			gpio_set_value_cansleep(GPIO_DONGLE_PWR_EN, 0);
-		/* BACKLIGHT */
-		gpio_set_value_cansleep(GPIO_BACKLIGHT_EN, 0);
-		/* LVDS */
-		gpio_set_value_cansleep(GPIO_LVDS_SHUTDOWN_N, 0);
-	}
-}
-
-static void display_common_power(int on)
-{
-	int rc;
-	static struct regulator *display_reg;
-
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
-	    machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa()) {
-		if (on) {
-			/* LVDS */
-			_GET_REGULATOR(display_reg, "8901_l2");
-			if (!display_reg)
-				return;
-			rc = regulator_set_voltage(display_reg,
-				3300000, 3300000);
-			if (rc)
-				goto out;
-			rc = regulator_enable(display_reg);
-			if (rc)
-				goto out;
-			rc = gpio_request(GPIO_LVDS_SHUTDOWN_N,
-				"LVDS_STDN_OUT_N");
-			if (rc) {
-				printk(KERN_ERR "%s: LVDS gpio %d request"
-					"failed\n", __func__,
-					 GPIO_LVDS_SHUTDOWN_N);
-				goto out2;
-			}
-
-			/* BACKLIGHT */
-			rc = gpio_request(GPIO_BACKLIGHT_EN, "BACKLIGHT_EN");
-			if (rc) {
-				printk(KERN_ERR "%s: BACKLIGHT gpio %d request"
-					"failed\n", __func__,
-					 GPIO_BACKLIGHT_EN);
-				goto out3;
-			}
-
-			if (machine_is_msm8x60_ffa() ||
-			    machine_is_msm8x60_charm_ffa()) {
-				rc = gpio_request(GPIO_DONGLE_PWR_EN,
-						  "DONGLE_PWR_EN");
-				if (rc) {
-					printk(KERN_ERR "%s: DONGLE_PWR_EN gpio"
-					       " %d request failed\n", __func__,
-					       GPIO_DONGLE_PWR_EN);
-					goto out4;
-				}
-			}
-
-			gpio_direction_output(GPIO_LVDS_SHUTDOWN_N, 0);
-			gpio_direction_output(GPIO_BACKLIGHT_EN, 0);
-			if (machine_is_msm8x60_ffa() ||
-			    machine_is_msm8x60_charm_ffa())
-				gpio_direction_output(GPIO_DONGLE_PWR_EN, 0);
-			mdelay(20);
-			display_power_on = 1;
-			setup_display_power();
-		} else {
-			if (display_power_on) {
-				display_power_on = 0;
-				setup_display_power();
-				mdelay(20);
-				if (machine_is_msm8x60_ffa() ||
-				    machine_is_msm8x60_charm_ffa())
-					gpio_free(GPIO_DONGLE_PWR_EN);
-				goto out4;
-			}
-		}
-	}
-	return;
-
-out4:
-	gpio_free(GPIO_BACKLIGHT_EN);
-out3:
-	gpio_free(GPIO_LVDS_SHUTDOWN_N);
-out2:
-	regulator_disable(display_reg);
-out:
-	regulator_put(display_reg);
-	display_reg = NULL;
-}
-#undef _GET_REGULATOR
-#endif
-
-static int mipi_dsi_panel_power(int on);
 
 #define LCDC_NUM_GPIO 28
 #define LCDC_GPIO_START 0
 
-static void lcdc_samsung_panel_power(int on)
+static void lcdc_chimei_panel_power(int on)
 {
 	int n, ret = 0;
+#ifdef USE_VREG_L2B
+	static struct regulator *vreg_l2b;
 
-	display_common_power(on);
+	/*
+	 * chimei panle power always on.
+	 * no power control necessary.
+	 */
 
+	if (vreg_l2b == NULL) {
+		vreg_l2b = regulator_get(NULL, "8901_l2");
+		if (IS_ERR(vreg_l2b)) {
+			pr_debug("%s: vreg_l2b failed\n", __func__);
+			ret = PTR_ERR(vreg_l2b);
+			return ret;
+		}
+	}
+
+	if (on) {
+		ret = regulator_set_voltage(vreg_l2b, 3300000, 3300000);
+		if (ret)
+			goto out;
+		ret = regulator_enable(vreg_l2b);
+		if (ret)
+			goto out;
+	} else {
+		regulator_disable(display_reg);
+	}
+#endif
+
+	/* configure gpio pins */
 	for (n = 0; n < LCDC_NUM_GPIO; n++) {
 		if (on) {
 			ret = gpio_request(LCDC_GPIO_START + n, "LCDC_GPIO");
@@ -6927,7 +4083,12 @@ static void lcdc_samsung_panel_power(int on)
 			gpio_free(LCDC_GPIO_START + n);
 	}
 
-	mipi_dsi_panel_power(0); /* set 8058_ldo0 to LPM */
+#ifdef USE_VREG_L2B
+out:
+	regulator_disable(vreg_l2b);
+	regulator_put(vreg_l2b);
+	vreg_l2b = NULL;
+#endif
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL
@@ -7110,130 +4271,12 @@ static int lcdc_panel_power(int on)
 
 	lcdc_power_save_on = flag_on;
 
-	lcdc_samsung_panel_power(on);
+	lcdc_chimei_panel_power(on);
 
 	return 0;
 }
+
 #ifdef CONFIG_MSM_BUS_SCALING
-#ifdef CONFIG_FB_MSM_LCDC_DSUB
-static struct msm_bus_vectors mdp_init_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = 0,
-	},
-};
-
-static struct msm_bus_vectors mdp_sd_smi_vectors[] = {
-	/* Default case static display/UI/2d/3d if FB SMI */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 388800000,
-		.ib = 486000000,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = 0,
-	},
-};
-
-static struct msm_bus_vectors mdp_sd_ebi_vectors[] = {
-	/* Default case static display/UI/2d/3d if FB SMI */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 388800000,
-		.ib = 486000000,
-	},
-};
-static struct msm_bus_vectors mdp_vga_vectors[] = {
-	/* VGA and less video */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 458092800,
-		.ib = 572616000,
-	},
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 458092800,
-		.ib = 572616000,
-	},
-};
-static struct msm_bus_vectors mdp_720p_vectors[] = {
-	/* 720p and less video */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 471744000,
-		.ib = 589680000,
-	},
-	/* Master and slaves can be from different fabrics */
-       {
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-	       .ab = 471744000,
-	       .ib = 589680000,
-	},
-};
-
-static struct msm_bus_vectors mdp_1080p_vectors[] = {
-	/* 1080p and less video */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 575424000,
-		.ib = 719280000,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 575424000,
-		.ib = 719280000,
-	},
-};
-
-static struct msm_bus_vectors mdp_rgb_vectors[] = {
-	/* RGB playing on VG or RGB pipe, might be on SMI */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 575424000,
-		.ib = 719280000,
-	},
-	/* FB on EBI, request for EBI too*/
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 575424000,
-		.ib = 719280000,
-	},
-};
-#else
 static struct msm_bus_vectors mdp_init_vectors[] = {
 	/* For now, 0th array entry is reserved.
 	 * Please leave 0 as is and don't use it
@@ -7352,7 +4395,7 @@ static struct msm_bus_vectors mdp_rgb_vectors[] = {
 		.ib = 417600000,
 	},
 };
-#endif
+
 static struct msm_bus_paths mdp_bus_scale_usecases[] = {
 	{
 		ARRAY_SIZE(mdp_init_vectors),
@@ -7388,188 +4431,25 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 	ARRAY_SIZE(mdp_bus_scale_usecases),
 	.name = "mdp",
 };
-
 #endif
-#ifdef CONFIG_MSM_BUS_SCALING
-static struct msm_bus_vectors dtv_bus_init_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = 0,
-	},
-};
-static struct msm_bus_vectors dtv_bus_def_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 566092800,
-		.ib = 707616000,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 566092800,
-		.ib = 707616000,
-	},
-};
-static struct msm_bus_paths dtv_bus_scale_usecases[] = {
-	{
-		ARRAY_SIZE(dtv_bus_init_vectors),
-		dtv_bus_init_vectors,
-	},
-	{
-		ARRAY_SIZE(dtv_bus_def_vectors),
-		dtv_bus_def_vectors,
-	},
-};
-static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
-	dtv_bus_scale_usecases,
-	ARRAY_SIZE(dtv_bus_scale_usecases),
-	.name = "dtv",
-};
-
-static struct lcdc_platform_data dtv_pdata = {
-	.bus_scale_table = &dtv_bus_scale_pdata,
-};
-#endif
-
 
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_power_save   = lcdc_panel_power,
 };
 
+#define MDP_VSYNC_GPIO		28
 
-#define MDP_VSYNC_GPIO 28
-
-/*
- * MIPI_DSI only use 8058_LDO0 which need always on
- * therefore it need to be put at low power mode if
- * it was not used instead of turn it off.
- */
-static int mipi_dsi_panel_power(int on)
-{
-	int flag_on = !!on;
-	static int mipi_dsi_power_save_on;
-	static struct regulator *ldo0;
-	int rc = 0;
-
-	if (mipi_dsi_power_save_on == flag_on)
-		return 0;
-
-	mipi_dsi_power_save_on = flag_on;
-
-	if (ldo0 == NULL) {	/* init */
-		ldo0 = regulator_get(NULL, "8058_l0");
-		if (IS_ERR(ldo0)) {
-			pr_debug("%s: LDO0 failed\n", __func__);
-			rc = PTR_ERR(ldo0);
-			return rc;
-		}
-
-		rc = regulator_set_voltage(ldo0, 3300000, 3300000);
-		if (rc)
-			goto out;
-
-		rc = regulator_enable(ldo0);
-		if (rc)
-			goto out;
-	}
-
-	if (on) {
-		/* set ldo0 to HPM */
-		rc = regulator_set_optimum_mode(ldo0, 100000);
-		if (rc)
-			goto out;
-	} else {
-		/* set ldo0 to LPM */
-		rc = regulator_set_optimum_mode(ldo0, 9000);
-		if (rc)
-			goto out;
-	}
-
-	return 0;
-out:
-	regulator_disable(ldo0);
-	regulator_put(ldo0);
-	ldo0 = NULL;
-	return rc;
-}
-
-static struct mipi_dsi_platform_data mipi_dsi_pdata = {
-	.vsync_gpio = MDP_VSYNC_GPIO,
-	.dsi_power_save   = mipi_dsi_panel_power,
-};
-
-#ifdef CONFIG_FB_MSM_TVOUT
-static struct regulator *reg_8058_l13;
-
-static int atv_dac_power(int on)
-{
-	int rc = 0;
-	#define _GET_REGULATOR(var, name) do {				\
-		var = regulator_get(NULL, name);			\
-		if (IS_ERR(var)) {					\
-			pr_info("'%s' regulator not found, rc=%ld\n",	\
-				name, IS_ERR(var));			\
-			var = NULL;					\
-			return -ENODEV;					\
-		}							\
-	} while (0)
-
-	if (!reg_8058_l13)
-		_GET_REGULATOR(reg_8058_l13, "8058_l13");
-	#undef _GET_REGULATOR
-
-	if (on) {
-		rc = regulator_set_voltage(reg_8058_l13, 2050000, 2050000);
-		if (rc) {
-			pr_info("%s: '%s' regulator set voltage failed,\
-				rc=%d\n", __func__, "8058_l13", rc);
-			return rc;
-		}
-
-		rc = regulator_enable(reg_8058_l13);
-		if (rc) {
-			pr_err("%s: '%s' regulator enable failed,\
-				rc=%d\n", __func__, "8058_l13", rc);
-			return rc;
-		}
-	} else {
-		rc = regulator_force_disable(reg_8058_l13);
-		if (rc)
-			pr_warning("%s: '%s' regulator disable failed, rc=%d\n",
-				__func__, "8058_l13", rc);
-	}
-	return rc;
-
-}
-#endif
-
-int mdp_core_clk_rate_table[] = {
+static int mdp_core_clk_rate_table[] = {
 	59080000,
-	59080000,
-	85330000,
+	128000000,
+	160000000,
 	200000000,
 	200000000,
 };
+
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
-	.mdp_core_clk_rate = 59080000,
+	.mdp_core_clk_rate = 160000000,
 	.mdp_core_clk_table = mdp_core_clk_rate_table,
 	.num_mdp_clk = ARRAY_SIZE(mdp_core_clk_rate_table),
 #ifdef CONFIG_MSM_BUS_SCALING
@@ -7577,92 +4457,10 @@ static struct msm_panel_common_pdata mdp_pdata = {
 #endif
 };
 
-#ifdef CONFIG_FB_MSM_TVOUT
-
-#ifdef CONFIG_MSM_BUS_SCALING
-static struct msm_bus_vectors atv_bus_init_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 0,
-		.ib = 0,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 0,
-		.ib = 0,
-	},
-};
-static struct msm_bus_vectors atv_bus_def_vectors[] = {
-	/* For now, 0th array entry is reserved.
-	 * Please leave 0 as is and don't use it
-	 */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_SMI,
-		.ab = 236390400,
-		.ib = 265939200,
-	},
-	/* Master and slaves can be from different fabrics */
-	{
-		.src = MSM_BUS_MASTER_MDP_PORT0,
-		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 236390400,
-		.ib = 265939200,
-	},
-};
-static struct msm_bus_paths atv_bus_scale_usecases[] = {
-	{
-		ARRAY_SIZE(atv_bus_init_vectors),
-		atv_bus_init_vectors,
-	},
-	{
-		ARRAY_SIZE(atv_bus_def_vectors),
-		atv_bus_def_vectors,
-	},
-};
-static struct msm_bus_scale_pdata atv_bus_scale_pdata = {
-	atv_bus_scale_usecases,
-	ARRAY_SIZE(atv_bus_scale_usecases),
-	.name = "atv",
-};
-#endif
-
-static struct tvenc_platform_data atv_pdata = {
-	.poll		 = 0,
-	.pm_vid_en	 = atv_dac_power,
-#ifdef CONFIG_MSM_BUS_SCALING
-	.bus_scale_table = &atv_bus_scale_pdata,
-#endif
-};
-#endif
-
 static void __init msm_fb_add_devices(void)
 {
-#ifdef CONFIG_FB_MSM_LCDC_DSUB
-	mdp_pdata.mdp_core_clk_table = NULL;
-	mdp_pdata.num_mdp_clk = 0;
-	mdp_pdata.mdp_core_clk_rate = 200000000;
-#endif
-	if (machine_is_msm8x60_rumi3())
-		msm_fb_register_device("mdp", NULL);
-	else
-		msm_fb_register_device("mdp", &mdp_pdata);
-
+	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("lcdc", &lcdc_pdata);
-	msm_fb_register_device("mipi_dsi", &mipi_dsi_pdata);
-#ifdef CONFIG_MSM_BUS_SCALING
-	msm_fb_register_device("dtv", &dtv_pdata);
-#endif
-#ifdef CONFIG_FB_MSM_TVOUT
-	msm_fb_register_device("tvenc", &atv_pdata);
-	msm_fb_register_device("tvout_device", NULL);
-#endif
 }
 
 #if (defined(CONFIG_MARIMBA_CORE)) && \
@@ -7675,12 +4473,14 @@ static const struct {
 } bt_regs_info[] = {
 	{ "8058_s3", 1800000, 1800000 },
 	{ "8058_s2", 1300000, 1300000 },
+	{ "8058_l2", 1800000, 1800000 },
 	{ "8058_l8", 2900000, 3050000 },
 };
 
 static struct {
 	bool enabled;
 } bt_regs_status[] = {
+	{ false },
 	{ false },
 	{ false },
 	{ false },
@@ -8023,14 +4823,6 @@ out:
 
 #endif /*CONFIG_MARIMBA_CORE, CONFIG_MSM_BT_POWER, CONFIG_MSM_BT_POWER_MODULE*/
 
-static void __init msm8x60_cfg_smsc911x(void)
-{
-	smsc911x_resources[1].start =
-		PM8058_GPIO_IRQ(PM8058_IRQ_BASE, 6);
-	smsc911x_resources[1].end =
-		PM8058_GPIO_IRQ(PM8058_IRQ_BASE, 6);
-}
-
 #ifdef CONFIG_MSM_RPM
 static struct msm_rpm_platform_data msm_rpm_data = {
 	.reg_base_addrs = {
@@ -8050,53 +4842,10 @@ struct msm_board_data {
 	struct msm_gpiomux_configs *gpiomux_cfgs;
 };
 
-static struct msm_board_data msm8x60_rumi3_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
+static struct msm_board_data msm8x60_qt_board_data __initdata = {
+	.gpiomux_cfgs = msm8x60_qt_gpiomux_cfgs,
 };
 
-static struct msm_board_data msm8x60_sim_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
-};
-
-static struct msm_board_data msm8x60_surf_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
-};
-
-static struct msm_board_data msm8x60_ffa_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_surf_ffa_gpiomux_cfgs,
-};
-
-static struct msm_board_data msm8x60_fluid_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_fluid_gpiomux_cfgs,
-};
-
-static struct msm_board_data msm8x60_charm_surf_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_charm_gpiomux_cfgs,
-};
-
-static struct msm_board_data msm8x60_charm_ffa_board_data __initdata = {
-	.gpiomux_cfgs = msm8x60_charm_gpiomux_cfgs,
-};
-
-#define USB_HUB_EN_GPIO	138
-static void msm8x60_charm_hub_init(void)
-{
-	int rc;
-
-	rc = gpio_request(USB_HUB_EN_GPIO, "usb_hub");
-	if (rc) {
-		pr_err("%s: hub enable %d request failed\n",
-				__func__, USB_HUB_EN_GPIO);
-		return;
-	}
-
-	rc = gpio_direction_output(USB_HUB_EN_GPIO, 1);
-	if (rc) {
-		pr_err("%s: gpio_direction_output failed for %d\n",
-				__func__, USB_HUB_EN_GPIO);
-		return;
-	}
-}
 
 static void __init msm8x60_init(struct msm_board_data *board_data)
 {
@@ -8157,108 +4906,28 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	 */
 	msm8x60_init_buses();
 	platform_add_devices(early_devices, ARRAY_SIZE(early_devices));
-	/* CPU frequency control is not supported on simulated targets. */
-	if (!machine_is_msm8x60_rumi3() && !machine_is_msm8x60_sim())
-		msm_acpu_clock_init(&msm8x60_acpu_clock_data);
+	msm_acpu_clock_init(&msm8x60_acpu_clock_data);
 
-	/* No EBI2 on 8660 charm targets */
-	if (!machine_is_msm8x60_charm_surf() && !machine_is_msm8x60_charm_ffa())
-		msm8x60_init_ebi2();
 	msm8x60_init_tlmm();
 	msm8x60_init_gpiomux(board_data->gpiomux_cfgs);
-	msm8x60_init_uart12dm();
 	msm8x60_init_mmc();
-
-	if (machine_is_msm8x60_charm_ffa())
-		msm8x60_charm_hub_init();
-
-#ifdef CONFIG_MSM_DSPS
-	msm8x60_init_dsps();
-#endif
 
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	msm8x60_init_pm8058_othc();
 #endif
 
-	if (machine_is_msm8x60_fluid()) {
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_KPD].
-			platform_data = &fluid_keypad_data;
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_KPD].data_size
-			= sizeof(fluid_keypad_data);
-	} else {
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_KPD].
-			platform_data = &ffa_keypad_data;
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_KPD].data_size
-			= sizeof(ffa_keypad_data);
-	}
-
-#ifdef CONFIG_USB_ANDROID
-	if (machine_is_msm8x60_charm_surf() ||
-			machine_is_msm8x60_charm_ffa()) {
-		android_usb_pdata.product_id = 0x9032;
-		android_usb_pdata.functions = charm_usb_functions_all,
-		android_usb_pdata.num_functions =
-				ARRAY_SIZE(charm_usb_functions_all),
-		android_usb_pdata.products = charm_usb_products;
-		android_usb_pdata.num_products =
-				ARRAY_SIZE(charm_usb_products);
-	}
-#endif
-
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
-	    machine_is_msm8x60_fluid() || machine_is_msm8x60_charm_surf() ||
-	    machine_is_msm8x60_charm_ffa()) {
-		msm8x60_cfg_smsc911x();
-		if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) != 1)
-			platform_add_devices(msm_footswitch_devices,
-					     msm_num_footswitch_devices);
-		platform_add_devices(surf_devices,
-				     ARRAY_SIZE(surf_devices));
+	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) != 1)
+		platform_add_devices(msm_footswitch_devices,
+				     msm_num_footswitch_devices);
+	platform_add_devices(qt_devices,
+			     ARRAY_SIZE(qt_devices));
 #ifdef CONFIG_USB_EHCI_MSM
-	/*
-	 * Drive MPP2 pin HIGH for PHY to generate ID interrupts on 8660
-	 * fluid
-	 */
-	if (machine_is_msm8x60_fluid()) {
-		pm8901_mpp_config_digital_out(1,
-			PM8901_MPP_DIG_LEVEL_L5, 1);
-	}
 		msm_add_host(0, &msm_usb_host_pdata);
 #endif
-	} else {
-		msm8x60_configure_smc91x();
-		platform_add_devices(rumi_sim_devices,
-				     ARRAY_SIZE(rumi_sim_devices));
-	}
-#ifdef CONFIG_USB_PEHCI_HCD
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa())
-		msm8x60_cfg_isp1763();
-#endif
-#ifdef CONFIG_BATTERY_MSM8X60
-	if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
-		machine_is_msm8x60_charm_surf() ||
-		machine_is_msm8x60_charm_ffa())
-		platform_device_register(&msm_charger_device);
-#endif
 
-	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
-		platform_add_devices(charm_devices, ARRAY_SIZE(charm_devices));
-
-	if (!machine_is_msm8x60_fluid())
-		pm8058_platform_data.charger_sub_device
-			= &pm8058_charger_sub_dev;
-
-#if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
-	if (machine_is_msm8x60_fluid())
-		platform_device_register(&msm_gsbi10_qup_spi_device);
-#endif
-
-	if (!machine_is_msm8x60_sim())
-		msm_fb_add_devices();
+	msm_fb_add_devices();
 	fixup_i2c_configs();
 	register_i2c_devices();
-
-	platform_device_register(&smsc911x_device);
 
 	msm_pm_set_platform_data(msm_pm_data, ARRAY_SIZE(msm_pm_data));
 	msm_cpuidle_set_states(msm_cstates, ARRAY_SIZE(msm_cstates),
@@ -8267,136 +4936,20 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 #ifdef CONFIG_MSM8X60_AUDIO
 	msm_snddev_init();
 #endif
-#if defined(CONFIG_GPIO_SX150X) || defined(CONFIG_GPIO_SX150X_MODULE)
-	if (machine_is_msm8x60_fluid())
-		platform_device_register(&fluid_leds_gpio);
-	else
-		platform_device_register(&gpio_leds);
-#endif
-
-	/* configure pmic leds */
-	if (machine_is_msm8x60_fluid()) {
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_LED].
-			platform_data = &pm8058_fluid_flash_leds_data;
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_LED].data_size
-			= sizeof(pm8058_fluid_flash_leds_data);
-	} else {
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_LED].
-			platform_data = &pm8058_flash_leds_data;
-		pm8058_platform_data.sub_devices[PM8058_SUBDEV_LED].data_size
-			= sizeof(pm8058_flash_leds_data);
-	}
-
-	msm8x60_multi_sdio_init();
 }
 
-static void __init msm8x60_rumi3_init(void)
+static void __init msm8x60_qt_init(void)
 {
-	msm8x60_init(&msm8x60_rumi3_board_data);
+	msm8x60_init(&msm8x60_qt_board_data);
 }
 
-static void __init msm8x60_sim_init(void)
-{
-	msm8x60_init(&msm8x60_sim_board_data);
-}
-
-static void __init msm8x60_surf_init(void)
-{
-	msm8x60_init(&msm8x60_surf_board_data);
-}
-
-static void __init msm8x60_ffa_init(void)
-{
-	msm8x60_init(&msm8x60_ffa_board_data);
-}
-
-static void __init msm8x60_fluid_init(void)
-{
-	msm8x60_init(&msm8x60_fluid_board_data);
-}
-
-static void __init msm8x60_charm_surf_init(void)
-{
-	msm8x60_init(&msm8x60_charm_surf_board_data);
-}
-
-static void __init msm8x60_charm_ffa_init(void)
-{
-	msm8x60_init(&msm8x60_charm_ffa_board_data);
-}
-MACHINE_START(MSM8X60_RUMI3, "QCT MSM8X60 RUMI3")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io  = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_rumi3_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_SIM, "QCT MSM8X60 SIMULATOR")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io  = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_sim_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_SURF, "QCT MSM8X60 SURF")
+MACHINE_START(MSM8X60_QT, "QCT MSM8X60 QT")
 #ifdef CONFIG_MSM_DEBUG_UART
 	.phys_io = MSM_DEBUG_UART_PHYS,
 	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
 #endif
 	.map_io = msm8x60_map_io,
 	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_surf_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_FFA, "QCT MSM8X60 FFA")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_ffa_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_FLUID, "QCT MSM8X60 FLUID")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_fluid_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_CHARM_SURF, "QCT MSM8X60 CHARM SURF")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_charm_surf_init,
-	.timer = &msm_timer,
-MACHINE_END
-
-MACHINE_START(MSM8X60_CHARM_FFA, "QCT MSM8X60 CHARM FFA")
-#ifdef CONFIG_MSM_DEBUG_UART
-	.phys_io = MSM_DEBUG_UART_PHYS,
-	.io_pg_offst = ((MSM_DEBUG_UART_BASE) >> 18) & 0xfffc,
-#endif
-	.map_io = msm8x60_map_io,
-	.init_irq = msm8x60_init_irq,
-	.init_machine = msm8x60_charm_ffa_init,
+	.init_machine = msm8x60_qt_init,
 	.timer = &msm_timer,
 MACHINE_END

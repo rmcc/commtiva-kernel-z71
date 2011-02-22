@@ -26,16 +26,20 @@
 #include <linux/workqueue.h>
 #include <linux/pm_runtime.h>
 #include <linux/diagchar.h>
+#include <linux/delay.h>
+#include <linux/reboot.h>
+#include <linux/smp_lock.h>
 #ifdef CONFIG_DIAG_OVER_USB
 #include <mach/usbdiag.h>
 #endif
 #include <mach/msm_smd.h>
 #include <mach/socinfo.h>
+#include <mach/restart.h>
 #include "diagmem.h"
 #include "diagchar.h"
 #include "diagfwd.h"
 #include "diagchar_hdlc.h"
-#ifdef CONFIG_MSM_SDIO_AL
+#ifdef CONFIG_DIAG_SDIO_PIPE
 #include "diagfwd_sdio.h"
 #endif
 
@@ -61,7 +65,8 @@ do {									\
 		enc.dest_last = (void *)(driver->buf_in_1 + 499);	\
 		diag_hdlc_encode(&send, &enc);				\
 		driver->write_ptr_1->buf = driver->buf_in_1;		\
-		driver->write_ptr_1->length = buf_length + 4;		\
+		driver->write_ptr_1->length = buf_length + 4 +		\
+			 *(int *)(enc.dest - buf_length);		\
 		usb_diag_write(driver->legacy_ch, driver->write_ptr_1);	\
 	}								\
 } while (0)
@@ -188,10 +193,14 @@ int diag_device_write(void *buf, int proc_num, struct diag_request *write_ptr)
 			write_ptr->buf = buf;
 			err = usb_diag_write(driver->legacy_ch, write_ptr);
 		}
-#ifdef CONFIG_MSM_SDIO_AL
+#ifdef CONFIG_DIAG_SDIO_PIPE
 		else if (proc_num == SDIO_DATA) {
-			write_ptr->buf = buf;
-			err = usb_diag_write(driver->mdm_ch, write_ptr);
+			if (machine_is_msm8x60_charm_surf() ||
+					machine_is_msm8x60_charm_ffa()) {
+				write_ptr->buf = buf;
+				err = usb_diag_write(driver->mdm_ch, write_ptr);
+			} else
+				pr_err("diag: Incorrect data while USB write");
 		}
 #endif
 		APPEND_DEBUG('d');
@@ -467,7 +476,23 @@ static int diag_process_apps_pkt(unsigned char *buf, int len)
 		TO DO
 	} */
 #if defined(CONFIG_DIAG_OVER_USB)
-	else if (CHK_APQ_GET_ID()) { /* Check for ID for APQ8060 */
+	/* Check for download command */
+	else if (cpu_is_msm8x60() && (*buf == 0x3A)) {
+		/* send response back */
+		driver->apps_rsp_buf[0] = *buf;
+		ENCODE_RSP_AND_SEND(0);
+		msleep(5000);
+		/* call download API */
+		msm_set_restart_mode(RESTART_DLOAD);
+		printk(KERN_CRIT "diag: download mode set, Rebooting SoC..\n");
+		lock_kernel();
+		kernel_restart(NULL);
+		unlock_kernel();
+		/* Not required, represents that command isnt sent to modem */
+		return 0;
+	}
+	 /* Check for ID for APQ8060 AND NO MODEM present */
+	else if (!(driver->ch) && CHK_APQ_GET_ID()) {
 		/* Respond to polling for Apps only DIAG */
 		if ((*buf == 0x4b) && (*(buf+1) == 0x32) &&
 							 (*(buf+2) == 0x03)) {
@@ -591,7 +616,7 @@ void diag_process_hdlc(void *data, unsigned len)
 		driver->debug_flag = 0;
 	}
 	/* implies this packet is NOT meant for apps */
-	if (type == 1 && CHK_APQ_GET_ID()) {
+	if (!(driver->ch) && type == 1 && CHK_APQ_GET_ID()) {
 		if (driver->chqdsp)
 			smd_write(driver->chqdsp, driver->hdlc_buf,
 							 hdlc.dest_idx - 3);
@@ -643,11 +668,13 @@ int diagfwd_connect(void)
 	queue_work(driver->diag_wq, &(driver->diag_read_smd_qdsp_work));
 	/* Poll USB channel to check for data*/
 	queue_work(driver->diag_wq, &(driver->diag_read_work));
-#ifdef CONFIG_MSM_SDIO_AL
-	if (driver->mdm_ch && !IS_ERR(driver->mdm_ch))
-		diagfwd_connect_sdio();
-	else
-		printk(KERN_INFO "diag:No data from SDIO without  USB MDM ch");
+#ifdef CONFIG_DIAG_SDIO_PIPE
+	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa()) {
+		if (driver->mdm_ch && !IS_ERR(driver->mdm_ch))
+			diagfwd_connect_sdio();
+		else
+			printk(KERN_INFO "diag: No USB MDM ch");
+	}
 #endif
 	return 0;
 }
@@ -662,9 +689,10 @@ int diagfwd_disconnect(void)
 	driver->in_busy_qdsp_2 = 1;
 	driver->debug_flag = 1;
 	usb_diag_free_req(driver->legacy_ch);
-#ifdef CONFIG_MSM_SDIO_AL
-	if (driver->mdm_ch && !IS_ERR(driver->mdm_ch))
-		diagfwd_disconnect_sdio();
+#ifdef CONFIG_DIAG_SDIO_PIPE
+	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
+		if (driver->mdm_ch && !IS_ERR(driver->mdm_ch))
+			diagfwd_disconnect_sdio();
 #endif
 	/* TBD - notify and flow control SMD */
 	return 0;
@@ -692,9 +720,13 @@ int diagfwd_write_complete(struct diag_request *diag_write_ptr)
 		APPEND_DEBUG('P');
 		queue_work(driver->diag_wq, &(driver->diag_read_smd_qdsp_work));
 	}
-#ifdef CONFIG_MSM_SDIO_AL
+#ifdef CONFIG_DIAG_SDIO_PIPE
 	else if (buf == (void *)driver->buf_in_sdio)
-		diagfwd_write_complete_sdio();
+		if (machine_is_msm8x60_charm_surf() ||
+					 machine_is_msm8x60_charm_ffa())
+			diagfwd_write_complete_sdio();
+		else
+			pr_err("diag: Incorrect buffer pointer while WRITE");
 #endif
 	else {
 		diagmem_free(driver, (unsigned char *)buf, POOL_TYPE_HDLC);
@@ -730,10 +762,14 @@ int diagfwd_read_complete(struct diag_request *diag_read_ptr)
 						 &(driver->diag_read_work));
 		}
 	}
-#ifdef CONFIG_MSM_SDIO_AL
+#ifdef CONFIG_DIAG_SDIO_PIPE
 	else if (buf == (void *)driver->usb_buf_mdm_out) {
-		driver->read_len_mdm = diag_read_ptr->actual;
-		diagfwd_read_complete_sdio();
+		if (machine_is_msm8x60_charm_surf() ||
+					 machine_is_msm8x60_charm_ffa()) {
+			driver->read_len_mdm = diag_read_ptr->actual;
+			diagfwd_read_complete_sdio();
+		} else
+			pr_err("diag: Incorrect buffer pointer while READ");
 	}
 #endif
 	else
@@ -808,7 +844,7 @@ static int diag_smd_probe(struct platform_device *pdev)
 #endif
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
-	printk(KERN_INFO "diag opened SMD port ; r = %d\n", r);
+	pr_debug("diag: opened SMD port ; r = %d\n", r);
 
 	return 0;
 }
@@ -890,8 +926,8 @@ void diagfwd_init(void)
 	if (driver->buf_tbl == NULL)
 		goto err;
 	if (driver->data_ready == NULL &&
-	     (driver->data_ready = kzalloc(driver->num_clients * sizeof(struct
-					 diag_client_map), GFP_KERNEL)) == NULL)
+	     (driver->data_ready = kzalloc(driver->num_clients * sizeof(int)
+							, GFP_KERNEL)) == NULL)
 		goto err;
 	if (driver->table == NULL &&
 	     (driver->table = kzalloc(diag_max_registration*
@@ -941,8 +977,9 @@ void diagfwd_init(void)
 		printk(KERN_ERR "Unable to open USB diag legacy channel\n");
 		goto err;
 	}
-#ifdef CONFIG_MSM_SDIO_AL
-	diagfwd_sdio_init();
+#ifdef CONFIG_DIAG_SDIO_PIPE
+	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
+		diagfwd_sdio_init();
 #endif
 #endif
 	platform_driver_register(&msm_smd_ch1_driver);

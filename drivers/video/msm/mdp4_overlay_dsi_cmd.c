@@ -40,20 +40,24 @@
 static struct mdp4_overlay_pipe *dsi_pipe;
 static struct mdp4_overlay_pipe *pending_pipe;
 static struct msm_fb_data_type *dsi_mfd;
-static struct completion dsi_delay_comp;
-static atomic_t dsi_delay_kickoff_cnt;
 
 static int vsync_start_y_adjust = 4;
 
 struct timer_list dsi_timer;
 
-void dsi_delay_tout(unsigned long data)
+static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 {
-	if (atomic_read(&dsi_delay_kickoff_cnt) != 0) {
-		atomic_dec(&dsi_delay_kickoff_cnt);
-		if (atomic_read(&dsi_delay_kickoff_cnt) == 0)
-			complete(&dsi_delay_comp);
-	}
+	/*
+	 * The adreno GPU hardware requires that the pitch be aligned to
+	 * 32 pixels for color buffers, so for the cases where the GPU
+	 * is writing directly to fb0, the framebuffer pitch
+	 * also needs to be 32 pixel aligned
+	 */
+
+	if (fb_index == 0)
+		return ALIGN(xres, 32) * bpp;
+	else
+		return xres * bpp;
 }
 
 void mdp4_mipi_vsync_enable(struct msm_fb_data_type *mfd,
@@ -92,6 +96,7 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 	uint8 *src;
 	int ptype;
 	struct mdp4_overlay_pipe *pipe;
+	int bpp;
 	int ret;
 
 	if (mfd->key != MFD_KEY)
@@ -118,11 +123,7 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 		if (ret < 0)
 			printk(KERN_INFO "%s: format2type failed\n", __func__);
 
-		init_completion(&dsi_delay_comp);
 		dsi_pipe = pipe; /* keep it */
-		init_timer(&dsi_timer);
-		dsi_timer.function = dsi_delay_tout;
-		dsi_timer.data = 0;
 		/*
 		 * configure dsi stream id
 		 * dma_p = 0, dma_s = 1
@@ -141,18 +142,31 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 		struct fb_info *fbi;
 
 		fbi = mfd->fbi;
-		pipe->src_height = fbi->var.yres;
-		pipe->src_width = fbi->var.xres;
-		pipe->src_h = fbi->var.yres;
-		pipe->src_w = fbi->var.xres;
+		if (pipe->is_3d) {
+			bpp = fbi->var.bits_per_pixel / 8;
+			pipe->src_height = pipe->src_height_3d;
+			pipe->src_width = pipe->src_width_3d;
+			pipe->src_h = pipe->src_height_3d;
+			pipe->src_w = pipe->src_width_3d;
+			pipe->dst_h = pipe->src_height_3d;
+			pipe->dst_w = pipe->src_width_3d;
+			pipe->srcp0_ystride = msm_fb_line_length(0,
+						pipe->src_width, bpp);
+		} else {
+			 /* 2D */
+			pipe->src_height = fbi->var.yres;
+			pipe->src_width = fbi->var.xres;
+			pipe->src_h = fbi->var.yres;
+			pipe->src_w = fbi->var.xres;
+			pipe->dst_h = fbi->var.yres;
+			pipe->dst_w = fbi->var.xres;
+			pipe->srcp0_ystride = fbi->fix.line_length;
+		}
 		pipe->src_y = 0;
 		pipe->src_x = 0;
-		pipe->dst_h = fbi->var.yres;
-		pipe->dst_w = fbi->var.xres;
 		pipe->dst_y = 0;
 		pipe->dst_x = 0;
 		pipe->srcp0_addr = (uint32)src;
-		pipe->srcp0_ystride = fbi->fix.line_length;
 	}
 
 
@@ -172,6 +186,73 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 
 	wmb();
+}
+
+void mdp4_dsi_cmd_3d(struct msm_fb_data_type *mfd, struct msmfb_overlay_3d *r3d)
+{
+	struct fb_info *fbi;
+	struct mdp4_overlay_pipe *pipe;
+	int bpp;
+	uint8 *src = NULL;
+
+	if (dsi_pipe == NULL)
+		return;
+
+	dsi_pipe->is_3d = r3d->is_3d;
+	dsi_pipe->src_height_3d = r3d->height;
+	dsi_pipe->src_width_3d = r3d->width;
+
+	pipe = dsi_pipe;
+
+	if (pipe->is_3d)
+		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_SIDE_BY_SIDE);
+	else
+		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_NONE);
+
+	if (mfd->panel_power_on)
+		mdp4_dsi_cmd_dma_busy_wait(mfd, pipe);
+
+	fbi = mfd->fbi;
+	if (pipe->is_3d) {
+		bpp = fbi->var.bits_per_pixel / 8;
+		pipe->src_height = pipe->src_height_3d;
+		pipe->src_width = pipe->src_width_3d;
+		pipe->src_h = pipe->src_height_3d;
+		pipe->src_w = pipe->src_width_3d;
+		pipe->dst_h = pipe->src_height_3d;
+		pipe->dst_w = pipe->src_width_3d;
+		pipe->srcp0_ystride = msm_fb_line_length(0,
+					pipe->src_width, bpp);
+	} else {
+		 /* 2D */
+		pipe->src_height = fbi->var.yres;
+		pipe->src_width = fbi->var.xres;
+		pipe->src_h = fbi->var.yres;
+		pipe->src_w = fbi->var.xres;
+		pipe->dst_h = fbi->var.yres;
+		pipe->dst_w = fbi->var.xres;
+		pipe->srcp0_ystride = fbi->fix.line_length;
+	}
+	pipe->src_y = 0;
+	pipe->src_x = 0;
+	pipe->dst_y = 0;
+	pipe->dst_x = 0;
+	pipe->srcp0_addr = (uint32)src;
+
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+
+	mdp4_overlay_rgb_setup(pipe);
+
+	mdp4_mixer_stage_up(pipe);
+
+	mdp4_overlayproc_cfg(pipe);
+
+	mdp4_overlay_dmap_xy(pipe);
+
+	mdp4_overlay_dmap_cfg(mfd, 0);
+
+	/* MDP cmd block disable */
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
 /*
@@ -194,12 +275,6 @@ void mdp4_dsi_cmd_overlay_restore(void)
 		mdp4_dsi_cmd_overlay_kickoff(dsi_mfd, dsi_pipe);
 		dsi_mfd->dma_update_flag = 1;
 	}
-}
-
-void dsi_add_delay_timer(int delay_ms)
-{
-	dsi_timer.expires = jiffies + ((delay_ms * HZ) / 1000);
-	add_timer(&dsi_timer);
 }
 
 void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd,
@@ -228,34 +303,12 @@ void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd,
 void mdp4_dsi_cmd_kickoff_video(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
-	unsigned long flag;
-
-	if (atomic_read(&dsi_delay_kickoff_cnt) != 0) {
-		spin_lock_irqsave(&mdp_spin_lock, flag);
-		complete(&dsi_delay_comp);
-		atomic_set(&dsi_delay_kickoff_cnt, 0);
-		del_timer(&dsi_timer);
-		mdp4_stat.kickoff_piggy++;
-		spin_unlock_irqrestore(&mdp_spin_lock, flag);
-		return;
-	}
-
 	mdp4_dsi_cmd_overlay_kickoff(mfd, pipe);
 }
 
 void mdp4_dsi_cmd_kickoff_ui(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
-
-	if (mdp4_overlay_mixer_play(dsi_pipe->mixer_num) > 0) {
-		dsi_add_delay_timer(10);
-		atomic_set(&dsi_delay_kickoff_cnt, 1);
-		INIT_COMPLETION(dsi_delay_comp);
-		mutex_unlock(&mfd->dma->ov_mutex);
-		wait_for_completion_killable(&dsi_delay_comp);
-		mutex_lock(&mfd->dma->ov_mutex);
-	}
-
 	mdp4_dsi_cmd_overlay_kickoff(mfd, pipe);
 }
 
@@ -264,14 +317,12 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe)
 {
 
-	down(&mfd->sem);
 	mdp_enable_irq(MDP_OVERLAY0_TERM);
 	mfd->dma->busy = TRUE;
 	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_sw_trigger();
-	up(&mfd->sem);
 }
 
 void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)

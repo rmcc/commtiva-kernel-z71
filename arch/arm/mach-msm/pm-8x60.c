@@ -42,6 +42,7 @@
 #endif
 
 #include "acpuclock.h"
+#include "clock.h"
 #include "avs.h"
 #include "cpuidle.h"
 #include "idle.h"
@@ -744,11 +745,24 @@ int msm_pm_idle_prepare(struct cpuidle_device *dev)
 
 		switch (mode) {
 		case MSM_PM_SLEEP_MODE_POWER_COLLAPSE:
-			if (num_online_cpus() > 1)
+			if (!allow)
+				break;
+
+			if (num_online_cpus() > 1) {
 				allow = false;
+				break;
+			}
 			/* fall through */
 
 		case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE:
+			if (!allow)
+				break;
+
+			if (!dev->cpu &&
+				msm_rpm_local_request_is_outstanding()) {
+				allow = false;
+				break;
+			}
 			/* fall through */
 
 		case MSM_PM_SLEEP_MODE_WAIT_FOR_INTERRUPT:
@@ -791,7 +805,7 @@ int msm_pm_idle_prepare(struct cpuidle_device *dev)
 		if (allow) {
 			state->flags &= ~CPUIDLE_FLAG_IGNORE;
 			state->target_residency = 0;
-			state->exit_latency = rs_limits->latency_us[dev->cpu];
+			state->exit_latency = 0;
 			state->power_usage = rs_limits->power[dev->cpu];
 
 			if (MSM_PM_SLEEP_MODE_POWER_COLLAPSE == mode)
@@ -908,6 +922,8 @@ static int msm_pm_enter(suspend_state_t state)
 
 		if (MSM_PM_DEBUG_SUSPEND & msm_pm_debug_mask)
 			pr_info("%s: power collapse\n", __func__);
+
+		clock_debug_print_enabled();
 
 #ifdef CONFIG_MSM_SLEEP_TIME_OVERRIDE
 		if (msm_pm_sleep_time_override > 0) {

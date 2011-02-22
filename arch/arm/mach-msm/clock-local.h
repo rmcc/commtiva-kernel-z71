@@ -36,7 +36,6 @@
 /*
  * Bit manipulation macros
  */
-#define B(x)	BIT(x)
 #define BM(msb, lsb)	(((((uint32_t)-1) << (31-msb)) >> (31-msb+lsb)) << lsb)
 #define BVAL(msb, lsb, val)	(((val) << lsb) & BM(msb, lsb))
 
@@ -107,7 +106,12 @@ struct banked_mnd_masks {
 	.extra_freq_data = e, \
 	}
 #define FREQ_END	(UINT_MAX-1)
-#define F_END	F_RAW(FREQ_END, SRC_NONE, 0, 0, 0, 0, LOW, NULL)
+#define F_END \
+	{ \
+		.freq_hz = FREQ_END, \
+		.src = SRC_NONE, \
+		.sys_vdd = LOW, \
+	}
 
 /*
  * Generic clock-definition struct and macros

@@ -33,7 +33,7 @@
 #include "diagmem.h"
 #include "diagchar.h"
 #include "diagfwd.h"
-#ifdef CONFIG_MSM_SDIO_AL
+#ifdef CONFIG_DIAG_SDIO_PIPE
 #include "diagfwd_sdio.h"
 #endif
 #include <linux/timer.h>
@@ -841,7 +841,7 @@ static int __init diagchar_init(void)
 	dev_t dev;
 	int error;
 
-	printk(KERN_INFO "diagfwd initializing ..\n");
+	pr_debug("diagfwd initializing ..\n");
 	driver = kzalloc(sizeof(struct diagchar_dev) + 5, GFP_KERNEL);
 
 	if (driver) {
@@ -865,7 +865,7 @@ static int __init diagchar_init(void)
 		INIT_WORK(&(driver->diag_read_smd_qdsp_work),
 			   diag_read_smd_qdsp_work_fn);
 		diagfwd_init();
-		printk(KERN_INFO "diagchar initializing ..\n");
+		pr_debug("diagchar initializing ..\n");
 		driver->num = 1;
 		driver->name = ((void *)driver) + sizeof(struct diagchar_dev);
 		strlcpy(driver->name, "diag", 4);
@@ -906,8 +906,9 @@ static void __exit diagchar_exit(void)
 	 ensure no memory leaks */
 	diagmem_exit(driver, POOL_TYPE_ALL);
 	diagfwd_exit();
-#ifdef CONFIG_MSM_SDIO_AL
-	diagfwd_sdio_exit();
+#ifdef CONFIG_DIAG_SDIO_PIPE
+	if (machine_is_msm8x60_charm_surf() || machine_is_msm8x60_charm_ffa())
+		diagfwd_sdio_exit();
 #endif
 	diagchar_cleanup();
 	printk(KERN_INFO "done diagchar exit\n");

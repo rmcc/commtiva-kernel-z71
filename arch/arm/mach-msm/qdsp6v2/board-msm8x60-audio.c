@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,7 +32,6 @@
 
 #include <mach/qdsp6v2/audio_dev_ctl.h>
 #include <mach/qdsp6v2/apr_audio.h>
-#include <mach/board.h>
 #include <mach/mpp.h>
 #include <asm/mach-types.h>
 #include <asm/uaccess.h>
@@ -150,13 +149,15 @@ static struct platform_device msm_mi2s_device = {
 static struct regulator *s3;
 static struct regulator *mvs;
 
-static void msm_snddev_enable_dmic_power(void)
+static int msm_snddev_enable_dmic_power(void)
 {
 	int ret;
 
 	s3 = regulator_get(NULL, "8058_s3");
-	if (IS_ERR(s3))
-		return;
+	if (IS_ERR(s3)) {
+		ret = -EBUSY;
+		goto fail_get_s3;
+	}
 
 	ret = regulator_set_voltage(s3, 1800000, 1800000);
 	if (ret) {
@@ -179,7 +180,7 @@ static void msm_snddev_enable_dmic_power(void)
 		pr_err("%s: error setting regulator\n", __func__);
 		goto fail_mvs0_enable;
 	}
-	return;
+	return ret;
 
 fail_mvs0_enable:
 	regulator_put(mvs);
@@ -189,6 +190,8 @@ fail_mvs0_get:
 fail_s3:
 	regulator_put(s3);
 	s3 = NULL;
+fail_get_s3:
+	return ret;
 }
 
 static void msm_snddev_disable_dmic_power(void)
@@ -212,8 +215,50 @@ static void msm_snddev_disable_dmic_power(void)
 	}
 }
 
+static struct regulator *l11;
+
+static int msm_snddev_enable_qt_dmic_power(void)
+{
+	int ret;
+
+	l11 = regulator_get(NULL, "8058_l11");
+	if (IS_ERR(l11))
+		return -EBUSY;
+
+	ret = regulator_set_voltage(l11, 1500000, 1500000);
+	if (ret) {
+		pr_err("%s: error setting regulator\n", __func__);
+		goto fail_l11;
+	}
+	ret = regulator_enable(l11);
+	if (ret) {
+		pr_err("%s: error enabling regulator\n", __func__);
+		goto fail_l11;
+	}
+	return 0;
+
+fail_l11:
+	regulator_put(l11);
+	l11 = NULL;
+	return ret;
+}
+
+
+static void msm_snddev_disable_qt_dmic_power(void)
+{
+	int ret;
+
+	if (l11) {
+		ret = regulator_disable(l11);
+		if (ret < 0)
+			pr_err("%s: error disabling regulator l11\n", __func__);
+		regulator_put(l11);
+		l11 = NULL;
+	}
+}
+
 #define PM8901_MPP_3 (2) /* PM8901 MPP starts from 0 */
-static void config_class_d1_gpio(int enable)
+static int config_class_d1_gpio(int enable)
 {
 	int rc;
 
@@ -222,17 +267,17 @@ static void config_class_d1_gpio(int enable)
 		if (rc) {
 			pr_err("%s: spkr pamp gpio %d request"
 			"failed\n", __func__, SNDDEV_GPIO_CLASS_D1_EN);
-			return;
+			return rc;
 		}
 		gpio_direction_output(SNDDEV_GPIO_CLASS_D1_EN, 1);
-		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D1_EN, 1);
 	} else {
 		gpio_set_value_cansleep(SNDDEV_GPIO_CLASS_D1_EN, 0);
 		gpio_free(SNDDEV_GPIO_CLASS_D1_EN);
 	}
+	return 0;
 }
 
-static void config_class_d0_gpio(int enable)
+static int config_class_d0_gpio(int enable)
 {
 	int rc;
 
@@ -242,7 +287,7 @@ static void config_class_d0_gpio(int enable)
 
 		if (rc) {
 			pr_err("%s: CLASS_D0_EN failed\n", __func__);
-			return;
+			return rc;
 		}
 
 		rc = gpio_request(SNDDEV_GPIO_CLASS_D0_EN, "CLASSD0_EN");
@@ -252,7 +297,7 @@ static void config_class_d0_gpio(int enable)
 			"failed\n", __func__);
 			pm8901_mpp_config_digital_out(PM8901_MPP_3,
 			PM8901_MPP_DIG_LEVEL_MSMIO, 0);
-			return;
+			return rc;
 		}
 
 		gpio_direction_output(SNDDEV_GPIO_CLASS_D0_EN, 1);
@@ -264,22 +309,37 @@ static void config_class_d0_gpio(int enable)
 		gpio_set_value(SNDDEV_GPIO_CLASS_D0_EN, 0);
 		gpio_free(SNDDEV_GPIO_CLASS_D0_EN);
 	}
+	return 0;
 }
 
-void msm_snddev_poweramp_on(void)
+static int msm_snddev_poweramp_on(void)
 {
-
+	int rc;
 	pr_debug("%s: enable stereo spkr amp\n", __func__);
-	config_class_d0_gpio(1);
-	config_class_d1_gpio(1);
+	rc = config_class_d0_gpio(1);
+	if (rc) {
+		pr_err("%s: d0 gpio configuration failed\n", __func__);
+		goto config_gpio_fail;
+	}
+	if (!machine_is_msm8x60_qt()) {
+		rc = config_class_d1_gpio(1);
+		if (rc) {
+			pr_err("%s: d1 gpio configuration failed\n", __func__);
+			config_class_d0_gpio(0);
+		}
+	}
+config_gpio_fail:
+	return rc;
 }
 
-void msm_snddev_poweramp_off(void)
+static void msm_snddev_poweramp_off(void)
 {
-
 	pr_debug("%s: disable stereo spkr amp\n", __func__);
 	config_class_d0_gpio(0);
-	config_class_d1_gpio(0);
+
+	if (!machine_is_msm8x60_qt())
+		config_class_d1_gpio(0);
+
 	msleep(30);
 }
 
@@ -287,7 +347,7 @@ void msm_snddev_poweramp_off(void)
 static struct regulator *snddev_reg_ncp;
 static struct regulator *snddev_reg_l10;
 
-static void msm_snddev_voltage_on(void)
+static int msm_snddev_voltage_on(void)
 {
 	int rc;
 	pr_debug("%s\n", __func__);
@@ -296,7 +356,7 @@ static void msm_snddev_voltage_on(void)
 	if (IS_ERR(snddev_reg_l10)) {
 		pr_err("%s: regulator_get(%s) failed (%ld)\n", __func__,
 			"l10", PTR_ERR(snddev_reg_l10));
-		return;
+		return -EBUSY;
 	}
 
 	rc = regulator_set_voltage(snddev_reg_l10, 2600000, 2600000);
@@ -312,17 +372,28 @@ static void msm_snddev_voltage_on(void)
 	if (IS_ERR(snddev_reg_ncp)) {
 		pr_err("%s: regulator_get(%s) failed (%ld)\n", __func__,
 			"ncp", PTR_ERR(snddev_reg_ncp));
-		return;
+		return -EBUSY;
 	}
 
 	rc = regulator_set_voltage(snddev_reg_ncp, 1800000, 1800000);
-	if (rc < 0)
+	if (rc < 0) {
 		pr_err("%s: regulator_set_voltage(ncp) failed (%d)\n",
 			__func__, rc);
+		goto regulator_fail;
+	}
 
 	rc = regulator_enable(snddev_reg_ncp);
-	if (rc < 0)
+	if (rc < 0) {
 		pr_err("%s: regulator_enable(ncp) failed (%d)\n", __func__, rc);
+		goto regulator_fail;
+	}
+
+	return rc;
+
+regulator_fail:
+	regulator_put(snddev_reg_ncp);
+	snddev_reg_ncp = NULL;
+	return rc;
 }
 
 static void msm_snddev_voltage_off(void)
@@ -356,10 +427,10 @@ done:
 	snddev_reg_l10 = NULL;
 }
 
-static void msm_snddev_enable_amic_power(void)
+static int msm_snddev_enable_amic_power(void)
 {
+	int ret = 0;
 #ifdef CONFIG_PMIC8058_OTHC
-	int ret;
 
 	if (machine_is_msm8x60_fluid()) {
 
@@ -372,7 +443,7 @@ static void msm_snddev_enable_amic_power(void)
 		if (ret) {
 			pr_err("%s: spkr pamp gpio %d request failed\n",
 				__func__, SNDDEV_GPIO_MIC2_ANCR_SEL);
-			return;
+			return ret;
 		}
 		gpio_direction_output(SNDDEV_GPIO_MIC2_ANCR_SEL, 0);
 
@@ -383,6 +454,7 @@ static void msm_snddev_enable_amic_power(void)
 			pr_err("%s: Enabling amic power failed\n", __func__);
 	}
 #endif
+	return ret;
 }
 
 static void msm_snddev_disable_amic_power(void)
@@ -401,13 +473,24 @@ static void msm_snddev_disable_amic_power(void)
 #endif
 }
 
-static void msm_snddev_enable_dmic_sec_power(void)
+static int msm_snddev_enable_dmic_sec_power(void)
 {
-	msm_snddev_enable_dmic_power();
+	int ret;
 
+	ret = msm_snddev_enable_dmic_power();
+	if (ret) {
+		pr_err("%s: Error: Enabling dmic power failed\n", __func__);
+		return ret;
+	}
 #ifdef CONFIG_PMIC8058_OTHC
-	pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_ALWAYS_ON);
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_ALWAYS_ON);
+	if (ret) {
+		pr_err("%s: Error: Enabling micbias failed\n", __func__);
+		msm_snddev_disable_dmic_power();
+		return ret;
+	}
 #endif
+	return 0;
 }
 
 static void msm_snddev_disable_dmic_sec_power(void)
@@ -452,7 +535,7 @@ static struct platform_device msm_iearpiece_device = {
 };
 
 static struct adie_codec_action_unit imic_48KHz_osr256_actions[] =
-	AMIC_PRI_MONO_8000_OSR_256;
+	AMIC_PRI_MONO_OSR_256;
 
 static struct adie_codec_hwsetting_entry imic_settings[] = {
 	{
@@ -590,7 +673,7 @@ static struct platform_device msm_ispkr_stereo_device = {
 };
 
 static struct adie_codec_action_unit idmic_mono_48KHz_osr256_actions[] =
-	DMIC1_PRI_MONO_8000_OSR_256;
+	DMIC1_PRI_MONO_OSR_256;
 
 static struct adie_codec_hwsetting_entry idmic_mono_settings[] = {
 	{
@@ -671,8 +754,24 @@ static struct platform_device msm_imic_ffa_device = {
 	.dev = { .platform_data = &snddev_imic_ffa_data },
 };
 
+static struct snddev_icodec_data snddev_qt_dual_dmic_d0_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "speaker_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &idmic_mono_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_qt_dmic_power,
+	.pamp_off = msm_snddev_disable_qt_dmic_power,
+};
+
+static struct platform_device msm_qt_dual_dmic_d0_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_qt_dual_dmic_d0_data },
+};
+
 static struct adie_codec_action_unit dual_mic_endfire_8KHz_osr256_actions[] =
-	DMIC1_PRI_STEREO_8000_OSR_256;
+	DMIC1_PRI_STEREO_OSR_256;
 
 static struct adie_codec_hwsetting_entry dual_mic_endfire_settings[] = {
 	{
@@ -723,7 +822,7 @@ static struct platform_device msm_spkr_dual_mic_endfire_device = {
 };
 
 static struct adie_codec_action_unit dual_mic_broadside_8osr256_actions[] =
-	HS_DMIC2_STEREO_8000_OSR_256;
+	HS_DMIC2_STEREO_OSR_256;
 
 static struct adie_codec_hwsetting_entry dual_mic_broadside_settings[] = {
 	{
@@ -915,7 +1014,7 @@ struct platform_device msm_bt_sco_mic_device = {
 };
 
 static struct adie_codec_action_unit itty_mono_tx_actions[] =
-	TTY_HEADSET_MONO_TX_8000_OSR_256;
+	TTY_HEADSET_MONO_TX_OSR_256;
 
 static struct adie_codec_hwsetting_entry itty_mono_tx_settings[] = {
 	{
@@ -1152,6 +1251,13 @@ static struct platform_device *snd_devices_fluid[] __initdata = {
 	&msm_anc_headset_device,
 };
 
+static struct platform_device *snd_devices_qt[] __initdata = {
+	&msm_headset_stereo_device,
+	&msm_headset_mic_device,
+	&msm_ispkr_stereo_device,
+	&msm_qt_dual_dmic_d0_device,
+};
+
 static struct platform_device *snd_devices_common[] __initdata = {
 	&msm_aux_pcm_device,
 	&msm_cdcclk_ctl_device,
@@ -1190,6 +1296,12 @@ void __init msm_snddev_init(void)
 
 		platform_add_devices(snd_devices_fluid,
 		ARRAY_SIZE(snd_devices_fluid));
+	} else if (machine_is_msm8x60_qt()) {
+		for (i = 0; i < ARRAY_SIZE(snd_devices_qt); i++)
+			snd_devices_qt[i]->id = dev_id++;
+
+		platform_add_devices(snd_devices_qt,
+		ARRAY_SIZE(snd_devices_qt));
 	}
 
 #ifdef CONFIG_DEBUG_FS

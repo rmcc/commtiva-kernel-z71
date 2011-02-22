@@ -80,10 +80,9 @@
 
 struct kgsl_driver {
 	struct cdev cdev;
-	dev_t dev_num;
+	dev_t major;
 	struct class *class;
 	struct kgsl_device *devp[KGSL_DEVICE_MAX];
-	int num_devs;
 	struct platform_device *pdev;
 
 	uint32_t flags_debug;
@@ -96,6 +95,9 @@ struct kgsl_driver {
 	struct mutex pt_mutex;
 	/* Mutex for accessing the process list */
 	struct mutex process_mutex;
+
+	/* Mutex for protecting the device list */
+	struct mutex devlock;
 
 	struct kgsl_pagetable *global_pt;
 
@@ -171,6 +173,9 @@ int kgsl_register_ts_notifier(struct kgsl_device *device,
 int kgsl_unregister_ts_notifier(struct kgsl_device *device,
 				struct notifier_block *nb);
 
+void kgsl_unregister_device(struct kgsl_device *device);
+int kgsl_register_device(struct kgsl_device *device);
+
 #ifdef CONFIG_MSM_KGSL_DRM
 extern int kgsl_drm_init(struct platform_device *dev);
 extern void kgsl_drm_exit(void);
@@ -194,6 +199,18 @@ static inline int kgsl_gpuaddr_in_memdesc(const struct kgsl_memdesc *memdesc,
 		return 1;
 	}
 	return 0;
+}
+
+static inline struct kgsl_device *kgsl_device_from_dev(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < KGSL_DEVICE_MAX; i++) {
+		if (kgsl_driver.devp[i] && kgsl_driver.devp[i]->dev == dev)
+			return kgsl_driver.devp[i];
+	}
+
+	return NULL;
 }
 
 #endif /* _GSL_DRIVER_H */

@@ -203,6 +203,8 @@ static void set_aca_id_inputs(struct msm_otg *dev)
 	u8		phy_ints;
 
 	phy_ints = ulpi_read(dev, 0x13);
+	if (phy_ints == -ETIMEDOUT)
+		return;
 
 	pr_debug("phy_ints = %x\n", phy_ints);
 	clear_bit(ID_A, &dev->inputs);
@@ -1491,6 +1493,25 @@ static void msm_otg_sm_work(struct work_struct *w)
 
 	switch (state) {
 	case OTG_STATE_UNDEFINED:
+
+		/*
+		 * We can come here when LPM fails with wall charger
+		 * connected. Increment the PM usage counter to reflect
+		 * the actual device state. Change the state to
+		 * B_PERIPHERAL and schedule the work which takes care
+		 * of resetting the PHY and putting the hardware in
+		 * low power mode.
+		 */
+		if (atomic_read(&dev->chg_type) ==
+				USB_CHG_TYPE__WALLCHARGER) {
+			msm_otg_get_resume(dev);
+			spin_lock_irq(&dev->lock);
+			dev->otg.state = OTG_STATE_B_PERIPHERAL;
+			spin_unlock_irq(&dev->lock);
+			work = 1;
+			break;
+		}
+
 		/* Reset both phy and link */
 		otg_reset(&dev->otg, 1);
 
@@ -1610,10 +1631,11 @@ static void msm_otg_sm_work(struct work_struct *w)
 
 			/* Workaround: Reset phy after session */
 			otg_reset(&dev->otg, 1);
+			if (is_b_sess_vld())
+				set_bit(B_SESS_VLD, &dev->inputs);
 
-			/* come back later to put hardware in
-			 * lpm. This removes addition checks in
-			 * suspend routine for missing BSV
+			/* If BSV is set gadget will be started. Otherwise
+			 * low power mode is initiated.
 			 */
 			work = 1;
 		} else if (test_bit(B_BUS_REQ, &dev->inputs) &&
@@ -2114,6 +2136,14 @@ static void msm_otg_id_func(unsigned long _dev)
 		msm_otg_set_suspend(&dev->otg, 0);
 
 	phy_ints = ulpi_read(dev, 0x13);
+
+	/*
+	 * ACA timer will be kicked again after the PHY
+	 * state is recovered.
+	 */
+	if (phy_ints == -ETIMEDOUT)
+		return;
+
 
 	/* If id_gnd happened then stop and let isr take care of this */
 	if (phy_id_state_gnd(phy_ints))

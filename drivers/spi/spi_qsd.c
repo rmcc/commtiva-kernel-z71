@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2008-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -321,6 +321,7 @@ struct msm_spi {
 	uint32_t                 pm_lat;
 	/* When set indicates a write followed by read transfer */
 	bool                     multi_xfr;
+	bool                     done;
 };
 
 /* Forward declaration */
@@ -492,6 +493,10 @@ static irqreturn_t msm_spi_qup_irq(int irq, void *dev_id)
 		ret |= msm_spi_output_irq(irq, dev_id);
 	}
 
+	if (dd->done) {
+		complete(&dd->transfer_complete);
+		dd->done = 0;
+	}
 	return ret;
 }
 
@@ -609,6 +614,7 @@ static int msm_spi_calculate_size(int *fifo_size,
 		break;
 	case 3:
 		*fifo_size = words * 16;
+		break;
 	default:
 		return -1;
 	}
@@ -992,7 +998,7 @@ static irqreturn_t msm_spi_input_irq(int irq, void *dev_id)
 				if (atomic_inc_return(&dd->rx_irq_called) == 1)
 					return IRQ_HANDLED;
 			}
-			complete(&dd->transfer_complete);
+			dd->done = 1;
 			return IRQ_HANDLED;
 		}
 		return IRQ_NONE;
@@ -1005,7 +1011,7 @@ static irqreturn_t msm_spi_input_irq(int irq, void *dev_id)
 			msm_spi_read_word_from_fifo(dd);
 		}
 		if (dd->rx_bytes_remaining == 0)
-			complete(&dd->transfer_complete);
+			dd->done = 1;
 	}
 
 	return IRQ_HANDLED;
@@ -1074,7 +1080,7 @@ static irqreturn_t msm_spi_output_irq(int irq, void *dev_id)
 		if (dd->read_buf == NULL && readl(dd->base + SPI_OPERATIONAL) &
 					    SPI_OP_MAX_OUTPUT_DONE_FLAG) {
 			msm_spi_ack_transfer(dd);
-			complete(&dd->transfer_complete);
+			dd->done = 1;
 			return IRQ_HANDLED;
 		}
 		return IRQ_NONE;
@@ -1100,8 +1106,16 @@ static irqreturn_t msm_spi_error_irq(int irq, void *dev_id)
 		dev_warn(master->dev.parent, "SPI input underrun error\n");
 	if (spi_err & SPI_ERR_OUTPUT_UNDER_RUN_ERR)
 		dev_warn(master->dev.parent, "SPI output underrun error\n");
-	if (spi_err & SPI_ERR_INPUT_OVER_RUN_ERR)
-		dev_warn(master->dev.parent, "SPI input overrun error\n");
+	if (spi_err & SPI_ERR_INPUT_OVER_RUN_ERR) {
+		/*
+		 * When switching from Run to Reset state, the core generates
+		 * a bogus input overrun error on 8660. We ignore such errors
+		 * when the transfer has completed successfully.
+		 */
+		if (dd->mode != SPI_MODE_NONE)
+			dev_warn(master->dev.parent,
+				 "SPI input overrun error\n");
+	}
 	msm_spi_get_clk_err(dd, &spi_err);
 	if (spi_err & SPI_ERR_CLK_OVER_RUN_ERR)
 		dev_warn(master->dev.parent, "SPI clock overrun error\n");
@@ -1147,7 +1161,7 @@ static void msm_spi_unmap_dma_buffers(struct msm_spi *dd)
  * 2. Buffers should be aligned to cache line.
   */
 static inline int msm_use_dm(struct msm_spi *dd, struct spi_transfer *tr,
-				u32 xfr_len)
+				u32 xfr_len, u8 bpw)
 {
 	u32 cache_line = dma_get_cache_alignment();
 
@@ -1165,6 +1179,10 @@ static inline int msm_use_dm(struct msm_spi *dd, struct spi_transfer *tr,
 		if (!IS_ALIGNED((size_t)tr->rx_buf, cache_line))
 			return 0;
 	}
+
+	if (tr->cs_change &&
+	   ((bpw != 8) || (bpw != 16) || (bpw != 32)))
+		return 0;
 	return 1;
 }
 
@@ -1222,7 +1240,7 @@ static void msm_spi_process_transfer(struct msm_spi *dd)
 		__func__);
 		return;
 	}
-	if ((!msm_use_dm(dd, dd->cur_transfer, transfer_len))) {
+	if (!msm_use_dm(dd, dd->cur_transfer, transfer_len, bpw)) {
 		dd->mode = SPI_FIFO_MODE;
 		dd->tx_bytes_remaining = transfer_len;
 		dd->rx_bytes_remaining = transfer_len;
@@ -1496,7 +1514,8 @@ static int msm_spi_transfer(struct spi_device *spi, struct spi_message *msg)
 		}
 
 		xfr_len = get_transfer_length(tr, msg);
-		if (!msm_use_dm(dd, tr, xfr_len) || msg->is_dma_mapped)
+		if (!msm_use_dm(dd, tr, xfr_len, tr->bits_per_word) ||
+		   msg->is_dma_mapped)
 			continue;
 
 		/* Do DMA mapping "early" for better error reporting */
@@ -1561,7 +1580,8 @@ static int msm_spi_transfer(struct spi_device *spi, struct spi_message *msg)
 error:
 	list_for_each_entry_continue_reverse(tr, &msg->transfers, transfer_list)
 	{
-		if (msm_use_dm(dd, tr, xfr_len) && !msg->is_dma_mapped) {
+		if (msm_use_dm(dd, tr, xfr_len, tr->bits_per_word) &&
+		   !msg->is_dma_mapped) {
 			if (tr->rx_buf != NULL)
 				dma_unmap_single(&spi->dev, tr->rx_dma, tr->len,
 						 DMA_TO_DEVICE);

@@ -51,9 +51,9 @@ MODULE_PARM_DESC(rmnet_sdio_data_ch, "RmNet data SDIO channel ID");
 #define RMNET_SDIO_NOTIFY_INTERVAL  5
 #define RMNET_SDIO_MAX_NFY_SZE  sizeof(struct usb_cdc_notification)
 
-#define RMNET_SDIO_RX_REQ_MAX             8
-#define RMNET_SDIO_RX_REQ_SIZE            2048
-#define RMNET_SDIO_TX_REQ_MAX             8
+#define RMNET_SDIO_RX_REQ_MAX             16
+#define RMNET_SDIO_RX_REQ_SIZE            4096
+#define RMNET_SDIO_TX_REQ_MAX             100
 
 /* QMI requests & responses buffer*/
 struct rmnet_sdio_qmi_buf {
@@ -83,6 +83,7 @@ struct rmnet_dev {
 	spinlock_t              lock;
 	atomic_t                online;
 	atomic_t                notify_count;
+	u8	                dmux_write_done;
 
 	struct workqueue_struct *wq;
 	struct work_struct disconnect_work;
@@ -393,6 +394,10 @@ static void rmnet_command_complete(struct usb_ep *ep, struct usb_request *req)
 		return;
 	}
 
+	/* discard the packet if sdio is not available */
+	if (!atomic_read(&dev->sdio_open))
+		return;
+
 	qmi_req = rmnet_alloc_qmi(len, GFP_ATOMIC);
 	if (IS_ERR(qmi_req)) {
 		ERROR(cdev, "unable to allocate memory for QMI req\n");
@@ -417,9 +422,6 @@ rmnet_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 	u16                     w_value = le16_to_cpu(ctrl->wValue);
 	u16                     w_length = le16_to_cpu(ctrl->wLength);
 	struct rmnet_sdio_qmi_buf *resp;
-
-	if (!atomic_read(&dev->sdio_open))
-		return -ENOTSUPP;
 
 	if (!atomic_read(&dev->online))
 		return -ENOTCONN;
@@ -560,19 +562,22 @@ static void rmnet_data_receive_cb(void *priv, struct sk_buff *skb)
 static void rmnet_data_write_done(void *priv, struct sk_buff *skb)
 {
 	struct rmnet_dev *dev = priv;
+	struct usb_composite_dev *cdev = dev->cdev;
 	unsigned long flags;
 
 	dev_kfree_skb_any(skb);
 
-	/*
-	 * TODO
-	 * May be we should check the online flag i.e cable status
-	 * and proceed. Also list_empty check will not suffice;
-	 * think again.
-	 */
+	if (!atomic_read(&dev->online)) {
+		DBG(cdev, "USB disconnected\n");
+		return;
+	}
+
 	spin_lock_irqsave(&dev->lock, flags);
-	if (!list_empty(&dev->rx_queue))
+	dev->dmux_write_done = 1;
+	if (!list_empty(&dev->rx_queue)) {
+		dev->dmux_write_done = 0;
 		queue_work(dev->wq, &dev->data_rx_work);
+	}
 	spin_unlock_irqrestore(&dev->lock, flags);
 }
 
@@ -617,7 +622,6 @@ static void rmnet_complete_epout(struct usb_ep *ep, struct usb_request *req)
 	struct rmnet_dev *dev = ep->driver_data;
 	struct usb_composite_dev *cdev = dev->cdev;
 	struct sk_buff *skb = req->context;
-	int was_empty;
 	int status = req->status;
 	int queue = 0;
 
@@ -640,11 +644,12 @@ static void rmnet_complete_epout(struct usb_ep *ep, struct usb_request *req)
 	}
 
 	spin_lock(&dev->lock);
-	was_empty = list_empty(&dev->rx_queue);
 	if (queue) {
 		list_add_tail(&req->list, &dev->rx_queue);
-		if (was_empty)
+		if (dev->dmux_write_done) {
+			dev->dmux_write_done = 0;
 			queue_work(dev->wq, &dev->data_rx_work);
+		}
 	} else {
 		list_add_tail(&req->list, &dev->rx_idle);
 	}
@@ -736,7 +741,6 @@ static void rmnet_disable(struct usb_function *f)
 	usb_ep_disable(dev->epin);
 
 	atomic_set(&dev->online, 0);
-
 	atomic_set(&dev->notify_count, 0);
 	rmnet_free_buf(dev);
 
@@ -779,6 +783,7 @@ static void rmnet_open_sdio_work(struct work_struct *w)
 		goto ctl_close;
 	}
 
+	dev->dmux_write_done = 1;
 	atomic_set(&dev->sdio_open, 1);
 	pr_info("%s: usb rmnet sdio channels are open retry_cnt:%d\n",
 				__func__, retry_cnt);
@@ -839,7 +844,6 @@ static int rmnet_set_alt(struct usb_function *f,
 	usb_ep_enable(dev->epnotify, ep_choose(cdev->gadget,
 				&rmnet_hs_notify_desc,
 				&rmnet_fs_notify_desc));
-
 
 	atomic_set(&dev->online, 1);
 

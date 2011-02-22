@@ -2211,6 +2211,7 @@ static int tavarua_vidioc_g_ctrl(struct file *file, void *priv,
 	case V4L2_CID_AUDIO_VOLUME:
 		break;
 	case V4L2_CID_AUDIO_MUTE:
+		ctrl->value = radio->registers[IOCTRL] & 0x03 ;
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_SRCHMODE:
 		ctrl->value = radio->registers[SRCHCTRL] & SRCH_MODE;
@@ -2376,6 +2377,12 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 					FMDERR("Error in tavarua_set_audio_path"
 						" %d\n", retval);
 				}
+			 /* Enabling 'SoftMute' and 'SignalBlending' features */
+			value = (radio->registers[IOCTRL] |
+				    IOC_SFT_MUTE | IOC_SIG_BLND);
+			retval = tavarua_write_register(radio, IOCTRL, value);
+			if (retval < 0)
+				FMDBG("SMute and SBlending not enabled\n");
 			}
 		}
 		/* check if off */

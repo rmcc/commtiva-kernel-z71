@@ -33,10 +33,12 @@
 #include <linux/debugfs.h>
 #include <linux/scatterlist.h>
 #include <linux/crypto.h>
+#include <crypto/hash.h>
 #include <mach/board.h>
+#include <mach/scm.h>
 #include "inc/qcedev.h"
-
 #include "inc/qce.h"
+
 
 #define CACHE_LINE_SIZE 32
 #define CE_SHA_BLOCK_SIZE SHA256_BLOCK_SIZE
@@ -67,6 +69,11 @@ struct qcedev_cipher_req {
 	void *cookie;
 };
 
+struct qcedev_sha_req {
+	struct ahash_request sreq;
+	void *cookie;
+};
+
 struct qcedev_async_req {
 	struct list_head			list;
 	struct completion			complete;
@@ -77,7 +84,7 @@ struct qcedev_async_req {
 	};
 	union{
 		struct qcedev_cipher_req	cipher_req;
-		struct qce_sha_req		sha_req;
+		struct qcedev_sha_req		sha_req;
 	};
 	struct qcedev_control			*podev;
 	int					err;
@@ -93,6 +100,8 @@ struct qcedev_async_req {
 struct qcedev_control{
 
 	struct msm_ce_hw_support ce_hw_support;
+
+	bool ce_locked;
 
 	/* misc device */
 	struct miscdevice miscdevice;
@@ -112,6 +121,77 @@ struct qcedev_control{
 	spinlock_t lock;
 	struct tasklet_struct done_tasklet;
 };
+
+/*-------------------------------------------------------------------------
+* Resource Locking Service
+* ------------------------------------------------------------------------*/
+#define QCEDEV_CMD_ID				1
+#define QCEDEV_CE_LOCK_CMD			1
+#define QCEDEV_CE_UNLOCK_CMD			0
+#define NUM_RETRY				1000
+#define CE_BUSY					55
+
+static int qcedev_scm_cmd(int resource, int cmd, int *response)
+{
+#ifdef CONFIG_MSM_SCM
+
+	struct {
+		int resource;
+		int cmd;
+	} cmd_buf;
+
+	cmd_buf.resource = resource;
+	cmd_buf.cmd = cmd;
+
+	return scm_call(SCM_SVC_TZ, QCEDEV_CMD_ID, &cmd_buf,
+		sizeof(cmd_buf), response, sizeof(*response));
+
+#else
+	return 0;
+#endif
+}
+
+static int qcedev_unlock_ce(struct qcedev_control *podev)
+{
+	if ((podev->ce_hw_support.ce_shared) && (podev->ce_locked == true)) {
+		int response = 0;
+
+		if (qcedev_scm_cmd(podev->ce_hw_support.shared_ce_resource,
+					QCEDEV_CE_UNLOCK_CMD, &response)) {
+			printk(KERN_ERR "%s Failed to release CE lock\n",
+				__func__);
+			return -EUSERS;
+		}
+		podev->ce_locked = false;
+	}
+	return 0;
+}
+
+static int qcedev_lock_ce(struct qcedev_control *podev)
+{
+	if ((podev->ce_hw_support.ce_shared) && (podev->ce_locked == false)) {
+		int response = -CE_BUSY;
+		int i = 0;
+
+		do {
+			if (qcedev_scm_cmd(
+				podev->ce_hw_support.shared_ce_resource,
+				QCEDEV_CE_LOCK_CMD, &response)) {
+				response = -EINVAL;
+				break;
+			}
+		} while ((response == -CE_BUSY) && (i++ < NUM_RETRY));
+
+		if ((response == -CE_BUSY) && (i >= NUM_RETRY))
+			return -EUSERS;
+		if (response < 0)
+			return -EINVAL;
+
+		podev->ce_locked = true;
+	}
+
+	return 0;
+}
 
 #define QCEDEV_MAGIC 0x56434544 /* "qced" */
 
@@ -246,13 +326,23 @@ again:
 	return;
 }
 
-static void qcedev_sha_req_cb(void *cookie, unsigned char *iv,
-	unsigned char *civ, int ret)
+static void qcedev_sha_req_cb(void *cookie, unsigned char *digest,
+	unsigned char *authdata, int ret)
 {
-	struct qcedev_control *pdev = (struct qcedev_control *) cookie;
+	struct qcedev_sha_req *areq;
+	struct qcedev_control *pdev;
+	uint32_t *auth32 = (uint32_t *)authdata;
 
-	if (iv)
-		memcpy(&pdev->sha_ctxt->digest[0], iv, 32);
+	areq = (struct qcedev_sha_req *) cookie;
+	pdev = (struct qcedev_control *) areq->cookie;
+
+	if (digest)
+		memcpy(&pdev->sha_ctxt->digest[0], digest, 32);
+
+	if (authdata) {
+		pdev->sha_ctxt->auth_data[0] = auth32[0];
+		pdev->sha_ctxt->auth_data[1] = auth32[1];
+	}
 
 	tasklet_schedule(&pdev->done_tasklet);
 };
@@ -376,26 +466,27 @@ unsupported:
 static int start_sha_req(struct qcedev_control *podev)
 {
 	struct qcedev_async_req *qcedev_areq;
-	struct qce_sha_req *sreq;
+	struct qce_sha_req sreq;
 	int ret = 0;
 
 	/* start the command on the podev->active_command */
 	qcedev_areq = podev->active_command;
 	qcedev_areq->podev = podev;
 
-	sreq = &qcedev_areq->sha_req;
+	qcedev_areq->sha_req.cookie = podev;
 
-	sreq->alg = qcedev_areq->sha_op_req.alg;
-	sreq->first_blk = podev->sha_ctxt->first_blk;
-	sreq->last_blk = podev->sha_ctxt->last_blk;
-	sreq->qce_cb = qcedev_sha_req_cb;
-	sreq->auth_data[0] = podev->sha_ctxt->auth_data[0];
-	sreq->auth_data[1] = podev->sha_ctxt->auth_data[1];
-	sreq->digest = &podev->sha_ctxt->digest[0];
+	sreq.qce_cb = qcedev_sha_req_cb;
+	sreq.alg = qcedev_areq->sha_op_req.alg;
+	sreq.auth_data[0] = podev->sha_ctxt->auth_data[0];
+	sreq.auth_data[1] = podev->sha_ctxt->auth_data[1];
+	sreq.digest = &podev->sha_ctxt->digest[0];
+	sreq.first_blk = podev->sha_ctxt->first_blk;
+	sreq.last_blk = podev->sha_ctxt->last_blk;
+	sreq.size = qcedev_areq->sha_req.sreq.nbytes;
+	sreq.src = qcedev_areq->sha_req.sreq.src;
+	sreq.areq = (void *)&qcedev_areq->sha_req;
 
-	sreq->cookie = podev;
-
-	ret = qce_process_sha_req(podev->qce, sreq);
+	ret = qce_process_sha_req(podev->qce, &sreq);
 
 	if (ret)
 		qcedev_areq->err = -ENXIO;
@@ -412,6 +503,10 @@ static int submit_req(struct qcedev_async_req *qcedev_areq,
 	struct qcedev_stat *pstat;
 
 	qcedev_areq->err = 0;
+
+	ret = qcedev_lock_ce(podev);
+	if (ret)
+		return ret;
 
 	spin_lock_irqsave(&podev->lock, flags);
 
@@ -432,6 +527,10 @@ static int submit_req(struct qcedev_async_req *qcedev_areq,
 
 	if (ret == 0)
 		wait_for_completion(&qcedev_areq->complete);
+
+	ret = qcedev_unlock_ce(podev);
+	if (ret)
+			qcedev_areq->err = -EIO;
 
 	pstat = &_qcedev_stat[podev->pdev->id];
 	if (qcedev_areq->op_type == QCEDEV_CRYPTO_OPER_CIPHER) {
@@ -573,14 +672,12 @@ static int qcedev_sha_update_max_xfer(struct qcedev_async_req *qcedev_areq,
 	sha_pad_len = ALIGN(total, CE_SHA_BLOCK_SIZE) - total;
 	trailing_buf_len =  CE_SHA_BLOCK_SIZE - sha_pad_len;
 
-	qcedev_areq->sha_req.src = (struct scatterlist *) &sg_src[0];
-	sg_set_buf(qcedev_areq->sha_req.src, k_align_src,
+	qcedev_areq->sha_req.sreq.src = (struct scatterlist *) &sg_src[0];
+	sg_set_buf(qcedev_areq->sha_req.sreq.src, k_align_src,
 						total-trailing_buf_len);
-	sg_mark_end(qcedev_areq->sha_req.src);
+	sg_mark_end(qcedev_areq->sha_req.sreq.src);
 
-	qcedev_areq->sha_req.size = total-trailing_buf_len;
-	qcedev_areq->sha_req.first_blk = podev->sha_ctxt->first_blk;
-	qcedev_areq->sha_req.last_blk = podev->sha_ctxt->last_blk;
+	qcedev_areq->sha_req.sreq.nbytes = total - trailing_buf_len;
 
 	/*  update sha_ctxt trailing buf content to new trailing buf */
 	if (trailing_buf_len > 0) {
@@ -592,8 +689,6 @@ static int qcedev_sha_update_max_xfer(struct qcedev_async_req *qcedev_areq,
 	podev->sha_ctxt->trailing_buf_len = trailing_buf_len;
 
 	err = submit_req(qcedev_areq, podev);
-	podev->sha_ctxt->auth_data[0] = qcedev_areq->sha_req.auth_data[0];
-	podev->sha_ctxt->auth_data[1] =	qcedev_areq->sha_req.auth_data[1];
 
 	podev->sha_ctxt->last_blk = 0;
 	podev->sha_ctxt->first_blk = 0;
@@ -741,14 +836,11 @@ static int qcedev_sha_final(struct qcedev_async_req *qcedev_areq,
 	podev->sha_ctxt->last_blk = 1;
 	podev->sha_ctxt->first_blk = 0;
 
-	qcedev_areq->sha_req.src = (struct scatterlist *) &sg_src;
-	sg_set_buf(qcedev_areq->sha_req.src, k_align_src, total);
-	sg_mark_end(qcedev_areq->sha_req.src);
+	qcedev_areq->sha_req.sreq.src = (struct scatterlist *) &sg_src;
+	sg_set_buf(qcedev_areq->sha_req.sreq.src, k_align_src, total);
+	sg_mark_end(qcedev_areq->sha_req.sreq.src);
 
-	qcedev_areq->sha_req.size = total;
-
-	qcedev_areq->sha_req.first_blk = podev->sha_ctxt->first_blk;
-	qcedev_areq->sha_req.last_blk = podev->sha_ctxt->last_blk;
+	qcedev_areq->sha_req.sreq.nbytes = total;
 
 	err = submit_req(qcedev_areq, podev);
 
@@ -1241,6 +1333,12 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 	pstat = &_qcedev_stat[podev->pdev->id];
 
 	switch (cmd) {
+	case QCEDEV_IOCTL_LOCK_CE:
+		err = qcedev_lock_ce(podev);
+		break;
+	case QCEDEV_IOCTL_UNLOCK_CE:
+		err = qcedev_unlock_ce(podev);
+		break;
 	case QCEDEV_IOCTL_ENC_REQ:
 	case QCEDEV_IOCTL_DEC_REQ:
 		if (!access_ok(VERIFY_WRITE, (void __user *)arg,
@@ -1254,10 +1352,11 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_CIPHER;
 
 		if (qcedev_areq.cipher_op_req.use_pmem == QCEDEV_USE_PMEM)
-			qcedev_pmem_ablk_cipher(&qcedev_areq, podev);
+			err = qcedev_pmem_ablk_cipher(&qcedev_areq, podev);
 		else
-			qcedev_vbuf_ablk_cipher(&qcedev_areq, podev);
-
+			err = qcedev_vbuf_ablk_cipher(&qcedev_areq, podev);
+		if (err)
+			return err;
 		if (__copy_to_user((void __user *)arg,
 					&qcedev_areq.cipher_op_req,
 					sizeof(struct qcedev_cipher_op_req)))
@@ -1277,7 +1376,7 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 
 		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
 		podev->sha_ctxt = &qcedev_areq.sha_op_req.ctxt;
-		qcedev_sha_init(&qcedev_areq, podev);
+		err = qcedev_sha_init(&qcedev_areq, podev);
 		if (__copy_to_user((void __user *)arg, &qcedev_areq.sha_op_req,
 					sizeof(struct qcedev_sha_op_req)))
 				return -EFAULT;
@@ -1295,7 +1394,9 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 
 		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
 		podev->sha_ctxt = &qcedev_areq.sha_op_req.ctxt;
-		qcedev_sha_update(&qcedev_areq, podev);
+		err = qcedev_sha_update(&qcedev_areq, podev);
+		if (err)
+			return err;
 		memcpy(&qcedev_areq.sha_op_req.digest[0],
 				&podev->sha_ctxt->digest[0],
 				podev->sha_ctxt->diglen);
@@ -1317,7 +1418,9 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 
 		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
 		podev->sha_ctxt = &qcedev_areq.sha_op_req.ctxt;
-		qcedev_sha_final(&qcedev_areq, podev);
+		err = qcedev_sha_final(&qcedev_areq, podev);
+		if (err)
+			return err;
 		qcedev_areq.sha_op_req.diglen = podev->sha_ctxt->diglen;
 		memcpy(&qcedev_areq.sha_op_req.digest[0],
 				&podev->sha_ctxt->digest[0],
@@ -1341,8 +1444,12 @@ static int qcedev_ioctl(struct inode *inode, struct file *file,
 		qcedev_areq.op_type = QCEDEV_CRYPTO_OPER_SHA;
 		podev->sha_ctxt = &qcedev_areq.sha_op_req.ctxt;
 		qcedev_sha_init(&qcedev_areq, podev);
-		qcedev_sha_update(&qcedev_areq, podev);
-		qcedev_sha_final(&qcedev_areq, podev);
+		err = qcedev_sha_update(&qcedev_areq, podev);
+		if (err)
+			return err;
+		err = qcedev_sha_final(&qcedev_areq, podev);
+		if (err)
+			return err;
 		qcedev_areq.sha_op_req.diglen = podev->sha_ctxt->diglen;
 		memcpy(&qcedev_areq.sha_op_req.digest[0],
 				&podev->sha_ctxt->digest[0],
@@ -1379,6 +1486,7 @@ static int qcedev_probe(struct platform_device *pdev)
 				ce_hw_support->shared_ce_resource;
 	podev->ce_hw_support.hw_key_support =
 				ce_hw_support->hw_key_support;
+	podev->ce_locked = false;
 
 	INIT_LIST_HEAD(&podev->ready_commands);
 	podev->active_command = NULL;
@@ -1551,7 +1659,7 @@ static void qcedev_exit(void)
 MODULE_LICENSE("GPL v2");
 MODULE_AUTHOR("Mona Hossain <mhossain@codeaurora.org>");
 MODULE_DESCRIPTION("Qualcomm DEV Crypto driver");
-MODULE_VERSION("1.06");
+MODULE_VERSION("1.09");
 
 module_init(qcedev_init);
 module_exit(qcedev_exit);
