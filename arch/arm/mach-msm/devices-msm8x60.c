@@ -1994,6 +1994,10 @@ struct clk_lookup msm_clocks_8x60[] = {
 					"ebi1_clk",    "msm_dmov.0", 0),
 	CLK_VOTER("ebi1_adm_clk",     EBI_ADM1_CLK,
 					"ebi1_clk",    "msm_dmov.1", 0),
+
+	CLK_8X60("sc0_div2_mclk", SC0_DIV2_M_CLK,	NULL, 0),
+	CLK_8X60("sc1_div2_mclk", SC1_DIV2_M_CLK,	NULL, 0),
+	CLK_8X60("l2_div2_mclk",  L2_DIV2_M_CLK,	NULL, 0),
 };
 
 unsigned msm_num_clocks_8x60 = ARRAY_SIZE(msm_clocks_8x60);

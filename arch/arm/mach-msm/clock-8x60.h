@@ -190,6 +190,11 @@ enum {
 	L_SPARE_I2S_SPKR_BIT_CLK,
 	L_PCM_CLK,
 
+	/* Measurement-only Clocks */
+	L_SC0_DIV2_M_CLK,
+	L_SC1_DIV2_M_CLK,
+	L_L2_DIV2_M_CLK,
+
 	L_NR_CLKS
 };
 
