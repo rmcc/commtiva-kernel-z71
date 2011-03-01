@@ -1512,7 +1512,7 @@ static uint32_t msm_sdcc_setup_power(struct device *dv, unsigned int vdd)
 
 	pdev = container_of(dv, struct platform_device, dev);
 	msm_sdcc_setup_gpio(pdev->id, !!vdd);
-	printk(KERN_INFO"%s: [MMC host %d power: %s]\n",__func__,pdev->id,vdd ? "on" : "off");	
+	dev_dbg(dv, "%s: [MMC host %d power: %s]\n",__func__,pdev->id,vdd ? "on" : "off");	
 
 	if (vdd == 0) {
 		if (!vreg_sts)
