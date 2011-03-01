@@ -511,7 +511,7 @@ static void set_rate_div_banked(struct clk_local *clk, struct clk_freq_tbl *nf)
 
 #define CLK_RESET(id, ns, r_m) \
 	[L_##id##_CLK] = { \
-		.type = RESET, \
+		.type = NOENABLE, \
 		.reset_reg = ns, \
 		.reset_mask = r_m, \
 		.parent = L_NONE_CLK, \
