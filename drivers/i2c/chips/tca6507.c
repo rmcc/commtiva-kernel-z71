@@ -566,7 +566,7 @@ int tca6507_get_state(int led_selection)
 	
 	for (i = JOGBALL_DISABLE; i > TCA6507_ABNORMAL_STATE; i--) {
 		if (tca6507_drvdata.led_state[led_selection] & (1 << i)) {
-			dev_dbg(tca6507_dev, "%s: LED<%d> in <%d> State!!\n", __func__, led_selection, i);
+			dev_dbg(tca6507_dev, "%s: LED <%d> in state <%d>\n", __func__, led_selection, i);
 			return i;
 		}
 	}
