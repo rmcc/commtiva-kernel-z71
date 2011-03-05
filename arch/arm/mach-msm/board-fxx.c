@@ -1320,6 +1320,51 @@ static struct platform_device lcdc_spigpio_device = {
 };
 #endif  //CONFIG_SPI_GPIO
 
+static int msm_fb_lcdc_config(int on){
+    return 0;
+}
+
+static char *msm_fb_lcdc_vreg[] = {
+	"gp5"
+};
+
+#define MSM_FB_LCDC_VREG_OP(name, op) \
+	do { \
+		vreg = vreg_get(0, name); \
+		if (vreg_##op(vreg)) \
+		printk(KERN_ERR "%s: %s vreg operation failed \n", \
+				(vreg_##op == vreg_enable) ? "vreg_enable" \
+				: "vreg_disable", name); \
+	} while (0)
+
+static int msm_fb_lcdc_power_save(int on)
+{
+	struct vreg *vreg;
+	int i, rc = 0;
+
+	for (i = 0; i < ARRAY_SIZE(msm_fb_lcdc_vreg); i++) {
+		if (on)
+			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], enable);
+		else{
+			int res=0;
+			MSM_FB_LCDC_VREG_OP(msm_fb_lcdc_vreg[i], disable);
+			gpio_tlmm_config(GPIO_CFG(88, 0,
+						GPIO_CFG_OUTPUT, GPIO_CFG_NO_PULL, GPIO_CFG_2MA), GPIO_CFG_ENABLE);
+			if (!rc) { rc = res; }
+			gpio_set_value(88, 0);
+			mdelay(15);
+			gpio_set_value(88, 1);
+			mdelay(15);
+		}
+	}
+	return rc;
+}
+
+static struct lcdc_platform_data lcdc_pdata = {
+	.lcdc_gpio_config = msm_fb_lcdc_config,
+	.lcdc_power_save   = msm_fb_lcdc_power_save,
+};
+
 /* ATHENV */
 static struct platform_device msm_wlan_ar6000_pm_device = {
 	.name		= "wlan_ar6000_pm_dev",
@@ -1399,7 +1444,7 @@ static void __init msm_fb_add_devices(void)
 {
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("pmdh", 0);
-	msm_fb_register_device("lcdc", 0);
+	msm_fb_register_device("lcdc", &lcdc_pdata);
 }
 
 extern struct sys_timer msm_timer;
