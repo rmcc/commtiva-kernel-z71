@@ -248,6 +248,28 @@ static int __init board_serialno_setup(char *serialno)
 
 #endif
 
+#ifdef CONFIG_USB_EHCI_MSM
+static void msm_hsusb_vbus_power(unsigned phy_info, int on)
+{
+	if (on)
+		msm_hsusb_vbus_powerup();
+	else
+		msm_hsusb_vbus_shutdown();
+}
+
+static struct msm_usb_host_platform_data msm_usb_host_pdata = {
+	.phy_info       = (USB_PHY_INTEGRATED | USB_PHY_MODEL_65NM),
+};
+
+static void __init msm7x2x_init_host(void)
+{
+	if (machine_is_msm7x25_ffa() || machine_is_msm7x27_ffa())
+		return;
+
+	msm_add_host(0, &msm_usb_host_pdata);
+}
+#endif
+
 static int hsusb_rpc_connect(int connect)
 {
 	if (connect)
@@ -311,6 +333,9 @@ static struct msm_otg_platform_data msm_otg_pdata = {
     .chg_vbus_draw       = hsusb_chg_vbus_draw,
 #ifdef CONFIG_BATTERY_FIH_ZEUS
     .chg_connected       = charger_connected,
+#endif
+#ifdef CONFIG_USB_EHCI_MSM
+    .vbus_power = msm_hsusb_vbus_power,
 #endif
     .chg_init        = hsusb_chg_init,
     .ldo_init       = msm_hsusb_ldo_init,
@@ -1856,6 +1881,9 @@ static void __init msm7x2x_init(void)
 
 	msm_power_register();
 	msm_fb_add_devices();
+#ifdef CONFIG_USB_EHCI_MSM
+	msm7x2x_init_host();
+#endif
 	msm7x2x_init_mmc();
 
 	properties_kobj = kobject_create_and_add("board_properties", NULL);
