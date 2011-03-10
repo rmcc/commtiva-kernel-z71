@@ -183,6 +183,7 @@ static struct usb_mass_storage_platform_data mass_storage_pdata = {
 	.vendor     = "Android",
 	.product        = "Mass storage",
 	.release    = 0x0100,
+	.can_stall  = 0,
 };
 
 static struct platform_device usb_mass_storage_device = {
@@ -1720,6 +1721,9 @@ msm_i2c_gpio_config(int iface, int config_type)
 	int gpio_sda;
 	gpio_scl = 60;
 	gpio_sda = 61;
+	if (iface) {
+		return;
+	}
 	if (config_type) {
 		gpio_tlmm_config(GPIO_CFG(gpio_scl, 1, GPIO_CFG_INPUT,
 					GPIO_CFG_NO_PULL, GPIO_CFG_16MA), GPIO_CFG_ENABLE);
