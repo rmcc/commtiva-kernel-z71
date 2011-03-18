@@ -15,6 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
+#include <linux/wakelock.h>
 
 /* FIH, Henry Juang, 2009/11/20 ++*/
 /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
@@ -98,6 +99,8 @@ static int isCM3602Suspend=0;
 extern int Q7x27_kybd_proximity_irqsetup(void);
 struct workqueue_struct *proximity_wq;
 struct work_struct proximity_work;
+
+struct wake_lock resume_wakelock;
 
 static int touch_last_flag=1;
 
@@ -381,42 +384,48 @@ static int __devinit sensor_probe(struct platform_device *pdev)
 		printk(KERN_WARNING "CM3602 ALSPS Unable to register misc device.\n");
 		return ret;
 	}
+
+	wake_lock_init(&resume_wakelock, WAKE_LOCK_SUSPEND, "proxi_resume");
 	
 	return 0;
 }
 static int sensor_remove(struct platform_device *pdev)
 {
+	wake_lock_destroy(&resume_wakelock);
 	return 0;
 }
+
+
 static int sensor_suspend(struct platform_device *pdev, pm_message_t state)
 {
 #ifndef DISABLE_PROXIMITY
-//FIH, HenryJuang 2009/11/11 ++
-/* Enable Proximaty wake source.*/
-	if (!((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
-	if (HWID == CMCS_HW_VER_EVB1)
-		enable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
-	else
-		enable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));	
-	isCM3602Suspend=1;
+	//FIH, HenryJuang 2009/11/11 ++
+	/* Enable Proximaty wake source.*/
+	if (enablePS && !((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
+		if (HWID == CMCS_HW_VER_EVB1)
+			enable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
+		else
+			enable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));	
+		isCM3602Suspend=1;
 	}
-//FIH, HenryJuang 2009/11/11 --
+	//FIH, HenryJuang 2009/11/11 --
 #endif
 	return 0;
 }
 static int sensor_resume(struct platform_device *pdev)
 {
 #ifndef DISABLE_PROXIMITY
-//FIH, HenryJuang 2009/11/11 ++
-/* Enable Proximaty wake source.*/
-	if (!((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
-	if (HWID == CMCS_HW_VER_EVB1)
-		disable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
-	else
-		disable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));		
-	isCM3602Suspend=0;		
+	//FIH, HenryJuang 2009/11/11 ++
+	/* Enable Proximaty wake source.*/
+	if (isCM3602Suspend && !((HWID >= CMCS_RTP_PR2) && ((HWID <= CMCS_RTP_MP3)))){
+		if (HWID == CMCS_HW_VER_EVB1)
+			disable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
+		else
+			disable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));		
+		isCM3602Suspend=0;		
+		wake_lock_timeout(&resume_wakelock, 1 * HZ);
 	}	
-//FIH, HenryJuang 2009/11/11 --
+	//FIH, HenryJuang 2009/11/11 --
 #endif
 	return 0;
 }
