@@ -44,8 +44,12 @@ to earlysuspend */
 /************************************************
  *  function marco
  ************************************************/
+#ifdef DEBUG
 #define bi8232_msg(lv, fmt, arg...)	\
 	printk(KERN_ ##lv"[%s@%s@%d] "fmt"\n",__FILE__,__func__,__LINE__,##arg)
+#else
+#define bi8232_msg(lv, fmt, arg...)
+#endif
 
 static struct proc_dir_entry *msm_touch_proc_file = NULL;  //Added by Stanley for dump scheme++
 /************************************************
@@ -464,7 +468,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				else
 					input_report_key(input, KEY_KBDILLUMDOWN, 0);
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - up!\n");
 				bSoft1CapKeyPressed = 0;
 				bSoft2CapKeyPressed = 0;
 				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
@@ -482,7 +486,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				else
 					input_report_key(input, KEY_BACK, 0);
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - up!\n");
 				bSoft2CapKeyPressed = 0;
 				bSoft1CapKeyPressed = 0;
 				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
@@ -506,7 +510,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				else
 					input_report_key(input, KEY_HOME, 0);  //F905 or other
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - up!\n");
 				bSoft2CapKeyPressed = 0;
 				bSoft1CapKeyPressed = 0;
 				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
@@ -526,7 +530,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				else
 					input_report_key(input, KEYCODE_BROWSER, 0);
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - up!\n");
 				bSoft2CapKeyPressed = 0;
 				bSoft1CapKeyPressed = 0;
 				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
@@ -539,7 +543,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_mt_sync(input);
 				input_report_key(input, KEYCODE_SEACHER, 0);
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center key - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center key - up!\n");
 				bSoft2CapKeyPressed = 0;
 				bSoft1CapKeyPressed = 0;
 				bHomeCapKeyPressed = 0;  //Modified for Home and AP key (2009/07/31)
@@ -557,7 +561,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_mt_sync(input);
 				bIsPenUp = 1;
-				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\n");
 				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
@@ -576,7 +580,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				//Added for FST--
 				bSoft2CapKeyPressed = 1;
 			}
-			bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - down!\r\n");
+			bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT2 - down!\n");
 			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
 		}
 		//Modified for Home and AP key (2009/07/31)++
@@ -588,7 +592,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_mt_sync(input);
 				bIsPenUp = 1;
-				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\n");
 				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
@@ -607,7 +611,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 						input_report_key(input, KEYCODE_BROWSER, 1);
 				}
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - down!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button AP key - down!\n");
 				bApCapKeyPressed = 1;
 			}
 			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
@@ -620,7 +624,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_mt_sync(input);
 				bIsPenUp = 1;
-				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\n");
 				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
@@ -640,7 +644,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 					else
 						input_report_key(input, KEY_HOME, 1);  //F905 or other
 				}
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - down!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button HOME key - down!\n");
 				bHomeCapKeyPressed = 1;
 			}
 			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
@@ -654,7 +658,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 0);
 				input_mt_sync(input);
 				bIsPenUp = 1;
-				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\n");
 				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
 			} else {
 				input_report_abs(input, ABS_MT_TOUCH_MAJOR, 255);
@@ -669,11 +673,11 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 						input_report_key(input, KEY_SEND, 1);  //FST
 					else{
 						input_report_key(input, KEY_KBDILLUMDOWN, 1);
-						//bi8232_msg(INFO, "[TOUCH-CAP]virtual button KEY_KBDILLUMDOWN1 - down!\r\n");
+						//bi8232_msg(INFO, "[TOUCH-CAP]virtual button KEY_KBDILLUMDOWN1 - down!\n");
 					}
 				}
 				//Added for FST--
-				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - down!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]virtual button SOFT1 - down!\n");
 				bSoft1CapKeyPressed = 1;
 			}
 			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
@@ -690,14 +694,14 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 				input_mt_sync(input);
 				//Added for F0XE.B-346--
 				bIsPenUp = 1;
-				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]Send BTN touch - up!\n");
 				bIsKeyLock = 1;  //Added for new behavior (2009/09/27)
 			}
 			//Added for touch behavior (2009/08/14)--
 			if(!bIsKeyLock)
 				input_report_key(input, KEYCODE_SEACHER, 1);
 			bIsKeyLock = 0;  //Added for new behavior (2009/09/27)
-			bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center - down!\r\n");
+			bi8232_msg(INFO, "[TOUCH-CAP]virtual button Center - down!\n");
 			bCenterKeyPressed = 1;  //Added for FST
 		}
 		//Added for FST--
@@ -710,7 +714,7 @@ static void bi8232_isr_workqueue(struct work_struct *work)
 	//Modify the scheme for receive hello packet++
 	else if ((buffer[0] == 0x55) && (buffer[1] == 0x55) && (buffer[2] == 0x55) && (buffer[3] == 0x55))
 	{
-		bi8232_msg(INFO, "[TOUCH-CAP]Receive the hello packet!\r\n");	    
+		bi8232_msg(INFO, "[TOUCH-CAP]Receive the hello packet!\n");	    
 	}
 	//gpio_clear_detect_status(bi8232->client->irq);  
 	//Modify the scheme for receive hello packet--
@@ -991,12 +995,12 @@ static int bi8232_resume(struct i2c_client *client)
 	    {
 	        if (bi8232_set_sensitivity(&sen) < 0)
 	        {
-                bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\r\n");
+                bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\n");
                 msleep(100);
             }
             else
             {
-                bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity successful!\r\n"); 
+                bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity successful!\n"); 
                 break;
             }
 	    }
@@ -1275,7 +1279,7 @@ static ssize_t msm_seq_write(struct file *file, const char *buff, size_t len, lo
     sen.y = sen_y;
 	if (bi8232_set_sensitivity(&sen) < 0)
 	    {
-            bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\r\n");
+            bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\n");
             msleep(100);
         }
 	
@@ -1299,75 +1303,75 @@ static ssize_t msm_seq_read(struct file *file, char __user *data, size_t count, 
     
 #if 0
     reg = readl(TSSC_REG(CTL));
-    bytes = sprintf(data, "[TOUCH]TSSC_CTL : 0x%x\r\n", reg);
+    bytes = sprintf(data, "[TOUCH]TSSC_CTL : 0x%x\n", reg);
     *ppos += bytes;
     data += bytes;
 
     reg = readl(TSSC_REG(OPN));
-    bytes = sprintf(data, "[TOUCH]TSSC_OPN : 0x%x\r\n", reg);
+    bytes = sprintf(data, "[TOUCH]TSSC_OPN : 0x%x\n", reg);
     *ppos += bytes;
     data += bytes;
 
     reg = readl(TSSC_REG(SI));
-    bytes = sprintf(data, "[TOUCH]TSSC_SAMPLING_INT : 0x%x\r\n", reg);
+    bytes = sprintf(data, "[TOUCH]TSSC_SAMPLING_INT : 0x%x\n", reg);
     *ppos += bytes;
     data += bytes;
 
     reg = readl(TSSC_REG(STATUS));
-    bytes = sprintf(data, "[TOUCH]TSSC_STATUS : 0x%x\r\n", reg);
+    bytes = sprintf(data, "[TOUCH]TSSC_STATUS : 0x%x\n", reg);
     *ppos += bytes;
     data += bytes;
 
     reg = readl(TSSC_REG(AVG12));
-    bytes = sprintf(data, "[TOUCH]TSSC_AVG_12 : 0x%x\r\n", reg);
+    bytes = sprintf(data, "[TOUCH]TSSC_AVG_12 : 0x%x\n", reg);
     *ppos += bytes;
     data += bytes;
 #endif
     bi8232_send(cmd, ARRAY_SIZE(cmd));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]X-axis absolute : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]X-axis absolute : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0x30, 0x00, 0x01 };
     bi8232_send(cmd2, ARRAY_SIZE(cmd2));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]Y-axis absolute : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]Y-axis absolute : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0x40, 0x00, 0x01 };
     bi8232_send(cmd3, ARRAY_SIZE(cmd3));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]Sensitivity value : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]Sensitivity value : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0x60, 0x00, 0x01 };
     bi8232_send(cmd4, ARRAY_SIZE(cmd4));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]X-axis resolution : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]X-axis resolution : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0x63, 0x00, 0x01 };
     bi8232_send(cmd5, ARRAY_SIZE(cmd5));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]Y-axis resolution : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]Y-axis resolution : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0xB0, 0x00, 0x01 };
     bi8232_send(cmd6, ARRAY_SIZE(cmd6));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]Normal report state : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]Normal report state : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
 
     //cmd[4] = { 0x53, 0xB1, 0x00, 0x01 };
     bi8232_send(cmd7, ARRAY_SIZE(cmd7));
 	bi8232_recv(buffer, ARRAY_SIZE(buffer));
-	bytes = sprintf(data, "[TOUCH]Origin point state : 0x%x, 0x%x, 0x%x, 0x%x\r\n", buffer[0], buffer[1], buffer[2], buffer[3]);
+	bytes = sprintf(data, "[TOUCH]Origin point state : 0x%x, 0x%x, 0x%x, 0x%x\n", buffer[0], buffer[1], buffer[2], buffer[3]);
     *ppos += bytes;
     data += bytes;
     
@@ -1439,12 +1443,12 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	{
 		if (bi8232_send(reset_cmd, ARRAY_SIZE(reset_cmd)) < 0)
 		{
-			bi8232_msg(INFO, "[TOUCH-CAP]Software reset failed!\r\n");
+			bi8232_msg(INFO, "[TOUCH-CAP]Software reset failed!\n");
 			msleep(50);
 		}
 		else
 		{
-			bi8232_msg(INFO, "[TOUCH-CAP]Software reset successful!\r\n"); 
+			bi8232_msg(INFO, "[TOUCH-CAP]Software reset successful!\n"); 
 			break;
 		}
 	}
@@ -1558,7 +1562,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	{
 		if (bi8232_set_orientation(2) < 0)  //Modified for new CAP sample by Stanley (2009/05/25)
 		{
-			bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_orientation set failed!\r\n");
+			bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_orientation set failed!\n");
 			msleep(10);
 		}
 		else
@@ -1580,7 +1584,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	}
 	else
 	{
-		bi8232_msg(INFO, "[TOUCH-CAP]bi8232 firmware version failed!\r\n");
+		bi8232_msg(INFO, "[TOUCH-CAP]bi8232 firmware version failed!\n");
 		return -EIO;
 	}
 	//Add for detect firmware version--
@@ -1593,18 +1597,18 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 		{
 			if (bi8232_set_sensitivity(&sen) < 0)
 			{
-				bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\r\n");
+				bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity failed!\n");
 				msleep(50);
 			}
 			else
 			{
-				bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity successful!\r\n"); 
+				bi8232_msg(INFO, "[TOUCH-CAP]bi8232_set_sensitivity successful!\n"); 
 				break;
 			}
 		}
 	}
 	//Add for modify sensitivity, 0729--
-	bi8232_msg(INFO, "[TOUCH-CAP]bi8232_probe init ok!\r\n");
+	bi8232_msg(INFO, "[TOUCH-CAP]bi8232_probe init ok!\n");
 	//Added by Stanley for dump scheme++
 	msm_touch_proc_file = create_proc_entry("driver/cap_touch", 0666, NULL);
 
@@ -1709,7 +1713,7 @@ static int __init bi8232_init( void )
              bIsFST = 1;
              bi8232_i2c_driver.suspend = bi8232_fst_suspend;
              bi8232_i2c_driver.resume = bi8232_fst_resume;
-             bi8232_msg(INFO, "[TOUCH-CAP]bi8232_init: FST device!\r\n"); 
+             bi8232_msg(INFO, "[TOUCH-CAP]bi8232_init: FST device!\n"); 
          }
          else
              bIsFST = 0;
