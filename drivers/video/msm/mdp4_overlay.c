@@ -1211,6 +1211,8 @@ void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all)
 	struct mdp4_overlay_pipe *bg_pipe;
 	uint32 bits = 0;
 
+	wmb(); /* make sure registers updated */
+
 	if (pipe->mixer_num == MDP4_MIXER1)
 		bits |= 0x02;
 	else
@@ -1244,6 +1246,7 @@ void mdp4_overlay_reg_flush(struct mdp4_overlay_pipe *pipe, int all)
 
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
 	outpdw(MDP_BASE + 0x18000, bits);	/* MDP_OVERLAY_REG_FLUSH */
+	wmb();
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
 
