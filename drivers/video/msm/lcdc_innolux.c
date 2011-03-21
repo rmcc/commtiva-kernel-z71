@@ -704,7 +704,7 @@ static int create_lcdspi_proc_file(void)
     return 0;
 }
 extern int fih_lcm_is_mddi_type(void);
-//extern void lcdc_clk_off(void);
+extern void lcdc_clk_off(void);
 static int __init lcdc_innolux_init(void)
 {
 	int ret;
@@ -712,7 +712,7 @@ static int __init lcdc_innolux_init(void)
 	
     
     if(fih_lcm_is_mddi_type()){
-        //lcdc_clk_off();        
+        lcdc_clk_off();        
         ret=-ENODEV;
         goto err;
     }
