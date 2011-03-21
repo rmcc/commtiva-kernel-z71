@@ -31,7 +31,6 @@
 
 struct kgsl_device;
 struct kgsl_device_private;
-struct kgsl_context;
 
 #define KGSL_G12_PACKET_SIZE 15
 #define KGSL_G12_MARKER_SIZE 10
@@ -68,10 +67,10 @@ struct kgsl_context;
 int
 kgsl_g12_drawctxt_create(struct kgsl_device_private *dev_priv,
 			uint32_t unused,
-			struct kgsl_context *context);
+			unsigned int *drawctxt_id);
 
 int
 kgsl_g12_drawctxt_destroy(struct kgsl_device *device,
-			  struct kgsl_context *context);
+			unsigned int drawctxt_id);
 
 #endif  /* __GSL_DRAWCTXT_H */

@@ -37,9 +37,12 @@ int kgsl_g12_cmdwindow_write(struct kgsl_device *device,
 	unsigned int cmdwinaddr;
 	unsigned int cmdstream;
 
+	KGSL_DRV_INFO("enter (device=%p,addr=%08x,data=0x%x)\n", device, addr,
+			data);
+
 	if (target < KGSL_CMDWINDOW_MIN ||
 		target > KGSL_CMDWINDOW_MAX) {
-		KGSL_DRV_ERR(device, "invalid target\n");
+		KGSL_DRV_ERR("dev %p invalid target\n", device);
 		return -EINVAL;
 	}
 

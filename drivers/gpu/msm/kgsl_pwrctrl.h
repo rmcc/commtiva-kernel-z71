@@ -1,4 +1,4 @@
-/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -49,6 +49,9 @@
 #define KGSL_PWRFLAGS_IRQ_ON		0x00000040
 #define KGSL_PWRFLAGS_IRQ_OFF		0x00000080
 
+#define BW_INIT 0
+#define BW_MAX  1
+
 #define KGSL_DEFAULT_PWRLEVEL 1
 
 struct kgsl_pwrctrl {
@@ -64,13 +67,12 @@ struct kgsl_pwrctrl {
 	unsigned int power_flags;
 	struct kgsl_pwrlevel pwrlevels[KGSL_MAX_PWRLEVELS];
 	unsigned int active_pwrlevel;
-	int requested_pwrlevel;
 	unsigned int num_pwrlevels;
 	unsigned int interval_timeout;
 	struct regulator *gpu_reg;
 	uint32_t pcl;
 	unsigned int nap_allowed;
-	struct kgsl_yamato_context *suspended_ctxt;
+	struct kgsl_drawctxt *suspended_ctxt;
 };
 
 int kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag);
@@ -84,8 +86,5 @@ void kgsl_pre_hwaccess(struct kgsl_device *device);
 void kgsl_check_suspended(struct kgsl_device *device);
 int kgsl_pwrctrl_sleep(struct kgsl_device *device);
 int kgsl_pwrctrl_wake(struct kgsl_device *device);
-
-int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
-void kgsl_pwrctrl_uninit_sysfs(struct kgsl_device *device);
 
 #endif /* _GSL_PWRCTRL_H */
