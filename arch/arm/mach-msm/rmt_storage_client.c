@@ -169,6 +169,8 @@ static struct dentry *stats_dentry;
 #define RAMFS_MDM_STORAGE_ID		0x4D4583A1
 /* SSD */
 #define RAMFS_SSD_STORAGE_ID		0x00535344
+#define RAMFS_SHARED_SSD_RAM_BASE	0x42E00000
+#define RAMFS_SHARED_SSD_RAM_SIZE	0x2000
 
 static struct rmt_storage_client *rmt_storage_get_client(uint32_t handle)
 {
@@ -454,7 +456,7 @@ static int rmt_storage_event_close_cb(struct rmt_storage_event *event_args,
 	if (event_type != RMT_STORAGE_EVNT_CLOSE)
 		return -1;
 
-	pr_info("%s: close callback received\n", __func__);
+	pr_debug("%s: close callback received\n", __func__);
 	ret = xdr_recv_pointer(xdr, (void **)&event,
 			sizeof(struct rmt_storage_event_params),
 			rmt_storage_parse_params);
@@ -489,7 +491,7 @@ static int rmt_storage_event_write_block_cb(
 	if (event_type != RMT_STORAGE_EVNT_WRITE_BLOCK)
 		return -1;
 
-	pr_info("%s: write block callback received\n", __func__);
+	pr_debug("%s: write block callback received\n", __func__);
 	ret = xdr_recv_pointer(xdr, (void **)&event,
 			sizeof(struct rmt_storage_event_params),
 			rmt_storage_parse_params);
@@ -533,7 +535,7 @@ static int rmt_storage_event_get_err_cb(struct rmt_storage_event *event_args,
 	if (event_type != RMT_STORAGE_EVNT_GET_DEV_ERROR)
 		return -1;
 
-	pr_info("%s: get err callback received\n", __func__);
+	pr_debug("%s: get err callback received\n", __func__);
 	ret = xdr_recv_pointer(xdr, (void **)&event,
 			sizeof(struct rmt_storage_event_params),
 			rmt_storage_parse_params);
@@ -831,7 +833,10 @@ static int handle_rmt_storage_call(struct msm_rpc_client *client,
 		rc = cb_func(event_args, xdr);
 		if (IS_ERR_VALUE(rc)) {
 			pr_err("%s: Invalid parameters received\n", __func__);
-			result = RMT_STORAGE_ERROR_PARAM;
+			if (req->procedure == RMT_STORAGE_OPEN_CB_TYPE_PROC)
+				result = 0; /* bad handle to signify err */
+			else
+				result = RMT_STORAGE_ERROR_PARAM;
 			kfree(kevent);
 			goto out;
 		}
@@ -905,7 +910,7 @@ static long rmt_storage_ioctl(struct file *fp, unsigned int cmd,
 	switch (cmd) {
 
 	case RMT_STORAGE_SHRD_MEM_PARAM:
-		pr_info("%s: get shared memory parameters ioctl\n", __func__);
+		pr_debug("%s: get shared memory parameters ioctl\n", __func__);
 		if (copy_from_user(&usr_shrd_mem, (void __user *)arg,
 				sizeof(struct rmt_shrd_mem_param))) {
 			pr_err("%s: copy from user failed\n\n", __func__);
@@ -929,7 +934,7 @@ static long rmt_storage_ioctl(struct file *fp, unsigned int cmd,
 		break;
 
 	case RMT_STORAGE_WAIT_FOR_REQ:
-		pr_info("%s: wait for request ioctl\n", __func__);
+		pr_debug("%s: wait for request ioctl\n", __func__);
 		if (atomic_read(&rmc->total_events) == 0) {
 			ret = wait_event_interruptible(rmc->event_q,
 				atomic_read(&rmc->total_events) != 0);
@@ -1325,7 +1330,12 @@ static int rmt_storage_init_ramfs(struct rmt_storage_srv *srv)
 	ramfs_table->ramfs_entry[0].size       = RAMFS_SHARED_EFS_RAM_SIZE;
 	ramfs_table->ramfs_entry[0].client_sts = RAMFS_DEFAULT;
 
-	ramfs_table->entries  = 1;
+	ramfs_table->ramfs_entry[1].client_id  = RAMFS_SSD_STORAGE_ID;
+	ramfs_table->ramfs_entry[1].base_addr  = RAMFS_SHARED_SSD_RAM_BASE;
+	ramfs_table->ramfs_entry[1].size       = RAMFS_SHARED_SSD_RAM_SIZE;
+	ramfs_table->ramfs_entry[1].client_sts = RAMFS_DEFAULT;
+
+	ramfs_table->entries  = 2;
 	ramfs_table->version  = RAMFS_INFO_VERSION;
 	ramfs_table->magic_id = RAMFS_INFO_MAGICNUMBER;
 

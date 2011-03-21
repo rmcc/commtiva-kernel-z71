@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -38,12 +38,21 @@
 #include "mipi_dsi.h"
 
 static struct mdp4_overlay_pipe *dsi_pipe;
-static struct mdp4_overlay_pipe *pending_pipe;
 static struct msm_fb_data_type *dsi_mfd;
+static int busy_wait_cnt;
 
 static int vsync_start_y_adjust = 4;
 
-struct timer_list dsi_timer;
+
+#ifdef DSI_CLK_CTRL
+struct timer_list dsi_clock_timer;
+
+static void dsi_clock_tout(unsigned long data)
+{
+	if (mipi_dsi_clk_on)
+		mipi_dsi_clk_disable();
+}
+#endif
 
 static __u32 msm_fb_line_length(__u32 fb_index, __u32 xres, int bpp)
 {
@@ -122,6 +131,11 @@ void mdp4_overlay_update_dsi_cmd(struct msm_fb_data_type *mfd)
 		ret = mdp4_overlay_format2pipe(pipe);
 		if (ret < 0)
 			printk(KERN_INFO "%s: format2type failed\n", __func__);
+#ifdef DSI_CLK_CTRL
+		init_timer(&dsi_clock_timer);
+		dsi_clock_timer.function = dsi_clock_tout;
+		dsi_clock_timer.data = (unsigned long) mfd;;
+#endif
 
 		dsi_pipe = pipe; /* keep it */
 		/*
@@ -210,7 +224,7 @@ void mdp4_dsi_cmd_3d(struct msm_fb_data_type *mfd, struct msmfb_overlay_3d *r3d)
 		mdp4_overlay_panel_3d(pipe->mixer_num, MDP4_3D_NONE);
 
 	if (mfd->panel_power_on)
-		mdp4_dsi_cmd_dma_busy_wait(mfd, pipe);
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
 
 	fbi = mfd->fbi;
 	if (pipe->is_3d) {
@@ -262,41 +276,53 @@ void mdp4_overlay0_done_dsi_cmd()
 {
 	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 
-	if (pending_pipe)
-		complete(&pending_pipe->comp);
+	if (busy_wait_cnt)
+		busy_wait_cnt--;
 }
 
 void mdp4_dsi_cmd_overlay_restore(void)
 {
 	/* mutex holded by caller */
 	if (dsi_mfd && dsi_pipe) {
-		mdp4_dsi_cmd_dma_busy_wait(dsi_mfd, dsi_pipe);
+		mdp4_dsi_cmd_dma_busy_wait(dsi_mfd);
 		mdp4_overlay_update_dsi_cmd(dsi_mfd);
 		mdp4_dsi_cmd_overlay_kickoff(dsi_mfd, dsi_pipe);
 		dsi_mfd->dma_update_flag = 1;
 	}
 }
 
-void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd,
-				struct mdp4_overlay_pipe *pipe)
+/*
+ * mdp4_dsi_cmd_dma_busy_wait: check dsi link activity
+ * dsi link is a shared resource and it can only be used
+ * while it is in idle state.
+ * ov_mutex need to be acquired before call this function.
+ */
+void mdp4_dsi_cmd_dma_busy_wait(struct msm_fb_data_type *mfd)
 {
 	unsigned long flag;
+	int need_wait = 0;
 
-	if (pipe == NULL) /* first time since boot up */
-		return;
+#ifdef DSI_CLK_CTRL
+	mod_timer(&dsi_clock_timer, jiffies + HZ); /* one second */
+#endif
 
 	spin_lock_irqsave(&mdp_spin_lock, flag);
+#ifdef DSI_CLK_CTRL
+	if (mipi_dsi_clk_on == 0)
+		mipi_dsi_clk_enable();
+#endif
+
 	if (mfd->dma->busy == TRUE) {
-		INIT_COMPLETION(pipe->comp);
-		pending_pipe = pipe;
+		if (busy_wait_cnt == 0)
+			INIT_COMPLETION(mfd->dma->comp);
+		busy_wait_cnt++;
+		need_wait++;
 	}
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
 
-	if (pending_pipe != NULL) {
+	if (need_wait) {
 		/* wait until DMA finishes the current job */
-		wait_for_completion_killable(&pipe->comp);
-		mfd->dma_update_flag = 0;
-		pending_pipe = NULL;
+		wait_for_completion(&mfd->dma->comp);
 	}
 }
 
@@ -330,7 +356,7 @@ void mdp4_dsi_cmd_overlay(struct msm_fb_data_type *mfd)
 	mutex_lock(&mfd->dma->ov_mutex);
 
 	if (mfd && mfd->panel_power_on) {
-		mdp4_dsi_cmd_dma_busy_wait(mfd, dsi_pipe);
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
 		mdp4_overlay_update_dsi_cmd(mfd);
 
 		mdp4_dsi_cmd_kickoff_ui(mfd, dsi_pipe);

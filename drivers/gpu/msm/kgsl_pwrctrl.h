@@ -49,9 +49,6 @@
 #define KGSL_PWRFLAGS_IRQ_ON		0x00000040
 #define KGSL_PWRFLAGS_IRQ_OFF		0x00000080
 
-#define BW_INIT 0
-#define BW_MAX  1
-
 #define KGSL_DEFAULT_PWRLEVEL 1
 
 struct kgsl_pwrctrl {
@@ -73,7 +70,7 @@ struct kgsl_pwrctrl {
 	struct regulator *gpu_reg;
 	uint32_t pcl;
 	unsigned int nap_allowed;
-	struct kgsl_drawctxt *suspended_ctxt;
+	struct kgsl_yamato_context *suspended_ctxt;
 };
 
 int kgsl_pwrctrl_clk(struct kgsl_device *device, unsigned int pwrflag);

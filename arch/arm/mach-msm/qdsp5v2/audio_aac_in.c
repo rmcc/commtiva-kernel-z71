@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -119,6 +119,7 @@ struct audio_in {
 	unsigned queue_ids;
 	uint16_t enc_id;
 
+	struct audrec_session_info session_info; /*audrec session info*/
 	uint16_t source; /* Encoding source bit mask */
 	uint32_t device_events; /* device events interested in */
 	uint32_t dev_cnt;
@@ -424,6 +425,10 @@ static void audrec_dsp_event(void *data, unsigned id, size_t len,
 		MM_DBG("flush ack recieved\n");
 		break;
 	}
+	case ADSP_MESSAGE_ID: {
+		MM_DBG("Received ADSP event:module audrectask\n");
+		break;
+	}
 	default:
 		MM_ERR("Unknown Event id %d\n", id);
 	}
@@ -561,7 +566,7 @@ static int audaac_in_enc_config(struct audio_in *audio, int enable)
 {
 	struct audpreproc_audrec_cmd_enc_cfg cmd;
 	memset(&cmd, 0, sizeof(cmd));
-	cmd.cmd_id = AUDPREPROC_AUDREC_CMD_ENC_CFG;
+	cmd.cmd_id = AUDPREPROC_AUDREC_CMD_ENC_CFG_2;
 	cmd.stream_id = audio->enc_id;
 
 	if (enable)
@@ -786,6 +791,10 @@ static long audaac_in_ioctl(struct file *file,
 			MM_DBG("msm_snddev_withdraw_freq\n");
 			break;
 		}
+		/*update aurec session info in audpreproc layer*/
+		audio->session_info.session_id = audio->enc_id;
+		audio->session_info.sampling_freq = audio->samp_rate;
+		audpreproc_update_audrec_info(&audio->session_info);
 		rc = audaac_in_enable(audio);
 		if (!rc) {
 			rc =
@@ -802,6 +811,8 @@ static long audaac_in_ioctl(struct file *file,
 		break;
 	}
 	case AUDIO_STOP: {
+		audio->session_info.sampling_freq = 0;
+		audpreproc_update_audrec_info(&audio->session_info);
 		rc = audaac_in_disable(audio);
 		rc = msm_snddev_withdraw_freq(audio->enc_id,
 					SNDDEV_CAP_TX, AUDDEV_CLNT_ENC);
@@ -1254,6 +1265,9 @@ static int audaac_in_release(struct inode *inode, struct file *file)
 	msm_snddev_withdraw_freq(audio->enc_id, SNDDEV_CAP_TX,
 					AUDDEV_CLNT_ENC);
 	auddev_unregister_evt_listner(AUDDEV_CLNT_ENC, audio->enc_id);
+	/*reset the sampling frequency information at audpreproc layer*/
+	audio->session_info.sampling_freq = 0;
+	audpreproc_update_audrec_info(&audio->session_info);
 	audaac_in_disable(audio);
 	audaac_in_flush(audio);
 	msm_adsp_put(audio->audrec);

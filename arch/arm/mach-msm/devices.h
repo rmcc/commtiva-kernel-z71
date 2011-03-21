@@ -34,6 +34,7 @@ extern struct platform_device msm_device_uart_gsbi9;
 
 extern struct platform_device msm8960_device_uart_gsbi2;
 extern struct platform_device msm8960_device_uart_gsbi5;
+extern struct platform_device msm8960_device_qup_i2c_gsbi4;
 
 extern struct platform_device msm_device_sdc1;
 extern struct platform_device msm_device_sdc2;
@@ -57,6 +58,8 @@ extern struct platform_device msm_device_i2c_2;
 
 extern struct platform_device qup_device_i2c;
 
+extern struct platform_device msm_gsbi0_qup_i2c_device;
+extern struct platform_device msm_gsbi1_qup_i2c_device;
 extern struct platform_device msm_gsbi3_qup_i2c_device;
 extern struct platform_device msm_gsbi4_qup_i2c_device;
 extern struct platform_device msm_gsbi7_qup_i2c_device;
@@ -85,6 +88,8 @@ extern struct platform_device msm_device_ssbi7;
 
 extern struct platform_device msm_gsbi1_qup_spi_device;
 
+extern struct platform_device msm_device_wcnss_wlan;
+
 extern struct platform_device msm_device_vidc_720p;
 
 extern struct platform_device *msm_footswitch_devices[];
@@ -98,6 +103,9 @@ extern unsigned msm_num_clocks_7x25;
 
 extern struct clk_lookup msm_clocks_7x27[];
 extern unsigned msm_num_clocks_7x27;
+
+extern struct clk_lookup msm_clocks_7x27a[];
+extern unsigned msm_num_clocks_7x27a;
 
 extern struct clk_lookup msm_clocks_7x30[];
 extern unsigned msm_num_clocks_7x30;

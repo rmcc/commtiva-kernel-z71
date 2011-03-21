@@ -34,9 +34,15 @@
 #include <mach/hardware.h>
 #include <mach/gpio.h>
 #include <mach/clk.h>
+#include <mach/msm_iomap.h>
 
 #include "msm_fb.h"
 #include "mipi_dsi.h"
+#include "mdp.h"
+#include "mdp4.h"
+
+
+int mipi_dsi_clk_on;
 
 static int mipi_dsi_probe(struct platform_device *pdev);
 static int mipi_dsi_remove(struct platform_device *pdev);
@@ -94,7 +100,7 @@ static int mipi_dsi_mxo_selected(void)
 	uint32 data;
 
 	cc = (uint32 *)(mmss_cc_base + 0x004c);
-	data = MIPI_INP(cc);
+	data = MIPI_INP_SECURE(cc);
 
 	if (data & BIT(14))
 		return 1;
@@ -116,18 +122,18 @@ static void mipi_dsi_clk(int on, struct dsi_clk_desc *clk)
 	val = clk->d * 2;
 	data = (~val) & 0x0ff;
 	data |= clk->m << 8;
-	MIPI_OUTP(md, data);
+	MIPI_OUTP_SECURE(md, data);
 
 	val = clk->n - clk->m;
 	data = (~val) & 0x0ff;
 	data <<= 24;
 	data |= clk->src;
-	MIPI_OUTP(ns, data);
+	MIPI_OUTP_SECURE(ns, data);
 
 	/*
 	 * mxo, bypass, mnd_en, root_en, clk_en
 	 * */
-	MIPI_OUTP(cc, 0x0145);
+	MIPI_OUTP_SECURE(cc, 0x0145);
 }
 #else
 
@@ -141,18 +147,18 @@ static void mipi_dsi_clk(int on)
 
 	if (on) {
 		if (mipi_dsi_mxo_selected())
-			MIPI_OUTP(cc, 0x125);	/* mxo */
+			MIPI_OUTP_SECURE(cc, 0x125);	/* mxo */
 		else
-			MIPI_OUTP(cc, 0x25);	/* pxo */
+			MIPI_OUTP_SECURE(cc, 0x25);	/* pxo */
 
-		MIPI_OUTP(md, 0x1fd);
-		MIPI_OUTP(ns, 0xff000003);
+		MIPI_OUTP_SECURE(md, 0x1fd);
+		MIPI_OUTP_SECURE(ns, 0xff000003);
+
 	} else
-		MIPI_OUTP(cc, 0);
+		MIPI_OUTP_SECURE(cc, 0);
 
 	wmb();
 }
-
 #endif
 
 static void mipi_dsi_sfpb_cfg(void)
@@ -178,11 +184,11 @@ static void mipi_dsi_pclk(int on)
 	ns = mmss_cc_base + 0x0138;
 
 	if (on) {
-		MIPI_OUTP(cc, 0x2a5);
-		MIPI_OUTP(md, 0x1fb);
-		MIPI_OUTP(ns, 0xfd0003);
+		MIPI_OUTP_SECURE(cc, 0x2a5);
+		MIPI_OUTP_SECURE(md, 0x1fb);
+		MIPI_OUTP_SECURE(ns, 0xfd0003);
 	} else
-		MIPI_OUTP(cc, 0);
+		MIPI_OUTP_SECURE(cc, 0);
 
 	wmb();
 }
@@ -193,7 +199,8 @@ static void mipi_dsi_ahb_en(void)
 
 	ahb = mmss_cc_base + 0x08;
 
-	printk(KERN_INFO "%s: ahb=%x %x\n", __func__, (int) ahb, MIPI_INP(ahb));
+	printk(KERN_INFO "%s: ahb=%x %x\n",
+		__func__, (int) ahb, MIPI_INP_SECURE(ahb));
 }
 
 static void mipi_dsi_calibration(void)
@@ -363,10 +370,14 @@ static int mipi_dsi_off(struct platform_device *pdev)
 		if (pinfo->lcd.hw_vsync_mode && vsync_gpio > 0)
 			gpio_free(vsync_gpio);
 
-		mipi_dsi_set_tear_off();
+		mipi_dsi_set_tear_off(mfd);
 	}
 
 	ret = panel_next_off(pdev);
+
+	mutex_lock(&mfd->dma->ov_mutex);
+	/* make sure mdp dma is not running */
+	mdp4_dsi_cmd_dma_busy_wait(mfd);
 
 #ifdef CONFIG_MSM_BUS_SCALING
 	mdp_bus_scale_update_request(0);
@@ -391,11 +402,15 @@ static int mipi_dsi_off(struct platform_device *pdev)
 	clk_disable(dsi_s_pclk);
 	clk_disable(amp_pclk); /* clock for AHB-master to AXI */
 
+	mipi_dsi_clk_on = 0;
+
 	/* disbale dsi engine */
 	MIPI_OUTP(MIPI_DSI_BASE + 0x0000, 0);
 
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
 		mipi_dsi_pdata->dsi_power_save(0);
+
+	mutex_unlock(&mfd->dma->ov_mutex);
 
 	pr_debug("%s:\n", __func__);
 
@@ -449,6 +464,8 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	mipi_dsi_clk(1);
 	mipi_dsi_pclk(1);
 
+	mipi_dsi_clk_on = 1;
+
 	mipi_dsi_phy_init(0, &(mfd->panel_info));
 
 	enable_irq(DSI_IRQ);
@@ -498,16 +515,17 @@ static int mipi_dsi_on(struct platform_device *pdev)
 
 	mipi_dsi_op_mode_config(mipi->mode);
 
-	if (pinfo->lcd.vsync_enable) {
-		if (pinfo->lcd.hw_vsync_mode && vsync_gpio > 0) {
-			if (gpio_request(vsync_gpio, "MDP_VSYNC") == 0)
-				gpio_direction_input(vsync_gpio);
-			else
-				pr_err("%s: unable to request gpio=%d\n",
-					__func__, vsync_gpio);
+	if (mfd->panel_info.type == MIPI_CMD_PANEL) {
+		if (pinfo->lcd.vsync_enable) {
+			if (pinfo->lcd.hw_vsync_mode && vsync_gpio > 0) {
+				if (gpio_request(vsync_gpio, "MDP_VSYNC") == 0)
+					gpio_direction_input(vsync_gpio);
+				else
+					pr_err("%s: unable to request gpio=%d\n",
+						__func__, vsync_gpio);
+			}
+			mipi_dsi_set_tear_on(mfd);
 		}
-
-		mipi_dsi_set_tear_on();
 	}
 
 #ifdef CONFIG_MSM_BUS_SCALING
@@ -520,6 +538,37 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	pr_debug("%s:\n", __func__);
 
 	return ret;
+}
+
+void mipi_dsi_clk_enable(void)
+{
+
+	clk_enable(amp_pclk); /* clock for AHB-master to AXI */
+	clk_enable(dsi_m_pclk);
+	clk_enable(dsi_s_pclk);
+	clk_enable(dsi_byte_div_clk);
+	clk_enable(dsi_esc_clk);
+	mipi_dsi_pclk(1);
+	mipi_dsi_clk(1);
+
+	MIPI_OUTP(MIPI_DSI_BASE + 0x118, 0x23f); /* DSI_CLK_CTRL */
+
+	mipi_dsi_clk_on = 1;
+}
+
+void mipi_dsi_clk_disable(void)
+{
+	MIPI_OUTP(MIPI_DSI_BASE + 0x0118, 0);
+
+	mipi_dsi_pclk(0);
+	mipi_dsi_clk(0);
+	clk_disable(dsi_esc_clk);
+	clk_disable(dsi_byte_div_clk);
+	clk_disable(dsi_m_pclk);
+	clk_disable(dsi_s_pclk);
+	clk_disable(amp_pclk); /* clock for AHB-master to AXI */
+
+	mipi_dsi_clk_on = 0;
 }
 
 static int mipi_dsi_resource_initialized;
@@ -546,9 +595,9 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 		if (!mipi_dsi_base)
 			return -ENOMEM;
 
-		mmss_cc_base =  ioremap(MMSS_CC_BASE_PHY, 0x200);
-		MSM_FB_INFO("mmss_cc base phy_addr = 0x%x virt = 0x%x\n",
-				MMSS_CC_BASE_PHY, (int) mmss_cc_base);
+		mmss_cc_base = MSM_MMSS_CLK_CTL_BASE;
+		MSM_FB_INFO("msm_mmss_cc base = 0x%x\n",
+				(int) mmss_cc_base);
 
 		if (!mmss_cc_base)
 			return -ENOMEM;
@@ -557,7 +606,7 @@ static int mipi_dsi_probe(struct platform_device *pdev)
 		MSM_FB_INFO("mmss_sfpb  base phy_addr = 0x%x virt = 0x%x\n",
 				MMSS_SFPB_BASE_PHY, (int) mmss_sfpb_base);
 
-		if (!mmss_cc_base)
+		if (!mmss_sfpb_base)
 			return -ENOMEM;
 
 		rc = request_irq(DSI_IRQ, mipi_dsi_isr, IRQF_DISABLED,
@@ -734,6 +783,8 @@ static int __init mipi_dsi_driver_init(void)
 		return PTR_ERR(dsi_byte_div_clk);
 	}
 
+	mipi_dsi_init();
+
 	ret = mipi_dsi_register_driver();
 
 	device_initialize(&dsi_dev);
@@ -752,8 +803,6 @@ static int __init mipi_dsi_driver_init(void)
 		printk(KERN_ERR "mipi_dsi_register_driver() failed!\n");
 		return ret;
 	}
-
-	mipi_dsi_init();
 
 	return ret;
 }

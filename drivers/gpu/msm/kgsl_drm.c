@@ -24,9 +24,9 @@
 #include <linux/android_pmem.h>
 #include <linux/notifier.h>
 
-#include "kgsl_drawctxt.h"
 #include "kgsl.h"
 #include "kgsl_device.h"
+#include "kgsl_drawctxt.h"
 #include "kgsl_drm.h"
 #include "kgsl_mmu.h"
 #include "kgsl_yamato.h"
@@ -791,8 +791,7 @@ kgsl_gem_map(struct drm_gem_object *obj)
 			return -EINVAL;
 		}
 
-		priv->pagetable =
-			kgsl_mmu_getpagetable(mmu, KGSL_MMU_GLOBAL_PT);
+		priv->pagetable = kgsl_mmu_getpagetable(KGSL_MMU_GLOBAL_PT);
 
 		if (priv->pagetable == NULL) {
 			DRM_ERROR("Unable to get the GPU MMU pagetable\n");

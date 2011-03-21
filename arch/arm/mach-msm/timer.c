@@ -32,7 +32,6 @@
 #include "smd_private.h"
 #endif
 #include "timer.h"
-#include "clock-8x60.h"
 
 enum {
 	MSM_TIMER_DEBUG_SYNC = 1U << 0,
@@ -204,9 +203,12 @@ static struct msm_clock msm_clocks[] = {
 		.freq = GPT_HZ,
 		.index = MSM_CLOCK_GPT,
 		.flags =
+#ifdef CONFIG_ARCH_MSM_ARM11
 			MSM_CLOCK_FLAGS_UNSTABLE_COUNT |
 			MSM_CLOCK_FLAGS_ODD_MATCH_WRITE |
-			MSM_CLOCK_FLAGS_DELAYED_WRITE_POST,
+			MSM_CLOCK_FLAGS_DELAYED_WRITE_POST |
+#endif
+			0,
 		.write_delay = 9,
 	},
 	[MSM_CLOCK_DGT] = {
@@ -840,7 +842,7 @@ void msm_timer_exit_idle(int low_power)
 	if (!enabled)
 		writel(TIMER_ENABLE_EN, gpt_clk->regbase + TIMER_ENABLE);
 
-#if defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_ARCH_MSM_SCORPION) || defined(CONFIG_ARCH_MSM_SCORPIONMP)
 	gpt_clk_state->in_sync = 0;
 #else
 	gpt_clk_state->in_sync = gpt_clk_state->in_sync && enabled;
@@ -854,7 +856,7 @@ void msm_timer_exit_idle(int low_power)
 	if (!enabled)
 		writel(TIMER_ENABLE_EN, clock->regbase + TIMER_ENABLE);
 
-#if defined(CONFIG_ARCH_MSM_SCORPION)
+#if defined(CONFIG_ARCH_MSM_SCORPION) || defined(CONFIG_ARCH_MSM_SCORPIONMP)
 	clock_state->in_sync = 0;
 #else
 	clock_state->in_sync = clock_state->in_sync && enabled;
@@ -927,7 +929,7 @@ int64_t msm_timer_get_sclk_time(int64_t *period)
 
 int __init msm_timer_init_time_sync(void (*timeout)(void))
 {
-#if defined(CONFIG_MSM_N_WAY_SMSM)
+#if defined(CONFIG_MSM_N_WAY_SMSM) && !defined(CONFIG_MSM_DIRECT_SCLK_ACCESS)
 	int ret = smsm_change_intr_mask(SMSM_TIME_MASTER_DEM, 0xFFFFFFFF, 0);
 
 	if (ret) {

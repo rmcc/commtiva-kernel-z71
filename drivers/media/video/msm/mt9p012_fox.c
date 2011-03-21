@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009, 2011 Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -143,6 +143,9 @@ DEFINE_MUTEX(mt9p012_mut);
 static int mt9p012_i2c_rxdata(unsigned short saddr, unsigned char *rxdata,
 			      int length)
 {
+	int retry_cnt = 0;
+	int rc;
+
 	struct i2c_msg msgs[] = {
 		{
 		 .addr = saddr,
@@ -158,8 +161,15 @@ static int mt9p012_i2c_rxdata(unsigned short saddr, unsigned char *rxdata,
 		 },
 	};
 
-	if (i2c_transfer(mt9p012_client->adapter, msgs, 2) < 0) {
-		CDBG("mt9p012_i2c_rxdata failed!\n");
+	do {
+		rc = i2c_transfer(mt9p012_client->adapter, msgs, 2);
+		if (rc > 0)
+			break;
+		retry_cnt++;
+	} while (retry_cnt < 3);
+
+	if (rc < 0) {
+		pr_err("mt9p012_i2c_rxdata failed!:%d %d\n", rc, retry_cnt);
 		return -EIO;
 	}
 
@@ -195,6 +205,9 @@ static int32_t mt9p012_i2c_read_w(unsigned short saddr, unsigned short raddr,
 static int32_t mt9p012_i2c_txdata(unsigned short saddr, unsigned char *txdata,
 				  int length)
 {
+	int retry_cnt = 0;
+	int rc;
+
 	struct i2c_msg msg[] = {
 		{
 		 .addr = saddr,
@@ -204,8 +217,15 @@ static int32_t mt9p012_i2c_txdata(unsigned short saddr, unsigned char *txdata,
 		 },
 	};
 
-	if (i2c_transfer(mt9p012_client->adapter, msg, 1) < 0) {
-		CDBG("mt9p012_i2c_txdata failed\n");
+	do {
+		rc = i2c_transfer(mt9p012_client->adapter, msg, 1);
+		if (rc > 0)
+			break;
+		retry_cnt++;
+	} while (retry_cnt < 3);
+
+	if (rc < 0) {
+		pr_err("mt9p012_i2c_txdata failed: %d %d\n", rc, retry_cnt);
 		return -EIO;
 	}
 
@@ -1222,8 +1242,10 @@ int mt9p012_sensor_release(void)
 	gpio_direction_output(mt9p012_ctrl->sensordata->sensor_reset, 0);
 	gpio_free(mt9p012_ctrl->sensordata->sensor_reset);
 
-	gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 0);
-	gpio_free(mt9p012_ctrl->sensordata->vcm_pwd);
+	if (mt9p012_ctrl->sensordata->vcm_enable) {
+		gpio_direction_output(mt9p012_ctrl->sensordata->vcm_pwd, 0);
+		gpio_free(mt9p012_ctrl->sensordata->vcm_pwd);
+	}
 
 	kfree(mt9p012_ctrl);
 	mt9p012_ctrl = NULL;

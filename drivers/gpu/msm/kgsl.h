@@ -67,7 +67,7 @@
 /* Extra accounting entries needed in the pagetable */
 #define KGSL_PT_EXTRA_ENTRIES      16
 
-#define KGSL_PAGETABLE_ENTRIES(_sz) (((_sz) >> KGSL_PAGESIZE_SHIFT) + \
+#define KGSL_PAGETABLE_ENTRIES(_sz) (((_sz) >> PAGE_SHIFT) + \
 				     KGSL_PT_EXTRA_ENTRIES)
 
 /* Casting using container_of() for structures that kgsl owns. */
@@ -78,10 +78,19 @@
 #define KGSL_G12_DEVICE(device) \
 		KGSL_CONTAINER_OF(device, struct kgsl_g12_device, dev)
 
+/* A macro for memory statistics - add the new size to the stat and if
+   the statisic is greater then _max, set _max
+*/
+
+#define KGSL_STATS_ADD(_size, _stat, _max) \
+	do { _stat += (_size); if (_stat > _max) _max = _stat; } while (0)
+
 struct kgsl_driver {
 	struct cdev cdev;
 	dev_t major;
 	struct class *class;
+	struct kobject *ptkobj;
+	struct kobject *prockobj;
 	struct kgsl_device *devp[KGSL_DEVICE_MAX];
 	struct platform_device *pdev;
 
@@ -109,16 +118,18 @@ struct kgsl_driver {
 
 	unsigned int pt_va_size;
 
-	/* A structure for information about the pool of
-	   pagetable memory */
+	/* Base virtual address shared across devices */
+	unsigned int pt_va_base;
+
+	struct dma_pool *ptpool;
 
 	struct {
-		unsigned long *bitmap;
-		int entries;
-		spinlock_t lock;
-		void *hostptr;
-		unsigned int physaddr;
-	} ptpool;
+		unsigned int vmalloc;
+		unsigned int vmalloc_max;
+		unsigned int coherent;
+		unsigned int coherent_max;
+		unsigned int histogram[16];
+	} stats;
 };
 
 extern struct kgsl_driver kgsl_driver;
@@ -137,9 +148,6 @@ enum kgsl_status {
 	KGSL_SUCCESS = 0,
 	KGSL_FAILURE = 1
 };
-
-#define KGSL_TRUE 1
-#define KGSL_FALSE 0
 
 #ifdef CONFIG_MSM_KGSL_MMU_PAGE_FAULT
 #define MMU_CONFIG 2

@@ -21,13 +21,14 @@
 #include <linux/module.h>
 #include <linux/wakelock.h>
 #include <mach/msm_adsp.h>
-
+#include <mach/qdsp5v2/audio_acdbi.h>
 #include <mach/qdsp5v2/audpreproc.h>
 #include <mach/debug_mm.h>
-
+#include <mach/qdsp5v2/qdsp5audpreprocmsg.h>
 
 static DEFINE_MUTEX(audpreproc_lock);
 static struct wake_lock audpre_wake_lock;
+static struct wake_lock audpre_idle_wake_lock;
 
 struct msm_adspenc_info {
 	const char *module_name;
@@ -105,10 +106,12 @@ static struct audpreproc_state the_audpreproc_state = {
 static inline void prevent_suspend(void)
 {
 	wake_lock(&audpre_wake_lock);
+	wake_lock(&audpre_idle_wake_lock);
 }
 static inline void allow_suspend(void)
 {
 	wake_unlock(&audpre_wake_lock);
+	wake_unlock(&audpre_idle_wake_lock);
 }
 
 /* DSP preproc event handler */
@@ -207,6 +210,20 @@ static void audpreproc_dsp_event(void *data, unsigned id, size_t len,
 			audpreproc->func[routing_mode_done.stream_id](
 			audpreproc->private[routing_mode_done.stream_id], id,
 			&routing_mode_done);
+		break;
+	}
+#ifdef CONFIG_DEBUG_FS
+	case AUDPREPROC_MSG_FEAT_QUERY_DM_DONE:
+	   {
+	    uint16_t msg[3];
+	    getevent(msg, sizeof(msg));
+	    MM_INFO("RTC ACK --> %x %x %x\n", msg[0], msg[1], msg[2]);
+	    acdb_rtc_set_err(msg[2]);
+	   }
+	break;
+#endif
+	case ADSP_MESSAGE_ID: {
+		MM_DBG("Received ADSP event:module audpreproctask\n");
 		break;
 	}
 	default:
@@ -396,6 +413,8 @@ int audpreproc_aenc_alloc(unsigned enc_type, const char **module_name,
 
 	if (!wakelock_init) {
 		wake_lock_init(&audpre_wake_lock, WAKE_LOCK_SUSPEND, "audpre");
+		wake_lock_init(&audpre_idle_wake_lock, WAKE_LOCK_IDLE,
+				"audpre_idle");
 		wakelock_init = 1;
 	}
 

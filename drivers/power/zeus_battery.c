@@ -575,6 +575,7 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 		if(Vbat <= g_Volt2PercentMode[iC].dwVolt)
            		break;
 	}
+#if 0
 	if(iC==0)
 		Volt_pec=0;
 	else if(iC==10)//Michael modify, 2009/10/21
@@ -584,6 +585,14 @@ static int	ChangeToVoltPercentage(unsigned Vbat)
 		Volt_pec=g_Volt2PercentMode[iC-1].dwPercent + 
 			( Vbat -g_Volt2PercentMode[iC-1].dwVolt) * ( g_Volt2PercentMode[iC].dwPercent -g_Volt2PercentMode[iC-1].dwPercent)/( g_Volt2PercentMode[iC].dwVolt -g_Volt2PercentMode[iC-1].dwVolt);
 	}
+#else
+	if (Vbat <= 3500)
+		Volt_pec = 0;
+	else if (Vbat >= 4100)
+		Volt_pec = 100;
+	else
+		Volt_pec = ((Vbat - 3500) * 100 / (4100 - 3500));
+#endif
 	/* FIH, Michael Kao, 2009/10/14 */
 	/* FIH, Michael Kao, 2009/09/10 */
 	/* [FXX_CR], charging full protection*/

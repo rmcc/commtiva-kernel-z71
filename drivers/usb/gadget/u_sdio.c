@@ -24,6 +24,7 @@
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/termios.h>
+#include <linux/debugfs.h>
 #include <mach/usb_gadget_fserial.h>
 
 #include <mach/sdio_al.h>
@@ -77,6 +78,10 @@ struct gsdio_port {
 #define ACM_CTRL_RTS	(1 << 1)	/* unused with full duplex */
 #define ACM_CTRL_DTR	(1 << 0)	/* host is ready for data r/w */
 	int				cbits_to_modem;
+
+	/* pkt logging */
+	unsigned long			nbytes_tolaptop;
+	unsigned long			nbytes_tomodem;
 };
 
 void gsdio_free_req(struct usb_ep *ep, struct usb_request *req)
@@ -193,24 +198,24 @@ start_rx_end:
 	spin_unlock_irq(&port->port_lock);
 }
 
-void gsdio_write(struct gsdio_port *port, struct usb_request *req)
+int gsdio_write(struct gsdio_port *port, struct usb_request *req)
 {
 	unsigned	avail;
 	char		*packet = req->buf;
 	unsigned	size = req->actual;
 	unsigned	n;
-	int		ret;
+	int		ret = 0;
 
 
 	if (!port) {
 		pr_err("%s: port is null\n", __func__);
-		return;
+		return -ENODEV;
 	}
 
 	if (!req) {
 		pr_err("%s: usb request is null port#%d\n",
 				__func__, port->port_num);
-		return;
+		return -ENODEV;
 	}
 
 	pr_debug("%s: port:%p port#%d req:%p actual:%d n_read:%d\n",
@@ -219,19 +224,21 @@ void gsdio_write(struct gsdio_port *port, struct usb_request *req)
 
 	if (!port->sdio_open) {
 		pr_debug("%s: SDIO IO is not supported\n", __func__);
-		port->n_read = 0;
-		return;
+		return -ENODEV;
 	}
 
 	avail = sdio_write_avail(port->sport_info->ch);
 
 	pr_debug("%s: sdio_write_avail:%d", __func__, avail);
 
+	if (!avail)
+		return -EBUSY;
+
 	if (!req->actual) {
 		pr_debug("%s: req->actual is already zero,update bytes read\n",
 				__func__);
 		port->n_read = 0;
-		return;
+		return -ENODEV;
 	}
 
 	packet = req->buf;
@@ -251,21 +258,24 @@ void gsdio_write(struct gsdio_port *port, struct usb_request *req)
 		pr_err("%s: port#%d sdio write failed err:%d",
 				__func__, port->port_num, ret);
 		/* try again later */
-		return;
+		return ret;
 	}
+
+	port->nbytes_tomodem += size;
 
 	if (size + n == req->actual)
 		port->n_read = 0;
 	else
 		port->n_read += size;
 
-	return;
+	return ret;
 }
 
 void gsdio_rx_push(struct work_struct *w)
 {
 	struct gsdio_port *port = container_of(w, struct gsdio_port, push);
 	struct list_head *q = &port->read_queue;
+	int ret;
 
 	pr_debug("%s: port:%p port#%d read_queue:%p", __func__,
 			port, port->port_num, q);
@@ -298,12 +308,9 @@ void gsdio_rx_push(struct work_struct *w)
 			goto rx_push_end;
 		}
 
-		gsdio_write(port, req);
-		if (port->n_read) {
-			pr_debug("%s: partial bytes were written into port\n",
-					__func__);
+		ret = gsdio_write(port, req);
+		if (ret || port->n_read)
 			goto rx_push_end;
-		}
 
 		list_move(&req->list, &port->read_pool);
 	}
@@ -375,6 +382,31 @@ void gsdio_write_complete(struct usb_ep *ep, struct usb_request *req)
 	return;
 }
 
+void gsdio_read_pending(struct gsdio_port *port)
+{
+	struct sdio_channel *ch;
+	char buf[1024];
+	int avail;
+
+	if (!port) {
+		pr_err("%s: port is null\n", __func__);
+		return;
+	}
+
+	ch = port->sport_info->ch;
+
+	if (!ch)
+		return;
+
+	while ((avail = sdio_read_avail(ch))) {
+		if (avail > 1024)
+			avail = 1024;
+		sdio_read(ch, buf, avail);
+
+		pr_debug("%s: flushed out %d bytes\n", __func__, avail);
+	}
+}
+
 void gsdio_tx_pull(struct work_struct *w)
 {
 	struct gsdio_port *port = container_of(w, struct gsdio_port, pull);
@@ -385,6 +417,10 @@ void gsdio_tx_pull(struct work_struct *w)
 
 	if (!port->port_usb) {
 		pr_err("%s: usb disconnected\n", __func__);
+
+		/* take out all the pending data from sdio */
+		gsdio_read_pending(port);
+
 		return;
 	}
 
@@ -451,6 +487,8 @@ void gsdio_tx_pull(struct work_struct *w)
 				list_add(&req->list, pool);
 			goto tx_pull_end;
 		}
+
+		port->nbytes_tolaptop += avail;
 	}
 tx_pull_end:
 	spin_unlock_irq(&port->port_lock);
@@ -523,6 +561,7 @@ void gsdio_ctrl_wq(struct work_struct *w)
 void gsdio_ctrl_notify_modem(struct gserial *gser, u8 portno, int ctrl_bits)
 {
 	struct gsdio_port *port;
+	int temp;
 
 	if (portno >= n_ports) {
 		pr_err("%s: invalid portno#%d\n", __func__, portno);
@@ -536,11 +575,12 @@ void gsdio_ctrl_notify_modem(struct gserial *gser, u8 portno, int ctrl_bits)
 
 	port = ports[portno].port;
 
-	/* modem is only interested in DTR */
-	if (ctrl_bits & ACM_CTRL_DTR)
-		port->cbits_to_modem = TIOCM_DTR;
+	temp = ctrl_bits & ACM_CTRL_DTR ? TIOCM_DTR : 0;
 
-	port->cbits_to_modem = ctrl_bits;
+	if (port->cbits_to_modem == temp)
+		return;
+
+	 port->cbits_to_modem = temp;
 
 	/* TIOCM_DTR - 0x002 - bit(1) */
 	pr_debug("%s: port:%p port#%d ctrl_bits:%08x\n", __func__,
@@ -552,10 +592,9 @@ void gsdio_ctrl_notify_modem(struct gserial *gser, u8 portno, int ctrl_bits)
 		return;
 	}
 
-	/* whenever DTR is high let laptop know that modem is online too */
-	/* TODO: Sending modem control bits should work, investigate why */
-	if (port->cbits_to_modem && gser->connect)
-		gser->connect(gser);
+	/* whenever DTR is high let laptop know that modem status */
+	if (port->cbits_to_modem && gser->send_modem_ctrl_bits)
+		gser->send_modem_ctrl_bits(gser, port->cbits_to_laptop);
 
 	queue_work(gsdio_wq, &port->notify_modem);
 }
@@ -571,17 +610,18 @@ void gsdio_ctrl_modem_status(int ctrl_bits, void *_dev)
 	pr_debug("%s: port:%p port#%d event:%08x\n", __func__,
 		port, port->port_num, ctrl_bits);
 
+	port->cbits_to_laptop = 0;
 	ctrl_bits &= TIOCM_RI | TIOCM_CD | TIOCM_DSR;
 	if (ctrl_bits & TIOCM_RI)
-		port->cbits_to_laptop = ACM_CTRL_RI;
+		port->cbits_to_laptop |= ACM_CTRL_RI;
 	if (ctrl_bits & TIOCM_CD)
-		port->cbits_to_laptop = ACM_CTRL_DCD;
+		port->cbits_to_laptop |= ACM_CTRL_DCD;
 	if (ctrl_bits & TIOCM_DSR)
-		port->cbits_to_laptop = ACM_CTRL_DSR;
+		port->cbits_to_laptop |= ACM_CTRL_DSR;
 
 	if (port->port_usb && port->port_usb->send_modem_ctrl_bits)
 		port->port_usb->send_modem_ctrl_bits(port->port_usb,
-				port->cbits_to_laptop);
+					port->cbits_to_laptop);
 }
 
 void gsdio_ch_notify(void *_dev, unsigned event)
@@ -645,8 +685,8 @@ static void gsdio_open_work(struct work_struct *w)
 	if (startio) {
 		pr_debug("%s: USB is already open, start io\n", __func__);
 		gsdio_start_io(port);
-		if (gser->connect)
-			gser->connect(gser);
+		 if (gser->send_modem_ctrl_bits)
+			gser->send_modem_ctrl_bits(gser, port->cbits_to_laptop);
 	}
 }
 
@@ -778,13 +818,8 @@ int gsdio_connect(struct gserial *gser, u8 portno)
 	if (port->sdio_open) {
 		pr_debug("%s: sdio is already open, start io\n", __func__);
 		gsdio_start_io(port);
-		/* TODO: Sending modem control bits should work
-		 * investigate on why they are not working
-		 * if (gser->send_modem_ctrl_bits)
-		 * gser->send_modem_ctrl_bits(gser, port->cbits_to_laptop);
-		 */
-		if (gser->connect)
-			gser->connect(gser);
+		 if (gser->send_modem_ctrl_bits)
+			gser->send_modem_ctrl_bits(gser, port->cbits_to_laptop);
 	}
 
 	return 0;
@@ -813,6 +848,8 @@ void gsdio_disconnect(struct gserial *gser, u8 portno)
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	port->port_usb = 0;
+	port->nbytes_tomodem = 0;
+	port->nbytes_tolaptop = 0;
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
 	/* disable endpoints, aborting down any active I/O */
@@ -828,6 +865,84 @@ void gsdio_disconnect(struct gserial *gser, u8 portno)
 	gsdio_free_requests(gser->in, &port->write_pool);
 	spin_unlock_irqrestore(&port->port_lock, flags);
 }
+
+#if defined(CONFIG_DEBUG_FS)
+static char debug_buffer[PAGE_SIZE];
+
+static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
+		size_t count, loff_t *ppos)
+{
+	struct gsdio_port *port;
+	char *buf = debug_buffer;
+	unsigned long flags;
+	int i = 0;
+	int temp = 0;
+
+	while (i < n_ports) {
+		port = ports[i].port;
+		spin_lock_irqsave(&port->port_lock, flags);
+		temp += scnprintf(buf + temp, PAGE_SIZE - temp,
+				"###PORT:%d###\n"
+				"nbytes_tolaptop: %lu\n"
+				"nbytes_tomodem:  %lu\n"
+				"cbits_to_modem:  %u\n"
+				"cbits_to_laptop: %u\n",
+				i, port->nbytes_tolaptop, port->nbytes_tomodem,
+				port->cbits_to_modem, port->cbits_to_laptop);
+		spin_unlock_irqrestore(&port->port_lock, flags);
+		i++;
+	}
+
+	return simple_read_from_buffer(ubuf, count, ppos, buf, temp);
+}
+
+static ssize_t debug_reset_stats(struct file *file, const char __user *buf,
+				 size_t count, loff_t *ppos)
+{
+	struct gsdio_port *port;
+	unsigned long flags;
+	int i = 0;
+
+	while (i < n_ports) {
+		port = ports[i].port;
+
+		spin_lock_irqsave(&port->port_lock, flags);
+		port->nbytes_tolaptop = 0;
+		port->nbytes_tomodem = 0;
+		spin_unlock_irqrestore(&port->port_lock, flags);
+		i++;
+	}
+
+	return count;
+}
+
+static int debug_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static const struct file_operations debug_gsdio_ops = {
+	.open = debug_open,
+	.read = debug_read_stats,
+	.write = debug_reset_stats,
+};
+
+static void gsdio_debugfs_init(void)
+{
+	struct dentry *dent;
+
+	dent = debugfs_create_dir("usb_gsdio", 0);
+	if (IS_ERR(dent))
+		return;
+
+	debugfs_create_file("status", 0444, dent, 0, &debug_gsdio_ops);
+}
+#else
+static void gsdio_debugfs_init(void)
+{
+	return;
+}
+#endif
 
 /* connect, disconnect, alloc_requests, free_requests */
 int gsdio_setup(struct usb_gadget *g, unsigned count, struct sdio_port_info *pi)
@@ -882,6 +997,8 @@ int gsdio_setup(struct usb_gadget *g, unsigned count, struct sdio_port_info *pi)
 #endif
 
 	}
+
+	gsdio_debugfs_init();
 
 	return 0;
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -120,12 +120,14 @@ struct audio_client {
 	struct mutex	       cmd_lock;
 
 	atomic_t		cmd_state;
-	atomic_t		eos_state;
+	atomic_t		time_flag;
 	wait_queue_head_t	cmd_wait;
+	wait_queue_head_t	time_wait;
 
 	app_cb			cb;
 	void			*priv;
 	uint32_t         io_mode;
+	uint32_t         time_stamp;
 };
 
 void q6asm_audio_client_free(struct audio_client *ac);
@@ -136,6 +138,14 @@ int q6asm_audio_client_buf_alloc(unsigned int dir/* 1:Out,0:In */,
 				struct audio_client *ac,
 				unsigned int bufsz,
 				unsigned int bufcnt);
+int q6asm_audio_client_buf_alloc_contiguous(unsigned int dir
+				/* 1:Out,0:In */,
+				struct audio_client *ac,
+				unsigned int bufsz,
+				unsigned int bufcnt);
+
+int q6asm_audio_client_buf_free_contiguous(unsigned int dir,
+			struct audio_client *ac);
 
 int q6asm_open_read(struct audio_client *ac, uint32_t format);
 
@@ -165,9 +175,14 @@ int q6asm_memory_unmap(struct audio_client *ac, uint32_t buf_add,
 int q6asm_run(struct audio_client *ac, uint32_t flags,
 		uint32_t msw_ts, uint32_t lsw_ts);
 
+int q6asm_run_nowait(struct audio_client *ac, uint32_t flags,
+		uint32_t msw_ts, uint32_t lsw_ts);
+
 int q6asm_reg_tx_overflow(struct audio_client *ac, uint16_t enable);
 
 int q6asm_cmd(struct audio_client *ac, int cmd);
+
+int q6asm_cmd_nowait(struct audio_client *ac, int cmd);
 
 void *q6asm_is_cpu_buf_avail(int dir, struct audio_client *ac,
 				uint32_t *size, uint32_t *idx);
@@ -216,6 +231,8 @@ int q6asm_set_lrgain(struct audio_client *ac, int left_gain, int right_gain);
 
 /* Enable Mute/unmute flag */
 int q6asm_set_mute(struct audio_client *ac, int muteflag);
+
+uint32_t q6asm_get_session_time(struct audio_client *ac);
 
 /* Client can set the IO mode to either AIO/SIO mode */
 int q6asm_set_io_mode(struct audio_client *ac, uint32_t mode);

@@ -733,7 +733,7 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 {
 	int i;
 	int retval;
-	enum tavarua_xfr_ctrl_t xfr_status;
+	unsigned char xfr_status;
 	if (!radio->handle_irq) {
 		FMDBG("IRQ happend, but I wont handle it\n");
 		return;
@@ -886,7 +886,7 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 		FMDBG("XFR Interrupt\n");
 		tavarua_read_registers(radio, XFRCTRL, XFR_REG_NUM+1);
 		FMDBG("XFRCTRL IS: %x\n", radio->registers[XFRCTRL]);
-		xfr_status = (enum tavarua_xfr_ctrl_t)radio->registers[XFRCTRL];
+		xfr_status = radio->registers[XFRCTRL];
 		switch (xfr_status) {
 		case RDS_PS_0:
 			FMDBG("PS Header\n");
@@ -990,6 +990,10 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 			tavarua_q_event(radio, TAVARUA_EVT_NEW_SRCH_LIST);
 			radio->xfr_in_progress = 0;
 			break;
+		case PHY_TXGAIN:
+			FMDBG("read PHY_TXGAIN is successful");
+			complete(&radio->sync_req_done);
+			break;
 		case (0x80 | RX_CONFIG):
 		case (0x80 | RADIO_CONFIG):
 		case (0x80 | RDS_CONFIG):
@@ -1021,6 +1025,10 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 			FMDBG("xfr interrupt PS data Sent\n");
 			complete(&radio->sync_req_done);
 			break;
+		case (0x80 | PHY_TXGAIN):
+			FMDBG("write PHY_TXGAIN is successful");
+			complete(&radio->sync_req_done);
+			break;
 		default:
 			FMDERR("UNKNOWN XFR = %d\n", xfr_status);
 		}
@@ -1031,7 +1039,7 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 
 	/* Error occurred. Read ERRCODE to determine cause */
 	if (radio->registers[STATUS_REG3] & ERROR) {
-#if FM_DEBUG
+#ifdef FM_DEBUG
 		unsigned char xfr_buf[XFR_REG_NUM];
 		int retval = sync_read_xfr(radio, ERROR_CODE, xfr_buf);
 		FMDBG("retval of ERROR_CODE read : %d\n", retval);
@@ -2279,6 +2287,7 @@ static int tavarua_vidioc_g_ctrl(struct file *file, void *priv,
 	int retval = 0;
 	unsigned char xfr_buf[XFR_REG_NUM];
 	signed char cRmssiThreshold;
+	signed char ioc;
 
 	switch (ctrl->id) {
 	case V4L2_CID_AUDIO_VOLUME:
@@ -2297,6 +2306,54 @@ static int tavarua_vidioc_g_ctrl(struct file *file, void *priv,
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_STATE:
 		ctrl->value = (radio->registers[RDCTRL] & 0x03);
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_IOVERC:
+		retval = tavarua_read_registers(radio, IOVERC, 1);
+		if (retval < 0)
+			return retval;
+		ioc = radio->registers[IOVERC];
+		ctrl->value = ioc;
+		break;
+	case V4L2_CID_PRIVATE_TAVARUA_INTDET:
+		xfr_buf[0] = INTDET_PEEK_MSB;
+		xfr_buf[1] = INTDET_PEEK_LSB;
+		FMDBG("xfr_buf[2]: %x\n", xfr_buf[2]);
+		xfr_buf[2] = 0;
+		FMDBG("After reset: xfr_buf[2]: %x\n", xfr_buf[2]);
+
+		/*Write the MSB of the address to peek*/
+		retval = tavarua_write_register(radio, XFRDAT0, xfr_buf[0]);
+		if (retval < 0) {
+			FMDBG("write failure, xfrdat0\n");
+			return retval;
+		}
+		/*Write the LSB of the address to peek*/
+		retval = tavarua_write_register(radio, XFRDAT1, xfr_buf[1]);
+		if (retval < 0) {
+			FMDBG("write failure, xfrdat1\n");
+			return retval;
+		}
+		/*Clear the xfrdata2 */
+		retval = tavarua_write_register(radio, XFRDAT2, xfr_buf[2]);
+		if (retval < 0) {
+			FMDBG("write failure, xfrdat2\n");
+			return retval;
+		}
+		/*Set the memaccess mode in XFRCTRL*/
+		retval = tavarua_write_register(radio, XFRCTRL, INTDET_PEEK);
+		if (retval < 0) {
+			FMDBG("write failure, xfrctrl\n");
+			return retval;
+		}
+		FMDBG("INT_DET:Sync write success\n");
+		/*Wait for the XFR interrupt */
+		msleep(TAVARUA_DELAY*2);
+		retval = tavarua_read_registers(radio, XFRDAT2, 1);
+		if (retval < 0)
+			FMDBG("INT_DET: Read failure\n");
+
+		ctrl->value = radio->registers[XFRDAT2];
+		FMDBG("Returning INTDET: %x\n", ctrl->value);
 		break;
 	case V4L2_CID_PRIVATE_TAVARUA_REGION:
 		ctrl->value = radio->region_params.region;
@@ -2402,6 +2459,7 @@ static int tavarua_vidioc_s_ext_ctrls(struct file *file, void *priv,
 		/* send payload to FM hardware */
 		while (bytes_left) {
 			chunk_index++;
+			FMDBG("chunk is %d", chunk_index);
 			bytes_to_copy = min(bytes_left, XFR_REG_NUM);
 			/*Clear the tx_data */
 			memset(tx_data, 0, XFR_REG_NUM);
@@ -2423,7 +2481,7 @@ static int tavarua_vidioc_s_ext_ctrls(struct file *file, void *priv,
 		extra_name_byte = (bytes_copied%8) ? 1 : 0;
 		name_bytes = (bytes_copied/8) + extra_name_byte;
 		/*8 bytes are grouped as 1 name */
-		tx_data[0] = (name_bytes)&MASK_TXREPCOUNT;
+		tx_data[0] = (name_bytes) & MASK_TXREPCOUNT;
 		tx_data[1] = radio->pty & MASK_PTY; /* PTY */
 		tx_data[2] = ((radio->pi & MASK_PI_MSB) >> 8);
 		tx_data[3] = radio->pi & MASK_PI_LSB;
@@ -2700,7 +2758,7 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 
 		} break;
 
-    case V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_RT: {
+	case V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_RT: {
 			memset(tx_data, '0', XFR_REG_NUM);
 			FMDBG("Writing RT header\n");
 			retval = sync_write_xfr(radio, RDS_RT_0, tx_data);
@@ -2711,6 +2769,34 @@ static int tavarua_vidioc_s_ctrl(struct file *file, void *priv,
 	case V4L2_CID_PRIVATE_TAVARUA_TX_SETPSREPEATCOUNT: {
 			radio->ps_repeatcount = ctrl->value;
 		} break;
+	case V4L2_CID_TUNE_POWER_LEVEL: {
+		unsigned char tx_power_lvl_config[FM_TX_PWR_LVL_MAX+1] = {
+			0x85, /* tx_da<5:3> = 0  lpf<2:0> = 5*/
+			0x95, /* tx_da<5:3> = 2  lpf<2:0> = 5*/
+			0x9D, /* tx_da<5:3> = 3  lpf<2:0> = 5*/
+			0xA5, /* tx_da<5:3> = 4  lpf<2:0> = 5*/
+			0xAD, /* tx_da<5:3> = 5  lpf<2:0> = 5*/
+			0xB5, /* tx_da<5:3> = 6  lpf<2:0> = 5*/
+			0xBD, /* tx_da<5:3> = 7  lpf<2:0> = 5*/
+			0xBF  /* tx_da<5:3> = 7  lpf<2:0> = 7*/
+		};
+		if (ctrl->value > FM_TX_PWR_LVL_MAX)
+			ctrl->value = FM_TX_PWR_LVL_MAX;
+		if (ctrl->value < FM_TX_PWR_LVL_0)
+			ctrl->value = FM_TX_PWR_LVL_0;
+		retval = sync_read_xfr(radio, PHY_TXGAIN, xfr_buf);
+		FMDBG("return for PHY_TXGAIN is %d", retval);
+		if (retval < 0) {
+			FMDBG("read failed");
+			break;
+		}
+		xfr_buf[2] = tx_power_lvl_config[ctrl->value];
+		retval = sync_write_xfr(radio, PHY_TXGAIN, xfr_buf);
+		FMDBG("return for write PHY_TXGAIN is %d", retval);
+		if (retval < 0)
+			FMDBG("write failed");
+	} break;
+
 	default:
 		retval = -EINVAL;
 	}

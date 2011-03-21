@@ -480,7 +480,7 @@ int msm_camio_clk_enable(enum msm_camio_clk_type clktype)
 	case CAMIO_VPE_CLK:
 		camio_vpe_clk =
 		clk = clk_get(NULL, "vpe_clk");
-		msm_camio_clk_set_min_rate(clk, 150000000);
+		msm_camio_clk_set_min_rate(clk, 200000000);
 		break;
 
 	case CAMIO_VPE_PCLK:
@@ -571,6 +571,13 @@ int msm_camio_clk_disable(enum msm_camio_clk_type clktype)
 	} else
 		rc = -1;
 	return rc;
+}
+
+void msm_camio_vfe_clk_rate_set(int rate)
+{
+	struct clk *clk = camio_vfe_clk;
+	if (rate > clk_get_rate(clk))
+		clk_set_rate(clk, rate);
 }
 
 void msm_camio_clk_rate_set(int rate)
@@ -751,6 +758,13 @@ common_fail:
 void msm_camio_disable(struct platform_device *pdev)
 {
 	uint32_t val;
+	val = (0x0 << MIPI_CALIBRATION_CONTROL_SWCAL_CAL_EN_SHFT) |
+		(0x0 <<
+		MIPI_CALIBRATION_CONTROL_SWCAL_STRENGTH_OVERRIDE_EN_SHFT) |
+		(0x0 << MIPI_CALIBRATION_CONTROL_CAL_SW_HW_MODE_SHFT) |
+		(0x0 << MIPI_CALIBRATION_CONTROL_MANUAL_OVERRIDE_EN_SHFT);
+	CDBG("%s MIPI_CALIBRATION_CONTROL val=0x%x\n", __func__, val);
+	msm_io_w(val, csibase + MIPI_CALIBRATION_CONTROL);
 
 	val = (20 <<
 		MIPI_PHY_D0_CONTROL2_SETTLE_COUNT_SHFT) |

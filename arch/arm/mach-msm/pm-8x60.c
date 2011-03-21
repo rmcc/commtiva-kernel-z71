@@ -31,6 +31,7 @@
 #include <linux/suspend.h>
 #include <linux/tick.h>
 #include <linux/uaccess.h>
+#include <linux/wakelock.h>
 #include <mach/msm_iomap.h>
 #include <mach/system.h>
 #include <asm/cacheflush.h>
@@ -752,6 +753,12 @@ int msm_pm_idle_prepare(struct cpuidle_device *dev)
 				allow = false;
 				break;
 			}
+#ifdef CONFIG_HAS_WAKELOCK
+			if (has_wake_lock(WAKE_LOCK_IDLE)) {
+				allow = false;
+				break;
+			}
+#endif
 			/* fall through */
 
 		case MSM_PM_SLEEP_MODE_POWER_COLLAPSE_STANDALONE:
@@ -1090,6 +1097,7 @@ static int __init msm_pm_init(void)
 {
 	pgd_t *pc_pgd;
 	pmd_t *pmd;
+	unsigned long pmdval;
 	unsigned int irq;
 	unsigned int cpu;
 #ifdef CONFIG_MSM_IDLE_STATS
@@ -1105,8 +1113,18 @@ static int __init msm_pm_init(void)
 	pmd = pmd_offset(pc_pgd +
 			 pgd_index(virt_to_phys(msm_pm_collapse_exit)),
 			 virt_to_phys(msm_pm_collapse_exit));
-	*pmd = __pmd((virt_to_phys(msm_pm_collapse_exit) & PGDIR_MASK) |
-		     PMD_TYPE_SECT | PMD_SECT_AP_WRITE);
+	pmdval = (virt_to_phys(msm_pm_collapse_exit) & PGDIR_MASK) |
+		     PMD_TYPE_SECT | PMD_SECT_AP_WRITE;
+	pmd[0] = __pmd(pmdval);
+	pmd[1] = __pmd(pmdval + (1 << (PGDIR_SHIFT - 1)));
+
+	/* It is remotely possible that the code in msm_pm_collapse_exit()
+	 * which turns on the MMU with this mapping is in the
+	 * next even-numbered megabyte beyond the
+	 * start of msm_pm_collapse_exit().
+	 * Map this megabyte in as well.
+	 */
+	pmd[2] = __pmd(pmdval + (2 << (PGDIR_SHIFT - 1)));
 	flush_pmd_entry(pmd);
 	msm_pm_pc_pgd = virt_to_phys(pc_pgd);
 

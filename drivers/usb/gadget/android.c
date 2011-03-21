@@ -332,11 +332,29 @@ static struct usb_composite_driver android_usb_driver = {
 	.enable_function = android_enable_function,
 };
 
+static bool is_func_supported(struct android_usb_function *f)
+{
+	char **functions = _android_dev->functions;
+	int count = _android_dev->num_functions;
+	const char *name = f->name;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		if (!strcmp(*functions++, name))
+			return true;
+	}
+	return false;
+}
+
 void android_register_function(struct android_usb_function *f)
 {
 	struct android_dev *dev = _android_dev;
 
 	pr_debug("%s: %s\n", __func__, f->name);
+
+	if (!is_func_supported(f))
+		return;
+
 	list_add_tail(&f->list, &_functions);
 	_registered_function_count++;
 
@@ -362,7 +380,7 @@ static void android_set_function_mask(struct android_usb_product *up)
 
 	list_for_each_entry(func, &android_config_driver.functions, list) {
 		/* adb function enable/disable handled separetely */
-		if (!strcmp(func->name, "adb"))
+		if (!strcmp(func->name, "adb") && !func->disabled)
 			continue;
 		func->disabled = 1;
 		for (index = 0; index < up->num_functions; index++) {

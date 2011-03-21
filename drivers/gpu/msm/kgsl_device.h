@@ -35,14 +35,14 @@
 #include <linux/workqueue.h>
 #include <linux/mutex.h>
 #include <linux/msm_kgsl.h>
+#include <linux/idr.h>
+#include <linux/wakelock.h>
 
 #include <asm/atomic.h>
 
 #include "kgsl_mmu.h"
 #include "kgsl_pwrctrl.h"
 #include "kgsl_log.h"
-
-#define KGSL_CONTEXT_MAX (CONFIG_MSM_KGSL_CONTEXTS)
 
 #define KGSL_TIMEOUT_NONE       0
 #define KGSL_TIMEOUT_DEFAULT    0xFFFFFFFF
@@ -78,6 +78,7 @@
 struct kgsl_device;
 struct platform_device;
 struct kgsl_device_private;
+struct kgsl_context;
 
 struct kgsl_functable {
 	int (*device_regread) (struct kgsl_device *device,
@@ -104,19 +105,18 @@ struct kgsl_functable {
 					struct kgsl_device *device,
 					enum kgsl_timestamp_type type);
 	int (*device_issueibcmds) (struct kgsl_device_private *dev_priv,
-				int drawctxt_index,
+				struct kgsl_context *context,
 				struct kgsl_ibdesc *ibdesc,
 				unsigned int sizedwords,
 				uint32_t *timestamp,
 				unsigned int flags);
 	int (*device_drawctxt_create) (struct kgsl_device_private *dev_priv,
 					uint32_t flags,
-					unsigned int *drawctxt_id);
+					struct kgsl_context *context);
 	int (*device_drawctxt_destroy) (struct kgsl_device *device,
-					unsigned int drawctxt_id);
+					struct kgsl_context *context);
 	long (*device_ioctl) (struct kgsl_device_private *dev_priv,
-					unsigned int cmd,
-					unsigned long arg);
+					unsigned int cmd, void *data);
 	int (*device_setup_pt)(struct kgsl_device *device,
 			       struct kgsl_pagetable *pagetable);
 
@@ -135,6 +135,8 @@ struct kgsl_memregion {
 struct kgsl_device {
 	struct device *dev;
 	const char *name;
+	unsigned int ver_major;
+	unsigned int ver_minor;
 	uint32_t       flags;
 	enum kgsl_deviceid    id;
 	unsigned int      chip_id;
@@ -161,6 +163,26 @@ struct kgsl_device {
 	struct workqueue_struct *work_queue;
 	struct platform_device *pdev;
 	struct completion recovery_gate;
+	struct dentry *d_debugfs;
+	struct idr context_idr;
+
+	/* Logging levels */
+	int cmd_log;
+	int ctxt_log;
+	int drv_log;
+	int mem_log;
+	int pwr_log;
+	struct wake_lock idle_wakelock;
+};
+
+struct kgsl_context {
+	uint32_t id;
+
+	/* Pointer to the owning device instance */
+	struct kgsl_device_private *dev_priv;
+
+	/* Pointer to the device specific context information */
+	void *devctxt;
 };
 
 struct kgsl_process_private {
@@ -170,10 +192,18 @@ struct kgsl_process_private {
 	struct list_head mem_list;
 	struct kgsl_pagetable *pagetable;
 	struct list_head list;
+	struct kobject *kobj;
+
+	struct {
+		unsigned int vmalloc;
+		unsigned int vmalloc_max;
+		unsigned int exmem;
+		unsigned int exmem_max;
+		unsigned int flushes;
+	} stats;
 };
 
 struct kgsl_device_private {
-	unsigned long ctxt_bitmap[BITS_TO_LONGS(KGSL_CONTEXT_MAX)];
 	struct kgsl_device *device;
 	struct kgsl_process_private *process_priv;
 };
@@ -200,14 +230,25 @@ kgsl_get_mmu(struct kgsl_device *device)
 
 static inline int kgsl_create_device_workqueue(struct kgsl_device *device)
 {
-	KGSL_DRV_INFO("creating workqueue: %s\n", device->name);
 	device->work_queue = create_workqueue(device->name);
 	if (!device->work_queue) {
-		KGSL_DRV_ERR("Failed to create workqueue %s\n",
-				device->name);
+		KGSL_DRV_ERR(device, "create_workqueue(%s) failed\n",
+			device->name);
 		return -EINVAL;
 	}
 	return 0;
+}
+
+static inline struct kgsl_context *
+kgsl_find_context(struct kgsl_device_private *dev_priv, uint32_t id)
+{
+	struct kgsl_context *ctxt =
+		idr_find(&dev_priv->device->context_idr, id);
+
+	/* Make sure that the context belongs to the current instance so
+	   that other processes can't guess context IDs and mess things up */
+
+	return  (ctxt && ctxt->dev_priv == dev_priv) ? ctxt : NULL;
 }
 
 #endif  /* _KGSL_DEVICE_H */

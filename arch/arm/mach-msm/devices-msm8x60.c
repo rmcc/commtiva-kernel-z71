@@ -95,7 +95,6 @@
 
 static void charm_ap2mdm_kpdpwr_on(void)
 {
-	gpio_request(132, "AP2MDM_KPDPWR_N");
 	if (machine_is_msm8x60_charm_surf())
 		gpio_direction_output(132, 0);
 	else
@@ -482,11 +481,20 @@ static struct msm_bus_vectors grp3d_init_vectors[] = {
 	},
 };
 
+static struct msm_bus_vectors grp3d_nominal_vectors[] = {
+	{
+		.src = MSM_BUS_MASTER_GRAPHICS_3D,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 200800000U,
+	},
+};
+
 static struct msm_bus_vectors grp3d_max_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_3D,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 2096000000U,
+		.ab = 0,
 		.ib = 2096000000U,
 	},
 };
@@ -495,6 +503,10 @@ static struct msm_bus_paths grp3d_bus_scale_usecases[] = {
 	{
 		ARRAY_SIZE(grp3d_init_vectors),
 		grp3d_init_vectors,
+	},
+	{
+		ARRAY_SIZE(grp3d_nominal_vectors),
+		grp3d_nominal_vectors,
 	},
 	{
 		ARRAY_SIZE(grp3d_max_vectors),
@@ -521,7 +533,7 @@ static struct msm_bus_vectors grp2d0_max_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_2D_CORE0,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 248000000,
+		.ab = 0,
 		.ib = 248000000,
 	},
 };
@@ -556,7 +568,7 @@ static struct msm_bus_vectors grp2d1_max_vectors[] = {
 	{
 		.src = MSM_BUS_MASTER_GRAPHICS_2D_CORE1,
 		.dst = MSM_BUS_SLAVE_EBI_CH0,
-		.ab = 248000000,
+		.ab = 0,
 		.ib = 248000000,
 	},
 };
@@ -594,65 +606,141 @@ struct platform_device msm_device_rng = {
 };
 #endif
 
-struct kgsl_platform_data kgsl_pdata = {
-	.pwrlevel_2d = {
-		{
-			.gpu_freq = 228571000,
-			.bus_freq = 1,
-		},
-		{
-			.gpu_freq = 228571000,
-			.bus_freq = 0,
-		},
-	},
-	.init_level_2d = 0,
-	.num_levels_2d = 2,
-	.pwrlevel_3d = {
-		{
-			.gpu_freq = 266667000,
-			.bus_freq = 1,
-		},
-		{
-			.gpu_freq = 266667000,
-			.bus_freq = 0,
-		},
-	},
-	.init_level_3d = 0,
-	.num_levels_3d = 2,
-	.set_grp2d_async = NULL,
-	.set_grp3d_async = NULL,
-	.imem_clk_name = "imem_axi_clk",
-	.imem_pclk_name = "imem_pclk",
-	.grp3d_clk_name = "gfx3d_clk",
-	.grp3d_pclk_name = "gfx3d_pclk",
-#ifdef CONFIG_MSM_KGSL_2D
-	.grp2d0_clk_name = "gfx2d0_clk", /* note: 2d clocks disabled on v1 */
-	.grp2d0_pclk_name = "gfx2d0_pclk",
-	.grp2d1_clk_name = "gfx2d1_clk",
-	.grp2d1_pclk_name = "gfx2d1_pclk",
-#else
-	.grp2d0_clk_name = NULL,
-	.grp2d1_clk_name = NULL,
-#endif
-	.idle_timeout_3d = HZ/5,
-	.idle_timeout_2d = HZ/10,
-#ifdef CONFIG_MSM_BUS_SCALING
-	.grp3d_bus_scale_table = &grp3d_bus_scale_pdata,
-	.grp2d0_bus_scale_table = &grp2d0_bus_scale_pdata,
-	.grp2d1_bus_scale_table = &grp2d1_bus_scale_pdata,
-	.nap_allowed = true,
-#endif
+static struct kgsl_core_platform_data kgsl_core_pdata = {
+	.pt_va_base = 0x66000000,
+	/* The maximum possible range for any individual pagetable
+	   is 256MB - 64K (0xfff0000) */
+
 #ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
-	.pt_va_size = SZ_32M,
-	/* Maximum of 32 concurrent processes */
-	.pt_max_count = 32,
+	.pt_va_size = SZ_128M,
 #else
 	/* Set the GPU pagetable size to the maximum practical
 	 * limit */
 	.pt_va_size = SZ_256M - SZ_64K,
-	/* We only ever have one pagetable for everybody */
-	.pt_max_count = 1,
 #endif
+};
+
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 266667000,
+				.bus_freq = 2,
+			},
+			{
+				.gpu_freq = 228571000,
+				.bus_freq = 1,
+			},
+			{
+				.gpu_freq = 266667000,
+				.bus_freq = 0,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 3,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/5,
+#ifdef CONFIG_MSM_BUS_SCALING
+		.nap_allowed = true,
+#endif
+	},
+	.clk = {
+		.name = {
+			.clk = "gfx3d_clk",
+			.pclk = "gfx3d_pclk",
+		},
+#ifdef CONFIG_MSM_BUS_SCALING
+		.bus_scale_table = &grp3d_bus_scale_pdata,
+#else
+		.bus_scale_table = NULL,
+#endif
+	},
+	.imem_clk_name = {
+		.clk = NULL,
+		.pclk = "imem_pclk",
+	},
+};
+
+static struct kgsl_device_platform_data kgsl_2d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 228571000,
+				.bus_freq = 1,
+			},
+			{
+				.gpu_freq = 228571000,
+				.bus_freq = 0,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 2,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/10,
+#ifdef CONFIG_MSM_BUS_SCALING
+		.nap_allowed = true,
+#endif
+	},
+	.clk = {
+		.name = {
+#ifdef CONFIG_MSM_KGSL_2D
+			/* note: 2d clocks disabled on v1 */
+			.clk = "gfx2d0_clk",
+			.pclk = "gfx2d0_pclk",
+#else
+			.clk = NULL,
+#endif
+		},
+#ifdef CONFIG_MSM_BUS_SCALING
+		.bus_scale_table = &grp2d0_bus_scale_pdata,
+#else
+		.bus_scale_table = NULL,
+#endif
+	},
+};
+
+static struct kgsl_device_platform_data kgsl_2d1_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 228571000,
+				.bus_freq = 1,
+			},
+			{
+				.gpu_freq = 228571000,
+				.bus_freq = 0,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 2,
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/10,
+#ifdef CONFIG_MSM_BUS_SCALING
+		.nap_allowed = true,
+#endif
+	},
+	.clk = {
+		.name = {
+#ifdef CONFIG_MSM_KGSL_2D
+			.clk = "gfx2d1_clk",
+			.pclk = "gfx2d1_pclk",
+#else
+			.clk = NULL,
+#endif
+		},
+#ifdef CONFIG_MSM_BUS_SCALING
+		.bus_scale_table = &grp2d1_bus_scale_pdata,
+#else
+		.bus_scale_table = NULL,
+#endif
+	},
+};
+
+static struct kgsl_platform_data kgsl_pdata = {
+	.core = &kgsl_core_pdata,
+	.dev_3d0 = &kgsl_3d0_pdata,
+	.dev_2d0 = &kgsl_2d0_pdata,
+	.dev_2d1 = &kgsl_2d1_pdata,
 };
 
 /*
@@ -666,8 +754,8 @@ void __init msm8x60_check_2d_hardware(void)
 	if ((SOCINFO_VERSION_MAJOR(socinfo_get_version()) == 1) &&
 	    (SOCINFO_VERSION_MINOR(socinfo_get_version()) == 0)) {
 		printk(KERN_WARNING "kgsl: 2D cores disabled on 8660v1\n");
-		kgsl_pdata.grp2d0_clk_name = NULL;
-		kgsl_pdata.grp2d1_clk_name = NULL;
+		kgsl_2d0_pdata.clk.name.clk = NULL;
+		kgsl_2d1_pdata.clk.name.clk = NULL;
 	}
 }
 
@@ -1639,6 +1727,8 @@ struct clk_lookup msm_clocks_8x60[] = {
 	CLK_8X60("csi_clk",		CSI0_CLK,		NULL, OFF),
 	CLK_8X60("csi_clk",		CSI1_CLK,	  "msm_camera_ov7692.0",
 			OFF),
+	CLK_8X60("csi_clk",		CSI1_CLK,	  "msm_camera_ov9726.0",
+			OFF),
 	CLK_8X60("csi_src_clk",		CSI_SRC_CLK,		NULL, OFF),
 	CLK_8X60("dsi_byte_div_clk",	DSI_BYTE_CLK,		NULL, OFF),
 	CLK_8X60("dsi_esc_clk",		DSI_ESC_CLK,		NULL, OFF),
@@ -1663,6 +1753,8 @@ struct clk_lookup msm_clocks_8x60[] = {
 	CLK_8X60("csi_vfe_clk",		CSI0_VFE_CLK,		NULL, OFF),
 	CLK_8X60("csi_vfe_clk",		CSI1_VFE_CLK,	  "msm_camera_ov7692.0",
 			OFF),
+	CLK_8X60("csi_vfe_clk",		CSI1_VFE_CLK,	  "msm_camera_ov9726.0",
+			OFF),
 	CLK_8X60("vfe_clk",		VFE_CLK,		NULL, OFF),
 	CLK_8X60("smmu_jpegd_clk",	JPEGD_AXI_CLK,		NULL, OFF),
 	CLK_8X60("smmu_vfe_clk",	VFE_AXI_CLK,		NULL, OFF),
@@ -1676,6 +1768,8 @@ struct clk_lookup msm_clocks_8x60[] = {
 	CLK_8X60("amp_pclk",		AMP_P_CLK,		NULL, OFF),
 	CLK_8X60("csi_pclk",		CSI0_P_CLK,		NULL, OFF),
 	CLK_8X60("csi_pclk",		CSI1_P_CLK,	  "msm_camera_ov7692.0",
+			OFF),
+	CLK_8X60("csi_pclk",		CSI1_P_CLK,	  "msm_camera_ov9726.0",
 			OFF),
 	CLK_8X60("dsi_m_pclk",		DSI_M_P_CLK,		NULL, OFF),
 	CLK_8X60("dsi_s_pclk",		DSI_S_P_CLK,		NULL, OFF),

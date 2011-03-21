@@ -38,9 +38,10 @@ enum {
 	MSM_MPM_DEBUG_NON_DETECTABLE_IRQ = BIT(0),
 	MSM_MPM_DEBUG_PENDING_IRQ = BIT(1),
 	MSM_MPM_DEBUG_WRITE = BIT(2),
+	MSM_MPM_DEBUG_NON_DETECTABLE_IRQ_IDLE = BIT(3),
 };
 
-static int msm_mpm_debug_mask;
+static int msm_mpm_debug_mask = 1;
 module_param_named(
 	debug_mask, msm_mpm_debug_mask, int, S_IRUGO | S_IWUSR | S_IWGRP
 );
@@ -175,6 +176,8 @@ static DEFINE_SPINLOCK(msm_mpm_lock);
 static DECLARE_BITMAP(msm_mpm_enabled_apps_irqs, MSM_MPM_NR_APPS_IRQS);
 static DECLARE_BITMAP(msm_mpm_wake_apps_irqs, MSM_MPM_NR_APPS_IRQS);
 
+static DECLARE_BITMAP(msm_mpm_gpio_irqs_mask, MSM_MPM_NR_APPS_IRQS);
+
 static uint32_t msm_mpm_enabled_irq[MSM_MPM_REG_WIDTH];
 static uint32_t msm_mpm_wake_irq[MSM_MPM_REG_WIDTH];
 static uint32_t msm_mpm_detect_ctl[MSM_MPM_REG_WIDTH];
@@ -205,6 +208,8 @@ static inline void msm_mpm_write(
 
 static inline void msm_mpm_write_barrier(void)
 {
+	mb();
+
 	/*
 	 * By the time the read from memory returns, all previous
 	 * writes are guaranteed visible.
@@ -245,6 +250,19 @@ static void msm_mpm_set(bool wakeset)
 
 		reg = MSM_MPM_REQUEST_REG_CLEAR;
 		msm_mpm_write(reg, i, 0xffffffff);
+	}
+
+	msm_mpm_write_barrier();
+	msm_mpm_send_interrupt();
+}
+
+static void msm_mpm_clear(void)
+{
+	int i;
+
+	for (i = 0; i < MSM_MPM_REG_WIDTH; i++) {
+		msm_mpm_write(MSM_MPM_REQUEST_REG_ENABLE, i, 0);
+		msm_mpm_write(MSM_MPM_REQUEST_REG_CLEAR, i, 0xffffffff);
 	}
 
 	msm_mpm_write_barrier();
@@ -438,10 +456,20 @@ int msm_mpm_set_pin_type(enum msm_mpm_pin pin, unsigned int flow_type)
 
 bool msm_mpm_irqs_detectable(bool from_idle)
 {
-	unsigned long *apps_irq_bitmap = from_idle ?
-			msm_mpm_enabled_apps_irqs : msm_mpm_wake_apps_irqs;
+	unsigned long *apps_irq_bitmap;
+	int debug_mask;
 
-	if (MSM_MPM_DEBUG_NON_DETECTABLE_IRQ & msm_mpm_debug_mask) {
+	if (from_idle) {
+		apps_irq_bitmap = msm_mpm_enabled_apps_irqs;
+		debug_mask = msm_mpm_debug_mask &
+					MSM_MPM_DEBUG_NON_DETECTABLE_IRQ_IDLE;
+	} else {
+		apps_irq_bitmap = msm_mpm_wake_apps_irqs;
+		debug_mask = msm_mpm_debug_mask &
+					MSM_MPM_DEBUG_NON_DETECTABLE_IRQ;
+	}
+
+	if (debug_mask) {
 		static char buf[DIV_ROUND_UP(MSM_MPM_NR_APPS_IRQS, 32)*9+1];
 
 		bitmap_scnprintf(buf, sizeof(buf), apps_irq_bitmap,
@@ -452,6 +480,15 @@ bool msm_mpm_irqs_detectable(bool from_idle)
 	}
 
 	return (bool)__bitmap_empty(apps_irq_bitmap, MSM_MPM_NR_APPS_IRQS);
+}
+
+bool msm_mpm_gpio_irqs_detectable(bool from_idle)
+{
+	unsigned long *apps_irq_bitmap = from_idle ?
+			msm_mpm_enabled_apps_irqs : msm_mpm_wake_apps_irqs;
+
+	return !__bitmap_intersects(msm_mpm_gpio_irqs_mask, apps_irq_bitmap,
+			MSM_MPM_NR_APPS_IRQS);
 }
 
 void msm_mpm_enter_sleep(bool from_idle)
@@ -494,7 +531,7 @@ void msm_mpm_exit_sleep(bool from_idle)
 		}
 	}
 
-	msm_mpm_set(!from_idle);
+	msm_mpm_clear();
 }
 
 static int __init msm_mpm_early_init(void)
@@ -510,14 +547,19 @@ static int __init msm_mpm_early_init(void)
 
 	return 0;
 }
+core_initcall(msm_mpm_early_init);
 
 static int __init msm_mpm_init(void)
 {
 	unsigned int irq = MSM_MPM_IPC_IRQ;
 	int rc;
 
+	bitmap_set(msm_mpm_gpio_irqs_mask, NR_MSM_IRQS,
+			MSM_MPM_NR_APPS_IRQS - 1);
+
 	rc = request_irq(irq, msm_mpm_irq,
 			IRQF_TRIGGER_RISING, "mpm_drv", msm_mpm_irq);
+
 	if (rc) {
 		pr_err("%s: failed to request irq %u: %d\n",
 			__func__, irq, rc);
@@ -539,6 +581,4 @@ init_free_bail:
 init_bail:
 	return rc;
 }
-
-core_initcall(msm_mpm_early_init);
 device_initcall(msm_mpm_init);

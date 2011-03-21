@@ -17,6 +17,7 @@
  */
 
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
 #include <linux/reboot.h>
@@ -39,12 +40,18 @@
 
 #define PSHOLD_CTL_SU (MSM_TLMM_BASE + 0x820)
 
-#define RESTART_REASON_ADDR 0x2A05F010
+#define IMEM_BASE           0x2A05F000
+
+#define RESTART_REASON_ADDR 0x65C
+#define DLOAD_MODE_ADDR     0x0
 
 static int restart_mode;
+void *restart_reason;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 static int in_panic;
+static int reset_detection;
+static void *dload_mode_addr;
 
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
@@ -59,16 +66,52 @@ static struct notifier_block panic_blk = {
 
 static void set_dload_mode(int on)
 {
-	void *dload_mode_addr;
-	dload_mode_addr = ioremap_nocache(0x2A05F000, SZ_4K);
 	if (dload_mode_addr) {
 		writel(on ? 0xE47B337D : 0, dload_mode_addr);
 		writel(on ? 0xCE14091A : 0,
 		       dload_mode_addr + sizeof(unsigned int));
 		dmb();
-		iounmap(dload_mode_addr);
 	}
 }
+
+static int reset_detect_set(const char *val, struct kernel_param *kp)
+{
+	int ret;
+	int old_val = reset_detection;
+
+	ret = param_set_int(val, kp);
+
+	if (ret)
+		return ret;
+
+	switch (reset_detection) {
+
+	case 0:
+		/*
+		*  Deactivate reset detection. Unset the download mode flag only
+		*  if someone hasn't already set restart_mode to something other
+		*  than RESTART_NORMAL.
+		*/
+		if (restart_mode == RESTART_NORMAL)
+			set_dload_mode(0);
+	break;
+
+	case 1:
+		set_dload_mode(1);
+	break;
+
+	default:
+		reset_detection = old_val;
+		return -EINVAL;
+	break;
+
+	}
+
+	return 0;
+}
+
+module_param_call(reset_detection, reset_detect_set, param_get_int,
+			&reset_detection, 0644);
 #else
 #define set_dload_mode(x) do {} while (0)
 #endif
@@ -92,11 +135,18 @@ static void msm_power_off(void)
 
 void arch_reset(char mode, const char *cmd)
 {
-	void *restart_reason;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 	if (in_panic || restart_mode == RESTART_DLOAD)
 		set_dload_mode(1);
+
+	/*
+	*  If we're not currently panic-ing, and if reset detection is active,
+	*  unset the download mode flag. However, do this only if the current
+	*  restart mode is RESTART_NORMAL.
+	*/
+	if (reset_detection && !in_panic && restart_mode == RESTART_NORMAL)
+		set_dload_mode(0);
 #endif
 
 	printk(KERN_NOTICE "Going down for restart now\n");
@@ -104,7 +154,6 @@ void arch_reset(char mode, const char *cmd)
 	pm8058_reset_pwr_off(1);
 
 	if (cmd != NULL) {
-		restart_reason = ioremap_nocache(RESTART_REASON_ADDR, SZ_4K);
 		if (!strncmp(cmd, "bootloader", 10)) {
 			writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
@@ -117,12 +166,11 @@ void arch_reset(char mode, const char *cmd)
 		} else {
 			writel(0x77665501, restart_reason);
 		}
-		iounmap(restart_reason);
 	}
 
 	writel(1, WDT0_RST);
 	writel(0, WDT0_EN);
-	writel(0x31F3, WDT0_BARK_TIME);
+	writel(5*0x31F3, WDT0_BARK_TIME);
 	writel(0x31F3, WDT0_BITE_TIME);
 	writel(3, WDT0_EN);
 	dmb();
@@ -133,10 +181,13 @@ void arch_reset(char mode, const char *cmd)
 
 static int __init msm_restart_init(void)
 {
+	void *imem = ioremap_nocache(IMEM_BASE, SZ_4K);
+
 #ifdef CONFIG_MSM_DLOAD_MODE
 	atomic_notifier_chain_register(&panic_notifier_list, &panic_blk);
+	dload_mode_addr = imem + DLOAD_MODE_ADDR;
 #endif
-
+	restart_reason = imem + RESTART_REASON_ADDR;
 	pm_power_off = msm_power_off;
 
 	return 0;

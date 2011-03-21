@@ -32,12 +32,17 @@
 #include <linux/pwm.h>
 #include <linux/pmic8058-pwm.h>
 #include <linux/pmic8058-xoadc.h>
-#include <linux/m_adc.h>
+#include <linux/msm_adc.h>
 #include <linux/m_adcproc.h>
 #include <linux/mfd/marimba.h>
 #include <linux/i2c.h>
 #include <linux/spi/spi.h>
 #include <linux/dma-mapping.h>
+#include <linux/gpio_keys.h>
+#include <linux/input/matrix_keypad.h>
+#include <linux/msm-charger.h>
+#include <linux/i2c/isl9519.h>
+#include <linux/atmel_maxtouch.h>
 
 #ifdef CONFIG_ANDROID_PMEM
 #include <linux/android_pmem.h>
@@ -61,6 +66,7 @@
 #include <mach/msm_bus_board.h>
 #include <mach/msm_tsif.h>
 #include <mach/socinfo.h>
+#include <mach/rpm.h>
 #ifdef CONFIG_USB_ANDROID
 #include <linux/usb/android_composite.h>
 #endif
@@ -72,7 +78,6 @@
 #include "devices-msm8x60.h"
 #include "cpuidle.h"
 #include "pm.h"
-#include "rpm.h"
 #include "spm.h"
 #include "rpm_log.h"
 #include "timer.h"
@@ -103,7 +108,7 @@
 
 #define GPIO_AUX_CAM_2P7_EN	94
 #define GPIO_WEB_CAMIF_STANDBY	105
-#define GPIO_MS_SYS_RESET_N	PM8058_GPIO_PM_TO_SYS(3)
+#define GPIO_MS_SYS_RESET_N	PM8058_GPIO_PM_TO_SYS(2)
 /*
  * The UI_INTx_N lines are pmic gpio lines which connect i2c
  * gpio expanders to the pm8058.
@@ -861,10 +866,6 @@ static struct platform_device msm_vpe_device = {
 #endif
 
 #ifdef CONFIG_MSM_CAMERA
-#define VFE_CAMIF_TIMER1_GPIO 29
-#define VFE_CAMIF_TIMER2_GPIO 30
-#define VFE_CAMIF_TIMER3_GPIO_INT 31
-
 static int msm_cam_gpio_tbl[] = {
 	32,/*CAMIF_MCLK*/
 	47,/*CAMIF_I2C_DATA*/
@@ -985,39 +986,30 @@ static struct msm_camera_sensor_flash_src msm_flash_src = {
 	._fsrc.pmic_src.led_src_2 = PMIC8058_ID_FLASH_LED_1,
 	._fsrc.pmic_src.pmic_set_current = pm8058_set_flash_led_current,
 };
-#ifdef CONFIG_IMX074
-static struct msm_camera_sensor_strobe_flash_data strobe_flash_xenon = {
-	.flash_trigger = VFE_CAMIF_TIMER1_GPIO,
-	.flash_charge = VFE_CAMIF_TIMER2_GPIO,
-	.flash_charge_done = VFE_CAMIF_TIMER3_GPIO_INT,
-	.flash_recharge_duration = 50000,
-	.irq = MSM_GPIO_TO_INT(VFE_CAMIF_TIMER3_GPIO_INT),
-};
 #endif
-#endif
-#ifdef CONFIG_IMX074
-static struct msm_camera_sensor_flash_data flash_imx074 = {
-	.flash_type		= MSM_CAMERA_FLASH_LED,
-	.flash_src		= &msm_flash_src
+#ifdef CONFIG_MT9E013
+static struct msm_camera_sensor_flash_data flash_mt9e013 = {
+	.flash_type = MSM_CAMERA_FLASH_LED,
+	.flash_src  = &msm_flash_src
 };
 
-static struct msm_camera_sensor_info msm_camera_sensor_imx074_data = {
-	.sensor_name		= "imx074",
-	.sensor_reset		= 106,
-	.sensor_pwd		= 85,
-	.vcm_pwd		= GPIO_AUX_CAM_2P7_EN,
-	.vcm_enable		= 1,
-	.pdata			= &msm_camera_device_data,
-	.resource		= msm_camera_resources,
-	.num_resources		= ARRAY_SIZE(msm_camera_resources),
-	.flash_data		= &flash_imx074,
-	.strobe_flash_data	= &strobe_flash_xenon,
-	.csi_if			= 1
+static struct msm_camera_sensor_info msm_camera_sensor_mt9e013_data = {
+	.sensor_name    = "mt9e013",
+	.sensor_reset   = GPIO_AUX_CAM_2P7_EN,
+	.sensor_pwd     = 85,
+	.vcm_pwd        = 1,
+	.vcm_enable     = 1,
+	.pdata          = &msm_camera_device_data,
+	.resource       = msm_camera_resources,
+	.num_resources  = ARRAY_SIZE(msm_camera_resources),
+	.flash_data     = &flash_mt9e013,
+	.csi_if         = 1
 };
-static struct platform_device msm_camera_sensor_imx074 = {
-	.name	= "msm_camera_imx074",
-	.dev	= {
-		.platform_data = &msm_camera_sensor_imx074_data,
+
+static struct platform_device msm_camera_sensor_mt9e013 = {
+	.name      = "msm_camera_mt9e013",
+	.dev       = {
+		.platform_data = &msm_camera_sensor_mt9e013_data,
 	},
 };
 #endif
@@ -1028,7 +1020,7 @@ static struct msm_camera_sensor_flash_data flash_ov9726 = {
 };
 static struct msm_camera_sensor_info msm_camera_sensor_ov9726_data = {
 	.sensor_name	= "ov9726",
-	.sensor_reset	= GPIO_FRONT_CAM_RESET_N,
+	.sensor_reset	= 106,
 	.sensor_pwd	= 85,
 	.vcm_pwd	= 1,
 	.vcm_enable	= 0,
@@ -1038,7 +1030,7 @@ static struct msm_camera_sensor_info msm_camera_sensor_ov9726_data = {
 	.flash_data	= &flash_ov9726,
 	.csi_if		= 1
 };
-struct platform_device msm_camera_sensor_webcam_ov9726 = {
+static struct platform_device msm_camera_sensor_webcam_ov9726 = {
 	.name	= "msm_camera_ov9726",
 	.dev	= {
 		.platform_data = &msm_camera_sensor_ov9726_data,
@@ -1071,9 +1063,9 @@ static struct platform_device msm_camera_sensor_webcam_ov7692 = {
 };
 #endif
 static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
-	#ifdef CONFIG_IMX074
+	#ifdef CONFIG_MT9E013
 	{
-		I2C_BOARD_INFO("imx074", 0x1A),
+		I2C_BOARD_INFO("mt9e013", 0x6C >> 2),
 	},
 	#endif
 	#ifdef CONFIG_WEBCAM_OV7692
@@ -1116,7 +1108,7 @@ static void gsbi_qup_i2c_gpio_config(int adap_id, int config_type)
 }
 
 static struct msm_i2c_platform_data msm_gsbi3_qup_i2c_pdata = {
-	.clk_freq = 100000,
+	.clk_freq = 384000,
 	.src_clk_rate = 24000000,
 	.clk = "gsbi_qup_clk",
 	.pclk = "gsbi_pclk",
@@ -1538,6 +1530,24 @@ static struct msm_serial_hs_platform_data msm_uart_dm1_pdata = {
        .inject_rx_on_wakeup = 1,
        .rx_to_inject = 0xFD,
        .gpio_config = configure_uart_gpios,
+};
+#endif
+
+#ifdef CONFIG_BATTERY_MSM8X60
+static struct msm_charger_platform_data msm_charger_data = {
+	.safety_time	= 180,
+	.update_time	= 1,
+	.max_voltage	= 4200,
+	.min_voltage	= 3200,
+	.resume_voltage = 4100,
+};
+
+static struct platform_device msm_charger_device = {
+	.name	= "msm-charger",
+	.id	= -1,
+	.dev	= {
+		.platform_data = &msm_charger_data,
+	}
 };
 #endif
 
@@ -2016,6 +2026,160 @@ static struct xoadc_platform_data xoadc_pdata = {
 };
 #endif
 
+#define QT_ATMEL_TS_GPIO_IRQ	61
+#define ATMEL_I2C_NAME "maXTouch"
+
+static struct regulator *pm8901_l2;
+
+static int atmel_qt_platform_init(struct i2c_client *client)
+{
+	int rc = -EINVAL;
+
+	pm8901_l2 = regulator_get(NULL, "8901_l2");
+	if (IS_ERR(pm8901_l2)) {
+		pr_err("%s: regulator get of 8901_l2 failed (%ld)\n",
+			__func__, PTR_ERR(pm8901_l2));
+		rc = PTR_ERR(pm8901_l2);
+		return rc;
+	}
+
+	rc = regulator_set_voltage(pm8901_l2, 3300000, 3300000);
+	if (rc) {
+		pr_err("%s: regulator_set_voltage of 8901_l2 failed(%d)\n",
+			__func__, rc);
+		goto reg_put;
+	}
+
+	rc = regulator_enable(pm8901_l2);
+	if (rc) {
+		pr_err("%s: regulator_enable of 8901_l2 failed(%d)\n",
+			__func__, rc);
+		goto reg_put;
+	}
+
+	/* configure touchscreen interrupt gpio */
+	rc = gpio_request(QT_ATMEL_TS_GPIO_IRQ, "atmel_irq_gpio");
+	if (rc) {
+		pr_err("%s: unable to request gpio %d\n",
+			__func__, QT_ATMEL_TS_GPIO_IRQ);
+		goto reg_disable;
+	}
+
+	rc = gpio_direction_input(QT_ATMEL_TS_GPIO_IRQ);
+	if (rc < 0) {
+		pr_err("%s: unable to set the direction of gpio %d\n",
+			__func__, QT_ATMEL_TS_GPIO_IRQ);
+		goto free_gpio;
+	}
+
+	return 0;
+
+free_gpio:
+	gpio_free(QT_ATMEL_TS_GPIO_IRQ);
+reg_disable:
+	regulator_disable(pm8901_l2);
+reg_put:
+	regulator_put(pm8901_l2);
+	return rc;
+}
+
+static int atmel_qt_platform_exit(struct i2c_client *client)
+{
+	return 0;
+}
+
+static u8 atmel_qt_read_chg(void)
+{
+	return gpio_get_value(QT_ATMEL_TS_GPIO_IRQ);
+}
+
+static u8 atmel_qt_valid_interrupt(void)
+{
+	return !atmel_qt_read_chg();
+}
+
+static struct mxt_platform_data atmel_qt_pdata = {
+	.numtouch = 10,
+	.init_platform_hw = atmel_qt_platform_init,
+	.exit_platform_hw = atmel_qt_platform_exit,
+	.max_x = 1366,
+	.max_y = 768,
+	.valid_interrupt = atmel_qt_valid_interrupt,
+	.read_chg = atmel_qt_read_chg,
+};
+
+static struct i2c_board_info atmel_i2c_info[] __initdata = {
+	{
+		I2C_BOARD_INFO(ATMEL_I2C_NAME, 0x4c),
+		.platform_data = &atmel_qt_pdata,
+		.irq = MSM_GPIO_TO_INT(QT_ATMEL_TS_GPIO_IRQ),
+	},
+};
+
+#define LOCK_KEY_GPIO		67
+
+static struct gpio_keys_button gpio_keys_buttons[] = {
+	{
+		.code           = KEY_SCREENLOCK,
+		.gpio           = LOCK_KEY_GPIO,
+		.desc           = "lock_key",
+		.active_low     = 1,
+		.type		= EV_KEY,
+		.wakeup		= 1
+	},
+};
+
+static struct gpio_keys_platform_data gpio_keys_data = {
+	.buttons        = gpio_keys_buttons,
+	.nbuttons       = ARRAY_SIZE(gpio_keys_buttons),
+	.rep		= 0,
+};
+
+static struct platform_device qt_gpio_keys = {
+	.name           = "gpio-keys",
+	.id             = -1,
+	.dev            = {
+		.platform_data  = &gpio_keys_data,
+	},
+};
+
+static const unsigned int qt_keymap[] = {
+	KEY(0, 3, KEY_VOLUMEDOWN),
+	KEY(1, 3, KEY_VOLUMEUP),
+	KEY(2, 3, KEY_HOME),
+};
+
+static struct matrix_keymap_data qt_keymap_data = {
+	.keymap_size	= ARRAY_SIZE(qt_keymap),
+	.keymap		= qt_keymap,
+};
+
+static unsigned int qt_row_gpios[] = { PM8058_GPIO_PM_TO_SYS(8),
+				       PM8058_GPIO_PM_TO_SYS(9),
+				       PM8058_GPIO_PM_TO_SYS(10) };
+static unsigned int qt_col_gpios[] = { PM8058_GPIO_PM_TO_SYS(3) };
+
+static struct matrix_keypad_platform_data qt_keypad_data = {
+	.keymap_data		= &qt_keymap_data,
+	.row_gpios		= qt_row_gpios,
+	.col_gpios		= qt_col_gpios,
+	.num_row_gpios		= ARRAY_SIZE(qt_row_gpios),
+	.num_col_gpios		= ARRAY_SIZE(qt_col_gpios),
+	.col_scan_delay_us	= 32000,
+	.debounce_ms		= 10,
+	.wakeup			= 1,
+	.active_low		= 1,
+	.no_autorepeat		= 1,
+};
+
+static struct platform_device qt_keypad_device = {
+	.name           = "matrix-keypad",
+	.id             = -1,
+	.dev            = {
+		.platform_data  = &qt_keypad_data,
+	},
+};
+
 static struct platform_device *qt_devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_uart_dm12,
@@ -2038,9 +2202,6 @@ static struct platform_device *qt_devices[] __initdata = {
 	&msm_device_ssbi1,
 	&msm_device_ssbi2,
 	&msm_device_ssbi3,
-#endif
-#ifdef CONFIG_USB_PEHCI_HCD
-	&isp1763_device,
 #endif
 
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
@@ -2082,8 +2243,8 @@ static struct platform_device *qt_devices[] __initdata = {
 	&hdmi_msm_device,
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 #ifdef CONFIG_MSM_CAMERA
-#ifdef CONFIG_IMX074
-	&msm_camera_sensor_imx074,
+#ifdef CONFIG_MT9E013
+	&msm_camera_sensor_mt9e013,
 #endif
 #ifdef CONFIG_WEBCAM_OV7692
 	&msm_camera_sensor_webcam_ov7692,
@@ -2167,11 +2328,69 @@ static struct platform_device *qt_devices[] __initdata = {
 #endif
 
 	&msm_tsens_device,
+	&qt_gpio_keys,
+	&qt_keypad_device,
 
 };
 
 #ifdef CONFIG_PMIC8058
 #define PMIC_GPIO_SDC3_DET 22
+
+static int pm8058_kp_config_drv(int gpio_start, int num_gpios)
+{
+	int	rc;
+	struct pm8058_gpio kypd_drv = {
+		.direction	= PM_GPIO_DIR_OUT,
+		.output_buffer	= PM_GPIO_OUT_BUF_OPEN_DRAIN,
+		.output_value	= 0,
+		.pull		= PM_GPIO_PULL_NO,
+		.vin_sel	= 2,
+		.out_strength	= PM_GPIO_STRENGTH_LOW,
+		.function	= PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol	= 1,
+	};
+
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
+		return -EINVAL;
+
+	while (num_gpios--) {
+		rc = pm8058_gpio_config(gpio_start++, &kypd_drv);
+		if (rc) {
+			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
+				__func__, rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
+static int pm8058_kp_config_sns(int gpio_start, int num_gpios)
+{
+	int	rc;
+	struct pm8058_gpio kypd_sns = {
+		.direction	= PM_GPIO_DIR_IN,
+		.pull		= PM_GPIO_PULL_UP_31P5,
+		.vin_sel	= 2,
+		.out_strength	= PM_GPIO_STRENGTH_NO,
+		.function	= PM_GPIO_FUNC_NORMAL,
+		.inv_int_pol	= 1,
+	};
+
+	if (gpio_start < 0 || num_gpios < 0 || num_gpios > PM8058_GPIOS)
+		return -EINVAL;
+
+	while (num_gpios--) {
+		rc = pm8058_gpio_config(gpio_start++, &kypd_sns);
+		if (rc) {
+			pr_err("%s: FAIL pm8058_gpio_config(): rc=%d.\n",
+				__func__, rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
 
 static int pm8058_gpios_init(void)
 {
@@ -2303,6 +2522,8 @@ static int pm8058_gpios_init(void)
 		return rc;
 	}
 #endif
+	rc = pm8058_kp_config_sns(8, 3);
+	rc = pm8058_kp_config_drv(3, 1);
 
 	for (i = 0; i < ARRAY_SIZE(gpio_cfgs); ++i) {
 		rc = pm8058_gpio_config(gpio_cfgs[i].gpio,
@@ -2445,11 +2666,18 @@ static struct othc_hsed_config hsed_config_1 = {
 	.othc_num_accessories = ARRAY_SIZE(othc_accessories),
 };
 
+static struct othc_regulator_config othc_reg = {
+	.regulator = "8058_l5",
+	.max_uV = 2850000,
+	.min_uV = 2850000,
+};
+
 /* MIC_BIAS0 is configured as normal MIC BIAS */
 static struct pmic8058_othc_config_pdata othc_config_pdata_0 = {
 	.micbias_select = OTHC_MICBIAS_0,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
+	.micbias_regulator = &othc_reg,
 };
 
 /* MIC_BIAS1 is configured as HSED_BIAS for OTHC */
@@ -2457,6 +2685,7 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_1 = {
 	.micbias_select = OTHC_MICBIAS_1,
 	.micbias_capability = OTHC_MICBIAS_HSED,
 	.micbias_enable = OTHC_SIGNAL_PWM_TCXO,
+	.micbias_regulator = &othc_reg,
 	.hsed_config = &hsed_config_1,
 	.hsed_name = "8660_handset",
 };
@@ -2466,6 +2695,7 @@ static struct pmic8058_othc_config_pdata othc_config_pdata_2 = {
 	.micbias_select = OTHC_MICBIAS_2,
 	.micbias_capability = OTHC_MICBIAS,
 	.micbias_enable = OTHC_SIGNAL_OFF,
+	.micbias_regulator = &othc_reg,
 };
 
 static struct resource resources_othc_0[] = {
@@ -2987,8 +3217,7 @@ static struct i2c_board_info pm8901_boardinfo[] __initdata = {
 
 #endif /* CONFIG_PMIC8901 */
 
-#if defined(CONFIG_MARIMBA_CORE) && (defined(CONFIG_GPIO_SX150X) \
-	|| defined(CONFIG_GPIO_SX150X_MODULE))
+#if defined(CONFIG_MARIMBA_CORE)
 
 static struct regulator *vreg_bahama;
 static unsigned int msm_bahama_setup_power(void)
@@ -3189,8 +3418,53 @@ static struct i2c_board_info msm_marimba_board_info[] = {
 };
 #endif /* CONFIG_MAIMBA_CORE */
 
-#ifdef CONFIG_I2C
+#define EXT_CHG_VALID_MPP 10
+#define EXT_CHG_VALID_MPP_2 11
 
+#ifdef CONFIG_ISL9519_CHARGER
+static int isl_detection_setup(void)
+{
+	int ret = 0;
+
+	ret = pm8058_mpp_config_digital_in(EXT_CHG_VALID_MPP,
+					   PM8058_MPP_DIG_LEVEL_S3,
+					   PM_MPP_DIN_TO_INT);
+	ret |=  pm8058_mpp_config_bi_dir(EXT_CHG_VALID_MPP_2,
+					   PM8058_MPP_DIG_LEVEL_S3,
+					   PM_MPP_BI_PULLUP_10KOHM
+					   );
+	return ret;
+}
+
+static struct isl_platform_data isl_data __initdata = {
+	.chgcurrent		= 1900,
+	.valid_n_gpio		= PM8058_MPP_PM_TO_SYS(10),
+	.chg_detection_config	= isl_detection_setup,
+	.max_system_voltage	= 4200,
+	.min_system_voltage	= 3200,
+	.term_current		= 500,
+	.input_current		= 2048,
+};
+
+static struct i2c_board_info isl_charger_i2c_info[] __initdata = {
+	{
+		I2C_BOARD_INFO("isl9519q", 0x9),
+		.irq		= PM8058_CBLPWR_IRQ(PM8058_IRQ_BASE),
+		.platform_data	= &isl_data,
+	},
+};
+#endif
+
+#if defined(CONFIG_BATTERY_BQ27541) || \
+		defined(CONFIG_BATTERY_BQ27541_MODULE)
+static struct i2c_board_info msm_bq27541_board_info[] = {
+	{
+		I2C_BOARD_INFO("bq27541", 0xaa>>1),
+	},
+};
+#endif
+
+#ifdef CONFIG_I2C
 struct i2c_registry {
 	int                    bus;
 	struct i2c_board_info *info;
@@ -3224,6 +3498,11 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 		msm_i2c_gsbi7_timpani_info,
 		ARRAY_SIZE(msm_i2c_gsbi7_timpani_info),
 	},
+	{
+		MSM_GSBI3_QUP_I2C_BUS_ID,
+		atmel_i2c_info,
+		ARRAY_SIZE(atmel_i2c_info),
+	},
 #if defined(CONFIG_MARIMBA_CORE)
 	{
 		MSM_GSBI7_QUP_I2C_BUS_ID,
@@ -3231,6 +3510,21 @@ static struct i2c_registry msm8x60_i2c_devices[] __initdata = {
 		ARRAY_SIZE(msm_marimba_board_info),
 	},
 #endif /* CONFIG_MARIMBA_CORE */
+#ifdef CONFIG_ISL9519_CHARGER
+	{
+		MSM_GSBI8_QUP_I2C_BUS_ID,
+		isl_charger_i2c_info,
+		ARRAY_SIZE(isl_charger_i2c_info),
+	},
+#endif
+#if defined(CONFIG_BATTERY_BQ27541) || \
+		defined(CONFIG_BATTERY_BQ27541_MODULE)
+	{
+		MSM_GSBI8_QUP_I2C_BUS_ID,
+		msm_bq27541_board_info,
+		ARRAY_SIZE(msm_bq27541_board_info),
+	},
+#endif
 };
 #endif /* CONFIG_I2C */
 
@@ -4434,6 +4728,63 @@ static struct msm_bus_scale_pdata mdp_bus_scale_pdata = {
 	.name = "mdp",
 };
 #endif
+#ifdef CONFIG_MSM_BUS_SCALING
+static struct msm_bus_vectors dtv_bus_init_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab = 0,
+		.ib = 0,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 0,
+		.ib = 0,
+	},
+};
+static struct msm_bus_vectors dtv_bus_def_vectors[] = {
+	/* For now, 0th array entry is reserved.
+	 * Please leave 0 as is and don't use it
+	 */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_SMI,
+		.ab = 566092800,
+		.ib = 707616000,
+	},
+	/* Master and slaves can be from different fabrics */
+	{
+		.src = MSM_BUS_MASTER_MDP_PORT0,
+		.dst = MSM_BUS_SLAVE_EBI_CH0,
+		.ab = 566092800,
+		.ib = 707616000,
+	},
+};
+static struct msm_bus_paths dtv_bus_scale_usecases[] = {
+	{
+		ARRAY_SIZE(dtv_bus_init_vectors),
+		dtv_bus_init_vectors,
+	},
+	{
+		ARRAY_SIZE(dtv_bus_def_vectors),
+		dtv_bus_def_vectors,
+	},
+};
+static struct msm_bus_scale_pdata dtv_bus_scale_pdata = {
+	dtv_bus_scale_usecases,
+	ARRAY_SIZE(dtv_bus_scale_usecases),
+	.name = "dtv",
+};
+
+static struct lcdc_platform_data dtv_pdata = {
+	.bus_scale_table = &dtv_bus_scale_pdata,
+};
+#endif
 
 static struct lcdc_platform_data lcdc_pdata = {
 	.lcdc_power_save   = lcdc_panel_power,
@@ -4463,6 +4814,9 @@ static void __init msm_fb_add_devices(void)
 {
 	msm_fb_register_device("mdp", &mdp_pdata);
 	msm_fb_register_device("lcdc", &lcdc_pdata);
+#ifdef CONFIG_MSM_BUS_SCALING
+	msm_fb_register_device("dtv", &dtv_pdata);
+#endif
 }
 
 #if (defined(CONFIG_MARIMBA_CORE)) && \
@@ -4916,6 +5270,10 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	msm8x60_init_pm8058_othc();
+#endif
+
+#ifdef CONFIG_BATTERY_MSM8X60
+	platform_device_register(&msm_charger_device);
 #endif
 
 	if (SOCINFO_VERSION_MAJOR(socinfo_get_version()) != 1)

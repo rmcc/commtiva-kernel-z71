@@ -29,23 +29,23 @@
  * Audio Front End (AFE)
  */
 
-/* Port ID */
-enum {
-	PRIMARY_I2S_RX = 0,
-	PRIMARY_I2S_TX = 1,
-	PCM_RX = 2,
-	PCM_TX = 3,
-	SECONDARY_I2S_RX = 4,
-	SECONDARY_I2S_TX = 5,
-	MI2S_RX = 6,
-	MI2S_TX = 7,
-	HDMI_RX = 8,
-	RSVD_2 = 9,
-	RSVD_3 = 10,
-	DIGI_MIC_TX = 11,
-	AFE_MAX_PORTS ,
-	INVALID = 0xFFFF,
-};
+/* Port ID. Update afe_get_port_index when a new port is added here. */
+#define PRIMARY_I2S_RX 0		/* index = 0 */
+#define PRIMARY_I2S_TX 1		/* index = 1 */
+#define PCM_RX 2			/* index = 2 */
+#define PCM_TX 3			/* index = 3 */
+#define SECONDARY_I2S_RX 4		/* index = 4 */
+#define SECONDARY_I2S_TX 5		/* index = 5 */
+#define MI2S_RX 6			/* index = 6 */
+#define MI2S_TX 7			/* index = 7 */
+#define HDMI_RX 8			/* index = 8 */
+#define RSVD_2 9			/* index = 9 */
+#define RSVD_3 10			/* index = 10 */
+#define DIGI_MIC_TX 11			/* index = 11 */
+#define VOICE_RECORD_RX 0x8003		/* index = 12 */
+#define VOICE_RECORD_TX 0x8004		/* index = 13 */
+#define VOICE_PLAYBACK_TX 0x8005	/* index = 14 */
+#define AFE_PORT_INVALID 0xFFFF
 
 #define AFE_PORT_CMD_START 0x000100ca
 struct afe_port_start_command {
@@ -237,6 +237,57 @@ struct afe_codec_loopback_command {
 				/* Secondary i2s = 4 */
 				/* Mi2s = 6 */
 	u16	enable;		/* 0, disable. 1, enable */
+} __attribute__ ((packed));
+
+
+#define AFE_PARAM_ID_SIDETONE_GAIN	0x00010300
+struct afe_param_sidetone_gain {
+	u16 gain;
+	u16 reserved;
+} __attribute__ ((packed));
+
+#define AFE_PARAM_ID_SAMPLING_RATE	0x00010301
+struct afe_param_sampling_rate {
+	u32 sampling_rate;
+} __attribute__ ((packed));
+
+
+#define AFE_PARAM_ID_CHANNELS		0x00010302
+struct afe_param_channels {
+	u16 channels;
+	u16 reserved;
+} __attribute__ ((packed));
+
+
+#define AFE_PARAM_ID_LOOPBACK_GAIN	0x00010303
+struct afe_param_loopback_gain {
+	u16 gain;
+	u16 reserved;
+} __attribute__ ((packed));
+
+
+#define AFE_MODULE_ID_PORT_INFO		0x00010200
+struct afe_param_payload {
+	u32 module_id;
+	u32 param_id;
+	u16 param_size;
+	u16 reserved;
+	union {
+		struct afe_param_sidetone_gain sidetone_gain;
+		struct afe_param_sampling_rate sampling_rate;
+		struct afe_param_channels      channels;
+		struct afe_param_loopback_gain loopback_gain;
+	} __attribute__((packed)) param;
+} __attribute__ ((packed));
+
+#define AFE_PORT_CMD_SET_PARAM		0x000100dc
+
+struct afe_port_cmd_set_param {
+	struct apr_hdr hdr;
+	u16 port_id;
+	u16 payload_size;
+	u32 payload_address;
+	struct afe_param_payload payload;
 } __attribute__ ((packed));
 
 

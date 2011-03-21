@@ -91,7 +91,11 @@
 #include "smd_private.h"
 
 #define MSM_PMEM_SF_SIZE	0x1700000
-#define MSM_FB_SIZE		0x500000
+#ifdef CONFIG_FB_MSM_TRIPLE_BUFFER
+#define MSM_FB_SIZE            0x780000
+#else
+#define MSM_FB_SIZE            0x500000
+#endif
 #define MSM_PMEM_ADSP_SIZE      0x1800000
 #define MSM_FLUID_PMEM_ADSP_SIZE	0x2800000
 #define PMEM_KERNEL_EBI1_SIZE   0x600000
@@ -119,6 +123,8 @@
 
 #define PMIC_GPIO_FLASH_BOOST_ENABLE	15	/* PMIC GPIO Number 16 */
 #define PMIC_GPIO_HAP_ENABLE   16  /* PMIC GPIO Number 17 */
+
+#define PMIC_GPIO_WLAN_EXT_POR  22 /* PMIC GPIO NUMBER 23 */
 
 #define HAP_LVL_SHFT_MSM_GPIO 24
 
@@ -179,6 +185,16 @@ static int pm8058_gpios_init(void)
 		.function       = PM_GPIO_FUNC_2,
 	};
 
+	struct pm8058_gpio gpio23 = {
+			.direction      = PM_GPIO_DIR_OUT,
+			.output_buffer  = PM_GPIO_OUT_BUF_CMOS,
+			.output_value   = 0,
+			.pull           = PM_GPIO_PULL_NO,
+			.vin_sel        = 2,
+			.out_strength   = PM_GPIO_STRENGTH_LOW,
+			.function       = PM_GPIO_FUNC_NORMAL,
+	};
+
 
 	if (machine_is_msm8x55_svlte_surf() || machine_is_msm8x55_svlte_ffa() ||
 						machine_is_msm7x30_fluid())
@@ -216,6 +232,13 @@ static int pm8058_gpios_init(void)
 	rc = pm8058_gpio_config(pmic_gpio_hdmi_5v_en, &hdmi_5V_en);
 	if (rc) {
 		pr_err("%s PMIC_GPIO_HDMI_5V_EN config failed\n", __func__);
+		return rc;
+	}
+
+	/* Deassert GPIO#23 (source for Ext_POR on WLAN-Volans) */
+	rc = pm8058_gpio_config(PMIC_GPIO_WLAN_EXT_POR, &gpio23);
+	if (rc) {
+		pr_err("%s PMIC_GPIO_WLAN_EXT_POR config failed\n", __func__);
 		return rc;
 	}
 
@@ -810,6 +833,11 @@ static struct i2c_board_info msm_camera_boardinfo[] __initdata = {
 		I2C_BOARD_INFO("mt9d112", 0x78 >> 1),
 	},
 #endif
+#ifdef CONFIG_WEBCAM_OV9726
+	{
+		I2C_BOARD_INFO("ov9726", 0x10),
+	},
+#endif
 #ifdef CONFIG_S5K3E2FX
 	{
 		I2C_BOARD_INFO("s5k3e2fx", 0x20 >> 1),
@@ -982,7 +1010,7 @@ struct msm_camera_device_platform_data msm_camera_device_data = {
 	.ioext.csisz  = 0x00000400,
 	.ioext.csiirq = INT_CSI,
 	.ioclk.mclk_clk_rate = 24000000,
-	.ioclk.vfe_clk_rate  = 122880000,
+	.ioclk.vfe_clk_rate  = 147456000,
 };
 
 static struct msm_camera_sensor_flash_src msm_flash_src_pwm = {
@@ -1017,6 +1045,31 @@ static struct platform_device msm_camera_sensor_mt9d112 = {
 	.name      = "msm_camera_mt9d112",
 	.dev       = {
 		.platform_data = &msm_camera_sensor_mt9d112_data,
+	},
+};
+#endif
+
+#ifdef CONFIG_WEBCAM_OV9726
+static struct msm_camera_sensor_flash_data flash_ov9726 = {
+	.flash_type	= MSM_CAMERA_FLASH_LED,
+	.flash_src	= &msm_flash_src_pwm
+};
+static struct msm_camera_sensor_info msm_camera_sensor_ov9726_data = {
+	.sensor_name	= "ov9726",
+	.sensor_reset	= 0,
+	.sensor_pwd	= 85,
+	.vcm_pwd	= 1,
+	.vcm_enable	= 0,
+	.pdata		= &msm_camera_device_data,
+	.resource	= msm_camera_resources,
+	.num_resources	= ARRAY_SIZE(msm_camera_resources),
+	.flash_data	= &flash_ov9726,
+	.csi_if		= 1
+};
+struct platform_device msm_camera_sensor_ov9726 = {
+	.name	= "msm_camera_ov9726",
+	.dev	= {
+		.platform_data = &msm_camera_sensor_ov9726_data,
 	},
 };
 #endif
@@ -3849,51 +3902,79 @@ static struct platform_device android_pmem_audio_device = {
        .dev = { .platform_data = &android_pmem_audio_pdata },
 };
 
-static struct kgsl_platform_data kgsl_pdata = {
-	.pwrlevel_2d = {
-		{
-			.gpu_freq = 0,
-			.bus_freq = 192000000,
-		},
-	},
-	.init_level_2d = 0,
-	.num_levels_2d = 1,
-	.pwrlevel_3d = {
-		{
-			.gpu_freq = 245760000,
-			.bus_freq = 192000000,
-		},
-		{
-			.gpu_freq = 192000000,
-			.bus_freq = 0,
-		},
-	},
-	.init_level_3d = 0,
-	.num_levels_3d = 2,
-	.set_grp2d_async = NULL, /* HW workaround, run Z180 SYNC @ 192 MHZ */
-	.set_grp3d_async = set_grp3d_async,
-	.imem_clk_name = "imem_clk",
-	.grp3d_clk_name = "grp_clk",
-	.grp3d_pclk_name = "grp_pclk",
-#ifdef CONFIG_MSM_KGSL_2D
-	.grp2d0_clk_name = "grp_2d_clk",
-	.grp2d0_pclk_name = "grp_2d_pclk",
-#else
-	.grp2d0_clk_name = NULL,
-#endif
-	.idle_timeout_3d = HZ/20,
-	.idle_timeout_2d = HZ/10,
-	.nap_allowed = true,
-
+static struct kgsl_core_platform_data kgsl_core_pdata = {
+	.pt_va_base = 0x66000000,
 #ifdef CONFIG_KGSL_PER_PROCESS_PAGE_TABLE
 	.pt_va_size = SZ_32M,
-	/* Maximum of 32 concurrent processes */
-	.pt_max_count = 32,
 #else
 	.pt_va_size = SZ_128M,
-	/* We only ever have one pagetable for everybody */
-	.pt_max_count = 1,
 #endif
+};
+
+static struct kgsl_device_platform_data kgsl_3d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 245760000,
+				.bus_freq = 192000000,
+			},
+			{
+				.gpu_freq = 192000000,
+				.bus_freq = 0,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 2,
+		.set_grp_async = set_grp3d_async,
+		.idle_timeout = HZ/20,
+		.nap_allowed = true,
+	},
+	.clk = {
+		.name = {
+			.clk = "grp_clk",
+			.pclk = "grp_pclk",
+		},
+	},
+	.imem_clk_name = {
+		.clk = "imem_clk",
+		.pclk = NULL,
+	},
+};
+
+static struct kgsl_device_platform_data kgsl_2d0_pdata = {
+	.pwr_data = {
+		.pwrlevel = {
+			{
+				.gpu_freq = 0,
+				.bus_freq = 192000000,
+			},
+		},
+		.init_level = 0,
+		.num_levels = 1,
+		/* HW workaround, run Z180 SYNC @ 192 MHZ */
+		.set_grp_async = NULL,
+		.idle_timeout = HZ/10,
+		.nap_allowed = true,
+	},
+	.clk = {
+		.name = {
+#ifdef CONFIG_MSM_KGSL_2D
+			.clk = "grp_2d_clk",
+			.pclk = "grp_2d_pclk",
+#else
+			.clk = NULL,
+#endif
+		},
+	},
+};
+
+static struct kgsl_device_platform_data kgsl_2d1_pdata;
+
+static struct kgsl_platform_data kgsl_pdata = {
+	.core = &kgsl_core_pdata,
+	.dev_3d0 = &kgsl_3d0_pdata,
+	.dev_2d0 = &kgsl_2d0_pdata,
+	.dev_2d1 = &kgsl_2d1_pdata,
 };
 
 static struct resource kgsl_resources[] = {
@@ -5405,6 +5486,9 @@ static struct platform_device *devices[] __initdata = {
 #endif
 #ifdef CONFIG_MT9D112
 	&msm_camera_sensor_mt9d112,
+#endif
+#ifdef CONFIG_WEBCAM_OV9726
+	&msm_camera_sensor_ov9726,
 #endif
 #ifdef CONFIG_S5K3E2FX
 	&msm_camera_sensor_s5k3e2fx,

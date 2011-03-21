@@ -29,6 +29,7 @@
 #include <linux/interrupt.h>
 #include <mach/msm_iomap.h>
 #include <mach/scm-io.h>
+#include <mach/scm.h>
 
 #define TCSR_WDT_CFG 0x30
 
@@ -49,6 +50,20 @@ static unsigned long long last_pet;
  */
 static int enable = 1;
 module_param(enable, int, 0);
+
+/*
+ * If the watchdog is enabled at bootup (enable=1),
+ * the runtime_disable sysfs node at
+ * /sys/module/msm_watchdog/runtime_disable
+ * can be used to deactivate the watchdog.
+ * This is a one-time setting. The watchdog
+ * cannot be re-enabled once it is disabled.
+ */
+static int runtime_disable;
+static DEFINE_MUTEX(disable_lock);
+static int wdog_enable_set(const char *val, struct kernel_param *kp);
+module_param_call(runtime_disable, wdog_enable_set, param_get_int,
+			&runtime_disable, 0644);
 
 /*
  * Use /sys/module/msm_watchdog/parameters/print_all_stacks
@@ -111,6 +126,55 @@ static struct notifier_block msm_watchdog_power_notifier = {
 	.notifier_call = msm_watchdog_power_event,
 };
 
+static int wdog_enable_set(const char *val, struct kernel_param *kp)
+{
+	int ret = 0;
+	int old_val = runtime_disable;
+
+	mutex_lock(&disable_lock);
+
+	if (!enable) {
+		printk(KERN_INFO "MSM Watchdog is not active.\n");
+		ret = -EINVAL;
+		goto done;
+	}
+
+	ret = param_set_int(val, kp);
+
+	if (ret)
+		goto done;
+
+	switch (runtime_disable) {
+
+	case 1:
+		if (!old_val) {
+			writel(0, WDT0_EN);
+			unregister_pm_notifier(&msm_watchdog_power_notifier);
+
+			/* may be suspended after the first write above */
+			writel(0, WDT0_EN);
+			secure_writel(0, MSM_TCSR_BASE + TCSR_WDT_CFG);
+			free_irq(WDT0_ACCSCSSNBARK_INT, 0);
+			enable = 0;
+			atomic_notifier_chain_unregister(&panic_notifier_list,
+			       &panic_blk);
+			cancel_delayed_work(&dogwork_struct);
+			printk(KERN_INFO "MSM Watchdog deactivated.\n");
+		}
+	break;
+
+	default:
+		runtime_disable = old_val;
+		ret = -EINVAL;
+	break;
+
+	}
+
+done:
+	mutex_unlock(&disable_lock);
+	return ret;
+}
+
 static void pet_watchdog(struct work_struct *work)
 {
 	writel(1, WDT0_RST);
@@ -167,40 +231,69 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
+#define SCM_SET_REGSAVE_CMD 0x2
+
 static int __init init_watchdog(void)
 {
 	int ret;
-	if (enable) {
-		secure_writel(1, MSM_TCSR_BASE + TCSR_WDT_CFG);
-		delay_time = msecs_to_jiffies(PET_DELAY);
+	void *regsave;
+	struct {
+		unsigned addr;
+		int len;
+	} cmd_buf;
 
-		/* 32768 ticks = 1 second */
-		writel(32768*4, WDT0_BARK_TIME);
-		writel(32768*5, WDT0_BITE_TIME);
-
-		ret = register_pm_notifier(&msm_watchdog_power_notifier);
-		if (ret)
-			return ret;
-
-		ret = request_irq(WDT0_ACCSCSSNBARK_INT, wdog_bark_handler, 0,
-				  "apps_wdog_bark", NULL);
-		if (ret)
-			return ret;
-
-		INIT_DELAYED_WORK(&dogwork_struct, pet_watchdog);
-		schedule_delayed_work(&dogwork_struct, delay_time);
-
-		atomic_notifier_chain_register(&panic_notifier_list,
-					       &panic_blk);
-
-		writel(1, WDT0_EN);
-		writel(1, WDT0_RST);
-		last_pet = sched_clock();
-
-		printk(KERN_INFO "MSM Watchdog Initialized\n");
-	} else {
+	if (!enable) {
 		printk(KERN_INFO "MSM Watchdog Not Initialized\n");
+		return 0;
 	}
+#ifdef CONFIG_MSM_SCM
+	regsave = (void *)__get_free_page(GFP_KERNEL);
+
+	if (regsave) {
+		cmd_buf.addr = __pa(regsave);
+		cmd_buf.len  = PAGE_SIZE;
+
+		ret = scm_call(SCM_SVC_UTIL, SCM_SET_REGSAVE_CMD, &cmd_buf,
+			 sizeof(cmd_buf), NULL, 0);
+		if (ret)
+			pr_err("Setting register save address failed.\n"
+			       "Registers won't be dumped on a dog bite\n");
+	} else
+		pr_err("Allocating register save space failed\n"
+		       "Registers won't be dumped on a dog bite\n");
+		/*
+		 * No need to bail if allocation fails. Simply don't send the
+		 * command, and the secure side will reset without saving
+		 * registers.
+		 */
+#endif
+	secure_writel(1, MSM_TCSR_BASE + TCSR_WDT_CFG);
+	delay_time = msecs_to_jiffies(PET_DELAY);
+
+	/* 32768 ticks = 1 second */
+	writel(32768*4, WDT0_BARK_TIME);
+	writel(32768*5, WDT0_BITE_TIME);
+
+	ret = register_pm_notifier(&msm_watchdog_power_notifier);
+	if (ret)
+		return ret;
+
+	ret = request_irq(WDT0_ACCSCSSNBARK_INT, wdog_bark_handler, 0,
+			  "apps_wdog_bark", NULL);
+	if (ret)
+		return ret;
+
+	INIT_DELAYED_WORK(&dogwork_struct, pet_watchdog);
+	schedule_delayed_work(&dogwork_struct, delay_time);
+
+	atomic_notifier_chain_register(&panic_notifier_list,
+				       &panic_blk);
+
+	writel(1, WDT0_EN);
+	writel(1, WDT0_RST);
+	last_pet = sched_clock();
+
+	printk(KERN_INFO "MSM Watchdog Initialized\n");
 
 	return 0;
 }

@@ -38,6 +38,14 @@
 #define MVS_AMR_SET_AMR_MODE_PROC 7
 #define MVS_AMR_SET_AWB_MODE_PROC 8
 #define MVS_VOC_SET_FRAME_RATE_PROC 10
+#define MVS_GSM_SET_DTX_MODE_PROC 11
+#define MVS_G729A_SET_MODE_PROC 12
+#define MVS_G711_GET_MODE_PROC 14
+#define MVS_G711_SET_MODE_PROC 15
+#define MVS_G711A_GET_MODE_PROC 16
+#define MVS_G711A_SET_MODE_PROC 17
+#define MVS_G722_SET_MODE_PROC 20
+#define MVS_G722_GET_MODE_PROC 21
 #define MVS_SET_DTX_MODE_PROC 22
 
 #define MVS_EVENT_CB_TYPE_PROC 1
@@ -52,8 +60,22 @@
 #define MVS_FRAME_MODE_VOC_RX 2
 #define MVS_FRAME_MODE_AMR_UL 3
 #define MVS_FRAME_MODE_AMR_DL 4
+#define MVS_FRAME_MODE_GSM_UL 5
+#define MVS_FRAME_MODE_GSM_DL 6
+#define MVS_FRAME_MODE_HR_UL 7
+#define MVS_FRAME_MODE_HR_DL 8
+#define MVS_FRAME_MODE_G711_UL 9
+#define MVS_FRAME_MODE_G711_DL 10
 #define MVS_FRAME_MODE_PCM_UL 13
 #define MVS_FRAME_MODE_PCM_DL 14
+#define MVS_FRAME_MODE_G729A_UL 17
+#define MVS_FRAME_MODE_G729A_DL 18
+#define MVS_FRAME_MODE_G711A_UL 19
+#define MVS_FRAME_MODE_G711A_DL 20
+#define MVS_FRAME_MODE_G722_UL 21
+#define MVS_FRAME_MODE_G722_DL 22
+
+
 
 #define MVS_PKT_CONTEXT_ISR 0x00000001
 
@@ -149,6 +171,37 @@ struct audio_mvs_set_voc_mode_msg {
 	uint32_t min_rate;
 };
 
+/* Parameters for G711 mode */
+struct audio_mvs_set_g711_mode_msg {
+	struct rpc_request_hdr rpc_hdr;
+	uint32_t g711_mode;
+};
+
+/* Parameters for G729 mode */
+struct audio_mvs_set_g729_mode_msg {
+	struct rpc_request_hdr rpc_hdr;
+	uint32_t g729_mode;
+};
+
+/* Parameters for G722 mode */
+struct audio_mvs_set_g722_mode_msg {
+	struct rpc_request_hdr rpc_hdr;
+	uint32_t g722_mode;
+};
+
+
+/* Parameters for G711A mode */
+struct audio_mvs_set_g711A_mode_msg {
+	struct rpc_request_hdr rpc_hdr;
+	uint32_t g711A_mode;
+};
+
+/* Parameters for EFR FR and HR mode */
+struct audio_mvs_set_efr_mode_msg {
+	struct rpc_request_hdr rpc_hdr;
+	uint32_t efr_mode;
+};
+
 union audio_mvs_event_data {
 	struct mvs_ev_command_type {
 		uint32_t event;
@@ -235,6 +288,7 @@ struct audio_mvs_info_type {
 	uint32_t mvs_mode;
 	uint32_t buf_free_cnt;
 	uint32_t rate_type;
+	uint32_t dtx_mode;
 
 	struct msm_rpc_endpoint *rpc_endpt;
 	uint32_t rpc_prog;
@@ -265,115 +319,312 @@ struct audio_mvs_info_type {
 
 static struct audio_mvs_info_type audio_mvs_info;
 
-static int audio_mvs_setup_amr(struct audio_mvs_info_type *audio)
+static int audio_mvs_setup_mode(struct audio_mvs_info_type *audio)
 {
 	int rc = 0;
-	struct audio_mvs_set_amr_mode_msg set_amr_mode_msg;
-	struct audio_mvs_set_dtx_mode_msg set_dtx_mode_msg;
 
 	pr_debug("%s:\n", __func__);
 
-	/* Set AMR mode. */
-	memset(&set_amr_mode_msg, 0, sizeof(set_amr_mode_msg));
-	set_amr_mode_msg.amr_mode = cpu_to_be32(audio->rate_type);
+	switch (audio->mvs_mode) {
+	case MVS_MODE_AMR:
+	case MVS_MODE_AMR_WB: {
+		struct audio_mvs_set_amr_mode_msg set_amr_mode_msg;
+		struct audio_mvs_set_dtx_mode_msg set_dtx_mode_msg;
 
-	if (audio->mvs_mode == MVS_MODE_AMR) {
-		msm_rpc_setup_req(&set_amr_mode_msg.rpc_hdr,
-				  audio->rpc_prog,
-				  audio->rpc_ver,
-				  MVS_AMR_SET_AMR_MODE_PROC);
-	} else {
-		msm_rpc_setup_req(&set_amr_mode_msg.rpc_hdr,
-				  audio->rpc_prog,
-				  audio->rpc_ver,
-				  MVS_AMR_SET_AWB_MODE_PROC);
-	}
+		/* Set AMR mode. */
+		memset(&set_amr_mode_msg, 0, sizeof(set_amr_mode_msg));
+		set_amr_mode_msg.amr_mode = cpu_to_be32(audio->rate_type);
 
-	audio->rpc_status = RPC_STATUS_FAILURE;
-	rc = msm_rpc_write(audio->rpc_endpt,
-			   &set_amr_mode_msg,
-			   sizeof(set_amr_mode_msg));
-
-	if (rc >= 0) {
-		pr_debug("%s: RPC write for set amr mode done\n", __func__);
-
-		/* Save the MVS configuration information. */
-		audio->frame_mode = MVS_FRAME_MODE_AMR_DL;
-
-		/* Disable DTX. */
-		memset(&set_dtx_mode_msg, 0, sizeof(set_dtx_mode_msg));
-		set_dtx_mode_msg.dtx_mode = cpu_to_be32(0);
-
-		msm_rpc_setup_req(&set_dtx_mode_msg.rpc_hdr,
-				  audio->rpc_prog,
-				  audio->rpc_ver,
-				  MVS_SET_DTX_MODE_PROC);
+		if (audio->mvs_mode == MVS_MODE_AMR) {
+			msm_rpc_setup_req(&set_amr_mode_msg.rpc_hdr,
+					  audio->rpc_prog,
+					  audio->rpc_ver,
+					  MVS_AMR_SET_AMR_MODE_PROC);
+		} else {
+			msm_rpc_setup_req(&set_amr_mode_msg.rpc_hdr,
+					  audio->rpc_prog,
+					  audio->rpc_ver,
+					  MVS_AMR_SET_AWB_MODE_PROC);
+		}
 
 		audio->rpc_status = RPC_STATUS_FAILURE;
 		rc = msm_rpc_write(audio->rpc_endpt,
-				   &set_dtx_mode_msg,
-				   sizeof(set_dtx_mode_msg));
+				   &set_amr_mode_msg,
+				   sizeof(set_amr_mode_msg));
 
 		if (rc >= 0) {
-			pr_debug("%s: RPC write for set dtx done\n",
-					 __func__);
+			pr_debug("%s: RPC write for set amr mode done\n",
+					__func__);
+
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_AMR_DL;
+
+			/* Disable DTX. */
+			memset(&set_dtx_mode_msg, 0, sizeof(set_dtx_mode_msg));
+			set_dtx_mode_msg.dtx_mode = cpu_to_be32(0);
+
+			msm_rpc_setup_req(&set_dtx_mode_msg.rpc_hdr,
+					  audio->rpc_prog,
+					  audio->rpc_ver,
+					  MVS_SET_DTX_MODE_PROC);
+
+			audio->rpc_status = RPC_STATUS_FAILURE;
+			rc = msm_rpc_write(audio->rpc_endpt,
+					   &set_dtx_mode_msg,
+					   sizeof(set_dtx_mode_msg));
+
+			if (rc >= 0) {
+				pr_debug("%s: RPC write for set dtx done\n",
+						 __func__);
+
+				rc = 0;
+			}
+		} else {
+			pr_err("%s: RPC write for set amr mode failed %d\n",
+			       __func__, rc);
+		}
+		break;
+	}
+	case MVS_MODE_PCM:
+	case MVS_MODE_LINEAR_PCM: {
+		/* PCM does not have any params to be set.
+		Save the MVS configuration information. */
+		audio->rate_type = MVS_AMR_MODE_UNDEF;
+		audio->frame_mode = MVS_FRAME_MODE_PCM_DL;
+		break;
+	}
+	case MVS_MODE_IS127:
+	case MVS_MODE_IS733:
+	case MVS_MODE_4GV_NB:
+	case MVS_MODE_4GV_WB: {
+		struct audio_mvs_set_voc_mode_msg set_voc_mode_msg;
+
+		/* Set EVRC mode. */
+		memset(&set_voc_mode_msg, 0, sizeof(set_voc_mode_msg));
+		set_voc_mode_msg.min_rate = cpu_to_be32(audio->rate_type);
+		set_voc_mode_msg.max_rate = cpu_to_be32(audio->rate_type);
+
+		msm_rpc_setup_req(&set_voc_mode_msg.rpc_hdr,
+				  audio->rpc_prog,
+				  audio->rpc_ver,
+				  MVS_VOC_SET_FRAME_RATE_PROC);
+
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+				   &set_voc_mode_msg,
+				   sizeof(set_voc_mode_msg));
+
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set voc mode done\n",
+					__func__);
+
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_VOC_RX;
+
+			rc = 0;
+		} else {
+			pr_err("%s: RPC write for set voc mode failed %d\n",
+			       __func__, rc);
+		}
+		break;
+	}
+	case MVS_MODE_G711: {
+		struct audio_mvs_set_g711_mode_msg set_g711_mode_msg;
+
+		/* Set G711 mode. */
+		memset(&set_g711_mode_msg, 0, sizeof(set_g711_mode_msg));
+		set_g711_mode_msg.g711_mode = cpu_to_be32(audio->rate_type);
+
+		pr_debug("%s: mode of g711:%d\n",
+			       __func__, set_g711_mode_msg.g711_mode);
+
+		msm_rpc_setup_req(&set_g711_mode_msg.rpc_hdr,
+				 audio->rpc_prog,
+				 audio->rpc_ver,
+				 MVS_G711_SET_MODE_PROC);
+
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+				  &set_g711_mode_msg,
+				  sizeof(set_g711_mode_msg));
+
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set g711 mode done\n",
+					__func__);
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_G711_DL;
+
+			rc = 0;
+		} else {
+		       pr_err("%s: RPC write for set g711 mode failed %d\n",
+			      __func__, rc);
+		}
+		break;
+	}
+	case MVS_MODE_G729A: {
+		struct audio_mvs_set_g729_mode_msg set_g729_mode_msg;
+
+		/* Set G729 mode. */
+		memset(&set_g729_mode_msg, 0, sizeof(set_g729_mode_msg));
+		set_g729_mode_msg.g729_mode = cpu_to_be32(audio->dtx_mode);
+
+		pr_debug("%s: mode of g729:%d\n",
+			       __func__, set_g729_mode_msg.g729_mode);
+
+		msm_rpc_setup_req(&set_g729_mode_msg.rpc_hdr,
+				 audio->rpc_prog,
+				 audio->rpc_ver,
+				 MVS_G729A_SET_MODE_PROC);
+
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+				  &set_g729_mode_msg,
+				  sizeof(set_g729_mode_msg));
+
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set g729 mode done\n",
+			       __func__);
+
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_G729A_DL;
+
+			rc = 0;
+		} else {
+		       pr_err("%s: RPC write for set g729 mode failed %d\n",
+			      __func__, rc);
+		}
+		break;
+	}
+	case MVS_MODE_G722: {
+		struct audio_mvs_set_g722_mode_msg set_g722_mode_msg;
+
+		/* Set G722 mode. */
+		memset(&set_g722_mode_msg, 0, sizeof(set_g722_mode_msg));
+		set_g722_mode_msg.g722_mode = cpu_to_be32(audio->rate_type);
+
+		pr_debug("%s: mode of g722:%d\n",
+		      __func__, set_g722_mode_msg.g722_mode);
+
+		msm_rpc_setup_req(&set_g722_mode_msg.rpc_hdr,
+			audio->rpc_prog,
+			audio->rpc_ver,
+			MVS_G722_SET_MODE_PROC);
+
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+			 &set_g722_mode_msg,
+			 sizeof(set_g722_mode_msg));
+
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set g722 mode done\n",
+			__func__);
+
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_G722_DL;
 
 			rc = 0;
 		}
-	} else {
-		pr_err("%s: RPC write for set amr mode failed %d\n",
-		       __func__, rc);
+		break;
 	}
+	case MVS_MODE_G711A: {
+		struct audio_mvs_set_g711A_mode_msg set_g711A_mode_msg;
+		struct audio_mvs_set_dtx_mode_msg set_dtx_mode_msg;
 
-	return rc;
-}
+		/* Set G711A mode. */
+		memset(&set_g711A_mode_msg, 0, sizeof(set_g711A_mode_msg));
+		set_g711A_mode_msg.g711A_mode = cpu_to_be32(audio->rate_type);
 
-static int audio_mvs_setup_pcm(struct audio_mvs_info_type *audio)
-{
-	pr_debug("%s:\n", __func__);
+		pr_debug("%s: mode of g711A:%d\n",
+		       __func__, set_g711A_mode_msg.g711A_mode);
 
-	/* PCM does not have any params to be set. Save the MVS configuration
-	 * information. */
-	audio->rate_type = MVS_AMR_MODE_UNDEF;
-	audio->frame_mode = MVS_FRAME_MODE_PCM_DL;
+		msm_rpc_setup_req(&set_g711A_mode_msg.rpc_hdr,
+			 audio->rpc_prog,
+			 audio->rpc_ver,
+			 MVS_G711A_SET_MODE_PROC);
 
-	return 0;
-}
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+			  &set_g711A_mode_msg,
+			  sizeof(set_g711A_mode_msg));
 
-static int audio_mvs_setup_voc(struct audio_mvs_info_type *audio)
-{
-	int rc = 0;
-	struct audio_mvs_set_voc_mode_msg set_voc_mode_msg;
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set g711A mode done\n",
+				       __func__);
 
-	pr_debug("%s:\n", __func__);
+			/* Save the MVS configuration information. */
+			audio->frame_mode = MVS_FRAME_MODE_G711A_DL;
+			/* Set DTX MODE. */
+			memset(&set_dtx_mode_msg, 0, sizeof(set_dtx_mode_msg));
+			set_dtx_mode_msg.dtx_mode =
+				cpu_to_be32((audio->dtx_mode));
 
-	/* Set EVRC mode. */
-	memset(&set_voc_mode_msg, 0, sizeof(set_voc_mode_msg));
-	set_voc_mode_msg.min_rate = cpu_to_be32(audio->rate_type);
-	set_voc_mode_msg.max_rate = cpu_to_be32(audio->rate_type);
+			msm_rpc_setup_req(&set_dtx_mode_msg.rpc_hdr,
+					  audio->rpc_prog,
+					  audio->rpc_ver,
+					  MVS_SET_DTX_MODE_PROC);
 
-	msm_rpc_setup_req(&set_voc_mode_msg.rpc_hdr,
-			  audio->rpc_prog,
-			  audio->rpc_ver,
-			  MVS_VOC_SET_FRAME_RATE_PROC);
+			audio->rpc_status = RPC_STATUS_FAILURE;
+			rc = msm_rpc_write(audio->rpc_endpt,
+					   &set_dtx_mode_msg,
+					   sizeof(set_dtx_mode_msg));
 
-	audio->rpc_status = RPC_STATUS_FAILURE;
-	rc = msm_rpc_write(audio->rpc_endpt,
-			   &set_voc_mode_msg,
-			   sizeof(set_voc_mode_msg));
+			if (rc >= 0) {
+				pr_debug("%s: RPC write for set dtx done\n",
+						 __func__);
 
-	if (rc >= 0) {
-		pr_debug("%s: RPC write for set voc mode done\n", __func__);
-
-		/* Save the MVS configuration information. */
-		audio->frame_mode = MVS_FRAME_MODE_VOC_RX;
-
-		rc = 0;
-	} else {
-		pr_err("%s: RPC write for set voc mode failed %d\n",
-		       __func__, rc);
+				rc = 0;
+			}
+			rc = 0;
+		} else {
+		pr_err("%s: RPC write for set g711A mode failed %d\n",
+		      __func__, rc);
+		}
+		break;
 	}
+	case MVS_MODE_EFR:
+	case MVS_MODE_FR:
+	case MVS_MODE_HR: {
+		struct audio_mvs_set_efr_mode_msg set_efr_mode_msg;
 
+		/* Set G729 mode. */
+		memset(&set_efr_mode_msg, 0, sizeof(set_efr_mode_msg));
+		set_efr_mode_msg.efr_mode = cpu_to_be32(audio->dtx_mode);
+
+		pr_debug("%s: mode of EFR, FR and HR:%d\n",
+			       __func__, set_efr_mode_msg.efr_mode);
+
+		msm_rpc_setup_req(&set_efr_mode_msg.rpc_hdr,
+				 audio->rpc_prog,
+				 audio->rpc_ver,
+				 MVS_GSM_SET_DTX_MODE_PROC);
+
+		audio->rpc_status = RPC_STATUS_FAILURE;
+		rc = msm_rpc_write(audio->rpc_endpt,
+				  &set_efr_mode_msg,
+				  sizeof(set_efr_mode_msg));
+
+		if (rc >= 0) {
+			pr_debug("%s: RPC write for set EFR, FR and HR mode done\n",
+			       __func__);
+
+			/* Save the MVS configuration information. */
+			if ((audio->mvs_mode == MVS_MODE_EFR) ||
+				(audio->mvs_mode == MVS_MODE_FR))
+				audio->frame_mode = MVS_FRAME_MODE_GSM_DL;
+			if (audio->mvs_mode == MVS_MODE_HR)
+				audio->frame_mode = MVS_FRAME_MODE_HR_DL;
+
+			rc = 0;
+		} else {
+		       pr_err("%s: RPC write for set EFR, FR and HR mode failed %d\n",
+			      __func__, rc);
+		}
+		break;
+	}
+	default:
+		rc = -EINVAL;
+		pr_err("Default case\n");
+	}
 	return rc;
 }
 
@@ -410,20 +661,12 @@ static int audio_mvs_setup(struct audio_mvs_info_type *audio)
 		if (rc > 0) {
 			pr_debug("%s: Wait event for enable succeeded\n",
 				 __func__);
-
-			if (audio->mvs_mode == MVS_MODE_AMR ||
-			    audio->mvs_mode == MVS_MODE_AMR_WB) {
-				rc = audio_mvs_setup_amr(audio);
-			} else if (audio->mvs_mode == MVS_MODE_PCM ||
-				   audio->mvs_mode == MVS_MODE_LINEAR_PCM) {
-				rc = audio_mvs_setup_pcm(audio);
-			} else if (audio->mvs_mode == MVS_MODE_IS127) {
-				rc = audio_mvs_setup_voc(audio);
-			} else {
+			rc = audio_mvs_setup_mode(audio);
+			if (rc < 0) {
 				pr_err("%s: Unknown MVS mode %d\n",
 				       __func__, audio->mvs_mode);
-				rc = -EINVAL;
 			}
+			pr_err("rc value after mode setup: %d\n", rc);
 		} else {
 			pr_err("%s: Wait event for enable failed %d\n",
 			       __func__, rc);
@@ -682,6 +925,37 @@ static void audio_mvs_process_rpc_request(uint32_t procedure,
 				   (frame_mode == MVS_FRAME_MODE_VOC_TX)) {
 				/* PCM and EVRC don't have frame_type */
 				buf_node->frame.frame_type = 0;
+			} else if (frame_mode == MVS_FRAME_MODE_G711_UL) {
+				/* Extract G711 frame type. */
+				buf_node->frame.frame_type = be32_to_cpu(*args);
+
+				pr_debug("%s: UL G711 frame_type %d\n",
+					__func__, be32_to_cpu(*args));
+			} else if (frame_mode == MVS_FRAME_MODE_G729A_UL) {
+				/* Extract G729 frame type. */
+				buf_node->frame.frame_type = be32_to_cpu(*args);
+
+				pr_debug("%s: UL G729 frame_type %d\n",
+					__func__, be32_to_cpu(*args));
+			} else if (frame_mode == MVS_FRAME_MODE_G722_UL) {
+				/* Extract G722 frame type. */
+				buf_node->frame.frame_type = be32_to_cpu(*args);
+
+				pr_debug("%s: UL G722 frame_type %d\n",
+				       __func__, be32_to_cpu(*args));
+			} else if (frame_mode == MVS_FRAME_MODE_G711A_UL) {
+				/* Extract G711A frame type. */
+				buf_node->frame.frame_type = be32_to_cpu(*args);
+
+				pr_debug("%s: UL G711A frame_type %d\n",
+				       __func__, be32_to_cpu(*args));
+			} else if ((frame_mode == MVS_FRAME_MODE_GSM_UL) ||
+				   (frame_mode == MVS_FRAME_MODE_HR_UL)) {
+				/* Extract EFR, FR and HR frame type. */
+				buf_node->frame.frame_type = be32_to_cpu(*args);
+
+				pr_debug("%s: UL EFR,FR,HR frame_type %d\n",
+					__func__, be32_to_cpu(*args));
 			} else {
 				pr_debug("%s: UL Unknown frame mode %d\n",
 				       __func__, frame_mode);
@@ -758,6 +1032,7 @@ static void audio_mvs_process_rpc_request(uint32_t procedure,
 			       &buf_node->frame.voc_pkt[0],
 			       buf_node->frame.len);
 
+			pr_debug("%s:frame mode %d\n", __func__, frame_mode);
 			if (frame_mode == MVS_FRAME_MODE_AMR_DL) {
 				dl_reply.param1 = cpu_to_be32(
 					buf_node->frame.frame_type);
@@ -768,6 +1043,27 @@ static void audio_mvs_process_rpc_request(uint32_t procedure,
 			} else if (frame_mode == MVS_FRAME_MODE_VOC_RX) {
 				dl_reply.param1 = cpu_to_be32(audio->rate_type);
 				dl_reply.param2 = 0;
+			} else if (frame_mode == MVS_FRAME_MODE_G711_DL) {
+				dl_reply.param1 = cpu_to_be32(
+				       buf_node->frame.frame_type);
+				dl_reply.param2 = cpu_to_be32(audio->rate_type);
+			} else if (frame_mode == MVS_FRAME_MODE_G729A_DL) {
+				dl_reply.param1 = cpu_to_be32(
+				       buf_node->frame.frame_type);
+				dl_reply.param2 = cpu_to_be32(audio->rate_type);
+			} else if (frame_mode == MVS_FRAME_MODE_G722_DL) {
+				dl_reply.param1 = cpu_to_be32(
+				      buf_node->frame.frame_type);
+				dl_reply.param2 = cpu_to_be32(audio->rate_type);
+			} else if (frame_mode == MVS_FRAME_MODE_G711A_DL) {
+				dl_reply.param1 = cpu_to_be32(
+				       buf_node->frame.frame_type);
+				dl_reply.param2 = cpu_to_be32(audio->rate_type);
+			} else if ((frame_mode == MVS_FRAME_MODE_GSM_DL) ||
+				   (frame_mode == MVS_FRAME_MODE_HR_DL)) {
+				dl_reply.param1 = cpu_to_be32(
+				       buf_node->frame.frame_type);
+				dl_reply.param2 = cpu_to_be32(audio->rate_type);
 			} else {
 				pr_debug("%s: DL Unknown frame mode %d\n",
 				       __func__, frame_mode);
@@ -1209,6 +1505,7 @@ static long audio_mvs_ioctl(struct file *file,
 			if (audio->state == AUDIO_MVS_OPENED) {
 				audio->mvs_mode = config.mvs_mode;
 				audio->rate_type = config.rate_type;
+				audio->dtx_mode = config.dtx_mode;
 			} else {
 				pr_err("%s: Set confg called in state %d\n",
 				       __func__, audio->state);

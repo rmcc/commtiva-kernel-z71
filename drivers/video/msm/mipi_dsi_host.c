@@ -41,15 +41,15 @@
 
 #include "msm_fb.h"
 #include "mipi_dsi.h"
+#include "mdp.h"
+#include "mdp4.h"
 
-static struct mutex dsi_mutex;
 static struct completion dsi_dma_comp;
 static struct dsi_buf dsi_tx_buf;
 
 void mipi_dsi_init(void)
 {
 	init_completion(&dsi_dma_comp);
-	mutex_init(&dsi_mutex);
 	mipi_dsi_buf_alloc(&dsi_tx_buf, DSI_BUF_SIZE);
 }
 
@@ -751,22 +751,20 @@ static char set_tear_off[2] = {0x34, 0x00};
 static struct dsi_cmd_desc dsi_tear_off_cmd = {
 	DTYPE_DCS_WRITE, 1, 0, 0, 0, sizeof(set_tear_off), set_tear_off};
 
-void mipi_dsi_set_tear_on(void)
+void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd)
 {
-	mutex_lock(&dsi_mutex);
-
+	mutex_lock(&mfd->dma->ov_mutex);
 	mipi_dsi_buf_init(&dsi_tx_buf);
-	mipi_dsi_cmds_tx(&dsi_tx_buf, &dsi_tear_on_cmd, 1);
-	mutex_unlock(&dsi_mutex);
+	mipi_dsi_cmds_tx(mfd, &dsi_tx_buf, &dsi_tear_on_cmd, 1);
+	mutex_unlock(&mfd->dma->ov_mutex);
 }
 
-void mipi_dsi_set_tear_off(void)
+void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd)
 {
-	mutex_lock(&dsi_mutex);
-
+	mutex_lock(&mfd->dma->ov_mutex);
 	mipi_dsi_buf_init(&dsi_tx_buf);
-	mipi_dsi_cmds_tx(&dsi_tx_buf, &dsi_tear_off_cmd, 1);
-	mutex_unlock(&dsi_mutex);
+	mipi_dsi_cmds_tx(mfd, &dsi_tx_buf, &dsi_tear_off_cmd, 1);
+	mutex_unlock(&mfd->dma->ov_mutex);
 }
 
 int mipi_dsi_cmd_reg_tx(uint32 data)
@@ -798,10 +796,31 @@ int mipi_dsi_cmd_reg_tx(uint32 data)
 	return 4;
 }
 
-int mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *cmds, int cnt)
+/*
+ * mipi_dsi_cmds_tx:
+ * ov_mutex need to be acquired before call this function.
+ */
+int mipi_dsi_cmds_tx(struct msm_fb_data_type *mfd,
+		struct dsi_buf *tp, struct dsi_cmd_desc *cmds, int cnt)
 {
 	struct dsi_cmd_desc *cm;
-	int i;
+	uint32 dsi_ctrl, ctrl;
+	int i, video_mode;
+
+	/* turn on cmd mode
+	* for video mode, do not send cmds more than
+	* one pixel line, since it only transmit it
+	* during BLLP.
+	*/
+	dsi_ctrl = MIPI_INP(MIPI_DSI_BASE + 0x0000);
+	video_mode = dsi_ctrl & 0x02; /* VIDEO_MODE_EN */
+	if (video_mode) {
+		ctrl = dsi_ctrl | 0x04; /* CMD_MODE_EN */
+		MIPI_OUTP(MIPI_DSI_BASE + 0x0000, ctrl);
+	} else { /* cmd mode */
+		/* make sure mdp dma is not txing pixel data */
+		mdp4_dsi_cmd_dma_busy_wait(mfd);
+	}
 
 	cm = cmds;
 	mipi_dsi_buf_init(tp);
@@ -814,6 +833,9 @@ int mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *cmds, int cnt)
 		cm++;
 	}
 
+	if (video_mode)
+		MIPI_OUTP(MIPI_DSI_BASE + 0x0000, dsi_ctrl); /* restore */
+
 	return cnt;
 }
 
@@ -823,9 +845,12 @@ int mipi_dsi_cmds_tx(struct dsi_buf *tp, struct dsi_cmd_desc *cmds, int cnt)
  * currently, we set MAX_RETURN_PAKET_SIZE to 4 to align with 32 bits
  * register
  * currently, only MAX_RETURN_PACKET_SIZE (4) bytes per read
+ *
+ * ov_mutex need to be acquired before call this function.
  */
-int mipi_dsi_cmds_rx(struct dsi_buf *tp, struct dsi_buf *rp,
-				struct dsi_cmd_desc *cmds, int len)
+int mipi_dsi_cmds_rx(struct msm_fb_data_type *mfd,
+			struct dsi_buf *tp, struct dsi_buf *rp,
+			struct dsi_cmd_desc *cmds, int len)
 {
 	int cnt, res;
 
@@ -845,6 +870,10 @@ int mipi_dsi_cmds_rx(struct dsi_buf *tp, struct dsi_buf *rp,
 
 	mipi_dsi_buf_init(tp);
 	mipi_dsi_cmd_dma_add(tp, cmds);
+
+	/* make sure mdp dma is not txing pixel data */
+	mdp4_dsi_cmd_dma_busy_wait(mfd);
+
 	/* transmit read comamnd to client */
 	mipi_dsi_cmd_dma_tx(tp);
 	/*

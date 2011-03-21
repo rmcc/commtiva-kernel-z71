@@ -43,6 +43,7 @@ config ARCH_MSM7X30
 	select DONT_RESERVE_FROM_MOVABLE_ZONE
 	select MSM_GPIOMUX
 	select RESERVE_FIRST_PAGE
+	select MSM_DALRPC
 
 config ARCH_QSD8X50
 	bool "QSD8X50"
@@ -52,6 +53,7 @@ config ARCH_QSD8X50
 	select MSM_REMOTE_SPINLOCK_LDREX
 	select EMULATE_DOMAIN_MANAGER_V7
 	select MSM_GPIOMUX
+	select MSM_DALRPC
 
 config ARCH_MSM8X60
 	bool "MSM8X60"
@@ -73,6 +75,7 @@ config ARCH_MSM8X60
 	select MSM_GPIOMUX
 	select MSM_BUS_SCALING
 	select MSM_SECURE_IO
+	select MSM_DALRPC
 
 config ARCH_MSM8960
 	bool "MSM8960"
@@ -849,7 +852,7 @@ config MSM_SDIO_CTL
 
 config MSM_ONCRPCROUTER
 	depends on MSM_SMD
-	default y
+	default n
 	bool "MSM ONCRPC router support"
 	help
 	  Support for the MSM ONCRPC router for communication between
@@ -1126,14 +1129,6 @@ config SURF_FFA_GPIO_KEYPAD
 	help
 	  Select if the GPIO keypad is attached.
 
-config CLOCK_BASED_SLEEP_LIMIT
-	default y
-	bool "Set sleep limitation based on clock usage"
-	help
-	  The application processor checks for enabled clocks and
-	  decides accordingly the sleep limitation which it informs
-	  the modem to use.
-
 config MSM_SLEEP_TIME_OVERRIDE
 	bool "Allow overriding suspend/sleep time with PM module parameter"
 	default y
@@ -1326,6 +1321,13 @@ config MSM_DLOAD_MODE
 		due to a kernel panic. Note that this doesn't by itself
 		make the kernel reboot on a kernel panic - that must be
 		enabled via another mechanism.
+
+config MSM_ETM
+	tristate "Enable MSM ETM and ETB"
+	depends on ARCH_MSM8X60
+	select MSM_JTAG_V7
+	help
+		This enables embedded trace collection on Qualcomm v7 CPUs.
 
 config MSM_SLEEP_STATS
 	bool "Enable exporting of MSM sleep stats to userspace"

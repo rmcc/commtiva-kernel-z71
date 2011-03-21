@@ -199,17 +199,13 @@ enum clk_sources {
 	PLL_2,
 	PLL_3,
 	PLL_4,
-	PLL_5,
 	PLL_6,
 	PLL_7,
 	PLL_8,
-	MXO,
 	PXO,
 	CXO,
 	NUM_SRC
 };
-
-extern struct clk_local soc_clk_local_tbl_mxo[];
 
 struct pll_rate {
 	const uint32_t	l_val;

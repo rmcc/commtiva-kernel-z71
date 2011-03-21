@@ -50,6 +50,12 @@
 #define BYTES_PER_BLOCK             (3)
 #define MAX_PS_LENGTH              (96)
 #define MAX_RT_LENGTH              (64)
+#define INTDET_PEEK                (0x42)
+#define XFRDAT0                    (0x20)
+#define XFRDAT1                    (0x21)
+#define XFRDAT2                    (0x22)
+#define INTDET_PEEK_MSB            (0x88)
+#define INTDET_PEEK_LSB            (0x26)
 
 /* Standard buffer size */
 #define STD_BUF_SIZE               (64)
@@ -140,7 +146,9 @@ enum v4l2_cid_private_tavarua_t {
 	/*v4l2 Tx controls*/
 	V4L2_CID_PRIVATE_TAVARUA_TX_SETPSREPEATCOUNT,
 	V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_PS_NAME,
-	V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_RT
+	V4L2_CID_PRIVATE_TAVARUA_STOP_RDS_TX_RT,
+	V4L2_CID_PRIVATE_TAVARUA_IOVERC,
+	V4L2_CID_PRIVATE_TAVARUA_INTDET,
 };
 
 enum tavarua_buf_t {
@@ -194,6 +202,7 @@ enum register_t {
 	ADVCTRL,
 	AUDIOCTRL,
 	RMSSI,
+	IOVERC,
 	AUDIOIND = 0x1E,
 	XFRCTRL,
 	FM_CTL0 = 0xFF,
@@ -325,6 +334,9 @@ enum radio_state_t {
 #define	RDSPROC		(1 << 1) /* Dynamic RDS Processing complete */
 #define	ERROR		(1 << 7) /* Err occurred.Read code to determine cause */
 
+
+#define	FM_TX_PWR_LVL_0		0 /* Lowest power lvl that can be set for Tx */
+#define	FM_TX_PWR_LVL_MAX	7 /* Max power lvl for Tx */
 /* Transfer */
 enum tavarua_xfr_ctrl_t {
 	RDS_PS_0 = 0x01,
@@ -379,7 +391,8 @@ enum tavarua_xfr_ctrl_t {
 	DIG_MOST,
 	DIG_TX_0,
 	DIG_TX_1,
-	PHY_CONFIG = 0x3C,
+	PHY_TXGAIN = 0x3B,
+	PHY_CONFIG,
 	PHY_TXBLOCK,
 	PHY_TCB,
 	TAVARUA_XFR_CTRL_MAX

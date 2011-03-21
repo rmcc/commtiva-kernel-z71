@@ -40,6 +40,8 @@ obj-$(CONFIG_CPU_V6) += idle-v6.o
 obj-$(CONFIG_CPU_V7) += idle-v7.o
 obj-$(CONFIG_MSM_JTAG_V7) += jtag-v7.o
 
+msm-etm-objs := cp14.o etm.o
+obj-$(CONFIG_MSM_ETM) += msm-etm.o
 
 quiet_cmd_mkrpcsym = MKCAP   $@
       cmd_mkrpcsym = $(PERL) $(srctree)/$(src)/mkrpcsym.pl $< $@
@@ -62,13 +64,16 @@ obj-$(CONFIG_MSM_SDIO_DMUX) += sdio_dmux.o
 obj-$(CONFIG_MSM_SMD_LOGGING) += smem_log.o
 obj-$(CONFIG_MSM_SMD) += smd.o smd_debug.o remote_spinlock.o
 ifndef CONFIG_ARCH_MSM7X27A
-        obj-$(CONFIG_MSM_SMD) += socinfo.o
+        obj-y += socinfo.o
 endif
+ifndef CONFIG_ARCH_MSM8960
 ifndef CONFIG_ARCH_MSM8X60
 ifndef CONFIG_ARCH_MSM7X27A
-	obj-$(CONFIG_MSM_SMD) += pmic.o nand_partitions.o
+	obj-$(CONFIG_MSM_SMD) += pmic.o
 endif
+	obj-$(CONFIG_MSM_SMD) += nand_partitions.o
 	obj-$(CONFIG_MSM_ONCRPCROUTER) += rpc_hsusb.o rpc_pmapp.o rpc_fsusb.o
+endif
 endif
 obj-$(CONFIG_MSM_SMD_TTY) += smd_tty.o
 obj-$(CONFIG_MSM_SMD_QMI) += smd_qmi.o
@@ -180,10 +185,7 @@ obj-$(CONFIG_ARCH_MSM7X30) += spm.o
 obj-$(CONFIG_MSM_RPM) += rpm.o rpm_resources.o mpm.o
 obj-$(CONFIG_MSM_RPM_LOG) += rpm_log.o
 obj-$(CONFIG_MSM_XO) += msm_xo.o
-obj-$(CONFIG_MSM_BUS_SCALING)	+= msm_bus_core.o msm_bus_fabric.o msm_bus_board_8660.o
-ifdef CONFIG_MSM_BUS_SCALING
-obj-$(CONFIG_DEBUG_FS) += msm_bus_dbg.o
-endif
+obj-$(CONFIG_MSM_BUS_SCALING) += msm_bus/
 
 obj-$(CONFIG_MSM_IOMMU)		+= iommu.o iommu_dev.o devices-iommu.o
 

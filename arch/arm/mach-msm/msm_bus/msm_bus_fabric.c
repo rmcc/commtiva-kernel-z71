@@ -25,8 +25,8 @@
 #include <linux/radix-tree.h>
 #include <mach/clk.h>
 #include <mach/board.h>
+#include <mach/rpm.h>
 #include "msm_bus_core.h"
-#include "rpm.h"
 
 #define BWMASK 0x7FFF
 #define TIERMASK 0x8000
@@ -133,7 +133,7 @@ static int register_fabric_info(struct msm_bus_fabric *fabric)
 	for (i = 0; i < fabric->pdata->len; i++) {
 		struct msm_bus_inode_info *info;
 		info = kzalloc(sizeof(struct msm_bus_inode_info), GFP_KERNEL);
-		info->node_info = fabric->pdata->info++;
+		info->node_info = fabric->pdata->info + i;
 		info->commit_index = -1;
 		info->num_pnodes = -1;
 		if (info->node_info->slaveclk) {
@@ -258,7 +258,7 @@ static int msm_bus_fabric_rpm_commit(struct msm_bus_fabric_device *fabdev,
 		i = 0;
 
 	/* Copy arb values to rpm data */
-	for (; i <= (fabric->pdata->ntieredslaves * fabric->pdata->nmasters);
+	for (; i < (fabric->pdata->ntieredslaves * fabric->pdata->nmasters);
 		i += 2) {
 		rpm_data[index].id = offset + index;
 		rpm_data[index].value = RPM_SHIFT(*(cdata->arb + i + 1)) |
@@ -301,36 +301,34 @@ static int msm_bus_fabric_rpm_commit(struct msm_bus_fabric_device *fabdev,
  * @fabric: Fabric for which the clocks need to be updated
  * @slave: The node for which the clocks need to be updated
  * @index: The index for which the current clocks are set
- * @curr_clk:Current clock value
- * @req_clk: Requested clock value
+ * @curr_clk_hz:Current clock value
+ * @req_clk_hz: Requested clock value
  * @bwsum: Bandwidth Sum
  * @clk_flag: Flag determining whether fabric clock or the slave clock has to
  * be set. If clk_flag is set, fabric clock is set, else slave clock is set.
  */
 static int msm_bus_fabric_update_clks(struct msm_bus_fabric_device *fabdev,
 		struct msm_bus_inode_info *slave, int index,
-		unsigned long curr_clk, unsigned long req_clk,
-		unsigned long bwsum, int clk_flag, int context,
+		unsigned long curr_clk_hz, unsigned long req_clk_hz,
+		unsigned long bwsum_hz, int clk_flag, int context,
 		unsigned int cl_active_flag)
 {
 	int i, status = 0;
 	unsigned long max_pclk = 0;
 	unsigned long *pclk = NULL;
-	unsigned long pclk_freq;
-	unsigned long max_pclk_freq;
 	struct msm_bus_fabric *fabric = to_msm_bus_fabric(fabdev);
 	struct clk *select_clk;
 
 	/* Maximum for this gateway */
 	for (i = 0; i <= slave->num_pnodes; i++) {
-		if (i == index && (req_clk < curr_clk))
+		if (i == index && (req_clk_hz < curr_clk_hz))
 			continue;
 		SELECT_CLK_VAL(context, slave->pnode[i]);
 		max_pclk = max(max_pclk, *slave->pnode[i].sel_clk);
 	}
 
 	*slave->link_info.sel_clk =
-		max(max_pclk, max(MSM_BUS_GET_BW_BYTES(bwsum), req_clk));
+		max(max_pclk, max(bwsum_hz, req_clk_hz));
 	/* Is this gateway or slave? */
 	if (clk_flag && (!fabric->ahb)) {
 		struct msm_bus_fabnodeinfo *fabgw = NULL;
@@ -345,32 +343,20 @@ static int msm_bus_fabric_update_clks(struct msm_bus_fabric_device *fabdev,
 		}
 		MSM_FAB_DBG("max_pclk from gateways: %lu\n", max_pclk);
 
-		/*
-		 * Maximum of all slave clocks.
-		 *
-		 * The clock values are maintained as bandwidth but the bus
-		 * width needs to be taken into consideration.  Therefore
-		 * convert to frequency values to find the max and then
-		 * convert back to bandwidth
-		 */
-		max_pclk_freq =
-			BW_TO_CLK_FREQ_HZ(slave->node_info->buswidth, max_pclk);
+		/* Maximum of all slave clocks. */
 
-		for (i = 0; i < fabric->pdata->nslaves; i++) {
+		for (i = 0; i < fabric->pdata->len; i++) {
+			if (fabric->pdata->info[i].gateway ||
+				(fabric->pdata->info[i].id < SLAVE_ID_KEY))
+				continue;
 			info = radix_tree_lookup(&fabric->fab_tree,
-				(fabric->fabdev.id + SLAVE_ID_KEY + i));
+				fabric->pdata->info[i].priv_id);
 			if (!info)
 				continue;
-
 			SELECT_CLK_VAL(context, info->link_info);
-			max_pclk_freq = max(max_pclk_freq,
-				BW_TO_CLK_FREQ_HZ(info->node_info->buswidth,
-						*info->link_info.sel_clk));
+			max_pclk = max(max_pclk, *info->link_info.sel_clk);
 		}
 
-		/* Convert back to bandwidth */
-		max_pclk = FAB_MAX_BW_BYTES(slave->node_info->buswidth,
-						max_pclk_freq);
 
 		MSM_FAB_DBG("max_pclk from slaves & gws: %lu\n", max_pclk);
 		SELECT_CLK_VAL(context, fabric->info.link_info);
@@ -380,13 +366,8 @@ static int msm_bus_fabric_update_clks(struct msm_bus_fabric_device *fabdev,
 		pclk = slave->link_info.sel_clk;
 	}
 
-	if (!slave->node_info->buswidth) {
-		slave->node_info->buswidth = 8;
-		MSM_FAB_DBG("Invalid width!, using default width 8\n");
-	}
 
-	*pclk = max(max_pclk, max(MSM_BUS_GET_BW_BYTES(bwsum), req_clk));
-	pclk_freq = BW_TO_CLK_FREQ_HZ(slave->node_info->buswidth, *pclk);
+	*pclk = max(max_pclk, max(bwsum_hz, req_clk_hz));
 
 	if (!fabric->pdata->rpm_enabled)
 		goto skip_set_clks;
@@ -400,19 +381,19 @@ static int msm_bus_fabric_update_clks(struct msm_bus_fabric_device *fabdev,
 		 * is selected.
 		 */
 		if (select_clk && (!(context ^ cl_active_flag))) {
-			MSM_FAB_DBG("clks: id: %d set-clk: %lu bwsum:%lu\n",
-			fabric->fabdev.id, pclk_freq, bwsum);
-			status = clk_set_min_rate(select_clk, pclk_freq);
+			MSM_FAB_DBG("clks: id: %d set-clk: %lu bwsum_hz:%lu\n",
+			fabric->fabdev.id, *pclk, bwsum_hz);
+			status = clk_set_min_rate(select_clk, *pclk);
 		}
 	} else {
-		MSM_FAB_DBG("AXI_clks: id: %d set-clk: %lu  bwsum:%lu\n" ,
-			slave->node_info->priv_id, pclk_freq, bwsum);
+		MSM_FAB_DBG("AXI_clks: id: %d set-clk: %lu  bwsum_hz:%lu\n" ,
+			slave->node_info->priv_id, *pclk, bwsum_hz);
 		select_clk = SELECT_CLK_PTR(context, slave);
 		if (select_clk && (!(context ^ cl_active_flag))) {
-			status = clk_set_min_rate(select_clk, pclk_freq);
+			status = clk_set_min_rate(select_clk, *pclk);
 			MSM_BUS_DBG("Trying to set clk, node id: %d val: %lu "
-				"status %d\n", slave->node_info->priv_id,
-				pclk_freq, status);
+				"status %d\n", slave->node_info->priv_id, *pclk,
+				status);
 		}
 		if (!status && slave->memclk &&
 			(!(context ^ cl_active_flag)))
@@ -648,7 +629,7 @@ static int allocate_commit_data(struct msm_bus_fabric *fabric,
 		return -ENOMEM;
 	}
 	(*cdata)->arb = kzalloc(((sizeof(uint16_t *)) *
-		fabric->pdata->ntieredslaves * fabric->pdata->nmasters),
+		(fabric->pdata->ntieredslaves * fabric->pdata->nmasters) + 1),
 		GFP_KERNEL);
 	if (!(*cdata)->arb) {
 		MSM_FAB_DBG("Couldn't alloc memory for"

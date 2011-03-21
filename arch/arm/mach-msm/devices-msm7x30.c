@@ -1053,7 +1053,6 @@ struct clk_lookup msm_clocks_7x30[] = {
 	CLK_VOTER("ebi1_lcdc_clk",	EBI_LCDC_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_mddi_clk",	EBI_MDDI_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_tv_clk",	EBI_TV_CLK,	"pbus_clk", NULL, 0),
-	CLK_VOTER("ebi1_usb_clk",	EBI_USB_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_vcd_clk",	EBI_VCD_CLK,	"pbus_clk", NULL, 0),
 	CLK_VOTER("ebi1_vfe_clk",	EBI_VFE_CLK,	"pbus_clk", NULL, 0),
 
@@ -1100,6 +1099,7 @@ struct clk_lookup msm_clocks_7x30[] = {
 	CLK_7X30("rotator_imem_clk",	ROTATOR_IMEM_CLK,	NULL, OFF),
 	CLK_7X30("rotator_pclk",	ROTATOR_P_CLK,		NULL, OFF),
 	CLK_7X30("sdac_clk",	SDAC_CLK,	NULL, OFF),
+	CLK_7X30("sdac_m_clk",	SDAC_M_CLK,	NULL, OFF),
 	CLK_7X30("sdc_clk",	SDC1_CLK,	"msm_sdcc.1", OFF),
 	CLK_7X30("sdc_pclk",	SDC1_P_CLK,	"msm_sdcc.1", OFF),
 	CLK_7X30("sdc_clk",	SDC2_CLK,	"msm_sdcc.2", OFF),
