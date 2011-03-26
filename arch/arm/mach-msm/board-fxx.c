@@ -94,14 +94,6 @@ void __init msm_power_register(void);
 //HVGA (420 x 320) preview + 5M (2592 x 1944) raw data + 512 x 384 thumbnail data
 #define MSM_PMEM_ADSP_SIZE	0x986000 // 0x201000 + 0x73D000 + 0x48000
 
-#ifndef CONFIG_MSM_KGSL_MMU
-//Need to enable GPU MMU feature
-//Need to use 5320 gles library
-//CONFIG_MSM_KGSL_MMU=y in kernel/arch/arm/configs/msm7627_defconfig
-//GPU RAM from 22 MB -> 16MB
-#define MSM_PMEM_GPU1_SIZE	0x1000000 
-#endif //CONFIG_MSM_KGSL_MMU  
-
 #define MSM_FB_SIZE		0xA0000
 #define PMEM_KERNEL_EBI1_SIZE	0x200000
 
@@ -496,14 +488,6 @@ static struct android_pmem_platform_data android_pmem_adsp_pdata = {
 	.cached = 0,
 };
 
-#ifndef CONFIG_MSM_KGSL_MMU
-static struct android_pmem_platform_data android_pmem_gpu1_pdata = {
-	.name = "pmem_gpu1",
-	.allocator_type = PMEM_ALLOCATORTYPE_BITMAP,
-	.cached = 0,
-};
-#endif //CONFIG_MSM_KGSL_MMU
-
 static struct platform_device android_pmem_device = {
 	.name = "android_pmem",
 	.id = 0,
@@ -521,14 +505,6 @@ static struct platform_device android_pmem_kernel_ebi1_device = {
 	.id = 4,
 	.dev = { .platform_data = &android_pmem_kernel_ebi1_pdata },
 };
-
-#ifndef CONFIG_MSM_KGSL_MMU
-static struct platform_device android_pmem_gpu1_device = {
-	.name = "android_pmem",
-	.id = 3,
-	.dev = { .platform_data = &android_pmem_gpu1_pdata },
-};
-#endif //CONFIG_MSM_KGSL_MMU
 
 static struct msm_handset_platform_data hs_platform_data = {
        .hs_name = "7k_handset",
@@ -1426,9 +1402,6 @@ static struct platform_device *devices[] __initdata = {
 	&android_pmem_kernel_ebi1_device,
 	&android_pmem_device,
 	&android_pmem_adsp_device,
-#ifndef CONFIG_MSM_KGSL_MMU
-	&android_pmem_gpu1_device,
-#endif //CONFIG_MSM_KGSL_MMU
 #ifdef CONFIG_SPI_GPIO
 	&lcdc_spigpio_device,
 #endif	 //CONFIG_SPI_GPIO
@@ -1916,10 +1889,6 @@ static unsigned pmem_mdp_size = MSM_PMEM_MDP_SIZE;
 
 static unsigned pmem_adsp_size = MSM_PMEM_ADSP_SIZE;
 
-#ifndef CONFIG_MSM_KGSL_MMU
-static unsigned pmem_gpu1_size = MSM_PMEM_GPU1_SIZE;
-#endif
-
 static unsigned fb_size = MSM_FB_SIZE;
 
 static void __init msm_msm7x2x_allocate_memory_regions(void)
@@ -1973,17 +1942,6 @@ static void __init msm_msm7x2x_allocate_memory_regions(void)
 		pr_info("allocating %lu bytes at %p (%lx physical) for kernel"
 			" ebi1 pmem arena\n", size, addr, __pa(addr));
 	}
-
-#ifndef CONFIG_MSM_KGSL_MMU
-	size = pmem_gpu1_size;
-	if (size) {
-		addr = alloc_bootmem(size);
-		android_pmem_gpu1_pdata.start = __pa(addr);
-		android_pmem_gpu1_pdata.size = size;
-		pr_info("allocating %lu bytes at %p (%lx physical) for gpu1 "
-			"pmem arena\n", size, addr, __pa(addr));
-	}
-#endif
 
 }
 
