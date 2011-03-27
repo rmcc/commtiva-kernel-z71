@@ -824,6 +824,10 @@ static void ar6000_wow_suspend(AR_SOFTC_T *ar)
     }
 }
 
+#if defined(CONFIG_FIH_FXX) && defined(MODULE)
+extern int fxx_wifi_power(int status);
+#endif
+
 static void ar6000_pwr_on(AR_SOFTC_T *ar)
 {
     if (ar == NULL) {
@@ -873,6 +877,9 @@ static void ar6000_pwr_on(AR_SOFTC_T *ar)
      *
      * the end of the sampe code.
      */
+#if defined(CONFIG_FIH_FXX) && defined(MODULE)
+    fxx_wifi_power(1);
+#endif
 }
 
 static void ar6000_pwr_down(AR_SOFTC_T *ar)
@@ -893,6 +900,9 @@ static void ar6000_pwr_down(AR_SOFTC_T *ar)
      *
      * the end of the sampe code.
      */
+#if defined(CONFIG_FIH_FXX) && defined(MODULE)
+    fxx_wifi_power(0);
+#endif
 }
 
 static A_STATUS ar6000_suspend_ev(void *context)

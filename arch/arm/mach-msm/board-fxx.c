@@ -99,10 +99,8 @@ void __init msm_power_register(void);
 
 char *board_serial;
 
-#ifdef CONFIG_AR6K
 #define WIFI_CONTROL_MASK   0x10000000
 static DEFINE_SPINLOCK(wif_bt_lock);
-#endif
 
 #if defined(CONFIG_BT) || defined(CONFIG_AR6K)
 static int wifi_status = 0;
@@ -645,7 +643,6 @@ static int msm_read_serial_number_from_nvitem(void)
 
 }
 
-#ifdef CONFIG_AR6K
 
 static void (*ar6k_wifi_status_cb)(int card_present, void *dev_id);
 static void *ar6k_wifi_status_cb_devid;
@@ -665,7 +662,6 @@ static unsigned int ar6k_wifi_status(struct device *dev)
 	return wifi_power_on;
 }
 
-#endif
 
 #ifdef CONFIG_BT
 static struct platform_device msm_bt_power_device = {
@@ -765,7 +761,6 @@ static int bluetooth_power(int on)
 	gpio_tlmm_config(GPIO_CFG(34, 0, GPIO_CFG_OUTPUT, GPIO_CFG_PULL_DOWN, GPIO_CFG_2MA),GPIO_CFG_ENABLE);   /* 1.2V */
 #endif
 
-#ifdef CONFIG_AR6K
 	spin_lock(&wif_bt_lock);
 
 	bConfigWIFI = (on & WIFI_CONTROL_MASK);
@@ -786,16 +781,13 @@ static int bluetooth_power(int on)
 			module_status = MODULE_TURN_OFF;
 
 	}else 
-#endif
 	{
 		prev_status = bt_status;
 		bt_status = on;
 		if( bt_status == prev_status )
 		{
 			printk(KERN_ERR "%s: BT already turn %s\n", __func__,  (bt_status?"ON":"OFF") );
-#ifdef CONFIG_AR6K
 			spin_unlock(&wif_bt_lock);
-#endif
 			return 0;
 		}
 		if(bt_status && !wifi_status)
@@ -820,7 +812,6 @@ static int bluetooth_power(int on)
 		mdelay(10);
 		gpio_direction_output(27,1);
 		mdelay(10);
-#ifdef CONFIG_AR6K
 	}else if(bConfigWIFI && wifi_status) {  //Turn WIFI on
 		printk(KERN_DEBUG "%s : Turn WIFI on.\n", __func__);
 		
@@ -847,7 +838,6 @@ static int bluetooth_power(int on)
 		gpio_direction_output(96,0);
 		gpio_direction_output(35,0);
 		mdelay(10);
-#endif
 	}
 
 	//Turn module on/off
@@ -864,12 +854,15 @@ static int bluetooth_power(int on)
 		gpio_direction_output(76,0);
 	}
 
-#ifdef CONFIG_AR6K
 	spin_unlock(&wif_bt_lock);
-#endif
 
 	return 0;
 }
+
+int fxx_wifi_power(int status) {
+	return bluetooth_power(status | WIFI_CONTROL_MASK);
+}
+EXPORT_SYMBOL(fxx_wifi_power);
 
 static void __init bt_power_init(void)
 {
@@ -1598,18 +1591,7 @@ static struct mmc_platform_data msm7x2x_sdc1_data = {
 };
 #endif
 
-#if defined(CONFIG_MMC_MSM_SDC2_SUPPORT) && !defined(CONFIG_AR6K)
-static struct mmc_platform_data msm7x2x_sdc2_data = {
-	.ocr_mask	= MMC_VDD_28_29,
-	.translate_vdd	= msm_sdcc_setup_power,
-	.mmc_bus_width  = MMC_CAP_4_BIT_DATA,
-#ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
-	.sdiowakeup_irq = MSM_GPIO_TO_INT(66),
-#endif
-};
-#endif
-
-#if defined(CONFIG_MMC_MSM_SDC2_SUPPORT) && defined(CONFIG_AR6K)
+#if defined(CONFIG_MMC_MSM_SDC2_SUPPORT)
 static struct mmc_platform_data ar6k_wifi_data = {
 	.ocr_mask	    = MMC_VDD_28_29,
 	.translate_vdd	= msm_sdcc_setup_power,
@@ -1654,11 +1636,7 @@ static void __init msm7x2x_init_mmc(void)
 #endif
 
 #ifdef CONFIG_MMC_MSM_SDC2_SUPPORT
-#ifdef CONFIG_AR6K
 	msm_add_sdcc(2, &ar6k_wifi_data);
-#else
-	msm_add_sdcc(2, &msm7x2x_sdc2_data);
-#endif
 #endif
 
 }
@@ -1776,10 +1754,8 @@ static void __init msm7x2x_init(void)
 	fih_smem_alloc();
 
 	msm_clock_init(msm_clocks_7x27, msm_num_clocks_7x27);
-#ifdef CONFIG_AR6K
 	ar6k_wifi_status_cb=NULL; 
 	ar6k_wifi_status_cb_devid=NULL;
-#endif
 
 	msm7x2x_clock_data.max_axi_khz = 200000;
 

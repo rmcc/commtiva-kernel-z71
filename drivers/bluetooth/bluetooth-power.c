@@ -29,12 +29,12 @@
 #include <linux/rfkill.h>
 #include "../../net/rfkill/rfkill.h"
 
-///FIH+++
+#ifdef CONFIG_AR6K
 #define WIFI_CONTROL_MASK   0x10000000
 
 static int      wifi_power_state;
 struct rfkill   *g_WifiRfkill = NULL;
-///FIH---
+#endif
 
 static int bluetooth_power_state;
 static int (*power_control)(int enable);
@@ -50,6 +50,7 @@ static int bluetooth_toggle_radio(void *data, bool blocked)
 	return ret;
 }
 
+#ifdef CONFIG_AR6K
 static int wifi_toggle_radio(void *data, bool blocked)
 {
 	int ret;
@@ -63,7 +64,6 @@ static int wifi_toggle_radio(void *data, bool blocked)
 static const struct rfkill_ops wifi_power_rfkill_ops = {
 	.set_block = wifi_toggle_radio,
 };
-
 
 static int wifi_rfkill_probe(struct platform_device *pdev)
 {
@@ -93,6 +93,7 @@ static int wifi_rfkill_probe(struct platform_device *pdev)
 	}
 	return ret;
 }
+#endif
 
 static const struct rfkill_ops bluetooth_power_rfkill_ops = {
 	.set_block = bluetooth_toggle_radio,
@@ -136,10 +137,10 @@ static void bluetooth_power_rfkill_remove(struct platform_device *pdev)
 	rfkill = platform_get_drvdata(pdev);
 	if (rfkill)
 		rfkill_unregister(rfkill);
-	//FIH+++ Remove WIFI RFKILL  
+#ifdef CONFIG_AR6K
 	if (g_WifiRfkill)
 		rfkill_unregister(g_WifiRfkill);
-	//FIH---
+#endif
 	rfkill_destroy(rfkill);
 	platform_set_drvdata(pdev, NULL);
 }
@@ -188,7 +189,9 @@ static int __devinit bt_power_probe(struct platform_device *pdev)
 		return -ENOSYS;
 	}
 
+#ifdef CONFIG_AR6K
     wifi_power_state = 0;
+#endif
 
 	spin_lock(&bt_power_lock);
 	power_control = pdev->dev.platform_data;
@@ -206,7 +209,9 @@ static int __devinit bt_power_probe(struct platform_device *pdev)
 		    bluetooth_power_rfkill_probe(pdev))
 		ret = -ENOMEM;
 
+#ifdef CONFIG_AR6K
     wifi_rfkill_probe(pdev);
+#endif
 
 
 	return ret;
@@ -229,10 +234,10 @@ static int __devexit bt_power_remove(struct platform_device *pdev)
 	bluetooth_power_state = 0;
 	ret = (*power_control)(bluetooth_power_state);
 
-    ///FIH+++
+#ifdef CONFIG_AR6K
     wifi_power_state=0;
     ret = (*power_control)(WIFI_CONTROL_MASK | wifi_power_state);
-    ///FIH---
+#endif
 
 	power_control = NULL;
 	spin_unlock(&bt_power_lock);
