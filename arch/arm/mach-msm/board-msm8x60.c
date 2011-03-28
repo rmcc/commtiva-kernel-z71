@@ -6945,7 +6945,7 @@ static void __init msm8x60_init_ebi2(void)
 
 		if (machine_is_msm8x60_surf() || machine_is_msm8x60_ffa() ||
 			machine_is_msm8x60_fluid())
-				ebi2_cfg |= (1 << 4) | (1 << 5); /* CS2, CS3 */
+			ebi2_cfg |= (1 << 4) | (1 << 5); /* CS2, CS3 */
 		else if (machine_is_msm8x60_sim())
 			ebi2_cfg |= (1 << 4); /* CS2 */
 		else if (machine_is_msm8x60_rumi3())
@@ -8774,7 +8774,10 @@ static struct lcdc_platform_data lcdc_pdata = {
 };
 
 
-#define MDP_VSYNC_GPIO 28
+#define MDP_VSYNC_GPIO			28
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+#define FPGA_3D_GPIO_CONFIG_ADDR	0x1D00017A
+#endif
 
 /*
  * MIPI_DSI only use 8058_LDO0 which need always on
@@ -8833,6 +8836,9 @@ out:
 static struct mipi_dsi_platform_data mipi_dsi_pdata = {
 	.vsync_gpio = MDP_VSYNC_GPIO,
 	.dsi_power_save   = mipi_dsi_panel_power,
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+	.fpga_config_addr  = FPGA_3D_GPIO_CONFIG_ADDR,
+#endif
 };
 
 #ifdef CONFIG_FB_MSM_TVOUT
