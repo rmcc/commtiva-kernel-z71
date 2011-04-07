@@ -834,8 +834,10 @@ again:
 	 *    RW1 = 0x1 (read)
 	 *    START1 = 0x1 (insert START bit)
 	 *    STOP1 = 0x1 (insert STOP bit)
-	 *    CNT1 = data_len   (0xN (write N bytes of data)) */
-	HDMI_OUTP_ND(0x022C, (1 << 13) | (data_len << 16));
+	 *    CNT1 = data_len   (0xN (write N bytes of data))
+	 *    Byte count for second transition (excluding the first
+	 *    Byte which is usually the address) */
+	HDMI_OUTP_ND(0x022C, (1 << 13) | ((data_len-1) << 16));
 
 	/* Trigger the I2C transfer */
 	/* 0x020C HDMI_DDC_CTRL
