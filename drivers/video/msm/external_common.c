@@ -1028,6 +1028,9 @@ int hdmi_common_read_edid(void)
 	/* Find out any CEA extension blocks following block 0 */
 	switch (num_og_cea_blocks) {
 	case 0: /* No CEA extension */
+		external_common_state->hdmi_sink = false;
+		DEV_DBG("HDMI DVI mode: %s\n",
+			external_common_state->hdmi_sink ? "no" : "yes");
 		break;
 	case 1: /* Read block 1 */
 		status = hdmi_common_read_edid_block(1, edid_buf+0x80);
@@ -1041,6 +1044,10 @@ int hdmi_common_read_edid(void)
 		if (num_og_cea_blocks) {
 			ieee_reg_id =
 				hdmi_edid_extract_ieee_reg_id(edid_buf+0x80);
+			if (ieee_reg_id == 0x0c03)
+				external_common_state->hdmi_sink = TRUE ;
+			else
+				external_common_state->hdmi_sink = FALSE ;
 			hdmi_edid_extract_latency_fields(edid_buf+0x80);
 			hdmi_edid_extract_speaker_allocation_data(
 				edid_buf+0x80);

@@ -608,7 +608,6 @@ static boolean hdmi_msm_is_power_on(void)
 	return (HDMI_INP_ND(0x0000) & 0x00000001) ? TRUE : FALSE;
 }
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT
 /* 1.2.1.2.1 DVI Operation
  * HDMI compliance requires the HDMI core to support DVI as well. The
  * HDMI core also supports DVI. In DVI operation there are no preambles
@@ -622,31 +621,24 @@ static boolean hdmi_msm_is_dvi_mode(void)
 	return (HDMI_INP_ND(0x0000) & 0x00000002) ? FALSE : TRUE;
 }
 
-#else
-static inline boolean hdmi_msm_is_dvi_mode(void) { return FALSE; }
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
-
-
 static void hdmi_msm_set_mode(boolean power_on)
 {
 	uint32 reg_val = 0;
-
 	if (power_on) {
 		/* ENABLE */
 		reg_val |= 0x00000001; /* Enable the block */
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT
-		/* HDMI_DVI_SEL */
-		reg_val |= 0x00000002;
-		/* HDMI_CTRL */
-		HDMI_OUTP(0x0000, reg_val);
-		/* HDMI_DVI_SEL */
-		reg_val &= ~0x00000002;
-#else /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
-		reg_val |= 0x00000002;
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
-	} else {
+		if (external_common_state->hdmi_sink == 0) {
+			/* HDMI_DVI_SEL */
+			reg_val |= 0x00000002;
+			/* HDMI_CTRL */
+			HDMI_OUTP(0x0000, reg_val);
+			/* HDMI_DVI_SEL */
+			reg_val &= ~0x00000002;
+		} else
+			reg_val |= 0x00000002;
+	} else
 		reg_val = 0x00000002;
-	}
+
 	/* HDMI_CTRL */
 	HDMI_OUTP(0x0000, reg_val);
 	DEV_DBG("HDMI Core: %s\n", power_on ? "Enable" : "Disable");
@@ -2979,14 +2971,9 @@ static int hdmi_msm_power_on(struct platform_device *pdev)
 
 	hdmi_msm_dump_regs("HDMI-ON: ");
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT
-	DEV_DBG("power=%s, DVI=%s\n",
-		hdmi_msm_is_power_on() ? "ON" : "OFF",
+	DEV_INFO("power=%s DVI= %s\n",
+		hdmi_msm_is_power_on() ? "ON" : "OFF" ,
 		hdmi_msm_is_dvi_mode() ? "ON" : "OFF");
-#else /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
-	DEV_DBG("power=%s\n", hdmi_msm_is_power_on() ? "ON" : "OFF");
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
-
 	return 0;
 }
 

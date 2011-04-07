@@ -214,6 +214,7 @@ struct external_common_state_type {
 #ifdef CONFIG_FB_MSM_HDMI_COMMON
 	boolean hdcp_active;
 	boolean hpd_feature_on;
+	boolean hdmi_sink;
 	struct hdmi_disp_mode_list_type disp_mode_list;
 	uint8 speaker_allocation_block;
 	uint16 video_latency, audio_latency;
