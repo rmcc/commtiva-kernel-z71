@@ -1572,6 +1572,7 @@ static int hdcp_authentication_part2(void)
 	static uint8 buf[0xFF];
 	static uint8 kvs_fifo[5 * 127];
 
+	int max_devs_exceeded = 0;
 	memset(buf, 0, sizeof(buf));
 	memset(kvs_fifo, 0, sizeof(kvs_fifo));
 
@@ -1618,6 +1619,18 @@ static int hdcp_authentication_part2(void)
 		goto error;
 	}
 
+	/*
+	 * HDCP Compliance 1B-05:
+	 * Check if no. of devices connected to repeater
+	 * exceed max_devices_connected from bit 7 of Bstatus.
+	 */
+	max_devs_exceeded = (bstatus & 0x80) >> 7;
+	if (max_devs_exceeded == 0x01) {
+		DEV_ERR("%s: Number of devs connected to repeater "
+			"exceeds max_devs\n", __func__);
+		ret = -EINVAL;
+		goto hdcp_error;
+	}
 	/* Read KSV FIFO over DDC
 	 * Key Slection vector FIFO
 	 * Used to pull downstream KSVs from HDCP Repeaters.
@@ -1688,6 +1701,11 @@ static int hdcp_authentication_part2(void)
 
 error:
 	return ret;
+
+hdcp_error:
+	hdcp_deauthenticate();
+	return ret;
+
 }
 
 static int hdcp_authentication_part3(uint32 found_repeater)
