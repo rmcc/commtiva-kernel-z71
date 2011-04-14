@@ -422,8 +422,25 @@ static int cy8c_ts_suspend(struct device *dev)
 
 		rc = cancel_delayed_work_sync(&ts->work);
 
-		if (rc)
+		if (rc) {
+			/* missed the worker, write to STATUS_REG to
+			   acknowledge interrupt */
+			rc = cy8c_ts_write_reg_u8(ts->client,
+				ts->dd->status_reg, ts->dd->update_data);
+			if (rc < 0) {
+				dev_err(&ts->client->dev,
+					"write failed, try once more\n");
+
+				rc = cy8c_ts_write_reg_u8(ts->client,
+					ts->dd->status_reg,
+					ts->dd->update_data);
+				if (rc < 0)
+					dev_err(&ts->client->dev,
+						"write failed, exiting\n");
+			}
+
 			enable_irq(ts->pen_irq);
+		}
 
 		gpio_free(ts->pdata->irq_gpio);
 
