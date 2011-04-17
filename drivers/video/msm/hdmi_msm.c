@@ -1538,24 +1538,83 @@ error:
 	return ret;
 }
 
-static int hdmi_msm_transfer_v_h(int h)
+static int hdmi_msm_transfer_v_h(void)
 {
 	/* Read V'.HO 4 Byte at offset 0x20 */
 	char what[20];
 	int ret;
 	uint8 buf[4];
 
-	snprintf(what, sizeof(what), "V' H%d", h);
-	ret = hdmi_msm_ddc_read(0x74, 0x20 + 4*h, buf, 4, 5, what);
+	snprintf(what, sizeof(what), "V' H0");
+	ret = hdmi_msm_ddc_read(0x74, 0x20, buf, 4, 5, what);
 	if (ret) {
 		DEV_ERR("%s: Read %s failed", __func__, what);
 		return ret;
 	}
+	DEV_DBG("buf[0]= %x , buf[1] = %x , buf[2] = %x , buf[3] = %x\n ",
+			buf[0] , buf[1] , buf[2] , buf[3]);
 
 	/* 0x0154 HDCP_RCVPORT_DATA7
 	   [31:0] V_HO */
-	HDMI_OUTP(0x0154 + 4*h,
+	HDMI_OUTP(0x0154 ,
 		(buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0]));
+
+	snprintf(what, sizeof(what), "V' H1");
+	ret = hdmi_msm_ddc_read(0x74, 0x24, buf, 4, 5, what);
+	if (ret) {
+		DEV_ERR("%s: Read %s failed", __func__, what);
+		return ret;
+	}
+	DEV_DBG("buf[0]= %x , buf[1] = %x , buf[2] = %x , buf[3] = %x\n ",
+			buf[0] , buf[1] , buf[2] , buf[3]);
+
+	/* 0x0158 HDCP_RCVPORT_ DATA8
+	   [31:0] V_H1 */
+	HDMI_OUTP(0x0158,
+		(buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0]));
+
+
+	snprintf(what, sizeof(what), "V' H2");
+	ret = hdmi_msm_ddc_read(0x74, 0x28, buf, 4, 5, what);
+	if (ret) {
+		DEV_ERR("%s: Read %s failed", __func__, what);
+		return ret;
+	}
+	DEV_DBG("buf[0]= %x , buf[1] = %x , buf[2] = %x , buf[3] = %x\n ",
+			buf[0] , buf[1] , buf[2] , buf[3]);
+
+	/* 0x015c HDCP_RCVPORT_DATA9
+	   [31:0] V_H2 */
+	HDMI_OUTP(0x015c ,
+		(buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0]));
+
+	snprintf(what, sizeof(what), "V' H3");
+	ret = hdmi_msm_ddc_read(0x74, 0x2c, buf, 4, 5, what);
+	if (ret) {
+		DEV_ERR("%s: Read %s failed", __func__, what);
+		return ret;
+	}
+	DEV_DBG("buf[0]= %x , buf[1] = %x , buf[2] = %x , buf[3] = %x\n ",
+			buf[0] , buf[1] , buf[2] , buf[3]);
+
+	/* 0x0160 HDCP_RCVPORT_DATA10
+	   [31:0] V_H3 */
+	HDMI_OUTP(0x0160,
+		(buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0]));
+
+	snprintf(what, sizeof(what), "V' H4");
+	ret = hdmi_msm_ddc_read(0x74, 0x30, buf, 4, 5, what);
+	if (ret) {
+		DEV_ERR("%s: Read %s failed", __func__, what);
+		return ret;
+	}
+	DEV_DBG("buf[0]= %x , buf[1] = %x , buf[2] = %x , buf[3] = %x\n ",
+			buf[0] , buf[1] , buf[2] , buf[3]);
+	/* 0x0164 HDCP_RCVPORT_DATA11
+	   [31:0] V_H4 */
+	HDMI_OUTP(0x0164,
+		(buf[3] << 24 | buf[2] << 16 | buf[1] << 8 | buf[0]));
+
 	return 0;
 }
 
@@ -1646,11 +1705,9 @@ static int hdcp_authentication_part2(void)
 		goto error;
 	}
 
-	for (i = 0; i <= 4; ++i) {
-		ret = hdmi_msm_transfer_v_h(i);
-		if (ret)
-			goto error;
-	}
+	ret = hdmi_msm_transfer_v_h();
+	if (ret)
+		goto error;
 
 	/* Next: Write KSV FIFO to HDCP_SHA_DATA.
 	 * This is done 1 byte at time starting with the LSB.
@@ -2299,7 +2356,8 @@ static void hdmi_msm_en_gc_packet(boolean av_mute_is_requested)
 
 static void hdmi_msm_en_isrc_packet(boolean isrc_is_continued)
 {
-	static char isrc_psuedo_data[] = "ISRC1:0123456789isrc2=ABCDEFGHIJ";
+	static const char isrc_psuedo_data[] =
+					"ISRC1:0123456789isrc2=ABCDEFGHIJ";
 	const uint32 * isrc_data = (const uint32 *) isrc_psuedo_data;
 
 	/* ISRC_STATUS =0b010 | ISRC_CONTINUE | ISRC_VALID */
