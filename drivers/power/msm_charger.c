@@ -369,6 +369,7 @@ static struct power_supply msm_psy_batt = {
 	.get_property = msm_batt_power_get_property,
 };
 
+static int usb_chg_current;
 static struct msm_hardware_charger_priv *usb_hw_chg_priv;
 static void (*notify_vbus_state_func_ptr)(int);
 static int usb_notified_of_insertion;
@@ -830,6 +831,14 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 		if (hw_chg->type == CHG_TYPE_USB) {
 			priv->hw_chg_state = CHG_PRESENT_STATE;
 			notify_usb_of_the_plugin_event(priv, 1);
+			if (usb_chg_current) {
+				priv->max_source_current = usb_chg_current;
+				usb_chg_current = 0;
+				/* usb has already indicated us to charge */
+				handle_charger_ready(priv);
+				msm_charger_notify_event(priv->hw_chg,
+						CHG_ENUMERATED_EVENT);
+			}
 		} else {
 			priv->hw_chg_state = CHG_READY_STATE;
 			handle_charger_ready(priv);
@@ -865,8 +874,10 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 			break;
 		}
 		update_batt_status();
-		if (hw_chg->type == CHG_TYPE_USB)
+		if (hw_chg->type == CHG_TYPE_USB) {
+			usb_chg_current = 0;
 			notify_usb_of_the_plugin_event(priv, 0);
+		}
 		handle_charger_removed(priv, CHG_ABSENT_STATE);
 		wake_unlock(&priv->wl);
 		break;
@@ -1003,9 +1014,9 @@ void msm_charger_vbus_draw(unsigned int mA)
 		usb_hw_chg_priv->max_source_current = mA;
 		msm_charger_notify_event(usb_hw_chg_priv->hw_chg,
 						CHG_ENUMERATED_EVENT);
-	}
-	else
-		pr_err("%s called early;charger isnt initialized\n", __func__);
+	} else
+		/* remember the current, to be used when charger is ready */
+		usb_chg_current = mA;
 }
 
 static int __init determine_initial_batt_status(void)
