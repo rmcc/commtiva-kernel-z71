@@ -1283,7 +1283,7 @@ static void hdcp_deauthenticate(void)
 	  [8] ENCRYPTION_ENABLE
 	  [0] ENABLE */
 	/* encryption_enable = 0 | hdcp block enable = 1 */
-	HDMI_OUTP(0x0110, 0x1);
+	HDMI_OUTP(0x0110, 0x0);
 
 	if (hdcp_link_status & 0x00000004)
 		hdcp_auth_info((hdcp_link_status & 0x000000F0) >> 4);
