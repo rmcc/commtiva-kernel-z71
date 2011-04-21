@@ -249,7 +249,7 @@ void msm_send_frame_to_vpe(uint32_t pyaddr, uint32_t pcbcraddr,
 int msm_vpe_config(struct msm_vpe_cfg_cmd *cmd, void *data);
 int msm_vpe_cfg_update(void *pinfo);
 void msm_vpe_offset_update(int frame_pack, uint32_t pyaddr, uint32_t pcbcraddr,
-	struct timespec *ts, int output_id, int32_t x, int32_t y,
-	int32_t frameid, struct msm_st_crop stCropInfo);
+	struct timespec *ts, int output_id, struct msm_st_half st_half,
+	int frameid);
 #endif /*_msm_vpe1_h_*/
 

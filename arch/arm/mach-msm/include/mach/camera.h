@@ -203,7 +203,7 @@ struct msm_camvpe_fn {
 	int (*vpe_config)(struct msm_vpe_cfg_cmd *, void *);
 	void (*vpe_cfg_offset)(int frame_pack, uint32_t pyaddr,
 		uint32_t pcbcraddr, struct timespec *ts, int output_id,
-		int32_t x, int32_t y, int32_t frameid, struct msm_st_crop);
+		struct msm_st_half st_half, int frameid);
 	int *dis;
 };
 
@@ -318,6 +318,8 @@ struct msm_sync {
 	spinlock_t abort_pict_lock;
 	int snap_count;
 	int thumb_count;
+	void *st_quality_ind;
+	int st_quality_ind_len;
 };
 
 #define MSM_APPS_ID_V4L2 "msm_v4l2"

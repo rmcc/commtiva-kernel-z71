@@ -504,10 +504,6 @@ static int vpe_update_scaler_with_dis(struct video_crop_t *pcrop,
 	}
 	/* If fall through then scaler is needed.*/
 
-	/* calculate only offset when zooming */
-	if (vpe_ctrl->output_type == OUTPUT_TYPE_ST_R)
-		dis_offset->dis_offset_x -= vpe_ctrl->out_w;
-
 	CDBG("========VPE zoom needed + DIS enabled.\n");
 	/* assumption is both direction need zoom. this can be
 	 improved. */
@@ -544,10 +540,6 @@ static int vpe_update_scaler_with_dis(struct video_crop_t *pcrop,
 	msm_io_w(src_roi, vpe_device->vpebase + VPE_SRC_SIZE_OFFSET);
 
 	CDBG("src_x = %d, src_y=%d.\n", src_x, src_y);
-
-	/* add back out_w when calculating address */
-	if (vpe_ctrl->output_type == OUTPUT_TYPE_ST_R)
-		src_x += vpe_ctrl->out_w;
 
 	src_xy = src_y*(1<<16) + src_x;
 	msm_io_w(src_xy, vpe_device->vpebase +
@@ -721,19 +713,8 @@ void msm_send_frame_to_vpe(uint32_t pyaddr, uint32_t pcbcraddr,
 			VPE_OUTP1_ADDR_OFFSET);
 		temp_pyaddr = msm_io_r(vpe_device->vpebase +
 			VPE_OUTP0_ADDR_OFFSET);
-
-		if (vpe_ctrl->frame_pack == TOP_DOWN_FULL)
-			temp_pcbcraddr = temp_pyaddr +
-				(vpe_ctrl->out_w * vpe_ctrl->out_h * 2);
-		else if ((vpe_ctrl->frame_pack == SIDE_BY_SIDE_HALF) ||
-				(vpe_ctrl->frame_pack == SIDE_BY_SIDE_FULL))
-			temp_pcbcraddr = temp_pyaddr +
-				PAD_TO_2K((vpe_ctrl->out_w * 2) *
-					vpe_ctrl->out_h, vpe_ctrl->pad_2k_bool);
-		else
-			CDBG("%s: Invalid Frame Packing = %d\n", __func__,
-				 vpe_ctrl->frame_pack);
-
+		temp_pcbcraddr = temp_pyaddr + PAD_TO_2K(vpe_ctrl->out_w *
+			vpe_ctrl->out_h * 2, vpe_ctrl->pad_2k_bool);
 		msm_io_w(temp_pcbcraddr, vpe_device->vpebase +
 			VPE_OUTP1_ADDR_OFFSET);
 	}
@@ -1014,21 +995,26 @@ int msm_vpe_config(struct msm_vpe_cfg_cmd *cmd, void *data)
 }
 
 void msm_vpe_offset_update(int frame_pack, uint32_t pyaddr, uint32_t pcbcraddr,
-	struct timespec *ts, int output_id, int32_t x, int32_t y,
-	int32_t frameid, struct msm_st_crop stCropInfo)
+	struct timespec *ts, int output_id, struct msm_st_half st_half,
+	int frameid)
 {
 	struct msm_vpe_buf_info vpe_buf;
+	uint32_t input_stride;
 
-	/* TODO: Update cropinfo from msm_sync. */
-	vpe_buf.vpe_crop.in2_w = stCropInfo.in_w;
-	vpe_buf.vpe_crop.in2_h = stCropInfo.in_h;
-	vpe_buf.vpe_crop.out2_w = stCropInfo.out_w;
-	vpe_buf.vpe_crop.out2_h = stCropInfo.out_h;
-	vpe_ctrl->dis_offset.dis_offset_x = x;
-	vpe_ctrl->dis_offset.dis_offset_y = y;
+	vpe_buf.vpe_crop.in2_w = st_half.stCropInfo.in_w;
+	vpe_buf.vpe_crop.in2_h = st_half.stCropInfo.in_h;
+	vpe_buf.vpe_crop.out2_w = st_half.stCropInfo.out_w;
+	vpe_buf.vpe_crop.out2_h = st_half.stCropInfo.out_h;
+	vpe_ctrl->dis_offset.dis_offset_x = st_half.pix_x_off;
+	vpe_ctrl->dis_offset.dis_offset_y = st_half.pix_y_off;
 	vpe_ctrl->dis_offset.frame_id = frameid;
 	vpe_ctrl->frame_pack = frame_pack;
 	vpe_ctrl->output_type = output_id;
+
+	input_stride = (st_half.buf_cbcr_stride * (1<<16)) +
+		st_half.buf_y_stride;
+
+	msm_io_w(input_stride, vpe_device->vpebase + VPE_SRC_YSTRIDE1_OFFSET);
 
 	vpe_update_scaler_with_dis(&(vpe_buf.vpe_crop),
 		&(vpe_ctrl->dis_offset));
@@ -1106,7 +1092,8 @@ static void vpe_do_tasklet(unsigned long data)
 			CDBG("%s: out_w = %d, out_h = %d\n", __func__,
 				vpe_ctrl->out_w, vpe_ctrl->out_h);
 
-			if (vpe_ctrl->frame_pack == TOP_DOWN_FULL) {
+			if ((vpe_ctrl->frame_pack == TOP_DOWN_FULL) ||
+				(vpe_ctrl->frame_pack == TOP_DOWN_HALF)) {
 				msm_io_w(pyaddr + (vpe_ctrl->out_w *
 					vpe_ctrl->out_h), vpe_device->vpebase +
 					VPE_OUTP0_ADDR_OFFSET);
@@ -1128,7 +1115,7 @@ static void vpe_do_tasklet(unsigned long data)
 					vpe_ctrl->frame_pack);
 
 			vpe_send_msg_no_payload(MSG_ID_VPE_OUTPUT_ST_L);
-			vpe_ctrl->state = 0;   /* put it back to idle. */
+			vpe_ctrl->state = 0; /* put it back to idle. */
 			kfree(qcmd);
 			return;
 		} else if (vpe_ctrl->output_type == OUTPUT_TYPE_ST_R) {
@@ -1137,7 +1124,8 @@ static void vpe_do_tasklet(unsigned long data)
 			CDBG("%s: out_w = %d, out_h = %d\n", __func__,
 				vpe_ctrl->out_w, vpe_ctrl->out_h);
 
-			if (vpe_ctrl->frame_pack == TOP_DOWN_FULL) {
+			if ((vpe_ctrl->frame_pack == TOP_DOWN_FULL) ||
+				(vpe_ctrl->frame_pack == TOP_DOWN_HALF)) {
 				pyaddr = msm_io_r(vpe_device->vpebase +
 					VPE_OUTP0_ADDR_OFFSET) -
 					(vpe_ctrl->out_w * vpe_ctrl->out_h);
@@ -1145,8 +1133,7 @@ static void vpe_do_tasklet(unsigned long data)
 				SIDE_BY_SIDE_HALF) || (vpe_ctrl->frame_pack ==
 				SIDE_BY_SIDE_FULL)) {
 				pyaddr = msm_io_r(vpe_device->vpebase +
-					VPE_OUTP0_ADDR_OFFSET) -
-					vpe_ctrl->out_w;
+				VPE_OUTP0_ADDR_OFFSET) - vpe_ctrl->out_w;
 			} else
 				CDBG("%s: Invalid packing = %d\n", __func__,
 					vpe_ctrl->frame_pack);
@@ -1171,8 +1158,8 @@ static void vpe_do_tasklet(unsigned long data)
 		msm_io_w(src_cbcr,
 				vpe_device->vpebase + VPE_OUTP1_ADDR_OFFSET);
 
-		temp = msm_io_r(
-		vpe_device->vpebase + VPE_OP_MODE_OFFSET) & 0xFFFFFFFC;
+		temp = msm_io_r(vpe_device->vpebase + VPE_OP_MODE_OFFSET) &
+			0xFFFFFFFC;
 		msm_io_w(temp, vpe_device->vpebase + VPE_OP_MODE_OFFSET);
 
 		/*  now pass this frame to msm_camera.c. */

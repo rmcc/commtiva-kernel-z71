@@ -722,6 +722,7 @@ static int __msm_get_frame(struct msm_sync *sync,
 	frame->fd = pmem_info.fd;
 	frame->path = vdata->phy.output_id;
 	frame->frame_id = vdata->phy.frame_id;
+
 	CDBG("%s: y %x, cbcr %x, qcmd %x, virt_addr %x\n",
 		__func__,
 		pphy->y_phy, pphy->cbcr_phy, (int) qcmd, (int) frame->buffer);
@@ -748,7 +749,7 @@ static int msm_get_frame(struct msm_sync *sync, void __user *arg)
 		return rc;
 
 	mutex_lock(&sync->lock);
-	if (sync->croplen) {
+	if (sync->croplen && (!sync->stereocam_enabled)) {
 		if (frame.croplen != sync->croplen) {
 			pr_err("%s: invalid frame croplen %d,"
 				"expecting %d\n",
@@ -772,6 +773,17 @@ static int msm_get_frame(struct msm_sync *sync, void __user *arg)
 		if (copy_to_user((void *)frame.roi_info.info,
 			sync->fdroiinfo.info,
 			sync->fdroiinfo.info_len)) {
+			ERR_COPY_TO_USER();
+			mutex_unlock(&sync->lock);
+			return -EFAULT;
+		}
+	}
+
+	if (sync->stereocam_enabled && sync->st_quality_ind &&
+		sync->st_quality_ind_len) {
+		if (copy_to_user((void *)frame.st_quality_ind,
+			sync->st_quality_ind,
+			sync->st_quality_ind_len)) {
 			ERR_COPY_TO_USER();
 			mutex_unlock(&sync->lock);
 			return -EFAULT;
@@ -2231,7 +2243,7 @@ static int msm_get_pic(struct msm_sync *sync, void __user *arg)
 	if (rc < 0)
 		return rc;
 
-	if (sync->croplen) {
+	if (sync->croplen && (!sync->stereocam_enabled)) {
 		if (frame.croplen != sync->croplen) {
 			pr_err("%s: invalid frame croplen %d,"
 				"expecting %d\n",
@@ -2403,7 +2415,7 @@ static int msm_pp_grab(struct msm_sync *sync, void __user *arg)
 static int msm_put_st_frame(struct msm_sync *sync, void __user *arg)
 {
 	unsigned long flags;
-    unsigned long st_pphy;
+	unsigned long st_pphy;
 	if (sync->stereocam_enabled) {
 		/* Make stereo frame ready for VPE. */
 		struct msm_st_frame stereo_frame_half;
@@ -2442,11 +2454,8 @@ static int msm_put_st_frame(struct msm_sync *sync, void __user *arg)
 			sync->vpefn.vpe_cfg_offset(stereo_frame_half.packing,
 			vfe_rp->phy.y_phy + stereo_frame_half.L.buf_y_off,
 			vfe_rp->phy.y_phy + stereo_frame_half.L.buf_cbcr_off,
-			&(qcmd->ts), OUTPUT_TYPE_ST_L,
-			stereo_frame_half.L.pix_x_off,
-			stereo_frame_half.L.pix_y_off,
-			stereo_frame_half.frame_id,
-			stereo_frame_half.L.stCropInfo);
+			&(qcmd->ts), OUTPUT_TYPE_ST_L, stereo_frame_half.L,
+			stereo_frame_half.frame_id);
 
 			free_qcmd(qcmd);
 		} else if (stereo_frame_half.type == OUTPUT_TYPE_ST_R) {
@@ -2463,11 +2472,32 @@ static int msm_put_st_frame(struct msm_sync *sync, void __user *arg)
 			sync->vpefn.vpe_cfg_offset(stereo_frame_half.packing,
 				st_pphy + stereo_frame_half.R.buf_y_off,
 				st_pphy + stereo_frame_half.R.buf_cbcr_off,
-				NULL, OUTPUT_TYPE_ST_R,
-				stereo_frame_half.R.pix_x_off,
-				stereo_frame_half.R.pix_y_off,
-				stereo_frame_half.frame_id,
-				stereo_frame_half.R.stCropInfo);
+				NULL, OUTPUT_TYPE_ST_R, stereo_frame_half.R,
+				stereo_frame_half.frame_id);
+
+			/*update the global variable from the frame info*/
+			if (!sync->st_quality_ind &&
+				!sync->st_quality_ind_len) {
+				sync->st_quality_ind = kzalloc(sizeof(
+				stereo_frame_half.buf_info.st_quality_ind_len),
+					GFP_KERNEL);
+				if (!sync->st_quality_ind) {
+					pr_err("%s: no memory to allocate\n",
+						__func__);
+					return -ENOMEM;
+				}
+			}
+			sync->st_quality_ind_len =
+				stereo_frame_half.buf_info.st_quality_ind_len;
+
+			if (copy_from_user(sync->st_quality_ind,
+				stereo_frame_half.buf_info.st_quality_ind,
+				sync->st_quality_ind_len)) {
+				ERR_COPY_FROM_USER();
+				kfree(sync->st_quality_ind);
+				sync->st_quality_ind = NULL;
+				sync->st_quality_ind_len = 0;
+			}
 
 			spin_unlock_irqrestore(&st_frame_spinlock, flags);
 		} else {
@@ -2853,6 +2883,9 @@ static int __msm_release(struct msm_sync *sync)
 		kfree(sync->cropinfo);
 		sync->cropinfo = NULL;
 		sync->croplen = 0;
+		kfree(sync->st_quality_ind);
+		sync->st_quality_ind = NULL;
+		sync->st_quality_ind_len = 0;
 		CDBG("%s, free frame pmem region\n", __func__);
 		hlist_for_each_entry_safe(region, hnode, n,
 				&sync->pmem_frames, list) {
