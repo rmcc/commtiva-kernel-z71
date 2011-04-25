@@ -2030,6 +2030,7 @@ int kgsl_device_probe(struct kgsl_device *device,
 		goto error_close_mmu;
 
 	wake_lock_init(&device->idle_wakelock, WAKE_LOCK_IDLE, device->name);
+	idr_init(&device->context_idr);
 	return status;
 
 error_close_mmu:
@@ -2079,6 +2080,7 @@ void kgsl_device_remove(struct kgsl_device *device)
 	pm_runtime_disable(&device->pdev->dev);
 
 	wake_lock_destroy(&device->idle_wakelock);
+	idr_destroy(&device->context_idr);
 }
 
 static int __devinit
