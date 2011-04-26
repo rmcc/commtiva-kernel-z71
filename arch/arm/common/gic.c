@@ -299,7 +299,7 @@ static int __init gic_init_sysdev(void)
 		}
 	return 0;
 }
-arch_initcall(gic_init_sysdev);
+late_initcall(gic_init_sysdev);
 #else
 static int gic_set_wake(unsigned int irq, unsigned int on)
 {
