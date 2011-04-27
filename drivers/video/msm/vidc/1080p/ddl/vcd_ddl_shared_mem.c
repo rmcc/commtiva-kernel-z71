@@ -602,19 +602,26 @@ void vidc_sm_set_pand_b_frame_qp(struct ddl_buf_addr *shared_mem,
 
 
 void vidc_sm_get_profile_info(struct ddl_buf_addr *shared_mem,
-	u32 *pn_disp_profile_info, u32 *pn_disp_level_info, u32 *idc_value)
+	struct ddl_profile_info_type *ddl_profile_info)
 {
 	u32 disp_pic_profile;
 
 	disp_pic_profile = DDL_MEM_READ_32(shared_mem,
-				VIDC_SM_DISP_PIC_PROFILE_ADDR);
-	*pn_disp_profile_info = VIDC_GETFIELD(disp_pic_profile,
-			VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_PROFILE_BMASK,
-			VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_PROFILE_SHFT);
-	*pn_disp_level_info = VIDC_GETFIELD(disp_pic_profile,
-			VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_LEVEL_BMASK,
-			VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_LEVEL_SHFT);
-	*idc_value = (disp_pic_profile & 0x60) >> 5;
+		VIDC_SM_DISP_PIC_PROFILE_ADDR);
+	ddl_profile_info->bit_depth_chroma_minus8 =
+		(disp_pic_profile  & 0x00380000) >> 19;
+	ddl_profile_info->bit_depth_luma_minus8 =
+		(disp_pic_profile & 0x00070000) >> 16;
+	ddl_profile_info->pic_profile = VIDC_GETFIELD(
+		disp_pic_profile,
+		VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_PROFILE_BMASK,
+		VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_PROFILE_SHFT);
+	ddl_profile_info->pic_level = VIDC_GETFIELD(
+		disp_pic_profile,
+		VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_LEVEL_BMASK,
+		VIDC_SM_DISP_PIC_PROFILE_DISP_PIC_LEVEL_SHFT);
+	ddl_profile_info->chroma_format_idc =
+		(disp_pic_profile & 0x60) >> 5;
 }
 
 void vidc_sm_set_encoder_new_bit_rate(struct ddl_buf_addr *shared_mem,

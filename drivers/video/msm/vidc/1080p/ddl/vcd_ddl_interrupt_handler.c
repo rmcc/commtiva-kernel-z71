@@ -237,7 +237,7 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 	struct ddl_decoder_data *decoder = &ddl->codec_data.decoder;
 	struct vidc_1080p_seq_hdr_info seq_hdr_info;
 	u32 process_further = true;
-	u32 idc_value = VIDC_1080P_IDCFORMAT_32BIT;
+	struct ddl_profile_info_type disp_profile_info;
 
 	DDL_MSG_MED("ddl_decoder_seq_done_callback");
 	if (!ddl->decoding ||
@@ -261,19 +261,34 @@ static u32 ddl_decoder_seq_done_callback(struct ddl_context *ddl_context,
 			return process_further;
 		}
 		vidc_sm_get_profile_info(&ddl->shared_mem
-			[ddl->command_channel],
-			&seq_hdr_info.profile, &seq_hdr_info.level, &idc_value);
+			[ddl->command_channel], &disp_profile_info);
+		disp_profile_info.pic_profile = seq_hdr_info.profile;
+		disp_profile_info.pic_level = seq_hdr_info.level;
 		ddl_get_dec_profile_level(decoder, seq_hdr_info.profile,
 			seq_hdr_info.level);
 		switch (decoder->codec.codec) {
 		case VCD_CODEC_H264:
 			if (decoder->profile.profile == VCD_PROFILE_H264_HIGH ||
-				decoder->profile.profile == VCD_PROFILE_UNKNOWN)
-				if (idc_value > VIDC_1080P_IDCFORMAT_420) {
-					DDL_MSG_ERROR("Unsupported IDC format");
+				decoder->profile.profile ==
+				VCD_PROFILE_UNKNOWN) {
+				if ((disp_profile_info.chroma_format_idc >
+					VIDC_1080P_IDCFORMAT_420) ||
+					(disp_profile_info.bit_depth_luma_minus8
+					 || disp_profile_info.
+					bit_depth_chroma_minus8)) {
+					DDL_MSG_ERROR("Unsupported H.264 "
+						"feature: IDC "
+						"format : %d, Bitdepth: %d",
+						disp_profile_info.
+						chroma_format_idc,
+						(disp_profile_info.
+						 bit_depth_luma_minus8
+						 ||	disp_profile_info.
+					bit_depth_chroma_minus8));
 					ddl_client_fatal_cb(ddl);
 					return process_further;
 				}
+			}
 			break;
 		case VCD_CODEC_MPEG4:
 		case VCD_CODEC_DIVX_4:

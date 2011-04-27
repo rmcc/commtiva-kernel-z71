@@ -72,6 +72,15 @@ enum VIDC_SM_ref_picture {
 	VIDC_SM_REF_PICT_FRAME_OR_TOP_FIELD   = 0,
 	VIDC_SM_REF_PICT_BOTTOM_FIELD         = 1
 };
+
+struct ddl_profile_info_type {
+	u32 bit_depth_chroma_minus8;
+	u32 bit_depth_luma_minus8;
+	u32 pic_level;
+	u32 chroma_format_idc;
+	u32 pic_profile;
+};
+
 void vidc_sm_get_extended_decode_status(struct ddl_buf_addr *shared_mem,
 	u32 *more_field_needed,
 	u32 *resl_change);
@@ -146,7 +155,7 @@ void vidc_sm_set_extradata_addr(struct ddl_buf_addr *shared_mem,
 void vidc_sm_set_pand_b_frame_qp(struct ddl_buf_addr *shared_mem,
 	u32 b_frame_qp, u32 p_frame_qp);
 void vidc_sm_get_profile_info(struct ddl_buf_addr *shared_mem,
-	u32 *pn_disp_profile_info, u32 *pn_disp_level_info, u32 *idc_info);
+	struct ddl_profile_info_type *ddl_profile_info);
 void vidc_sm_set_encoder_new_bit_rate(struct ddl_buf_addr *shared_mem,
 	u32 new_bit_rate);
 void vidc_sm_set_encoder_new_frame_rate(struct ddl_buf_addr *shared_mem,
