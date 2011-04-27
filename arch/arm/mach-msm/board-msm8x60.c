@@ -685,6 +685,7 @@ static const int vregs_isa1200_val[] = {
 	2600000,
 };
 static struct regulator *vregs_isa1200[ARRAY_SIZE(vregs_isa1200_name)];
+static struct msm_xo_voter *xo_handle_a1;
 
 static int isa1200_power(int vreg_on)
 {
@@ -700,21 +701,20 @@ static int isa1200_power(int vreg_on)
 			goto vreg_fail;
 		}
 	}
+
+	rc = vreg_on ? msm_xo_mode_vote(xo_handle_a1, MSM_XO_MODE_ON) :
+			msm_xo_mode_vote(xo_handle_a1, MSM_XO_MODE_OFF);
+	if (rc < 0) {
+		pr_err("%s: failed to %svote for TCXO A1 buffer%d\n",
+				__func__, vreg_on ? "" : "de-", rc);
+		goto vreg_fail;
+	}
 	return 0;
 
 vreg_fail:
-	while (i) {
-		int ret;
-		ret = !vreg_on ? regulator_enable(vregs_isa1200[i]) :
+	while (i--)
+		!vreg_on ? regulator_enable(vregs_isa1200[i]) :
 			regulator_disable(vregs_isa1200[i]);
-		if (ret < 0) {
-			pr_err("%s: vreg %s %s failed (%d) in err path\n",
-				__func__, vregs_isa1200_name[i],
-				!vreg_on ? "enable" : "disable", ret);
-		}
-		i--;
-	}
-
 	return rc;
 }
 
@@ -754,15 +754,27 @@ static int isa1200_dev_setup(bool enable)
 			pr_err("%s: Unable to set direction\n", __func__);;
 			goto free_gpio;
 		}
+
+		xo_handle_a1 = msm_xo_get(MSM_XO_TCXO_A1, "isa1200");
+		if (IS_ERR(xo_handle_a1)) {
+			rc = PTR_ERR(xo_handle_a1);
+			pr_err("%s: failed to get the handle for A1(%d)\n",
+							__func__, rc);
+			goto gpio_set_dir;
+		}
 	} else {
 		gpio_set_value(GPIO_HAP_SHIFT_LVL_OE, 0);
 		gpio_free(GPIO_HAP_SHIFT_LVL_OE);
 
 		for (i = 0; i < ARRAY_SIZE(vregs_isa1200_name); i++)
 			regulator_put(vregs_isa1200[i]);
+
+		msm_xo_put(xo_handle_a1);
 	}
 
 	return 0;
+gpio_set_dir:
+	gpio_set_value(GPIO_HAP_SHIFT_LVL_OE, 0);
 free_gpio:
 	gpio_free(GPIO_HAP_SHIFT_LVL_OE);
 vreg_get_fail:
