@@ -53,6 +53,8 @@
 #define MSM_HDMI_SAMPLE_RATE_MAX		7
 #define MSM_HDMI_SAMPLE_RATE_FORCE_32BIT	0x7FFFFFFF
 
+struct workqueue_struct *hdmi_work_queue;
+
 struct hdmi_msm_state_type {
 	boolean panel_power_on;
 	boolean hpd_initialized;
@@ -535,7 +537,7 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 			& ~((1 << 6) | (1 << 4)));
 		DEV_INFO("HDCP: AUTH_FAIL_INT received, LINK0_STATUS=0x%08x\n",
 			HDMI_INP_ND(0x011C));
-		schedule_work(&hdmi_msm_state->hdcp_reauth_work);
+		queue_work(hdmi_work_queue, &hdmi_msm_state->hdcp_reauth_work);
 		return IRQ_HANDLED;
 	}
 	/*    [8] DDC_XFER_REQ_INT	[R]	HDCP DDC Transfer Request
@@ -1856,7 +1858,7 @@ error:
 	hdmi_msm_state->hdcp_activating = FALSE;
 	mutex_unlock(&hdmi_msm_state_mutex);
 	if (hdmi_msm_state->panel_power_on || external_common_state->hpd_state)
-		schedule_work(&hdmi_msm_state->hdcp_reauth_work);
+		queue_work(hdmi_work_queue, &hdmi_msm_state->hdcp_reauth_work);
 }
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
 
@@ -2807,13 +2809,13 @@ static void hdmi_msm_turn_on(void)
 
 static void hdmi_msm_hpd_state_timer(unsigned long data)
 {
-	schedule_work(&hdmi_msm_state->hpd_state_work);
+	queue_work(hdmi_work_queue, &hdmi_msm_state->hpd_state_work);
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
 static void hdmi_msm_hdcp_timer(unsigned long data)
 {
-	schedule_work(&hdmi_msm_state->hdcp_work);
+	queue_work(hdmi_work_queue, &hdmi_msm_state->hdcp_work);
 }
 #endif
 
@@ -3153,7 +3155,7 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 	if (rc)
 		goto error;
 
-	schedule_work(&hdmi_msm_state->hpd_read_work);
+	queue_work(hdmi_work_queue, &hdmi_msm_state->hpd_read_work);
 	return 0;
 
 error:
@@ -3326,6 +3328,12 @@ static int __init hdmi_msm_init(void)
 #ifdef CONFIG_FB_MSM_HDMI_3D
 	external_common_state->switch_3d = hdmi_msm_switch_3d;
 #endif
+
+	/*
+	 * Create your work queue
+	 * allocs and returns ptr
+	*/
+	hdmi_work_queue = create_workqueue("hdmi_hdcp");
 	external_common_state->hpd_feature = hdmi_msm_hpd_feature;
 
 	rc = platform_driver_register(&this_driver);
