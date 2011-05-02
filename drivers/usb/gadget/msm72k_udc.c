@@ -562,6 +562,9 @@ static void usb_ept_enable(struct msm_endpoint *ept, int yes,
 	mb();
 	writel(n, USB_ENDPTCTRL(ept->num));
 
+	/* Ensure endpoint is enabled before returning */
+	dsb();
+
 	dev_dbg(&ui->pdev->dev, "ept %d %s %s\n",
 	       ept->num, in ? "in" : "out", yes ? "enabled" : "disabled");
 }
@@ -883,6 +886,9 @@ static void handle_setup(struct usb_info *ui)
 #endif
 
 	memcpy(&ctl, ui->ep0out.head->setup_data, sizeof(ctl));
+	/* Ensure buffer is read before acknowledging to h/w */
+	dsb();
+
 	writel(EPT_RX(0), USB_ENDPTSETUPSTAT);
 
 	if (ctl.bRequestType & USB_DIR_IN)
@@ -1380,6 +1386,9 @@ static void usb_reset(struct usb_info *ui)
 
 	/* enable interrupts */
 	writel(STS_URI | STS_SLI | STS_UI | STS_PCI, USB_USBINTR);
+
+	/* Ensure that h/w RESET is completed before returning */
+	dsb();
 
 	atomic_set(&ui->running, 1);
 }
@@ -2124,6 +2133,9 @@ static int msm72k_pullup_internal(struct usb_gadget *_gadget, int is_active)
 		otg_io_write(ui->xceiv, 0x48, 0x04);
 	}
 
+	/* Ensure pull-up operation is completed before returning */
+	dsb();
+
 	return 0;
 }
 
@@ -2172,6 +2184,9 @@ static int msm72k_wakeup(struct usb_gadget *_gadget)
 
 	if (!is_usb_active())
 		writel(readl(USB_PORTSC) | PORTSC_FPR, USB_PORTSC);
+
+	/* Ensure that USB port is resumed before enabling the IRQ */
+	dsb();
 
 	enable_irq(otg->irq);
 
