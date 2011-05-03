@@ -68,8 +68,6 @@ int platform_physical_low_power_pages(unsigned long, unsigned long);
 #if defined(CONFIG_ARCH_MSM_ARM11) || defined(CONFIG_ARCH_MSM_CORTEX_A5)
 void write_to_strongly_ordered_memory(void);
 void map_page_strongly_ordered(void);
-
-#define arch_barrier_extra()
 #endif
 
 #ifdef CONFIG_CACHE_L2X0
