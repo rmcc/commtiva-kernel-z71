@@ -1368,7 +1368,9 @@ msmsdcc_irq(int irq, void *dev_id)
 				 * If DMA is still in progress, we complete
 				 * via the completion handler
 				 */
-				if (!host->dma.busy && !host->sps.busy) {
+				if ((host->is_dma_mode && !host->dma.busy)
+				|| (host->is_sps_mode && !host->sps.busy)
+				) {
 					/*
 					 * There appears to be an issue in the
 					 * controller where if you request a
@@ -2463,8 +2465,6 @@ msmsdcc_probe(struct platform_device *pdev)
 		ret = msmsdcc_init_dma(host);
 		if (ret)
 			goto ioremap_free;
-	} else {
-		host->dma.channel = -1;
 	}
 
 	/*
