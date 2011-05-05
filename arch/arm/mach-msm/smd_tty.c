@@ -141,6 +141,16 @@ static void smd_tty_notify(void *priv, unsigned event)
 
 	switch (event) {
 	case SMD_EVENT_DATA:
+		/* There may be clients (tty framework) that are blocked
+		 * waiting for space to write data, so if a possible read
+		 * interrupt came in wake anyone waiting and disable the
+		 * interrupts
+		 */
+		if (smd_write_avail(info->ch)) {
+			smd_disable_read_intr(info->ch);
+			if (info->tty)
+				wake_up_interruptible(&info->tty->write_wait);
+		}
 		tasklet_hi_schedule(&info->tty_tsklt);
 		break;
 
@@ -288,6 +298,13 @@ static int smd_tty_write(struct tty_struct *tty, const unsigned char *buf, int l
 		return -ENETRESET;
 
 	avail = smd_write_avail(info->ch);
+	/* if no space, we'll have to setup a notification later to wake up the
+	 * tty framework when space becomes avaliable
+	 */
+	if (!avail) {
+		smd_enable_read_intr(info->ch);
+		return 0;
+	}
 	if (len > avail)
 		len = avail;
 
