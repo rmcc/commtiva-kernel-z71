@@ -621,7 +621,11 @@ static boolean hdmi_msm_is_dvi_mode(void)
 	/* HDMI_CTRL, HDMI_DVI_SEL */
 	return (HDMI_INP_ND(0x0000) & 0x00000002) ? FALSE : TRUE;
 }
+
+#else
+static inline boolean hdmi_msm_is_dvi_mode(void) { return FALSE; }
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_DVI_SUPPORT */
+
 
 static void hdmi_msm_set_mode(boolean power_on)
 {
@@ -2688,7 +2692,8 @@ static void hdmi_msm_turn_on(void)
 	HDMI_OUTP(0x0208, 0x0001001B);
 
 	hdmi_msm_video_setup(external_common_state->video_resolution);
-	hdmi_msm_audio_setup();
+	if (!hdmi_msm_is_dvi_mode())
+		hdmi_msm_audio_setup();
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
 	hdmi_msm_avi_info_frame();
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
