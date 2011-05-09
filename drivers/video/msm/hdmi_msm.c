@@ -396,7 +396,7 @@ static void hdmi_msm_hdcp_work(struct work_struct *work)
 	mutex_lock(&external_common_state_hpd_mutex);
 	if (external_common_state->hpd_state) {
 		mutex_unlock(&external_common_state_hpd_mutex);
-		hdmi_msm_hdcp_enable();
+		hdmi_msm_turn_on();
 	} else
 		mutex_unlock(&external_common_state_hpd_mutex);
 }
