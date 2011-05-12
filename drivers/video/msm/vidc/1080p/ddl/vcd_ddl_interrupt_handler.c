@@ -1125,7 +1125,8 @@ static u32 ddl_decoder_output_done_callback(
 			(output_vcd_frm->dec_op_prop.frm_size.height !=
 			decoder->frame_size.height))) {
 			DDL_MSG_LOW("%s o/p width = %u o/p height = %u"
-				"decoder width = %u decoder height = %u "
+				"decoder width = %u decoder height = %u ",
+				__func__,
 				output_vcd_frm->dec_op_prop.frm_size.width,
 				output_vcd_frm->dec_op_prop.frm_size.height,
 				decoder->frame_size.width,
