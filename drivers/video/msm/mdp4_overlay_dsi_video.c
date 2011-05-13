@@ -270,6 +270,14 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 }
 
 /*
+ * mdp4_primary_vsync_dsi_video: called from isr
+ */
+void mdp4_primary_vsync_dsi_video(void)
+{
+	complete_all(&dsi_pipe->comp);
+}
+
+/*
  * mdp4_overlay1_done_dsi: called from isr
  */
 void mdp4_overlay0_done_dsi_video()
@@ -317,4 +325,31 @@ void mdp4_dsi_video_overlay(struct msm_fb_data_type *mfd)
 	mdp4_stat.kickoff_dsi++;
 	mdp4_overlay_resource_release();
 	mutex_unlock(&mfd->dma->ov_mutex);
+}
+void mdp4_overlay_dsi_video_wait4vsync(struct msm_fb_data_type *mfd)
+{
+	unsigned long flag;
+
+	 /* enable irq */
+	spin_lock_irqsave(&mdp_spin_lock, flag);
+	mdp_enable_irq(MDP_DMA2_TERM);	/* enable intr */
+	INIT_COMPLETION(dsi_pipe->comp);
+	mfd->dma->waiting = TRUE;
+	outp32(MDP_INTR_CLEAR, INTR_PRIMARY_VSYNC);
+	mdp_intr_mask |= INTR_PRIMARY_VSYNC;
+	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+	spin_unlock_irqrestore(&mdp_spin_lock, flag);
+	wait_for_completion_killable(&dsi_pipe->comp);
+	mdp_disable_irq(MDP_DMA2_TERM);
+}
+
+void mdp4_overlay_dsi_video_vsync_push(struct msm_fb_data_type *mfd,
+			struct mdp4_overlay_pipe *pipe)
+{
+
+	mdp4_overlay_reg_flush(pipe, 1);
+	if (pipe->flags & MDP_OV_PLAY_NOWAIT)
+		return;
+
+	mdp4_overlay_dsi_video_wait4vsync(mfd);
 }

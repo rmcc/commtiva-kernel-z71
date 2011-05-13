@@ -439,7 +439,7 @@ void mdp4_primary_vsync_lcdc(void);
 void mdp4_external_vsync_dtv(void);
 void mdp4_mddi_overlay_restore(void);
 void mdp4_overlay_lcdc_wait4vsync(struct msm_fb_data_type *mfd);
-void mdp4_overlay_vsync_push(struct msm_fb_data_type *mfd,
+void mdp4_overlay_lcdc_vsync_push(struct msm_fb_data_type *mfd,
 				struct mdp4_overlay_pipe *pipe);
 void mdp4_mddi_overlay_dmas_restore(void);
 void mdp4_mddi_dma_busy_wait(struct msm_fb_data_type *mfd);
@@ -495,4 +495,9 @@ void mdp_hw_cursor_init(void);
 int mdp4_mddi_overlay_cursor(struct fb_info *info, struct fb_cursor *cursor);
 int mdp_ppp_blit(struct fb_info *info, struct mdp_blit_req *req);
 void mdp4_overlay_resource_release(void);
+void mdp4_overlay_dsi_video_wait4vsync(struct msm_fb_data_type *mfd);
+void mdp4_overlay_dsi_video_vsync_push(struct msm_fb_data_type *mfd,
+				struct mdp4_overlay_pipe *pipe);
+void mdp4_primary_vsync_dsi_video(void);
+
 #endif /* MDP_H */

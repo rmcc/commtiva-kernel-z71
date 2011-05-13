@@ -411,6 +411,10 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		if (isr & INTR_PRIMARY_VSYNC) {
 			if (panel & MDP4_PANEL_LCDC)
 				mdp4_primary_vsync_lcdc();
+#ifdef CONFIG_FB_MSM_MIPI_DSI
+			else if (panel & MDP4_PANEL_DSI_VIDEO)
+				mdp4_primary_vsync_dsi_video();
+#endif
 		}
 #ifdef CONFIG_FB_MSM_DTV
 		if (isr & INTR_EXTERNAL_VSYNC) {

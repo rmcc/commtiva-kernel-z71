@@ -324,7 +324,7 @@ void mdp4_overlay_lcdc_wait4vsync(struct msm_fb_data_type *mfd)
 	mdp_disable_irq(MDP_DMA2_TERM);
 }
 
-void mdp4_overlay_vsync_push(struct msm_fb_data_type *mfd,
+void mdp4_overlay_lcdc_vsync_push(struct msm_fb_data_type *mfd,
 			struct mdp4_overlay_pipe *pipe)
 {
 
@@ -372,7 +372,7 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	pipe = lcdc_pipe;
 	pipe->srcp0_addr = (uint32) buf;
 	mdp4_overlay_rgb_setup(pipe);
-	mdp4_overlay_vsync_push(mfd, pipe);
+	mdp4_overlay_lcdc_vsync_push(mfd, pipe);
 	mdp4_stat.kickoff_lcdc++;
 	mdp4_overlay_resource_release();
 	mutex_unlock(&mfd->dma->ov_mutex);
