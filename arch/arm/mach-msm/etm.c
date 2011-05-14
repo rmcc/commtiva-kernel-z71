@@ -20,6 +20,8 @@
 #include <linux/percpu.h>
 #include <linux/io.h>
 #include <linux/uaccess.h>
+#include <linux/wakelock.h>
+#include <linux/pm_qos_params.h>
 
 #include <asm/atomic.h>
 
@@ -64,6 +66,11 @@
 				     * instances on all cores */
 
 static int trace_enabled;
+static int *cpu_restore;
+static int cpu_to_dump;
+static int next_cpu_to_dump;
+static struct wake_lock etm_wake_lock;
+static struct pm_qos_request_list *etm_qos_req;
 static int trace_on_boot;
 module_param_named(
 	trace_on_boot, trace_on_boot, int, S_IRUGO
@@ -370,6 +377,9 @@ static void __cpu_disable_trace(void *unused)
 
 static void enable_trace(void)
 {
+	wake_lock(&etm_wake_lock);
+	pm_qos_update_request(etm_qos_req, 0);
+
 	if (etm_config.swconfig & TRIGGER_ALL) {
 		/* This register is accessible from either core.
 		 * CPU1_extout[0] -> CPU0_extin[0]
@@ -381,16 +391,42 @@ static void enable_trace(void)
 	__cpu_enable_trace(NULL);
 	smp_call_function(__cpu_enable_trace, NULL, 1);
 	put_cpu();
+
+	/* When the smp_call returns, we are guaranteed that all online
+	 * cpus are out of wfi/power_collapse and won't be allowed to enter
+	 * again due to the pm_qos latency request above.
+	 */
 	trace_enabled = 1;
+
+	pm_qos_update_request(etm_qos_req, PM_QOS_DEFAULT_VALUE);
+	wake_unlock(&etm_wake_lock);
 }
 
 static void disable_trace(void)
 {
+	int cpu;
+
+	wake_lock(&etm_wake_lock);
+	pm_qos_update_request(etm_qos_req, 0);
+
 	get_cpu();
 	__cpu_disable_trace(NULL);
 	smp_call_function(__cpu_disable_trace, NULL, 1);
 	put_cpu();
+
+	/* When the smp_call returns, we are guaranteed that all online
+	 * cpus are out of wfi/power_collapse and won't be allowed to enter
+	 * again due to the pm_qos latency request above.
+	 */
 	trace_enabled = 0;
+
+	for_each_possible_cpu(cpu)
+		*per_cpu_ptr(cpu_restore, cpu) = 0;
+
+	cpu_to_dump = next_cpu_to_dump = 0;
+
+	pm_qos_update_request(etm_qos_req, PM_QOS_DEFAULT_VALUE);
+	wake_unlock(&etm_wake_lock);
 }
 
 static void generate_etb_dump(void)
@@ -464,8 +500,14 @@ static void dump_all(void *unused)
 	put_cpu();
 }
 
-static int cpu_to_dump;
-static int next_cpu_to_dump;
+static void dump_trace(void)
+{
+	get_cpu();
+	dump_all(NULL);
+	smp_call_function(dump_all, NULL, 1);
+	put_cpu();
+}
+
 static int bytes_to_dump;
 static uint8_t *etm_buf_ptr;
 
@@ -482,12 +524,8 @@ static ssize_t etm_dev_read(struct file *file, char __user *data,
 				size_t len, loff_t *ppos)
 {
 	if (cpu_to_dump == next_cpu_to_dump) {
-		if (cpu_to_dump == 0) {
-			get_cpu();
-			dump_all(NULL);
-			smp_call_function(dump_all, NULL, 1);
-			put_cpu();
-		}
+		if (cpu_to_dump == 0)
+			dump_trace();
 		bytes_to_dump = buf[cpu_to_dump].log_end;
 		buf[cpu_to_dump].log_end = 0;
 		etm_buf_ptr = buf[cpu_to_dump].etm_log_buf;
@@ -838,27 +876,78 @@ static const struct file_operations etm_dev_fops = {
 };
 
 static struct miscdevice etm_dev = {
-	.name = "etm",
-	.minor = 0,
+	.name = "msm_etm",
+	.minor = MISC_DYNAMIC_MINOR,
 	.fops = &etm_dev_fops,
 };
 
+/* etm_save_reg_check and etm_restore_reg_check should be fast
+ *
+ * These functions will be called either from:
+ * 1. per_cpu idle thread context for idle wfi and power collapses.
+ * 2. per_cpu idle thread context for hotplug/suspend power collapse for
+ *    nonboot cpus.
+ * 3. suspend thread context for core0.
+ *
+ * In all cases we are guaranteed to be running on the same cpu for the
+ * entire duration.
+ *
+ * Another assumption is that etm registers won't change after trace_enabled
+ * is set. Current usage model guarantees this doesn't happen.
+ */
+void etm_save_reg_check(void)
+{
+	if (trace_enabled) {
+		int cpu = smp_processor_id();
+
+		/* Don't save the registers if we just got called from per_cpu
+		 * idle thread context of a nonboot cpu after hotplug/suspend
+		 * power collapse. This is to prevent corruption due to saving
+		 * twice since nonboot cpus start out fresh without the
+		 * corresponding restore.
+		 */
+		if (!(*per_cpu_ptr(cpu_restore, cpu))) {
+			etm_save_reg();
+			*per_cpu_ptr(cpu_restore, cpu) = 1;
+		}
+	}
+}
+
+void etm_restore_reg_check(void)
+{
+	if (trace_enabled) {
+		int cpu = smp_processor_id();
+
+		etm_restore_reg();
+		*per_cpu_ptr(cpu_restore, cpu) = 0;
+	}
+}
+
 static int __init etm_init(void)
 {
-	int rv, cpu;
-	void __iomem *etm_buf_addr_base;
-	void *etm_dump_buf;
+	int ret, cpu;
 
-	rv = misc_register(&etm_dev);
-	if (rv)
+	ret = misc_register(&etm_dev);
+	if (ret)
 		return -ENODEV;
 
 	alloc_b = alloc_percpu(typeof(*alloc_b));
 	if (!alloc_b)
-		return -ENOMEM;
+		goto err1;
 
 	for_each_possible_cpu(cpu)
 		*per_cpu_ptr(alloc_b, cpu) = &buf[cpu];
+
+	cpu_restore = alloc_percpu(int);
+	if (!cpu_restore)
+		goto err2;
+
+	for_each_possible_cpu(cpu)
+		*per_cpu_ptr(cpu_restore, cpu) = 0;
+
+	wake_lock_init(&etm_wake_lock, WAKE_LOCK_SUSPEND, "msm_etm");
+	etm_qos_req = pm_qos_add_request(PM_QOS_CPU_DMA_LATENCY,
+						PM_QOS_DEFAULT_VALUE);
 
 	cpu_to_dump = next_cpu_to_dump = 0;
 
@@ -867,27 +956,23 @@ static int __init etm_init(void)
 	if (trace_on_boot)
 		enable_trace();
 
-	/* Allocate memory for ETB dump on wdog reset. */
-	etm_dump_buf = kmalloc(SZ_16K, GFP_KERNEL);
-	if (!etm_dump_buf) {
-		pr_err("Could not allocate etm dump buffer.\n");
-		return -ENOMEM;
-	}
-	etm_buf_addr_base = ioremap(0x2a05f000, SZ_4K);
-	if (!etm_buf_addr_base) {
-		pr_err("Could not map etm buffer dump address.\n");
-		kfree(etm_dump_buf);
-		return -ENOMEM;
-	}
-	writel(__pa(etm_dump_buf), etm_buf_addr_base + 0x10);
-	iounmap(etm_buf_addr_base);
-
 	return 0;
+
+err2:
+	free_percpu(alloc_b);
+err1:
+	misc_deregister(&etm_dev);
+	return -ENOMEM;
 }
 
 static void __exit etm_exit(void)
 {
 	disable_trace();
+	pm_qos_remove_request(etm_qos_req);
+	wake_lock_destroy(&etm_wake_lock);
+	free_percpu(cpu_restore);
+	free_percpu(alloc_b);
+	misc_deregister(&etm_dev);
 }
 
 module_init(etm_init);

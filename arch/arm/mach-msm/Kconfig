@@ -1403,7 +1403,6 @@ config MSM_DLOAD_MODE
 config MSM_ETM
 	tristate "Enable MSM ETM and ETB"
 	depends on ARCH_MSM8X60
-	select MSM_JTAG_V7
 	help
 		This enables embedded trace collection on Qualcomm v7 CPUs.
 
