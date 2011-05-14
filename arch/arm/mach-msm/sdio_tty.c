@@ -304,6 +304,12 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 		return -ENODEV;
 	}
 
+	sdio_tty_drv->tty_str->driver_data = sdio_tty_drv;
+
+	sdio_tty_drv->tty_str->low_latency = 1;
+	sdio_tty_drv->tty_str->icanon = 0;
+	set_bit(TTY_NO_WRITE_SPLIT, &sdio_tty_drv->tty_str->flags);
+
 	sdio_tty_drv->read_buf = kzalloc(SDIO_TTY_MAX_PACKET_SIZE, GFP_KERNEL);
 	if (sdio_tty_drv->read_buf == NULL) {
 		pr_err(SDIO_TTY_MODULE_NAME ": %s: failed to allocate read_buf",
@@ -501,23 +507,8 @@ void *sdio_tty_init_tty(char *tty_name, char *sdio_ch_name)
 	}
 
 	sdio_tty_drv->sdio_tty_state = TTY_REGISTERED;
-
-	sdio_tty_drv->tty_str = tty_init_dev(sdio_tty_drv->tty_drv, 0, 1);
-	if (!sdio_tty_drv->tty_str) {
-		pr_err(SDIO_TTY_MODULE_NAME ": %s: param sdio_tty->tty_str"
-				   " is NULL.\n", __func__);
-		goto exit_err;
-	}
-
-	sdio_tty_drv->tty_str->driver_data = sdio_tty_drv;
-
-	sdio_tty_drv->tty_str->low_latency = 1;
-	sdio_tty_drv->tty_str->icanon = 0;
-	set_bit(TTY_NO_WRITE_SPLIT, &sdio_tty_drv->tty_str->flags);
-
 	return sdio_tty_drv;
 
-exit_err:
 	tty_unregister_device(sdio_tty_drv->tty_drv, 0);
 	if (tty_unregister_driver(sdio_tty_drv->tty_drv))
 		pr_err(SDIO_TTY_MODULE_NAME ": %s: tty_unregister_driver() "
