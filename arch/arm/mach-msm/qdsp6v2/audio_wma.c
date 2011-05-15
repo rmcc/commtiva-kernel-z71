@@ -81,6 +81,7 @@ struct timestamp {
 } __attribute__ ((packed));
 
 struct meta_in {
+	unsigned char reserved[18];
 	unsigned short offset;
 	struct timestamp ntimestamp;
 	unsigned int nflags;
@@ -96,6 +97,7 @@ struct meta_out_dsp{
 } __attribute__ ((packed));
 
 struct dec_meta_out{
+	unsigned int reserved[7];
 	unsigned int num_of_frames;
 	struct meta_out_dsp meta_out_dsp[];
 } __attribute__ ((packed));
@@ -197,7 +199,7 @@ static int insert_eos_buf(struct q6audio *audio,
 	struct dec_meta_out *eos_buf = buf_node->kvaddr;
 	eos_buf->num_of_frames = 0xFFFFFFFF;
 	eos_buf->meta_out_dsp[0].nflags = AUDWMA_EOS_SET;
-	return sizeof(eos_buf->num_of_frames) +
+	return sizeof(struct dec_meta_out) +
 		sizeof(eos_buf->meta_out_dsp[0]);
 }
 
@@ -217,8 +219,8 @@ static void extract_meta_info(struct q6audio *audio,
 			buf_node->meta_info.meta_in.nflags);
 	} else { /* Write */
 		memcpy((char *)buf_node->kvaddr,
-			&buf_node->meta_info.meta_out.num_of_frames,
-			sizeof(buf_node->meta_info.meta_out.num_of_frames));
+			&buf_node->meta_info.meta_out,
+			sizeof(struct dec_meta_out));
 		pr_debug("o/p: msw_ts 0x%8x lsw_ts 0x%8x nflags 0x%8x\n",
 		((struct dec_meta_out *)buf_node->kvaddr)->\
 			meta_out_dsp[0].msw_ts,
@@ -415,9 +417,9 @@ static void audwma_async_read(struct q6audio *audio,
 	ac = audio->ac;
 	/* Provide address so driver can append nr frames information */
 	param.paddr = buf_node->paddr +
-			sizeof(buf_node->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 	param.len = buf_node->buf.buf_len -
-			sizeof(buf_node->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 	param.uid = param.paddr;
 	/* Write command will populate paddr as token */
 	buf_node->token = param.paddr;
@@ -438,8 +440,8 @@ static void audwma_async_write(struct q6audio *audio,
 
 	ac = audio->ac;
 	/* Offset with  appropriate meta */
-	param.paddr = buf_node->paddr + buf_node->meta_info.meta_in.offset;
-	param.len = buf_node->buf.data_len - buf_node->meta_info.meta_in.offset;
+	param.paddr = buf_node->paddr + sizeof(struct meta_in);
+	param.len = buf_node->buf.data_len - sizeof(struct meta_in);
 	param.msw_ts = buf_node->meta_info.meta_in.ntimestamp.highpart;
 	param.lsw_ts = buf_node->meta_info.meta_in.ntimestamp.lowpart;
 	/* If no meta_info enaled, indicate no time stamp valid */
@@ -528,7 +530,7 @@ static void audwma_async_read_ack(struct q6audio *audio, uint32_t token,
 				filled_buf->meta_info.meta_out.num_of_frames);
 			event_payload.aio_buf.data_len = payload[2] + \
 			payload[3] + \
-			sizeof(filled_buf->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 			extract_meta_info(audio, filled_buf, 0);
 		}
 		audwma_post_event(audio, AUDIO_EVENT_READ_DONE, event_payload);

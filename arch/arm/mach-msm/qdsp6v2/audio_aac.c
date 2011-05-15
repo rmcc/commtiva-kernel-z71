@@ -199,7 +199,7 @@ static int insert_eos_buf(struct q6audio *audio,
 	struct dec_meta_out *eos_buf = buf_node->kvaddr;
 	eos_buf->num_of_frames = 0xFFFFFFFF;
 	eos_buf->meta_out_dsp[0].nflags = AUDAAC_EOS_SET;
-	return sizeof(eos_buf->num_of_frames) +
+	return sizeof(struct dec_meta_out) +
 		sizeof(eos_buf->meta_out_dsp[0]);
 }
 
