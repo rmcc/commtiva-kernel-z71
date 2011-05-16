@@ -694,7 +694,6 @@ static void sdio_cmux_fn(struct work_struct *work)
 				  __func__, write_size);
 				bytes_written += write_size;
 			}
-			abort_tx = 0;
 			mutex_unlock(&modem_reset_lock);
 			kfree(list_elem->cmux_pkt.hdr);
 			kfree(list_elem);
@@ -776,11 +775,13 @@ static int sdio_cmux_probe(struct platform_device *pdev)
 		mutex_lock(&modem_reset_lock);
 		r =  sdio_open("SDIO_QMI", &sdio_qmi_chl, NULL,
 				sdio_qmi_chl_notify);
-		mutex_unlock(&modem_reset_lock);
 		if (r < 0) {
+			mutex_unlock(&modem_reset_lock);
 			pr_err("%s: sdio_open() failed\n", __func__);
 			goto error2;
 		}
+		abort_tx = 0;
+		mutex_unlock(&modem_reset_lock);
 		return 0;
 	}
 
