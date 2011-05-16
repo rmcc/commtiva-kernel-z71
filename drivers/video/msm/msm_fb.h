@@ -181,4 +181,7 @@ int msm_fb_detect_client(const char *name);
 void msm_fb_config_backlight(struct msm_fb_data_type *mfd);
 #endif
 
+void fill_black_screen(void);
+void unfill_black_screen(void);
+
 #endif /* MSM_FB_H */

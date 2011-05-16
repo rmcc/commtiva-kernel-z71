@@ -1817,6 +1817,7 @@ static void hdmi_msm_hdcp_enable(void)
 	hdmi_msm_state->hdcp_activating = TRUE;
 	mutex_unlock(&hdmi_msm_state_mutex);
 
+	fill_black_screen();
 	/* PART I Authentication*/
 	ret = hdcp_authentication_part1();
 	if (ret)
@@ -1845,6 +1846,8 @@ static void hdmi_msm_hdcp_enable(void)
 	ret = hdcp_authentication_part3(found_repeater);
 	if (ret)
 		goto error;
+
+	unfill_black_screen();
 
 	external_common_state->hdcp_active = TRUE;
 	mutex_lock(&hdmi_msm_state_mutex);
