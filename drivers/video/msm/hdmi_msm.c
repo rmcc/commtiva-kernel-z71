@@ -258,6 +258,7 @@ static void hdmi_msm_hpd_off(void);
 static void hdmi_msm_hpd_state_work(struct work_struct *work)
 {
 	boolean hpd_state;
+	char *envp[2];
 
 	if (!hdmi_msm_state || !hdmi_msm_state->hpd_initialized || !HDMI_BASE) {
 		DEV_DBG("%s: ignored, probe failed\n", __func__);
@@ -316,9 +317,15 @@ static void hdmi_msm_hpd_state_work(struct work_struct *work)
 		hdmi_msm_state->hpd_cable_chg_detected = FALSE;
 		mutex_unlock(&hdmi_msm_state_mutex);
 		if (hpd_state) {
-			/* Build EDID table */
-			hdmi_msm_turn_on();
 			hdmi_msm_read_edid();
+			/* Build EDID table */
+			envp[0] = "HDCP_STATE=FAIL";
+			envp[1] = NULL;
+			DEV_INFO("HDMI HPD: QDSP OFF\n");
+			kobject_uevent_env(external_common_state->uevent_kobj,
+				KOBJ_CHANGE, envp);
+			hdmi_msm_turn_on();
+
 			DEV_INFO("HDMI HPD: sense CONNECTED: send ONLINE\n");
 			kobject_uevent(external_common_state->uevent_kobj,
 				KOBJ_ONLINE);
@@ -355,6 +362,7 @@ static void hdmi_msm_hpd_state_work(struct work_struct *work)
 }
 
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+static int full_auth_proc_done;
 static void hdcp_deauthenticate(void);
 static void hdmi_msm_hdcp_enable(void);
 static void hdmi_msm_hdcp_reauth_work(struct work_struct *work)
@@ -396,7 +404,7 @@ static void hdmi_msm_hdcp_work(struct work_struct *work)
 
 	/* Only re-enable if cable still connected */
 	mutex_lock(&external_common_state_hpd_mutex);
-	if (external_common_state->hpd_state) {
+	if (external_common_state->hpd_state && !full_auth_proc_done) {
 		mutex_unlock(&external_common_state_hpd_mutex);
 		hdmi_msm_turn_on();
 	} else
@@ -412,6 +420,7 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 	uint32 audio_int_val;
 #ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
 	uint32 hdcp_int_val;
+	char *envp[2];
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
 	static uint32 fifo_urun_int_occurred;
 	static uint32 sample_drop_int_occurred;
@@ -537,6 +546,13 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 			& ~((1 << 6) | (1 << 4)));
 		DEV_INFO("HDCP: AUTH_FAIL_INT received, LINK0_STATUS=0x%08x\n",
 			HDMI_INP_ND(0x011C));
+		if (full_auth_proc_done) {
+			envp[0] = "HDCP_STATE=FAIL";
+			envp[1] = NULL;
+			DEV_INFO("HDMI HPD:QDSP OFF\n");
+			kobject_uevent_env(external_common_state->uevent_kobj,
+			KOBJ_CHANGE, envp);
+		}
 		queue_work(hdmi_work_queue, &hdmi_msm_state->hdcp_reauth_work);
 		return IRQ_HANDLED;
 	}
@@ -1809,6 +1825,7 @@ static void hdmi_msm_hdcp_enable(void)
 	int ret = 0;
 	uint8 bcaps;
 	uint32 found_repeater = 0x0;
+	char *envp[2];
 
 	if (!hdmi_msm_has_hdcp())
 		return;
@@ -1854,6 +1871,13 @@ static void hdmi_msm_hdcp_enable(void)
 	hdmi_msm_state->hdcp_activating = FALSE;
 	mutex_unlock(&hdmi_msm_state_mutex);
 
+	if (!hdmi_msm_is_dvi_mode()) {
+		DEV_INFO("HDMI HPD: sense : send HDCP_PASS\n");
+		envp[0] = "HDCP_STATE=PASS";
+		envp[1] = NULL;
+		kobject_uevent_env(external_common_state->uevent_kobj,
+			KOBJ_CHANGE, envp);
+	}
 	return;
 
 error:
