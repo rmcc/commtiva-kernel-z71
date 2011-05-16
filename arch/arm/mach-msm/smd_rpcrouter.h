@@ -227,7 +227,6 @@ enum write_data_type {
 struct rpcrouter_xprt {
 	char *name;
 	void *priv;
-	int closed_for_reset;
 
 	int (*read_avail)(void);
 	int (*read)(void *data, uint32_t len);
