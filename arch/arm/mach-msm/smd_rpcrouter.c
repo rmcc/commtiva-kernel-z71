@@ -1265,33 +1265,6 @@ static int msm_rpc_write_pkt(
 	hdr->confirm_rx = 0;
 	hdr->size = count + sizeof(uint32_t);
 
-	for (;;) {
-		prepare_to_wait(&ept->restart_wait, &__wait,
-				TASK_INTERRUPTIBLE);
-		spin_lock_irqsave(&ept->restart_lock, flags);
-		if (ept->restart_state == RESTART_NORMAL) {
-			spin_unlock_irqrestore(&ept->restart_lock, flags);
-			break;
-		} else if (ept->restart_state & RESTART_PEND_NTFY) {
-			ept->restart_state &= ~RESTART_PEND_NTFY;
-			spin_unlock_irqrestore(&ept->restart_lock, flags);
-			finish_wait(&ept->restart_wait, &__wait);
-			return -ENETRESET;
-		}
-		if (signal_pending(current) &&
-		   ((!(ept->flags & MSM_RPC_UNINTERRUPTIBLE)))) {
-			spin_unlock_irqrestore(&ept->restart_lock, flags);
-			break;
-		}
-		spin_unlock_irqrestore(&ept->restart_lock, flags);
-		schedule();
-	}
-	finish_wait(&ept->restart_wait, &__wait);
-
-	if (signal_pending(current) &&
-		(!(ept->flags & MSM_RPC_UNINTERRUPTIBLE))) {
-		return -ERESTARTSYS;
-	}
 	rc = wait_for_restart_and_notify(ept);
 	if (rc)
 		return rc;
