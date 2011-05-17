@@ -3573,6 +3573,12 @@ static int sdio_al_subsys_notifier_cb(struct notifier_block *this,
 				__func__, sdio_al_dev->card->host->index);
 			continue;
 		}
+		if (sdio_al_dev->state == MODEM_RESTART) {
+			pr_info(MODULE_NAME ": %s: card %d was already "
+					    "notified for modem reset",
+				__func__, sdio_al_dev->card->host->index);
+			continue;
+		}
 
 		pr_info(MODULE_NAME ": %s: Set the state to MODEM_RESTART"
 			" for card %d",
