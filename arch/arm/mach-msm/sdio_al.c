@@ -3114,6 +3114,7 @@ void sdio_al_card_remove(struct mmc_card *card)
 					continue;
 				platform_device_unregister(
 					&sdio_al_dev->channel[i].pdev);
+				sdio_al_dev->channel[i].signature = 0x0;
 			}
 		}
 	}
