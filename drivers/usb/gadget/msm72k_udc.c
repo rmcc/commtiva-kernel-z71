@@ -559,7 +559,7 @@ static void usb_ept_enable(struct msm_endpoint *ept, int yes,
 			n &= ~(CTRL_RXE);
 	}
 	/* complete all the updates to ept->head before enabling endpoint*/
-	dma_coherent_pre_ops();
+	mb();
 	writel(n, USB_ENDPTCTRL(ept->num));
 
 	dev_dbg(&ui->pdev->dev, "ept %d %s %s\n",
@@ -595,14 +595,14 @@ static void usb_ept_start(struct msm_endpoint *ept)
 		req = req->next;
 	}
 
+	rmb();
 	/* link the hw queue head to the request's transaction item */
 	ept->head->next = ept->req->item_dma;
 	ept->head->info = 0;
 
 reprime_ept:
 	/* flush buffers before priming ept */
-	dma_coherent_pre_ops();
-
+	mb();
 	/* during high throughput testing it is observed that
 	 * ept stat bit is not set even thoguh all the data
 	 * structures are updated properly and ept prime bit
@@ -616,7 +616,7 @@ reprime_ept:
 	if (readl_relaxed(USB_ENDPTSTAT) & n)
 		return;
 
-	dma_coherent_post_ops();
+	rmb();
 	info = f_req->item->info;
 	if (info & INFO_ACTIVE) {
 		if (reprime_cnt++ < 3)
