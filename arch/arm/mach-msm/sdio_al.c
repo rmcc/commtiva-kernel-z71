@@ -790,6 +790,15 @@ static int read_mailbox(struct sdio_al_device *sdio_al_dev, int from_isr)
 				"overflow=0x%x, underflow=0x%x\n",
 				overflow_pipe, underflow_pipe);
 
+	/* In case of modem reset we would like to read the daya from the modem
+	   to clear the interrupts but do not process it */
+	if (sdio_al_dev->state != CARD_INSERTED) {
+		pr_err(MODULE_NAME ":sdio_al_device (card %d) is in invalid "
+				   "state %d\n",
+				sdio_al_dev->card->host->index,
+				sdio_al_dev->state);
+		return -ENODEV;
+	}
 
 	pr_debug(MODULE_NAME ":card %d: eot=0x%x, thresh=0x%x\n",
 			sdio_al_dev->card->host->index,
