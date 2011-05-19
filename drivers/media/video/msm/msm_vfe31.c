@@ -1122,6 +1122,8 @@ static void vfe31_start_common(void)
 
 static int vfe31_start_recording(void)
 {
+	msm_camio_set_perf_lvl(S_VIDEO);
+	usleep(1000);
 	vfe31_ctrl->recording_state = VFE_REC_STATE_START_REQUESTED;
 	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
 	return 0;
@@ -1131,6 +1133,7 @@ static int vfe31_stop_recording(void)
 {
 	vfe31_ctrl->recording_state = VFE_REC_STATE_STOP_REQUESTED;
 	msm_io_w_mb(1, vfe31_ctrl->vfebase + VFE_REG_UPDATE_CMD);
+	msm_camio_set_perf_lvl(S_PREVIEW);
 	return 0;
 }
 
@@ -1253,6 +1256,8 @@ static int vfe31_capture(uint32_t num_frames_capture)
 		}
 	}
 	msm_io_w(irq_comp_mask, vfe31_ctrl->vfebase + VFE_IRQ_COMP_MASK);
+	msm_camio_set_perf_lvl(S_CAPTURE);
+	usleep(1000);
 	vfe31_start_common();
 	return 0;
 }
@@ -1286,6 +1291,8 @@ static int vfe31_start(void)
 		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 			24 * (vfe31_ctrl->outpath.out0.ch1));
 	}
+	msm_camio_set_perf_lvl(S_PREVIEW);
+	usleep(1000);
 	vfe31_start_common();
 	return 0;
 }
@@ -3490,7 +3497,6 @@ static int vfe31_init(struct msm_vfe_callback *presp,
 	/* Bring up all the required GPIOs and Clocks */
 	rc = msm_camio_enable(pdev);
 	msm_camio_set_perf_lvl(S_INIT);
-	msm_camio_set_perf_lvl(S_PREVIEW);
 	if (msm_vpe_open() < 0)
 		CDBG("%s: vpe_open failed\n", __func__);
 
