@@ -1463,6 +1463,7 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 	struct mdp4_overlay_pipe *pipe;
 	struct mdp4_pipe_desc  *pd;
 	int ret, ptype, req_share;
+	int j;
 
 	if (mfd == NULL) {
 		pr_err("%s: mfd == NULL, -ENODEV\n", __func__);
@@ -1603,7 +1604,12 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 	 */
 	if (req->id == MSMFB_NEW_REQUEST) {  /* new request */
 		pd = &ctrl->ov_pipe[pipe->pipe_num];
-		pd->ndx_list[pd->ref_cnt] = pipe->pipe_ndx;
+		for (j = 0; j < MDP4_MAX_SHARE; j++) {
+			if (pd->ndx_list[j] == 0) {
+				pd->ndx_list[j] = pipe->pipe_ndx;
+				break;
+			}
+		}
 		pipe->pipe_share = req_share;
 		pd->ref_cnt++;
 		pipe->pipe_used++;
