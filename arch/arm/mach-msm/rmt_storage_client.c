@@ -713,7 +713,7 @@ static int sdio_smem_cb(int event)
 	return 0;
 }
 
-static int sdio_smem_probe(struct platform_device *pdev)
+static int rmt_storage_sdio_smem_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct rmt_shrd_mem_param *shrd_mem;
@@ -737,8 +737,16 @@ static int sdio_smem_probe(struct platform_device *pdev)
 	return ret;
 }
 
+
+static int rmt_storage_sdio_smem_remove(struct platform_device *pdev)
+{
+	sdio_smem_unregister_client();
+	return 0;
+}
+
 static struct platform_driver sdio_smem_drv = {
-	.probe		= sdio_smem_probe,
+	.probe		= rmt_storage_sdio_smem_probe,
+	.remove		= rmt_storage_sdio_smem_remove,
 	.driver		= {
 		.name	= "SDIO_SMEM_CLIENT",
 		.owner	= THIS_MODULE,
