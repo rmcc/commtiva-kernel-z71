@@ -422,20 +422,19 @@ static void sdio_xprt_read_data(struct work_struct *work)
 			queue_delayed_work(sdio_xprt_read_workqueue,
 					   &work_read_data,
 					   msecs_to_jiffies(100));
-			return;
+			break;
 		}
 		spin_unlock_irqrestore(
 			&sdio_remote_xprt.channel->read_list_lock, flags);
 
 		buf = alloc_from_free_list(sdio_remote_xprt.channel);
 		if (!buf) {
-			mutex_unlock(&modem_reset_lock);
 			SDIO_XPRT_DBG("%s: Failed to alloc_from_free_list"
 				      " Try again later\n", __func__);
 			queue_delayed_work(sdio_xprt_read_workqueue,
 					   &work_read_data,
 					   msecs_to_jiffies(100));
-			return;
+			break;
 		}
 
 		size = sdio_read(sdio_remote_xprt.channel->handle,
@@ -445,11 +444,10 @@ static void sdio_xprt_read_data(struct work_struct *work)
 					" read %d bytes, expected %d\n",
 					size, read_avail);
 			return_to_free_list(sdio_remote_xprt.channel, buf);
-			mutex_unlock(&modem_reset_lock);
 			queue_delayed_work(sdio_xprt_read_workqueue,
 					   &work_read_data,
 					   msecs_to_jiffies(100));
-			return;
+			break;
 		}
 
 		if (size == 0)
@@ -466,7 +464,7 @@ static void sdio_xprt_read_data(struct work_struct *work)
 			&sdio_remote_xprt.channel->read_list_lock, flags);
 	}
 
-	if (!modem_reset)
+	if (!modem_reset && !list_empty(&sdio_remote_xprt.channel->read_list))
 		msm_rpcrouter_xprt_notify(&sdio_remote_xprt.xprt,
 				  RPCROUTER_XPRT_EVENT_DATA);
 	mutex_unlock(&modem_reset_lock);
