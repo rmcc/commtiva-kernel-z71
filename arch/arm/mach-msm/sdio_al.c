@@ -3133,9 +3133,9 @@ void sdio_al_card_remove(struct mmc_card *card)
 	if (card->sdio_func[0])
 		sdio_release_host(card->sdio_func[0]);
 
-	pr_info(MODULE_NAME ":%s: wake_unlock for card %d\n",
+	pr_info(MODULE_NAME ":%s: vote for sleep for card %d\n",
 			 __func__, card->host->index);
-	wake_lock(&sdio_al_dev->wake_lock);
+	sdio_al_vote_for_sleep(sdio_al_dev, 1);
 
 	pr_info(MODULE_NAME ":%s: flush_workqueue for card %d\n",
 			 __func__, card->host->index);
@@ -3645,7 +3645,7 @@ static int sdio_al_subsys_notifier_cb(struct notifier_block *this,
 
 		pr_debug(MODULE_NAME ": %s: Allows sleep for card %d", __func__,
 			sdio_al_dev->card->host->index);
-		wake_lock(&sdio_al_dev->wake_lock);
+		sdio_al_vote_for_sleep(sdio_al_dev, 1);
 	}
 
 	return NOTIFY_OK;
