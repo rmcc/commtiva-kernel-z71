@@ -40,7 +40,7 @@
 
 #define MAX_WRITE_RETRY 5
 #define MAGIC_NO_V1 0x33FC
-#define NUM_SDIO_CTL_PORTS 8
+#define NUM_SDIO_CTL_PORTS 9
 #define DEVICE_NAME "sdioctl"
 #define MAX_BUF_SIZE 2048
 #define DEBUG
