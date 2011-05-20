@@ -410,3 +410,4 @@ header-y += msm_audio_wmapro.h
 header-y += msm_audio_mvs.h
 header-y += msm_ipc.h
 header-y += msm_charm.h
+header-y += tzcom.h
