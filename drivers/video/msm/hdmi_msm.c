@@ -535,7 +535,7 @@ static irqreturn_t hdmi_msm_isr(int irq, void *dev_id)
 		/* AUTH_SUCCESS_INT */
 		HDMI_OUTP(0x0118, (hdcp_int_val | (1 << 1)) & ~(1 << 0));
 		DEV_INFO("HDCP: AUTH_SUCCESS_INT received\n");
-		complete(&hdmi_msm_state->hdcp_success_done);
+		complete_all(&hdmi_msm_state->hdcp_success_done);
 		return IRQ_HANDLED;
 	}
 	/*    [4] AUTH_FAIL_INT		[R]	HDCP Authentication Lost
@@ -1311,16 +1311,13 @@ static void hdcp_deauthenticate(void)
 static int hdcp_authentication_part1(void)
 {
 	int ret = 0;
+	boolean is_match;
 	uint32 timeout_count;
-
 	uint8 bcaps;
-
 	uint8 aksv[5];
 	uint32 qfprom_aksv_0, qfprom_aksv_1, link0_aksv_0, link0_aksv_1;
-
 	uint8 bksv[5];
 	uint32 link0_bksv_0, link0_bksv_1;
-
 	uint8 an[8];
 	uint32 link0_an_0, link0_an_1;
 
@@ -1440,7 +1437,7 @@ static int hdcp_authentication_part1(void)
 	timeout_count = 100;
 	while (((HDMI_INP_ND(0x011C) & (0x3 << 8)) != (0x3 << 8))
 			&& timeout_count--)
-		msleep(10);
+		msleep(20);
 	if (!timeout_count) {
 		ret = -ETIMEDOUT;
 		DEV_ERR("%s(%d): timedout, An0=%d, An1=%d\n",
@@ -1517,7 +1514,9 @@ static int hdcp_authentication_part1(void)
 	DEV_DBG("HDCP: Link0-BKSV=%02x%08x\n", link0_bksv_1, link0_bksv_0);
 
 	/* Reading R0' 2 bytes at offset 0x08 */
-	ret = hdmi_msm_ddc_read(0x74, 0x08, buf, 16, 5, "RO'");
+	ret = hdmi_msm_ddc_read(0x74, 0x08, buf, 2, 5, "RO'");
+	DEV_DBG("DEBUG RO BUFF[0]is %2x, BUFF[1] is %2x\n ", buf[0], buf[1]) ;
+
 	if (ret) {
 		DEV_ERR("%s(%d): Read RO's failed", __func__, __LINE__);
 		goto error;
@@ -1525,17 +1524,21 @@ static int hdcp_authentication_part1(void)
 
 	/* 0x013C HDCP_RCVPORT_DATA2_0
 	     [15:0] LINK0_RI */
-	HDMI_OUTP(0x013C, (((uint32)buf[9]) << 8) | buf[8]);
-	DEV_DBG("HDCP: R0'=%02x%02x\n", buf[9], buf[8]);
+	HDMI_OUTP(0x013C, (((uint32)buf[1]) << 8) | buf[0]);
+	DEV_DBG("HDCP: R0'=%02x%02x\n", buf[1], buf[0]);
 
+	INIT_COMPLETION(hdmi_msm_state->hdcp_success_done);
 	timeout_count = wait_for_completion_interruptible_timeout(
-		&hdmi_msm_state->hdcp_success_done, HZ/2);
+		&hdmi_msm_state->hdcp_success_done, HZ*2);
+
 	if (!timeout_count) {
 		ret = -ETIMEDOUT;
+		is_match = HDMI_INP(0x011C) & BIT(12);
 		DEV_ERR("%s(%d): timedout, Link0=<%s>\n", __func__, __LINE__,
-			(HDMI_INP(0x011C) & BIT(12)) ? "RI_MATCH"
-			: "RI_MISMATCH");
-		goto error;
+			is_match ? "RI_MATCH"
+			: "No RI Match INTR in time");
+		if (!is_match)
+			goto error;
 	}
 
 	/* 0x011C HDCP_LINK0_STATUS
@@ -1552,7 +1555,6 @@ static int hdcp_authentication_part1(void)
 
 	DEV_INFO("HDCP: authentication part I, successful\n");
 	return 0;
-
 error:
 	return ret;
 }
@@ -1770,7 +1772,7 @@ static int hdcp_authentication_part2(void)
 	/* Now wait for HDCP_SHA_COMP_DONE */
 	timeout_count = 100;
 	while ((0x10 != (HDMI_INP_ND(0x0240) & 0x10)) && timeout_count--)
-		msleep(10);
+		msleep(20);
 	if (!timeout_count) {
 		ret = -ETIMEDOUT;
 		DEV_ERR("%s(%d): timedout", __func__, __LINE__);
@@ -1782,7 +1784,7 @@ static int hdcp_authentication_part2(void)
 	timeout_count = 100;
 	while (((HDMI_INP_ND(0x011C) & (1 << 20)) != (1 << 20))
 			&& timeout_count--)
-		msleep(10);
+		msleep(20);
 	if (!timeout_count) {
 		ret = -ETIMEDOUT;
 		DEV_ERR("%s(%d): timedout", __func__, __LINE__);
