@@ -31,11 +31,19 @@ static DECLARE_WORK(work_read, sdio_smem_read);
 static DECLARE_WAIT_QUEUE_HEAD(waitq);
 static int bytes_avail;
 
+static void sdio_smem_release(struct device *dev)
+{
+	pr_debug("sdio smem released\n");
+}
+
 static struct sdio_smem_client client = {
 	.plat_dev = {
 		.name = "SDIO_SMEM_CLIENT",
-			.id = -1,
+		.id = -1,
+		.dev = {
+			.release = sdio_smem_release,
 		},
+	},
 };
 
 static void sdio_smem_read(struct work_struct *work)
@@ -108,13 +116,31 @@ int sdio_smem_register_client(void)
 	return err;
 }
 
+int sdio_smem_unregister_client(void)
+{
+	sdio_close(channel);
+	destroy_workqueue(workq);
+	bytes_avail = 0;
+	client.buf = NULL;
+	client.cb_func = NULL;
+	client.size = 0;
+	pr_debug("SDIO SMEM channel closed\n");
+	return 0;
+}
+
 static int sdio_smem_probe(struct platform_device *pdev)
 {
 	return platform_device_register(&client.plat_dev);
 }
 
+static int sdio_smem_remove(struct platform_device *pdev)
+{
+	platform_device_unregister(&client.plat_dev);
+	return 0;
+}
 static struct platform_driver sdio_smem_drv = {
 	.probe		= sdio_smem_probe,
+	.remove		= sdio_smem_remove,
 	.driver		= {
 		.name	= "SDIO_SMEM",
 		.owner	= THIS_MODULE,
