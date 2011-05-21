@@ -52,6 +52,12 @@ void *restart_reason;
 static int in_panic;
 static void *dload_mode_addr;
 
+/* Download mode master kill-switch */
+static int dload_set(const char *val, struct kernel_param *kp);
+static int download_mode = 1;
+module_param_call(download_mode, dload_set, param_get_int,
+			&download_mode, 0644);
+
 static int panic_prep_restart(struct notifier_block *this,
 			      unsigned long event, void *ptr)
 {
@@ -71,6 +77,27 @@ static void set_dload_mode(int on)
 		       dload_mode_addr + sizeof(unsigned int));
 		dmb();
 	}
+}
+
+static int dload_set(const char *val, struct kernel_param *kp)
+{
+	int ret;
+	int old_val = download_mode;
+
+	ret = param_set_int(val, kp);
+
+	if (ret)
+		return ret;
+
+	/* If download_mode is not zero or one, ignore. */
+	if (download_mode >> 1) {
+		download_mode = old_val;
+		return -EINVAL;
+	}
+
+	set_dload_mode(download_mode);
+
+	return 0;
 }
 #else
 #define set_dload_mode(x) do {} while (0)
@@ -110,6 +137,10 @@ void arch_reset(char mode, const char *cmd)
 	/* Write download mode flags if restart_mode says so */
 	if (restart_mode == RESTART_DLOAD)
 		set_dload_mode(1);
+
+	/* Kill download mode if master-kill switch is set */
+	if (!download_mode)
+		set_dload_mode(0);
 #endif
 
 	printk(KERN_NOTICE "Going down for restart now\n");
