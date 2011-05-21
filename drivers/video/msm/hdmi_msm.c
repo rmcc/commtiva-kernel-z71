@@ -619,13 +619,11 @@ static int check_hdmi_features(void)
 	return 0;
 }
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
 static boolean hdmi_msm_has_hdcp(void)
 {
 	/* RAW_FEAT_CONFIG_ROW0_LSB, HDCP_DISABLE */
 	return (inpdw(QFPROM_BASE + 0x0238) & 0x00400000) ? FALSE : TRUE;
 }
-#endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT */
 
 static boolean hdmi_msm_is_power_on(void)
 {
@@ -3202,6 +3200,11 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 	rc = hdmi_msm_hpd_on(true);
 	if (rc)
 		goto error;
+
+	if (hdmi_msm_has_hdcp())
+		external_common_state->present_hdcp = TRUE;
+	else
+		external_common_state->present_hdcp = FALSE;
 
 	queue_work(hdmi_work_queue, &hdmi_msm_state->hpd_read_work);
 	return 0;
