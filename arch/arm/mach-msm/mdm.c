@@ -178,8 +178,9 @@ static long charm_modem_ioctl(struct file *filp, unsigned int cmd,
 	case WAIT_FOR_RESTART:
 		CHARM_DBG("%s: wait for charm to need images reloaded\n",
 				__func__);
-		wait_for_completion(&charm_needs_reload);
-		put_user(boot_type, (unsigned long __user *) arg);
+		ret = wait_for_completion_interruptible(&charm_needs_reload);
+		if (!ret)
+			put_user(boot_type, (unsigned long __user *) arg);
 		INIT_COMPLETION(charm_needs_reload);
 		break;
 	default:
