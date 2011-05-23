@@ -28,6 +28,7 @@
 #define SDIO_PREFIX "SDIO_"
 #define PEER_CHANNEL_NAME_SIZE		4
 #define CHANNEL_NAME_SIZE (sizeof(SDIO_PREFIX) + PEER_CHANNEL_NAME_SIZE)
+#define SDIO_TEST_POSTFIX_SIZE 5
 
 struct sdio_al_device; /* Forward Declaration */
 
@@ -130,6 +131,7 @@ struct peer_sdioc_channel_config {
 struct sdio_channel {
 	/* Channel Configuration Parameters*/
 	char name[CHANNEL_NAME_SIZE];
+	char ch_test_name[CHANNEL_NAME_SIZE+SDIO_TEST_POSTFIX_SIZE];
 	int read_threshold;
 	int write_threshold;
 	int def_read_threshold;

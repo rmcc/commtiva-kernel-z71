@@ -148,6 +148,8 @@
 
 #define TIME_TO_WAIT_US 500
 
+#define SDIO_TEST_POSTFIX "_TEST"
+
 #define DATA_DEBUG(x...) if (sdio_al->debug.debug_data_on) pr_info(x)
 #define LPM_DEBUG(x...) if (sdio_al->debug.debug_lpm_on) pr_info(x)
 
@@ -2909,25 +2911,35 @@ static int init_channels(struct sdio_al_device *sdio_al_dev)
 	if (ret)
 		goto exit;
 
-	if (sdio_al->unittest_mode) {
-		pr_info(MODULE_NAME ":==== SDIO-AL UNIT-TEST ====\n");
-		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
-			if (!sdio_al_dev->channel[i].is_valid)
-				continue;
+	for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
+		int ch_name_size;
+		if (!sdio_al_dev->channel[i].is_valid)
+			continue;
+		if (sdio_al->unittest_mode) {
 			test_channel_init(sdio_al_dev->channel[i].name);
-		}
-	}
-	else
-		/* Allow clients to probe for this driver */
-		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
-			if (!sdio_al_dev->channel[i].is_valid)
-				continue;
+			memset(sdio_al_dev->channel[i].ch_test_name, 0,
+				sizeof(sdio_al_dev->channel[i].ch_test_name));
+			ch_name_size = strnlen(sdio_al_dev->channel[i].name,
+				       CHANNEL_NAME_SIZE);
+			strncpy(sdio_al_dev->channel[i].ch_test_name,
+			       sdio_al_dev->channel[i].name,
+			       ch_name_size);
+			strncat(sdio_al_dev->channel[i].ch_test_name +
+			       ch_name_size,
+			       SDIO_TEST_POSTFIX,
+			       SDIO_TEST_POSTFIX_SIZE);
+			sdio_al_dev->channel[i].pdev.name =
+				sdio_al_dev->channel[i].ch_test_name;
+		} else {
 			sdio_al_dev->channel[i].pdev.name =
 				sdio_al_dev->channel[i].name;
-			sdio_al_dev->channel[i].pdev.dev.release =
-				default_sdio_al_release;
-			platform_device_register(&sdio_al_dev->channel[i].pdev);
 		}
+		pr_info(MODULE_NAME ":pdev.name = %s\n",
+			sdio_al_dev->channel[i].pdev.name);
+		sdio_al_dev->channel[i].pdev.dev.release =
+			default_sdio_al_release;
+		platform_device_register(&sdio_al_dev->channel[i].pdev);
+	}
 
 exit:
 	sdio_release_host(sdio_al_dev->func1);
