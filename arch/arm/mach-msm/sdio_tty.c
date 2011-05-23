@@ -508,13 +508,6 @@ void *sdio_tty_init_tty(char *tty_name, char *sdio_ch_name)
 
 	sdio_tty_drv->sdio_tty_state = TTY_REGISTERED;
 	return sdio_tty_drv;
-
-	tty_unregister_device(sdio_tty_drv->tty_drv, 0);
-	if (tty_unregister_driver(sdio_tty_drv->tty_drv))
-		pr_err(SDIO_TTY_MODULE_NAME ": %s: tty_unregister_driver() "
-		       "failed.\n", __func__);
-	kfree(sdio_tty_drv);
-	return NULL;
 }
 EXPORT_SYMBOL(sdio_tty_init_tty);
 
