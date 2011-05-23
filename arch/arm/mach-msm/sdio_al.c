@@ -3148,6 +3148,7 @@ void sdio_al_card_remove(struct mmc_card *card)
 			 __func__, card->host->index);
 	flush_workqueue(sdio_al_dev->workqueue);
 	destroy_workqueue(sdio_al_dev->workqueue);
+	wake_lock_destroy(&sdio_al_dev->wake_lock);
 
 	pr_info(MODULE_NAME ":%s: delete data structures for card %d\n",
 			 __func__, card->host->index);
