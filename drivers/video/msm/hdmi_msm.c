@@ -1154,7 +1154,268 @@ error:
 	return status;
 }
 
-#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+static int hdmi_msm_ddc_read_edid_seg(uint32 dev_addr, uint32 offset,
+	uint8 *data_buf, uint32 data_len, uint32 request_len, int retry,
+	const char *what)
+{
+	uint32 reg_val, ndx;
+	int status = 0;
+	uint32 time_out_count;
+	int log_retry_fail = retry != 1;
+	int seg_addr = 0x60, seg_num = 0x01;
+
+	if (NULL == data_buf) {
+		status = -EINVAL;
+		DEV_ERR("%s: invalid input paramter\n", __func__);
+		goto error;
+	}
+
+again:
+	status = hdmi_msm_ddc_clear_irq(what);
+	if (status)
+		goto error;
+
+	/* Ensure Device Address has LSB set to 0 to indicate Slave addr read */
+	dev_addr &= 0xFE;
+
+	/* 0x0238 HDMI_DDC_DATA
+	   [31] INDEX_WRITE WRITE ONLY. To write index field, set this bit to
+		1 while writing HDMI_DDC_DATA.
+	   [23:16] INDEX Use to set index into DDC buffer for next read or
+		current write, or to read index of current read or next write.
+		Writable only when INDEX_WRITE=1.
+	   [15:8] DATA Use to fill or read the DDC buffer
+	   [0] DATA_RW Select whether buffer access will be a read or write.
+		For writes, address auto-increments on write to HDMI_DDC_DATA.
+		For reads, address autoincrements on reads to HDMI_DDC_DATA.
+		* 0: Write
+		* 1: Read */
+
+	/* 1. Write to HDMI_I2C_DATA with the following fields set in order to
+	 *    handle portion #1
+	 *    DATA_RW = 0x0 (write)
+	 *    DATA = linkAddress (primary link address and writing)
+	 *    INDEX = 0x0 (initial offset into buffer)
+	 *    INDEX_WRITE = 0x1 (setting initial offset) */
+	HDMI_OUTP_ND(0x0238, (0x1UL << 31) | (seg_addr << 8));
+
+	/* 2. Write to HDMI_I2C_DATA with the following fields set in order to
+	 *    handle portion #2
+	 *    DATA_RW = 0x0 (write)
+	 *    DATA = offsetAddress
+	 *    INDEX = 0x0
+	 *    INDEX_WRITE = 0x0 (auto-increment by hardware) */
+	HDMI_OUTP_ND(0x0238, seg_num << 8);
+
+	/* 3. Write to HDMI_I2C_DATA with the following fields set in order to
+	 *    handle portion #3
+	 *    DATA_RW = 0x0 (write)
+	 *    DATA = linkAddress + 1 (primary link address 0x74 and reading)
+	 *    INDEX = 0x0
+	 *    INDEX_WRITE = 0x0 (auto-increment by hardware) */
+	HDMI_OUTP_ND(0x0238, dev_addr << 8);
+	HDMI_OUTP_ND(0x0238, offset << 8);
+	HDMI_OUTP_ND(0x0238, (dev_addr | 1) << 8);
+
+	/* Data setup is complete, now setup the transaction characteristics */
+
+	/* 0x0228 HDMI_DDC_TRANS0
+	   [23:16] CNT0 Byte count for first transaction (excluding the first
+		byte, which is usually the address).
+	   [13] STOP0 Determines whether a stop bit will be sent after the first
+		transaction
+		* 0: NO STOP
+		* 1: STOP
+	   [12] START0 Determines whether a start bit will be sent before the
+		first transaction
+		* 0: NO START
+		* 1: START
+	   [8] STOP_ON_NACK0 Determines whether the current transfer will stop
+		if a NACK is received during the first transaction (current
+		transaction always stops).
+		* 0: STOP CURRENT TRANSACTION, GO TO NEXT TRANSACTION
+		* 1: STOP ALL TRANSACTIONS, SEND STOP BIT
+	   [0] RW0 Read/write indicator for first transaction - set to 0 for
+		write, 1 for read. This bit only controls HDMI_DDC behaviour -
+		the R/W bit in the transaction is programmed into the DDC buffer
+		as the LSB of the address byte.
+		* 0: WRITE
+		* 1: READ */
+
+	/* 4. Write to HDMI_I2C_TRANSACTION0 with the following fields set in
+	      order to handle characteristics of portion #1 and portion #2
+	 *    RW0 = 0x0 (write)
+	 *    START0 = 0x1 (insert START bit)
+	 *    STOP0 = 0x0 (do NOT insert STOP bit)
+	 *    CNT0 = 0x1 (single byte transaction excluding address) */
+	HDMI_OUTP_ND(0x0228, (1 << 12) | (1 << 16));
+
+	/* 0x022C HDMI_DDC_TRANS1
+	  [23:16] CNT1 Byte count for second transaction (excluding the first
+		byte, which is usually the address).
+	  [13] STOP1 Determines whether a stop bit will be sent after the second
+		transaction
+		* 0: NO STOP
+		* 1: STOP
+	  [12] START1 Determines whether a start bit will be sent before the
+		second transaction
+		* 0: NO START
+		* 1: START
+	  [8] STOP_ON_NACK1 Determines whether the current transfer will stop if
+		a NACK is received during the second transaction (current
+		transaction always stops).
+		* 0: STOP CURRENT TRANSACTION, GO TO NEXT TRANSACTION
+		* 1: STOP ALL TRANSACTIONS, SEND STOP BIT
+	  [0] RW1 Read/write indicator for second transaction - set to 0 for
+		write, 1 for read. This bit only controls HDMI_DDC behaviour -
+		the R/W bit in the transaction is programmed into the DDC buffer
+		as the LSB of the address byte.
+		* 0: WRITE
+		* 1: READ */
+
+	/* 5. Write to HDMI_I2C_TRANSACTION1 with the following fields set in
+	      order to handle characteristics of portion #3
+	 *    RW1 = 0x1 (read)
+	 *    START1 = 0x1 (insert START bit)
+	 *    STOP1 = 0x1 (insert STOP bit)
+	 *    CNT1 = data_len   (it's 128 (0x80) for a blk read) */
+	HDMI_OUTP_ND(0x022C, (1 << 12) | (1 << 16));
+
+	/* 0x022C HDMI_DDC_TRANS2
+	  [23:16] CNT1 Byte count for second transaction (excluding the first
+		byte, which is usually the address).
+	  [13] STOP1 Determines whether a stop bit will be sent after the second
+		transaction
+		* 0: NO STOP
+		* 1: STOP
+	  [12] START1 Determines whether a start bit will be sent before the
+		second transaction
+		* 0: NO START
+		* 1: START
+	  [8] STOP_ON_NACK1 Determines whether the current transfer will stop if
+		a NACK is received during the second transaction (current
+		transaction always stops).
+		* 0: STOP CURRENT TRANSACTION, GO TO NEXT TRANSACTION
+		* 1: STOP ALL TRANSACTIONS, SEND STOP BIT
+	  [0] RW1 Read/write indicator for second transaction - set to 0 for
+		write, 1 for read. This bit only controls HDMI_DDC behaviour -
+		the R/W bit in the transaction is programmed into the DDC buffer
+		as the LSB of the address byte.
+		* 0: WRITE
+		* 1: READ */
+
+	/* 5. Write to HDMI_I2C_TRANSACTION1 with the following fields set in
+	      order to handle characteristics of portion #3
+	 *    RW1 = 0x1 (read)
+	 *    START1 = 0x1 (insert START bit)
+	 *    STOP1 = 0x1 (insert STOP bit)
+	 *    CNT1 = data_len   (it's 128 (0x80) for a blk read) */
+	HDMI_OUTP_ND(0x0230, 1 | (1 << 12) | (1 << 13) | (request_len << 16));
+
+	/* Trigger the I2C transfer */
+	/* 0x020C HDMI_DDC_CTRL
+	   [21:20] TRANSACTION_CNT
+		Number of transactions to be done in current transfer.
+		* 0x0: transaction0 only
+		* 0x1: transaction0, transaction1
+		* 0x2: transaction0, transaction1, transaction2
+		* 0x3: transaction0, transaction1, transaction2, transaction3
+	   [3] SW_STATUS_RESET
+		Write 1 to reset HDMI_DDC_SW_STATUS flags, will reset SW_DONE,
+		ABORTED, TIMEOUT, SW_INTERRUPTED, BUFFER_OVERFLOW,
+		STOPPED_ON_NACK, NACK0, NACK1, NACK2, NACK3
+	   [2] SEND_RESET Set to 1 to send reset sequence (9 clocks with no
+		data) at start of transfer.  This sequence is sent after GO is
+		written to 1, before the first transaction only.
+	   [1] SOFT_RESET Write 1 to reset DDC controller
+	   [0] GO WRITE ONLY. Write 1 to start DDC transfer. */
+
+	/* 6. Write to HDMI_I2C_CONTROL to kick off the hardware.
+	 *    Note that NOTHING has been transmitted on the DDC lines up to this
+	 *    point.
+	 *    TRANSACTION_CNT = 0x2 (execute transaction0 followed by
+	 *    transaction1)
+	 *    GO = 0x1 (kicks off hardware) */
+	INIT_COMPLETION(hdmi_msm_state->ddc_sw_done);
+	HDMI_OUTP_ND(0x020C, (1 << 0) | (2 << 20));
+
+	time_out_count = wait_for_completion_interruptible_timeout(
+		&hdmi_msm_state->ddc_sw_done, HZ/2);
+	HDMI_OUTP_ND(0x0214, 0x2);
+	if (!time_out_count) {
+		if (retry-- > 0) {
+			DEV_INFO("%s: failed timout, retry=%d\n", __func__,
+				retry);
+			goto again;
+		}
+		status = -ETIMEDOUT;
+		DEV_ERR("%s: timedout(7), DDC SW Status=%08x, HW "
+			"Status=%08x, Int Ctrl=%08x\n", __func__,
+			HDMI_INP(0x0218), HDMI_INP(0x021C), HDMI_INP(0x0214));
+		goto error;
+	}
+
+	/* Read DDC status */
+	reg_val = HDMI_INP_ND(0x0218);
+	reg_val &= 0x00001000 | 0x00002000 | 0x00004000 | 0x00008000;
+
+	/* Check if any NACK occurred */
+	if (reg_val) {
+		HDMI_OUTP_ND(0x020C, BIT(3)); /* SW_STATUS_RESET */
+		if (retry == 1)
+			HDMI_OUTP_ND(0x020C, BIT(1)); /* SOFT_RESET */
+		if (retry-- > 0) {
+			DEV_DBG("%s(%s): failed NACK=0x%08x, retry=%d, "
+				"dev-addr=0x%02x, offset=0x%02x, "
+				"length=%d\n", __func__, what,
+				reg_val, retry, dev_addr,
+				offset, data_len);
+			goto again;
+		}
+		status = -EIO;
+		if (log_retry_fail)
+			DEV_ERR("%s(%s): failed NACK=0x%08x, dev-addr=0x%02x, "
+				"offset=0x%02x, length=%d\n", __func__, what,
+				reg_val, dev_addr, offset, data_len);
+		goto error;
+	}
+
+	/* 0x0238 HDMI_DDC_DATA
+	   [31] INDEX_WRITE WRITE ONLY. To write index field, set this bit to 1
+		while writing HDMI_DDC_DATA.
+	   [23:16] INDEX Use to set index into DDC buffer for next read or
+		current write, or to read index of current read or next write.
+		Writable only when INDEX_WRITE=1.
+	   [15:8] DATA Use to fill or read the DDC buffer
+	   [0] DATA_RW Select whether buffer access will be a read or write.
+		For writes, address auto-increments on write to HDMI_DDC_DATA.
+		For reads, address autoincrements on reads to HDMI_DDC_DATA.
+		* 0: Write
+		* 1: Read */
+
+	/* 8. ALL data is now available and waiting in the DDC buffer.
+	 *    Read HDMI_I2C_DATA with the following fields set
+	 *    RW = 0x1 (read)
+	 *    DATA = BCAPS (this is field where data is pulled from)
+	 *    INDEX = 0x3 (where the data has been placed in buffer by hardware)
+	 *    INDEX_WRITE = 0x1 (explicitly define offset) */
+	/* Write this data to DDC buffer */
+	HDMI_OUTP_ND(0x0238, 0x1 | (3 << 16) | (1 << 31));
+
+	/* Discard first byte */
+	HDMI_INP_ND(0x0238);
+	for (ndx = 0; ndx < data_len; ++ndx) {
+		reg_val = HDMI_INP_ND(0x0238);
+		data_buf[ndx] = (uint8) ((reg_val & 0x0000FF00) >> 8);
+	}
+
+	DEV_DBG("%s[%s] success\n", __func__, what);
+
+error:
+	return status;
+}
+
+
 static int hdmi_msm_ddc_read(uint32 dev_addr, uint32 offset, uint8 *data_buf,
 	uint32 data_len, int retry, const char *what, boolean no_align)
 {
@@ -1170,7 +1431,7 @@ static int hdmi_msm_ddc_read(uint32 dev_addr, uint32 offset, uint8 *data_buf,
 			data_len, 32 * ((data_len + 31) / 32), retry, what);
 	}
 }
-#endif
+
 
 static int hdmi_msm_read_edid_block(int block, uint8 *edid_buf)
 {
@@ -1181,9 +1442,16 @@ static int hdmi_msm_read_edid_block(int block, uint8 *edid_buf)
 		DEV_DBG("EDID: reading block(%d) with block-size=%d\n",
 			block, block_size);
 		for (i = 0; i < 0x80; i += block_size) {
-			rc = hdmi_msm_ddc_read_retry(0xA0, block*0x80 + i,
-				edid_buf+i, block_size, block_size, 1,
-				"EDID");
+			/*Read EDID twice with 32bit alighnment too */
+			if (block < 2) {
+				rc = hdmi_msm_ddc_read(0xA0, block*0x80 + i,
+					edid_buf+i, block_size, 1,
+					"EDID", FALSE);
+			} else {
+				rc = hdmi_msm_ddc_read_edid_seg(0xA0,
+				block*0x80 + i, edid_buf+i, block_size,
+				block_size, 1, "EDID");
+			}
 			if (rc)
 				break;
 		}
