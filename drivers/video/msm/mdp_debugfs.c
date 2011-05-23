@@ -1,4 +1,4 @@
-/* Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -319,6 +319,11 @@ static ssize_t mdp_stat_read(
 	dlen -= len;
 	len = snprintf(bp, dlen, "unerrun_external:  %08lu\n\n",
 					mdp4_stat.intr_underrun_e);
+
+	bp += len;
+	dlen -= len;
+	len = snprintf(bp, dlen, "intr_dsi  :    %08lu\n\n",
+					mdp4_stat.intr_dsi);
 
 	bp += len;
 	dlen -= len;
