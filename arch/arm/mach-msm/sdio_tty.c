@@ -46,6 +46,8 @@ struct sdio_tty {
 	int is_sdio_open;
 };
 
+static struct sdio_tty *sdio_tty;
+
 #define DEBUG_MSG(sdio_tty, x...) if (sdio_tty->debug_msg_on) pr_info(x)
 
 static void sdio_tty_read(struct work_struct *work)
@@ -297,15 +299,16 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 		       __func__);
 		return -ENODEV;
 	}
-	sdio_tty_drv = tty->driver_data;
+	sdio_tty_drv = sdio_tty;
 	if (!sdio_tty_drv) {
 		pr_err(SDIO_TTY_MODULE_NAME ": %s: NULL sdio_tty_drv",
 		       __func__);
 		return -ENODEV;
 	}
 
-	sdio_tty_drv->tty_str->driver_data = sdio_tty_drv;
+	tty->driver_data = sdio_tty_drv;
 
+	sdio_tty_drv->tty_str = tty;
 	sdio_tty_drv->tty_str->low_latency = 1;
 	sdio_tty_drv->tty_str->icanon = 0;
 	set_bit(TTY_NO_WRITE_SPLIT, &sdio_tty_drv->tty_str->flags);
@@ -454,6 +457,7 @@ void *sdio_tty_init_tty(char *tty_name, char *sdio_ch_name)
 		return NULL;
 	}
 
+	sdio_tty = sdio_tty_drv;
 	sdio_tty_drv->sdio_ch_name = sdio_ch_name;
 
 	INIT_WORK(&sdio_tty_drv->work_read, sdio_tty_read);
@@ -502,6 +506,7 @@ void *sdio_tty_init_tty(char *tty_name, char *sdio_ch_name)
 		pr_err(SDIO_TTY_MODULE_NAME ": %s: tty_register_device() "
 			"failed\n", __func__);
 		tty_unregister_driver(sdio_tty_drv->tty_drv);
+		put_tty_driver(sdio_tty_drv->tty_drv);
 		kfree(sdio_tty_drv);
 		return NULL;
 	}
@@ -530,6 +535,7 @@ int sdio_tty_uninit_tty(void *sdio_tty_handle)
 			pr_err(SDIO_TTY_MODULE_NAME ": %s: "
 			    "tty_unregister_driver() failed\n", __func__);
 		}
+		put_tty_driver(sdio_tty_drv->tty_drv);
 		sdio_tty_drv->sdio_tty_state = TTY_INITIAL;
 		sdio_tty_drv->tty_drv = NULL;
 	}
