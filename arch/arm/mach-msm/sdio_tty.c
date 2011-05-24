@@ -333,6 +333,12 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 			__func__);
 
 		sdio_tty_drv->is_sdio_open = 1;
+	} else {
+		/* If SDIO channel is already open try to read the data
+		 * from the modem
+		 */
+		queue_work(sdio_tty_drv->workq, &sdio_tty_drv->work_read);
+
 	}
 
 	return ret;
