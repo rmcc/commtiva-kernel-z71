@@ -1199,6 +1199,8 @@ static int vfe31_zsl(void)
 	}
 	msm_io_w(irq_comp_mask, vfe31_ctrl->vfebase + VFE_IRQ_COMP_MASK);
 	vfe31_start_common();
+	msm_camio_set_perf_lvl(S_ZSL);
+	usleep(1000);
 	/* for debug */
 	msm_io_w(1, vfe31_ctrl->vfebase + 0x18C);
 	msm_io_w(1, vfe31_ctrl->vfebase + 0x188);
@@ -1256,7 +1258,11 @@ static int vfe31_capture(uint32_t num_frames_capture)
 		}
 	}
 	msm_io_w(irq_comp_mask, vfe31_ctrl->vfebase + VFE_IRQ_COMP_MASK);
-	msm_camio_set_perf_lvl(S_CAPTURE);
+	if (p_sync->stereocam_enabled)
+		msm_camio_set_perf_lvl(S_STEREO_CAPTURE);
+	else
+		msm_camio_set_perf_lvl(S_CAPTURE);
+
 	usleep(1000);
 	vfe31_start_common();
 	return 0;
@@ -1265,6 +1271,7 @@ static int vfe31_capture(uint32_t num_frames_capture)
 static int vfe31_start(void)
 {
 	uint32_t irq_comp_mask = 0;
+	struct msm_sync* p_sync = (struct msm_sync *)vfe_syncdata;
 	/* start command now is only good for continuous mode. */
 	if ((vfe31_ctrl->operation_mode != VFE_MODE_OF_OPERATION_CONTINUOUS) &&
 		(vfe31_ctrl->operation_mode != VFE_MODE_OF_OPERATION_VIDEO))
@@ -1291,7 +1298,11 @@ static int vfe31_start(void)
 		msm_io_w(1, vfe31_ctrl->vfebase + V31_AXI_OUT_OFF + 20 +
 			24 * (vfe31_ctrl->outpath.out0.ch1));
 	}
-	msm_camio_set_perf_lvl(S_PREVIEW);
+	if (p_sync->stereocam_enabled)
+		msm_camio_set_perf_lvl(S_STEREO_VIDEO);
+	else
+		msm_camio_set_perf_lvl(S_PREVIEW);
+
 	usleep(1000);
 	vfe31_start_common();
 	return 0;
