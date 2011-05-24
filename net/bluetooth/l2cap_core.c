@@ -2130,6 +2130,7 @@ static struct sk_buff *l2cap_create_iframe_pdu(struct sock *sk,
 {
 	struct sk_buff *skb;
 	int err, count, hlen;
+	int reserve = 0;
 	struct l2cap_hdr *lh;
 	u8 fcs = l2cap_pi(sk)->fcs;
 
@@ -2149,19 +2150,31 @@ static struct sk_buff *l2cap_create_iframe_pdu(struct sock *sk,
 
 	count = min_t(unsigned int, (l2cap_pi(sk)->conn->mtu - hlen), len);
 
+	/* Allocate extra headroom for Qualcomm PAL.  This is only
+	 * necessary in two places (here and when creating sframes)
+	 * because only unfragmented iframes and sframes are sent
+	 * using AMP controllers.
+	 */
+	if (l2cap_pi(sk)->ampcon &&
+			l2cap_pi(sk)->ampcon->hdev->manufacturer == 0x001d)
+		reserve = BT_SKB_RESERVE_80211;
+
 	/* Don't use bt_skb_send_alloc() while resegmenting, since
 	 * it is not ok to block.
 	 */
 	if (reseg) {
-		skb = bt_skb_alloc(count + hlen, GFP_ATOMIC);
+		skb = bt_skb_alloc(count + hlen + reserve, GFP_ATOMIC);
 		if (skb)
 			skb_set_owner_w(skb, sk);
 	} else {
-		skb = bt_skb_send_alloc(sk, count + hlen,
+		skb = bt_skb_send_alloc(sk, count + hlen + reserve,
 					msg->msg_flags & MSG_DONTWAIT, &err);
 	}
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
+
+	if (reserve)
+		skb_reserve(skb, reserve);
 
 	bt_cb(skb)->control.fcs = fcs;
 
@@ -2229,6 +2242,7 @@ static struct sk_buff *l2cap_create_sframe_pdu(struct sock *sk, u32 control)
 {
 	struct sk_buff *skb;
 	int len;
+	int reserve = 0;
 	struct l2cap_hdr *lh;
 
 	if (l2cap_pi(sk)->extended_control)
@@ -2239,10 +2253,18 @@ static struct sk_buff *l2cap_create_sframe_pdu(struct sock *sk, u32 control)
 	if (l2cap_pi(sk)->fcs == L2CAP_FCS_CRC16)
 		len += L2CAP_FCS_SIZE;
 
-	skb = bt_skb_alloc(len, GFP_ATOMIC);
+	/* Allocate extra headroom for Qualcomm PAL */
+	if (l2cap_pi(sk)->ampcon &&
+			l2cap_pi(sk)->ampcon->hdev->manufacturer == 0x001d)
+		reserve = BT_SKB_RESERVE_80211;
+
+	skb = bt_skb_alloc(len + reserve, GFP_ATOMIC);
 
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
+
+	if (reserve)
+		skb_reserve(skb, reserve);
 
 	lh = (struct l2cap_hdr *) skb_put(skb, L2CAP_HDR_SIZE);
 	lh->cid = cpu_to_le16(l2cap_pi(sk)->dcid);
