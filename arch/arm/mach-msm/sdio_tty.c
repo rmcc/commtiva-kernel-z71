@@ -43,6 +43,7 @@ struct sdio_tty {
 	int debug_msg_on;
 	char *read_buf;
 	enum sdio_tty_state sdio_tty_state;
+	int is_sdio_open;
 };
 
 #define DEBUG_MSG(sdio_tty, x...) if (sdio_tty->debug_msg_on) pr_info(x)
@@ -318,17 +319,22 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 	}
 	sdio_tty_drv->sdio_tty_state = TTY_OPENED;
 
-	ret = sdio_open(sdio_tty_drv->sdio_ch_name, &sdio_tty_drv->ch,
-			sdio_tty_drv, sdio_tty_notify);
-	if (ret < 0) {
-		pr_err(SDIO_TTY_MODULE_NAME ": %s: sdio_open error (%d)\n",
-		       __func__, ret);
-		destroy_workqueue(sdio_tty_drv->workq);
-		return ret;
+	if (!sdio_tty_drv->is_sdio_open) {
+		ret = sdio_open(sdio_tty_drv->sdio_ch_name, &sdio_tty_drv->ch,
+				sdio_tty_drv, sdio_tty_notify);
+		if (ret < 0) {
+			pr_err(SDIO_TTY_MODULE_NAME ": %s: sdio_open err=%d\n",
+			       __func__, ret);
+			destroy_workqueue(sdio_tty_drv->workq);
+			return ret;
+		}
+
+		pr_info(SDIO_TTY_MODULE_NAME ": %s: SDIO_TTY channel opened\n",
+			__func__);
+
+		sdio_tty_drv->is_sdio_open = 1;
 	}
 
-	pr_info(SDIO_TTY_MODULE_NAME ": %s: SDIO_TTY channel opened\n",
-		__func__);
 	return ret;
 }
 
