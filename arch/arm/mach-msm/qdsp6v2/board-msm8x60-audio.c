@@ -402,10 +402,15 @@ static void msm_snddev_poweramp_off(void)
 static struct regulator *snddev_reg_ncp;
 static struct regulator *snddev_reg_l10;
 
+static atomic_t preg_ref_cnt;
+
 static int msm_snddev_voltage_on(void)
 {
 	int rc;
 	pr_debug("%s\n", __func__);
+
+	if (atomic_inc_return(&preg_ref_cnt) > 1)
+		return 0;
 
 	snddev_reg_l10 = regulator_get(NULL, "8058_l10");
 	if (IS_ERR(snddev_reg_l10)) {
@@ -459,14 +464,15 @@ static void msm_snddev_voltage_off(void)
 	if (!snddev_reg_ncp)
 		goto done;
 
-	rc = regulator_disable(snddev_reg_ncp);
-	if (rc < 0)
-		pr_err("%s: regulator_disable(ncp) failed (%d)\n",
-			__func__, rc);
+	if (atomic_dec_return(&preg_ref_cnt) == 0) {
+		rc = regulator_disable(snddev_reg_ncp);
+		if (rc < 0)
+			pr_err("%s: regulator_disable(ncp) failed (%d)\n",
+				__func__, rc);
+		regulator_put(snddev_reg_ncp);
 
-	regulator_put(snddev_reg_ncp);
-
-	snddev_reg_ncp = NULL;
+		snddev_reg_ncp = NULL;
+	}
 
 done:
 	if (!snddev_reg_l10)
@@ -2543,6 +2549,7 @@ void __init msm_snddev_init(void)
 	int dev_id;
 
 	atomic_set(&pamp_ref_cnt, 0);
+	atomic_set(&preg_ref_cnt, 0);
 
 	for (i = 0, dev_id = 0; i < ARRAY_SIZE(snd_devices_common); i++)
 		snd_devices_common[i]->id = dev_id++;
