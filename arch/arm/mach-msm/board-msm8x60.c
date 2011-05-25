@@ -999,7 +999,7 @@ __setup("usb_id_pin_rework=", usb_id_pin_rework_setup);
 static void pmic_id_detect(struct work_struct *w)
 {
 	int val = gpio_get_value_cansleep(PM8058_GPIO_PM_TO_SYS(36));
-	pr_info("%s(): gpio_read_value = %d\n", __func__, val);
+	pr_debug("%s(): gpio_read_value = %d\n", __func__, val);
 
 	if (notify_vbus_state_func_ptr)
 		(*notify_vbus_state_func_ptr) (val);
