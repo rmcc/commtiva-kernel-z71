@@ -28,9 +28,7 @@
 #include <linux/msm-charger.h>
 #include <linux/time.h>
 #include <linux/slab.h>
-#ifdef CONFIG_HAS_WAKELOCK
 #include <linux/wakelock.h>
-#endif
 
 #include <asm/atomic.h>
 
@@ -76,9 +74,6 @@ struct msm_hardware_charger_priv {
 	enum msm_hardware_charger_state hw_chg_state;
 	unsigned int max_source_current;
 	struct power_supply psy;
-#ifdef CONFIG_HAS_WAKELOCK
-	struct wake_lock wl;
-#endif
 };
 
 struct msm_charger_event {
@@ -123,6 +118,7 @@ struct msm_charger_mux {
 	int queue_count;
 	struct work_struct queue_work;
 	struct workqueue_struct *event_wq_thread;
+	struct wake_lock wl;
 };
 
 static struct msm_charger_mux msm_chg;
@@ -488,7 +484,12 @@ static int msm_charging_switched(struct msm_hardware_charger_priv *priv)
 
 static int msm_stop_charging(struct msm_hardware_charger_priv *priv)
 {
-	return priv->hw_chg->stop_charging(priv->hw_chg);
+	int ret;
+
+	ret = priv->hw_chg->stop_charging(priv->hw_chg);
+	if (!ret)
+		wake_unlock(&msm_chg.wl);
+	return ret;
 }
 
 /* the best charger has been selected -start charging from current_chg_priv */
@@ -498,14 +499,15 @@ static int msm_start_charging(void)
 	struct msm_hardware_charger_priv *priv;
 
 	priv = msm_chg.current_chg_priv;
+	wake_lock(&msm_chg.wl);
 	ret = priv->hw_chg->start_charging(priv->hw_chg, msm_chg.max_voltage,
 					 priv->max_source_current);
 	if (ret) {
+		wake_unlock(&msm_chg.wl);
 		dev_err(msm_chg.dev, "%s couldnt start chg error = %d",
 			priv->hw_chg->name, ret);
-	} else {
+	} else
 		priv->hw_chg_state = CHG_CHARGING_STATE;
-	}
 
 	return ret;
 }
@@ -843,7 +845,6 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 			priv->hw_chg_state = CHG_READY_STATE;
 			handle_charger_ready(priv);
 		}
-		wake_lock(&priv->wl);
 		break;
 	case CHG_ENUMERATED_EVENT:	/* only in USB types */
 		if (priv->hw_chg_state == CHG_ABSENT_STATE) {
@@ -879,7 +880,6 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 			notify_usb_of_the_plugin_event(priv, 0);
 		}
 		handle_charger_removed(priv, CHG_ABSENT_STATE);
-		wake_unlock(&priv->wl);
 		break;
 	case CHG_DONE_EVENT:
 		if (priv->hw_chg_state == CHG_CHARGING_STATE)
@@ -1107,6 +1107,7 @@ static int __devinit msm_charger_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&msm_chg.resume_work, resume_charging);
 	INIT_DELAYED_WORK(&msm_chg.update_heartbeat_work, update_heartbeat);
 
+	wake_lock_init(&msm_chg.wl, WAKE_LOCK_SUSPEND, "msm_charger");
 	return 0;
 }
 
@@ -1162,9 +1163,6 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	priv->psy.num_properties = ARRAY_SIZE(msm_power_props);
 	priv->psy.get_property = msm_power_get_property;
 
-#ifdef CONFIG_HAS_WAKELOCK
-	wake_lock_init(&priv->wl, WAKE_LOCK_SUSPEND, priv->psy.name);
-#endif
 	rc = power_supply_register(NULL, &priv->psy);
 	if (rc) {
 		dev_err(msm_chg.dev, "%s power_supply_register failed\n",
@@ -1182,7 +1180,7 @@ int msm_charger_register(struct msm_hardware_charger *hw_chg)
 	return 0;
 
 out:
-	wake_lock_destroy(&priv->wl);
+	wake_lock_destroy(&msm_chg.wl);
 	kfree(priv);
 	return rc;
 }
@@ -1215,7 +1213,7 @@ int msm_charger_unregister(struct msm_hardware_charger *hw_chg)
 	mutex_lock(&msm_chg.msm_hardware_chargers_lock);
 	list_del(&priv->list);
 	mutex_unlock(&msm_chg.msm_hardware_chargers_lock);
-	wake_lock_destroy(&priv->wl);
+	wake_lock_destroy(&msm_chg.wl);
 	power_supply_unregister(&priv->psy);
 	kfree(priv);
 	return 0;
