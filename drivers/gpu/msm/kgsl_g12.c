@@ -738,11 +738,6 @@ static long kgsl_g12_ioctl(struct kgsl_device_private *dev_priv,
 
 }
 
-static unsigned int kgsl_g12_idle_calc(struct kgsl_device *device)
-{
-	return device->pwrctrl.time;
-}
-
 static void kgsl_g12_getfunctable(struct kgsl_functable *ftbl)
 {
 
@@ -768,7 +763,6 @@ static void kgsl_g12_getfunctable(struct kgsl_functable *ftbl)
 	ftbl->device_ioctl = kgsl_g12_ioctl;
 	ftbl->device_setup_pt = kgsl_g12_setup_pt;
 	ftbl->device_cleanup_pt = kgsl_g12_cleanup_pt;
-	ftbl->device_idle_calc = kgsl_g12_idle_calc;
 }
 
 static struct platform_device_id kgsl_2d_id_table[] = {
