@@ -7042,7 +7042,7 @@ static struct msm_sdcc_gpio sdc2_gpio_cfg[] = {
 	{150, "sdc2_dat_7"},
 #endif
 	{151, "sdc2_cmd"},
-	{152, "sdc2_clk"}
+	{152, "sdc2_clk", 1}
 };
 #endif
 

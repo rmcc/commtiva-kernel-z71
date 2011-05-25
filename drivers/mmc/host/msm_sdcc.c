@@ -49,6 +49,7 @@
 #include <mach/clk.h>
 #include <mach/dma.h>
 #include <mach/htc_pwrsink.h>
+#include <mach/sdio_al.h>
 
 
 #include "msm_sdcc.h"
@@ -2100,6 +2101,11 @@ msmsdcc_runtime_resume(struct device *dev)
 		}
 		mmc->ios.clock = host->clk_rate;
 		mmc->ops->set_ios(host->mmc, &host->mmc->ios);
+
+#ifdef CONFIG_MSM_SDIO_AL
+		if (host->plat->is_sdio_al_client)
+			sdio_al_client_resume(mmc);
+#endif
 
 		spin_lock_irqsave(&host->lock, flags);
 		writel(host->mci_irqenable, host->base + MMCIMASK0);
