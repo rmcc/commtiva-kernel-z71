@@ -7797,6 +7797,9 @@ static struct mmc_platform_data msm8x60_sdc2_data = {
 #ifdef CONFIG_MMC_MSM_SDC2_DUMMY52_REQUIRED
 	.dummy52_required = 1,
 #endif
+#ifdef CONFIG_MSM_SDIO_AL
+	.is_sdio_al_client = 1,
+#endif
 };
 #endif
 
@@ -7854,6 +7857,9 @@ static struct mmc_platform_data msm8x60_sdc5_data = {
 	.register_status_notify = sdc5_register_status_notify,
 #ifdef CONFIG_MMC_MSM_SDC5_DUMMY52_REQUIRED
 	.dummy52_required = 1,
+#endif
+#ifdef CONFIG_MSM_SDIO_AL
+	.is_sdio_al_client = 1,
 #endif
 };
 #endif
