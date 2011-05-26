@@ -744,6 +744,7 @@ static int rmt_storage_sdio_smem_remove(struct platform_device *pdev)
 	return 0;
 }
 
+static int sdio_smem_drv_registered;
 static struct platform_driver sdio_smem_drv = {
 	.probe		= rmt_storage_sdio_smem_probe,
 	.remove		= rmt_storage_sdio_smem_remove,
@@ -804,10 +805,14 @@ static int rmt_storage_event_alloc_rmt_buf_cb(
 
 #ifdef CONFIG_MSM_SDIO_SMEM
 	if (rs_client->srv->prog == MDM_RMT_STORAGE_APIPROG) {
-		ret = platform_driver_register(&sdio_smem_drv);
-		if (ret)
-			pr_err("%s: Unable to register sdio smem client\n",
-			       __func__);
+		if (!sdio_smem_drv_registered) {
+			ret = platform_driver_register(&sdio_smem_drv);
+			if (!ret)
+				sdio_smem_drv_registered = 1;
+			else
+				pr_err("%s: Cant register sdio smem client\n",
+				       __func__);
+		}
 	}
 #endif
 	event_args->id = RMT_STORAGE_NOOP;
