@@ -553,7 +553,9 @@ static void handle_battery_inserted(void)
 {
 	msm_chg.stop_resume_check = 0;
 	/* if a charger is already present start charging */
-	if (msm_chg.current_chg_priv != NULL) {
+	if (msm_chg.current_chg_priv != NULL &&
+	    is_batt_status_capable_of_charging() &&
+	    !is_batt_status_charging()) {
 		if (msm_start_charging()) {
 			dev_err(msm_chg.dev, "%s couldnt start chg",
 				msm_chg.current_chg_priv->hw_chg->name);
