@@ -4592,9 +4592,7 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_gsbi7_qup_i2c_device,
 	&msm_gsbi8_qup_i2c_device,
 	&msm_gsbi9_qup_i2c_device,
-#ifndef CONFIG_MSM_DSPS
 	&msm_gsbi12_qup_i2c_device,
-#endif
 #endif
 #if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
 	&msm_gsbi1_qup_spi_device,
@@ -4609,10 +4607,6 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)
 	&isp1763_device,
-#endif
-
-#ifdef CONFIG_MSM_DSPS
-	&msm_dsps_device,
 #endif
 
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
@@ -9486,7 +9480,10 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 				     ARRAY_SIZE(surf_devices));
 
 #ifdef CONFIG_MSM_DSPS
-		msm8x60_init_dsps();
+		if (machine_is_msm8x60_fluid()) {
+			platform_device_unregister(&msm_gsbi12_qup_i2c_device);
+			msm8x60_init_dsps();
+		}
 #endif
 
 #ifdef CONFIG_USB_EHCI_MSM_72K
