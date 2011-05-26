@@ -7791,7 +7791,7 @@ static struct mmc_platform_data msm8x60_sdc2_data = {
 	.msmsdcc_fmin	= 400000,
 	.msmsdcc_fmid	= 24000000,
 	.msmsdcc_fmax	= 48000000,
-	.nonremovable	= 1,
+	.nonremovable	= 0,
 	.pclk_src_dfab  = 1,
 	.register_status_notify = sdc2_register_status_notify,
 #ifdef CONFIG_MMC_MSM_SDC2_DUMMY52_REQUIRED
@@ -7849,7 +7849,7 @@ static struct mmc_platform_data msm8x60_sdc5_data = {
 	.msmsdcc_fmin	= 400000,
 	.msmsdcc_fmid	= 24000000,
 	.msmsdcc_fmax	= 48000000,
-	.nonremovable	= 1,
+	.nonremovable	= 0,
 	.pclk_src_dfab  = 1,
 	.register_status_notify = sdc5_register_status_notify,
 #ifdef CONFIG_MMC_MSM_SDC5_DUMMY52_REQUIRED
