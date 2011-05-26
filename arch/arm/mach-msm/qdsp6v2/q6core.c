@@ -35,18 +35,6 @@
 
 #define TIMEOUT_MS 1000
 
-static char *svc_names[] = {
-					"NULL",
-					"NULL",
-					"TEST",
-					"CORE",
-					"AFE",
-					"VSM",
-					"VPM",
-					"ASM",
-					"ADM",
-};
-
 static struct apr_svc *apr_handle_q;
 static struct apr_svc *apr_handle_m;
 static struct apr_svc *core_handle_q;
@@ -117,11 +105,13 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 			pr_info("Build id          = %x\n", payload->build_id);
 			pr_info("Number of services= %x\n", payload->svc_cnt);
 			pr_info("----------------------------------------\n");
-			for (i = 0; i < payload->svc_cnt; i++)
-				pr_info("%s\t%x.%x\n",
-				svc_names[svc_info[i].svc_id],
-				(svc_info[i].svc_ver & 0xFFFF0000) >> 16,
-				(svc_info[i].svc_ver & 0xFFFF));
+			for (i = 0; i < payload->svc_cnt; i++) {
+				pr_info("svc-id[%d]\tver[%x.%x]\n",
+					svc_info[i].svc_id,
+					(svc_info[i].svc_ver & 0xFFFF0000)
+					>> 16,
+					(svc_info[i].svc_ver & 0xFFFF));
+			}
 			pr_info("-----------------------------------------\n");
 		} else
 			pr_info("zero payload for ADSP_GET_VERSION_RSP\n");
