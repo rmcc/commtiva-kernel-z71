@@ -115,8 +115,15 @@ struct rmt_shrd_mem {
 
 static struct rmt_storage_srv *rmt_storage_get_srv(uint32_t prog);
 static uint32_t rmt_storage_get_sid(const char *path);
+#ifdef CONFIG_MSM_SDIO_SMEM
+static void rmt_storage_sdio_smem_work(struct work_struct *work);
+#endif
 
 static struct rmt_storage_client_info *rmc;
+
+#ifdef CONFIG_MSM_SDIO_SMEM
+DECLARE_DELAYED_WORK(sdio_smem_work, rmt_storage_sdio_smem_work);
+#endif
 
 #ifdef CONFIG_MSM_SDIO_SMEM
 #define MDM_LOCAL_BUF_SZ	0xC0000
@@ -737,10 +744,10 @@ static int rmt_storage_sdio_smem_probe(struct platform_device *pdev)
 	return ret;
 }
 
-
 static int rmt_storage_sdio_smem_remove(struct platform_device *pdev)
 {
 	sdio_smem_unregister_client();
+	queue_delayed_work(rmc->workq, &sdio_smem_work, 0);
 	return 0;
 }
 
@@ -753,6 +760,12 @@ static struct platform_driver sdio_smem_drv = {
 		.owner	= THIS_MODULE,
 	},
 };
+
+static void rmt_storage_sdio_smem_work(struct work_struct *work)
+{
+	platform_driver_unregister(&sdio_smem_drv);
+	sdio_smem_drv_registered = 0;
+}
 #endif
 
 static int rmt_storage_event_alloc_rmt_buf_cb(
