@@ -109,6 +109,7 @@
 #define AUTO_CHARGING_IEOC_ITERM			160
 
 #define AUTO_CHARGING_VBATDET				4150
+#define AUTO_CHARGING_VBATDET_DEBOUNCE_TIME_MS		3000
 #define AUTO_CHARGING_VEOC_VBATDET			4100
 #define AUTO_CHARGING_VEOC_TCHG				16
 #define AUTO_CHARGING_VEOC_TCHG_FINAL_CYCLE		32
@@ -185,6 +186,7 @@ struct pm8058_charger {
 	struct delayed_work chg_done_check_work;
 	struct delayed_work check_vbat_low_work;
 	struct delayed_work veoc_begin_work;
+	struct delayed_work charging_check_work;
 	int waiting_for_topoff;
 	int waiting_for_veoc;
 	int vbatdet;
@@ -526,6 +528,22 @@ static int pm_chg_enum_done_enable(int value)
 	return pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_CNTRL_2, &temp, 1);
 }
 
+static uint32_t get_fsm_state(void)
+{
+	u8 temp;
+
+	temp = 0x00;
+	pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_TEST_3, &temp, 1);
+	pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_TEST_3, &temp, 1);
+	return (uint32_t)temp;
+}
+
+static int get_fsm_status(void *data, u64 * val)
+{
+	*val = get_fsm_state();
+	return 0;
+}
+
 static int __pm8058_start_charging(int chg_current, int termination_current,
 				   int time)
 {
@@ -596,11 +614,56 @@ out:
 	return ret;
 }
 
+static void chg_done_cleanup(void)
+{
+	dev_info(pm8058_chg.dev, "%s notify pm8058 charging completion"
+		"\n", __func__);
+
+	pm8058_chg_disable_irq(AUTO_CHGDONE_IRQ);
+	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
+	cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work);
+
+	pm8058_chg_disable_irq(CHG_END_IRQ);
+
+	pm8058_chg_disable_irq(VBATDET_LOW_IRQ);
+	pm8058_chg_disable_irq(VBATDET_IRQ);
+	pm8058_chg.waiting_for_veoc = 0;
+	pm8058_chg.waiting_for_topoff = 0;
+
+	pm_chg_auto_disable(1);
+
+	msm_charger_notify_event(&usb_hw_chg, CHG_DONE_EVENT);
+}
+
+static void chg_done_check_work(struct work_struct *work)
+{
+	chg_done_cleanup();
+}
+
+static void charging_check_work(struct work_struct *work)
+{
+	uint32_t fsm_state = get_fsm_state();
+
+	switch (fsm_state) {
+	/* We're charging - so fall through */
+	case 2:
+	case 7:
+	case 8:
+		break;
+	default:
+		/* Still not charging, so update driver state */
+		chg_done_cleanup();
+		break;
+	};
+}
+
 static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 				 int chg_voltage, int chg_current)
 {
 	int vbat_higher_than_vbatdet;
 	int ret = 0;
+
+	cancel_delayed_work_sync(&pm8058_chg.charging_check_work);
 
 	/*
 	 * adjust the max current for PC USB connection - set the higher limit
@@ -645,6 +708,17 @@ static int pm8058_start_charging(struct msm_hardware_charger *hw_chg,
 	ret = __pm8058_start_charging(chg_current, AUTO_CHARGING_IEOC_ITERM,
 				AUTO_CHARGING_FAST_TIME_MAX_MINUTES);
 	pm8058_chg.current_charger_current = chg_current;
+
+	/*
+	 * We want to check the FSM state to verify we're charging. We must
+	 * wait before doing this to allow the VBATDET to settle. The worst
+	 * case for this is two seconds. The batt alarm does not have this
+	 * delay.
+	 */
+	schedule_delayed_work(&pm8058_chg.charging_check_work,
+				      round_jiffies_relative(msecs_to_jiffies
+			     (AUTO_CHARGING_VBATDET_DEBOUNCE_TIME_MS)));
+
 out:
 	return ret;
 }
@@ -682,26 +756,6 @@ static void vbat_low_work(struct work_struct *work)
 				AUTO_CHARGING_VEOC_TCHG_FINAL_CYCLE);
 }
 
-static void chg_done_check_work(struct work_struct *work)
-{
-	dev_info(pm8058_chg.dev, "%s notify pm8058 charging completion"
-		"\n", __func__);
-
-	pm8058_chg_disable_irq(AUTO_CHGDONE_IRQ);
-	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
-	cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work);
-
-	pm8058_chg_disable_irq(CHG_END_IRQ);
-
-	pm8058_chg_disable_irq(VBATDET_LOW_IRQ);
-	pm8058_chg_disable_irq(VBATDET_IRQ);
-	pm8058_chg.waiting_for_veoc = 0;
-	pm8058_chg.waiting_for_topoff = 0;
-
-	pm_chg_auto_disable(1);
-
-	msm_charger_notify_event(&usb_hw_chg, CHG_DONE_EVENT);
-}
 
 static irqreturn_t pm8058_chg_chgval_handler(int irq, void *dev_id)
 {
@@ -970,17 +1024,6 @@ static int get_rt_status(void *data, u64 * val)
 	return 0;
 }
 
-static int get_fsm_status(void *data, u64 * val)
-{
-	u8 temp;
-
-	temp = 0x00;
-	pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_TEST_3, &temp, 1);
-	pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_TEST_3, &temp, 1);
-	*val = temp;
-	return 0;
-}
-
 DEFINE_SIMPLE_ATTRIBUTE(rt_fops, get_rt_status, NULL, "%llu\n");
 DEFINE_SIMPLE_ATTRIBUTE(fsm_fops, get_fsm_status, NULL, "%llu\n");
 
@@ -1230,6 +1273,7 @@ static int pm8058_stop_charging(struct msm_hardware_charger *hw_chg)
 	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
 	cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work);
 	cancel_delayed_work_sync(&pm8058_chg.chg_done_check_work);
+	cancel_delayed_work_sync(&pm8058_chg.charging_check_work);
 
 	ret = pm_chg_get_rt_status(pm8058_chg.pmic_chg_irq[FASTCHG_IRQ]);
 	if (ret == 1)
@@ -1676,6 +1720,7 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&pm8058_chg.veoc_begin_work, veoc_begin_work);
 	INIT_DELAYED_WORK(&pm8058_chg.check_vbat_low_work, vbat_low_work);
 	INIT_DELAYED_WORK(&pm8058_chg.chg_done_check_work, chg_done_check_work);
+	INIT_DELAYED_WORK(&pm8058_chg.charging_check_work, charging_check_work);
 
 	/* determine what state the charger is in */
 	pm8058_chg_determine_initial_state();
@@ -1701,6 +1746,7 @@ static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 	msm_charger_unregister(&usb_hw_chg);
 	cancel_delayed_work_sync(&pm8058_chg.veoc_begin_work);
 	cancel_delayed_work_sync(&pm8058_chg.check_vbat_low_work);
+	cancel_delayed_work_sync(&pm8058_chg.charging_check_work);
 	free_irqs();
 	remove_debugfs_entries();
 	kfree(chip);
