@@ -208,6 +208,12 @@ static int sdio_tty_write_callback(struct tty_struct *tty,
 		return -ENODEV;
 	}
 
+	if (sdio_tty_drv->sdio_tty_state != TTY_OPENED) {
+		pr_err(SDIO_TTY_MODULE_NAME ": %s: sdio_tty_state = %d",
+		       __func__, sdio_tty_drv->sdio_tty_state);
+		return -EPERM;
+	}
+
 	DEBUG_MSG(sdio_tty_drv,
 		  SDIO_TTY_MODULE_NAME ": %s: WRITING CALLBACK CALLED WITH "
 				       "%d bytes\n",
@@ -317,7 +323,6 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 		       __func__);
 		return -EBUSY;
 	}
-	sdio_tty_drv->sdio_tty_state = TTY_OPENED;
 
 	if (!sdio_tty_drv->is_sdio_open) {
 		ret = sdio_open(sdio_tty_drv->sdio_ch_name, &sdio_tty_drv->ch,
@@ -333,7 +338,18 @@ static int sdio_tty_open(struct tty_struct *tty, struct file *file)
 			__func__);
 
 		sdio_tty_drv->is_sdio_open = 1;
+	} else {
+		/* If SDIO channel is already open try to read the data
+		 * from the modem
+		 */
+		queue_work(sdio_tty_drv->workq, &sdio_tty_drv->work_read);
+
 	}
+
+	sdio_tty_drv->sdio_tty_state = TTY_OPENED;
+
+	pr_info(SDIO_TTY_MODULE_NAME ": %s: TTY device opened\n",
+		__func__);
 
 	return ret;
 }
@@ -364,6 +380,12 @@ static void sdio_tty_close(struct tty_struct *tty, struct file *file)
 		       __func__);
 		return;
 	}
+	if (sdio_tty_drv->sdio_tty_state != TTY_OPENED) {
+		pr_err(SDIO_TTY_MODULE_NAME ": %s: trying to close a "
+					    "TTY device that was not opened\n",
+		       __func__);
+		return;
+	}
 
 	flush_workqueue(sdio_tty_drv->workq);
 	destroy_workqueue(sdio_tty_drv->workq);
@@ -390,6 +412,12 @@ static void sdio_tty_unthrottle(struct tty_struct *tty)
 	if (!sdio_tty_drv) {
 		pr_err(SDIO_TTY_MODULE_NAME ": %s: NULL sdio_tty_drv",
 		       __func__);
+		return;
+	}
+
+	if (sdio_tty_drv->sdio_tty_state != TTY_OPENED) {
+		pr_err(SDIO_TTY_MODULE_NAME ": %s: sdio_tty_state = %d",
+		       __func__, sdio_tty_drv->sdio_tty_state);
 		return;
 	}
 
