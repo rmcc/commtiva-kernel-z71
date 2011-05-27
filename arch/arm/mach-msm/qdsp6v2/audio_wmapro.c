@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -81,6 +81,7 @@ struct timestamp {
 } __attribute__ ((packed));
 
 struct meta_in {
+	unsigned char reserved[18];
 	unsigned short offset;
 	struct timestamp ntimestamp;
 	unsigned int nflags;
@@ -96,6 +97,7 @@ struct meta_out_dsp{
 } __attribute__ ((packed));
 
 struct dec_meta_out{
+	unsigned int reserved[7];
 	unsigned int num_of_frames;
 	struct meta_out_dsp meta_out_dsp[];
 } __attribute__ ((packed));
@@ -197,7 +199,7 @@ static int insert_eos_buf(struct q6audio *audio,
 	struct dec_meta_out *eos_buf = buf_node->kvaddr;
 	eos_buf->num_of_frames = 0xFFFFFFFF;
 	eos_buf->meta_out_dsp[0].nflags = AUDWMAPRO_EOS_SET;
-	return sizeof(eos_buf->num_of_frames) +
+	return sizeof(struct dec_meta_out) +
 		sizeof(eos_buf->meta_out_dsp[0]);
 }
 
@@ -217,8 +219,8 @@ static void extract_meta_info(struct q6audio *audio,
 			buf_node->meta_info.meta_in.nflags);
 	} else { /* Write */
 		memcpy((char *)buf_node->kvaddr,
-			&buf_node->meta_info.meta_out.num_of_frames,
-			sizeof(buf_node->meta_info.meta_out.num_of_frames));
+			&buf_node->meta_info.meta_out,
+			sizeof(struct dec_meta_out));
 		pr_debug("o/p: msw_ts 0x%8x lsw_ts 0x%8x nflags 0x%8x\n",
 		((struct dec_meta_out *)buf_node->kvaddr)->\
 				meta_out_dsp[0].msw_ts,
@@ -415,9 +417,9 @@ static void audwmapro_async_read(struct q6audio *audio,
 	ac = audio->ac;
 	/* Provide address so driver can append nr frames information */
 	param.paddr = buf_node->paddr +
-			sizeof(buf_node->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 	param.len = buf_node->buf.buf_len -
-			sizeof(buf_node->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 	param.uid = param.paddr;
 	/* Write command will populate paddr as token */
 	buf_node->token = param.paddr;
@@ -438,8 +440,8 @@ static void audwmapro_async_write(struct q6audio *audio,
 
 	ac = audio->ac;
 	/* Offset with  appropriate meta */
-	param.paddr = buf_node->paddr + buf_node->meta_info.meta_in.offset;
-	param.len = buf_node->buf.data_len - buf_node->meta_info.meta_in.offset;
+	param.paddr = buf_node->paddr + sizeof(struct meta_in);
+	param.len = buf_node->buf.data_len - sizeof(struct meta_in);
 	param.msw_ts = buf_node->meta_info.meta_in.ntimestamp.highpart;
 	param.lsw_ts = buf_node->meta_info.meta_in.ntimestamp.lowpart;
 	/* If no meta_info enaled, indicate no time stamp valid */
@@ -528,7 +530,7 @@ static void audwmapro_async_read_ack(struct q6audio *audio, uint32_t token,
 				filled_buf->meta_info.meta_out.num_of_frames);
 			event_payload.aio_buf.data_len = payload[2] + \
 			payload[3] + \
-			sizeof(filled_buf->meta_info.meta_out.num_of_frames);
+			sizeof(struct dec_meta_out);
 			extract_meta_info(audio, filled_buf, 0);
 		}
 		audwmapro_post_event(audio, AUDIO_EVENT_READ_DONE,
@@ -1137,15 +1139,65 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 				break;
 			}
 		}
-		wmapro_cfg.format_tag = audio->wmapro_config.formattag;
-		wmapro_cfg.ch_cfg = audio->wmapro_config.numchannels;
-		wmapro_cfg.sample_rate =  audio->wmapro_config.samplingrate;
+		if ((audio->wmapro_config.formattag == 0x162) ||
+		(audio->wmapro_config.formattag == 0x166)) {
+			wmapro_cfg.format_tag = audio->wmapro_config.formattag;
+		} else {
+			pr_err("%s:AUDIO_START failed: formattag = %d\n",
+				__func__, audio->wmapro_config.formattag);
+			rc = -EINVAL;
+			break;
+		}
+		if ((audio->wmapro_config.numchannels == 1) ||
+		(audio->wmapro_config.numchannels == 2)) {
+			wmapro_cfg.ch_cfg = audio->wmapro_config.numchannels;
+		} else {
+			pr_err("%s:AUDIO_START failed: channels = %d\n",
+				__func__, audio->wmapro_config.numchannels);
+			rc = -EINVAL;
+			break;
+		}
+		if ((audio->wmapro_config.samplingrate <= 48000) ||
+		(audio->wmapro_config.samplingrate > 0)) {
+			wmapro_cfg.sample_rate =
+				audio->wmapro_config.samplingrate;
+		} else {
+			pr_err("%s:AUDIO_START failed: sample_rate = %d\n",
+				__func__, audio->wmapro_config.samplingrate);
+			rc = -EINVAL;
+			break;
+		}
 		wmapro_cfg.avg_bytes_per_sec =
 				audio->wmapro_config.avgbytespersecond;
-		wmapro_cfg.block_align = audio->wmapro_config.asfpacketlength;
-		wmapro_cfg.valid_bits_per_sample =
+		if ((audio->wmapro_config.asfpacketlength <= 13376) ||
+		(audio->wmapro_config.asfpacketlength > 0)) {
+			wmapro_cfg.block_align =
+				audio->wmapro_config.asfpacketlength;
+		} else {
+			pr_err("%s:AUDIO_START failed: block_align = %d\n",
+				__func__, audio->wmapro_config.asfpacketlength);
+			rc = -EINVAL;
+			break;
+		}
+		if (audio->wmapro_config.validbitspersample == 16) {
+			wmapro_cfg.valid_bits_per_sample =
 				audio->wmapro_config.validbitspersample;
-		wmapro_cfg.ch_mask =  audio->wmapro_config.channelmask;
+		} else {
+			pr_err("%s:AUDIO_START failed: bitspersample = %d\n",
+				__func__,
+				audio->wmapro_config.validbitspersample);
+			rc = -EINVAL;
+			break;
+		}
+		if ((audio->wmapro_config.channelmask  == 4) ||
+		(audio->wmapro_config.channelmask == 3)) {
+			wmapro_cfg.ch_mask =  audio->wmapro_config.channelmask;
+		} else {
+			pr_err("%s:AUDIO_START failed: channel_mask = %d\n",
+				__func__, audio->wmapro_config.channelmask);
+			rc = -EINVAL;
+			break;
+		}
 		wmapro_cfg.encode_opt = audio->wmapro_config.encodeopt;
 		wmapro_cfg.adv_encode_opt =
 				audio->wmapro_config.advancedencodeopt;
