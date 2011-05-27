@@ -6762,7 +6762,7 @@ static void __init msm8x60_init_uart12dm(void)
 	writew(1, fpga_mem + 0xEA);
 	/* FPGA_GPIO_CONFIG_118 */
 	writew(1, fpga_mem + 0xEC);
-	dmb();
+	dsb();
 	iounmap(fpga_mem);
 #endif
 }
