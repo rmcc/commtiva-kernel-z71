@@ -1113,6 +1113,11 @@ static int sdio_dld_open(struct tty_struct *tty, struct file *file)
 		REAL_FUNC_TO_FUNC_IN_ARRAY(sdio_dld->sdioc_boot_func);
 	struct sdio_func *str_func = sdio_dld->card->sdio_func[func_in_array];
 
+	sdio_dld->tty_str = tty;
+	sdio_dld->tty_str->low_latency = 1;
+	sdio_dld->tty_str->icanon = 0;
+	set_bit(TTY_NO_WRITE_SPLIT, &sdio_dld->tty_str->flags);
+
 	pr_info(MODULE_NAME ": %s, TTY DEVICE FOR FLASHLESS BOOT OPENED\n",
 	       __func__);
 	sdio_dld_info.start_time = get_jiffies_64(); /* read the current time */
@@ -2485,18 +2490,6 @@ int sdio_downloader_setup(struct mmc_card *card,
 		kfree(sdio_dld);
 		return PTR_ERR(tty_dev);
 	}
-
-	sdio_dld->tty_str = tty_init_dev(sdio_dld->tty_drv, 0, 1);
-	if (!sdio_dld->tty_str) {
-		pr_err(MODULE_NAME ": %s - param ""sdio_dld->tty_str"" is "
-				   "NULL.\n", __func__);
-		status = -EINVAL;
-		goto exit_err;
-	}
-
-	sdio_dld->tty_str->low_latency = 1;
-	sdio_dld->tty_str->icanon = 0;
-	set_bit(TTY_NO_WRITE_SPLIT, &sdio_dld->tty_str->flags);
 
 	sdio_dld->sdioc_boot_func = SDIOC_CHAN_TO_FUNC_NUM(channel_number);
 	func_in_array = REAL_FUNC_TO_FUNC_IN_ARRAY(sdio_dld->sdioc_boot_func);
