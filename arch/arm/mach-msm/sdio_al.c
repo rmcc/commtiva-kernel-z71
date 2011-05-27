@@ -2206,8 +2206,8 @@ static void sdio_al_tear_down(void)
 		sdio_al_dev = sdio_al->devices[i];
 
 		if (sdio_al_dev->is_ready) {
-
 			sdio_al_dev->is_ready = false; /* Flag worker to exit */
+			sdio_al_dev->ask_mbox = false;
 			ask_reading_mailbox(sdio_al_dev); /* Wakeup worker */
 			/* allow gracefully exit of the worker thread */
 			msleep(100);
@@ -3113,7 +3113,7 @@ void sdio_al_card_remove(struct mmc_card *card)
 	pr_info(MODULE_NAME ":%s: ask_reading_mailbox for card %d\n",
 			 __func__, card->host->index);
 	sdio_al_dev->is_ready = false; /* Flag worker to exit */
-	sdio_al_dev->ask_mbox = true;
+	sdio_al_dev->ask_mbox = false;
 	ask_reading_mailbox(sdio_al_dev); /* Wakeup worker */
 
 	if (state != MODEM_RESTART) {
