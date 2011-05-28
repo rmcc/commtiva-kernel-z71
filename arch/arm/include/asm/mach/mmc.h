@@ -35,6 +35,10 @@ struct mmc_platform_data {
 	bool pclk_src_dfab;
 	int (*cfg_mpm_sdiowakeup)(struct device *, bool);
 	bool sdcc_v4_sup;
+	unsigned int wpswitch_gpio;
+	unsigned char wpswitch_polarity;
+	struct msm_mmc_slot_reg_data *vreg_data;
+	int is_sdio_al_client;
 };
 
 #endif
