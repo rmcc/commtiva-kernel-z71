@@ -314,6 +314,8 @@ void mdp4_dsi_cmd_3d(struct msm_fb_data_type *mfd, struct msmfb_overlay_3d *r3d)
 
 	/* MDP cmd block disable */
 	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
+
+	wmb();
 }
 
 
@@ -467,8 +469,10 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
 
 	mdp4_blt_xy_update(dsi_pipe);
 	mdp_enable_irq(MDP_DMA2_TERM);	/* enable intr */
+	wmb();	/* make sure registers updated */
 	/* kick off dmap */
 	outpdw(MDP_BASE + 0x000c, 0x0);
+	wmb();
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_sw_trigger();
 
@@ -528,8 +532,10 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 
 	mdp4_blt_xy_update(dsi_pipe);
 	mdp_enable_irq(MDP_DMA2_TERM);	/* enable intr */
+	wmb();	/* make sure registers updated */
 	/* kick off dmap */
 	outpdw(MDP_BASE + 0x000c, 0x0);
+	wmb();
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_sw_trigger();
 }
@@ -651,9 +657,12 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 	mfd->dma->busy = TRUE;
 	if (dsi_pipe->blt_addr)
 		mfd->dma->dmap_busy = TRUE;
-	/* start OVERLAY pipe */
+
+	wmb();	/* make sure all registers updated */
 	spin_unlock_irqrestore(&mdp_spin_lock, flag);
+	/* start OVERLAY pipe */
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
+	wmb();
 
 	if (pipe->blt_addr == 0) {
 		/* trigger dsi cmd engine */
