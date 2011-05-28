@@ -2053,11 +2053,10 @@ static int sdio_al_wake_up(struct sdio_al_device *sdio_al_dev,
 	}
 	LPM_DEBUG(MODULE_NAME ":GPIO mdm2ap_status=%d\n",
 		       sdio_al->pdata->get_mdm2ap_status());
-	if (sdio_al->pdata->get_mdm2ap_status() == 0) {
-		pr_err(MODULE_NAME ":Modem is not out of VDD MIN\n");
-		ret = -EIO;
-		goto error_exit;
-	}
+
+	/* Here get_mdm2ap_status() returning 0 is not an error condition */
+	if (sdio_al->pdata->get_mdm2ap_status() == 0)
+		LPM_DEBUG(MODULE_NAME ": get_mdm2ap_status() is 0\n");
 
 	/* Enable Wake up Function */
 	ret = sdio_al_enable_func_retry(wk_func, "wakeup func");
