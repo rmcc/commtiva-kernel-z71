@@ -551,14 +551,6 @@ static struct pil_device peripherals[] = {
 		.ops = &pil_q6_ops,
 	},
 	{
-		.name = "dsps",
-		.pdev = {
-			.name = "pil_dsps",
-			.id = -1,
-		},
-		.ops = &pil_dsps_ops,
-	},
-	{
 		.name = "playrdy",
 		.pdev = {
 			.name = "pil_playready",
@@ -568,6 +560,14 @@ static struct pil_device peripherals[] = {
 	},
 };
 
+struct pil_device peripheral_dsps = {
+	.name = "dsps",
+	.pdev = {
+		.name = "pil_dsps",
+		.id = -1,
+	},
+	.ops = &pil_dsps_ops,
+};
 
 #ifdef CONFIG_MSM_SECURE_PIL
 #define SECURE_PIL 1

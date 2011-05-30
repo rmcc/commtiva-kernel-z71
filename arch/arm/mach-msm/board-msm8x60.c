@@ -103,6 +103,7 @@
 #include "gpiomux.h"
 #include "gpiomux-8x60.h"
 #include "rpm_stats.h"
+#include "peripheral-loader.h"
 #define MSM_SHARED_RAM_PHYS 0x40000000
 
 /* Macros assume PMIC GPIOs start at 0 */
@@ -131,6 +132,9 @@
 #define LCDC_SAMSUNG_WSVGA_PANEL_NAME	"lcdc_samsung_wsvga"
 #define LCDC_SAMSUNG_SPI_DEVICE_NAME	"lcdc_samsung_ams367pe02"
 #define LCDC_AUO_SPI_DEVICE_NAME		"lcdc_auo_nt35582"
+
+#define DSPS_PIL_GENERIC_NAME		"dsps"
+#define DSPS_PIL_FLUID_NAME		"dsps_fluid"
 
 enum {
 	GPIO_EXPANDER_IRQ_BASE  = PM8901_IRQ_BASE + NR_PMIC8901_IRQS,
@@ -2470,12 +2474,21 @@ static void __init msm8x60_init_dsps(void)
 	 * different IO-Expender (north) than used on surf/ffa.
 	 */
 	if (machine_is_msm8x60_fluid()) {
+		/* fluid has different firmware, gpios */
+		peripheral_dsps.name = DSPS_PIL_FLUID_NAME;
+		pdata->pil_name = DSPS_PIL_FLUID_NAME;
 		pdata->gpios = dsps_fluid_gpios;
 		pdata->gpios_num = ARRAY_SIZE(dsps_fluid_gpios);
 	} else {
+		peripheral_dsps.name = DSPS_PIL_GENERIC_NAME;
+		pdata->pil_name = DSPS_PIL_GENERIC_NAME;
 		pdata->gpios = dsps_surf_gpios;
 		pdata->gpios_num = ARRAY_SIZE(dsps_surf_gpios);
 	}
+
+	msm_pil_add_device(&peripheral_dsps);
+
+	platform_device_register(&msm_dsps_device);
 }
 #endif /* CONFIG_MSM_DSPS */
 
@@ -4579,9 +4592,7 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_gsbi7_qup_i2c_device,
 	&msm_gsbi8_qup_i2c_device,
 	&msm_gsbi9_qup_i2c_device,
-#ifndef CONFIG_MSM_DSPS
 	&msm_gsbi12_qup_i2c_device,
-#endif
 #endif
 #if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
 	&msm_gsbi1_qup_spi_device,
@@ -4596,10 +4607,6 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif
 #if defined(CONFIG_USB_PEHCI_HCD) || defined(CONFIG_USB_PEHCI_HCD_MODULE)
 	&isp1763_device,
-#endif
-
-#ifdef CONFIG_MSM_DSPS
-	&msm_dsps_device,
 #endif
 
 #if defined(CONFIG_USB_GADGET_MSM_72K) || defined(CONFIG_USB_EHCI_HCD)
@@ -9422,10 +9429,6 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 	msm8x60_init_uart12dm();
 	msm8x60_init_mmc();
 
-#ifdef CONFIG_MSM_DSPS
-	msm8x60_init_dsps();
-#endif
-
 #if defined(CONFIG_PMIC8058_OTHC) || defined(CONFIG_PMIC8058_OTHC_MODULE)
 	msm8x60_init_pm8058_othc();
 #endif
@@ -9475,6 +9478,14 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 					     msm_num_footswitch_devices);
 		platform_add_devices(surf_devices,
 				     ARRAY_SIZE(surf_devices));
+
+#ifdef CONFIG_MSM_DSPS
+		if (machine_is_msm8x60_fluid()) {
+			platform_device_unregister(&msm_gsbi12_qup_i2c_device);
+			msm8x60_init_dsps();
+		}
+#endif
+
 #ifdef CONFIG_USB_EHCI_MSM_72K
 	/*
 	 * Drive MPP2 pin HIGH for PHY to generate ID interrupts on 8660
