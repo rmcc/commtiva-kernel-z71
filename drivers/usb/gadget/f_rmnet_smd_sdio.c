@@ -371,6 +371,9 @@ static void rmnet_sdio_data_receive_cb(void *priv, struct sk_buff *skb)
 	unsigned long flags;
 	int status;
 
+	if (!skb)
+		return;
+
 	spin_lock_irqsave(&dev->lock, flags);
 	if (list_empty(&sdio_dev->tx_idle)) {
 		spin_unlock_irqrestore(&dev->lock, flags);
@@ -401,6 +404,9 @@ static void rmnet_sdio_data_write_done(void *priv, struct sk_buff *skb)
 	struct rmnet_sdio_dev *sdio_dev = &dev->sdio_dev;
 	struct usb_composite_dev *cdev = dev->cdev;
 	unsigned long flags;
+
+	if (!skb)
+		return;
 
 	dev_kfree_skb_any(skb);
 
