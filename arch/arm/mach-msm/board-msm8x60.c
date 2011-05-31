@@ -24,6 +24,7 @@
 #include <linux/mfd/pmic8058.h>
 
 #include <linux/input/pmic8058-keypad.h>
+#include <linux/pmic8058-batt-alarm.h>
 #include <linux/pmic8058-pwrkey.h>
 #include <linux/pmic8058-vibrator.h>
 #include <linux/leds.h>
@@ -5667,19 +5668,27 @@ static struct pmic8058_leds_platform_data pm8058_fluid_flash_leds_data = {
 };
 
 static struct resource resources_temp_alarm[] = {
-       {
+	{
 		.start  = PM8058_TEMP_ALARM_IRQ(PM8058_IRQ_BASE),
 		.end    = PM8058_TEMP_ALARM_IRQ(PM8058_IRQ_BASE),
 		.flags  = IORESOURCE_IRQ,
-       },
+	},
 };
 
 static struct resource resources_pm8058_misc[] = {
-       {
+	{
 		.start  = PM8058_OSCHALT_IRQ(PM8058_IRQ_BASE),
 		.end    = PM8058_OSCHALT_IRQ(PM8058_IRQ_BASE),
 		.flags  = IORESOURCE_IRQ,
-       },
+	},
+};
+
+static struct resource resources_pm8058_batt_alarm[] = {
+	{
+		.start  = PM8058_BATT_ALARM_IRQ(PM8058_IRQ_BASE),
+		.end    = PM8058_BATT_ALARM_IRQ(PM8058_IRQ_BASE),
+		.flags  = IORESOURCE_IRQ,
+	},
 };
 
 #define PM8058_SUBDEV_KPD 0
@@ -5781,6 +5790,11 @@ static struct mfd_cell pm8058_subdevs[] = {
 		.id = -1,
 		.num_resources  = ARRAY_SIZE(resources_pm8058_misc),
 		.resources      = resources_pm8058_misc,
+	},
+	{	.name = "pm8058-batt-alarm",
+		.id		= -1,
+		.num_resources  = ARRAY_SIZE(resources_pm8058_batt_alarm),
+		.resources      = resources_pm8058_batt_alarm,
 	},
 };
 
