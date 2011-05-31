@@ -355,6 +355,7 @@ int msm_check_multistream_per_copp(int copp_id)
 	int i = 0;
 	int flag = 0;
 	payload.copp_ids[0] = copp_id;
+	payload.num_copps = 1;
 	pr_debug("%s: copp_id=%d\n", __func__, copp_id);
 	mutex_lock(&routing_info.copp_list_mutex);
 	for (i = 1; i < MAX_SESSIONS; i++) {
