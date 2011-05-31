@@ -104,14 +104,13 @@ static void voice_set_apr_cvs(struct voice_data *v, void *apr_cvs)
 	pr_debug("%s: apr_cvs 0x%x\n", __func__, (unsigned int)apr_cvs);
 
 	if (v->voc_path == VOC_PATH_PASSIVE &&
-		!(is_adsp_support_cvd())) {
+		!(is_adsp_support_cvd()))
 		v->apr_cvs = apr_cvs;
-#ifdef CONFIG_MSM8X60_RTAC
-		rtac_set_voice_handle(RTAC_CVS, apr_cvs);
-#endif
-	} else {
+	else
 		v->apr_q6_cvs = apr_cvs;
-	}
+#ifdef CONFIG_MSM8X60_RTAC
+	rtac_set_voice_handle(RTAC_CVS, apr_cvs);
+#endif
 }
 
 static void *voice_get_apr_cvp(struct voice_data *v)
@@ -134,14 +133,13 @@ static void voice_set_apr_cvp(struct voice_data *v, void *apr_cvp)
 	pr_debug("%s: apr_cvp 0x%x\n", __func__, (unsigned int)apr_cvp);
 
 	if (v->voc_path == VOC_PATH_PASSIVE &&
-		!(is_adsp_support_cvd())) {
+		!(is_adsp_support_cvd()))
 		v->apr_cvp = apr_cvp;
-#ifdef CONFIG_MSM8X60_RTAC
-		rtac_set_voice_handle(RTAC_CVP, apr_cvp);
-#endif
-	} else {
+	else
 		v->apr_q6_cvp = apr_cvp;
-	}
+#ifdef CONFIG_MSM8X60_RTAC
+	rtac_set_voice_handle(RTAC_CVP, apr_cvp);
+#endif
 }
 
 static u16 voice_get_mvm_handle(struct voice_data *v)
