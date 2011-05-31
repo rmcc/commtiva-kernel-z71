@@ -1435,7 +1435,8 @@ ssize_t test_write(struct file *filp, const char __user *buf, size_t size,
 		    set_params_loopback_9k(test_ctx->test_ch_arr[SDIO_DIAG]) ||
 		    set_params_a2_perf(test_ctx->test_ch_arr[SDIO_RMNT]) ||
 		    set_params_a2_perf(test_ctx->test_ch_arr[SDIO_DUN]) ||
-		    set_params_smem_test(test_ctx->test_ch_arr[SDIO_SMEM]))
+		    set_params_smem_test(test_ctx->test_ch_arr[SDIO_SMEM]) ||
+		    set_params_loopback_9k(test_ctx->test_ch_arr[SDIO_CIQ]))
 			return size;
 		break;
 	case 11:
