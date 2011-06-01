@@ -30,6 +30,8 @@
 #define TIMEOUT_MS 1000
 #define AUDIO_RX 0x0
 #define AUDIO_TX 0x1
+#define RESET_COPP_ID 99
+#define INVALID_COPP_ID 0xFF
 
 struct adm_ctl {
 	void *apr;
@@ -53,7 +55,7 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 		if (this_adm.apr) {
 			apr_reset(this_adm.apr);
 			for (i = 0; i < AFE_MAX_PORTS; i++) {
-				atomic_set(&this_adm.copp_id[i], 0);
+				atomic_set(&this_adm.copp_id[i], RESET_COPP_ID);
 				atomic_set(&this_adm.copp_cnt[i], 0);
 				atomic_set(&this_adm.copp_stat[i], 0);
 			}
@@ -101,6 +103,13 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 		switch (data->opcode) {
 		case ADM_CMDRSP_COPP_OPEN: {
 			struct adm_copp_open_respond *open = data->payload;
+			if (open->copp_id == INVALID_COPP_ID) {
+				pr_err("%s: invalid coppid rxed %d\n",
+						__func__, open->copp_id);
+				atomic_set(&this_adm.copp_stat[index], 1);
+				wake_up(&this_adm.wait);
+				break;
+			}
 			atomic_set(&this_adm.copp_id[index], open->copp_id);
 			atomic_set(&this_adm.copp_stat[index], 1);
 			pr_debug("%s: coppid rxed=%d\n", __func__,
@@ -375,7 +384,8 @@ int adm_route_mcopp(int session_id, void *payload, int path, int route_flag)
 	int i = 0;
 	int port_id = tmp->copp_ids[tmp->num_copps-1];
 
-	pr_debug("%s:%d:", __func__, __LINE__);
+	pr_debug("%s:%d:portid[%d][%d]", __func__, __LINE__, port_id,
+				tmp->num_copps);
 
 	route.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
 		       APR_HDR_LEN(APR_HDR_SIZE), APR_PKT_VER);
@@ -635,7 +645,7 @@ int adm_close(int port_id)
 		close.token = port_id;
 		close.opcode = ADM_CMD_COPP_CLOSE;
 
-		atomic_set(&this_adm.copp_id[index], 0);
+		atomic_set(&this_adm.copp_id[index], RESET_COPP_ID);
 		atomic_set(&this_adm.copp_stat[index], 0);
 
 
@@ -678,7 +688,7 @@ static int __init adm_init(void)
 	this_adm.apr = NULL;
 
 	for (i = 0; i < AFE_MAX_PORTS; i++) {
-		atomic_set(&this_adm.copp_id[i], 0);
+		atomic_set(&this_adm.copp_id[i], RESET_COPP_ID);
 		atomic_set(&this_adm.copp_cnt[i], 0);
 		atomic_set(&this_adm.copp_stat[i], 0);
 	}
