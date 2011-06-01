@@ -3734,6 +3734,8 @@ static struct platform_device *early_devices[] __initdata = {
 	&msm_bus_sys_fpb,
 	&msm_bus_cpss_fpb,
 #endif
+	&msm_device_dmov_adm0,
+	&msm_device_dmov_adm1,
 };
 
 #if (defined(CONFIG_MARIMBA_CORE)) && \
@@ -4584,8 +4586,6 @@ static struct platform_device *charm_devices[] __initdata = {
 static struct platform_device *surf_devices[] __initdata = {
 	&msm_device_smd,
 	&msm_device_uart_dm12,
-	&msm_device_dmov_adm0,
-	&msm_device_dmov_adm1,
 #ifdef CONFIG_I2C_QUP
 	&msm_gsbi3_qup_i2c_device,
 	&msm_gsbi4_qup_i2c_device,
