@@ -849,7 +849,9 @@ static int rmnet_smd_enable(struct rmnet_dev *dev)
 	int i, ret;
 	struct usb_request *req;
 
-	/* Data channel for network packets */
+	if (test_bit(CH_OPENED, &smd_dev->smd_data.flags))
+		goto smd_alloc_req;
+
 	ret = smd_open(rmnet_smd_data_ch, &smd_dev->smd_data.ch,
 			dev, rmnet_smd_notify);
 	if (ret) {
@@ -864,6 +866,7 @@ static int rmnet_smd_enable(struct rmnet_dev *dev)
 	 * If the memory allocation fails, all the allocated
 	 * requests will be freed upon cable disconnect.
 	 */
+smd_alloc_req:
 	for (i = 0; i < RMNET_SMD_RX_REQ_MAX; i++) {
 		req = rmnet_alloc_req(dev->epout, RMNET_SMD_RX_REQ_SIZE,
 				GFP_KERNEL);
@@ -1194,9 +1197,6 @@ static void rmnet_disconnect_work(struct work_struct *w)
 	if (dev->xport == USB_RMNET_XPORT_SMD) {
 		tasklet_kill(&smd_dev->smd_data.rx_tlet);
 		tasklet_kill(&smd_dev->smd_data.tx_tlet);
-
-		smd_close(smd_dev->smd_data.ch);
-		smd_dev->smd_data.flags = 0;
 	}
 
 	rmnet_free_buf(dev);
@@ -1387,9 +1387,6 @@ static ssize_t transport_store(
 		tasklet_kill(&smd_dev->smd_data.rx_tlet);
 		tasklet_kill(&smd_dev->smd_data.tx_tlet);
 
-		smd_close(smd_dev->smd_data.ch);
-		smd_dev->smd_data.flags = 0;
-
 		spin_lock_irqsave(&dev->lock, flags);
 		/* free all usb requests in SMD tx pool */
 		pool = &smd_dev->tx_idle;
@@ -1537,6 +1534,12 @@ static void rmnet_sdio_init(struct rmnet_sdio_dev *sdio_dev)
 static void
 rmnet_unbind(struct usb_configuration *c, struct usb_function *f)
 {
+	struct rmnet_dev *dev = container_of(f, struct rmnet_dev, function);
+	struct rmnet_smd_dev *smd_dev = &dev->smd_dev;
+
+	smd_close(smd_dev->smd_data.ch);
+	smd_dev->smd_data.flags = 0;
+
 }
 
 #if defined(CONFIG_DEBUG_FS)
