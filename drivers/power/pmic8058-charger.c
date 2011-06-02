@@ -29,6 +29,8 @@
 #include <linux/debugfs.h>
 #include <linux/slab.h>
 #include <linux/msm_adc.h>
+#include <linux/notifier.h>
+#include <linux/pmic8058-batt-alarm.h>
 
 #include <mach/msm_xo.h>
 #include <mach/msm_hsusb.h>
@@ -107,6 +109,7 @@
 #define AUTO_CHARGING_TRICKLE_TIME_MINUTES		30
 #define AUTO_CHARGING_VEOC_ITERM			100
 #define AUTO_CHARGING_IEOC_ITERM			160
+#define AUTO_CHARGING_RESUME_MV				4100
 
 #define AUTO_CHARGING_VBATDET				4150
 #define AUTO_CHARGING_VBATDET_DEBOUNCE_TIME_MS		3000
@@ -203,6 +206,37 @@ struct pm8058_charger {
 
 static struct pm8058_charger pm8058_chg;
 static struct msm_hardware_charger usb_hw_chg;
+
+
+static int msm_battery_gague_alarm_notify(struct notifier_block *nb,
+					  unsigned long status, void *unused);
+
+static struct notifier_block alarm_notifier = {
+	.notifier_call = msm_battery_gague_alarm_notify,
+};
+
+static int resume_mv = AUTO_CHARGING_RESUME_MV;
+static DEFINE_MUTEX(batt_alarm_lock);
+static int resume_mv_set(const char *val, struct kernel_param *kp);
+module_param_call(resume_mv, resume_mv_set, param_get_int,
+				&resume_mv, S_IRUGO | S_IWUSR);
+
+static int resume_mv_set(const char *val, struct kernel_param *kp)
+{
+	int rc;
+
+	mutex_lock(&batt_alarm_lock);
+
+	rc = param_set_int(val, kp);
+	if (rc)
+		goto out;
+
+	rc = pm8058_batt_alarm_threshold_set(resume_mv, 4300);
+
+out:
+	mutex_unlock(&batt_alarm_lock);
+	return rc;
+}
 
 static void pm8058_chg_enable_irq(int interrupt)
 {
@@ -643,12 +677,17 @@ static void chg_done_check_work(struct work_struct *work)
 static void charging_check_work(struct work_struct *work)
 {
 	uint32_t fsm_state = get_fsm_state();
+	int rc;
 
 	switch (fsm_state) {
-	/* We're charging - so fall through */
+	/* We're charging, so disarm alarm */
 	case 2:
 	case 7:
 	case 8:
+		rc = pm8058_batt_alarm_state_set(0, 0);
+		if (rc)
+			dev_err(pm8058_chg.dev,
+				"%s: unable to set alarm state\n", __func__);
 		break;
 	default:
 		/* Still not charging, so update driver state */
@@ -1654,12 +1693,52 @@ static int pm8058_get_battery_mvolts(void)
 	return 0;
 }
 
+static int msm_battery_gague_alarm_notify(struct notifier_block *nb,
+		unsigned long status, void *unused)
+{
+	int rc;
+
+	pr_info("%s: status: %lu\n", __func__, status);
+
+	switch (status) {
+	case 0:
+		dev_err(pm8058_chg.dev,
+			"%s: spurious interrupt\n", __func__);
+		break;
+	/* expected case - trip of low threshold */
+	case 1:
+		rc = pm8058_batt_alarm_state_set(0, 0);
+		if (rc)
+			dev_err(pm8058_chg.dev,
+				"%s: unable to set alarm state\n", __func__);
+		msm_charger_notify_event(NULL, CHG_BATT_NEEDS_RECHARGING);
+		break;
+	case 2:
+		dev_err(pm8058_chg.dev,
+			"%s: trip of high threshold\n", __func__);
+		break;
+	default:
+		dev_err(pm8058_chg.dev,
+			"%s: error received\n", __func__);
+	};
+
+	return 0;
+}
+
+static int pm8058_monitor_for_recharging(void)
+{
+	/* enable low comparator */
+	return pm8058_batt_alarm_state_set(1, 0);
+}
+
+
 static struct msm_battery_gauge pm8058_batt_gauge = {
 	.get_battery_mvolts = pm8058_get_battery_mvolts,
 	.get_battery_temperature = pm8058_get_battery_temperature,
 	.is_battery_present = pm8058_is_battery_present,
 	.is_battery_temp_within_range = pm8058_is_battery_temp_within_range,
 	.is_battery_id_valid = pm8058_is_battery_id_valid,
+	.monitor_for_recharging = pm8058_monitor_for_recharging,
 };
 
 static int pm8058_usb_voltage_lower_limit(void)
@@ -1728,6 +1807,41 @@ static int __devinit pm8058_charger_probe(struct platform_device *pdev)
 	pm8058_chg_enable_irq(BATTTEMP_IRQ);
 	pm8058_chg_enable_irq(BATTCONNECT_IRQ);
 
+	rc = pm8058_batt_alarm_state_set(0, 0);
+	if (rc) {
+		pr_err("%s: unable to set batt alarm state\n", __func__);
+		goto free_irq;
+	}
+
+	/*
+	 * The batt-alarm driver requires sane values for both min / max,
+	 * regardless of whether they're both activated.
+	 */
+	rc = pm8058_batt_alarm_threshold_set(resume_mv, 4300);
+	if (rc) {
+		pr_err("%s: unable to set batt alarm threshold\n", __func__);
+		goto free_irq;
+	}
+
+	rc = pm8058_batt_alarm_hold_time_set(PM8058_BATT_ALARM_HOLD_TIME_16_MS);
+	if (rc) {
+		pr_err("%s: unable to set batt alarm hold time\n", __func__);
+		goto free_irq;
+	}
+
+	/* PWM enabled at 2Hz */
+	rc = pm8058_batt_alarm_pwm_rate_set(1, 7, 4);
+	if (rc) {
+		pr_err("%s: unable to set batt alarm pwm rate\n", __func__);
+		goto free_irq;
+	}
+
+	rc = pm8058_batt_alarm_register_notifier(&alarm_notifier);
+	if (rc) {
+		pr_err("%s: unable to register alarm notifier\n", __func__);
+		goto free_irq;
+	}
+
 	pm8058_chg.inited = 1;
 
 	return 0;
@@ -1741,6 +1855,7 @@ out:
 static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 {
 	struct pm8058_charger_chip *chip = platform_get_drvdata(pdev);
+	int rc;
 
 	msm_charger_notify_event(&usb_hw_chg, CHG_REMOVED_EVENT);
 	msm_charger_unregister(&usb_hw_chg);
@@ -1750,7 +1865,15 @@ static int __devexit pm8058_charger_remove(struct platform_device *pdev)
 	free_irqs();
 	remove_debugfs_entries();
 	kfree(chip);
-	return 0;
+
+	rc = pm8058_batt_alarm_state_set(0, 0);
+	if (rc)
+		pr_err("%s: unable to set batt alarm state\n", __func__);
+
+	rc |= pm8058_batt_alarm_unregister_notifier(&alarm_notifier);
+	if (rc)
+		pr_err("%s: unable to register alarm notifier\n", __func__);
+	return rc;
 }
 
 static struct platform_driver pm8058_charger_driver = {

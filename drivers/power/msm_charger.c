@@ -527,12 +527,7 @@ static void handle_charging_done(struct msm_hardware_charger_priv *priv)
 		dev_info(msm_chg.dev, "%s: stopping safety timer work\n",
 				__func__);
 		cancel_delayed_work(&msm_chg.teoc_work);
-		dev_info(msm_chg.dev, "%s: starting resume timer work\n",
-				__func__);
-		queue_delayed_work(msm_chg.event_wq_thread,
-					&msm_chg.resume_work,
-				      round_jiffies_relative(msecs_to_jiffies
-						     (RESUME_CHECK_PERIOD_MS)));
+		msm_batt_gauge->monitor_for_recharging();
 	}
 }
 
@@ -892,6 +887,11 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 		if (msm_chg.batt_status == BATT_STATUS_TRKL_CHARGING)
 			msm_chg.batt_status = BATT_STATUS_FAST_CHARGING;
 		break;
+	case CHG_BATT_NEEDS_RECHARGING:
+		msm_chg.batt_status = BATT_STATUS_DISCHARGING;
+		handle_battery_inserted();
+		priv = msm_chg.current_chg_priv;
+		break;
 	case CHG_BATT_TEMP_OUTOFRANGE:
 		/* the batt_temp out of range can trigger
 		 * when the battery is absent */
@@ -1227,10 +1227,6 @@ static int msm_charger_suspend(struct device *dev)
 	dev_dbg(msm_chg.dev, "%s suspended\n", __func__);
 	msm_chg.stop_update = 1;
 	cancel_delayed_work(&msm_chg.update_heartbeat_work);
-	/*
-	 * we wont be charging in the suspend sequence, act as if the
-	 * battery is removed - this will stop the resume delayed work
-	 */
 	mutex_lock(&msm_chg.status_lock);
 	handle_battery_removed();
 	mutex_unlock(&msm_chg.status_lock);
