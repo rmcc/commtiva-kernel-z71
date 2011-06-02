@@ -3251,6 +3251,7 @@ static int sdio_al_sdio_suspend(struct device *dev)
 	int ret = 0;
 	struct sdio_al_device *sdio_al_dev = NULL;
 	int i;
+	int pending_due_to_rx = 0;
 
 	/* Find the sdio_al_device of this function */
 	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
@@ -3306,7 +3307,21 @@ static int sdio_al_sdio_suspend(struct device *dev)
 
 	/* Check if we can get into suspend */
 	if (!sdio_al_dev->is_ok_to_sleep) {
-		pr_err(MODULE_NAME ":Cannot suspend due to pending data\n");
+		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
+			if ((!sdio_al_dev->channel[i].is_valid) ||
+			    (!sdio_al_dev->channel[i].is_open))
+				continue;
+			if ((sdio_al_dev->channel[i].read_avail > 0)) {
+				pr_err(MODULE_NAME ":Cannot suspend due to rx "
+					"pending data on ch %s\n",
+				       sdio_al_dev->channel[i].name);
+				pending_due_to_rx = 1;
+				break;
+			}
+		}
+		if (!pending_due_to_rx)
+			pr_err(MODULE_NAME ":Cannot suspend due to tx "
+					   "pending data\n");
 		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
 		return -EBUSY;
 	}
