@@ -41,7 +41,6 @@
 
 #define DEFAULT_BATT_MAX_V		4200
 #define DEFAULT_BATT_MIN_V		3200
-#define DEFAULT_BATT_RESUME_V		4100
 
 #define MSM_CHARGER_GAUGE_MISSING_VOLTS 3500
 #define MSM_CHARGER_GAUGE_MISSING_TEMP  35
@@ -91,14 +90,9 @@ struct msm_charger_mux {
 
 	unsigned int max_voltage;
 	unsigned int min_voltage;
-	unsigned int resume_voltage;
 
 	unsigned int safety_time;
 	struct delayed_work teoc_work;
-
-	int stop_resume_check;
-	int resume_count;
-	struct delayed_work resume_work;
 
 	unsigned int update_time;
 	int stop_update;
@@ -268,7 +262,6 @@ static void update_batt_status(void)
 			if (msm_chg.batt_status == BATT_STATUS_ABSENT
 				|| msm_chg.batt_status
 					== BATT_STATUS_ID_INVALID) {
-				msm_chg.stop_resume_check = 0;
 				msm_chg.batt_status = BATT_STATUS_DISCHARGING;
 			}
 		} else
@@ -546,7 +539,6 @@ static void teoc(struct work_struct *work)
 
 static void handle_battery_inserted(void)
 {
-	msm_chg.stop_resume_check = 0;
 	/* if a charger is already present start charging */
 	if (msm_chg.current_chg_priv != NULL &&
 	    is_batt_status_capable_of_charging() &&
@@ -568,62 +560,6 @@ static void handle_battery_inserted(void)
 	}
 }
 
-#define MSM_CHARGER_RESUME_COUNT 5
-static void resume_charging(struct work_struct *work)
-{
-	dev_dbg(msm_chg.dev, "%s resuming charging %d\n", __func__,
-						msm_chg.resume_count);
-
-	if (msm_chg.stop_resume_check) {
-		msm_chg.stop_resume_check = 0;
-		pr_err("%s stopping resume", __func__);
-		return;
-	}
-
-	update_batt_status();
-	if (msm_chg.batt_status != BATT_STATUS_JUST_FINISHED_CHARGING) {
-		pr_err("%s called outside JFC state", __func__);
-		return;
-	}
-
-	if (get_prop_battery_mvolts() < msm_chg.resume_voltage)
-		msm_chg.resume_count++;
-	else
-		msm_chg.resume_count = 0;
-
-	/*
-	 * if we are within 500mV of min voltage range forget the count
-	 * force start battery charging by increasing resume count
-	 */
-	if (get_prop_battery_mvolts() < msm_chg.min_voltage + 500) {
-		pr_err("%s: batt lost voltage rapidly -force resume charging\n",
-					__func__);
-		msm_chg.resume_count += MSM_CHARGER_RESUME_COUNT + 1;
-	}
-
-	if (msm_chg.resume_count > MSM_CHARGER_RESUME_COUNT) {
-		/* the battery has dropped below 4.1V for 5 mins
-		 * straight- resume charging */
-		/* act as if the battery was just plugged in */
-		mutex_lock(&msm_chg.status_lock);
-		msm_chg.batt_status = BATT_STATUS_DISCHARGING;
-		msm_chg.resume_count = 0;
-		handle_battery_inserted();
-		power_supply_changed(&msm_psy_batt);
-		if (msm_chg.current_chg_priv != NULL)
-			power_supply_changed(&msm_chg.current_chg_priv->psy);
-		mutex_unlock(&msm_chg.status_lock);
-	} else {
-		/* reschedule resume check */
-		dev_info(msm_chg.dev, "%s: rescheduling resume timer work\n",
-				__func__);
-		queue_delayed_work(msm_chg.event_wq_thread,
-					&msm_chg.resume_work,
-				      round_jiffies_relative(msecs_to_jiffies
-						     (RESUME_CHECK_PERIOD_MS)));
-	}
-}
-
 static void handle_battery_removed(void)
 {
 	/* if a charger is charging the battery stop it */
@@ -639,8 +575,6 @@ static void handle_battery_removed(void)
 				__func__);
 		cancel_delayed_work(&msm_chg.teoc_work);
 	}
-	msm_chg.stop_resume_check = 1;
-	cancel_delayed_work(&msm_chg.resume_work);
 }
 
 static void update_heartbeat(struct work_struct *work)
@@ -1086,7 +1020,6 @@ static int __devinit msm_charger_probe(struct platform_device *pdev)
 
 		msm_chg.max_voltage = pdata->max_voltage;
 		msm_chg.min_voltage = pdata->min_voltage;
-		msm_chg.resume_voltage = pdata->resume_voltage;
 		msm_chg.get_batt_capacity_percent =
 		    pdata->get_batt_capacity_percent;
 	}
@@ -1098,15 +1031,12 @@ static int __devinit msm_charger_probe(struct platform_device *pdev)
 		msm_chg.max_voltage = DEFAULT_BATT_MAX_V;
 	if (msm_chg.min_voltage == 0)
 		msm_chg.min_voltage = DEFAULT_BATT_MIN_V;
-	if (msm_chg.resume_voltage == 0)
-		msm_chg.resume_voltage = DEFAULT_BATT_RESUME_V;
 	if (msm_chg.get_batt_capacity_percent == NULL)
 		msm_chg.get_batt_capacity_percent =
 		    msm_chg_get_batt_capacity_percent;
 
 	mutex_init(&msm_chg.status_lock);
 	INIT_DELAYED_WORK(&msm_chg.teoc_work, teoc);
-	INIT_DELAYED_WORK(&msm_chg.resume_work, resume_charging);
 	INIT_DELAYED_WORK(&msm_chg.update_heartbeat_work, update_heartbeat);
 
 	wake_lock_init(&msm_chg.wl, WAKE_LOCK_SUSPEND, "msm_charger");
