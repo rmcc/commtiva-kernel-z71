@@ -403,9 +403,15 @@ static void gsmd_write_complete(struct usb_ep *ep, struct usb_request *req)
 
 static void gsmd_start_io(struct gsmd_port *port)
 {
-	int ret;
+	int		ret = -ENODEV;
+	unsigned long	flags;
 
 	pr_debug("%s: port: %p\n", __func__, port);
+
+	spin_lock_irqsave(&port->port_lock, flags);
+
+	if (!port->port_usb)
+		goto start_io_out;
 
 	ret = gsmd_alloc_requests(port->port_usb->out,
 				&port->read_pool,
@@ -414,7 +420,7 @@ static void gsmd_start_io(struct gsmd_port *port)
 	if (ret) {
 		pr_err("%s: unable to allocate out requests\n",
 				__func__);
-		return;
+		goto start_io_out;
 	}
 
 	ret = gsmd_alloc_requests(port->port_usb->in,
@@ -422,11 +428,17 @@ static void gsmd_start_io(struct gsmd_port *port)
 				TX_QUEUE_SIZE, TX_BUF_SIZE,
 				gsmd_write_complete);
 	if (ret) {
+		gsmd_free_requests(port->port_usb->out, &port->read_pool);
 		pr_err("%s: unable to allocate IN requests\n",
 				__func__);
-		gsmd_free_requests(port->port_usb->out, &port->read_pool);
-		return;
+		goto start_io_out;
 	}
+
+start_io_out:
+	spin_unlock_irqrestore(&port->port_lock, flags);
+
+	if (ret)
+		return;
 
 	gsmd_start_rx(port);
 }
@@ -672,10 +684,7 @@ void gsmd_disconnect(struct gserial *gser, u8 portno)
 
 	/* disable endpoints, aborting down any active I/O */
 	usb_ep_disable(gser->out);
-	gser->out->driver_data = NULL;
-
 	usb_ep_disable(gser->in);
-	gser->in->driver_data = NULL;
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	gsmd_free_requests(gser->out, &port->read_pool);

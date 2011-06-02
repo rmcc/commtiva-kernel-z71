@@ -1183,8 +1183,6 @@ static void rmnet_free_buf(struct rmnet_dev *dev)
 		ctrl_dev->rx_len--;
 	}
 	spin_unlock_irqrestore(&dev->lock, flags);
-
-	rmnet_free_req(dev->epnotify, dev->notify_req);
 }
 
 static void rmnet_disconnect_work(struct work_struct *w)
@@ -1218,6 +1216,8 @@ static void rmnet_disable(struct usb_function *f)
 
 	usb_ep_fifo_flush(dev->epnotify);
 	usb_ep_disable(dev->epnotify);
+	rmnet_free_req(dev->epnotify, dev->notify_req);
+
 	usb_ep_fifo_flush(dev->epout);
 	usb_ep_disable(dev->epout);
 
