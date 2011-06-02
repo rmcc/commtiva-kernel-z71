@@ -6352,7 +6352,7 @@ static unsigned int msm_bahama_shutdown_power(int value)
 
 
 {
-	gpio_set_value(GPIO_MS_SYS_RESET_N, 0);
+	gpio_set_value_cansleep(GPIO_MS_SYS_RESET_N, 0);
 
 	gpio_free(GPIO_MS_SYS_RESET_N);
 
@@ -9214,6 +9214,15 @@ static struct msm_xo_voter *bt_clock;
 static int bluetooth_power(int on)
 {
 	int rc = 0;
+	int id;
+
+	/* In case probe function fails, cur_connv_type would be -1 */
+	id = adie_get_detected_connectivity_type();
+	if (id != BAHAMA_ID) {
+		pr_err("%s: unexpected adie connectivity type: %d\n",
+			__func__, id);
+		return -ENODEV;
+	}
 
 	if (on) {
 
