@@ -48,6 +48,7 @@
 #define CHG_USB_SUSPEND			6
 #define CHG_IMON_CAL			5
 #define CHG_IMON_GAIN			4
+#define CHG_CHARGE_BAT			3
 #define CHG_VBUS_FROM_BOOST_OVRD	2
 #define CHG_CHARGE_DIS			1
 #define CHG_VCP_EN			0
@@ -1291,6 +1292,58 @@ err_out:
 	return -EINVAL;
 }
 
+static int pm8058_get_charge_batt(void)
+{
+	u8 temp;
+	int rc;
+
+	rc = pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_CNTRL, &temp, 1);
+	if (rc)
+		return rc;
+
+	temp &= BIT(CHG_CHARGE_BAT);
+	if (temp)
+		temp = 1;
+	return temp;
+}
+EXPORT_SYMBOL(pm8058_get_charge_batt);
+
+static int pm8058_set_charge_batt(int on)
+{
+	u8 temp;
+	int rc;
+
+	rc = pm8058_read(pm8058_chg.pm_chip, PM8058_CHG_CNTRL, &temp, 1);
+	if (rc)
+		return rc;
+	if (on)
+		temp |= BIT(CHG_CHARGE_BAT);
+	else
+		temp &= ~BIT(CHG_CHARGE_BAT);
+
+	return pm8058_write(pm8058_chg.pm_chip, PM8058_CHG_CNTRL, &temp, 1);
+
+}
+EXPORT_SYMBOL(pm8058_set_charge_batt);
+
+static int get_charge_batt(void *data, u64 * val)
+{
+	int ret;
+
+	ret = pm8058_get_charge_batt();
+	if (ret < 0)
+		return ret;
+
+	*val = ret;
+	return 0;
+}
+
+static int set_charge_batt(void *data, u64 val)
+{
+	return pm8058_set_charge_batt(val);
+}
+DEFINE_SIMPLE_ATTRIBUTE(fet_fops, get_charge_batt, set_charge_batt, "%llu\n");
+
 static void pm8058_chg_determine_initial_state(void)
 {
 	if (is_chg_plugged_in()) {
@@ -1554,6 +1607,9 @@ static void create_debugfs_entries(void)
 				    (void *)
 				    pm8058_chg.pmic_chg_irq[VBATDET_LOW_IRQ],
 				    &rt_fops);
+	debugfs_create_file("CHARGE_BATT", 0444, pm8058_chg.dent,
+				    NULL,
+				    &fet_fops);
 }
 #else
 static inline void create_debugfs_entries(void)
@@ -1730,7 +1786,6 @@ static int pm8058_monitor_for_recharging(void)
 	/* enable low comparator */
 	return pm8058_batt_alarm_state_set(1, 0);
 }
-
 
 static struct msm_battery_gauge pm8058_batt_gauge = {
 	.get_battery_mvolts = pm8058_get_battery_mvolts,
