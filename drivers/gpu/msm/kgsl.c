@@ -1444,12 +1444,7 @@ static long kgsl_ioctl_map_user_mem(struct kgsl_device_private *dev_priv,
 
 		if (!param->len)
 			param->len = len;
-		else if (param->len != len) {
-			KGSL_CORE_ERR("param->len(%d) invalid for given host "
-				"address(%x)\n", param->len, param->hostptr);
-			result = -EINVAL;
-			goto error;
-		}
+
 		if (param->memtype == KGSL_USER_MEM_TYPE_ASHMEM) {
 			struct file *ashmem_vm_file;
 			if (get_ashmem_file(param->fd, &file_ptr,
