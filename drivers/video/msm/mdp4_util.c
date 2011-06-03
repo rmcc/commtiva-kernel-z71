@@ -409,6 +409,12 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 
 		panel = mdp4_overlay_panel_list();
 		if (isr & INTR_PRIMARY_VSYNC) {
+			dma = &dma2_data;
+			spin_lock(&mdp_spin_lock);
+			mdp_intr_mask &= ~INTR_PRIMARY_VSYNC;
+			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+			dma->waiting = FALSE;
+			spin_unlock(&mdp_spin_lock);
 			if (panel & MDP4_PANEL_LCDC)
 				mdp4_primary_vsync_lcdc();
 #ifdef CONFIG_FB_MSM_MIPI_DSI
@@ -418,6 +424,12 @@ irqreturn_t mdp4_isr(int irq, void *ptr)
 		}
 #ifdef CONFIG_FB_MSM_DTV
 		if (isr & INTR_EXTERNAL_VSYNC) {
+			dma = &dma_e_data;
+			spin_lock(&mdp_spin_lock);
+			mdp_intr_mask &= ~INTR_EXTERNAL_VSYNC;
+			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
+			dma->waiting = FALSE;
+			spin_unlock(&mdp_spin_lock);
 			if (panel & MDP4_PANEL_DTV)
 				mdp4_external_vsync_dtv();
 		}
