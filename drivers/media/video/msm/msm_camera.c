@@ -608,12 +608,10 @@ static int __msm_pmem_table_del(struct msm_sync *sync,
 	unsigned long flags = 0;
 
 	switch (pinfo->type) {
-	case MSM_PMEM_VIDEO:
 	case MSM_PMEM_PREVIEW:
 	case MSM_PMEM_THUMBNAIL:
 	case MSM_PMEM_MAINIMG:
 	case MSM_PMEM_RAW_MAINIMG:
-	case MSM_PMEM_VIDEO_VPE:
 	case MSM_PMEM_C2D:
 	case MSM_PMEM_MAINIMG_VPE:
 	case MSM_PMEM_THUMBNAIL_VPE:
@@ -624,6 +622,26 @@ static int __msm_pmem_table_del(struct msm_sync *sync,
 			if (pinfo->type == region->info.type &&
 					pinfo->vaddr == region->info.vaddr &&
 					pinfo->fd == region->info.fd) {
+				hlist_del(node);
+				put_pmem_file(region->file);
+				kfree(region);
+				CDBG("%s: type %d, vaddr  0x%p\n",
+					__func__, pinfo->type, pinfo->vaddr);
+			}
+		}
+		spin_unlock_irqrestore(&sync->pmem_frame_spinlock, flags);
+		break;
+
+	case MSM_PMEM_VIDEO:
+	case MSM_PMEM_VIDEO_VPE:
+		spin_lock_irqsave(&sync->pmem_frame_spinlock, flags);
+		hlist_for_each_entry_safe(region, node, n,
+			&sync->pmem_frames, list) {
+
+			if (((region->info.type == MSM_PMEM_VIDEO) ||
+				(region->info.type == MSM_PMEM_VIDEO_VPE)) &&
+				pinfo->vaddr == region->info.vaddr &&
+				pinfo->fd == region->info.fd) {
 				hlist_del(node);
 				put_pmem_file(region->file);
 				kfree(region);
