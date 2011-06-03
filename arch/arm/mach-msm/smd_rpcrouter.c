@@ -313,48 +313,48 @@ static void modem_reset_cleanup(struct rpcrouter_xprt_info *xprt_info)
 			kfree(reply);
 		}
 		spin_unlock(&ept->reply_q_lock);
-		if (ept->dst_pid == RPCROUTER_PID_REMOTE) {
-			/* Set restart state for local ep */
-			RR("EPT:0x%p, State %d  RESTART_PEND_NTFY_SVR "
-				"PROG:0x%08x VERS:0x%08x\n",
-				ept, ept->restart_state,
-				be32_to_cpu(ept->dst_prog),
-				be32_to_cpu(ept->dst_vers));
-			spin_lock(&ept->restart_lock);
-			ept->restart_state = RESTART_PEND_NTFY_SVR;
 
-			/* remove incomplete packets */
-			spin_lock(&ept->incomplete_lock);
-			list_for_each_entry_safe(pkt, tmp_pkt,
-						 &ept->incomplete, list) {
-				list_del(&pkt->list);
-				frag = pkt->first;
-				while (frag != NULL) {
-					next = frag->next;
-					kfree(frag);
-					frag = next;
-				}
+		/* Set restart state for local ep */
+		RR("EPT:0x%p, State %d  RESTART_PEND_NTFY_SVR "
+			"PROG:0x%08x VERS:0x%08x\n",
+			ept, ept->restart_state,
+			be32_to_cpu(ept->dst_prog),
+			be32_to_cpu(ept->dst_vers));
+		spin_lock(&ept->restart_lock);
+		ept->restart_state = RESTART_PEND_NTFY_SVR;
+
+		/* remove incomplete packets */
+		spin_lock(&ept->incomplete_lock);
+		list_for_each_entry_safe(pkt, tmp_pkt,
+					 &ept->incomplete, list) {
+			list_del(&pkt->list);
+			frag = pkt->first;
+			while (frag != NULL) {
+				next = frag->next;
+				kfree(frag);
+				frag = next;
+			}
 			kfree(pkt);
-			}
-			spin_unlock(&ept->incomplete_lock);
-			/* remove all completed packets waiting to be read*/
-			spin_lock(&ept->read_q_lock);
-			list_for_each_entry_safe(pkt, tmp_pkt, &ept->read_q,
-						 list) {
-				list_del(&pkt->list);
-				frag = pkt->first;
-				while (frag != NULL) {
-					next = frag->next;
-					kfree(frag);
-					frag = next;
-				}
-				kfree(pkt);
-			}
-			spin_unlock(&ept->read_q_lock);
-
-			spin_unlock(&ept->restart_lock);
-			wake_up(&ept->wait_q);
 		}
+		spin_unlock(&ept->incomplete_lock);
+
+		/* remove all completed packets waiting to be read */
+		spin_lock(&ept->read_q_lock);
+		list_for_each_entry_safe(pkt, tmp_pkt, &ept->read_q,
+					 list) {
+			list_del(&pkt->list);
+			frag = pkt->first;
+			while (frag != NULL) {
+				next = frag->next;
+				kfree(frag);
+				frag = next;
+			}
+			kfree(pkt);
+		}
+		spin_unlock(&ept->read_q_lock);
+
+		spin_unlock(&ept->restart_lock);
+		wake_up(&ept->wait_q);
 	}
 
 	spin_unlock_irqrestore(&local_endpoints_lock, flags);
