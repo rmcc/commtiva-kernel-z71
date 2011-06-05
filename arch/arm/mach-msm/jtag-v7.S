@@ -21,9 +21,10 @@
  */
 #include <linux/linkage.h>
 #include <asm/assembler.h>
+#include <linux/threads.h>
 
-#if (CONFIG_NR_CPUS > 2)
-#error Code only written and tested for 1 or 2 CPUs.
+#if (NR_CPUS > 2)
+#error code only tested for 1 or 2 CPUs.
 #endif
 
 #define MAX_ETM_REGS 56
@@ -34,10 +35,12 @@
 
 ENTRY(msm_save_jtag_debug)
 	ldr     r3, =dbg_state        /* store state at dbg_state */
-#if defined(CONFIG_NR_CPUS) && (CONFIG_NR_CPUS >= 2)
+#if (NR_CPUS >= 2)
 	mrc	p15, 0, r2, c0, c0, 5 /* MPIDR */
-	ands	r2, r2, #15	      /* What CPU am I */
-	addne	r3, r3, #MAX_DEBUG_STATE_SIZE
+	and	r2, r2, #15	      /* What CPU am I */
+	ldr     r1, =MAX_DEBUG_STATE_SIZE
+	mul     r2, r2, r1
+	add	r3, r3, r2
 #endif
 
 	/* save jtag state */
@@ -84,10 +87,12 @@ ENTRY(msm_save_jtag_debug)
 ENTRY(msm_restore_jtag_debug)
 	/* restore debug registers after power collapse  */
 	ldr     r3, =dbg_state        /* load state from dbg_state */
-#if defined(CONFIG_NR_CPUS) && (CONFIG_NR_CPUS >= 2)
+#if (NR_CPUS >= 2)
 	mrc	p15, 0, r2, c0, c0, 5 /* MPIDR */
-	ands	r2, r2, #15	      /* What CPU am I */
-	addne	r3, r3, #MAX_DEBUG_STATE_SIZE
+	and	r2, r2, #15	      /* What CPU am I */
+	ldr     r1, =MAX_DEBUG_STATE_SIZE
+	mul     r2, r2, r1
+	add	r3, r3, r2
 #endif
 
 	/* restore jtag state */
@@ -111,10 +116,12 @@ ENTRY(msm_restore_jtag_debug)
 	bne     1b
 
 	ldr     r3, =dbg_state        /* load state from dbg_state */
-#if defined(CONFIG_NR_CPUS) && (CONFIG_NR_CPUS >= 2)
+#if (NR_CPUS >= 2)
 	mrc	p15, 0, r2, c0, c0, 5 /* MPIDR */
-	ands	r2, r2, #15	      /* What CPU am I */
-	addne	r3, r3, #MAX_DEBUG_STATE_SIZE
+	and	r2, r2, #15	      /* What CPU am I */
+	ldr     r1, =MAX_DEBUG_STATE_SIZE
+	mul     r2, r2, r1
+	add	r3, r3, r2
 #endif
 	ldr     r1, =0xc5ACCE55       /* set DBGOSLAR lock */
 	mcr     p14, 0, r1, c1, c0, 4
@@ -160,9 +167,4 @@ msm_pm_etm_restore_end:
 	.data
 
 dbg_state:
-#if defined(CONFIG_NR_CPUS) && (CONFIG_NR_CPUS >= 2)
-	.space	MAX_DEBUG_STATE_SIZE * 2 /* This code only supports 2 cores */
-#else
-	.space  MAX_DEBUG_STATE_SIZE
-#endif
-
+	.space	MAX_DEBUG_STATE_SIZE * NR_CPUS

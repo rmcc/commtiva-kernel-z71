@@ -74,8 +74,7 @@ struct b {
 	uint32_t log_end;
 };
 
-static struct b b0;
-static struct b b1;
+static struct b buf[NR_CPUS];
 static struct b __percpu * *alloc_b;
 static atomic_t etm_dev_in_use;
 
@@ -180,9 +179,9 @@ static struct etm_config_struct etm_config = {
 static void emit_log_char(uint8_t c)
 {
 	int this_cpu = get_cpu();
-	struct b *myb = *per_cpu_ptr(alloc_b, this_cpu);
-	char *log_buf = myb->etm_log_buf;
-	int index = (myb->log_end)++ & (LOG_BUF_LEN - 1);
+	struct b *mybuf = *per_cpu_ptr(alloc_b, this_cpu);
+	char *log_buf = mybuf->etm_log_buf;
+	int index = (mybuf->log_end)++ & (LOG_BUF_LEN - 1);
 	log_buf[index] = c;
 	put_cpu();
 }
@@ -465,7 +464,8 @@ static void dump_all(void *unused)
 	put_cpu();
 }
 
-static int next_cpu_to_dump = -1;
+static int cpu_to_dump;
+static int next_cpu_to_dump;
 static int bytes_to_dump;
 static uint8_t *etm_buf_ptr;
 
@@ -481,15 +481,19 @@ static int etm_dev_open(struct inode *inode, struct file *file)
 static ssize_t etm_dev_read(struct file *file, char __user *data,
 				size_t len, loff_t *ppos)
 {
-	if (next_cpu_to_dump == -1) {
-		get_cpu();
-		dump_all(NULL);
-		smp_call_function(dump_all, NULL, 1);
-		put_cpu();
-		bytes_to_dump = b0.log_end;
-		b0.log_end = 0;
-		etm_buf_ptr = b0.etm_log_buf;
-		next_cpu_to_dump = 0;
+	if (cpu_to_dump == next_cpu_to_dump) {
+		if (cpu_to_dump == 0) {
+			get_cpu();
+			dump_all(NULL);
+			smp_call_function(dump_all, NULL, 1);
+			put_cpu();
+		}
+		bytes_to_dump = buf[cpu_to_dump].log_end;
+		buf[cpu_to_dump].log_end = 0;
+		etm_buf_ptr = buf[cpu_to_dump].etm_log_buf;
+		next_cpu_to_dump++;
+		if (next_cpu_to_dump >= num_possible_cpus())
+			next_cpu_to_dump = 0;
 	}
 
 	if (len > bytes_to_dump)
@@ -816,13 +820,10 @@ err_out:
 
 static int etm_dev_release(struct inode *inode, struct file *file)
 {
-	if (next_cpu_to_dump == 0) {
-		bytes_to_dump = b1.log_end;
-		b1.log_end = 0;
-		etm_buf_ptr = b1.etm_log_buf;
-		next_cpu_to_dump = 1;
-	} else
-		next_cpu_to_dump = -1;
+	if (cpu_to_dump == next_cpu_to_dump)
+		next_cpu_to_dump = 0;
+	cpu_to_dump = next_cpu_to_dump;
+
 	atomic_set(&etm_dev_in_use, 0);
 	pr_debug("%s: released\n", __func__);
 	return 0;
@@ -844,7 +845,7 @@ static struct miscdevice etm_dev = {
 
 static int __init etm_init(void)
 {
-	int rv;
+	int rv, cpu;
 	void __iomem *etm_buf_addr_base;
 	void *etm_dump_buf;
 
@@ -856,8 +857,10 @@ static int __init etm_init(void)
 	if (!alloc_b)
 		return -ENOMEM;
 
-	*per_cpu_ptr(alloc_b, 0) = &b0;
-	*per_cpu_ptr(alloc_b, 1) = &b1;
+	for_each_possible_cpu(cpu)
+		*per_cpu_ptr(alloc_b, cpu) = &buf[cpu];
+
+	cpu_to_dump = next_cpu_to_dump = 0;
 
 	pr_info("ETM/ETB intialized.\n");
 
