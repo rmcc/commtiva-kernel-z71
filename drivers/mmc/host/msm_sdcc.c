@@ -933,7 +933,13 @@ msmsdcc_irq(int irq, void *dev_id)
 #if IRQ_DEBUG
 		msmsdcc_print_status(host, "irq0-p", status);
 #endif
-
+#ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
+		if (status & MCI_SDIOINTROPE) {
+			if (host->sdcc_suspending)
+				wake_lock(&host->sdio_suspend_wlock);
+			mmc_signal_sdio_irq(host->mmc);
+		}
+#endif
 		if ((host->plat->dummy52_required) &&
 		    (host->dummy_52_state == DUMMY_52_STATE_SENT)) {
 			if (status & (MCI_PROGDONE | MCI_CMDCRCFAIL |
@@ -954,13 +960,7 @@ msmsdcc_irq(int irq, void *dev_id)
 		}
 
 		data = host->curr.data;
-#ifdef CONFIG_MMC_MSM_SDIO_SUPPORT
-		if (status & MCI_SDIOINTROPE) {
-			if (host->sdcc_suspending)
-				wake_lock(&host->sdio_suspend_wlock);
-			mmc_signal_sdio_irq(host->mmc);
-		}
-#endif
+
 		/*
 		 * Check for proper command response
 		 */
