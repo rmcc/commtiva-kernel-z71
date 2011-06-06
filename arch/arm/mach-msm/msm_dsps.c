@@ -118,7 +118,7 @@ static void dsps_suspend(void)
 	pr_debug("%s.\n", __func__);
 
 	writel_relaxed(1, drv->ppss_base + PPSS_PAUSE_REG);
-	mb(); /* Make sure write commited before ioctl returns. */
+	dsb(); /* write needs to be finished before the function returns */
 }
 
 /**
@@ -129,7 +129,7 @@ static void dsps_resume(void)
 	pr_debug("%s.\n", __func__);
 
 	writel_relaxed(0, drv->ppss_base + PPSS_PAUSE_REG);
-	mb(); /* Make sure write commited before ioctl returns. */
+	dsb(); /* write needs to be finished before the function returns */
 }
 
 /**
