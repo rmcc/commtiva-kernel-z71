@@ -28,6 +28,7 @@
 #include <linux/semaphore.h>
 #include <linux/spinlock.h>
 #include <linux/fb.h>
+#include <linux/msm_mdp.h>
 #include <asm/system.h>
 #include <asm/mach-types.h>
 #include <mach/hardware.h>
@@ -39,6 +40,8 @@
 
 static int first_pixel_start_x;
 static int first_pixel_start_y;
+
+static int writeback_offset;
 
 static struct mdp4_overlay_pipe *dsi_pipe;
 
@@ -124,6 +127,9 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 			printk(KERN_INFO "%s: format2type failed\n", __func__);
 
 		dsi_pipe = pipe; /* keep it */
+
+		writeback_offset = mdp4_overlay_writeback_setup(
+						fbi, pipe, buf, bpp);
 	} else {
 		pipe = dsi_pipe;
 	}
@@ -143,6 +149,7 @@ int mdp4_dsi_video_on(struct platform_device *pdev)
 	pipe->src_x = 0;
 	pipe->srcp0_addr = (uint32) buf;
 	pipe->srcp0_ystride = fbi->fix.line_length;
+	pipe->bpp = bpp;
 
 	mdp4_overlay_dmap_xy(pipe);	/* dma_p */
 	mdp4_overlay_dmap_cfg(mfd, 1);
@@ -269,63 +276,61 @@ int mdp4_dsi_video_off(struct platform_device *pdev)
 	return ret;
 }
 
-/*
- * mdp4_primary_vsync_dsi_video: called from isr
- */
-void mdp4_primary_vsync_dsi_video(void)
+#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
+int mdp4_dsi_video_overlay_blt_offset(struct msm_fb_data_type *mfd,
+					struct msmfb_overlay_blt *req)
 {
-	complete_all(&dsi_pipe->comp);
+	req->offset = writeback_offset;
+	req->width = dsi_pipe->src_width;
+	req->height = dsi_pipe->src_height;
+	req->bpp = dsi_pipe->bpp;
+
+	return sizeof(*req);
 }
 
-/*
- * mdp4_overlay1_done_dsi: called from isr
- */
-void mdp4_overlay0_done_dsi_video()
+void mdp4_dsi_video_overlay_blt(struct msm_fb_data_type *mfd,
+					struct msmfb_overlay_blt *req)
 {
-	complete(&dsi_pipe->comp);
-}
-
-
-void mdp4_dsi_video_overlay(struct msm_fb_data_type *mfd)
-{
-	struct fb_info *fbi = mfd->fbi;
-	uint8 *buf;
-	int bpp;
 	unsigned long flag;
-	struct mdp4_overlay_pipe *pipe;
+	int change = 0;
 
-	if (!mfd->panel_power_on)
+	spin_lock_irqsave(&mdp_spin_lock, flag);
+	if (req->enable && dsi_pipe->blt_addr == 0) {
+		dsi_pipe->blt_addr = dsi_pipe->blt_base;
+		change++;
+	} else if (req->enable == 0 && dsi_pipe->blt_addr) {
+		dsi_pipe->blt_addr = 0;
+		change++;
+	}
+	pr_debug("%s: blt_addr=%x\n", __func__, (int)dsi_pipe->blt_addr);
+	dsi_pipe->blt_cnt = 0;
+	spin_unlock_irqrestore(&mdp_spin_lock, flag);
+
+	if (!change)
 		return;
 
-	/* no need to power on cmd block since it's dsi mode */
-	bpp = fbi->var.bits_per_pixel / 8;
-	buf = (uint8 *) fbi->fix.smem_start;
-	buf += fbi->var.xoffset * bpp +
-		fbi->var.yoffset * fbi->fix.line_length;
-
-	mutex_lock(&mfd->dma->ov_mutex);
-
-	pipe = dsi_pipe;
-	pipe->srcp0_addr = (uint32) buf;
-	mdp4_overlay_rgb_setup(pipe);
-	mdp4_overlay_reg_flush(pipe, 1); /* rgb0 and mixer0 */
-
-	/* enable irq */
-	spin_lock_irqsave(&mdp_spin_lock, flag);
-	mdp_enable_irq(MDP_OVERLAY0_TERM);
-	INIT_COMPLETION(dsi_pipe->comp);
-	mfd->dma->waiting = TRUE;
-	outp32(MDP_INTR_CLEAR, INTR_OVERLAY0_DONE);
-	mdp_intr_mask |= INTR_OVERLAY0_DONE;
-	outp32(MDP_INTR_ENABLE, mdp_intr_mask);
-	spin_unlock_irqrestore(&mdp_spin_lock, flag);
-	wait_for_completion_killable(&dsi_pipe->comp);
-	mdp_disable_irq(MDP_OVERLAY0_TERM);
-
-	mdp4_stat.kickoff_dsi++;
-	mdp4_overlay_resource_release();
-	mutex_unlock(&mfd->dma->ov_mutex);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_ON, FALSE);
+	/*
+	 * it does not work by turnning dsi video timing enerator off
+	 * and configure new changes and tune it back on like LCDC.
+	 */
+	mdp4_overlayproc_cfg(dsi_pipe);
+	mdp4_overlay_dmap_xy(dsi_pipe);
+	mdp_pipe_ctrl(MDP_CMD_BLOCK, MDP_BLOCK_POWER_OFF, FALSE);
 }
+#else
+int mdp4_dsi_video_overlay_blt_offset(struct msm_fb_data_type *mfd,
+					struct msmfb_overlay_blt *req)
+{
+	return 0;
+}
+void mdp4_dsi_video_overlay_blt(struct msm_fb_data_type *mfd,
+					struct msmfb_overlay_blt *req)
+{
+	return;
+}
+#endif
+
 void mdp4_overlay_dsi_video_wait4vsync(struct msm_fb_data_type *mfd)
 {
 	unsigned long flag;
@@ -352,4 +357,48 @@ void mdp4_overlay_dsi_video_vsync_push(struct msm_fb_data_type *mfd,
 		return;
 
 	mdp4_overlay_dsi_video_wait4vsync(mfd);
+}
+
+/*
+ * mdp4_primary_vsync_dsi_video: called from isr
+ */
+void mdp4_primary_vsync_dsi_video(void)
+{
+	complete_all(&dsi_pipe->comp);
+}
+
+/*
+ * mdp4_overlay1_done_dsi: called from isr
+ */
+void mdp4_overlay0_done_dsi_video()
+{
+	complete(&dsi_pipe->comp);
+}
+
+
+void mdp4_dsi_video_overlay(struct msm_fb_data_type *mfd)
+{
+	struct fb_info *fbi = mfd->fbi;
+	uint8 *buf;
+	int bpp;
+	struct mdp4_overlay_pipe *pipe;
+
+	if (!mfd->panel_power_on)
+		return;
+
+	/* no need to power on cmd block since it's dsi mode */
+	bpp = fbi->var.bits_per_pixel / 8;
+	buf = (uint8 *) fbi->fix.smem_start;
+	buf += fbi->var.xoffset * bpp +
+		fbi->var.yoffset * fbi->fix.line_length;
+
+	mutex_lock(&mfd->dma->ov_mutex);
+
+	pipe = dsi_pipe;
+	pipe->srcp0_addr = (uint32) buf;
+	mdp4_overlay_rgb_setup(pipe);
+	mdp4_overlay_dsi_video_vsync_push(mfd, pipe);
+	mdp4_stat.kickoff_dsi++;
+	mdp4_overlay_resource_release();
+	mutex_unlock(&mfd->dma->ov_mutex);
 }

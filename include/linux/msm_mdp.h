@@ -225,7 +225,10 @@ struct msmfb_overlay_3d {
 
 struct msmfb_overlay_blt {
 	uint32_t enable;
-	struct msmfb_data data;
+	uint32_t offset;
+	uint32_t width;
+	uint32_t height;
+	uint32_t bpp;
 };
 
 struct mdp_histogram {

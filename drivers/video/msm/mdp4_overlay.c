@@ -958,7 +958,8 @@ void mdp4_overlayproc_cfg(struct mdp4_overlay_pipe *pipe)
 		data <<= 16;
 		data |= pipe->src_width;
 		outpdw(overlay_base + 0x0008, data); /* ROI, height + width */
-		if (ctrl->panel_mode & MDP4_PANEL_LCDC) {
+		if (ctrl->panel_mode & MDP4_PANEL_LCDC ||
+				ctrl->panel_mode & MDP4_PANEL_DSI_VIDEO) {
 			outpdw(overlay_base + 0x000c, pipe->blt_addr);
 			outpdw(overlay_base + 0x0010, pipe->src_width * bpp);
 			off = pipe->src_height * pipe->src_width * bpp;
@@ -1718,15 +1719,10 @@ int mdp4_overlay_3d(struct fb_info *info, struct msmfb_overlay_3d *req)
 	return ret;
 }
 
-int mdp4_overlay_blt(struct fb_info *info, struct msmfb_overlay_blt *req,
-		struct file **pp_src_file)
+#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
+int mdp4_overlay_blt(struct fb_info *info, struct msmfb_overlay_blt *req)
 {
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
-
-	struct msmfb_data *img;
-	ulong start, addr;
-	ulong len = 0;
-	struct file *p_src_file = 0;
 
 	if (mfd == NULL)
 		return -ENODEV;
@@ -1734,67 +1730,39 @@ int mdp4_overlay_blt(struct fb_info *info, struct msmfb_overlay_blt *req,
 	if (mutex_lock_interruptible(&mfd->dma->ov_mutex))
 		return -EINTR;
 
-	if (req->enable) {
-		img = &req->data;
-		get_img(img, info, &start, &len, &p_src_file);
-		if (len == 0) {
-			mutex_unlock(&mfd->dma->ov_mutex);
-			pr_err("%s: could not retrieve image from pmem\n",
-				__func__);
-			return -ENODEV;
-		}
-		*pp_src_file = p_src_file;
-
-		addr = start + img->offset;
-
-		pr_info("%s: Start=%x off=%x\n", __func__,
-					(int)start, img->offset);
-
-#ifdef CONFIG_FB_MSM_MIPI_DSI
-		if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD)
-			mdp4_dsi_overlay_blt(addr); /* enable */
-		else
-#else
-		if (ctrl->panel_mode & MDP4_PANEL_MDDI)
-			mdp4_mddi_overlay_blt(addr); /* enable */
-		else
-#endif
-		if (ctrl->panel_mode & MDP4_PANEL_LCDC)
-			mdp4_lcdc_overlay_blt(addr); /* enable */
-	} else {
-#ifdef CONFIG_FB_MSM_MIPI_DSI
-		if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD)
-			mdp4_dsi_overlay_blt(0); /* disable */
-		else
-#else
-		if (ctrl->panel_mode & MDP4_PANEL_MDDI)
-			mdp4_mddi_overlay_blt(0); /* disable */
-		else
-#endif
-		if (ctrl->panel_mode & MDP4_PANEL_LCDC)
-			mdp4_lcdc_overlay_blt(0); /* disable */
-
-		pr_info("%s: End\n", __func__);
-	}
+	if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD)
+		mdp4_dsi_overlay_blt(mfd, req);
+	else if (ctrl->panel_mode & MDP4_PANEL_DSI_VIDEO)
+		mdp4_dsi_video_overlay_blt(mfd, req);
+	else if (ctrl->panel_mode & MDP4_PANEL_LCDC)
+		mdp4_lcdc_overlay_blt(mfd, req);
 
 	mutex_unlock(&mfd->dma->ov_mutex);
 
 	return 0;
 }
 
-int mdp4_overlay_blt_offset(struct fb_info *info, int *off)
+int mdp4_overlay_blt_offset(struct fb_info *info, struct msmfb_overlay_blt *req)
 {
-#ifdef CONFIG_FB_MSM_MDDI
-	if (ctrl->panel_mode & MDP4_PANEL_MDDI)
-		return mdp4_mddi_overlay_blt_offset(off);
-	else
-#endif
-	if (ctrl->panel_mode & MDP4_PANEL_LCDC)
-		return mdp4_lcdc_overlay_blt_offset(off);
+	int ret = 0;
 
-	*off = -1;
-	return -EINVAL;
+	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)info->par;
+
+	if (mutex_lock_interruptible(&mfd->dma->ov_mutex))
+		return -EINTR;
+
+	if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD)
+		ret = mdp4_dsi_overlay_blt_offset(mfd, req);
+	else if (ctrl->panel_mode & MDP4_PANEL_DSI_VIDEO)
+		ret = mdp4_dsi_video_overlay_blt_offset(mfd, req);
+	else if (ctrl->panel_mode & MDP4_PANEL_LCDC)
+		ret = mdp4_lcdc_overlay_blt_offset(mfd, req);
+
+	mutex_unlock(&mfd->dma->ov_mutex);
+
+	return ret;
 }
+#endif
 
 int mdp4_overlay_get(struct fb_info *info, struct mdp_overlay *req)
 {

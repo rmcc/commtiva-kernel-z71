@@ -2512,11 +2512,11 @@ static int msmfb_overlay_play_enable(struct fb_info *info, unsigned long *argp)
 }
 
 
+#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
 static int msmfb_overlay_blt(struct fb_info *info, unsigned long *argp)
 {
 	int     ret;
 	struct msmfb_overlay_blt req;
-	struct file *p_src_file = 0;
 
 	ret = copy_from_user(&req, argp, sizeof(req));
 	if (ret) {
@@ -2525,27 +2525,35 @@ static int msmfb_overlay_blt(struct fb_info *info, unsigned long *argp)
 		return ret;
 	}
 
-	ret = mdp4_overlay_blt(info, &req, &p_src_file);
-
-	if (p_src_file)
-		put_pmem_file(p_src_file);
+	ret = mdp4_overlay_blt(info, &req);
 
 	return ret;
 }
 
 static int msmfb_overlay_blt_off(struct fb_info *info, unsigned long *argp)
 {
-	int	ret, off;
+	int	ret;
+	struct msmfb_overlay_blt req;
 
-	ret = mdp4_overlay_blt_offset(info, &off);
+	ret = mdp4_overlay_blt_offset(info, &req);
 
-	ret = copy_to_user(argp, &off, sizeof(off));
+	ret = copy_to_user(argp, &req, sizeof(req));
 	if (ret)
 		printk(KERN_ERR "%s:msmfb_overlay_blt_off ioctl failed\n",
 		__func__);
 
 	return ret;
 }
+#else
+static int msmfb_overlay_blt(struct fb_info *info, unsigned long *argp)
+{
+	return 0;
+}
+static int msmfb_overlay_blt_off(struct fb_info *info, unsigned long *argp)
+{
+	return 0;
+}
+#endif
 
 static int msmfb_overlay_3d(struct fb_info *info, unsigned long *argp)
 {
@@ -2877,7 +2885,7 @@ static int msm_fb_ioctl(struct fb_info *info, unsigned int cmd,
 		break;
 
 	default:
-		MSM_FB_INFO("MDP: unknown ioctl (cmd=%d) received!\n", cmd);
+		MSM_FB_INFO("MDP: unknown ioctl (cmd=%x) received!\n", cmd);
 		ret = -EINVAL;
 		break;
 	}
