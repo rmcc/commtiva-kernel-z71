@@ -1443,13 +1443,13 @@ ssize_t test_write(struct file *filp, const char __user *buf, size_t size,
 		pr_info(TEST_MODULE_NAME " --LPM Test For Device 0. Client "
 			"wakes the Host --.\n");
 		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RMNT],
-				    SDIO_TEST_LPM_CLIENT_WAKER, 40);
+				    SDIO_TEST_LPM_CLIENT_WAKER, 90);
 		break;
 	case 12:
 		pr_info(TEST_MODULE_NAME " --LPM Test For Device 1. Client "
 			"wakes the Host --.\n");
 		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RPC],
-				    SDIO_TEST_LPM_CLIENT_WAKER, 40);
+				    SDIO_TEST_LPM_CLIENT_WAKER, 90);
 		break;
 	case 13:
 		pr_info(TEST_MODULE_NAME " --LPM Test For Device 0. Host "
