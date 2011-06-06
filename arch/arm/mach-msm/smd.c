@@ -1132,7 +1132,7 @@ static int smd_alloc_channel(struct smd_alloc_elm *alloc_elm)
 	mutex_unlock(&smd_creation_mutex);
 
 	platform_device_register(&ch->pdev);
-	if (!strcmp(ch->name, "LOOPBACK")) {
+	if (!strncmp(ch->name, "LOOPBACK", 8) && ch->type == SMD_APPS_MODEM) {
 		/* create a platform driver to be used by smd_tty driver
 		 * so that it can access the loopback port
 		 */
