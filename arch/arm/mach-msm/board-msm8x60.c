@@ -9454,6 +9454,11 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 			= sizeof(ffa_keypad_data);
 	}
 
+	/* Disable END_CALL simulation function of powerkey on fluid */
+	if (machine_is_msm8x60_fluid()) {
+		pwrkey_pdata.pwrkey_time_ms = 0;
+	}
+
 #ifdef CONFIG_USB_ANDROID
 	if (machine_is_msm8x60_charm_surf() ||
 			machine_is_msm8x60_charm_ffa()) {
