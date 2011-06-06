@@ -2501,7 +2501,7 @@ static void __init msm8x60_init_dsps(void)
 #endif
 
 
-#ifdef CONFIG_FB_MSM_MIPI_DSI
+#ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
 /* 960 x 540 x 3 x 2 */
 #define MIPI_DSI_WRITEBACK_SIZE 0x300000
 #else
