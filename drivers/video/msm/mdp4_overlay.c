@@ -1991,13 +1991,7 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 #ifdef CONFIG_FB_MSM_MIPI_DSI
 		if (ctrl->panel_mode & MDP4_PANEL_DSI_CMD) {
 			if (mfd->panel_power_on)
-				if (mdp4_dsi_overlay_blt_stop(mfd) == 0)
-					mdp4_dsi_cmd_overlay_restore();
-		}  else if (ctrl->panel_mode & MDP4_PANEL_DSI_VIDEO) {
-			flags = pipe->flags;
-			pipe->flags &= ~MDP_OV_PLAY_NOWAIT;
-			mdp4_overlay_dsi_video_vsync_push(mfd, pipe);
-			pipe->flags = flags;
+				mdp4_dsi_overlay_blt_stop(mfd);
 		}
 #else
 		if (ctrl->panel_mode & MDP4_PANEL_MDDI) {

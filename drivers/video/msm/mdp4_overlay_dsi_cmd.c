@@ -540,19 +540,6 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 	mipi_dsi_cmd_mdp_sw_trigger();
 }
 
-void mdp4_dsi_cmd_overlay_restore(void)
-{
-	/* mutex holded by caller */
-	if (dsi_mfd && dsi_pipe) {
-		mdp4_dsi_cmd_dma_busy_wait(dsi_mfd);
-		mdp4_overlay_update_dsi_cmd(dsi_mfd);
-
-		if (dsi_pipe->blt_addr)
-			mdp4_dsi_blt_dmap_busy_wait(dsi_mfd);
-		mdp4_dsi_cmd_overlay_kickoff(dsi_mfd, dsi_pipe);
-	}
-}
-
 void mdp4_dsi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
 {
 	unsigned long flag;
