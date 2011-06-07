@@ -1994,6 +1994,21 @@ struct clk_lookup msm_clocks_8x60[] = {
 					"ebi1_clk",    "msm_dmov.0", 0),
 	CLK_VOTER("ebi1_adm_clk",     EBI_ADM1_CLK,
 					"ebi1_clk",    "msm_dmov.1", 0),
+
+	CLK_8X60("sc0_div2_mclk",  SC0_DIV2_M_CLK,  NULL, 0),
+	CLK_8X60("sc1_div2_mclk",  SC1_DIV2_M_CLK,  NULL, 0),
+	CLK_8X60("l2_div2_mclk",   L2_DIV2_M_CLK,   NULL, 0),
+	CLK_8X60("afab_mclk",      AFAB_M_CLK,      NULL, 0),
+	CLK_8X60("sfab_mclk",      SFAB_M_CLK,      NULL, 0),
+	CLK_8X60("ebi1_2x_mclk",   EBI1_2X_M_CLK,   NULL, 0),
+	CLK_8X60("cfpb0_mclk",     CFPB0_M_CLK,     NULL, 0),
+	CLK_8X60("cfpb1_mclk",     CFPB1_M_CLK,     NULL, 0),
+	CLK_8X60("cfpb2_mclk",     CFPB2_M_CLK,     NULL, 0),
+	CLK_8X60("dfab_mclk",      DFAB_M_CLK,      NULL, 0),
+	CLK_8X60("sfpb_mclk",      SFPB_M_CLK,      NULL, 0),
+	CLK_8X60("mmfab_mclk",     MMFAB_M_CLK,     NULL, 0),
+	CLK_8X60("smi_ddr2x_mclk", SMI_DDR2X_M_CLK, NULL, 0),
+	CLK_8X60("mmfpb_mclk",     MMFPB_M_CLK,     NULL, 0),
 };
 
 unsigned msm_num_clocks_8x60 = ARRAY_SIZE(msm_clocks_8x60);

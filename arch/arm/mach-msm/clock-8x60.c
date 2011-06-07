@@ -262,6 +262,7 @@
 #define TEST_TYPE_MM_LS		3
 #define TEST_TYPE_MM_HS		4
 #define TEST_TYPE_LPA		5
+#define TEST_TYPE_SC		6
 #define TEST_TYPE_SHIFT		24
 #define TEST_CLK_SEL_MASK	BM(23, 0)
 #define TEST_VECTOR(s, t)	(((t) << TEST_TYPE_SHIFT) | BVAL(23, 0, (s)))
@@ -270,6 +271,7 @@
 #define TEST_MM_LS(s)		TEST_VECTOR((s), TEST_TYPE_MM_LS)
 #define TEST_MM_HS(s)		TEST_VECTOR((s), TEST_TYPE_MM_HS)
 #define TEST_LPA(s)		TEST_VECTOR((s), TEST_TYPE_LPA)
+#define TEST_SC(s)		TEST_VECTOR((s), TEST_TYPE_SC)
 
 /*
  * SoC-specific Set-Rate Functions
@@ -511,11 +513,19 @@ static void set_rate_div_banked(struct clk_local *clk, struct clk_freq_tbl *nf)
 
 #define CLK_RESET(id, ns, r_m) \
 	[L_##id##_CLK] = { \
-		.type = RESET, \
+		.type = NOENABLE, \
 		.reset_reg = ns, \
 		.reset_mask = r_m, \
 		.parent = L_NONE_CLK, \
 		.current_freq = &local_dummy_freq, \
+	}
+
+#define CLK_MEASURE(id, tv) \
+	[L_##id##_CLK] = { \
+		.type = NOENABLE, \
+		.parent = L_NONE_CLK, \
+		.current_freq = &local_dummy_freq, \
+		.test_vector = tv, \
 	}
 
 /*
@@ -2128,6 +2138,22 @@ struct clk_local soc_clk_local_tbl[] = {
 		LCC_SPARE_I2S_SPKR_STATUS_REG, TEST_LPA(0x13)),
 
 	CLK_PCM(PCM),
+
+	/* Measurement-only Clocks */
+	CLK_MEASURE(SC0_DIV2_M,  TEST_SC(0x40)),
+	CLK_MEASURE(SC1_DIV2_M,  TEST_SC(0x41)),
+	CLK_MEASURE(L2_DIV2_M,   TEST_SC(0x42)),
+	CLK_MEASURE(AFAB_M,      TEST_PER_HS(0x07)),
+	CLK_MEASURE(SFAB_M,      TEST_PER_HS(0x18)),
+	CLK_MEASURE(EBI1_2X_M,   TEST_PER_HS(0x34)),
+	CLK_MEASURE(CFPB0_M,     TEST_PER_LS(0x33)),
+	CLK_MEASURE(CFPB1_M,     TEST_PER_LS(0x35)),
+	CLK_MEASURE(CFPB2_M,     TEST_PER_LS(0x37)),
+	CLK_MEASURE(DFAB_M,      TEST_PER_LS(0x25)),
+	CLK_MEASURE(SFPB_M,      TEST_PER_LS(0x78)),
+	CLK_MEASURE(MMFAB_M,     TEST_MM_HS(0x0F)),
+	CLK_MEASURE(SMI_DDR2X_M, TEST_MM_HS(0x24)),
+	CLK_MEASURE(MMFPB_M,     TEST_MM_LS(0x25)),
 };
 
 static struct msm_xo_voter *xo_pxo, *xo_cxo;
@@ -2301,7 +2327,7 @@ int soc_clk_measure_rate(unsigned id)
 	struct clk_local *clk = &soc_clk_local_tbl[id];
 	unsigned long flags;
 	uint32_t clk_sel, pdm_reg_backup, ringosc_reg_backup;
-	uint64_t raw_count_short, raw_count_full;
+	uint64_t raw_count_short, raw_count_full, full_measurement_ticks;
 	int ret;
 
 	spin_lock_irqsave(&local_clock_reg_lock, flags);
@@ -2311,21 +2337,30 @@ int soc_clk_measure_rate(unsigned id)
 	switch (clk->test_vector >> TEST_TYPE_SHIFT) {
 	case TEST_TYPE_PER_LS:
 		writel(0x4030D00|BVAL(7, 0, clk_sel), CLK_TEST_REG);
+		full_measurement_ticks = 0x10000;
 		break;
 	case TEST_TYPE_PER_HS:
 		writel(0x4020000|BVAL(16, 10, clk_sel), CLK_TEST_REG);
+		full_measurement_ticks = 0x10000;
 		break;
 	case TEST_TYPE_MM_LS:
 		writel(0x4030D97, CLK_TEST_REG);
 		writel(BVAL(6, 1, clk_sel)|BIT(0), DBG_CFG_REG_LS_REG);
+		full_measurement_ticks = 0x10000;
 		break;
 	case TEST_TYPE_MM_HS:
 		writel(0x402B800, CLK_TEST_REG);
 		writel(BVAL(6, 1, clk_sel)|BIT(0), DBG_CFG_REG_HS_REG);
+		full_measurement_ticks = 0x10000;
 		break;
 	case TEST_TYPE_LPA:
 		writel(0x4030D98, CLK_TEST_REG);
 		writel(BVAL(6, 1, clk_sel)|BIT(0), LCC_CLK_LS_DEBUG_CFG_REG);
+		full_measurement_ticks = 0x10000;
+		break;
+	case TEST_TYPE_SC:
+		writel(0x5020000|BVAL(16, 10, clk_sel), CLK_TEST_REG);
+		full_measurement_ticks = 0x4000;
 		break;
 	default:
 		ret = -EPERM;
@@ -2349,8 +2384,8 @@ int soc_clk_measure_rate(unsigned id)
 
 	/* Run a short measurement. (~1 ms) */
 	raw_count_short = run_measurement(0x1000);
-	/* Run a full measurement. (~14 ms) */
-	raw_count_full = run_measurement(0x10000);
+	/* Run a full measurement. (up to ~14 ms) */
+	raw_count_full = run_measurement(full_measurement_ticks);
 
 	writel(ringosc_reg_backup, RINGOSC_NS_REG);
 	writel(pdm_reg_backup, PDM_CLK_NS_REG);
@@ -2361,7 +2396,7 @@ int soc_clk_measure_rate(unsigned id)
 	else {
 		/* Compute rate in Hz. */
 		raw_count_full = ((raw_count_full * 10) + 15) * 4800000;
-		do_div(raw_count_full, ((0x10000 * 10) + 35));
+		do_div(raw_count_full, ((full_measurement_ticks * 10) + 35));
 		ret = (int)raw_count_full;
 	}
 
