@@ -59,6 +59,28 @@ struct peer_sdioc_channel_config {
 	u32 reserved[25];
 };
 
+
+/**
+ * Peer SDIO-Client channel statsitics.
+ *
+ * @last_any_read_avail - the last read avail in all the
+ *		 channels including this channel.
+ * @last_read_avail - the last read_avail that was read from HW
+ *	    mailbox.
+ * @last_old_read_avail - the last read_avail channel shadow.
+ * @total_notifs - the total number of read notifications sent
+ *	 to this channel client
+ * @total_read_times - the total number of successful sdio_read
+ *	     calls for this channel
+ */
+struct sdio_channel_statistics {
+	int last_any_read_avail;
+	int last_read_avail;
+	int last_old_read_avail;
+	int total_notifs;
+	int total_read_times;
+};
+
 /**
  *  SDIO Channel context.
  *
@@ -127,6 +149,8 @@ struct peer_sdioc_channel_config {
  *  @sdio_al_dev - a pointer to the sdio_al_device instance of
  *   this channel
  *
+ *   @statistics - channel statistics
+ *
  */
 struct sdio_channel {
 	/* Channel Configuration Parameters*/
@@ -175,9 +199,7 @@ struct sdio_channel {
 
 	struct sdio_al_device *sdio_al_dev;
 
-	int last_any_read_avail;
-	int last_read_avail;
-	int last_old_read_avail;
+	struct sdio_channel_statistics statistics;
 };
 
 /**

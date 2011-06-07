@@ -833,21 +833,25 @@ static int read_mailbox(struct sdio_al_device *sdio_al_dev, int from_isr)
 			continue;
 		}
 		any_read_avail |= read_avail | old_read_avail;
-		ch->last_any_read_avail = any_read_avail;
-		ch->last_read_avail = read_avail;
-		ch->last_old_read_avail = old_read_avail;
+		ch->statistics.last_any_read_avail = any_read_avail;
+		ch->statistics.last_read_avail = read_avail;
+		ch->statistics.last_old_read_avail = old_read_avail;
 
 		if (ch->is_packet_mode)
 			new_packet_size = check_pending_rx_packet(ch, eot_pipe);
 		else
 			ch->read_avail = read_avail;
 
-		if ((ch->is_packet_mode) && (new_packet_size > 0))
+		if ((ch->is_packet_mode) && (new_packet_size > 0)) {
 			rx_notify_bitmask |= (1<<ch->num);
+			ch->statistics.total_notifs++;
+		}
 
 		if ((!ch->is_packet_mode) && (ch->read_avail > 0) &&
-		    (old_read_avail == 0))
+		    (old_read_avail == 0)) {
 			rx_notify_bitmask |= (1<<ch->num);
+			ch->statistics.total_notifs++;
+		}
 	}
 
 	/* Update Write available */
@@ -2554,8 +2558,10 @@ int sdio_read(struct sdio_channel *ch, void *data, int len)
 		pr_err(MODULE_NAME ":%s: called when is_ok_to_sleep is set "
 		       "for ch %s, len=%d, last_any_read_avail=%d,"
 		       "last_read_avail=%d, last_old_read_avail=%d",
-		       __func__, ch->name, len, ch->last_any_read_avail,
-		       ch->last_read_avail, ch->last_old_read_avail);
+		       __func__, ch->name, len,
+		       ch->statistics.last_any_read_avail,
+		       ch->statistics.last_read_avail,
+		       ch->statistics.last_old_read_avail);
 	}
 	BUG_ON(sdio_al_dev->is_ok_to_sleep);
 
@@ -2595,6 +2601,8 @@ int sdio_read(struct sdio_channel *ch, void *data, int len)
 		sdio_release_host(sdio_al_dev->func1);
 		return ret;
 	}
+
+	ch->statistics.total_read_times++;
 
 	/* Remove handled packet from the list regardless if ret is ok */
 	if (ch->is_packet_mode)
@@ -3505,10 +3513,13 @@ static void sdio_al_print_info(void)
 			pr_err(MODULE_NAME ": total_rx=0x%x, "
 				"total_tx=0x%x, "
 				"read_avail=0x%x, "
-				"write_avail=0x%x, rx_pending=0x%x",
+				"write_avail=0x%x, rx_pending=0x%x, "
+				"num_reads=0x%x, num_notifs=0x%x",
 				ch->total_rx_bytes, ch->total_tx_bytes,
 				ch->read_avail, ch->write_avail,
-				ch->rx_pending_bytes);
+				ch->rx_pending_bytes,
+				ch->statistics.total_read_times,
+				ch->statistics.total_notifs);
 		} /* end loop over all channels */
 
 	} /* end loop over all devices */
