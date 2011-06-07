@@ -131,6 +131,9 @@ static int diagchar_open(struct inode *inode, struct file *file)
 {
 	int i = 0;
 
+	if (!strncmp(current->comm, "ATFWD-daemon", 12))
+		return -ENOMEM;
+
 	if (driver) {
 		mutex_lock(&driver->diagchar_mutex);
 
