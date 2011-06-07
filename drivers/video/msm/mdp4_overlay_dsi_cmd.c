@@ -434,8 +434,6 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
 {
 	int diff;
 
-	mdp_disable_irq_nosync(MDP_DMA2_TERM);  /* disable intr */
-
 	dsi_pipe->dmap_cnt++;
 	diff = dsi_pipe->ov_cnt - dsi_pipe->dmap_cnt;
 	pr_debug("%s: ov_cnt=%d dmap_cnt=%d\n",
@@ -455,6 +453,7 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
 			outp32(MDP_INTR_ENABLE, mdp_intr_mask);
 		}
 		mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_OFF, TRUE);
+		mdp_disable_irq_nosync(MDP_DMA2_TERM);  /* disable intr */
 		return;
 	}
 
@@ -468,8 +467,7 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
 	pr_debug("%s: kickoff dmap\n", __func__);
 
 	mdp4_blt_xy_update(dsi_pipe);
-	mdp_enable_irq(MDP_DMA2_TERM);	/* enable intr */
-	wmb();	/* make sure registers updated */
+
 	/* kick off dmap */
 	outpdw(MDP_BASE + 0x000c, 0x0);
 	wmb();
@@ -485,11 +483,7 @@ void mdp4_dma_p_done_dsi(struct mdp_dma_data *dma)
  */
 void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 {
-
 	int diff;
-
-
-	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 
 	if (dsi_pipe->blt_addr == 0) {
 		mdp_pipe_ctrl(MDP_OVERLAY0_BLOCK, MDP_BLOCK_POWER_OFF, TRUE);
@@ -499,6 +493,7 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 		complete(&dma->comp);
 		if (busy_wait_cnt)
 			busy_wait_cnt--;
+		mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 		return;
 	}
 
@@ -517,8 +512,10 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 	dsi_pipe->blt_cnt++;
 
 	diff = dsi_pipe->ov_cnt - dsi_pipe->dmap_cnt;
-	if (diff >= 2)
+	if (diff >= 2) {
+		mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 		return;
+	}
 
 	spin_lock(&mdp_spin_lock);
 	dma->busy = FALSE;
@@ -538,6 +535,7 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 	wmb();
 	/* trigger dsi cmd engine */
 	mipi_dsi_cmd_mdp_sw_trigger();
+	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 }
 
 void mdp4_dsi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
