@@ -155,4 +155,8 @@ void vidc_sm_set_encoder_init_rc_value(struct ddl_buf_addr *shared_mem,
 	u32 new_rc_value);
 void vidc_sm_set_idr_decode_only(struct ddl_buf_addr *shared_mem,
 	u32 enable);
+void vidc_sm_set_concealment_color(struct ddl_buf_addr *shared_mem,
+	u32 conceal_ycolor, u32 conceal_ccolor);
+void vidc_sm_set_chroma_addr_change(struct ddl_buf_addr *shared_mem,
+	u32 addr_change);
 #endif

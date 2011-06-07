@@ -3039,3 +3039,12 @@ void vcd_handle_clnt_fatal_input_done(struct vcd_clnt_ctxt *cctxt,
 		cctxt->status.frame_submitted--;
 	vcd_handle_clnt_fatal(cctxt, trans_end);
 }
+
+void vcd_handle_ind_info_output_reconfig(
+	struct vcd_clnt_ctxt *cctxt, u32 status)
+{
+	if (cctxt) {
+		cctxt->callback(VCD_EVT_IND_INFO_OUTPUT_RECONFIG, status, NULL,
+		 0, cctxt, cctxt->client_data);
+	}
+}

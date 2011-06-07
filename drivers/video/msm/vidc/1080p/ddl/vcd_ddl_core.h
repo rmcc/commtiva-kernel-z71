@@ -140,4 +140,8 @@
 #define DDL_PIXEL_CACHE_STATUS_READ_RETRY 10
 #define DDL_PIXEL_CACHE_STATUS_READ_SLEEP 200
 
+#define DDL_RESL_CHANGE_NO_CHANGE               0
+#define DDL_RESL_CHANGE_INCREASED               1
+#define DDL_RESL_CHANGE_DECREASED               2
+
 #endif

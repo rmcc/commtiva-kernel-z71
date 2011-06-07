@@ -487,6 +487,8 @@ void vidc_1080p_get_display_frame_result(
 	VIDC_HWIO_IN(REG_640904, &dec_disp_info->display_y_addr);
 	VIDC_HWIO_IN(REG_60114, &dec_disp_info->display_c_addr);
 	VIDC_HWIO_IN(REG_853667, &display_result);
+	VIDC_HWIO_IN(REG_845544, &dec_disp_info->img_size_y);
+	VIDC_HWIO_IN(REG_859906, &dec_disp_info->img_size_x);
 	dec_disp_info->display_status =
 		(enum vidc_1080p_display_status)
 		VIDC_GETFIELD(display_result,
