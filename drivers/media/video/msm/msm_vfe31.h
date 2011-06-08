@@ -773,41 +773,46 @@ enum VFE31_MESSAGE_ID {
 	MSG_ID_OUTPUT_S,
 	MSG_ID_OUTPUT_V,
 	MSG_ID_SNAPSHOT_DONE,
-	MSG_ID_STATS_AEC,
-	MSG_ID_STATS_AF, /* 10 */
-	MSG_ID_STATS_AWB,
-	MSG_ID_STATS_RS,
-	MSG_ID_STATS_CS,
-	MSG_ID_STATS_IHIST,
-	MSG_ID_STATS_SKIN,
-	MSG_ID_EPOCH1,
+	MSG_ID_COMMON,
+	MSG_ID_EPOCH1, /* 10 */
 	MSG_ID_EPOCH2,
 	MSG_ID_SYNC_TIMER0_DONE,
 	MSG_ID_SYNC_TIMER1_DONE,
-	MSG_ID_SYNC_TIMER2_DONE, /* 20 */
+	MSG_ID_SYNC_TIMER2_DONE,
 	MSG_ID_ASYNC_TIMER0_DONE,
 	MSG_ID_ASYNC_TIMER1_DONE,
 	MSG_ID_ASYNC_TIMER2_DONE,
 	MSG_ID_ASYNC_TIMER3_DONE,
 	MSG_ID_AE_OVERFLOW,
-	MSG_ID_AF_OVERFLOW,
+	MSG_ID_AF_OVERFLOW, /* 20 */
 	MSG_ID_AWB_OVERFLOW,
 	MSG_ID_RS_OVERFLOW,
 	MSG_ID_CS_OVERFLOW,
-	MSG_ID_IHIST_OVERFLOW, /* 30 */
+	MSG_ID_IHIST_OVERFLOW,
 	MSG_ID_SKIN_OVERFLOW,
 	MSG_ID_AXI_ERROR,
 	MSG_ID_CAMIF_OVERFLOW,
 	MSG_ID_VIOLATION,
 	MSG_ID_CAMIF_ERROR,
-	MSG_ID_BUS_OVERFLOW,
+	MSG_ID_BUS_OVERFLOW, /* 30 */
 	MSG_ID_SOF_ACK,
 	MSG_ID_STOP_REC_ACK,
 };
 
-struct vfe_msg_stats{
-	uint32_t    buffer;
+struct stats_buffer {
+	uint32_t aec;
+	uint32_t awb;
+	uint32_t af;
+	uint32_t ihist;
+	uint32_t rs;
+	uint32_t cs;
+	uint32_t skin;
+};
+
+struct vfe_msg_stats {
+	struct stats_buffer buff;
 	uint32_t    frameCounter;
+	uint32_t    status_bits;
 };
 
 
@@ -917,6 +922,8 @@ struct vfe31_output_ch {
 #define VFE31_IMASK_STATS_SKIN_BUS_OVFL       (0x00000001<<20)
 #define VFE31_IMASK_AXI_ERROR                 (0x00000001<<21)
 
+#define VFE_COM_STATUS 0x000FE000
+
 struct vfe31_output_path {
 	uint16_t output_mode;     /* bitmask  */
 
@@ -1021,9 +1028,12 @@ struct vfe31_ctrl_type {
 	spinlock_t  update_ack_lock;
 	spinlock_t  io_lock;
 
-	spinlock_t  aec_ack_lock;
-	spinlock_t  awb_ack_lock;
-	spinlock_t  af_ack_lock;
+	int8_t aec_ack_pending;
+	int8_t awb_ack_pending;
+	int8_t af_ack_pending;
+	int8_t ihist_ack_pending;
+	int8_t rs_ack_pending;
+	int8_t cs_ack_pending;
 
 	struct msm_vfe_callback *resp;
 	uint32_t extlen;
@@ -1063,6 +1073,7 @@ struct vfe31_ctrl_type {
 	uint32_t vfeFrameSkipCount;
 	uint32_t vfeFrameSkipPeriod;
 	uint32_t rolloff_update;
+	uint32_t status_bits;
 	struct vfe_stats_control afStatsControl;
 	struct vfe_stats_control awbStatsControl;
 	struct vfe_stats_control aecStatsControl;

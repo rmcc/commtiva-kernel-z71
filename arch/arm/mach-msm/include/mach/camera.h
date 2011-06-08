@@ -84,6 +84,7 @@ enum vfe_resp_msg {
 	VFE_MSG_SYNC_TIMER0,
 	VFE_MSG_SYNC_TIMER1,
 	VFE_MSG_SYNC_TIMER2,
+	VFE_MSG_COMMON,
 };
 
 enum vpe_resp_msg {
@@ -132,6 +133,18 @@ struct msm_vfe_phy_info {
 	uint32_t frame_id;
 };
 
+struct msm_vfe_stats_msg {
+	uint32_t aec_buff;
+	uint32_t awb_buff;
+	uint32_t af_buff;
+	uint32_t ihist_buff;
+	uint32_t rs_buff;
+	uint32_t cs_buff;
+	uint32_t skin_buff;
+	uint32_t status_bits;
+	uint32_t frame_id;
+};
+
 struct video_crop_t{
 	uint32_t  in1_w;
 	uint32_t  out1_w;
@@ -156,6 +169,7 @@ struct msm_vfe_resp {
 	enum vfe_resp_msg type;
 	struct msm_cam_evt_msg evt_msg;
 	struct msm_vfe_phy_info phy;
+	struct msm_vfe_stats_msg stats_msg;
 	struct msm_vpe_buf_info vpe_bf;
 	void    *extdata;
 	int32_t extlen;
