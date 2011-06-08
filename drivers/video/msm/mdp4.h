@@ -327,6 +327,7 @@ struct mdp4_statistic {
 	ulong intr_overlay1;
 	ulong intr_underrun_p;	/* Primary interface */
 	ulong intr_underrun_e;	/* external interface */
+	ulong intr_dsi;
 	ulong kickoff_mddi;
 	ulong kickoff_lcdc;
 	ulong kickoff_dtv;

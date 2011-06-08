@@ -49,11 +49,17 @@ static struct dsi_buf dsi_tx_buf;
 static int dsi_irq_enabled;
 static spinlock_t dsi_lock;
 
+static struct list_head pre_kickoff_list;
+static struct list_head post_kickoff_list;
+
 void mipi_dsi_init(void)
 {
 	init_completion(&dsi_dma_comp);
 	mipi_dsi_buf_alloc(&dsi_tx_buf, DSI_BUF_SIZE);
 	spin_lock_init(&dsi_lock);
+
+	INIT_LIST_HEAD(&pre_kickoff_list);
+	INIT_LIST_HEAD(&post_kickoff_list);
 }
 
 void mipi_dsi_enable_irq(void)
@@ -102,6 +108,68 @@ void mipi_dsi_disable_irq(void)
 	dsi_irq_enabled = 0;
 	disable_irq_nosync(DSI_IRQ);
 	spin_unlock(&dsi_lock);
+}
+
+static void mipi_dsi_action(struct list_head *act_list)
+{
+	struct list_head *lp;
+	struct dsi_kickoff_action *act;
+
+	list_for_each(lp, act_list) {
+		act = list_entry(lp, struct dsi_kickoff_action, act_entry);
+		if (act && act->action)
+			act->action(act->data);
+	}
+}
+
+void mipi_dsi_pre_kickoff_action(void)
+{
+	mipi_dsi_action(&pre_kickoff_list);
+}
+
+void mipi_dsi_post_kickoff_action(void)
+{
+	mipi_dsi_action(&post_kickoff_list);
+}
+
+/*
+ * mipi_dsi_pre_kickoff_add:
+ * ov_mutex need to be acquired before call this function.
+ */
+void mipi_dsi_pre_kickoff_add(struct dsi_kickoff_action *act)
+{
+	if (act)
+		list_add_tail(&act->act_entry, &pre_kickoff_list);
+}
+
+/*
+ * mipi_dsi_pre_kickoff_add:
+ * ov_mutex need to be acquired before call this function.
+ */
+void mipi_dsi_post_kickoff_add(struct dsi_kickoff_action *act)
+{
+	if (act)
+		list_add_tail(&act->act_entry, &post_kickoff_list);
+}
+
+/*
+ * mipi_dsi_pre_kickoff_add:
+ * ov_mutex need to be acquired before call this function.
+ */
+void mipi_dsi_pre_kickoff_del(struct dsi_kickoff_action *act)
+{
+	if (!list_empty(&pre_kickoff_list) && act)
+		list_del(&act->act_entry);
+}
+
+/*
+ * mipi_dsi_pre_kickoff_add:
+ * ov_mutex need to be acquired before call this function.
+ */
+void mipi_dsi_post_kickoff_del(struct dsi_kickoff_action *act)
+{
+	if (!list_empty(&post_kickoff_list) && act)
+		list_del(&act->act_entry);
 }
 
 /*
@@ -679,7 +747,7 @@ void mipi_dsi_host_init(struct mipi_panel_info *pinfo)
 
 	dsi_ctrl = BIT(8) | BIT(2);	/* clock enable & cmd mode */
 	intr_ctrl = 0;
-	intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK;
+	intr_ctrl = (DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_CMD_MDP_DONE_MASK);
 
 	if (pinfo->crc_check)
 		dsi_ctrl |= BIT(24);
@@ -757,7 +825,8 @@ void mipi_dsi_op_mode_config(int mode)
 		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK;
 	} else {		/* command mode */
 		dsi_ctrl |= 0x05;
-		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_ERROR_MASK;
+		intr_ctrl = DSI_INTR_CMD_DMA_DONE_MASK | DSI_INTR_ERROR_MASK |
+				DSI_INTR_CMD_MDP_DONE_MASK;
 	}
 
 	pr_debug("%s: dsi_ctrl=%x intr=%x\n", __func__, dsi_ctrl, intr_ctrl);
@@ -769,6 +838,8 @@ void mipi_dsi_op_mode_config(int mode)
 
 void mipi_dsi_cmd_mdp_sw_trigger(void)
 {
+	mipi_dsi_pre_kickoff_action();
+	mipi_dsi_enable_irq();
 	MIPI_OUTP(MIPI_DSI_BASE + 0x090, 0x01);	/* trigger */
 	wmb();
 }
@@ -1141,6 +1212,10 @@ irqreturn_t mipi_dsi_isr(int irq, void *ptr)
 	isr = MIPI_INP(MIPI_DSI_BASE + 0x010c);/* DSI_INTR_CTRL */
 	MIPI_OUTP(MIPI_DSI_BASE + 0x010c, isr);
 
+#ifdef CONFIG_FB_MSM_MDP40
+	mdp4_stat.intr_dsi++;
+#endif
+
 	if (isr & DSI_INTR_ERROR) {
 		mipi_dsi_error();
 	}
@@ -1156,9 +1231,8 @@ irqreturn_t mipi_dsi_isr(int irq, void *ptr)
 	}
 
 	if (isr & DSI_INTR_CMD_MDP_DONE) {
-		/*
-		* do something  here
-		*/
+		mipi_dsi_disable_irq_nosync();
+		mipi_dsi_post_kickoff_action();
 	}
 
 
