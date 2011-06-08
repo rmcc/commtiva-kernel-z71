@@ -515,9 +515,6 @@ static int32_t qs_s5k4e1_bridge_reset(void){
 	if (rc < 0)
 		goto bridge_fail;
 	msleep(30);
-	rc = bridge_i2c_write_w(0x14, 0x0C);
-	if (rc < 0)
-		goto err;
 	rc = bridge_i2c_write_w(0x0E, 0xFFFF);
 	if (rc < 0)
 		goto err;
@@ -528,16 +525,10 @@ static int32_t qs_s5k4e1_bridge_reset(void){
 	if (rc < 0)
 		goto err;
 	msleep(30);
-	rc = bridge_i2c_write_w(0x54, (RegData | 0x3));
-	if (rc < 0)
-		goto err;
 	rc = bridge_i2c_read(0x54, &RegData, 2);
 	if (rc < 0)
 		goto err;
 	rc = bridge_i2c_write_w(0x54, (RegData | 0x4));
-	if (rc < 0)
-		goto err;
-	rc = bridge_i2c_write_w(0x54, (RegData | 0xC));
 	if (rc < 0)
 		goto err;
 	rc = bridge_i2c_read(0x55, &GPIOInState, 2);
@@ -547,9 +538,6 @@ static int32_t qs_s5k4e1_bridge_reset(void){
 	if (rc < 0)
 		goto err;
 	msleep(30);
-	rc = bridge_i2c_write_w(0x55, (GPIOInState | 0x3));
-	if (rc < 0)
-		goto err;
 	rc = bridge_i2c_read(0x55, &GPIOInState, 2);
 	if (rc < 0)
 		goto err;
@@ -557,9 +545,6 @@ static int32_t qs_s5k4e1_bridge_reset(void){
 	if (rc < 0)
 		goto err;
 	msleep(30);
-	rc = bridge_i2c_write_w(0x55, (GPIOInState | 0xC));
-	if (rc < 0)
-		goto err;
 	rc = bridge_i2c_read(0x55, &GPIOInState, 2);
 	if (rc < 0)
 		goto err;
@@ -584,7 +569,15 @@ bridge_fail:
 
 static void qs_s5k4e1_bridge_config(int mode, int rt)
 {
+	unsigned short RegData = 0;
 	if (mode == MODE_3D) {
+		bridge_i2c_read(0x54, &RegData, 2);
+		bridge_i2c_write_w(0x54, (RegData | 0x2));
+		bridge_i2c_write_w(0x54, (RegData | 0xa));
+		bridge_i2c_read(0x55, &RegData, 2);
+		bridge_i2c_write_w(0x55, (RegData | 0x2));
+		bridge_i2c_write_w(0x55, (RegData | 0xa));
+		bridge_i2c_write_w(0x14, 0x0C);
 		bridge_i2c_write_w(0x16, 0x00);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x52, 0x1);
@@ -592,11 +585,29 @@ static void qs_s5k4e1_bridge_config(int mode, int rt)
 		bridge_i2c_write_w(0x04, 0x2018);
 		bridge_i2c_write_w(0x50, 0x00);
 	} else if (mode == MODE_2D_RIGHT) {
+		bridge_i2c_read(0x54, &RegData, 2);
+		RegData |= 0x2;
+		bridge_i2c_write_w(0x54, RegData);
+		bridge_i2c_write_w(0x54, (RegData & ~(0x8)));
+		bridge_i2c_read(0x55, &RegData, 2);
+		RegData |= 0x2;
+		bridge_i2c_write_w(0x55, RegData);
+		bridge_i2c_write_w(0x55, (RegData & ~(0x8)));
+		bridge_i2c_write_w(0x14, 0x04);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x06, 0x01);
 		bridge_i2c_write_w(0x04, 0x2018);
 		bridge_i2c_write_w(0x50, 0x01);
 	} else if (mode == MODE_2D_LEFT) {
+		bridge_i2c_read(0x54, &RegData, 2);
+		RegData |= 0x8;
+		bridge_i2c_write_w(0x54, RegData);
+		bridge_i2c_write_w(0x54, (RegData & ~(0x2)));
+		bridge_i2c_read(0x55, &RegData, 2);
+		RegData |= 0x8;
+		bridge_i2c_write_w(0x55, RegData);
+		bridge_i2c_write_w(0x55, (RegData & ~(0x2)));
+		bridge_i2c_write_w(0x14, 0x08);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x06, 0x02);
 		bridge_i2c_write_w(0x04, 0x2018);
