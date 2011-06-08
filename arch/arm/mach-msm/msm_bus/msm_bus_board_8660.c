@@ -360,7 +360,7 @@ static struct msm_bus_node_info mmss_fabric_info[]  = {
 		.slavep = MSM_BUS_MMSS_SLAVE_PORT_APPS_FAB_0,
 		.masterp = MSM_BUS_APPSS_MASTER_PORT_FAB_MMSS,
 		.tier = MSM_BUS_MMSS_TIERED_SLAVE_FAB_APPS,
-		.buswidth = 8,
+		.buswidth = 16,
 	},
 	{
 		.id = MSM_BUS_SLAVE_MM_IMEM,
