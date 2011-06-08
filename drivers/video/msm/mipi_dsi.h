@@ -84,7 +84,7 @@ enum {
 	EV_DSI_NUM
 };
 
-enum display_mode {
+enum {
 	LANDSCAPE = 1,
 	PORTRAIT = 2,
 };

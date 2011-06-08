@@ -846,7 +846,7 @@ void mipi_dsi_fpga_addr_init(int addr)
 	fpga_addr = addr;
 }
 
-void mipi_dsi_enable_3d_barrier(int enable)
+void mipi_dsi_enable_3d_barrier(int mode)
 {
 	void *fpga_ptr;
 	uint32_t ptr_value = 0;
@@ -854,8 +854,10 @@ void mipi_dsi_enable_3d_barrier(int enable)
 	fpga_ptr = ioremap_nocache(fpga_addr, sizeof(uint32_t));
 	if (fpga_ptr != 0)
 		ptr_value = readl_relaxed(fpga_ptr);
-	if (enable)
+	if (mode == LANDSCAPE)
 		writel_relaxed(((0xFFFF0000 & ptr_value) | 1), fpga_ptr);
+	else if (mode == PORTRAIT)
+		writel_relaxed(((0xFFFF0000 & ptr_value) | 3), fpga_ptr);
 	else
 		writel_relaxed((0xFFFF0000 & ptr_value), fpga_ptr);
 

@@ -277,15 +277,28 @@ static int mipi_dsi_cmd_set_backlight(struct msm_fb_data_type *mfd)
 }
 #endif
 
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+static int mipi_dsi_3d_barrier_sysfs_register(struct device *dev);
+static int barrier_mode;
+#endif
+
 static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 {
 	if (pdev->id == 0) {
 		mipi_novatek_pdata = pdev->dev.platform_data;
+
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+		/* create sysfs to control 3D barrier for the Sharp panel */
+		if (mipi_dsi_3d_barrier_sysfs_register(&pdev->dev)) {
+			pr_err("%s: Failed to register 3d Barrier sysfs\n",
+						__func__);
+			return -ENODEV;
+		}
+		barrier_mode = 0;
+#endif
 		return 0;
 	}
-
 	msm_fb_add_device(pdev);
-
 	return 0;
 }
 
@@ -300,6 +313,71 @@ static struct msm_fb_panel_data novatek_panel_data = {
 	.on		= mipi_novatek_lcd_on,
 	.off		= mipi_novatek_lcd_off,
 };
+
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+/* MIPI panel device structure */
+static struct platform_device this_device0 = {
+	.name   = "mipi_novatek",
+	.id	= 0,
+	.dev	= {
+		.platform_data = &novatek_panel_data,
+	}
+};
+
+static ssize_t mipi_dsi_3d_barrier_read(struct device *dev,
+				struct device_attribute *attr,
+				char *buf)
+{
+	return snprintf((char *)buf, sizeof(buf), "%u\n", barrier_mode);
+}
+
+static ssize_t mipi_dsi_3d_barrier_write(struct device *dev,
+				struct device_attribute *attr,
+				const char *buf,
+				size_t count)
+{
+	int ret = -1;
+	u32 data = 0;
+
+	if (sscanf((char *)buf, "%u", &data) != 1) {
+		dev_err(dev, "%s\n", __func__);
+		ret = -EINVAL;
+	} else {
+		barrier_mode = data;
+		if (data == 1)
+			mipi_dsi_enable_3d_barrier(LANDSCAPE);
+		else if (data == 2)
+			mipi_dsi_enable_3d_barrier(PORTRAIT);
+		else
+			mipi_dsi_enable_3d_barrier(0);
+	}
+
+	return count;
+}
+
+static struct device_attribute mipi_dsi_3d_barrier_attributes[] = {
+	__ATTR(enable_3d_barrier, 0644, mipi_dsi_3d_barrier_read,
+					 mipi_dsi_3d_barrier_write),
+};
+
+static int mipi_dsi_3d_barrier_sysfs_register(struct device *dev)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(mipi_dsi_3d_barrier_attributes); i++)
+		if (device_create_file(dev, mipi_dsi_3d_barrier_attributes + i))
+			goto error;
+
+	return 0;
+
+error:
+	for (; i >= 0 ; i--)
+		device_remove_file(dev, mipi_dsi_3d_barrier_attributes + i);
+	pr_err("%s: Unable to create interface\n", __func__);
+
+	return -ENODEV;
+}
+#endif
 
 static int ch_used[3];
 
@@ -344,6 +422,15 @@ err_device_put:
 
 static int __init mipi_novatek_lcd_init(void)
 {
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+	int ret;
+	ret = platform_device_register(&this_device0);
+	if (ret) {
+		printk(KERN_ERR
+		  "%s: platform_device_register failed!\n", __func__);
+	}
+#endif
+
 	mipi_dsi_buf_alloc(&novatek_tx_buf, DSI_BUF_SIZE);
 	mipi_dsi_buf_alloc(&novatek_rx_buf, DSI_BUF_SIZE);
 
