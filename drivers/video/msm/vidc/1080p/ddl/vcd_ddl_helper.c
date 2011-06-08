@@ -930,6 +930,8 @@ u32 ddl_check_reconfig(struct ddl_client_context *ddl)
 			decoder->client_frame_size.height) &&
 			(decoder->actual_output_buf_req.sz <=
 			decoder->client_output_buf_req.sz) &&
+			(decoder->actual_output_buf_req.min_count ==
+			decoder->client_output_buf_req.min_count) &&
 			(decoder->actual_output_buf_req.actual_count ==
 			decoder->client_output_buf_req.actual_count) &&
 			(decoder->frame_size.scan_lines ==
