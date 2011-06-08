@@ -455,6 +455,13 @@ struct asm_softvolume_params {
 	u32 rampingcurve;
 } __attribute__ ((packed));
 
+struct asm_softpause_params {
+	u32 enable;
+	u32 period;
+	u32 step;
+	u32 rampingcurve;
+} __packed;
+
 struct asm_pp_param_data_hdr {
 	u32 module_id;
 	u32 param_id;
@@ -476,6 +483,7 @@ struct asm_pp_params_command {
 #define MASTER_GAIN_PARAM_ID		0x00010bff
 #define L_R_CHANNEL_GAIN_PARAM_ID	0x00010c00
 #define MUTE_CONFIG_PARAM_ID 0x00010c01
+#define SOFT_PAUSE_PARAM_ID 0x00010D6A
 
 #define IIR_FILTER_ENABLE_PARAM_ID 0x00010c03
 #define IIR_FILTER_PREGAIN_PARAM_ID 0x00010c04
