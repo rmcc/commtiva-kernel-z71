@@ -3701,6 +3701,16 @@ static int sdio_al_subsys_notifier_cb(struct notifier_block *this,
 			sdio_al_dev->poll_delay_msec = 0;
 			del_timer_sync(&sdio_al_dev->timer);
 		}
+	}
+
+	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; i++) {
+		struct sdio_al_device *sdio_al_dev;
+		if (sdio_al->devices[i] == NULL) {
+			pr_debug(MODULE_NAME ": %s: NULL device in index %d",
+			__func__, i);
+			continue;
+		}
+		sdio_al_dev = sdio_al->devices[i];
 
 		func1 = sdio_al_dev->func1;
 
