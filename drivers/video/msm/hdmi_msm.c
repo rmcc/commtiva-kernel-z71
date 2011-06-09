@@ -392,9 +392,18 @@ static void hdmi_msm_hdcp_reauth_work(struct work_struct *work)
 	}
 	mutex_unlock(&hdmi_msm_state_mutex);
 
-	hdcp_deauthenticate();
-
-	mod_timer(&hdmi_msm_state->hdcp_timer, jiffies + HZ/2);
+	/*
+	 * Reauth=>deauth, hdcp_auth
+	 * hdcp_auth=>turn_on() which calls
+	 * HDMI Core reset without informing the Audio QDSP
+	 * this can do bad things to video playback on the HDTV
+	 * Therefore, as surprising as it may sound do reauth
+	 * only if the device is HDCP-capable
+	 */
+	if (external_common_state->present_hdcp) {
+		hdcp_deauthenticate();
+		mod_timer(&hdmi_msm_state->hdcp_timer, jiffies + HZ/2);
+	}
 }
 
 static void hdmi_msm_hdcp_work(struct work_struct *work)
@@ -3599,8 +3608,16 @@ static int __devinit hdmi_msm_probe(struct platform_device *pdev)
 
 	if (hdmi_msm_has_hdcp())
 		external_common_state->present_hdcp = TRUE;
-	else
+	else {
 		external_common_state->present_hdcp = FALSE;
+#ifdef CONFIG_FB_MSM_HDMI_MSM_PANEL_HDCP_SUPPORT
+		/*
+		 * If the device is not hdcp capable do
+		 * not start hdcp timer.
+		 */
+		del_timer(&hdmi_msm_state->hdcp_timer);
+#endif
+	}
 
 	queue_work(hdmi_work_queue, &hdmi_msm_state->hpd_read_work);
 	return 0;
