@@ -190,7 +190,7 @@ struct sdio_channel {
 
 	struct list_head rx_size_list_head;
 
-	struct platform_device pdev;
+	struct platform_device *pdev;
 
 	u32 total_rx_bytes;
 	u32 total_tx_bytes;
