@@ -1139,7 +1139,6 @@ static int sdio_dld_open(struct tty_struct *tty, struct file *file)
 
 	status = sdio_dld_allocate_buffers(str_func);
 	if (status) {
-		sdio_dld_dealloc_local_buffers();
 		pr_err(MODULE_NAME ": %s, failed in "
 		       "sdio_dld_allocate_buffers(). status=%d\n",
 		       __func__, status);
