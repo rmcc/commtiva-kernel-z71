@@ -517,14 +517,24 @@ tx_pull_end:
 int gsdio_start_io(struct gsdio_port *port)
 {
 	int			ret;
+	unsigned long		flags;
 
 	pr_debug("%s:\n", __func__);
+
+	spin_lock_irqsave(&port->port_lock, flags);
+
+	if (!port->port_usb) {
+		spin_unlock_irqrestore(&port->port_lock, flags);
+		return -ENODEV;
+	}
+
 	/* start usb out queue */
 	ret = gsdio_alloc_requests(port->port_usb->out,
 				&port->read_pool,
 				RX_QUEUE_SIZE, RX_BUF_SIZE,
 				gsdio_read_complete);
 	if (ret) {
+		spin_unlock_irqrestore(&port->port_lock, flags);
 		pr_err("%s: unable to allocate out reqs\n", __func__);
 		return ret;
 	}
@@ -534,10 +544,12 @@ int gsdio_start_io(struct gsdio_port *port)
 				TX_QUEUE_SIZE, TX_BUF_SIZE,
 				gsdio_write_complete);
 	if (ret) {
-		pr_err("%s: unable to allocate in reqs\n", __func__);
 		gsdio_free_requests(port->port_usb->out, &port->read_pool);
+		spin_unlock_irqrestore(&port->port_lock, flags);
+		pr_err("%s: unable to allocate in reqs\n", __func__);
 		return ret;
 	}
+	spin_unlock_irqrestore(&port->port_lock, flags);
 
 	gsdio_start_rx(port);
 	queue_work(gsdio_wq, &port->pull);
@@ -874,10 +886,8 @@ void gsdio_disconnect(struct gserial *gser, u8 portno)
 
 	/* disable endpoints, aborting down any active I/O */
 	usb_ep_disable(gser->out);
-	gser->out->driver_data = NULL;
 
 	usb_ep_disable(gser->in);
-	gser->in->driver_data = NULL;
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	gsdio_free_requests(gser->out, &port->read_pool);

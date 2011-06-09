@@ -657,8 +657,9 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 	if (!atomic_read(&ui->configured) && (ept->num != 0)) {
 		req->req.status = -ESHUTDOWN;
 		spin_unlock_irqrestore(&ui->lock, flags);
-		dev_err(&ui->pdev->dev,
-			"usb_ept_queue_xfer() called while offline\n");
+		if (printk_ratelimit())
+			dev_err(&ui->pdev->dev,
+				"%s: called while offline\n", __func__);
 		return -ESHUTDOWN;
 	}
 
@@ -666,7 +667,8 @@ int usb_ept_queue_xfer(struct msm_endpoint *ept, struct usb_request *_req)
 		if (!atomic_read(&ui->remote_wakeup)) {
 			req->req.status = -EAGAIN;
 			spin_unlock_irqrestore(&ui->lock, flags);
-			dev_err(&ui->pdev->dev,
+			if (printk_ratelimit())
+				dev_err(&ui->pdev->dev,
 				"%s: cannot queue as bus is suspended "
 				"ept #%d %s max:%d head:%p bit:%d\n",
 				__func__, ept->num,
