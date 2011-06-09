@@ -765,11 +765,21 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			goto fail;
 		} else {
+			struct asm_softpause_params param = {
+				.enable = SOFT_PAUSE_ENABLE,
+				.period = SOFT_PAUSE_PERIOD,
+				.step = SOFT_PAUSE_STEP,
+				.rampingcurve = SOFT_PAUSE_CURVE_LINEAR,
+			};
 			audio->out_enabled = 1;
 			audio->out_needed = 1;
 			rc = q6asm_set_volume(audio->ac, audio->volume);
 			if (rc < 0)
 				pr_err("%s: Send Volume command failed rc=%d\n",
+					__func__, rc);
+			rc = q6asm_set_softpause(audio->ac, &param);
+			if (rc < 0)
+				pr_err("%s: Send SoftPause Param failed rc=%d\n",
 					__func__, rc);
 			rc = q6asm_set_lrgain(audio->ac, 0x2000, 0x2000);
 			if (rc < 0)

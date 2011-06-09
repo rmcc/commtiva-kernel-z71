@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -34,6 +34,14 @@
 #define ADRV_STATUS_IBUF_GIVEN 0x00000002
 #define ADRV_STATUS_FSYNC 0x00000004
 #define ADRV_STATUS_PAUSE 0x00000008
+
+#define SOFT_PAUSE_PERIOD       30   /* ramp up/down for 30ms    */
+#define SOFT_PAUSE_STEP         2000 /* Step value 2ms or 2000us */
+enum {
+	SOFT_PAUSE_CURVE_LINEAR = 0,
+	SOFT_PAUSE_CURVE_EXP,
+	SOFT_PAUSE_CURVE_LOG,
+};
 
 struct buffer {
 	void *data;
