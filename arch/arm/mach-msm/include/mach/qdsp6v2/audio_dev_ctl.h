@@ -40,7 +40,6 @@
 /* 8 concurrent sessions with Q6 possible,  session:0
    reserved in DSP */
 #define MAX_SESSIONS 0x09
-#define MAX_PORTS 0x0c
 
 /* This represents Maximum bit needed for representing sessions
    per clients, MAX_BIT_PER_CLIENT >= MAX_SESSIONS */
@@ -81,13 +80,6 @@ struct msm_snddev_info {
 struct msm_volume {
 	int volume; /* Volume parameter, in % Scale */
 	int pan;
-};
-
-struct route_payload {
-	unsigned short session_ids[MAX_SESSIONS];
-	unsigned short num_sessions;
-	unsigned short copp_ids[MAX_PORTS];
-	unsigned short num_copps;
 };
 
 extern struct msm_volume msm_vol_ctl;
