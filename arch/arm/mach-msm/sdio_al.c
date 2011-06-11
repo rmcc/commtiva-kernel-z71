@@ -3202,12 +3202,14 @@ void sdio_al_card_remove(struct mmc_card *card)
 					continue;
 				platform_device_unregister(
 					&sdio_al_dev->channel[i].pdev);
-				sdio_al_dev->channel[i].signature = 0x0;
 			}
 		}
 	}
 	if (card->sdio_func[0])
 		sdio_release_host(card->sdio_func[0]);
+
+	for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++)
+		sdio_al_dev->channel[i].signature = 0x0;
 
 	pr_info(MODULE_NAME ":%s: vote for sleep for card %d\n",
 			 __func__, card->host->index);
@@ -3743,6 +3745,7 @@ static int sdio_al_subsys_notifier_cb(struct notifier_block *this,
 					continue;
 				platform_device_unregister(
 					&sdio_al_dev->channel[j].pdev);
+				sdio_al_dev->channel[i].signature = 0x0;
 			}
 
 		if (func1)
