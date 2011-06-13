@@ -5610,7 +5610,7 @@ static struct sdio_al_platform_data sdio_al_pdata = {
 	.peer_sdioc_version_minor = 0x0001,
 	.peer_sdioc_version_major = 0x0003,
 	.peer_sdioc_boot_version_minor = 0x0001,
-	.peer_sdioc_boot_version_major = 0x0002,
+	.peer_sdioc_boot_version_major = 0x0003,
 };
 
 struct platform_device msm_device_sdio_al = {
