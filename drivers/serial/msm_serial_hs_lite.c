@@ -44,15 +44,6 @@
 #include <asm/mach-types.h>
 #include "msm_serial_hs_hwreg.h"
 
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-enum msm_hsl_clk_states_e {
-	MSM_HSL_CLK_PORT_OFF,     /* uart port not in use */
-	MSM_HSL_CLK_OFF,          /* clock enabled */
-	MSM_HSL_CLK_REQUEST_OFF,  /* disable after TX flushed */
-	MSM_HSL_CLK_ON,           /* clock disabled */
-};
-#endif
-
 struct msm_hsl_port {
 	struct uart_port	uart;
 	char			name[16];
@@ -63,11 +54,6 @@ struct msm_hsl_port {
 	unsigned int            *gsbi_mapbase;
 	unsigned int            *mapped_gsbi;
 	unsigned int            old_snap_state;
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	enum msm_hsl_clk_states_e	clk_state;
-	struct hrtimer		clk_off_timer;
-	ktime_t			clk_off_delay;
-#endif
 };
 
 #define UART_TO_MSM(uart_port)	((struct msm_hsl_port *) uart_port)
@@ -503,23 +489,11 @@ static void msm_hsl_set_baud_rate(struct uart_port *port, unsigned int baud)
 static void msm_hsl_init_clock(struct uart_port *port)
 {
 	clk_en(port, 1);
-
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	msm_hsl_port->clk_state = MSM_HSL_CLK_ON;
-#endif
 }
 
 static void msm_hsl_deinit_clock(struct uart_port *port)
 {
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
-	if (msm_hsl_port->clk_state != MSM_HSL_CLK_OFF)
-		clk_en(port, 0);
-	msm_hsl_port->clk_state = MSM_HSL_CLK_PORT_OFF;
-#else
 	clk_en(port, 0);
-#endif
-
 }
 
 static int msm_hsl_startup(struct uart_port *port)
@@ -840,7 +814,6 @@ static int msm_hsl_verify_port(struct uart_port *port,
 static void msm_hsl_power(struct uart_port *port, unsigned int state,
 			  unsigned int oldstate)
 {
-#ifndef CONFIG_SERIAL_MSM_HSL_CLOCK_CONTROL
 	switch (state) {
 	case 0:
 		clk_en(port, 1);
@@ -851,7 +824,6 @@ static void msm_hsl_power(struct uart_port *port, unsigned int state,
 	default:
 		printk(KERN_ERR "msm_serial_hsl: Unknown PM state %d\n", state);
 	}
-#endif
 }
 
 static struct uart_ops msm_hsl_uart_pops = {
