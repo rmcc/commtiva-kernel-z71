@@ -770,8 +770,6 @@ static void handle_event(struct msm_hardware_charger *hw_chg, int event)
 				/* usb has already indicated us to charge */
 				priv->hw_chg_state = CHG_READY_STATE;
 				handle_charger_ready(priv);
-				msm_charger_notify_event(priv->hw_chg,
-						CHG_ENUMERATED_EVENT);
 			}
 		} else {
 			priv->hw_chg_state = CHG_READY_STATE;
