@@ -2,7 +2,7 @@
  *
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2009-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2009-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -186,6 +186,7 @@ struct q6audio {
 	uint32_t drv_status;
 	int event_abort;
 	int eos_rsp;
+	int eos_flag;
 	int opened;
 	int enabled;
 	int stopped;
@@ -198,9 +199,23 @@ static int insert_eos_buf(struct q6audio *audio,
 	struct audwma_buffer_node *buf_node) {
 	struct dec_meta_out *eos_buf = buf_node->kvaddr;
 	eos_buf->num_of_frames = 0xFFFFFFFF;
+	eos_buf->meta_out_dsp[0].offset_to_frame = 0x0;
 	eos_buf->meta_out_dsp[0].nflags = AUDWMA_EOS_SET;
 	return sizeof(struct dec_meta_out) +
 		sizeof(eos_buf->meta_out_dsp[0]);
+}
+
+/* Routine which updates read buffers of driver/dsp,
+   for flush operation as DSP output might not have proper
+   value set */
+static int insert_meta_data(struct q6audio *audio,
+	struct audwma_buffer_node *buf_node) {
+	struct dec_meta_out *meta_data = buf_node->kvaddr;
+	meta_data->num_of_frames = 0x0;
+	meta_data->meta_out_dsp[0].offset_to_frame = 0x0;
+	meta_data->meta_out_dsp[0].nflags = 0x0;
+	return sizeof(struct dec_meta_out) +
+		sizeof(meta_data->meta_out_dsp[0]);
 }
 
 static void extract_meta_info(struct q6audio *audio,
@@ -517,8 +532,9 @@ static void audwma_async_read_ack(struct q6audio *audio, uint32_t token,
 		list_del(&filled_buf->list);
 		spin_unlock_irqrestore(&audio->dsp_lock, flags);
 		event_payload.aio_buf = filled_buf->buf;
-		/* Buffer due to flush after EOS event, append EOS buffer */
-		if (audio->eos_rsp) {
+		/* Read done Buffer due to flush/normal condition
+		   after EOS event, so append EOS buffer */
+		if (audio->eos_rsp == 0x1) {
 			event_payload.aio_buf.data_len =
 					insert_eos_buf(audio, filled_buf);
 			/* Reset flag back to indicate eos intimated */
@@ -532,6 +548,7 @@ static void audwma_async_read_ack(struct q6audio *audio, uint32_t token,
 			payload[3] + \
 			sizeof(struct dec_meta_out);
 			extract_meta_info(audio, filled_buf, 0);
+			audio->eos_rsp = 0;
 		}
 		audwma_post_event(audio, AUDIO_EVENT_READ_DONE, event_payload);
 		kfree(filled_buf);
@@ -562,10 +579,16 @@ static void q6_audwma_cb(uint32_t opcode, uint32_t token,
 		pr_debug("%s:ASM_DATA_CMDRSP_EOS\n", __func__);
 		if (audio->feedback) { /* Non-Tunnel mode */
 			audio->eos_rsp = 1;
-			audwma_post_event(audio, AUDIO_EVENT_WRITE_DONE,
+			/* propagate input EOS i/p buffer,
+			   after receiving DSP acknowledgement */
+			if (audio->eos_flag &&
+				(audio->eos_write_payload.aio_buf.buf_addr)) {
+				audwma_post_event(audio, AUDIO_EVENT_WRITE_DONE,
 						audio->eos_write_payload);
-			memset(&audio->eos_write_payload , 0,
-				sizeof(union msm_audio_event_payload));
+				memset(&audio->eos_write_payload , 0,
+					sizeof(union msm_audio_event_payload));
+				audio->eos_flag = 0;
+			}
 		} else { /* Tunnel mode */
 			audio->eos_rsp = 1;
 			wake_up(&audio->write_wait);
@@ -584,14 +607,28 @@ static void audwma_async_out_flush(struct q6audio *audio)
 	struct audwma_buffer_node *buf_node;
 	struct list_head *ptr, *next;
 	union msm_audio_event_payload payload;
+	unsigned long flags;
 
-	pr_debug("\n");		/* Macro prints the file name and function */
+	pr_debug("%s\n", __func__);
+	/* EOS followed by flush, EOS response not guranteed, free EOS i/p
+	   buffer */
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+	if (audio->eos_flag && (audio->eos_write_payload.aio_buf.buf_addr)) {
+		pr_debug("%s: EOS followed by flush received,acknowledge eos"\
+			" i/p buffer immediately\n", __func__);
+		audwma_post_event(audio, AUDIO_EVENT_WRITE_DONE,
+					audio->eos_write_payload);
+		memset(&audio->eos_write_payload , 0,
+			sizeof(union msm_audio_event_payload));
+	}
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
 	list_for_each_safe(ptr, next, &audio->out_queue) {
 		buf_node = list_entry(ptr, struct audwma_buffer_node, list);
 		list_del(&buf_node->list);
 		payload.aio_buf = buf_node->buf;
 		audwma_post_event(audio, AUDIO_EVENT_WRITE_DONE, payload);
 		kfree(buf_node);
+		pr_debug("%s: Propagate WRITE_DONE during flush\n", __func__);
 	}
 }
 
@@ -601,14 +638,27 @@ static void audwma_async_in_flush(struct q6audio *audio)
 	struct list_head *ptr, *next;
 	union msm_audio_event_payload payload;
 
-	pr_debug("\n");		/* Macro prints the file name and function */
+	pr_debug("%s\n", __func__);
 	list_for_each_safe(ptr, next, &audio->in_queue) {
 		buf_node = list_entry(ptr, struct audwma_buffer_node, list);
 		list_del(&buf_node->list);
-		payload.aio_buf = buf_node->buf;
-		payload.aio_buf.data_len = 0;
+		/* Forcefull send o/p eos buffer after flush, if no eos response
+		 * received by dsp even after sending eos command */
+		if ((audio->eos_rsp != 1) && audio->eos_flag) {
+			pr_debug("%s: send eos on o/p buffer during flush\n",\
+				__func__);
+			payload.aio_buf = buf_node->buf;
+			payload.aio_buf.data_len =
+					insert_eos_buf(audio, buf_node);
+			audio->eos_flag = 0;
+		} else {
+			payload.aio_buf = buf_node->buf;
+			payload.aio_buf.data_len =
+					insert_meta_data(audio, buf_node);
+		}
 		audwma_post_event(audio, AUDIO_EVENT_READ_DONE, payload);
 		kfree(buf_node);
+		pr_debug("%s: Propagate READ_DONE during flush\n", __func__);
 	}
 }
 
@@ -730,10 +780,11 @@ static long audwma_process_event_req(struct q6audio *audio, void __user * arg)
 		mutex_unlock(&audio->read_lock);
 	}
 
-	/* Some read buffer might be held up in DSP, release all */
+	/* Some read buffer might be held up in DSP,release all
+	   Once EOS indicated*/
 	if (audio->eos_rsp && !list_empty(&audio->in_queue)) {
-		pr_info("Send flush command to release read buffers"\
-		"held up in DSP\n");
+		pr_debug("Send flush command to release read buffers"\
+		" held up in DSP\n");
 		audwma_flush(audio);
 	}
 
@@ -773,7 +824,7 @@ static int audwma_pmem_add(struct q6audio *audio,
 	struct audwma_pmem_region *region;
 	int rc = -EINVAL;
 
-	pr_debug("\n");		/* Macro prints the file name and function */
+	pr_debug("%s:\n", __func__);
 	region = kmalloc(sizeof(*region), GFP_KERNEL);
 
 	if (!region) {
@@ -891,12 +942,24 @@ static int audwma_aio_buf_add(struct q6audio *audio, unsigned dir,
 			spin_unlock_irqrestore(&audio->dsp_lock, flags);
 		}
 		if (buf_node->meta_info.meta_in.nflags & AUDWMA_EOS_SET) {
-			pr_debug("%s:Send EOS cmd at i/p\n", __func__);
-			/* Driver will forcefully post writedone event
-				once eos ack recived from DSP*/
-			audio->eos_write_payload.aio_buf = buf_node->buf;
-			q6asm_cmd(audio->ac, CMD_EOS);
-			kfree(buf_node);
+			if (!audio->wflush) {
+				pr_debug("%s:Send EOS cmd at i/p\n", __func__);
+				/* Driver will forcefully post writedone event
+				   once eos ack recived from DSP*/
+				audio->eos_write_payload.aio_buf =\
+						buf_node->buf;
+				audio->eos_flag = 1;
+				audio->eos_rsp = 0;
+				q6asm_cmd(audio->ac, CMD_EOS);
+				kfree(buf_node);
+			} else { /* Flush in progress, send back i/p EOS buffer
+				    as is */
+				union msm_audio_event_payload event_payload;
+				event_payload.aio_buf = buf_node->buf;
+				audwma_post_event(audio, AUDIO_EVENT_WRITE_DONE,
+						event_payload);
+				kfree(buf_node);
+			}
 		}
 	} else {
 		/* read */
@@ -916,20 +979,18 @@ static int audwma_aio_buf_add(struct q6audio *audio, unsigned dir,
 		}
 		/* EOS reached at input side fake all upcoming read buffer to
 		   indicate the same */
-		if (audio->eos_rsp) {
+		else {
 			union msm_audio_event_payload event_payload;
 			event_payload.aio_buf = buf_node->buf;
 			event_payload.aio_buf.data_len =
 				insert_eos_buf(audio, buf_node);
-			/* Reset flag back to indicate eos intimated */
-			audio->eos_rsp = 0;
+			pr_debug("%s: propagate READ_DONE as EOS done\n",\
+					__func__);
 			audwma_post_event(audio, AUDIO_EVENT_READ_DONE,
 					event_payload);
+			kfree(buf_node);
 		}
 	}
-
-	pr_debug("Add buf_node %p paddr %lx\n", buf_node, buf_node->paddr);
-
 	return 0;
 }
 
@@ -1153,11 +1214,12 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			break;
 		}
 		rc = audwma_enable(audio);
+		audio->eos_rsp = 0;
+		audio->eos_flag = 0;
 		if (!rc) {
 			audio->enabled = 1;
 		} else {
 			audio->enabled = 0;
-			audio->eos_rsp = 0;
 			pr_err("Audio Start procedure failed rc=%d\n", rc);
 			break;
 		}
@@ -1204,10 +1266,10 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		pr_debug("AUDIO_FLUSH\n");
 		audio->rflush = 1;
 		audio->wflush = 1;
-		/* Flush input / Output buffer in software*/
-		audwma_ioport_reset(audio);
 		/* Flush DSP */
 		rc = audwma_flush(audio);
+		/* Flush input / Output buffer in software*/
+		audwma_ioport_reset(audio);
 		if (rc < 0) {
 			pr_err("AUDIO_FLUSH interrupted\n");
 			rc = -EINTR;
@@ -1215,6 +1277,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			audio->rflush = 0;
 			audio->wflush = 0;
 		}
+		audio->eos_flag = 0;
+		audio->eos_rsp = 0;
 		break;
 	}
 	case AUDIO_REGISTER_PMEM: {
@@ -1351,7 +1415,6 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 static int audio_release(struct inode *inode, struct file *file)
 {
 	struct q6audio *audio = file->private_data;
-	pr_info("\n");
 	mutex_lock(&audio->lock);
 	audwma_disable(audio);
 	audio->drv_ops.out_flush(audio);
@@ -1362,12 +1425,16 @@ static int audio_release(struct inode *inode, struct file *file)
 	audwma_reset_event_queue(audio);
 	q6asm_audio_client_free(audio->ac);
 	mutex_unlock(&audio->lock);
+	mutex_destroy(&audio->lock);
+	mutex_destroy(&audio->read_lock);
+	mutex_destroy(&audio->write_lock);
+	mutex_destroy(&audio->get_event_lock);
 #ifdef CONFIG_DEBUG_FS
 	if (audio->dentry)
 		debugfs_remove(audio->dentry);
 #endif
 	kfree(audio);
-	pr_info("%s:success\n", __func__);
+	pr_info("%s: wma_decoder success\n", __func__);
 	return 0;
 }
 
@@ -1487,7 +1554,8 @@ static int audio_open(struct inode *inode, struct file *file)
 			break;
 		}
 	}
-	pr_info("%s:success\n", __func__);
+	pr_info("%s:wma decoder open success, session_id = %d\n", __func__,
+				audio->ac->session);
 	return 0;
 fail:
 	q6asm_audio_client_free(audio->ac);
