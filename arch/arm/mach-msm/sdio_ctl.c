@@ -149,6 +149,30 @@ static void sdio_ctl_write_done(void *data, int size, void *priv)
 	wake_up(&sdio_ctl_devp[id]->write_wait_queue);
 }
 
+static long sdio_ctl_ioctl(struct file *file, unsigned int cmd,
+					      unsigned long arg)
+{
+	int ret;
+	struct sdio_ctl_dev *sdio_ctl_devp;
+
+	sdio_ctl_devp = file->private_data;
+	if (!sdio_ctl_devp)
+		return -ENODEV;
+
+	switch (cmd) {
+	case TIOCMGET:
+		ret = sdio_cmux_tiocmget(sdio_ctl_devp->id);
+		break;
+	case TIOCMSET:
+		ret = sdio_cmux_tiocmset(sdio_ctl_devp->id, arg, ~arg);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	return ret;
+}
+
 ssize_t sdio_ctl_read(struct file *file,
 		      char __user *buf,
 		      size_t count,
@@ -360,6 +384,7 @@ static const struct file_operations sdio_ctl_fops = {
 	.release = sdio_ctl_release,
 	.read = sdio_ctl_read,
 	.write = sdio_ctl_write,
+	.unlocked_ioctl = sdio_ctl_ioctl,
 };
 
 static int sdio_ctl_probe(struct platform_device *pdev)
