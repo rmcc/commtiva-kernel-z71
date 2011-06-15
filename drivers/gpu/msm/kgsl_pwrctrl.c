@@ -30,7 +30,6 @@
 #define TZ_UPDATE_ID		0x01404000
 #define TZ_RESET_ID		0x01403000
 
-#undef CONFIG_MSM_SECURE_IO
 #ifdef CONFIG_MSM_SECURE_IO
 /* Trap into the TrustZone, and call funcs there. */
 static int __secure_tz_entry(u32 cmd, u32 val)
