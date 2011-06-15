@@ -195,4 +195,11 @@ static inline int kgsl_ringbuffer_count(struct kgsl_ringbuffer *rb,
 	return rb->wptr + rb->sizedwords - rptr;
 }
 
+/* Increment a value by 4 bytes with wrap-around based on size */
+static inline unsigned int adreno_ringbuffer_inc_wrapped(unsigned int val,
+							unsigned int size)
+{
+	return (val + sizeof(unsigned int)) % size;
+}
+
 #endif  /* __GSL_RINGBUFFER_H */
