@@ -39,6 +39,7 @@
 #define SCM_Q6_NMI_CMD                  0x1
 #define MODULE_NAME			"subsystem_fatal_8x60"
 #define Q6SS_SOFT_INTR_WAKEUP		0x288A001C
+#define MODEM_WDOG_ENABLE		0x10020008
 
 #define SUBSYS_FATAL_DEBUG
 
@@ -134,7 +135,16 @@ static struct notifier_block modem_notif_nb = {
 
 static void modem_unlock_timeout(struct work_struct *work)
 {
+	void __iomem *hwio_modem_reset_addr =
+			ioremap_nocache(MODEM_HWIO_MSS_RESET_ADDR, 8);
 	pr_crit("%s: Timeout waiting for modem to unlock.\n", MODULE_NAME);
+
+	/* Set MSS_MODEM_RESET to 0x0 since the unlock didn't work */
+	writel_relaxed(0x0, hwio_modem_reset_addr);
+	/* Write needs to go through before the modem is restarted. */
+	mb();
+	iounmap(hwio_modem_reset_addr);
+
 	subsystem_restart("modem");
 }
 
@@ -197,7 +207,7 @@ static int modem_notif_handler(struct notifier_block *this,
 
 static int subsys_modem_shutdown(void)
 {
-
+	void __iomem *modem_wdog_addr;
 	int smsm_notif_unregistered = 0;
 
 	/* If the modem didn't already crash, setting SMSM_RESET
@@ -210,6 +220,17 @@ static int subsys_modem_shutdown(void)
 		smsm_notif_unregistered = 1;
 		smsm_reset_modem(SMSM_RESET);
 	}
+
+	/* Disable the modem watchdog to allow clean modem bootup */
+	modem_wdog_addr = ioremap_nocache(MODEM_WDOG_ENABLE, 8);
+	writel_relaxed(0x0, modem_wdog_addr);
+
+	/*
+	 * The write above needs to go through before the modem is
+	 * powered up again (subsystem restart).
+	 */
+	mb();
+	iounmap(modem_wdog_addr);
 
 	/* Wait for 5ms to allow the modem to clean up caches etc. */
 	usleep(5000);
