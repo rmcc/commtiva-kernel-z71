@@ -545,6 +545,7 @@ static void ch_read_done(struct smd_channel *ch, unsigned count)
 {
 	BUG_ON(count > smd_stream_read_avail(ch));
 	ch->recv->tail = (ch->recv->tail + count) & ch->fifo_mask;
+	wmb();
 	ch->send->fTAIL = 1;
 }
 
@@ -638,6 +639,7 @@ static void ch_write_done(struct smd_channel *ch, unsigned count)
 {
 	BUG_ON(count > smd_stream_write_avail(ch));
 	ch->send->head = (ch->send->head + count) & ch->fifo_mask;
+	wmb();
 	ch->send->fHEAD = 1;
 }
 
@@ -1615,8 +1617,10 @@ void *smem_get_entry(unsigned id, unsigned *size)
 	if (id >= SMEM_NUM_ITEMS)
 		return 0;
 
+	/* toc is in device memory and cannot be speculatively accessed */
 	if (toc[id].allocated) {
 		*size = toc[id].size;
+		barrier();
 		return (void *) (MSM_SHARED_RAM_BASE + toc[id].offset);
 	} else {
 		*size = 0;
@@ -1692,6 +1696,7 @@ static int smsm_init(void)
 						 SMSM_NUM_INTR_MUX *
 						 sizeof(uint32_t));
 
+	dsb();
 	return 0;
 }
 
@@ -1826,6 +1831,7 @@ int smsm_change_intr_mask(uint32_t smsm_entry,
 	new_mask = (old_mask & ~clear_mask) | set_mask;
 	smd_writel(new_mask, SMSM_INTR_MASK_ADDR(smsm_entry, SMSM_APPS));
 
+	dsb();
 	spin_unlock_irqrestore(&smem_lock, flags);
 
 	return 0;
