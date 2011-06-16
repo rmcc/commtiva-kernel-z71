@@ -92,6 +92,11 @@ struct bt_security {
  */
 #define BT_AMP_POLICY_PREFER_BR_EDR    2
 
+#define BT_POWER	8
+struct bt_power {
+	__u8 force_active;
+};
+
 #define BT_INFO(fmt, arg...) printk(KERN_INFO "Bluetooth: " fmt "\n" , ## arg)
 #define BT_ERR(fmt, arg...)  printk(KERN_ERR "%s: " fmt "\n" , __func__ , ## arg)
 #define BT_DBG(fmt, arg...)  pr_debug("%s: " fmt "\n" , __func__ , ## arg)
@@ -182,6 +187,7 @@ struct bt_skb_cb {
 	__u16 expect;
 	__u8 retries;
 	struct bt_l2cap_control control;
+	__u8 force_active;
 };
 #define bt_cb(skb) ((struct bt_skb_cb *)((skb)->cb))
 
