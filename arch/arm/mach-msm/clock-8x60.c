@@ -2468,15 +2468,11 @@ static void reg_init(void)
 	writel(0, MM_PLL2_MODE_REG); /* PXO */
 	writel(0x00800000, MM_PLL2_CONFIG_REG); /* Enable main out. */
 
-	/* TODO:
-	 * The ADM clock votes below should removed once all users of the ADMs
-	 * begin voting for the clocks appropriately.
-	 */
 	/* The clock driver doesn't use SC1's voting register to control
 	 * HW-voteable clocks.  Clear its bits so that disabling bits in the
 	 * SC0 register will cause the corresponding clocks to be disabled. */
 	rmwreg(BIT(12)|BIT(11), SC0_U_CLK_BRANCH_ENA_VOTE_REG, BM(12, 11));
-	writel(BIT(12)|BIT(11)|BM(5, 2), SC1_U_CLK_BRANCH_ENA_VOTE_REG);
+	writel_relaxed(BIT(12)|BIT(11), SC1_U_CLK_BRANCH_ENA_VOTE_REG);
 	/* Let sc_aclk and sc_clk halt when both Scorpions are collapsed. */
 	writel(BIT(12)|BIT(11), SC0_U_CLK_SLEEP_ENA_VOTE_REG);
 	writel(BIT(12)|BIT(11), SC1_U_CLK_SLEEP_ENA_VOTE_REG);
