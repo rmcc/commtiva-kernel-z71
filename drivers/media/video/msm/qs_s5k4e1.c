@@ -578,6 +578,7 @@ static void qs_s5k4e1_bridge_config(int mode, int rt)
 		bridge_i2c_write_w(0x55, (RegData | 0x2));
 		bridge_i2c_write_w(0x55, (RegData | 0xa));
 		bridge_i2c_write_w(0x14, 0x0C);
+		msleep(20);
 		bridge_i2c_write_w(0x16, 0x00);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x52, 0x1);
@@ -594,6 +595,7 @@ static void qs_s5k4e1_bridge_config(int mode, int rt)
 		bridge_i2c_write_w(0x55, RegData);
 		bridge_i2c_write_w(0x55, (RegData & ~(0x8)));
 		bridge_i2c_write_w(0x14, 0x04);
+		msleep(20);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x06, 0x01);
 		bridge_i2c_write_w(0x04, 0x2018);
@@ -608,6 +610,7 @@ static void qs_s5k4e1_bridge_config(int mode, int rt)
 		bridge_i2c_write_w(0x55, RegData);
 		bridge_i2c_write_w(0x55, (RegData & ~(0x2)));
 		bridge_i2c_write_w(0x14, 0x08);
+		msleep(20);
 		bridge_i2c_write_w(0x51, 0x3);
 		bridge_i2c_write_w(0x06, 0x02);
 		bridge_i2c_write_w(0x04, 0x2018);
@@ -683,20 +686,21 @@ static uint32_t qs_s5k4e1_get_pict_max_exp_lc(void)
 
 static int32_t qs_s5k4e1_set_fps(struct fps_cfg   *fps)
 {
-	uint16_t total_lines_per_frame;
+	uint16_t total_line_length_pclk;
 	int32_t rc = 0;
 	qs_s5k4e1_ctrl->fps_divider = fps->fps_div;
 	qs_s5k4e1_ctrl->pict_fps_divider = fps->pict_fps_div;
 	if (qs_s5k4e1_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
-		total_lines_per_frame = (uint16_t)
-		((prev_frame_length_lines) * qs_s5k4e1_ctrl->fps_divider/0x400);
+		total_line_length_pclk = (uint16_t)
+		((prev_line_length_pck) * qs_s5k4e1_ctrl->fps_divider/0x400);
 	} else {
-		total_lines_per_frame = (uint16_t)
-		((snap_frame_length_lines) * qs_s5k4e1_ctrl->fps_divider/0x400);
+		total_line_length_pclk = (uint16_t)
+		((snap_line_length_pck) *
+			qs_s5k4e1_ctrl->pict_fps_divider/0x400);
 	}
 	qs_s5k4e1_group_hold_on();
-	rc = qs_s5k4e1_i2c_write_w_sensor(REG_FRAME_LENGTH_LINES,
-							total_lines_per_frame);
+	rc = qs_s5k4e1_i2c_write_w_sensor(REG_LINE_LENGTH_PCK,
+							total_line_length_pclk);
 	qs_s5k4e1_group_hold_off();
 	return rc;
 }
@@ -719,25 +723,21 @@ static int32_t qs_s5k4e1_write_exp_gain(struct sensor_3d_exp_cfg exp_cfg)
 	if (qs_s5k4e1_ctrl->sensormode == SENSOR_PREVIEW_MODE) {
 		qs_s5k4e1_ctrl->my_reg_gain = gain;
 		qs_s5k4e1_ctrl->my_reg_line_count = (uint16_t) line;
-		line = (uint32_t) (line * qs_s5k4e1_ctrl->fps_divider);
+		ll_ratio = (uint32_t)(qs_s5k4e1_ctrl->fps_divider);
 		fl_lines = prev_frame_length_lines;
 		ll_pck = prev_line_length_pck;
 	} else {
-		line = (uint32_t) (line * qs_s5k4e1_ctrl->pict_fps_divider);
+		ll_ratio = (uint32_t)(qs_s5k4e1_ctrl->pict_fps_divider);
 		fl_lines = snap_frame_length_lines;
 		ll_pck = snap_line_length_pck;
 	}
-
-	if (fl_lines < (line / 0x400))
-		ll_ratio = (line / (fl_lines - QS_S5K4E1_OFFSET));
-	else
-		ll_ratio = 0x400;
-
+	if (((fl_lines * ll_ratio / 0x400) - QS_S5K4E1_OFFSET) < line) {
+		ll_ratio = ll_ratio * line / (fl_lines - QS_S5K4E1_OFFSET);
+		line = fl_lines - QS_S5K4E1_OFFSET;
+	}
 	ll_pck = ll_pck * ll_ratio / 0x400;
-	line = line / ll_ratio;
 	if (ll_pck < min_ll_pck)
 		ll_pck = min_ll_pck;
-
 	qs_s5k4e1_group_hold_on();
 	rc = qs_s5k4e1_i2c_write_w_sensor(REG_GLOBAL_GAIN, gain);
 	rc = qs_s5k4e1_i2c_write_w_sensor(REG_LINE_LENGTH_PCK, ll_pck);
@@ -1104,6 +1104,8 @@ static int32_t qs_s5k4e1_set_sensor_mode(int mode,
 
 static int32_t qs_s5k4e1_power_down(void)
 {
+	qs_s5k4e1_stop_stream();
+	msleep(30);
 	qs_s5k4e1_af_mode = 2;
 	qs_s5k4e1_af_right_adjust = 0;
 	qs_s5k4e1_write_focus_value(0);
