@@ -2357,17 +2357,17 @@ static inline void vfe31_read_irq_status(struct vfe31_irq_status *out)
 	uint32_t *temp;
 	memset(out, 0, sizeof(struct vfe31_irq_status));
 	temp = (uint32_t *)(vfe31_ctrl->vfebase + VFE_IRQ_STATUS_0);
-	out->vfeIrqStatus0 = msm_io_r(temp);
+	out->vfeIrqStatus0 = msm_io_r_mb(temp);
 
 	temp = (uint32_t *)(vfe31_ctrl->vfebase + VFE_IRQ_STATUS_1);
-	out->vfeIrqStatus1 = msm_io_r(temp);
+	out->vfeIrqStatus1 = msm_io_r_mb(temp);
 
 	temp = (uint32_t *)(vfe31_ctrl->vfebase + VFE_CAMIF_STATUS);
 	out->camifStatus = msm_io_r(temp);
 	CDBG("camifStatus  = 0x%x\n", out->camifStatus);
 
 	temp = (uint32_t *)(vfe31_ctrl->vfebase + VFE_BUS_PING_PONG_STATUS);
-	out->vfePingPongStatus = msm_io_r(temp);
+	out->vfePingPongStatus = msm_io_r_mb(temp);
 
 	/* clear the pending interrupt of the same kind.*/
 	msm_io_w(out->vfeIrqStatus0, vfe31_ctrl->vfebase + VFE_IRQ_CLEAR_0);
@@ -2998,6 +2998,13 @@ static void vfe31_process_output_path_irq_2(uint32_t ping_pong)
 	CDBG("%s, operation_mode = %d, state %d\n", __func__,
 		vfe31_ctrl->operation_mode,
 		vfe31_ctrl->recording_state);
+	/* Ensure that both wm1 and wm5 ping and pong buffers are active*/
+	if (!(((ping_pong & 0x22) == 0x22) ||
+		((ping_pong & 0x22) == 0x0))) {
+		pr_err(" Irq_2 - skip the frame pp_status is not proper"
+			"PP_status = 0x%x\n", ping_pong);
+		return;
+	}
 	if (vfe31_ctrl->recording_state == VFE_REC_STATE_STOPPED) {
 		vfe31_ctrl->outpath.out2.frame_drop_cnt++;
 		pr_warning("path_irq_2 - recording stopped\n");
