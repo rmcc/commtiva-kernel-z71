@@ -3600,11 +3600,12 @@ static void sdio_al_print_info(void)
 
 		/* Reading HW Mailbox */
 		hw_mailbox = sdio_al_dev->mailbox;
+		func1 = sdio_al_dev->card->sdio_func[0];
 
-		sdio_claim_host(sdio_al_dev->card->sdio_func[0]);
+		sdio_claim_host(func1);
 		ret = sdio_memcpy_fromio(func1, hw_mailbox,
 			HW_MAILBOX_ADDR, sizeof(*hw_mailbox));
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
+		sdio_release_host(func1);
 
 		if (ret) {
 			pr_err(MODULE_NAME ": fail to read "
