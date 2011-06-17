@@ -895,6 +895,9 @@ static void rmnet_set_modem_ctl_bits_work(struct work_struct *w)
 	if (!atomic_read(&dev->sdio_open))
 		return;
 
+	pr_debug("%s: cbits_to_modem:%d\n",
+			__func__, dev->cbits_to_modem);
+
 	sdio_cmux_tiocmset(rmnet_sdio_ctl_ch,
 			dev->cbits_to_modem,
 			~dev->cbits_to_modem);
@@ -968,6 +971,11 @@ static void rmnet_open_sdio_work(struct work_struct *w)
 
 	if (ctl_ch_opened && data_ch_opened) {
 		atomic_set(&dev->sdio_open, 1);
+
+		/* if usb cable is connected, update DTR status to modem */
+		if (atomic_read(&dev->online))
+			queue_work(dev->wq, &dev->set_modem_ctl_bits_work);
+
 		pr_info("%s: usb rmnet sdio channels are open retry_cnt:%d\n",
 				__func__, retry_cnt);
 		return;
@@ -1161,12 +1169,14 @@ static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
 			"tx skb size:     %u\n"
 			"rx_skb_size:     %u\n"
 			"dpkts_pending_at_dmux: %u\n"
-			"tx drp cnt: %lu\n",
+			"tx drp cnt: %lu\n"
+			"cbits_tomodem: %d",
 			dev->dpkt_tomodem, dev->dpkt_tolaptop,
 			dev->cpkt_tomodem, dev->cpkt_tolaptop,
 			dev->cbits_to_modem,
 			dev->tx_skb_queue.qlen, dev->rx_skb_queue.qlen,
-			dev->dpkts_pending_atdmux, dev->tx_drp_cnt);
+			dev->dpkts_pending_atdmux, dev->tx_drp_cnt,
+			dev->cbits_to_modem);
 
 	spin_unlock_irqrestore(&dev->lock, flags);
 
