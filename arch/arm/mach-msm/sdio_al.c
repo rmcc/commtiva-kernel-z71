@@ -405,7 +405,7 @@ struct sdio_al_device {
  * sdio_al.debug_lpm_on=1 to enable the LPM debug messages
  * By default the LPM debug messages are turned off
  */
-static int debug_lpm_on = 1;
+static int debug_lpm_on;
 module_param(debug_lpm_on, int, 0);
 
 /*
