@@ -873,20 +873,24 @@ static char set_tear_off[2] = {0x34, 0x00};
 static struct dsi_cmd_desc dsi_tear_off_cmd = {
 	DTYPE_DCS_WRITE, 1, 0, 0, 0, sizeof(set_tear_off), set_tear_off};
 
+#ifdef SET_TEAR_SCANLINE
+static char set_tear_scanline[3] = {0x44, 0x02, 0xcf};	/* line 719 */
+
+static struct dsi_cmd_desc dsi_tear_scanline_cmd = {
+	DTYPE_DCS_LWRITE, 1, 0, 0, 0,
+			sizeof(set_tear_scanline), set_tear_scanline};
+#endif
+
 void mipi_dsi_set_tear_on(struct msm_fb_data_type *mfd)
 {
-	mutex_lock(&mfd->dma->ov_mutex);
 	mipi_dsi_buf_init(&dsi_tx_buf);
 	mipi_dsi_cmds_tx(mfd, &dsi_tx_buf, &dsi_tear_on_cmd, 1);
-	mutex_unlock(&mfd->dma->ov_mutex);
 }
 
 void mipi_dsi_set_tear_off(struct msm_fb_data_type *mfd)
 {
-	mutex_lock(&mfd->dma->ov_mutex);
 	mipi_dsi_buf_init(&dsi_tx_buf);
 	mipi_dsi_cmds_tx(mfd, &dsi_tx_buf, &dsi_tear_off_cmd, 1);
-	mutex_unlock(&mfd->dma->ov_mutex);
 }
 
 int mipi_dsi_cmd_reg_tx(uint32 data)
