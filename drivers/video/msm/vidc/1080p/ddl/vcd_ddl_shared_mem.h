@@ -89,6 +89,8 @@ void vidc_sm_get_displayed_picture_frame(struct ddl_buf_addr
 	*shared_mem, u32 *n_disp_picture_frame);
 void vidc_sm_get_available_luma_dpb_address(
 	struct ddl_buf_addr *shared_mem, u32 *pn_free_luma_dpb_address);
+void vidc_sm_get_available_luma_dpb_dec_order_address(
+	struct ddl_buf_addr *shared_mem, u32 *pn_free_luma_dpb_address);
 void vidc_sm_get_dec_order_resl(
 	struct ddl_buf_addr *shared_mem, u32 *width, u32 *height);
 void vidc_sm_get_dec_order_crop_info(

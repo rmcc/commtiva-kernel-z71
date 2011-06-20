@@ -1088,16 +1088,25 @@ static u32 ddl_decoder_output_done_callback(
 		decoder->codec.codec <= VCD_CODEC_XVID)) {
 		vidc_sm_get_displayed_picture_frame(&ddl->shared_mem
 		[ddl->command_channel], &disp_pict);
-		if (!disp_pict)
-			output_vcd_frm->frame = VCD_FRAME_NOTCODED;
-		if (output_vcd_frm->frame == VCD_FRAME_NOTCODED) {
-			vidc_sm_get_available_luma_dpb_address(
-				&ddl->shared_mem[ddl->command_channel],
-				&free_luma_dpb);
-			if (free_luma_dpb)
-				output_vcd_frm->physical =
-					(u8 *)(free_luma_dpb << 11);
+		if (decoder->output_order == VCD_DEC_ORDER_DISPLAY) {
+			if (!disp_pict) {
+				output_vcd_frm->frame = VCD_FRAME_NOTCODED;
+				vidc_sm_get_available_luma_dpb_address(
+					&ddl->shared_mem[ddl->command_channel],
+					&free_luma_dpb);
+			}
+		} else {
+			if (dec_disp_info->input_frame ==
+				VIDC_1080P_DECODE_FRAMETYPE_NOT_CODED) {
+				output_vcd_frm->frame = VCD_FRAME_NOTCODED;
+			vidc_sm_get_available_luma_dpb_dec_order_address(
+					&ddl->shared_mem[ddl->command_channel],
+					&free_luma_dpb);
+			}
 		}
+		if (free_luma_dpb)
+			output_vcd_frm->physical =
+				(u8 *)(free_luma_dpb << 11);
 	}
 	vcd_status = ddl_decoder_dpb_transact(decoder, output_frame,
 			DDL_DPB_OP_MARK_BUSY);

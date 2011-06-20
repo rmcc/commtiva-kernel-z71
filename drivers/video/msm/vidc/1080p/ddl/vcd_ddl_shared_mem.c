@@ -57,6 +57,10 @@
 #define VIDC_SM_FREE_LUMA_DPB_BMSK                          0xffffffff
 #define VIDC_SM_FREE_LUMA_DPB_SHFT                          0
 
+#define VIDC_SM_FREE_LUMA_DPB_DEC_ORDER_ADDR                0x00fc
+#define VIDC_SM_FREE_LUMA_DPB_DEC_ORDER_BMSK                0xffffffff
+#define VIDC_SM_FREE_LUMA_DPB_DEC_ORDER_SHFT                0
+
 #define VIDC_SM_DEC_ORDER_WIDTH_ADDR                        0x00e8
 #define VIDC_SM_DEC_ORDER_WIDTH_BMSK                        0xffffffff
 #define VIDC_SM_DEC_ORDER_WIDTH_SHFT                        0
@@ -298,6 +302,14 @@ void vidc_sm_get_available_luma_dpb_address(struct ddl_buf_addr
 {
 	*pn_free_luma_dpb_address = DDL_MEM_READ_32(shared_mem,
 		VIDC_SM_FREE_LUMA_DPB_ADDR);
+}
+
+void vidc_sm_get_available_luma_dpb_dec_order_address(
+	struct ddl_buf_addr	*shared_mem,
+	u32 *pn_free_luma_dpb_address)
+{
+	*pn_free_luma_dpb_address = DDL_MEM_READ_32(shared_mem,
+		VIDC_SM_FREE_LUMA_DPB_DEC_ORDER_ADDR);
 }
 
 void vidc_sm_get_dec_order_resl(
