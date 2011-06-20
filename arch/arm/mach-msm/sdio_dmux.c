@@ -127,6 +127,7 @@ struct sdio_partial_pkt_info {
 
 static void sdio_mux_read_data(struct work_struct *work);
 static void sdio_mux_write_data(struct work_struct *work);
+static void sdio_mux_send_open_cmd(uint32_t id);
 
 static DEFINE_MUTEX(sdio_mux_lock);
 static DECLARE_WORK(work_sdio_mux_read, sdio_mux_read_data);
@@ -229,6 +230,7 @@ static void *handle_sdio_mux_command(struct sdio_mux_hdr *hdr,
 {
 	void *rp;
 	unsigned long flags;
+	int send_open = 0;
 
 	DBG("%s: cmd %d ch %d\n", __func__, hdr->cmd, hdr->ch_id);
 	switch (hdr->cmd) {
@@ -238,7 +240,12 @@ static void *handle_sdio_mux_command(struct sdio_mux_hdr *hdr,
 	case SDIO_MUX_HDR_CMD_OPEN:
 		spin_lock_irqsave(&sdio_ch[hdr->ch_id].lock, flags);
 		sdio_ch[hdr->ch_id].status |= SDIO_CH_REMOTE_OPEN;
-		sdio_ch[hdr->ch_id].status &= ~SDIO_CH_IN_RESET;
+
+		if (sdio_ch_is_in_reset(hdr->ch_id)) {
+			DBG("%s: in reset - sending open cmd\n", __func__);
+			sdio_ch[hdr->ch_id].status &= ~SDIO_CH_IN_RESET;
+			send_open = 1;
+		}
 
 		/* notify client so it can update its status */
 		if (sdio_ch[hdr->ch_id].receive_cb)
@@ -250,6 +257,9 @@ static void *handle_sdio_mux_command(struct sdio_mux_hdr *hdr,
 					sdio_ch[hdr->ch_id].priv, NULL);
 		spin_unlock_irqrestore(&sdio_ch[hdr->ch_id].lock, flags);
 		rp = hdr + 1;
+		if (send_open)
+			sdio_mux_send_open_cmd(hdr->ch_id);
+
 		break;
 	case SDIO_MUX_HDR_CMD_CLOSE:
 		/* probably should drop pending write */
@@ -420,6 +430,20 @@ static int sdio_mux_write_cmd(void *data, uint32_t len)
 	}
 	mutex_unlock(&sdio_mux_lock);
 	return 0;
+}
+
+static void sdio_mux_send_open_cmd(uint32_t id)
+{
+	struct sdio_mux_hdr hdr = {
+		.magic_num = SDIO_MUX_HDR_MAGIC_NO,
+		.cmd = SDIO_MUX_HDR_CMD_OPEN,
+		.reserved = 0,
+		.ch_id = id,
+		.pkt_len = 0,
+		.pad_len = 0
+	};
+
+	sdio_mux_write_cmd((void *)&hdr, sizeof(hdr));
 }
 
 static void sdio_mux_write_data(struct work_struct *work)
@@ -615,7 +639,6 @@ int msm_sdio_dmux_open(uint32_t id, void *priv,
 			void (*receive_cb)(void *, struct sk_buff *),
 			void (*write_done)(void *, struct sk_buff *))
 {
-	struct sdio_mux_hdr hdr;
 	unsigned long flags;
 
 	DBG("%s: opening ch %d\n", __func__, id);
@@ -639,14 +662,7 @@ int msm_sdio_dmux_open(uint32_t id, void *priv,
 	sdio_ch[id].use_wm = 0;
 	spin_unlock_irqrestore(&sdio_ch[id].lock, flags);
 
-	hdr.magic_num = SDIO_MUX_HDR_MAGIC_NO;
-	hdr.cmd = SDIO_MUX_HDR_CMD_OPEN;
-	hdr.reserved = 0;
-	hdr.ch_id = id;
-	hdr.pkt_len = 0;
-	hdr.pad_len = 0;
-
-	sdio_mux_write_cmd((void *)&hdr, sizeof(hdr));
+	sdio_mux_send_open_cmd(id);
 
 open_done:
 	pr_info("%s: opened ch %d\n", __func__, id);
@@ -668,6 +684,7 @@ int msm_sdio_dmux_close(uint32_t id)
 	sdio_ch[id].receive_cb = NULL;
 	sdio_ch[id].priv = NULL;
 	sdio_ch[id].status &= ~SDIO_CH_LOCAL_OPEN;
+	sdio_ch[id].status &= ~SDIO_CH_IN_RESET;
 	spin_unlock_irqrestore(&sdio_ch[id].lock, flags);
 
 	hdr.magic_num = SDIO_MUX_HDR_MAGIC_NO;
