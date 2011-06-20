@@ -939,10 +939,10 @@ static struct tca6507_platform_data tca6507_data = {
 	.tca6507_reset = 84,
 };
 static struct elan_i2c_platform_data elan8232_device = {
-    .abs_x_min= 0,
-    .abs_x_max= 1792,
-    .abs_y_min= 0,
-    .abs_y_max= 2816,
+    .abs_x_min= -1,
+    .abs_x_max= 1793,
+    .abs_y_min= -1,
+    .abs_y_max= 2817,
     .intr_gpio= 89,
 };
 
