@@ -149,15 +149,4 @@ int sdio_set_write_threshold(struct sdio_channel *ch, int threshold);
  */
 int sdio_set_read_threshold(struct sdio_channel *ch, int threshold);
 
-
-/**
- *  Wake-up the modem. This function should be called in case of
- *  msm_sdcc resume.
- *
- * @host: pointer to the card host.
- *
- * @return 0 on success, negative value on error.
- */
-int sdio_al_client_resume(struct mmc_host *host);
-
 #endif /* __SDIO_AL__ */

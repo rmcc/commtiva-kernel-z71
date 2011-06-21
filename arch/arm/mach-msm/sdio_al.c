@@ -755,7 +755,7 @@ static void sdio_al_sleep(struct sdio_al_device *sdio_al_dev,
 	sdio_al_dev->clock = host->ios.clock;
 	/* Disable clocks here */
 	host->ios.clock = 0;
-	host->ops->set_ios(host, &host->ios);
+	msmsdcc_lpm_enable(host);
 	LPM_DEBUG(MODULE_NAME ":Finished sleep sequence for card %d. "
 			    "Sleep now.\n",
 		sdio_al_dev->card->host->index);
@@ -1993,56 +1993,6 @@ static void restart_timer(struct sdio_al_device *sdio_al_dev)
 	}
 }
 
-int sdio_al_client_resume(struct mmc_host *host)
-{
-	unsigned long time_to_wait;
-	struct sdio_al_device *sdio_al_dev = NULL;
-	int i = 0;
-	int ret = 0;
-
-	if (!host) {
-		pr_err(MODULE_NAME ": %s - host is NULL",
-		       __func__);
-		return -EIO;
-	}
-
-	for (i = 0 ; i < MAX_NUM_OF_SDIO_DEVICES ; ++i) {
-		if ((!sdio_al) || (!sdio_al->devices[i]) ||
-		    (!sdio_al->devices[i]->card))
-			continue;
-		if (sdio_al->devices[i]->card->host == host) {
-			sdio_al_dev = sdio_al->devices[i];
-			break;
-		}
-	}
-
-	if (sdio_al_dev == NULL) {
-		pr_err(MODULE_NAME ": %s - sdio_al_dev is NULL",
-		       __func__);
-		return -EIO;
-	}
-
-	host->ios.clock = sdio_al_dev->clock;
-	host->ops->set_ios(host, &host->ios);
-	msmsdcc_set_pwrsave(host, 0);
-	/* Poll the GPIO */
-	time_to_wait = jiffies + msecs_to_jiffies(1000);
-	while (time_before(jiffies, time_to_wait)) {
-		if (sdio_al->pdata->get_mdm2ap_status())
-			break;
-		udelay(TIME_TO_WAIT_US);
-	}
-	LPM_DEBUG(MODULE_NAME ": %s - GPIO mdm2ap_status=%d\n",
-		  __func__, sdio_al->pdata->get_mdm2ap_status());
-	if (sdio_al->pdata->get_mdm2ap_status() == 0) {
-		pr_err(MODULE_NAME ": %s - Modem is not out of VDD MIN\n",
-		       __func__);
-		ret = -EIO;
-	}
-	return 0;
-}
-EXPORT_SYMBOL(sdio_al_client_resume);
-
 /**
  *  Do the wakup sequence.
  *  This function should be called after claiming the host!
@@ -2090,7 +2040,7 @@ static int sdio_al_wake_up(struct sdio_al_device *sdio_al_dev,
 		 sdio_al_dev->card->host->index);
 	/* Enable the clock and set its rate */
 	host->ios.clock = sdio_al_dev->clock;
-	host->ops->set_ios(host, &host->ios);
+	msmsdcc_lpm_disable(host);
 	msmsdcc_set_pwrsave(sdio_al_dev->card->host, 0);
 	/* Poll the GPIO */
 	time_to_wait = jiffies + msecs_to_jiffies(1000);
@@ -3276,126 +3226,6 @@ static void sdio_al_sdio_remove(struct sdio_func *func)
 	pr_debug(MODULE_NAME ":sdio_al_sdio_remove was called");
 }
 
-static int sdio_al_sdio_suspend(struct device *dev)
-{
-	struct sdio_func *func = dev_to_sdio_func(dev);
-	int ret = 0;
-	struct sdio_al_device *sdio_al_dev = NULL;
-	int i;
-	int pending_due_to_rx = 0;
-	struct sdio_func *func1;
-
-	/* Find the sdio_al_device of this function */
-	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
-		if (sdio_al->devices[i] == NULL)
-			continue;
-		if (sdio_al->devices[i]->card == func->card) {
-			sdio_al_dev = sdio_al->devices[i];
-			break;
-		}
-	}
-	if (sdio_al_verify_dev(sdio_al_dev, __func__))
-		return -ENODEV;
-	func1 = sdio_al_dev->card->sdio_func[0];
-
-	LPM_DEBUG(MODULE_NAME ":sdio_al_sdio_suspend for func %d\n",
-		func->num);
-
-	if (sdio_al_dev->is_err) {
-		SDIO_AL_ERR(__func__);
-		return -ENODEV;
-	}
-
-	sdio_claim_host(sdio_al_dev->card->sdio_func[0]);
-
-	if (sdio_al_dev->is_suspended) {
-		pr_debug(MODULE_NAME ":already in suspend state\n");
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return 0;
-	}
-
-	ret = sdio_set_host_pm_flags(func, MMC_PM_KEEP_POWER);
-
-	if (ret) {
-		pr_err(MODULE_NAME ":Host doesn't support the keep "
-				   "power capability\n");
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return ret;
-	}
-
-	ret = sdio_set_host_pm_flags(func, MMC_PM_WAKE_SDIO_IRQ);
-	if (ret) {
-		pr_err(MODULE_NAME ":Host doesn't support the wakeup "
-				"capability\n");
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return ret;
-	}
-
-	/* Check if we can get into suspend */
-	if (!sdio_al_dev->is_ok_to_sleep) {
-		for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++) {
-			if ((!sdio_al_dev->channel[i].is_valid) ||
-			    (!sdio_al_dev->channel[i].is_open))
-				continue;
-			if ((sdio_al_dev->channel[i].read_avail > 0)) {
-				pr_err(MODULE_NAME ":Cannot suspend due to rx "
-					"pending data on ch %s\n",
-				       sdio_al_dev->channel[i].name);
-				pending_due_to_rx = 1;
-				break;
-			}
-		}
-		if (!pending_due_to_rx)
-			pr_err(MODULE_NAME ":Cannot suspend due to tx "
-					   "pending data\n");
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return -EBUSY;
-	}
-
-	sdio_al_dev->is_suspended = 1;
-
-	sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-
-	return 0;
-}
-
-static int sdio_al_sdio_resume(struct device *dev)
-{
-	struct sdio_func *func = dev_to_sdio_func(dev);
-	struct sdio_al_device *sdio_al_dev = NULL;
-	int i;
-
-	/* Find the sdio_al_device of this function */
-	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
-		if (sdio_al->devices[i] == NULL)
-			continue;
-		if (sdio_al->devices[i]->card == func->card) {
-			sdio_al_dev = sdio_al->devices[i];
-			break;
-		}
-	}
-	if (sdio_al_verify_dev(sdio_al_dev, __func__))
-		return -ENODEV;
-
-	LPM_DEBUG(MODULE_NAME ":sdio_al_sdio_resume for func %d\n",
-		func->num);
-
-	sdio_claim_host(sdio_al_dev->card->sdio_func[0]);
-
-	if (!sdio_al_dev->is_suspended) {
-		pr_debug(MODULE_NAME ":already in resume state\n");
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return 0;
-	}
-
-	sdio_al_dev->is_suspended = 0;
-
-	sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-
-	return 0;
-}
-
-
 static void sdio_print_mailbox(char *prefix_str, struct sdio_mailbox *mailbox)
 {
 	int k = 0;
@@ -3631,17 +3461,11 @@ static struct sdio_device_id sdio_al_sdioid[] = {
     {}
 };
 
-static const struct dev_pm_ops sdio_al_sdio_pm_ops = {
-    .suspend = sdio_al_sdio_suspend,
-    .resume = sdio_al_sdio_resume,
-};
-
 static struct sdio_driver sdio_al_sdiofn_driver = {
     .name      = "sdio_al_sdiofn",
     .id_table  = sdio_al_sdioid,
     .probe     = sdio_al_sdio_probe,
     .remove    = sdio_al_sdio_remove,
-    .drv.pm    = &sdio_al_sdio_pm_ops,
 };
 
 #ifdef CONFIG_MSM_SUBSYSTEM_RESTART
