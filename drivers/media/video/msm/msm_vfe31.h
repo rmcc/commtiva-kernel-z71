@@ -574,6 +574,8 @@ enum VFE_YUV_INPUT_COSITING_MODE {
 
 #define VFE31_LA_TABLE_LENGTH    64
 
+#define VFE31_HIST_TABLE_LENGTH  256
+
 struct vfe_cmds_demosaic_abf {
 	uint8_t   enable;
 	uint8_t   forceOn;
