@@ -52,6 +52,10 @@ static spinlock_t dsi_lock;
 static struct list_head pre_kickoff_list;
 static struct list_head post_kickoff_list;
 
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+static int fpga_addr;
+#endif
+
 void mipi_dsi_init(void)
 {
 	init_completion(&dsi_dma_comp);
@@ -835,6 +839,30 @@ void mipi_dsi_op_mode_config(int mode)
 	MIPI_OUTP(MIPI_DSI_BASE + 0x0000, dsi_ctrl);
 	wmb();
 }
+
+#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+void mipi_dsi_fpga_addr_init(int addr)
+{
+	fpga_addr = addr;
+}
+
+void mipi_dsi_enable_3d_barrier(int enable)
+{
+	void *fpga_ptr;
+	uint32_t ptr_value = 0;
+
+	fpga_ptr = ioremap_nocache(fpga_addr, sizeof(uint32_t));
+	if (fpga_ptr != 0)
+		ptr_value = readl_relaxed(fpga_ptr);
+	if (enable)
+		writel_relaxed(((0xFFFF0000 & ptr_value) | 1), fpga_ptr);
+	else
+		writel_relaxed((0xFFFF0000 & ptr_value), fpga_ptr);
+
+	dsb();
+	iounmap(fpga_ptr);
+}
+#endif
 
 void mipi_dsi_cmd_mdp_sw_trigger(void)
 {

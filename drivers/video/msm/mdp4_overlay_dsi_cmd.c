@@ -302,7 +302,6 @@ void mdp4_dsi_cmd_3d(struct msm_fb_data_type *mfd, struct msmfb_overlay_3d *r3d)
 	wmb();
 }
 
-
 #ifdef CONFIG_FB_MSM_OVERLAY_WRITEBACK
 int mdp4_dsi_overlay_blt_start(struct msm_fb_data_type *mfd)
 {

@@ -68,6 +68,7 @@ static int __init mipi_cmd_novatek_blue_qhd_pt_init(void)
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
 	pinfo.clk_rate = 454000000;
+	pinfo.is_3d_panel = FB_TYPE_3D_PANEL;
 #ifdef USE_HW_VSYNC
 	pinfo.lcd.vsync_enable = TRUE;
 	pinfo.lcd.hw_vsync_mode = TRUE;

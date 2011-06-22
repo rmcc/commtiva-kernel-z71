@@ -1546,17 +1546,12 @@ static int mdp4_overlay_req2pipe(struct mdp_overlay *req, int mixer,
 		return -ERANGE;
 	}
 
-	{
+	if (ctrl->panel_3d != MDP4_3D_SIDE_BY_SIDE) {
 		int xres;
 		int yres;
 
 		xres = mfd->panel_info.xres;
 		yres = mfd->panel_info.yres;
-
-		if (ctrl->panel_3d == MDP4_3D_SIDE_BY_SIDE) {
-			xres *= 2;
-			yres /= 2;
-		}
 
 		if (((req->dst_rect.x + req->dst_rect.w) > xres) ||
 			((req->dst_rect.y + req->dst_rect.h) > yres)) {
