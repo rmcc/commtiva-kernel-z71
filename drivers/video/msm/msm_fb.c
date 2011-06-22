@@ -1057,9 +1057,9 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 	var->yres_virtual = panel_info->yres * mfd->fb_page;
 	var->bits_per_pixel = bpp * 8;	/* FrameBuffer color depth */
 	if (mfd->dest == DISPLAY_LCD) {
-		var->reserved[3] = panel_info->lcd.refx100 / 100;
+		var->reserved[4] = panel_info->lcd.refx100 / 100;
 	} else {
-		var->reserved[3] = panel_info->clk_rate /
+		var->reserved[4] = panel_info->clk_rate /
 			((panel_info->lcdc.h_back_porch +
 			  panel_info->lcdc.h_front_porch +
 			  panel_info->lcdc.h_pulse_width +
