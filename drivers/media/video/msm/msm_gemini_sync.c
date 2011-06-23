@@ -468,7 +468,8 @@ int msm_gemini_input_buf_enqueue(struct msm_gemini_device *pgmn_dev,
 		(int) buf_cmd.vaddr, buf_cmd.y_len);
 
 	buf_p->y_buffer_addr    = msm_gemini_platform_v2p(buf_cmd.fd,
-		buf_cmd.y_len + buf_cmd.cbcr_len, &buf_p->file);
+		buf_cmd.y_len + buf_cmd.cbcr_len, &buf_p->file)
+		+ buf_cmd.offset;
 	buf_p->y_len          = buf_cmd.y_len;
 
 	buf_p->cbcr_buffer_addr = buf_p->y_buffer_addr + buf_cmd.y_len;
