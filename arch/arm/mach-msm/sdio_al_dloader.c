@@ -1,4 +1,3 @@
-
 /* Copyright (c) 2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -67,7 +66,7 @@
 #define PRINTING_GAP			200
 #define TIMER_DURATION			10
 #define PUSH_TIMER_DURATION		5000
-#define MULTIPLE_RATIO			10
+#define MULTIPLE_RATIO			1
 #define MS_IN_SEC			1000
 #define BITS_IN_BYTE			8
 #define BYTES_IN_KB			1024
@@ -77,6 +76,7 @@
 #define SDIO_DLD_AMSS_TEST_MODE_NAME	"SDIO DLD AMSS TEST MODE"
 #define TEST_NAME_MAX_SIZE		30
 #define PUSH_STRING
+#define SDIO_DLD_OUTGOING_BUFFER_SIZE	(48*1024*MULTIPLE_RATIO)
 
 /* FORWARD DECLARATIONS */
 static int sdio_dld_open(struct tty_struct *tty, struct file *file);
@@ -222,6 +222,7 @@ static const struct tty_operations sdio_dloader_tty_ops = {
 /* GLOBAL VARIABLES */
 struct sdio_downloader *sdio_dld;
 struct sdio_dld_global_info sdio_dld_info;
+static char outgoing_data_buffer[SDIO_DLD_OUTGOING_BUFFER_SIZE];
 
 static DEFINE_SPINLOCK(lock1);
 static unsigned long lock_flags1;
@@ -753,21 +754,21 @@ static int sdio_dld_allocate_local_buffers(void)
 
 	incoming->buffer_size = reg_str->dl_buff_size.reg_val;
 
-	outgoing->data =
-		kzalloc(reg_str->ul_buff_size.reg_val*MULTIPLE_RATIO,
-			GFP_KERNEL);
+	outgoing->data = outgoing_data_buffer;
 
-	/* if allocating of outgoing buffer failed, free incoming buffer */
-	if (!outgoing->data) {
+	outgoing->buffer_size = SDIO_DLD_OUTGOING_BUFFER_SIZE;
+
+	if (outgoing->buffer_size !=
+	    reg_str->ul_buff_size.reg_val*MULTIPLE_RATIO) {
+		pr_err(MODULE_NAME ": %s - HOST outgoing buffer size (%d bytes)"
+		       "must be a multiple of ClIENT uplink buffer size (%d "
+		       "bytes). HOST_SIZE == n*CLIENT_SIZE.(n=1,2,3...)\n",
+		       __func__,
+		       SDIO_DLD_OUTGOING_BUFFER_SIZE,
+		       reg_str->ul_buff_size.reg_val);
 		kfree(incoming->data);
-		pr_err(MODULE_NAME ": %s - param ""outgoing->data"" is NULL. "
-		       "Couldn't allocate outgoing->data local buffer\n",
-		       __func__);
-		return -ENOMEM;
+		return -EINVAL;
 	}
-
-	outgoing->buffer_size =
-		reg_str->ul_buff_size.reg_val*MULTIPLE_RATIO;
 
 	/* keep sdio_dld_info up to date */
 	sdio_dld_info.host_outgoing_buffer_size = outgoing->buffer_size;
@@ -784,7 +785,6 @@ static int sdio_dld_allocate_local_buffers(void)
 static void sdio_dld_dealloc_local_buffers(void)
 {
 	kfree((void *)sdio_dld->sdio_dloader_data.incoming_data.data);
-	kfree((void *)sdio_dld->sdio_dloader_data.outgoing_data.data);
 }
 
 /**
