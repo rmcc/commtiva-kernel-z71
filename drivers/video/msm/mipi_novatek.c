@@ -21,7 +21,7 @@
 #include "mipi_novatek.h"
 
 
-static struct msm_panel_common_pdata *mipi_novatek_pdata;
+static struct mipi_dsi_novatek_platform_data *mipi_novatek_pdata;
 
 static struct dsi_buf novatek_tx_buf;
 static struct dsi_buf novatek_rx_buf;
@@ -204,16 +204,54 @@ static uint32 mipi_novatek_manufacture_id(struct msm_fb_data_type *mfd)
 	return *lp;
 }
 
+static int fpga_addr;
+static bool support_3d;
+
+void mipi_novatek_3d_init(int addr)
+{
+	fpga_addr = addr;
+}
+
+void mipi_dsi_enable_3d_barrier(int mode)
+{
+	void *fpga_ptr;
+	uint32_t ptr_value = 0;
+
+	if (!fpga_addr && support_3d) {
+		pr_err("%s: fpga_addr not set. Failed to enable 3D barrier\n",
+					__func__);
+		return;
+	}
+
+	fpga_ptr = ioremap_nocache(fpga_addr, sizeof(uint32_t));
+	if (fpga_ptr != 0)
+		ptr_value = readl_relaxed(fpga_ptr);
+	if (mode == LANDSCAPE)
+		writel_relaxed(((0xFFFF0000 & ptr_value) | 1), fpga_ptr);
+	else if (mode == PORTRAIT)
+		writel_relaxed(((0xFFFF0000 & ptr_value) | 3), fpga_ptr);
+	else
+		writel_relaxed((0xFFFF0000 & ptr_value), fpga_ptr);
+
+	dsb();
+	iounmap(fpga_ptr);
+}
+
 static int mipi_novatek_lcd_on(struct platform_device *pdev)
 {
 	struct msm_fb_data_type *mfd;
 	struct mipi_panel_info *mipi;
+	struct msm_panel_info *pinfo;
 
 	mfd = platform_get_drvdata(pdev);
 	if (!mfd)
 		return -ENODEV;
 	if (mfd->key != MFD_KEY)
 		return -EINVAL;
+
+	pinfo = &mfd->panel_info;
+	if (pinfo->is_3d_panel)
+		support_3d = TRUE;
 
 	mipi  = &mfd->panel_info.mipi;
 
@@ -277,17 +315,17 @@ static int mipi_dsi_cmd_set_backlight(struct msm_fb_data_type *mfd)
 }
 #endif
 
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
 static int mipi_dsi_3d_barrier_sysfs_register(struct device *dev);
 static int barrier_mode;
-#endif
 
 static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 {
 	if (pdev->id == 0) {
 		mipi_novatek_pdata = pdev->dev.platform_data;
 
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
+	if (mipi_novatek_pdata && mipi_novatek_pdata->fpga_3d_config_addr)
+		mipi_novatek_3d_init(mipi_novatek_pdata->fpga_3d_config_addr);
+
 		/* create sysfs to control 3D barrier for the Sharp panel */
 		if (mipi_dsi_3d_barrier_sysfs_register(&pdev->dev)) {
 			pr_err("%s: Failed to register 3d Barrier sysfs\n",
@@ -295,7 +333,7 @@ static int __devinit mipi_novatek_lcd_probe(struct platform_device *pdev)
 			return -ENODEV;
 		}
 		barrier_mode = 0;
-#endif
+
 		return 0;
 	}
 	msm_fb_add_device(pdev);
@@ -312,16 +350,6 @@ static struct platform_driver this_driver = {
 static struct msm_fb_panel_data novatek_panel_data = {
 	.on		= mipi_novatek_lcd_on,
 	.off		= mipi_novatek_lcd_off,
-};
-
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-/* MIPI panel device structure */
-static struct platform_device this_device0 = {
-	.name   = "mipi_novatek",
-	.id	= 0,
-	.dev	= {
-		.platform_data = &novatek_panel_data,
-	}
 };
 
 static ssize_t mipi_dsi_3d_barrier_read(struct device *dev,
@@ -356,7 +384,7 @@ static ssize_t mipi_dsi_3d_barrier_write(struct device *dev,
 }
 
 static struct device_attribute mipi_dsi_3d_barrier_attributes[] = {
-	__ATTR(enable_3d_barrier, 0644, mipi_dsi_3d_barrier_read,
+	__ATTR(enable_3d_barrier, 0666, mipi_dsi_3d_barrier_read,
 					 mipi_dsi_3d_barrier_write),
 };
 
@@ -377,7 +405,6 @@ error:
 
 	return -ENODEV;
 }
-#endif
 
 static int ch_used[3];
 
@@ -422,15 +449,6 @@ err_device_put:
 
 static int __init mipi_novatek_lcd_init(void)
 {
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-	int ret;
-	ret = platform_device_register(&this_device0);
-	if (ret) {
-		printk(KERN_ERR
-		  "%s: platform_device_register failed!\n", __func__);
-	}
-#endif
-
 	mipi_dsi_buf_alloc(&novatek_tx_buf, DSI_BUF_SIZE);
 	mipi_dsi_buf_alloc(&novatek_rx_buf, DSI_BUF_SIZE);
 

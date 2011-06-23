@@ -2437,10 +2437,6 @@ config FB_MSM_OVERLAY_WRITEBACK
 	---help---
 	  Support for MDP4 OVERLAY write back mode
 
-config FB_MSM_MIPI_NOVATEK_3D_PANEL
-	bool
-	default n
-
 choice
 	prompt "LCD Panel"
 	default FB_MSM_MDDI_AUTO_DETECT
@@ -2588,7 +2584,6 @@ config FB_MSM_MIPI_NOVATEK_VIDEO_QHD_PT_PANEL
 config FB_MSM_MIPI_NOVATEK_CMD_QHD_PT_PANEL
 	bool "MIPI NOVATEK CMD QHD PT Panel"
 	select FB_MSM_MIPI_NOVATEK_CMD_QHD_PT
-	select FB_MSM_MIPI_NOVATEK_3D_PANEL
 
 config FB_MSM_EBI2_TMD_QVGA_EPSON_QCIF
 	bool "EBI2 TMD QVGA Epson QCIF Dual Panel"

@@ -565,11 +565,6 @@ static int mipi_dsi_on(struct platform_device *pdev)
 	if (mipi_dsi_pdata && mipi_dsi_pdata->dsi_power_save)
 		mipi_dsi_pdata->dsi_power_save(1);
 
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-	if (mipi_dsi_pdata && mipi_dsi_pdata->fpga_config_addr)
-		mipi_dsi_fpga_addr_init(mipi_dsi_pdata->fpga_config_addr);
-#endif
-
 	clk_rate = mfd->fbi->var.pixclock;
 	clk_rate = min(clk_rate, mfd->panel_info.clk_max);
 
