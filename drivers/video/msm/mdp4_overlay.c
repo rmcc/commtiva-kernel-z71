@@ -1990,7 +1990,8 @@ int mdp4_overlay_unset(struct fb_info *info, int ndx)
 
 #ifdef CONFIG_MSM_BUS_SCALING
 	if (pipe->mixer_num == MDP4_MIXER0)
-		mdp_bus_scale_update_request(2);
+		if (mfd->panel_power_on)
+			mdp_bus_scale_update_request(2);
 #endif
 	return 0;
 }
