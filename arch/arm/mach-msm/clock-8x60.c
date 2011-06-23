@@ -73,7 +73,6 @@
 #define PLLTEST_PAD_CFG_REG			REG(0x2FA4)
 #define PMEM_ACLK_CTL_REG			REG(0x25A0)
 #define PPSS_HCLK_CTL_REG			REG(0x2580)
-#define PRNG_CLK_NS_REG				REG(0x2E80)
 #define RINGOSC_NS_REG				REG(0x2DC0)
 #define RINGOSC_STATUS_REG			REG(0x2DCC)
 #define RINGOSC_TCXO_CTL_REG			REG(0x2DC4)
@@ -745,30 +744,25 @@ static struct clk_freq_tbl clk_tbl_pdm[] = {
 #define CLK_PRNG(id) \
 	[L_##id##_CLK] = { \
 		.type = BASIC, \
-		.ns_reg = PRNG_CLK_NS_REG, \
 		.cc_reg = SC0_U_CLK_BRANCH_ENA_VOTE_REG, \
-		.reset_reg = PRNG_CLK_NS_REG, \
-		.reset_mask = BIT(12), \
 		.halt_reg = CLK_HALT_SFPB_MISC_STATE_REG, \
 		.halt_check = HALT_VOTED, \
 		.halt_bit = 10, \
 		.br_en_mask = BIT(10), \
-		.ns_mask = (BM(6, 3) | BM(2, 0)), \
 		.set_rate = set_rate_nop, \
 		.freq_tbl = clk_tbl_prng, \
 		.parent = L_NONE_CLK, \
 		.test_vector = TEST_PER_LS(0x7D), \
 		.current_freq = &local_dummy_freq, \
 	}
-#define F_PRNG(f, s, d, v) \
+#define F_PRNG(f, s, v) \
 	{ \
 		.freq_hz = f, \
 		.src = SRC_##s, \
-		.ns_val = NS_DIVSRC(6, 3, d, 2, 0, s), \
 		.sys_vdd = v, \
 	}
 static struct clk_freq_tbl clk_tbl_prng[] = {
-	F_PRNG(64000000, BB_PLL8,  6, NOMINAL),
+	F_PRNG(64000000, BB_PLL8, NOMINAL),
 	F_END,
 };
 
