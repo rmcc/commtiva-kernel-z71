@@ -253,6 +253,12 @@ static void gsmd_rx_push(struct work_struct *w)
 			}
 
 			count = smd_write(pi->ch, packet, size);
+			if (count < 0) {
+				pr_err("%s: smd write failed err:%d\n",
+						__func__, count);
+				goto rx_push_end;
+			}
+
 			if (count != size) {
 				port->n_read += count;
 				goto rx_push_end;
@@ -261,6 +267,7 @@ static void gsmd_rx_push(struct work_struct *w)
 			port->nbytes_tomodem += count;
 		}
 
+		port->n_read = 0;
 		list_move(&req->list, &port->read_pool);
 	}
 
