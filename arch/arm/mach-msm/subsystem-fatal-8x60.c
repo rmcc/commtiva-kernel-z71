@@ -86,7 +86,7 @@ static void send_q6_nmi(void)
 	usleep(5000);
 }
 
-int subsys_q6_shutdown(void)
+int subsys_q6_shutdown(const char * const crashed_subsys)
 {
 	send_q6_nmi();
 	pil_force_shutdown("q6");
@@ -98,7 +98,7 @@ int subsys_q6_shutdown(void)
 	return 0;
 }
 
-int subsys_q6_powerup(void)
+int subsys_q6_powerup(const char * const crashed_subsys)
 {
 	int ret = pil_force_boot("q6");
 	enable_irq(LPASS_Q6SS_WDOG_EXPIRED);
@@ -108,7 +108,7 @@ int subsys_q6_powerup(void)
 /* FIXME: Get address, size from PIL */
 static struct ramdump_segment q6_segments[] = { {0x46700000, 0x47F00000 -
 					0x46700000}, {0x28400000, 0x12800} };
-static int subsys_q6_ramdump(int enable)
+static int subsys_q6_ramdump(int enable, const char * const crashed_subsys)
 {
 	if (enable)
 		return do_ramdump(q6_ramdump_dev, q6_segments,
@@ -117,7 +117,7 @@ static int subsys_q6_ramdump(int enable)
 		return 0;
 }
 
-void subsys_q6_crash_shutdown(struct subsys_data *subsys)
+void subsys_q6_crash_shutdown(const char * const crashed_subsys)
 {
 	send_q6_nmi();
 }
@@ -208,7 +208,7 @@ static int modem_notif_handler(struct notifier_block *this,
 	return NOTIFY_DONE;
 }
 
-static int subsys_modem_shutdown(void)
+static int subsys_modem_shutdown(const char * const crashed_subsys)
 {
 	void __iomem *modem_wdog_addr;
 	int smsm_notif_unregistered = 0;
@@ -248,7 +248,7 @@ static int subsys_modem_shutdown(void)
 	return 0;
 }
 
-static int subsys_modem_powerup(void)
+static int subsys_modem_powerup(const char * const crashed_subsys)
 {
 	int ret;
 
@@ -262,7 +262,7 @@ static int subsys_modem_powerup(void)
 static struct ramdump_segment modem_segments[] = {
 	{0x42F00000, 0x46000000 - 0x42F00000} };
 
-static int subsys_modem_ramdump(int enable)
+static int subsys_modem_ramdump(int enable, const char * const crashed_subsys)
 {
 	if (enable)
 		return do_ramdump(modem_ramdump_dev, modem_segments,
@@ -271,7 +271,7 @@ static int subsys_modem_ramdump(int enable)
 		return 0;
 }
 
-static void subsys_modem_crash_shutdown(struct subsys_data *subsys)
+static void subsys_modem_crash_shutdown(const char * const crashed_subsys)
 {
 	/* If modem hasn't already crashed, send SMSM_RESET. */
 	if (!(smsm_get_state(SMSM_MODEM_STATE) & SMSM_RESET)) {
