@@ -396,36 +396,14 @@ static void smd_channel_probe_worker(struct work_struct *work)
 	mutex_unlock(&smd_probe_lock);
 }
 
-void smd_channel_reset(void)
+static void smd_channel_reset_state(struct smd_alloc_elm *shared,
+		unsigned new_state)
 {
-	struct smd_alloc_elm *shared;
 	unsigned n;
-	struct smd_shared_v1 *shared1;
 	struct smd_shared_v2 *shared2;
 	uint32_t type;
-	uint32_t *smem_lock;
 
-	SMD_DBG("%s: starting reset\n", __func__);
-	shared = smem_find(ID_CH_ALLOC_TBL, sizeof(*shared) * 64);
-	if (!shared) {
-		pr_err("%s: allocation table not initialized\n", __func__);
-		return;
-	}
-
-	/* This code has a race condition with non-RPC clients that
-	 * could result in clients attempting to read or write at the
-	 * same time that this code is clearing out the data
-	 * structures.
-	 *
-	 * Since this code is not yet active in the mainline, a
-	 * follow-up changelist will be done that will address
-	 * this issue, but it's important to get the RPC API
-	 * out to clients for integration while this effort is
-	 * done in parallel.
-	 */
-	mutex_lock(&smd_probe_lock);
-	for (n = 0; n < 64; n++) {
-
+	for (n = 0; n < SMD_CHANNELS; n++) {
 		if (!shared[n].ref_count)
 			continue;
 		if (!shared[n].name[0])
@@ -437,37 +415,50 @@ void smd_channel_reset(void)
 			if ((type == SMD_APPS_MODEM) ||
 			    (type == SMD_APPS_QDSP) ||
 			    (type == SMD_APPS_DSPS) ||
-			    (type == SMD_APPS_WCNSS))
+			    (type == SMD_APPS_WCNSS)) {
+
+				/* for local (apps) side, empty the FIFO */
 				shared2->ch0.tail = shared2->ch0.head = 0;
-			else
+
+				/* for remote side, force to new state */
+				if (shared2->ch1.state != SMD_SS_CLOSED) {
+					shared2->ch1.state = new_state;
+					shared2->ch1.fDSR = 0;
+					shared2->ch1.fCTS = 0;
+					shared2->ch1.fCD = 0;
+					shared2->ch1.head = 0;
+					shared2->ch1.tail = 0;
+					shared2->ch1.fSTATE = 1;
+				}
+			} else {
+				/*
+				 * for edges not involving apps, reset to
+				 * power-on default
+				 */
 				memset(&shared2->ch0, 0,
 				       sizeof(struct smd_half_channel));
-			memset(&shared2->ch1, 0,
-			       sizeof(struct smd_half_channel));
-			continue;
-		}
 
-		shared1 = smem_alloc(SMEM_SMD_BASE_ID + n, sizeof(*shared1));
-		if (shared1) {
-			if ((type == SMD_APPS_MODEM) ||
-			    (type == SMD_APPS_QDSP) ||
-			    (type == SMD_APPS_DSPS) ||
-			    (type == SMD_APPS_WCNSS))
-				shared1->ch0.tail = shared1->ch0.head = 0;
-			else
-				memset(&shared1->ch0, 0,
+				memset(&shared2->ch1, 0,
 				       sizeof(struct smd_half_channel));
-			memset(&shared1->ch1, 0,
-			       sizeof(struct smd_half_channel));
-			continue;
+			}
 		}
-
 	}
-	mutex_unlock(&smd_probe_lock);
+}
 
-	if (smsm_info.state)
-		memset(smsm_info.state, 0,
-		       sizeof(*smsm_info.state) * SMSM_NUM_ENTRIES);
+
+void smd_channel_reset(void)
+{
+	struct smd_alloc_elm *shared;
+	unsigned n;
+	uint32_t *smem_lock;
+	unsigned long flags;
+
+	SMD_DBG("%s: starting reset\n", __func__);
+	shared = smem_find(ID_CH_ALLOC_TBL, sizeof(*shared) * 64);
+	if (!shared) {
+		pr_err("%s: allocation table not initialized\n", __func__);
+		return;
+	}
 
 	smem_lock = smem_alloc(SMEM_SPINLOCK_ARRAY, 8 * sizeof(uint32_t));
 	if (smem_lock) {
@@ -479,8 +470,26 @@ void smd_channel_reset(void)
 		}
 	}
 
-	/* notify clients of state change */
+	if (smsm_info.state)
+		memset(smsm_info.state, 0,
+		       sizeof(*smsm_info.state) * SMSM_NUM_ENTRIES);
+
+	/* change all remote states to CLOSING */
+	mutex_lock(&smd_probe_lock);
+	spin_lock_irqsave(&smd_lock, flags);
+	smd_channel_reset_state(shared, SMD_SS_CLOSING);
+	spin_unlock_irqrestore(&smd_lock, flags);
+	mutex_unlock(&smd_probe_lock);
 	smd_fake_irq_handler(0);
+
+	/* change all remote states to CLOSED */
+	mutex_lock(&smd_probe_lock);
+	spin_lock_irqsave(&smd_lock, flags);
+	smd_channel_reset_state(shared, SMD_SS_CLOSED);
+	spin_unlock_irqrestore(&smd_lock, flags);
+	mutex_unlock(&smd_probe_lock);
+	smd_fake_irq_handler(0);
+
 	SMD_DBG("%s: finished reset\n", __func__);
 }
 
