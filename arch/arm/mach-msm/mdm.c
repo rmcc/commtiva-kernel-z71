@@ -47,7 +47,8 @@
 #include "devices.h"
 #include "clock.h"
 
-#define CHARM_MODEM_TIMEOUT	2000
+#define CHARM_MODEM_TIMEOUT	6000
+#define CHARM_HOLD_TIME		4000
 #define CHARM_MODEM_DELTA	100
 
 static void (*power_on_charm)(void);
@@ -423,16 +424,21 @@ static void charm_modem_shutdown(struct platform_device *pdev)
 
 	gpio_set_value(AP2MDM_STATUS, 0);
 
-	for (i = 0; i < CHARM_MODEM_TIMEOUT; i += CHARM_MODEM_DELTA) {
+	for (i = CHARM_MODEM_TIMEOUT; i > 0; i -= CHARM_MODEM_DELTA) {
 		pet_watchdog();
 		msleep(CHARM_MODEM_DELTA);
 		if (gpio_get_value(MDM2AP_STATUS) == 0)
 			break;
 	}
 
-	if (i >= CHARM_MODEM_TIMEOUT) {
+	if (i <= 0) {
 		pr_err("%s: MDM2AP_STATUS never went low.\n",
 			 __func__);
+		gpio_direction_output(AP2MDM_PMIC_RESET_N, 1);
+		for (i = CHARM_HOLD_TIME; i > 0; i -= CHARM_MODEM_DELTA) {
+			pet_watchdog();
+			msleep(CHARM_MODEM_DELTA);
+		}
 		gpio_direction_output(AP2MDM_PMIC_RESET_N, 0);
 	}
 }
