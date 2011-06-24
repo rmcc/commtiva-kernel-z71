@@ -57,6 +57,7 @@ struct smd_tty_info {
 	spinlock_t reset_lock;
 };
 
+#define LOOPBACK_IDX 36
 static char *smd_ch_name[] = {
 	[0] = "DS",
 	[7] = "DATA1",
@@ -66,6 +67,7 @@ static char *smd_ch_name[] = {
 };
 
 
+static struct delayed_work loopback_work;
 static struct smd_tty_info smd_tty[MAX_SMD_TTYS];
 
 static int is_in_reset(struct smd_tty_info *info)
@@ -168,6 +170,10 @@ static void smd_tty_notify(void *priv, unsigned event)
 		spin_unlock_irqrestore(&info->reset_lock, flags);
 		/* schedule task to send TTY_BREAK */
 		tasklet_hi_schedule(&info->tty_tsklt);
+
+		if (info->tty->index == LOOPBACK_IDX)
+			schedule_delayed_work(&loopback_work,
+					msecs_to_jiffies(1000));
 		break;
 	}
 }
@@ -175,8 +181,10 @@ static void smd_tty_notify(void *priv, unsigned event)
 static uint32_t is_modem_smsm_inited(void)
 {
 	uint32_t modem_state;
+	uint32_t ready_state = (SMSM_INIT | SMSM_SMDINIT);
+
 	modem_state = smsm_get_state(SMSM_MODEM_STATE);
-	return modem_state & SMSM_INIT;
+	return (modem_state & ready_state) == ready_state;
 }
 
 static int smd_tty_open(struct tty_struct *tty, struct file *f)
@@ -366,6 +374,16 @@ static int smd_tty_tiocmset(struct tty_struct *tty, struct file *file,
 	return smd_tiocmset(info->ch, set, clear);
 }
 
+static void loopback_probe_worker(struct work_struct *work)
+{
+	/* wait for modem to restart before requesting loopback server */
+	if (!is_modem_smsm_inited())
+		schedule_delayed_work(&loopback_work, msecs_to_jiffies(1000));
+	else
+		smsm_change_state(SMSM_APPS_STATE,
+			  0, SMSM_SMD_LOOPBACK);
+}
+
 static struct tty_operations smd_tty_ops = {
 	.open = smd_tty_open,
 	.close = smd_tty_close,
@@ -467,6 +485,7 @@ static int __init smd_tty_init(void)
 	smd_tty[36].driver.driver.name = "LOOPBACK_TTY";
 	smd_tty[36].driver.driver.owner = THIS_MODULE;
 	spin_lock_init(&smd_tty[36].reset_lock);
+	INIT_DELAYED_WORK(&loopback_work, loopback_probe_worker);
 	ret = platform_driver_register(&smd_tty[36].driver);
 	if (ret)
 		goto unreg27;
