@@ -1359,7 +1359,7 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		break;
 	}
 	case AUDIO_GET_WMAPRO_CONFIG: {
-		if (copy_to_user(&audio->wmapro_config, (void *)arg,
+		if (copy_to_user((void *)arg, &audio->wmapro_config,
 				 sizeof(struct msm_audio_wmapro_config))) {
 			rc = -EFAULT;
 			break;
