@@ -27,43 +27,47 @@
 
 #include "cp14.h"
 
-#define LOG_BUF_LEN    32768
-#define ETM_NUM_REGS   128
-#define ETB_NUM_REGS   9
-#define ETB_RAM_SLOTS  2048 /* each slot is 4 bytes, 8kb total */
+#define LOG_BUF_LEN			32768
+#define ETM_NUM_REGS			128
+#define ETB_NUM_REGS			9
+/* each slot is 4 bytes, 8kb total */
+#define ETB_RAM_SLOTS			2048
 
-#define DATALOG_SYNC                 0xB5C7
-#define ETM_DUMP_MSG_ID              0x000A6960
-#define ETB_DUMP_MSG_ID              0x000A6961
+#define DATALOG_SYNC			0xB5C7
+#define ETM_DUMP_MSG_ID			0x000A6960
+#define ETB_DUMP_MSG_ID			0x000A6961
 
 /* ETM Registers */
-#define ETM_REG_CONTROL              0x00
-#define ETM_REG_STATUS               0x04
-#define ETB_REG_CONTROL              0x71
-#define ETB_REG_STATUS               0x72
-#define ETB_REG_COUNT                0x73
-#define ETB_REG_ADDRESS              0x74
-#define ETB_REG_DATA                 0x75
+#define ETM_REG_CONTROL			0x00
+#define ETM_REG_STATUS			0x04
+#define ETB_REG_CONTROL			0x71
+#define ETB_REG_STATUS			0x72
+#define ETB_REG_COUNT			0x73
+#define ETB_REG_ADDRESS			0x74
+#define ETB_REG_DATA			0x75
 
 /* Bitmasks for the ETM control register */
-#define ETM_CONTROL_POWERDOWN        0x00000001
-#define ETM_CONTROL_PROGRAM          0x00000400
+#define ETM_CONTROL_POWERDOWN		0x00000001
+#define ETM_CONTROL_PROGRAM		0x00000400
 
 /* Bitmasks for the ETM status register */
-#define ETM_STATUS_PROGRAMMING       0x00000002
+#define ETM_STATUS_PROGRAMMING		0x00000002
 
 /* ETB Status Register bit definitions */
-#define OV                           0x00200000
+#define OV				0x00200000
 
 /* ETB Control Register bit definitions */
-#define AIR                          0x00000008
-#define AIW                          0x00000004
-#define CPTM                         0x00000002
-#define CPTEN                        0x00000001
+#define AIR				0x00000008
+#define AIW				0x00000004
+#define CPTM				0x00000002
+#define CPTEN				0x00000001
 
-/* Bitmasks for the swconfig field of ETM_CONFIG */
-#define TRIGGER_ALL      0x00000002 /* ETM trigger propagated to ETM
-				     * instances on all cores */
+/* Bitmasks for the swconfig field of ETM_CONFIG
+ * ETM trigger propagated to ETM instances on all cores
+ */
+#define TRIGGER_ALL			0x00000002
+
+#define PROG_TIMEOUT_MS			500
 
 static int trace_enabled;
 static int *cpu_restore;
@@ -247,38 +251,41 @@ static void __cpu_disable_etb(void)
 static void __cpu_enable_etm(void)
 {
 	uint32_t etm_control;
-	uint32_t i;
+	unsigned long timeout = jiffies + msecs_to_jiffies(PROG_TIMEOUT_MS);
 
 	etm_control = etm_read_reg(ETM_REG_CONTROL);
 	etm_control &= ~ETM_CONTROL_PROGRAM;
-
 	etm_write_reg(ETM_REG_CONTROL, etm_control);
 
-	/* wait for prog bit to take effect (poll 250 times maximum) */
-	for (i = 0; i < 250; i++)
-		if (etm_read_reg(ETM_REG_STATUS) & ETM_STATUS_PROGRAMMING)
+	while ((etm_read_reg(ETM_REG_STATUS) & ETM_STATUS_PROGRAMMING) == 1) {
+		cpu_relax();
+		if (time_after(jiffies, timeout)) {
+			pr_err("etm: timeout while clearing prog bit\n");
 			break;
+		}
+	}
 }
 
 static void __cpu_disable_etm(void)
 {
 	uint32_t etm_control;
-	uint32_t i;
+	unsigned long timeout = jiffies + msecs_to_jiffies(PROG_TIMEOUT_MS);
 
 	etm_control = etm_read_reg(ETM_REG_CONTROL);
 	etm_control |= ETM_CONTROL_PROGRAM;
-
 	etm_write_reg(ETM_REG_CONTROL, etm_control);
 
-	/* wait for prog bit to take effect (poll 250 times maximum) */
-	for (i = 0; i < 250; i++)
-		if (etm_read_reg(ETM_REG_STATUS) & ETM_STATUS_PROGRAMMING)
+	while ((etm_read_reg(ETM_REG_STATUS) & ETM_STATUS_PROGRAMMING) == 0) {
+		cpu_relax();
+		if (time_after(jiffies, timeout)) {
+			pr_err("etm: timeout while setting prog bit\n");
 			break;
+		}
+	}
 }
 
 static void __cpu_enable_trace(void *unused)
 {
-	uint32_t i;
 	uint32_t etm_control;
 	uint32_t etm_trigger;
 	uint32_t etm_external_output;
@@ -288,15 +295,11 @@ static void __cpu_enable_trace(void *unused)
 	etm_read_reg(0xC5); /* clear sticky bit in PDSR */
 
 	__cpu_disable_etb();
+	__cpu_disable_etm();
 
-	etm_control = (etm_config.etm_00_control & ~ETM_CONTROL_POWERDOWN) |
-		ETM_CONTROL_PROGRAM;
+	etm_control = (etm_config.etm_00_control & ~ETM_CONTROL_POWERDOWN)
+						| ETM_CONTROL_PROGRAM;
 	etm_write_reg(0x00, etm_control);
-
-	/* wait for the prog bit to take effect (poll 250 times maximum) */
-	for (i = 0; i < 250; i++)
-		if (etm_read_reg(ETM_REG_STATUS) & ETM_STATUS_PROGRAMMING)
-			break;
 
 	etm_trigger = etm_config.etm_02_trigger_event;
 	etm_external_output = 0x406F; /* always FALSE */
@@ -371,8 +374,25 @@ static void __cpu_enable_trace(void *unused)
 
 static void __cpu_disable_trace(void *unused)
 {
+	uint32_t etm_control;
+
+	get_cpu();
+	etm_read_reg(0xC5); /* clear sticky bit in PDSR */
+
 	__cpu_disable_etm();
+
+	/* program trace enable to be low by using always false event */
+	etm_write_reg(0x08, 0x6F | BIT(14));
+
+	/* set the powerdown bit */
+	etm_control = etm_read_reg(ETM_REG_CONTROL);
+	etm_control |= ETM_CONTROL_POWERDOWN;
+	etm_write_reg(ETM_REG_CONTROL, etm_control);
+
+	__cpu_enable_etm();
 	__cpu_disable_etb();
+
+	put_cpu();
 }
 
 static void enable_trace(void)
