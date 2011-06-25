@@ -219,6 +219,12 @@ struct msmsdcc_curr_req {
 	int			user_pages;
 };
 
+struct msmsdcc_lpm_work {
+	struct msmsdcc_host *host;
+	bool enable;
+	struct work_struct work;
+};
+
 struct msmsdcc_host {
 	struct resource		*irqres;
 	struct resource		*memres;
@@ -277,8 +283,24 @@ struct msmsdcc_host {
 	unsigned int sdcc_irq_disabled;
 	struct timer_list req_tout_timer;
 	bool sdio_gpio_lpm;
+	bool irq_wake_enabled;
+	struct msmsdcc_lpm_work lpm_work;
 };
 
 int msmsdcc_set_pwrsave(struct mmc_host *mmc, int pwrsave);
+
+#ifdef CONFIG_MSM_SDIO_AL
+int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable);
+
+static inline int msmsdcc_lpm_enable(struct mmc_host *mmc)
+{
+	return msmsdcc_sdio_al_lpm(mmc, true);
+}
+
+static inline int msmsdcc_lpm_disable(struct mmc_host *mmc)
+{
+	return msmsdcc_sdio_al_lpm(mmc, false);
+}
+#endif
 
 #endif
