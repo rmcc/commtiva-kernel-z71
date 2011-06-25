@@ -285,9 +285,10 @@ struct mddi_platform_data {
 struct mipi_dsi_platform_data {
 	int vsync_gpio;
 	int (*dsi_power_save)(int on);
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-	int fpga_config_addr;
-#endif
+};
+
+struct mipi_dsi_novatek_platform_data {
+	int fpga_3d_config_addr;
 };
 
 struct msm_fb_platform_data {
