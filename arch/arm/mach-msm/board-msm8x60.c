@@ -9239,12 +9239,22 @@ static int atv_dac_power(int on)
 }
 #endif
 
+#ifdef CONFIG_FB_MSM_MIPI_DSI
+int mdp_core_clk_rate_table[] = {
+	85330000,
+	85330000,
+	160000000,
+	200000000,
+};
+#else
 int mdp_core_clk_rate_table[] = {
 	59080000,
 	59080000,
 	85330000,
 	200000000,
 };
+#endif
+
 static struct msm_panel_common_pdata mdp_pdata = {
 	.gpio = MDP_VSYNC_GPIO,
 	.mdp_core_clk_rate = 59080000,
