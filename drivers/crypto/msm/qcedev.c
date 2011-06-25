@@ -1168,6 +1168,7 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 	uint32_t byteoffset;
 	int num_entries = 0;
 	uint32_t total = 0;
+	uint32_t len;
 	uint8_t *k_buf_src = NULL;
 	uint8_t *k_align_src = NULL;
 	uint32_t max_data_xfer;
@@ -1309,6 +1310,11 @@ static int qcedev_vbuf_ablk_cipher(struct qcedev_async_req *areq,
 	for (i = 0; i < saved_req->entries; i++) {
 		creq->vbuf.src[i].len = saved_req->vbuf.src[i].len;
 		creq->vbuf.src[i].vaddr = saved_req->vbuf.src[i].vaddr;
+	}
+	for (len = 0, i = 0; len < saved_req->data_len; i++) {
+		creq->vbuf.dst[i].len = saved_req->vbuf.dst[i].len;
+		creq->vbuf.dst[i].vaddr = saved_req->vbuf.dst[i].vaddr;
+		len += saved_req->vbuf.dst[i].len;
 	}
 	creq->entries = saved_req->entries;
 	creq->data_len = saved_req->data_len;
