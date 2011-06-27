@@ -298,7 +298,7 @@ fail_cmd:
 }
 
 int adm_matrix_map(int session_id, int path, int num_copps,
-			unsigned short *port_id, int copp_id)
+			unsigned int *port_id, int copp_id)
 {
 	struct adm_routings_command	route;
 	int ret = 0, i = 0;
