@@ -64,7 +64,7 @@ static int __init mipi_cmd_novatek_blue_qhd_pt_init(void)
 	pinfo.lcdc.border_clr = 0;	/* blk */
 	pinfo.lcdc.underflow_clr = 0xff;	/* blue */
 	pinfo.lcdc.hsync_skew = 0;
-	pinfo.bl_max = 15;
+	pinfo.bl_max = 255;
 	pinfo.bl_min = 1;
 	pinfo.fb_num = 2;
 	pinfo.clk_rate = 454000000;
