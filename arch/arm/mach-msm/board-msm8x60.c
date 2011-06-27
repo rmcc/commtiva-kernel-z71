@@ -3811,9 +3811,6 @@ static struct platform_device *rumi_sim_devices[] __initdata = {
 	&msm_gsbi9_qup_i2c_device,
 	&msm_gsbi12_qup_i2c_device,
 #endif
-#if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
-	&msm_gsbi1_qup_spi_device,
-#endif
 #ifdef CONFIG_I2C_SSBI
 	&msm_device_ssbi1,
 	&msm_device_ssbi2,
@@ -4637,9 +4634,6 @@ static struct platform_device *surf_devices[] __initdata = {
 	&msm_gsbi8_qup_i2c_device,
 	&msm_gsbi9_qup_i2c_device,
 	&msm_gsbi12_qup_i2c_device,
-#endif
-#if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
-	&msm_gsbi1_qup_spi_device,
 #endif
 #ifdef CONFIG_SERIAL_MSM_HS
 	&msm_device_uart_dm1,
@@ -9615,6 +9609,8 @@ static void __init msm8x60_init(struct msm_board_data *board_data)
 #if defined(CONFIG_SPI_QUP) || defined(CONFIG_SPI_QUP_MODULE)
 	if (machine_is_msm8x60_fluid())
 		platform_device_register(&msm_gsbi10_qup_spi_device);
+	else
+		platform_device_register(&msm_gsbi1_qup_spi_device);
 #endif
 
 #if defined(CONFIG_TOUCHSCREEN_CYTTSP_I2C) || \
