@@ -42,6 +42,7 @@ static struct vfe31_ctrl_type *vfe31_ctrl;
 static struct msm_camera_io_clk camio_clk;
 static void *vfe_syncdata;
 static void vfe31_send_msg_no_payload(enum VFE31_MESSAGE_ID id);
+static void vfe31_reset_hist_cfg(void);
 
 struct vfe31_isr_queue_cmd {
 	struct list_head list;
@@ -960,6 +961,8 @@ static void vfe31_reset(void)
 	uint32_t vfe_version;
 	vfe31_reset_free_buf_queue_all();
 	vfe31_reset_internal_variables();
+
+	vfe31_reset_hist_cfg();
 	vfe_version = msm_io_r(vfe31_ctrl->vfebase);
 	CDBG("vfe_version = 0x%x\n", vfe_version);
 	/* disable all interrupts.  vfeImaskLocal is also reset to 0
@@ -1424,6 +1427,17 @@ static void vfe31_write_gamma_cfg(enum VFE31_DMI_RAM_SEL channel_sel,
 		msm_io_w((value1), vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
 		msm_io_w((value2), vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
 	}
+	vfe31_program_dmi_cfg(NO_MEM_SELECTED);
+}
+
+static void vfe31_reset_hist_cfg()
+{
+	uint32_t i;
+	uint32_t value = 0;
+
+	vfe31_program_dmi_cfg(STATS_HIST_RAM);
+	for (i = 0 ; i < VFE31_HIST_TABLE_LENGTH ; i++)
+		msm_io_w(value, vfe31_ctrl->vfebase + VFE_DMI_DATA_LO);
 	vfe31_program_dmi_cfg(NO_MEM_SELECTED);
 }
 
