@@ -921,7 +921,7 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 			break;
 		case RDS_RT_0:
 			FMDBG("RT Header\n");
-			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, 4);
+			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, 5);
 			radio->xfr_bytes_left = radio->registers[XFRCTRL+1]
 									& 0x7F;
 			FMDBG("RT RDS Length: %d\n", radio->xfr_bytes_left);
