@@ -638,7 +638,7 @@ void mdp4_dsi_cmd_overlay_kickoff(struct msm_fb_data_type *mfd,
 	mdp_pipe_kickoff(MDP_OVERLAY0_TERM, mfd);
 	wmb();
 
-	if (pipe->blt_addr == 0) {
+	if (dsi_pipe->blt_addr == 0) {
 		/* trigger dsi cmd engine */
 		mipi_dsi_cmd_mdp_sw_trigger();
 	}
