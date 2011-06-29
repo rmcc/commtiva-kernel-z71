@@ -76,9 +76,12 @@ struct gsdio_port {
 	struct list_head		read_pool;
 	struct list_head		read_queue;
 	struct work_struct		push;
+	unsigned long			rp_len;
+	unsigned long			rq_len;
 
 	struct list_head		write_pool;
 	struct work_struct		pull;
+	unsigned long			wp_len;
 
 	struct work_struct		notify_modem;
 
@@ -195,6 +198,7 @@ void gsdio_start_rx(struct gsdio_port *port)
 		req = list_entry(pool->next, struct usb_request, list);
 		list_del(&req->list);
 		req->length = RX_BUF_SIZE;
+		port->rp_len--;
 
 		spin_unlock_irq(&port->port_lock);
 		ret = usb_ep_queue(out, req, GFP_ATOMIC);
@@ -204,6 +208,7 @@ void gsdio_start_rx(struct gsdio_port *port)
 					"port:%p, port#%d\n",
 					__func__, port, port->port_num);
 			list_add_tail(&req->list, pool);
+			port->rp_len++;
 			break;
 		}
 
@@ -295,12 +300,21 @@ void gsdio_rx_push(struct work_struct *w)
 {
 	struct gsdio_port *port = container_of(w, struct gsdio_port, push);
 	struct list_head *q = &port->read_queue;
+	struct usb_ep		*out;
 	int ret;
 
 	pr_debug("%s: port:%p port#%d read_queue:%p", __func__,
 			port, port->port_num, q);
 
 	spin_lock_irq(&port->port_lock);
+
+	if (!port->port_usb) {
+		pr_debug("%s: usb cable is disconencted\n", __func__);
+		spin_unlock_irq(&port->port_lock);
+		return;
+	}
+
+	out = port->port_usb->out;
 
 	while (!list_empty(q)) {
 		struct usb_request *req;
@@ -325,14 +339,34 @@ void gsdio_rx_push(struct work_struct *w)
 		if (!port->sdio_open) {
 			pr_err("%s: sio channel is not open\n", __func__);
 			list_move(&req->list, &port->read_pool);
+			port->rp_len++;
+			port->rq_len--;
 			goto rx_push_end;
 		}
 
-		ret = gsdio_write(port, req);
-		if (ret || port->n_read)
-			goto rx_push_end;
 
-		list_move(&req->list, &port->read_pool);
+		list_del(&req->list);
+		port->rq_len--;
+
+		ret = gsdio_write(port, req);
+		/* as gsdio_write drops spin_lock while writing data
+		 * to sdio usb cable may have been disconnected
+		 */
+		if (!port->port_usb) {
+			port->n_read = 0;
+			gsdio_free_req(out, req);
+			spin_unlock_irq(&port->port_lock);
+			return;
+		}
+
+		if (ret || port->n_read) {
+			list_add(&req->list, &port->read_queue);
+			port->rq_len++;
+			goto rx_push_end;
+		}
+
+		list_add(&req->list, &port->read_pool);
+		port->rp_len++;
 	}
 
 	if (port->sdio_open && !list_empty(q)) {
@@ -360,6 +394,7 @@ void gsdio_read_complete(struct usb_ep *ep, struct usb_request *req)
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	list_add_tail(&req->list, &port->read_queue);
+	port->rq_len++;
 	queue_work(gsdio_wq, &port->push);
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
@@ -380,6 +415,7 @@ void gsdio_write_complete(struct usb_ep *ep, struct usb_request *req)
 
 	spin_lock_irqsave(&port->port_lock, flags);
 	list_add(&req->list, &port->write_pool);
+	port->wp_len++;
 
 	switch (req->status) {
 	default:
@@ -474,6 +510,7 @@ void gsdio_tx_pull(struct work_struct *w)
 			avail = len;
 
 		list_del(&req->list);
+		port->wp_len--;
 
 		spin_unlock_irq(&port->port_lock);
 		ret = sdio_read(ch, req->buf, avail);
@@ -483,10 +520,12 @@ void gsdio_tx_pull(struct work_struct *w)
 					__func__, port, port->port_num, ret);
 
 			/* check if usb is still active */
-			if (!port->port_usb)
+			if (!port->port_usb) {
 				gsdio_free_req(in, req);
-			else
+			} else {
 				list_add(&req->list, pool);
+				port->wp_len++;
+			}
 			goto tx_pull_end;
 		}
 
@@ -501,10 +540,12 @@ void gsdio_tx_pull(struct work_struct *w)
 					__func__, port, port->port_num, ret);
 
 			/* could be usb disconnected */
-			if (!port->port_usb)
+			if (!port->port_usb) {
 				gsdio_free_req(in, req);
-			else
+			} else {
 				list_add(&req->list, pool);
+				port->wp_len++;
+			}
 			goto tx_pull_end;
 		}
 
@@ -538,6 +579,7 @@ int gsdio_start_io(struct gsdio_port *port)
 		pr_err("%s: unable to allocate out reqs\n", __func__);
 		return ret;
 	}
+	port->rp_len = RX_QUEUE_SIZE;
 
 	ret = gsdio_alloc_requests(port->port_usb->in,
 				&port->write_pool,
@@ -545,10 +587,12 @@ int gsdio_start_io(struct gsdio_port *port)
 				gsdio_write_complete);
 	if (ret) {
 		gsdio_free_requests(port->port_usb->out, &port->read_pool);
+		port->rp_len = 0;
 		spin_unlock_irqrestore(&port->port_lock, flags);
 		pr_err("%s: unable to allocate in reqs\n", __func__);
 		return ret;
 	}
+	port->wp_len = TX_QUEUE_SIZE;
 	spin_unlock_irqrestore(&port->port_lock, flags);
 
 	gsdio_start_rx(port);
@@ -893,6 +937,11 @@ void gsdio_disconnect(struct gserial *gser, u8 portno)
 	gsdio_free_requests(gser->out, &port->read_pool);
 	gsdio_free_requests(gser->out, &port->read_queue);
 	gsdio_free_requests(gser->in, &port->write_pool);
+
+	port->rp_len = 0;
+	port->rq_len = 0;
+	port->wp_len = 0;
+	port->n_read = 0;
 	spin_unlock_irqrestore(&port->port_lock, flags);
 }
 
@@ -912,13 +961,20 @@ static ssize_t debug_read_stats(struct file *file, char __user *ubuf,
 		port = ports[i].port;
 		spin_lock_irqsave(&port->port_lock, flags);
 		temp += scnprintf(buf + temp, PAGE_SIZE - temp,
-				"###PORT:%d###\n"
+				"###PORT:%d port:%p###\n"
 				"nbytes_tolaptop: %lu\n"
 				"nbytes_tomodem:  %lu\n"
 				"cbits_to_modem:  %u\n"
-				"cbits_to_laptop: %u\n",
-				i, port->nbytes_tolaptop, port->nbytes_tomodem,
-				port->cbits_to_modem, port->cbits_to_laptop);
+				"cbits_to_laptop: %u\n"
+				"read_pool_len:   %lu\n"
+				"read_queue_len:  %lu\n"
+				"write_pool_len:  %lu\n"
+				"n_read:          %u\n",
+				i, port,
+				port->nbytes_tolaptop, port->nbytes_tomodem,
+				port->cbits_to_modem, port->cbits_to_laptop,
+				port->rp_len, port->rq_len, port->wp_len,
+				port->n_read);
 		spin_unlock_irqrestore(&port->port_lock, flags);
 		i++;
 	}
