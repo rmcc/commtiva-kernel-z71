@@ -89,11 +89,6 @@ enum {
 	PORTRAIT = 2,
 };
 
-struct msmfb_switch_panel_3d {
-	uint32_t	enable;
-	uint32_t	mode;
-};
-
 #define DSI_NON_BURST_SYNCH_PULSE	0
 #define DSI_NON_BURST_SYNCH_EVENT	1
 #define DSI_BURST_MODE			2
@@ -247,9 +242,7 @@ void mipi_dsi_pre_kickoff_add(struct dsi_kickoff_action *act);
 void mipi_dsi_post_kickoff_add(struct dsi_kickoff_action *act);
 void mipi_dsi_pre_kickoff_del(struct dsi_kickoff_action *act);
 void mipi_dsi_post_kickoff_del(struct dsi_kickoff_action *act);
-void config_3d_panel(struct msmfb_switch_panel_3d *);
+
 irqreturn_t mipi_dsi_isr(int irq, void *ptr);
-void mipi_dsi_fpga_addr_init(int addr);
-void mipi_dsi_enable_3d_barrier(int enable);
 
 #endif /* MIPI_DSI_H */

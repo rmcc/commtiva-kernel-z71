@@ -2924,6 +2924,20 @@ static struct platform_device mipi_dsi_toshiba_panel_device = {
 	.name = "mipi_toshiba",
 	.id = 0,
 };
+
+#define FPGA_3D_GPIO_CONFIG_ADDR	0x1D00017A
+
+static struct mipi_dsi_novatek_platform_data novatek_pdata = {
+	.fpga_3d_config_addr  = FPGA_3D_GPIO_CONFIG_ADDR,
+};
+
+static struct platform_device mipi_dsi_novatek_panel_device = {
+	.name = "mipi_novatek",
+	.id = 0,
+	.dev = {
+		.platform_data = &novatek_pdata,
+	}
+};
 #endif
 
 static void __init msm8x60_allocate_memory_regions(void)
@@ -4703,6 +4717,7 @@ static struct platform_device *surf_devices[] __initdata = {
 #endif /* CONFIG_FB_MSM_HDMI_MSM_PANEL */
 #ifdef CONFIG_FB_MSM_MIPI_DSI
 	&mipi_dsi_toshiba_panel_device,
+	&mipi_dsi_novatek_panel_device,
 #endif
 #ifdef CONFIG_MSM_CAMERA
 #ifdef CONFIG_MT9E013
@@ -8813,9 +8828,6 @@ static struct lcdc_platform_data lcdc_pdata = {
 
 
 #define MDP_VSYNC_GPIO			28
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-#define FPGA_3D_GPIO_CONFIG_ADDR	0x1D00017A
-#endif
 
 /*
  * MIPI_DSI only use 8058_LDO0 which need always on
@@ -8874,9 +8886,6 @@ out:
 static struct mipi_dsi_platform_data mipi_dsi_pdata = {
 	.vsync_gpio = MDP_VSYNC_GPIO,
 	.dsi_power_save   = mipi_dsi_panel_power,
-#ifdef CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL
-	.fpga_config_addr  = FPGA_3D_GPIO_CONFIG_ADDR,
-#endif
 };
 
 #ifdef CONFIG_FB_MSM_TVOUT

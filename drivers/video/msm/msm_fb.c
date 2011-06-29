@@ -1027,9 +1027,7 @@ static int msm_fb_register(struct msm_fb_data_type *mfd)
 		return ret;
 	}
 
-#if defined(CONFIG_FB_MSM_MDP40) && defined(CONFIG_FB_MSM_MIPI_NOVATEK_3D_PANEL)
 	fix->type = panel_info->is_3d_panel;
-#endif
 
 	fix->line_length = msm_fb_line_length(mfd->index, panel_info->xres,
 					      bpp);
