@@ -300,14 +300,19 @@ static void msm_gpio_irq_ack(unsigned int irq)
 	dsb();
 }
 
+static void __msm_gpio_irq_mask(unsigned int gpio)
+{
+	__raw_writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(gpio));
+	clr_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+}
+
 static void msm_gpio_irq_mask(unsigned int irq)
 {
 	int gpio = msm_irq_to_gpio(&msm_gpio.gpio_chip, irq);
 	unsigned long irq_flags;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
-	writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(gpio));
-	clr_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+	__msm_gpio_irq_mask(gpio);
 	__clear_bit(gpio, msm_gpio.enabled_irqs);
 	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
@@ -317,6 +322,12 @@ static void msm_gpio_irq_mask(unsigned int irq)
 #endif
 }
 
+static void __msm_gpio_irq_unmask(unsigned int gpio)
+{
+	set_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+	__raw_writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
+}
+
 static void msm_gpio_irq_unmask(unsigned int irq)
 {
 	int gpio = msm_irq_to_gpio(&msm_gpio.gpio_chip, irq);
@@ -324,8 +335,7 @@ static void msm_gpio_irq_unmask(unsigned int irq)
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
 	__set_bit(gpio, msm_gpio.enabled_irqs);
-	set_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
-	writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
+	__msm_gpio_irq_unmask(gpio);
 	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 
@@ -471,17 +481,18 @@ static int __devexit msm_gpio_remove(struct sysdev_class *sysclass)
 }
 
 #ifdef CONFIG_PM
-static int msm_gpio_suspend_noirq(struct sys_device *sys_dev,
+static int msm_gpio_suspend(struct sys_device *sys_dev,
 					pm_message_t state)
 {
 	unsigned long irq_flags;
 	unsigned long i;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
-	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS) {
-		if (!test_bit(i, msm_gpio.wake_irqs))
-			writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(i));
-	}
+	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS)
+			__msm_gpio_irq_mask(i);
+
+	for_each_set_bit(i, msm_gpio.wake_irqs, NR_MSM_GPIOS)
+		__msm_gpio_irq_unmask(i);
 	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
@@ -504,27 +515,30 @@ void msm_gpio_show_resume_irq(void)
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 }
 
-static int msm_gpio_resume_noirq(struct sys_device *sys_dev)
+static int msm_gpio_resume(struct sys_device *sys_dev)
 {
 	unsigned long irq_flags;
 	unsigned long i;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	for_each_set_bit(i, msm_gpio.wake_irqs, NR_MSM_GPIOS)
+		__msm_gpio_irq_mask(i);
+
 	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS)
-		writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(i));
+		__msm_gpio_irq_unmask(i);
 	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
 }
 #else
-#define msm_gpio_suspend_noirq NULL
-#define msm_gpio_resume_noirq NULL
+#define msm_gpio_suspend NULL
+#define msm_gpio_resume NULL
 #endif
 
 static struct sysdev_class msm_gpio_sysdev_class = {
 	.name = "msmgpio",
-	.suspend = msm_gpio_suspend_noirq,
-	.resume = msm_gpio_resume_noirq,
+	.suspend = msm_gpio_suspend,
+	.resume = msm_gpio_resume,
 };
 
 static struct sys_device msm_gpio_sys_device = {
