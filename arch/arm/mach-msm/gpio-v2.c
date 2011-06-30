@@ -23,8 +23,8 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
 #include <linux/spinlock.h>
+#include <linux/sysdev.h>
 #include <mach/msm_iomap.h>
 #include "gpiomux.h"
 #include "mpm.h"
@@ -433,7 +433,7 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.disable	= msm_gpio_irq_disable,
 };
 
-static int __devinit msm_gpio_probe(struct platform_device *dev)
+static int __devinit msm_gpio_probe(struct sysdev_class *sysclass)
 {
 	int i, irq, ret;
 
@@ -441,7 +441,7 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
 	bitmap_zero(msm_gpio.wake_irqs, NR_MSM_GPIOS);
 	bitmap_zero(msm_gpio.dual_edge_irqs, NR_MSM_GPIOS);
-	msm_gpio.gpio_chip.label = dev->name;
+	msm_gpio.gpio_chip.label = sysclass->name;
 	ret = gpiochip_add(&msm_gpio.gpio_chip);
 	if (ret < 0)
 		return ret;
@@ -458,7 +458,7 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 	return 0;
 }
 
-static int __devexit msm_gpio_remove(struct platform_device *dev)
+static int __devexit msm_gpio_remove(struct sysdev_class *sysclass)
 {
 	int ret = gpiochip_remove(&msm_gpio.gpio_chip);
 
@@ -471,7 +471,8 @@ static int __devexit msm_gpio_remove(struct platform_device *dev)
 }
 
 #ifdef CONFIG_PM
-static int msm_gpio_suspend_noirq(struct device *dev)
+static int msm_gpio_suspend_noirq(struct sys_device *sys_dev,
+					pm_message_t state)
 {
 	unsigned long irq_flags;
 	unsigned long i;
@@ -503,7 +504,7 @@ void msm_gpio_show_resume_irq(void)
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 }
 
-static int msm_gpio_resume_noirq(struct device *dev)
+static int msm_gpio_resume_noirq(struct sys_device *sys_dev)
 {
 	unsigned long irq_flags;
 	unsigned long i;
@@ -520,45 +521,41 @@ static int msm_gpio_resume_noirq(struct device *dev)
 #define msm_gpio_resume_noirq NULL
 #endif
 
-static const struct dev_pm_ops msm_gpio_dev_pm_ops = {
-	.suspend_noirq  = msm_gpio_suspend_noirq,
-	.resume_noirq   = msm_gpio_resume_noirq,
-	.freeze_noirq   = msm_gpio_suspend_noirq,
-	.thaw_noirq     = msm_gpio_resume_noirq,
-	.poweroff_noirq = msm_gpio_suspend_noirq,
-	.restore_noirq  = msm_gpio_resume_noirq,
-};
-
-static struct platform_driver msm_gpio_driver = {
-	.probe = msm_gpio_probe,
-	.remove = __devexit_p(msm_gpio_remove),
-	.driver = {
-		.name = "msmgpio",
-		.owner = THIS_MODULE,
-		.pm = &msm_gpio_dev_pm_ops,
-	},
-};
-
-static struct platform_device msm_device_gpio = {
+static struct sysdev_class msm_gpio_sysdev_class = {
 	.name = "msmgpio",
-	.id   = 0,
+	.suspend = msm_gpio_suspend_noirq,
+	.resume = msm_gpio_resume_noirq,
+};
+
+static struct sys_device msm_gpio_sys_device = {
+	.id = 0,
+	.cls = &msm_gpio_sysdev_class,
 };
 
 static int __init msm_gpio_init(void)
 {
 	int rc;
 
-	rc = platform_driver_register(&msm_gpio_driver);
-	if (rc == 0)
-		rc = platform_device_register(&msm_device_gpio);
+	rc = sysdev_class_register(&msm_gpio_sysdev_class);
+	if (!rc) {
+		rc = sysdev_register(&msm_gpio_sys_device);
+		if (!rc) {
+			rc = msm_gpio_probe(&msm_gpio_sysdev_class);
+			if (rc)
+				pr_err("msm_gpio_probe failed err = %d\n", rc);
+		} else
+			pr_err("sysdev_register failed for msm_gpio_sys_device \
+					error = %d\n", rc);
+	}
 
 	return rc;
 }
 
 static void __exit msm_gpio_exit(void)
 {
-	platform_device_unregister(&msm_device_gpio);
-	platform_driver_unregister(&msm_gpio_driver);
+	msm_gpio_remove(&msm_gpio_sysdev_class);
+	sysdev_unregister(&msm_gpio_sys_device);
+	sysdev_class_unregister(&msm_gpio_sysdev_class);
 }
 
 postcore_initcall(msm_gpio_init);
@@ -646,4 +643,4 @@ EXPORT_SYMBOL(msm_gpio_install_direct_irq);
 MODULE_AUTHOR("Gregory Bean <gbean@codeaurora.org>");
 MODULE_DESCRIPTION("Driver for Qualcomm MSM TLMMv2 SoC GPIOs");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:msmgpio");
+MODULE_ALIAS("sysdev:msmgpio");
