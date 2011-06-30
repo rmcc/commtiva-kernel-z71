@@ -399,9 +399,10 @@ static int msm_gpio_irq_set_type(unsigned int irq, unsigned int flow_type)
  * which have been set as summary IRQ lines and which are triggered,
  * and to call their interrupt handlers.
  */
-static void msm_summary_irq_handler(unsigned int irq, struct irq_desc *desc)
+static irqreturn_t msm_summary_irq_handler(int irq, void *data)
 {
 	unsigned long i;
+	struct irq_desc *desc = irq_to_desc(irq);
 
 	for (i = find_first_bit(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
 	     i < NR_MSM_GPIOS;
@@ -410,7 +411,9 @@ static void msm_summary_irq_handler(unsigned int irq, struct irq_desc *desc)
 			generic_handle_irq(msm_gpio_to_irq(&msm_gpio.gpio_chip,
 							   i));
 	}
+
 	desc->chip->ack(irq);
+	return IRQ_HANDLED;
 }
 
 static int msm_gpio_irq_set_wake(unsigned int irq, unsigned int on)
@@ -463,8 +466,13 @@ static int __devinit msm_gpio_probe(struct sysdev_class *sysclass)
 		set_irq_flags(irq, IRQF_VALID);
 	}
 
-	set_irq_chained_handler(TLMM_MSM_SUMMARY_IRQ,
-				msm_summary_irq_handler);
+	ret = request_irq(TLMM_MSM_SUMMARY_IRQ, msm_summary_irq_handler,
+			IRQF_TRIGGER_HIGH, "msmgpio", NULL);
+	if (ret) {
+		pr_err("Request_irq failed for TLMM_MSM_SUMMARY_IRQ - %d\n",
+				ret);
+		return ret;
+	}
 	return 0;
 }
 
