@@ -86,9 +86,6 @@ static struct mmc_command dummy52cmd = {
 	.mrq = &dummy52mrq,
 };
 
-static void msmsdcc_sdio_al_lpm_work(struct work_struct *work);
-static struct workqueue_struct *msmsdcc_workq;
-
 #define VERBOSE_COMMAND_TIMEOUTS	0
 
 #if IRQ_DEBUG == 1
@@ -908,17 +905,6 @@ msmsdcc_irq(int irq, void *dev_id)
 				wake_lock(&host->sdio_wlock);
 			/* only ansyc interrupt can come when clocks are off */
 			writel_relaxed(MCI_SDIOINTMASK, host->base + MMCICLEAR);
-			if (host->sdio_gpio_lpm) {
-				/*
-				 * SDIO IRQ must be processed only after
-				 * that gpios are configured to active i.e.,
-				 * after SDCC resume handler is called.
-				 */
-				disable_irq_nosync(host->irqres->start);
-				host->sdcc_irq_disabled = 1;
-				spin_unlock(&host->lock);
-				return IRQ_HANDLED;
-			}
 		}
 
 		status = readl_relaxed(host->base + MMCISTATUS);
@@ -1067,24 +1053,15 @@ msmsdcc_request(struct mmc_host *mmc, struct mmc_request *mrq)
 	struct msmsdcc_host *host = mmc_priv(mmc);
 	unsigned long		flags;
 
-	WARN(host->curr.mrq, "Request in progress\n");
-	WARN(!host->pwr, "SDCC power is turned off\n");
+	/*
+	 * Get the SDIO AL client out of LPM.
+	 */
+	if (host->plat->is_sdio_al_client)
+		msmsdcc_sdio_al_lpm(mmc, false);
 
 	spin_lock_irqsave(&host->lock, flags);
-	/*
-	 * Enable clocks for SDIO clients if they are already turned off
-	 * as part of their low-power management.
-	 */
-	if (mmc->card && (mmc->card->type == MMC_TYPE_SDIO) &&
-	    !host->clks_on) {
-		pr_warn("%s: mmc%d: Clock off.. turning on\n", __func__,
-			mmc->index);
-		mmc->ios.clock = host->clk_rate;
-		spin_unlock(&host->lock);
-		mmc->ops->set_ios(host->mmc, &host->mmc->ios);
-		spin_lock(&host->lock);
-	}
-
+	WARN(host->curr.mrq, "Request in progress\n");
+	WARN(!host->pwr, "SDCC power is turned off\n");
 	WARN(!host->clks_on, "SDCC clocks are turned off\n");
 	WARN(host->sdcc_irq_disabled, "SDCC IRQ is disabled\n");
 
@@ -1466,7 +1443,7 @@ msmsdcc_platform_sdiowakeup_irq(int irq, void *dev_id)
 {
 	struct msmsdcc_host	*host = dev_id;
 
-	pr_info("%s: SDIO Wake up IRQ : %d\n", __func__, irq);
+	pr_debug("%s: SDIO Wake up IRQ : %d\n", mmc_hostname(host->mmc), irq);
 	BUG_ON(irq != host->plat->sdiowakeup_irq);
 
 	spin_lock(&host->lock);
@@ -1479,9 +1456,17 @@ msmsdcc_platform_sdiowakeup_irq(int irq, void *dev_id)
 		host->sdio_irq_disabled = 1;
 	}
 	if (host->plat->is_sdio_al_client) {
-		host->lpm_work.host = host;
-		host->lpm_work.enable = false;
-		queue_work(msmsdcc_workq, &host->lpm_work.work);
+		if (!host->clks_on) {
+			msmsdcc_setup_clocks(host, true);
+			host->clks_on = 1;
+		}
+		if (host->sdcc_irq_disabled) {
+			writel_relaxed(host->mci_irqenable,
+				       host->base + MMCIMASK0);
+			mb();
+			enable_irq(host->irqres->start);
+			host->sdcc_irq_disabled = 0;
+		}
 		wake_lock(&host->sdio_wlock);
 	}
 	spin_unlock(&host->lock);
@@ -1821,10 +1806,8 @@ msmsdcc_probe(struct platform_device *pdev)
 	mmc->caps |= MMC_CAP_SDIO_IRQ;
 #endif
 
-	if (plat->is_sdio_al_client) {
+	if (plat->is_sdio_al_client)
 		mmc->pm_flags |= MMC_PM_IGNORE_PM_NOTIFY;
-		INIT_WORK(&host->lpm_work.work, msmsdcc_sdio_al_lpm_work);
-	}
 	mmc->max_phys_segs = NR_SG;
 	mmc->max_hw_segs = NR_SG;
 	mmc->max_blk_size = 4096;	/* MCI_DATA_CTL BLOCKSIZE up to 4096 */
@@ -2111,15 +2094,19 @@ int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable)
 	unsigned long flags;
 
 	spin_lock_irqsave(&host->lock, flags);
-	pr_debug("%s: %sabling LPM\n", __func__, enable ? "En" : "Dis");
-
-	msmsdcc_setup_clocks(host, !enable);
+	pr_debug("%s: %sabling LPM\n", mmc_hostname(mmc),
+			enable ? "En" : "Dis");
 
 	if (enable) {
 		if (!host->sdcc_irq_disabled) {
 			writel_relaxed(0, host->base + MMCIMASK0);
 			disable_irq(host->irqres->start);
 			host->sdcc_irq_disabled = 1;
+		}
+
+		if (host->clks_on) {
+			msmsdcc_setup_clocks(host, false);
+			host->clks_on = 0;
 		}
 
 		if (!host->sdio_gpio_lpm) {
@@ -2148,6 +2135,11 @@ int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable)
 			host->sdio_gpio_lpm = 0;
 		}
 
+		if (!host->clks_on) {
+			msmsdcc_setup_clocks(host, true);
+			host->clks_on = 1;
+		}
+
 		if (host->sdcc_irq_disabled) {
 			writel_relaxed(host->mci_irqenable,
 				       host->base + MMCIMASK0);
@@ -2160,22 +2152,10 @@ int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable)
 	spin_unlock_irqrestore(&host->lock, flags);
 	return 0;
 }
-
-static void msmsdcc_sdio_al_lpm_work(struct work_struct *work)
-{
-	struct msmsdcc_lpm_work *lpm_work = container_of(work,
-						struct msmsdcc_lpm_work,
-						work);
-	msmsdcc_sdio_al_lpm(lpm_work->host->mmc,
-			    lpm_work->enable);
-}
 #else
 int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable)
 {
 	return 0;
-}
-static void msmsdcc_sdio_al_lpm_work(struct work_struct *work)
-{
 }
 #endif
 
@@ -2412,9 +2392,6 @@ static int __init msmsdcc_init(void)
 		return ret;
 	}
 #endif
-	msmsdcc_workq = create_singlethread_workqueue("msm_sdcc");
-	if (!msmsdcc_workq)
-		return -ENOMEM;
 	return platform_driver_register(&msmsdcc_driver);
 }
 
