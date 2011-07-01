@@ -2982,30 +2982,25 @@ static int sdio_al_client_setup(struct sdio_al_device *sdio_al_dev)
 	return 0;
 }
 
-/**
- *  Probe to claim the SDIO card.
- *
+/*
+ * SDIO driver functions
  */
-static int sdio_al_card_probe(struct mmc_card *card)
+static int sdio_al_sdio_probe(struct sdio_func *func,
+		const struct sdio_device_id *sdio_dev_id)
 {
 	int ret = 0;
 	struct sdio_al_device *sdio_al_dev = NULL;
 	int i;
+	struct mmc_card *card = NULL;
 
-	dev_info(&card->dev, "Probing..\n");
-
-	if (!mmc_card_sdio(card)) {
-		dev_info(&card->dev,
-			 "Not an SDIO card\n");
+	if (!func) {
+		pr_err(MODULE_NAME ": %s: NULL func\n", __func__);
 		return -ENODEV;
 	}
+	card = func->card;
 
-	if ((card->cis.vendor != 0x70) ||
-	    ((card->cis.device != 0x2460) && (card->cis.device != 0x0460)
-	     && (card->cis.device != 0x23F1) && (card->cis.device != 0x23F0))) {
-		dev_info(&card->dev,
-			 "ignore card vendor id 0x%x, device id 0x%x",
-			 card->cis.vendor, card->cis.device);
+	if (!card) {
+		pr_err(MODULE_NAME ": %s: NULL card\n", __func__);
 		return -ENODEV;
 	}
 
@@ -3016,19 +3011,15 @@ static int sdio_al_card_probe(struct mmc_card *card)
 		return -ENODEV;
 	}
 
-	dev_info(&card->dev, "SDIO Card claimed.\n");
-
-	/* Check if there is already a card for this device */
+	/* Check if there is already a device for this card */
 	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
 		if (sdio_al->devices[i] == NULL)
 			continue;
-		if (sdio_al->devices[i]->card == card) {
-			pr_err(MODULE_NAME "mmc_probe is called for card %d "
-					   "before it was properly removed",
-			       card->host->index);
-			break;
-		}
+		if (sdio_al->devices[i]->card == card)
+			return 0;
 	}
+
+	dev_info(&card->dev, "SDIO Card claimed.\n");
 
 	sdio_al_dev = kzalloc(sizeof(struct sdio_al_device), GFP_KERNEL);
 	if (sdio_al_dev == NULL)
@@ -3104,26 +3095,25 @@ static int sdio_al_card_probe(struct mmc_card *card)
 exit:
 	sdio_release_host(card->sdio_func[0]);
 	return ret;
-
 }
 
-/**
- *  Release the SDIO card.
- *
- */
-void sdio_al_card_remove(struct mmc_card *card)
+static void sdio_al_sdio_remove(struct sdio_func *func)
 {
-	int i;
 	struct sdio_al_device *sdio_al_dev = NULL;
-	int state = 0;
+	int i;
+	int state;
+	struct mmc_card *card = NULL;
+
+	if (!func) {
+		pr_err(MODULE_NAME ": %s: NULL func\n", __func__);
+		return;
+	}
+	card = func->card;
 
 	if (!card) {
 		pr_err(MODULE_NAME ": %s: NULL card\n", __func__);
 		return;
 	}
-
-	pr_info(MODULE_NAME ":%s for card %d\n",
-			 __func__, card->host->index);
 
 	/* Find the sdio_al_device of this card */
 	for (i = 0; i < MAX_NUM_OF_SDIO_DEVICES; ++i) {
@@ -3136,18 +3126,28 @@ void sdio_al_card_remove(struct mmc_card *card)
 		}
 	}
 	if (sdio_al_dev == NULL) {
-		pr_err(MODULE_NAME ":%s :NULL sdio_al_dev for card %d\n",
+		pr_debug(MODULE_NAME ":%s :NULL sdio_al_dev for card %d\n",
 				 __func__, card->host->index);
 		return;
 	}
+
+	pr_info(MODULE_NAME ":%s for card %d\n",
+			 __func__, card->host->index);
+
 	if (card->sdio_func[0])
 		sdio_claim_host(card->sdio_func[0]);
 	else
 		pr_err(MODULE_NAME ":%s: NULL func1 for card %d\n",
 			 __func__, card->host->index);
 
+	if (sdio_al_dev->state == CARD_REMOVED)
+		return;
+
 	state = sdio_al_dev->state;
 	sdio_al_dev->state = CARD_REMOVED;
+
+	for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++)
+		sdio_al_dev->channel[i].signature = 0x0;
 
 	pr_info(MODULE_NAME ":%s: ask_reading_mailbox for card %d\n",
 			 __func__, card->host->index);
@@ -3179,9 +3179,6 @@ void sdio_al_card_remove(struct mmc_card *card)
 	if (card->sdio_func[0])
 		sdio_release_host(card->sdio_func[0]);
 
-	for (i = 0; i < SDIO_AL_MAX_CHANNELS; i++)
-		sdio_al_dev->channel[i].signature = 0x0;
-
 	pr_info(MODULE_NAME ":%s: vote for sleep for card %d\n",
 			 __func__, card->host->index);
 	sdio_al_vote_for_sleep(sdio_al_dev, 1);
@@ -3200,30 +3197,6 @@ void sdio_al_card_remove(struct mmc_card *card)
 
 	pr_info(MODULE_NAME ":%s: sdio card %d removed.\n", __func__,
 		card->host->index);
-}
-
-static struct mmc_driver sdio_al_mmc_driver = {
-	.drv		= {
-		.name   = "sdio_al",
-	},
-	.probe		= sdio_al_card_probe,
-	.remove		= sdio_al_card_remove,
-};
-
-
-/*
- * SDIO driver functions
- */
-static int sdio_al_sdio_probe(struct sdio_func *func,
-		const struct sdio_device_id *sdio_dev_id)
-{
-	pr_debug(MODULE_NAME ":sdio_al_sdio_probe was called");
-	return 0;
-}
-
-static void sdio_al_sdio_remove(struct sdio_func *func)
-{
-	pr_debug(MODULE_NAME ":sdio_al_sdio_remove was called");
 }
 
 static void sdio_print_mailbox(char *prefix_str, struct sdio_mailbox *mailbox)
@@ -3632,10 +3605,6 @@ static int __init sdio_al_init(void)
 	}
 
 	sdio_register_driver(&sdio_al_sdiofn_driver);
-
-	ret = mmc_register_driver(&sdio_al_mmc_driver);
-	if (ret)
-		pr_err(MODULE_NAME ": mmc_register_driver failed: %d\n", ret);
 exit:
 	if (ret)
 		kfree(sdio_al);
@@ -3667,8 +3636,6 @@ static void __exit sdio_al_exit(void)
 	sdio_unregister_driver(&sdio_al_sdiofn_driver);
 
 	kfree(sdio_al);
-
-	mmc_unregister_driver(&sdio_al_mmc_driver);
 
 #ifdef CONFIG_DEBUG_FS
 	sdio_al_debugfs_cleanup();
