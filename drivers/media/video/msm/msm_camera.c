@@ -797,15 +797,9 @@ static int msm_get_frame(struct msm_sync *sync, void __user *arg)
 		}
 	}
 
-	if (sync->stereocam_enabled && sync->st_quality_ind &&
-		sync->st_quality_ind_len) {
-		if (copy_to_user((void *)frame.st_quality_ind,
-			sync->st_quality_ind,
-			sync->st_quality_ind_len)) {
-			ERR_COPY_TO_USER();
-			mutex_unlock(&sync->lock);
-			return -EFAULT;
-		}
+	if (sync->stereocam_enabled) {
+		frame.stcam_conv_value = sync->stcam_conv_value;
+		frame.stcam_quality_ind = sync->stcam_quality_ind;
 	}
 
 	if (copy_to_user((void *)arg,
@@ -2582,6 +2576,11 @@ static int msm_put_st_frame(struct msm_sync *sync, void __user *arg)
 			CDBG("%s: delivering right frame to VPE\n", __func__);
 			spin_lock_irqsave(&st_frame_spinlock, flags);
 
+			sync->stcam_conv_value =
+				stereo_frame_half.buf_info.stcam_conv_value;
+			sync->stcam_quality_ind =
+				stereo_frame_half.buf_info.stcam_quality_ind;
+
 			st_pphy = msm_pmem_frame_vtop_lookup(sync,
 				stereo_frame_half.buf_info.buffer,
 				stereo_frame_half.buf_info.y_off,
@@ -2594,30 +2593,6 @@ static int msm_put_st_frame(struct msm_sync *sync, void __user *arg)
 				st_pphy + stereo_frame_half.R.buf_cbcr_off,
 				NULL, OUTPUT_TYPE_ST_R, stereo_frame_half.R,
 				stereo_frame_half.frame_id);
-
-			/*update the global variable from the frame info*/
-			if (!sync->st_quality_ind &&
-				!sync->st_quality_ind_len) {
-				sync->st_quality_ind = kzalloc(sizeof(
-				stereo_frame_half.buf_info.st_quality_ind_len),
-					GFP_KERNEL);
-				if (!sync->st_quality_ind) {
-					pr_err("%s: no memory to allocate\n",
-						__func__);
-					return -ENOMEM;
-				}
-			}
-			sync->st_quality_ind_len =
-				stereo_frame_half.buf_info.st_quality_ind_len;
-
-			if (copy_from_user(sync->st_quality_ind,
-				stereo_frame_half.buf_info.st_quality_ind,
-				sync->st_quality_ind_len)) {
-				ERR_COPY_FROM_USER();
-				kfree(sync->st_quality_ind);
-				sync->st_quality_ind = NULL;
-				sync->st_quality_ind_len = 0;
-			}
 
 			spin_unlock_irqrestore(&st_frame_spinlock, flags);
 		} else {
@@ -3003,9 +2978,6 @@ static int __msm_release(struct msm_sync *sync)
 		kfree(sync->cropinfo);
 		sync->cropinfo = NULL;
 		sync->croplen = 0;
-		kfree(sync->st_quality_ind);
-		sync->st_quality_ind = NULL;
-		sync->st_quality_ind_len = 0;
 		CDBG("%s, free frame pmem region\n", __func__);
 		hlist_for_each_entry_safe(region, hnode, n,
 				&sync->pmem_frames, list) {

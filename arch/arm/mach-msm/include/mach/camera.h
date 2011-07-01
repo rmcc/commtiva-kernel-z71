@@ -326,14 +326,14 @@ struct msm_sync {
 	struct msm_queue_cmd *pp_stereocam2;
 	struct msm_queue_cmd *pp_stereosnap;
 	enum msm_stereo_state stereo_state;
+	int stcam_quality_ind;
+	uint32_t stcam_conv_value;
 
 	spinlock_t pmem_frame_spinlock;
 	spinlock_t pmem_stats_spinlock;
 	spinlock_t abort_pict_lock;
 	int snap_count;
 	int thumb_count;
-	void *st_quality_ind;
-	int st_quality_ind_len;
 };
 
 #define MSM_APPS_ID_V4L2 "msm_v4l2"

@@ -439,8 +439,8 @@ struct msm_frame {
 	uint32_t error_code;
 	struct fd_roi_info roi_info;
 	uint32_t frame_id;
-	void *st_quality_ind;
-	int st_quality_ind_len;
+	int stcam_quality_ind;
+	uint32_t stcam_conv_value;
 };
 
 enum msm_st_frame_packing {
