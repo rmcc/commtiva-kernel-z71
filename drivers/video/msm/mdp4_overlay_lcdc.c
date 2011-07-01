@@ -393,8 +393,8 @@ void mdp4_lcdc_overlay(struct msm_fb_data_type *mfd)
 	pipe = lcdc_pipe;
 	pipe->srcp0_addr = (uint32) buf;
 	mdp4_overlay_rgb_setup(pipe);
+	mutex_unlock(&mfd->dma->ov_mutex);
 	mdp4_overlay_lcdc_vsync_push(mfd, pipe);
 	mdp4_stat.kickoff_lcdc++;
 	mdp4_overlay_resource_release();
-	mutex_unlock(&mfd->dma->ov_mutex);
 }
