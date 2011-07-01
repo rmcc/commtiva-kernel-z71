@@ -527,6 +527,17 @@ void mdp4_overlay0_done_dsi_cmd(struct mdp_dma_data *dma)
 	mdp_disable_irq_nosync(MDP_OVERLAY0_TERM);
 }
 
+void mdp4_dsi_cmd_overlay_restore(void)
+{
+	/* mutex holded by caller */
+	if (dsi_mfd && dsi_pipe) {
+		mdp4_dsi_cmd_dma_busy_wait(dsi_mfd);
+		mdp4_overlay_update_dsi_cmd(dsi_mfd);
+		mdp4_dsi_cmd_overlay_kickoff(dsi_mfd, dsi_pipe);
+		dsi_mfd->dma_update_flag = 1;
+	}
+}
+
 void mdp4_dsi_blt_dmap_busy_wait(struct msm_fb_data_type *mfd)
 {
 	unsigned long flag;
