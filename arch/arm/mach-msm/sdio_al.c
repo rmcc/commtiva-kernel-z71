@@ -2367,28 +2367,26 @@ int sdio_open(const char *name, struct sdio_channel **ret_ch, void *priv,
 
 	if (ch->is_open) {
 		pr_err(MODULE_NAME ":Channel already opened %s\n", name);
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return -EPERM;
+		ret = -EPERM;
+		goto exit_err;
 	}
 
 	if (sdio_al_dev->state != CARD_INSERTED) {
 		pr_err(MODULE_NAME ":%s: sdio_al_dev is in invalid state %d\n",
 		       __func__, sdio_al_dev->state);
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto exit_err;
 	}
 
 	if (sdio_al_dev->is_err) {
 		SDIO_AL_ERR(__func__);
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return -ENODEV;
+		ret = -ENODEV;
+		goto exit_err;
 	}
 
 	ret = sdio_al_wake_up(sdio_al_dev, 1);
-	if (ret) {
-		sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-		return ret;
-	}
+	if (ret)
+		goto exit_err;
 
 	ch->notify = notify;
 	ch->priv = priv;
@@ -2397,11 +2395,9 @@ int sdio_open(const char *name, struct sdio_channel **ret_ch, void *priv,
 	*ret_ch = ch;
 
 	ret = open_channel(ch);
-	sdio_release_host(sdio_al_dev->card->sdio_func[0]);
-
 	if (ret) {
 		pr_err(MODULE_NAME ":sdio_open %s err=%d\n", name, -ret);
-		return ret;
+		goto exit_err;
 	}
 
 	pr_info(MODULE_NAME ":sdio_open %s completed OK\n", name);
@@ -2419,7 +2415,9 @@ int sdio_open(const char *name, struct sdio_channel **ret_ch, void *priv,
 		}
 	}
 
-	return 0;
+exit_err:
+	sdio_release_host(sdio_al_dev->card->sdio_func[0]);
+	return ret;
 }
 EXPORT_SYMBOL(sdio_open);
 
