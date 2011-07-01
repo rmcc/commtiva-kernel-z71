@@ -980,6 +980,50 @@ done:
 	return 0;
 }
 
+static int voice_set_dtx(struct voice_data *v)
+{
+	int ret = 0;
+	void *apr_cvs = voice_get_apr_cvs(v);
+	u16 cvs_handle = voice_get_cvs_handle(v);
+
+	/* Set DTX */
+	struct cvs_set_enc_dtx_mode_cmd cvs_set_dtx = {
+		.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
+					      APR_HDR_LEN(APR_HDR_SIZE),
+					      APR_PKT_VER),
+		.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
+					sizeof(cvs_set_dtx) - APR_HDR_SIZE),
+		.hdr.src_port = 0,
+		.hdr.dest_port = cvs_handle,
+		.hdr.token = 0,
+		.hdr.opcode = VSS_ISTREAM_CMD_SET_ENC_DTX_MODE,
+		.dtx_mode.enable = v->mvs_info.dtx_mode,
+	};
+
+	pr_debug("%s: Setting DTX %d\n", __func__, v->mvs_info.dtx_mode);
+
+	v->cvs_state = CMD_STATUS_FAIL;
+
+	ret = apr_send_pkt(apr_cvs, (uint32_t *) &cvs_set_dtx);
+	if (ret < 0) {
+		pr_err("%s: Error %d sending SET_DTX\n", __func__, ret);
+
+		goto done;
+	}
+
+	ret = wait_event_timeout(v->cvs_wait,
+				 (v->cvs_state == CMD_STATUS_SUCCESS),
+				 msecs_to_jiffies(TIMEOUT_MS));
+	if (!ret) {
+		pr_err("%s: wait_event timeout\n", __func__);
+
+		ret = -EINVAL;
+	}
+
+done:
+	return ret;
+}
+
 static int voice_config_cvs_vocoder(struct voice_data *v)
 {
 	int ret = 0;
@@ -1010,7 +1054,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 		pr_err("%s: Error %d sending SET_MEDIA_TYPE\n",
 		       __func__, ret);
 
-		goto fail;
+		goto done;
 	}
 
 	ret = wait_event_timeout(v->cvs_wait,
@@ -1019,7 +1063,8 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 	if (!ret) {
 		pr_err("%s: wait_event timeout\n", __func__);
 
-		goto fail;
+		ret = -EINVAL;
+		goto done;
 	}
 
 	/* Set encoder properties. */
@@ -1050,7 +1095,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 			pr_err("%s: Error %d sending SET_EVRC_MINMAX_RATE\n",
 			       __func__, ret);
 
-			goto fail;
+			goto done;
 		}
 
 		ret = wait_event_timeout(v->cvs_wait,
@@ -1059,7 +1104,8 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 		if (!ret) {
 			pr_err("%s: wait_event timeout\n", __func__);
 
-			goto fail;
+			ret = -EINVAL;
+			goto done;
 		}
 
 		break;
@@ -1067,7 +1113,6 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 
 	case VSS_MEDIA_ID_AMR_NB_MODEM: {
 		struct cvs_set_amr_enc_rate_cmd cvs_set_amr_rate;
-		struct cvs_set_enc_dtx_mode_cmd cvs_set_dtx;
 
 		pr_info("%s: Setting AMR rate\n", __func__);
 
@@ -1091,7 +1136,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 			pr_err("%s: Error %d sending SET_AMR_RATE\n",
 			       __func__, ret);
 
-			goto fail;
+			goto done;
 		}
 
 		ret = wait_event_timeout(v->cvs_wait,
@@ -1100,48 +1145,17 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 		if (!ret) {
 			pr_err("%s: wait_event timeout\n", __func__);
 
-			goto fail;
+			ret = -EINVAL;
+			goto done;
 		}
 
-		/* Disable DTX */
-		pr_info("%s: Disabling DTX\n", __func__);
-
-		cvs_set_dtx.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-						      APR_HDR_LEN(APR_HDR_SIZE),
-						      APR_PKT_VER);
-		cvs_set_dtx.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
-				       sizeof(cvs_set_dtx) - APR_HDR_SIZE);
-		cvs_set_dtx.hdr.src_port = 0;
-		cvs_set_dtx.hdr.dest_port = cvs_handle;
-		cvs_set_dtx.hdr.token = 0;
-		cvs_set_dtx.hdr.opcode = VSS_ISTREAM_CMD_SET_ENC_DTX_MODE;
-		cvs_set_dtx.dtx_mode.enable = 0;
-
-		v->cvs_state = CMD_STATUS_FAIL;
-
-		ret = apr_send_pkt(apr_cvs, (uint32_t *) &cvs_set_dtx);
-		if (ret < 0) {
-			pr_err("%s: Error %d sending SET_DTX\n",
-			       __func__, ret);
-
-			goto fail;
-		}
-
-		ret = wait_event_timeout(v->cvs_wait,
-					 (v->cvs_state == CMD_STATUS_SUCCESS),
-					 msecs_to_jiffies(TIMEOUT_MS));
-		if (!ret) {
-			pr_err("%s: wait_event timeout\n", __func__);
-
-			goto fail;
-		}
+		ret = voice_set_dtx(v);
 
 		break;
 	}
 
 	case VSS_MEDIA_ID_AMR_WB_MODEM: {
 		struct cvs_set_amrwb_enc_rate_cmd cvs_set_amrwb_rate;
-		struct cvs_set_enc_dtx_mode_cmd cvs_set_dtx;
 
 		pr_info("%s: Setting AMR WB rate\n", __func__);
 
@@ -1165,7 +1179,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 			pr_err("%s: Error %d sending SET_AMRWB_RATE\n",
 			       __func__, ret);
 
-			goto fail;
+			goto done;
 		}
 
 		ret = wait_event_timeout(v->cvs_wait,
@@ -1174,41 +1188,11 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 		if (!ret) {
 			pr_err("%s: wait_event timeout\n", __func__);
 
-			goto fail;
+			ret = -EINVAL;
+			goto done;
 		}
 
-		/* Disable DTX */
-		pr_info("%s: Disabling DTX\n", __func__);
-
-		cvs_set_dtx.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-						      APR_HDR_LEN(APR_HDR_SIZE),
-						      APR_PKT_VER);
-		cvs_set_dtx.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
-				       sizeof(cvs_set_dtx) - APR_HDR_SIZE);
-		cvs_set_dtx.hdr.src_port = 0;
-		cvs_set_dtx.hdr.dest_port = cvs_handle;
-		cvs_set_dtx.hdr.token = 0;
-		cvs_set_dtx.hdr.opcode = VSS_ISTREAM_CMD_SET_ENC_DTX_MODE;
-		cvs_set_dtx.dtx_mode.enable = 0;
-
-		v->cvs_state = CMD_STATUS_FAIL;
-
-		ret = apr_send_pkt(apr_cvs, (uint32_t *) &cvs_set_dtx);
-		if (ret < 0) {
-			pr_err("%s: Error %d sending SET_DTX\n",
-			       __func__, ret);
-
-			goto fail;
-		}
-
-		ret = wait_event_timeout(v->cvs_wait,
-					 (v->cvs_state == CMD_STATUS_SUCCESS),
-					 msecs_to_jiffies(TIMEOUT_MS));
-		if (!ret) {
-			pr_err("%s: wait_event timeout\n", __func__);
-
-			goto fail;
-		}
+		ret = voice_set_dtx(v);
 
 		break;
 	}
@@ -1216,39 +1200,7 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 	case VSS_MEDIA_ID_G729:
 	case VSS_MEDIA_ID_G711_ALAW:
 	case VSS_MEDIA_ID_G711_MULAW: {
-		struct cvs_set_enc_dtx_mode_cmd cvs_set_dtx;
-		/* Disable DTX */
-		pr_info("%s: Disabling DTX\n", __func__);
-
-		cvs_set_dtx.hdr.hdr_field = APR_HDR_FIELD(APR_MSG_TYPE_SEQ_CMD,
-						      APR_HDR_LEN(APR_HDR_SIZE),
-						      APR_PKT_VER);
-		cvs_set_dtx.hdr.pkt_size = APR_PKT_SIZE(APR_HDR_SIZE,
-					    sizeof(cvs_set_dtx) - APR_HDR_SIZE);
-		cvs_set_dtx.hdr.src_port = 0;
-		cvs_set_dtx.hdr.dest_port = cvs_handle;
-		cvs_set_dtx.hdr.token = 0;
-		cvs_set_dtx.hdr.opcode = VSS_ISTREAM_CMD_SET_ENC_DTX_MODE;
-		cvs_set_dtx.dtx_mode.enable = 0;
-
-		v->cvs_state = CMD_STATUS_FAIL;
-
-		ret = apr_send_pkt(apr_cvs, (uint32_t *) &cvs_set_dtx);
-		if (ret < 0) {
-			pr_err("%s: Error %d sending SET_DTX\n",
-			       __func__, ret);
-
-			goto fail;
-		}
-
-		ret = wait_event_timeout(v->cvs_wait,
-					 (v->cvs_state == CMD_STATUS_SUCCESS),
-					 msecs_to_jiffies(TIMEOUT_MS));
-		if (!ret) {
-			pr_err("%s: wait_event timeout\n", __func__);
-
-			goto fail;
-		}
+		ret = voice_set_dtx(v);
 
 		break;
 	}
@@ -1258,10 +1210,8 @@ static int voice_config_cvs_vocoder(struct voice_data *v)
 	}
 	}
 
-	return 0;
-
-fail:
-	return -EINVAL;
+done:
+	return ret;
 }
 
 static int voice_send_start_voice_cmd(struct voice_data *v)
@@ -2398,11 +2348,13 @@ void voice_register_mvs_cb(ul_cb_fn ul_cb,
 
 void voice_config_vocoder(uint32_t media_type,
 			  uint32_t rate,
-			  uint32_t network_type)
+			  uint32_t network_type,
+			  uint32_t dtx_mode)
 {
 	voice.mvs_info.media_type = media_type;
 	voice.mvs_info.rate = rate;
 	voice.mvs_info.network_type = network_type;
+	voice.mvs_info.dtx_mode = dtx_mode;
 }
 
 static int32_t modem_mvm_callback(struct apr_client_data *data, void *priv)
