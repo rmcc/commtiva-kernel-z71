@@ -60,6 +60,7 @@ enum lpm_test_msg_type {
 
 #define MAX_XFER_SIZE (16*1024)
 #define SMEM_MAX_XFER_SIZE 0xBC000
+#define A2_MIN_PACKET_SIZE 5
 
 #define TEST_DBG(x...) if (test_ctx->runtime_debug) pr_info(x)
 
@@ -192,6 +193,8 @@ struct test_channel {
 	int is_ok_to_sleep;
 	struct lpm_test_struct lpm_test_db;
 	unsigned int packet_length;
+
+	int random_packet_size;
 };
 
 struct sdio_al_test_debug {
@@ -1100,6 +1103,7 @@ static void a2_performance_test(struct test_channel *test_ch)
 	int total_bytes = 0;
 	int max_packets = 10000;
 	u32 packet_size = test_ch->buf_size;
+	int rand_size = 0;
 
 	u64 start_jiffy, end_jiffy, delta_jiffies;
 	unsigned int time_msec = 0;
@@ -1123,6 +1127,13 @@ static void a2_performance_test(struct test_channel *test_ch)
 			return;
 		}
 
+		if (test_ch->random_packet_size) {
+			rand_size = get_random_int();
+			packet_size = (rand_size % test_ch->packet_length) + 1;
+			if (packet_size < A2_MIN_PACKET_SIZE)
+				packet_size = A2_MIN_PACKET_SIZE;
+		}
+
 		/* wait for data ready event */
 		/* use a func to avoid compiler optimizations */
 		write_avail = sdio_write_avail(test_ch->ch);
@@ -1142,7 +1153,7 @@ static void a2_performance_test(struct test_channel *test_ch)
 			 test_ch->name, write_avail);
 		if (write_avail > 0) {
 			size = min(packet_size, write_avail) ;
-			pr_debug(TEST_MODULE_NAME ":tx size = %d for chan %s\n",
+			TEST_DBG(TEST_MODULE_NAME ":tx size = %d for chan %s\n",
 				 size, test_ch->name);
 			test_ch->buf[0] = tx_packet_count;
 			test_ch->buf[(size/4)-1] = tx_packet_count;
@@ -1204,9 +1215,12 @@ static void a2_performance_test(struct test_channel *test_ch)
 				" for chan %s\n",
 		   total_bytes , (int) time_msec, test_ch->name);
 
-	throughput = (total_bytes / time_msec) * 8 / 1000;
-	pr_err(TEST_MODULE_NAME ":Performance = %d Mbit/sec for chan %s\n",
-	throughput, test_ch->name);
+	if (!test_ch->random_packet_size) {
+		throughput = (total_bytes / time_msec) * 8 / 1000;
+		pr_err(TEST_MODULE_NAME ":Performance = %d Mbit/sec for "
+					"chan %s\n",
+		       throughput, test_ch->name);
+	}
 
 #ifdef CONFIG_DEBUG_FS
 	switch (test_ch->ch_id) {
@@ -1743,6 +1757,27 @@ static int set_params_a2_perf(struct test_channel *tch)
 	return 0;
 }
 
+static int set_params_a2_small_pkts(struct test_channel *tch)
+{
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ":NULL channel\n");
+		return -EINVAL;
+	}
+	tch->is_used = 1;
+	tch->test_type = SDIO_TEST_PERF;
+	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
+	tch->config_msg.test_case = SDIO_TEST_LOOPBACK_CLIENT;
+	tch->packet_length = 128;
+
+	tch->config_msg.num_packets = 1000000;
+	tch->config_msg.num_iterations = 1;
+	tch->random_packet_size = 1;
+
+	tch->timer_interval_ms = 0;
+
+	return 0;
+}
+
 static int set_params_smem_test(struct test_channel *tch)
 {
 	if (!tch) {
@@ -1954,6 +1989,11 @@ ssize_t test_write(struct file *filp, const char __user *buf, size_t size,
 		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_DIAG]);
 		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_CIQ]);
 		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_RPC]);
+		break;
+	case 18:
+		pr_info(TEST_MODULE_NAME " -- rmnet small packets (5-128)  --");
+		if (set_params_a2_small_pkts(test_ctx->test_ch_arr[SDIO_RMNT]))
+			return size;
 		break;
 	case 98:
 		pr_info(TEST_MODULE_NAME " set runtime debug on");
