@@ -5621,6 +5621,8 @@ static struct othc_n_switch_config switch_config = {
 	.adc_channel = CHANNEL_ADC_HDSET,
 	.switch_info = switch_info,
 	.num_keys = ARRAY_SIZE(switch_info),
+	.default_sw_en = true,
+	.default_sw_idx = 0,
 };
 
 static struct hsed_bias_config hsed_bias_config = {
