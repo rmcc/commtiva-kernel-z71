@@ -19,6 +19,7 @@
 #include "msm_fb.h"
 #include "mipi_dsi.h"
 #include "mipi_novatek.h"
+#include "mdp4.h"
 
 
 static struct mipi_dsi_novatek_platform_data *mipi_novatek_pdata;
@@ -97,9 +98,6 @@ static char display_config_set_threelane[] = {
 	0xae, 0x05, 0x15, 0x80
 };
 
-static char led_pwm2[] = {0x53, 0x24}; /* DTYPE_DCS_LWRITE */
-static char led_pwm3[] = {0x55, 0x00}; /* DTYPE_DCS_LWRITE */
-
 #else
 
 static char sw_reset[2] = {0x01, 0x00}; /* DTYPE_DCS_WRITE */
@@ -130,13 +128,13 @@ static char set_height[5] = { /* DTYPE_DCS_LWRITE */
 	0x2B, 0x00, 0x00, 0x03, 0xBF}; /* 960 - 1 */
 #endif
 
-#ifdef NOVATEK_BACKLIGHT
-static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_LWRITE */
+static char led_pwm1[2] = {0x51, 0x0};	/* DTYPE_DCS_WRITE1 */
+static char led_pwm2[2] = {0x53, 0x24}; /* DTYPE_DCS_WRITE1 */
+static char led_pwm3[2] = {0x55, 0x00}; /* DTYPE_DCS_WRITE1 */
 
 static struct dsi_cmd_desc novatek_cmd_backlight_cmds[] = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 1, sizeof(led_pwm1), led_pwm1},
 };
-#endif
 
 static struct dsi_cmd_desc novatek_video_on_cmds[] = {
 	{DTYPE_DCS_WRITE, 1, 0, 0, 50,
@@ -148,7 +146,11 @@ static struct dsi_cmd_desc novatek_video_on_cmds[] = {
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
 		sizeof(set_num_of_lanes), set_num_of_lanes},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
-		sizeof(rgb_888), rgb_888}
+		sizeof(rgb_888), rgb_888},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
+		sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
+		sizeof(led_pwm3), led_pwm3},
 };
 
 static struct dsi_cmd_desc novatek_cmd_on_cmds[] = {
@@ -171,7 +173,11 @@ static struct dsi_cmd_desc novatek_cmd_on_cmds[] = {
 	{DTYPE_DCS_LWRITE, 1, 0, 0, 50,
 		sizeof(set_height), set_height},
 	{DTYPE_DCS_WRITE1, 1, 0, 0, 10,
-		sizeof(rgb_888), rgb_888}
+		sizeof(rgb_888), rgb_888},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1,
+		sizeof(led_pwm2), led_pwm2},
+	{DTYPE_DCS_WRITE1, 1, 0, 0, 1,
+		sizeof(led_pwm3), led_pwm3},
 };
 
 static struct dsi_cmd_desc novatek_display_off_cmds[] = {
@@ -285,29 +291,29 @@ static int mipi_novatek_lcd_off(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef NOVATEK_BACKLIGHT
-static int mipi_dsi_cmd_set_backlight(struct msm_fb_data_type *mfd)
+
+
+static void mipi_novatek_set_backlight(struct msm_fb_data_type *mfd)
 {
 	struct mipi_panel_info *mipi;
 	static int bl_level_old;
 
 	mipi  = &mfd->panel_info.mipi;
 	if (bl_level_old == mfd->bl_level)
-		return 0;
-
-	led_pwm1[1] = (unsigned char)(mfd->bl_level);
+		return;
 
 	mutex_lock(&mfd->dma->ov_mutex);
-	if (mipi->mode == DSI_CMD_MODE) {
-		mipi_dsi_cmds_tx(mfd, &novatek_tx_buf,
-				novatek_cmd_backlight_cmds,
-				ARRAY_SIZE(novatek_cmd_backlight_cmds));
-		bl_level_old = mfd->bl_level;
-	}
+	/* mdp4_dsi_cmd_busy_wait: will turn on dsi clock also */
+	mdp4_dsi_cmd_dma_busy_wait(mfd);
+	mdp4_dsi_blt_dmap_busy_wait(mfd);
+
+	led_pwm1[1] = (unsigned char)(mfd->bl_level);
+	mipi_dsi_cmds_tx(mfd, &novatek_tx_buf, novatek_cmd_backlight_cmds,
+			ARRAY_SIZE(novatek_cmd_backlight_cmds));
+	bl_level_old = mfd->bl_level;
 	mutex_unlock(&mfd->dma->ov_mutex);
-	return 0;
+	return;
 }
-#endif
 
 static int mipi_dsi_3d_barrier_sysfs_register(struct device *dev);
 static int barrier_mode;
@@ -344,6 +350,7 @@ static struct platform_driver this_driver = {
 static struct msm_fb_panel_data novatek_panel_data = {
 	.on		= mipi_novatek_lcd_on,
 	.off		= mipi_novatek_lcd_off,
+	.set_backlight = mipi_novatek_set_backlight,
 };
 
 static ssize_t mipi_dsi_3d_barrier_read(struct device *dev,
