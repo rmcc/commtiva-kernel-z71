@@ -157,6 +157,7 @@ static inline void skb_set_data(struct sk_buff *skb,
 	skb->data = data;
 	skb->tail = skb->data + len;
 	skb->len  = len;
+	skb->truesize = len + sizeof(struct sk_buff);
 }
 
 static void sdio_mux_save_partial_pkt(struct sdio_mux_hdr *hdr,
