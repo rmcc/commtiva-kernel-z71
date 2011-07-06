@@ -397,8 +397,8 @@ void mdp4_dsi_video_overlay(struct msm_fb_data_type *mfd)
 	pipe = dsi_pipe;
 	pipe->srcp0_addr = (uint32) buf;
 	mdp4_overlay_rgb_setup(pipe);
+	mutex_unlock(&mfd->dma->ov_mutex);
 	mdp4_overlay_dsi_video_vsync_push(mfd, pipe);
 	mdp4_stat.kickoff_dsi++;
 	mdp4_overlay_resource_release();
-	mutex_unlock(&mfd->dma->ov_mutex);
 }
