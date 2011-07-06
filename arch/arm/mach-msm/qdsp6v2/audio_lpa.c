@@ -1051,8 +1051,11 @@ static int audio_release(struct inode *inode, struct file *file)
 		(int)audio, audio->ac->session);
 
 	mutex_lock(&audio->lock);
+	audio->wflush = 1;
+	if (audio->out_enabled)
+		audlpa_async_flush(audio);
+	audio->wflush = 0;
 	audlpa_unmap_pmem_region(audio);
-	audlpa_async_flush(audio);
 	audio_disable(audio);
 	msm_clear_session_id(audio->ac->session);
 	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->ac->session);
