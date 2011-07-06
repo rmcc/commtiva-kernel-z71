@@ -31,7 +31,7 @@
 
 /* multiple copp per stream. */
 struct route_payload {
-	unsigned short copp_ids[AFE_MAX_PORTS];
+	unsigned int copp_ids[AFE_MAX_PORTS];
 	unsigned short num_copps;
 	unsigned int session_id;
 };
@@ -47,7 +47,7 @@ int adm_memory_unmap_regions(uint32_t *buf_add, uint32_t *bufsz,
 int adm_close(int port);
 
 int adm_matrix_map(int session_id, int path, int num_copps,
-				unsigned short *port_id, int copp_id);
+				unsigned int *port_id, int copp_id);
 
 #ifdef CONFIG_MSM8X60_RTAC
 int adm_get_copp_id(int port_id);

@@ -66,7 +66,7 @@ struct audio_routing_info {
 	unsigned short audrec_mixer_mask[MAX_SESSIONS];
 	struct session_freq dec_freq[MAX_SESSIONS];
 	struct session_freq enc_freq[MAX_SESSIONS];
-	unsigned short copp_list[MAX_SESSIONS][AFE_MAX_PORTS];
+	unsigned int copp_list[MAX_SESSIONS][AFE_MAX_PORTS];
 	int voice_tx_dev_id;
 	int voice_rx_dev_id;
 	int voice_tx_sample_rate;
@@ -374,7 +374,7 @@ int msm_snddev_set_dec(int popp_id, int copp_id, int set,
 		pr_debug("%s:Session id=%d copp_id=%d\n",
 			__func__, popp_id, copp_id);
 		memset(payload.copp_ids, DEVICE_IGNORE,
-				(sizeof(unsigned short) * AFE_MAX_PORTS));
+				(sizeof(unsigned int) * AFE_MAX_PORTS));
 		rc = msm_check_multicopp_per_stream(popp_id, &payload);
 		/* Multiple streams per copp is handled, one stream at a time */
 		rc = adm_matrix_map(popp_id, PLAYBACK, rc,
@@ -518,7 +518,7 @@ int msm_snddev_set_enc(int popp_id, int copp_id, int set,
 		}
 
 		rc = adm_matrix_map(popp_id, LIVE_RECORDING, 1,
-					(unsigned short *)&copp_id, copp_id);
+					(unsigned int *)&copp_id, copp_id);
 		if (rc < 0) {
 			pr_err("%s: matrix map failed rc[%d]\n", __func__, rc);
 			adm_close(copp_id);
@@ -968,7 +968,7 @@ int msm_enable_incall_recording(int popp_id, int rec_mode, int rate,
 				int channel_mode)
 {
 	int rc = 0;
-	int port_id[2];
+	unsigned int port_id[2];
 	port_id[0] = VOICE_RECORD_TX;
 	port_id[1] = VOICE_RECORD_RX;
 
@@ -996,7 +996,7 @@ int msm_enable_incall_recording(int popp_id, int rec_mode, int rate,
 		}
 
 		rc = adm_matrix_map(popp_id, LIVE_RECORDING, 1,
-				(unsigned short *)&port_id[0], port_id[0]);
+				&port_id[0], port_id[0]);
 		if (rc < 0) {
 			pr_err("%s: Error %d in ADM matrix map %d\n",
 			       __func__, rc, port_id[0]);
@@ -1025,7 +1025,7 @@ int msm_enable_incall_recording(int popp_id, int rec_mode, int rate,
 		}
 
 		rc = adm_matrix_map(popp_id, LIVE_RECORDING, 1,
-				(unsigned short *)&port_id[1], port_id[1]);
+				&port_id[1], port_id[1]);
 		if (rc < 0) {
 			pr_err("%s: Error %d in ADM matrix map %d\n",
 			       __func__, rc, port_id[1]);
@@ -1073,7 +1073,7 @@ int msm_enable_incall_recording(int popp_id, int rec_mode, int rate,
 		}
 
 		rc = adm_matrix_map(popp_id, LIVE_RECORDING, 2,
-				(unsigned short *)&port_id[0], port_id[1]);
+				&port_id[0], port_id[1]);
 		if (rc < 0) {
 			pr_err("%s: Error %d in ADM matrix map\n",
 			       __func__, rc);
@@ -1676,7 +1676,7 @@ static int __init audio_dev_ctrl_init(void)
 	mutex_init(&routing_info.adm_mutex);
 
 	memset(routing_info.copp_list, DEVICE_IGNORE,
-		(sizeof(unsigned short) * MAX_SESSIONS * AFE_MAX_PORTS));
+		(sizeof(unsigned int) * MAX_SESSIONS * AFE_MAX_PORTS));
 	return misc_register(&audio_dev_ctrl_misc);
 }
 
