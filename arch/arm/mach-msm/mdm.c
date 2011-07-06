@@ -85,7 +85,7 @@ static void charm_enable_irqs(void)
 	enable_irq(charm_status_irq);
 }
 
-static int charm_subsys_shutdown(void)
+static int charm_subsys_shutdown(const char * const crashed_subsys)
 {
 	charm_disable_irqs();
 	power_down_charm();
@@ -93,7 +93,7 @@ static int charm_subsys_shutdown(void)
 	return 0;
 }
 
-static int charm_subsys_powerup(void)
+static int charm_subsys_powerup(const char * const crashed_subsys)
 {
 	power_on_charm();
 	boot_type = CHARM_NORMAL_BOOT;
@@ -105,7 +105,8 @@ static int charm_subsys_powerup(void)
 	return charm_boot_status;
 }
 
-static int charm_subsys_ramdumps(int want_dumps)
+static int charm_subsys_ramdumps(int want_dumps,
+					const char * const crashed_subsys)
 {
 	charm_ram_dump_status = 0;
 	if (want_dumps) {

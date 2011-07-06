@@ -291,7 +291,7 @@ static int subsystem_restart_thread(void *data)
 		pr_info("subsys-restart: Shutting down %s\n",
 			restart_list[i]->name);
 
-		if (restart_list[i]->shutdown() < 0)
+		if (restart_list[i]->shutdown(subsys->name) < 0)
 			panic("%s: Failed to shutdown %s!\n", __func__,
 				restart_list[i]->name);
 	}
@@ -312,7 +312,8 @@ static int subsystem_restart_thread(void *data)
 			continue;
 
 		if (restart_list[i]->ramdump)
-			if (restart_list[i]->ramdump(enable_ramdumps) < 0)
+			if (restart_list[i]->ramdump(enable_ramdumps,
+							subsys->name) < 0)
 				pr_warn("%s(%s): Ramdump failed.", __func__,
 					restart_list[i]->name);
 	}
@@ -329,7 +330,7 @@ static int subsystem_restart_thread(void *data)
 		pr_info("subsys-restart: Powering up %s\n",
 			restart_list[i]->name);
 
-		if (restart_list[i]->powerup() < 0)
+		if (restart_list[i]->powerup(subsys->name) < 0)
 			panic("%s: Failed to powerup %s!", __func__,
 				restart_list[i]->name);
 	}
@@ -420,7 +421,7 @@ int subsystem_restart(const char *subsys_name)
 		mutex_lock(&subsystem_list_lock);
 		list_for_each_entry(subsys, &subsystem_list, list)
 			if (subsys->crash_shutdown)
-				subsys->crash_shutdown(subsys);
+				subsys->crash_shutdown(subsys->name);
 		mutex_unlock(&subsystem_list_lock);
 
 		panic("Resetting the SOC");
