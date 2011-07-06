@@ -93,6 +93,7 @@ static void q6asm_session_free(struct audio_client *ac)
 	mutex_lock(&session_lock);
 	session[ac->session] = 0;
 	mutex_unlock(&session_lock);
+	ac->session = 0;
 	return;
 }
 
@@ -516,6 +517,12 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		pr_err("ac or priv NULL\n");
 		return -EINVAL;
 	}
+	if (ac->session <= 0 || ac->session > 8) {
+		pr_err("%s:Session ID is invalid, session = %d\n", __func__,
+			ac->session);
+		return -EINVAL;
+	}
+
 	payload = data->payload;
 
 	if (data->opcode == RESET_EVENTS) {
@@ -550,7 +557,7 @@ static int32_t q6asm_callback(struct apr_client_data *data, void *priv)
 		if (token != ac->session) {
 			pr_err("%s:Invalid session[%d] rxed expected[%d]",
 					__func__, token, ac->session);
-			break;
+			return -EINVAL;
 		}
 		case ASM_STREAM_CMD_OPEN_READ:
 		case ASM_STREAM_CMD_OPEN_WRITE:
