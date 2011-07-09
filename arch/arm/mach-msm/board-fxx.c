@@ -1903,7 +1903,7 @@ static void __init msm7x2x_init(void)
 	msm_init_pmic_vibrator();
 	init_Bluetooth_gpio_table();
 	bt_power_init();
-
+	wifi_power_init();
 	msm_pm_set_platform_data(msm7x27_pm_data,ARRAY_SIZE(msm7x27_pm_data));
 	adq_info_init();
 
