@@ -40,7 +40,7 @@
 
 #define MAX_WRITE_RETRY 5
 #define MAGIC_NO_V1 0x33FC
-#define NUM_SDIO_CTL_PORTS 8
+#define NUM_SDIO_CTL_PORTS 9
 #define DEVICE_NAME "sdioctl"
 #define MAX_BUF_SIZE 2048
 #define DEBUG
@@ -114,8 +114,10 @@ static void sdio_ctl_receive_cb(void *data, int size, void *priv)
 
 	if (id < 0 || id >= NUM_SDIO_CTL_PORTS)
 		return;
-	if (!data || size <= 0)
+	if (!data || size <= 0) {
+		wake_up(&sdio_ctl_devp[id]->read_wait_queue);
 		return;
+	}
 
 	list_elem = kmalloc(sizeof(struct sdio_ctl_list_elem), GFP_KERNEL);
 	if (!list_elem) {
@@ -147,6 +149,30 @@ static void sdio_ctl_write_done(void *data, int size, void *priv)
 	wake_up(&sdio_ctl_devp[id]->write_wait_queue);
 }
 
+static long sdio_ctl_ioctl(struct file *file, unsigned int cmd,
+					      unsigned long arg)
+{
+	int ret;
+	struct sdio_ctl_dev *sdio_ctl_devp;
+
+	sdio_ctl_devp = file->private_data;
+	if (!sdio_ctl_devp)
+		return -ENODEV;
+
+	switch (cmd) {
+	case TIOCMGET:
+		ret = sdio_cmux_tiocmget(sdio_ctl_devp->id);
+		break;
+	case TIOCMSET:
+		ret = sdio_cmux_tiocmset(sdio_ctl_devp->id, arg, ~arg);
+		break;
+	default:
+		ret = -EINVAL;
+	}
+
+	return ret;
+}
+
 ssize_t sdio_ctl_read(struct file *file,
 		      char __user *buf,
 		      size_t count,
@@ -170,6 +196,8 @@ ssize_t sdio_ctl_read(struct file *file,
 		r = wait_event_interruptible(sdio_ctl_devp->read_wait_queue,
 					     sdio_ctl_devp->read_avail > 0 ||
 					     !is_remote_open(id));
+		if (sdio_cmux_is_channel_reset(id))
+			return -ENETRESET;
 
 		if (!is_remote_open(id))
 			return -ENODEV;
@@ -244,6 +272,9 @@ ssize_t sdio_ctl_write(struct file *file,
 		r = wait_event_interruptible(sdio_ctl_devp->write_wait_queue,
 					     sdio_cmux_write_avail(id) >= count
 					     || !is_remote_open(id));
+
+		if (sdio_cmux_is_channel_reset(id))
+			return -ENETRESET;
 
 		if (!is_remote_open(id))
 			return -ENODEV;
@@ -353,6 +384,7 @@ static const struct file_operations sdio_ctl_fops = {
 	.release = sdio_ctl_release,
 	.read = sdio_ctl_read,
 	.write = sdio_ctl_write,
+	.unlocked_ioctl = sdio_ctl_ioctl,
 };
 
 static int sdio_ctl_probe(struct platform_device *pdev)

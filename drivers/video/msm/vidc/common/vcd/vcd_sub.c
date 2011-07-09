@@ -1758,7 +1758,7 @@ u32 vcd_handle_input_done(
 			frame->vcd_frm.flags &= ~VCD_FRAME_FLAG_CODECCONFIG;
 		}
 		if (frame->vcd_frm.interlaced)
-			vcd_handle_input_done_for_interlacing(cctxt, transc);
+			vcd_handle_input_done_for_interlacing(cctxt);
 		if (frame->frm_trans_end)
 			vcd_handle_input_done_with_trans_end(cctxt);
 	}
@@ -1787,7 +1787,10 @@ u32 vcd_handle_input_done_in_eos(
 		VCD_MSG_HIGH("Got input done for EOS initiator");
 		transc->input_done = false;
 		transc->in_use = true;
-		if (codec_config && core_type == VCD_CORE_1080P)
+		if (codec_config ||
+			((status == VCD_ERR_BITSTREAM_ERR) &&
+			 !(cctxt->status.mask & VCD_FIRST_IP_DONE) &&
+			 (core_type == VCD_CORE_720P)))
 			vcd_handle_eos_done(cctxt, transc, VCD_S_SUCCESS);
 	}
 	return rc;
@@ -1846,14 +1849,12 @@ void vcd_handle_input_done_with_codec_config(
 		vcd_release_trans_tbl_entry(transc);
 }
 
-void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt *cctxt,
-	struct vcd_transc *transc)
+void vcd_handle_input_done_for_interlacing(struct vcd_clnt_ctxt *cctxt)
 {
 	cctxt->status.int_field_cnt++;
-	if (cctxt->status.int_field_cnt == 1) {
+	if (cctxt->status.int_field_cnt == 1)
 		cctxt->sched_clnt_hdl->tkns++;
-		vcd_release_trans_tbl_entry(transc);
-	} else if (cctxt->status.int_field_cnt ==
+	else if (cctxt->status.int_field_cnt ==
 		VCD_DEC_NUM_INTERLACED_FIELDS)
 		cctxt->status.int_field_cnt = 0;
 }
@@ -2097,15 +2098,6 @@ u32 vcd_handle_first_fill_output_buffer(
 	u32 *handled)
 {
 	u32 rc = VCD_S_SUCCESS;
-	if (cctxt->status.mask & VCD_IN_RECONFIG) {
-		cctxt->callback(VCD_EVT_RESP_OUTPUT_DONE,
-			VCD_S_SUCCESS,
-			buffer,
-			sizeof(struct vcd_frame_data),
-			cctxt, cctxt->client_data);
-		*handled = true;
-		return rc;
-	}
 	rc = vcd_check_if_buffer_req_met(cctxt, VCD_BUFFER_OUTPUT);
 	VCD_FAILED_RETURN(rc, "Output buffer requirements not met");
 	if (cctxt->out_buf_pool.q_len > 0) {
@@ -3046,4 +3038,13 @@ void vcd_handle_clnt_fatal_input_done(struct vcd_clnt_ctxt *cctxt,
 	if (cctxt->status.frame_submitted > 0)
 		cctxt->status.frame_submitted--;
 	vcd_handle_clnt_fatal(cctxt, trans_end);
+}
+
+void vcd_handle_ind_info_output_reconfig(
+	struct vcd_clnt_ctxt *cctxt, u32 status)
+{
+	if (cctxt) {
+		cctxt->callback(VCD_EVT_IND_INFO_OUTPUT_RECONFIG, status, NULL,
+		 0, cctxt, cctxt->client_data);
+	}
 }

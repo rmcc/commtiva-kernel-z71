@@ -137,7 +137,7 @@ static int usb_ulpi_read(struct otg_transceiver *xceiv, u32 reg)
 	return ulpi_read(dev, reg);
 }
 
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 static void enable_idgnd(struct msm_otg *dev)
 {
 	/* Do nothing if instead of ID pin, USER controls mode switch */
@@ -246,6 +246,19 @@ static inline void set_pre_emphasis_level(struct msm_otg *dev)
 	ulpi_write(dev, res, ULPI_CONFIG_REG3);
 }
 
+static inline void set_hsdrv_slope(struct msm_otg *dev)
+{
+	unsigned res = 0;
+
+	if (!dev->pdata || dev->pdata->hsdrvslope == HS_DRV_SLOPE_DEFAULT)
+		return;
+
+	res = ulpi_read(dev, ULPI_CONFIG_REG3);
+	res &= ~(ULPI_HSDRVSLOPE_MASK);
+	res |= (dev->pdata->hsdrvslope & ULPI_HSDRVSLOPE_MASK);
+	ulpi_write(dev, res, ULPI_CONFIG_REG3);
+}
+
 static inline void set_cdr_auto_reset(struct msm_otg *dev)
 {
 	unsigned res = 0;
@@ -347,13 +360,13 @@ static void otg_pm_qos_update_latency(struct msm_otg *dev, int vote)
  */
 static void msm_otg_vote_for_pclk_source(struct msm_otg *dev, int vote)
 {
-	if (!pclk_requires_voting(&dev->otg))
-		return;
+	if (dev->pclk_src && pclk_requires_voting(&dev->otg)) {
 
-	if (vote)
-		clk_enable(dev->pclk_src);
-	else
-		clk_disable(dev->pclk_src);
+		if (vote)
+			clk_enable(dev->pclk_src);
+		else
+			clk_disable(dev->pclk_src);
+	}
 }
 
 /* Controller gives interrupt for every 1 mesc if 1MSIE is set in OTGSC.
@@ -706,6 +719,9 @@ static int msm_otg_suspend(struct msm_otg *dev)
 	}
 
 	writel(readl(USB_USBCMD) | ASYNC_INTR_CTRL | ULPI_STP_CTRL, USB_USBCMD);
+	/* Ensure that above operation is completed before turning off clocks */
+	dsb();
+
 	if (dev->hs_pclk)
 		clk_disable(dev->hs_pclk);
 	if (dev->hs_cclk)
@@ -983,7 +999,7 @@ static int msm_otg_set_peripheral(struct otg_transceiver *xceiv,
 	return 0;
 }
 
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 static int usbdev_notify(struct notifier_block *self,
 			unsigned long action, void *device)
 {
@@ -1454,12 +1470,16 @@ reset_link:
 	writel(0x80000000, USB_PORTSC);
 
 	set_pre_emphasis_level(dev);
+	set_hsdrv_slope(dev);
 	set_cdr_auto_reset(dev);
 	set_driver_amplitude(dev);
 	set_se1_gating(dev);
 
 	writel(0x0, USB_AHB_BURST);
 	writel(0x00, USB_AHB_MODE);
+	/* Ensure that RESET operation is completed before turning off clock */
+	dsb();
+
 	clk_disable(dev->hs_clk);
 
 	if ((xceiv->gadget && xceiv->gadget->is_a_peripheral) ||
@@ -1487,7 +1507,7 @@ reset_link:
 		}
 	}
 
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 	if (dev->otg.host && !dev->pmic_id_notif_supp) {
 		enable_idgnd(dev);
 		/* Handle missing ID_GND interrupts during fast PIPO */
@@ -2387,7 +2407,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 		goto free_dev;
 	}
 
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 	if (!dev->pdata->vbus_power) {
 		ret = -ENODEV;
 		goto free_dev;
@@ -2577,6 +2597,8 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	writel((readl(USB_OTGSC) & ~OTGSC_INTR_MASK), USB_OTGSC);
 	writel(readl(USB_USBSTS), USB_USBSTS);
 	writel(0, USB_USBINTR);
+	/* Ensure that above STOREs are completed before enabling interrupts */
+	dsb();
 
 	ret = request_irq(dev->irq, msm_otg_irq, IRQF_SHARED,
 					"msm_otg", dev);
@@ -2586,7 +2608,7 @@ static int __init msm_otg_probe(struct platform_device *pdev)
 	}
 
 	dev->otg.set_peripheral = msm_otg_set_peripheral;
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 	dev->otg.set_host = msm_otg_set_host;
 #endif
 	dev->otg.set_suspend = msm_otg_set_suspend;

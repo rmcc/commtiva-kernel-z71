@@ -24,39 +24,24 @@
  * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
  * OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
  * IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
-#ifndef __DAI_H__
-#define __DAI_H__
 
-struct dai_dma_params {
-	u8 *buffer;
-	uint32_t src_start;
-	uint32_t bus_id;
-	int buffer_size;
-	int period_size;
-	int channels;
+#ifndef _ARCH_ARM_MACH_MSM_MDM_IOCTLS_H
+#define _ARXH_ARM_MACH_MSM_MDM_IOCTLS_H
+
+
+#define CHARM_CODE		0xCC
+#define WAKE_CHARM		_IO(CHARM_CODE, 1)
+#define RESET_CHARM		_IO(CHARM_CODE, 2)
+#define CHECK_FOR_BOOT		_IOR(CHARM_CODE, 3, int)
+#define WAIT_FOR_BOOT		_IO(CHARM_CODE, 4)
+#define NORMAL_BOOT_DONE	_IOW(CHARM_CODE, 5, int)
+#define RAM_DUMP_DONE		_IOW(CHARM_CODE, 6, int)
+#define WAIT_FOR_RESTART	_IOR(CHARM_CODE, 7, int)
+
+enum charm_boot_type {
+	CHARM_NORMAL_BOOT = 0,
+	CHARM_RAM_DUMPS,
 };
-
-enum {
-	DAI_SPKR = 0,
-	DAI_MIC,
-	DAI_MI2S,
-	DAI_SEC_SPKR,
-	DAI_SEC_MIC,
-};
-
-/* Function Prototypes */
-int dai_open(uint32_t dma_ch);
-void dai_close(uint32_t dma_ch);
-int dai_start(uint32_t dma_ch);
-int dai_stop(uint32_t dma_ch);
-int dai_set_params(uint32_t dma_ch, struct dai_dma_params *params);
-uint32_t dai_get_dma_pos(uint32_t dma_ch);
-void register_dma_irq_handler(int dma_ch,
-		irqreturn_t (*callback) (int intrSrc, void *private_data),
-		void *private_data);
-void unregister_dma_irq_handler(int dma_ch);
-void dai_set_master_mode(uint32_t dma_ch, int mode);
 
 #endif

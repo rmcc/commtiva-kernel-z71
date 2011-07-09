@@ -260,6 +260,15 @@ static void vid_dec_output_frame_done(struct video_client_ctx *client_ctx,
 			vcd_frame_data->dec_op_prop.disp_frm.right;
 		vdec_msg->vdec_msg_info.msgdata.output_frame.framesize.top =
 			vcd_frame_data->dec_op_prop.disp_frm.top;
+		if (vcd_frame_data->interlaced) {
+			vdec_msg->vdec_msg_info.msgdata.
+				output_frame.interlaced_format =
+				VDEC_InterlaceInterleaveFrameTopFieldFirst;
+		} else {
+			vdec_msg->vdec_msg_info.msgdata.
+				output_frame.interlaced_format =
+				VDEC_InterlaceFrameProgressive;
+		}
 		/* Decoded picture type */
 		switch (vcd_frame_data->frame) {
 		case VCD_FRAME_I:
@@ -353,6 +362,12 @@ static void vid_dec_lean_event(struct video_client_ctx *client_ctx,
 			 " to client");
 		vdec_msg->vdec_msg_info.msgcode = VDEC_MSG_RESP_PAUSE_DONE;
 		break;
+	case VCD_EVT_IND_INFO_OUTPUT_RECONFIG:
+		INFO("msm_vidc_dec: Sending VDEC_MSG_EVT_INFO_CONFIG_CHANGED"
+			 " to client");
+		vdec_msg->vdec_msg_info.msgcode =
+			 VDEC_MSG_EVT_INFO_CONFIG_CHANGED;
+		break;
 	default:
 		ERR("%s() : unknown event type\n", __func__);
 		break;
@@ -411,6 +426,7 @@ void vid_dec_vcd_cb(u32 event, u32 status,
 	case VCD_EVT_IND_OUTPUT_RECONFIG:
 	case VCD_EVT_IND_HWERRFATAL:
 	case VCD_EVT_IND_RESOURCES_LOST:
+	case VCD_EVT_IND_INFO_OUTPUT_RECONFIG:
 		vid_dec_lean_event(client_ctx, event, status);
 		break;
 	case VCD_EVT_RESP_START:
@@ -658,6 +674,22 @@ static u32 vid_dec_set_extradata(struct video_client_ctx *client_ctx,
 		return true;
 }
 
+static u32 vid_dec_set_idr_only_decoding(struct video_client_ctx *client_ctx)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	u32 vcd_status = VCD_ERR_FAIL;
+	u32 enable = true;
+	if (!client_ctx)
+		return false;
+	vcd_property_hdr.prop_id = VCD_I_DEC_PICTYPE;
+	vcd_property_hdr.sz = sizeof(u32);
+	vcd_status = vcd_set_property(client_ctx->vcd_handle,
+			&vcd_property_hdr, &enable);
+	if (vcd_status)
+		return false;
+	return true;
+}
+
 static u32 vid_dec_set_h264_mv_buffers(struct video_client_ctx *client_ctx,
 					struct vdec_h264_mv *mv_data)
 {
@@ -700,6 +732,22 @@ static u32 vid_dec_set_h264_mv_buffers(struct video_client_ctx *client_ctx,
 		return false;
 	else
 		return true;
+}
+
+static u32 vid_dec_set_cont_on_reconfig(struct video_client_ctx *client_ctx)
+{
+	struct vcd_property_hdr vcd_property_hdr;
+	u32 vcd_status = VCD_ERR_FAIL;
+	u32 enable = true;
+	if (!client_ctx)
+		return false;
+	vcd_property_hdr.prop_id = VCD_I_CONT_ON_RECONFIG;
+	vcd_property_hdr.sz = sizeof(u32);
+	vcd_status = vcd_set_property(client_ctx->vcd_handle,
+		&vcd_property_hdr, &enable);
+	if (vcd_status)
+		return false;
+	return true;
 }
 
 static u32 vid_dec_get_h264_mv_buffer_size(struct video_client_ctx *client_ctx,
@@ -1566,6 +1614,20 @@ static int vid_dec_ioctl(struct inode *inode, struct file *file,
 					sizeof(mv_buff)))
 				return -EFAULT;
 		} else
+			return -EIO;
+		break;
+	}
+	case VDEC_IOCTL_SET_IDR_ONLY_DECODING:
+	{
+		result = vid_dec_set_idr_only_decoding(client_ctx);
+		if (!result)
+			return -EIO;
+		break;
+	}
+	case VDEC_IOCTL_SET_CONT_ON_RECONFIG:
+	{
+		result = vid_dec_set_cont_on_reconfig(client_ctx);
+		if (!result)
 			return -EIO;
 		break;
 	}

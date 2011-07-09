@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, Code Aurora Forum. All rights reserved.
+/* Copyright (c) 2010-2011, Code Aurora Forum. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -114,15 +114,15 @@ static inline void msm_spm_set_slp_rst_en(
 static inline void msm_spm_flush_shadow(
 	struct msm_spm_device *dev, unsigned int reg_index)
 {
-	writel(dev->reg_shadow[reg_index],
+	__raw_writel(dev->reg_shadow[reg_index],
 		dev->reg_base_addr + msm_spm_reg_offsets[reg_index]);
 }
 
 static inline void msm_spm_load_shadow(
 	struct msm_spm_device *dev, unsigned int reg_index)
 {
-	dev->reg_shadow[reg_index] =
-		readl(dev->reg_base_addr + msm_spm_reg_offsets[reg_index]);
+	dev->reg_shadow[reg_index] = __raw_readl(dev->reg_base_addr +
+					msm_spm_reg_offsets[reg_index]);
 }
 
 static inline uint32_t msm_spm_get_sts_pmic_state(struct msm_spm_device *dev)
@@ -175,6 +175,8 @@ int msm_spm_set_low_power_mode(unsigned int mode, bool notify_rpm)
 	msm_spm_flush_shadow(dev, MSM_SPM_REG_SAW_SPM_CTL);
 	msm_spm_flush_shadow(dev, MSM_SPM_REG_SAW_SPM_PMIC_CTL);
 	msm_spm_flush_shadow(dev, MSM_SPM_REG_SAW_SLP_RST_EN);
+	/* Ensure that the registers are written before returning */
+	dsb();
 
 	dev->low_power_mode = mode;
 	dev->notify_rpm = notify_rpm;
@@ -261,6 +263,9 @@ void msm_spm_reinit(void)
 
 	for (i = 0; i < MSM_SPM_REG_NR_INITIALIZE; i++)
 		msm_spm_flush_shadow(dev, i);
+
+	/* Ensure that the registers are written before returning */
+	dsb();
 }
 
 void msm_spm_allow_x_cpu_set_vdd(bool allowed)
@@ -290,6 +295,9 @@ int __init msm_spm_init(struct msm_spm_platform_data *data, int nr_devs)
 
 		for (i = 0; i < MSM_SPM_REG_NR_INITIALIZE; i++)
 			msm_spm_flush_shadow(dev, i);
+
+		/* Ensure that the registers are written before returning */
+		dsb();
 
 		dev->low_power_mode = MSM_SPM_MODE_CLOCK_GATING;
 		dev->notify_rpm = false;

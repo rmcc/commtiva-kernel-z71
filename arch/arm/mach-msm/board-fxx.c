@@ -239,7 +239,7 @@ static int __init board_serialno_setup(char *serialno)
 
 #endif
 
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 static void msm_hsusb_vbus_power(unsigned phy_info, int on)
 {
 	if (on)
@@ -325,7 +325,7 @@ static struct msm_otg_platform_data msm_otg_pdata = {
 #ifdef CONFIG_BATTERY_FIH_ZEUS
     .chg_connected       = charger_connected,
 #endif
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
     .vbus_power = msm_hsusb_vbus_power,
 #endif
     .chg_init        = hsusb_chg_init,
@@ -1884,7 +1884,7 @@ static void __init msm7x2x_init(void)
 
 	msm_power_register();
 	msm_fb_add_devices();
-#ifdef CONFIG_USB_EHCI_MSM
+#ifdef CONFIG_USB_EHCI_MSM_72K
 	msm7x2x_init_host();
 #endif
 	msm7x2x_init_mmc();

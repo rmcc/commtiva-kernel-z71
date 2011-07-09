@@ -159,7 +159,8 @@ int marimba_write_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 		for (i = 0; i < num_bytes; i++)
 			marimba_shadow[marimba->mod_id][reg + i]
 							= mask_value[i];
-	}
+	} else
+		dev_err(&marimba->client->dev, "i2c write failed\n");
 
 	mutex_unlock(&marimba->xfer_lock);
 
@@ -228,7 +229,8 @@ int marimba_read_bit_mask(struct marimba *marimba, u8 reg, u8 *value,
 			marimba_shadow[marimba->mod_id][reg + i] = value[i];
 			value[i] &= mask;
 		}
-	}
+	} else
+		dev_err(&marimba->client->dev, "i2c read failed\n");
 
 	mutex_unlock(&marimba->xfer_lock);
 
@@ -400,6 +402,8 @@ bool marimba_get_fm_status(struct marimba *marimba)
 {
 	bool ret;
 
+	marimba = &marimba_modules[marimba->mod_id];
+
 	mutex_lock(&marimba->xfer_lock);
 
 	ret = fm_status;
@@ -412,6 +416,8 @@ EXPORT_SYMBOL(marimba_get_fm_status);
 
 void marimba_set_fm_status(struct marimba *marimba, bool value)
 {
+	marimba = &marimba_modules[marimba->mod_id];
+
 	mutex_lock(&marimba->xfer_lock);
 
 	fm_status = value;
@@ -423,6 +429,8 @@ EXPORT_SYMBOL(marimba_set_fm_status);
 bool marimba_get_bt_status(struct marimba *marimba)
 {
 	bool ret;
+
+	marimba = &marimba_modules[marimba->mod_id];
 
 	mutex_lock(&marimba->xfer_lock);
 
@@ -436,6 +444,8 @@ EXPORT_SYMBOL(marimba_get_bt_status);
 
 void marimba_set_bt_status(struct marimba *marimba, bool value)
 {
+	marimba = &marimba_modules[marimba->mod_id];
+
 	mutex_lock(&marimba->xfer_lock);
 
 	bt_status = value;
@@ -550,7 +560,7 @@ static int marimba_probe(struct i2c_client *client,
 			pdata->bahama_shutdown(cur_adie_type);
 		if (pdata->marimba_shutdown != NULL)
 			pdata->marimba_shutdown();
-		return 0;
+		return -ENODEV;
 	}
 
 	if (rc < 2) {

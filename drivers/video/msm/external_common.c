@@ -20,7 +20,7 @@
 #include <linux/bitops.h>
 #include <linux/mutex.h>
 
-/* #define DEBUG */
+#define DEBUG
 #define DEV_DBG_PREFIX "EXT_COMMON: "
 
 #include "msm_fb.h"
@@ -278,7 +278,28 @@ static ssize_t hdmi_common_wta_hpd(struct device *dev,
 
 	return ret;
 }
+
+static ssize_t hdmi_common_rda_3d_present(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret = snprintf(buf, PAGE_SIZE, "%d\n",
+		external_common_state->present_3d);
+	DEV_DBG("%s: '%d'\n", __func__,
+			external_common_state->present_3d);
+	return ret;
+}
+
+static ssize_t hdmi_common_rda_hdcp_present(struct device *dev,
+	struct device_attribute *attr, char *buf)
+{
+	ssize_t ret = snprintf(buf, PAGE_SIZE, "%d\n",
+		external_common_state->present_hdcp);
+	DEV_DBG("%s: '%d'\n", __func__,
+			external_common_state->present_hdcp);
+	return ret;
+}
 #endif
+
 #ifdef CONFIG_FB_MSM_HDMI_3D
 static ssize_t hdmi_3d_rda_format_3d(struct device *dev,
 	struct device_attribute *attr, char *buf)
@@ -385,6 +406,8 @@ static DEVICE_ATTR(edid_modes, S_IRUGO, hdmi_common_rda_edid_modes, NULL);
 static DEVICE_ATTR(hpd, S_IRUGO | S_IWUGO, hdmi_common_rda_hpd,
 	hdmi_common_wta_hpd);
 static DEVICE_ATTR(hdcp, S_IRUGO, hdmi_common_rda_hdcp, NULL);
+static DEVICE_ATTR(3d_present, S_IRUGO, hdmi_common_rda_3d_present, NULL);
+static DEVICE_ATTR(hdcp_present, S_IRUGO, hdmi_common_rda_hdcp_present, NULL);
 #endif
 #ifdef CONFIG_FB_MSM_HDMI_3D
 static DEVICE_ATTR(format_3d, S_IRUGO | S_IWUGO, hdmi_3d_rda_format_3d,
@@ -399,6 +422,8 @@ static struct attribute *external_common_fs_attrs[] = {
 	&dev_attr_edid_modes.attr,
 	&dev_attr_hdcp.attr,
 	&dev_attr_hpd.attr,
+	&dev_attr_3d_present.attr,
+	&dev_attr_hdcp_present.attr,
 #endif
 #ifdef CONFIG_FB_MSM_HDMI_3D
 	&dev_attr_format_3d.attr,
@@ -666,6 +691,26 @@ static uint32 hdmi_edid_extract_ieee_reg_id(const uint8 *in_buf)
 	return ((uint32)vsd[3] << 16) + ((uint32)vsd[2] << 8) + (uint32)vsd[1];
 }
 
+static void hdmi_edid_extract_3d_present(const uint8 *in_buf)
+{
+	uint8 len, offset;
+	const uint8 *vsd = hdmi_edid_find_block(in_buf, 3, &len);
+
+	external_common_state->present_3d = 0;
+	if (vsd == NULL || len < 9) {
+		DEV_DBG("EDID[3D]: block-id 3 not found or not long enough\n");
+		return;
+	}
+
+	offset = !(vsd[8] & BIT(7)) ? 9 : 13;
+	DEV_DBG("EDID: 3D present @ %d = %02x\n", offset, vsd[offset]);
+	if (vsd[offset] >> 7) { /* 3D format indication present */
+		DEV_INFO("EDID: 3D present, 3D-len=%d\n", vsd[offset+1] & 0x1F);
+		external_common_state->present_3d = 1;
+	}
+}
+
+
 static void hdmi_edid_extract_latency_fields(const uint8 *in_buf)
 {
 	uint8 len;
@@ -724,6 +769,7 @@ static void hdmi_edid_extract_audio_data_blocks(const uint8 *in_buf)
 		sad += 3;
 	}
 }
+
 
 static void hdmi_edid_detail_desc(const uint8 *data_buf, uint32 *disp_mode)
 {
@@ -966,10 +1012,12 @@ int hdmi_common_read_edid(void)
 	uint32 cea_extension_ver = 0;
 	uint32 num_og_cea_blocks  = 0;
 	uint32 ieee_reg_id = 0;
+	uint32 i = 1;
 	char vendor_id[5];
 	/* EDID_BLOCK_SIZE[0x80] Each page size in the EDID ROM */
-	uint8 edid_buf[0x80 * 2];
+	uint8 edid_buf[0x80 * 4];
 
+	external_common_state->present_3d = 0;
 	memset(&external_common_state->disp_mode_list, 0,
 		sizeof(external_common_state->disp_mode_list));
 	memset(edid_buf, 0, sizeof(edid_buf));
@@ -990,9 +1038,14 @@ int hdmi_common_read_edid(void)
 	/* EDID_CEA_EXTENSION_FLAG[0x7E] - CEC extension byte */
 	num_og_cea_blocks = edid_buf[0x7E];
 
+	DEV_DBG("[JSR] (%s): No. of CEA blocks is  [%u]\n", __func__,
+		num_og_cea_blocks);
 	/* Find out any CEA extension blocks following block 0 */
 	switch (num_og_cea_blocks) {
 	case 0: /* No CEA extension */
+		external_common_state->hdmi_sink = false;
+		DEV_DBG("HDMI DVI mode: %s\n",
+			external_common_state->hdmi_sink ? "no" : "yes");
 		break;
 	case 1: /* Read block 1 */
 		status = hdmi_common_read_edid_block(1, edid_buf+0x80);
@@ -1006,10 +1059,40 @@ int hdmi_common_read_edid(void)
 		if (num_og_cea_blocks) {
 			ieee_reg_id =
 				hdmi_edid_extract_ieee_reg_id(edid_buf+0x80);
+			if (ieee_reg_id == 0x0c03)
+				external_common_state->hdmi_sink = TRUE ;
+			else
+				external_common_state->hdmi_sink = FALSE ;
 			hdmi_edid_extract_latency_fields(edid_buf+0x80);
 			hdmi_edid_extract_speaker_allocation_data(
 				edid_buf+0x80);
 			hdmi_edid_extract_audio_data_blocks(edid_buf+0x80);
+			hdmi_edid_extract_3d_present(edid_buf+0x80);
+		}
+		break;
+	case 2:
+	case 3:
+	case 4:
+		for (i = 1; i <= num_og_cea_blocks; i++) {
+			if (!(i % 2)) {
+					status = hdmi_common_read_edid_block(i,
+								edid_buf+0x00);
+					if (status) {
+						DEV_ERR("%s: ddc read block(%d)"
+						"failed: %d\n", __func__, i,
+							status);
+						goto error;
+					}
+			} else {
+				status = hdmi_common_read_edid_block(i,
+							edid_buf+0x80);
+				if (status) {
+					DEV_ERR("%s: ddc read block(%d)"
+					"failed:%d\n", __func__, i,
+						status);
+					goto error;
+				}
+			}
 		}
 		break;
 	default:

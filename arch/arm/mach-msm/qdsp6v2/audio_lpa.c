@@ -681,7 +681,8 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct audio *audio = file->private_data;
 	int rc = -EINVAL;
-	uint32_t timestamp;
+	uint64_t timestamp;
+	uint64_t temp;
 
 	pr_debug("%s: audio_ioctl() cmd = %d\n", __func__, cmd);
 
@@ -692,16 +693,19 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		memset(&stats, 0, sizeof(stats));
 		timestamp = q6asm_get_session_time(audio->ac);
 		if (timestamp < 0) {
-			pr_err("%s: Get Session Time return value =%d\n",
+			pr_err("%s: Get Session Time return value =%lld\n",
 				__func__, timestamp);
 			return -EAGAIN;
 		}
-		audio->bytes_consumed = ((timestamp * 2 *
-			audio->out_channel_mode *
-			(audio->out_sample_rate/1000))/(1000));
-		pr_debug("%s: bytes_consumed = %d", __func__,
-				audio->bytes_consumed);
+		temp = (timestamp * 2 * audio->out_channel_mode);
+		temp = temp * (audio->out_sample_rate/1000);
+		temp = div_u64(temp, 1000);
+		audio->bytes_consumed = (uint32_t)(temp & 0xFFFFFFFF);
 		stats.byte_count = audio->bytes_consumed;
+		stats.unused[0]  = (uint32_t)((temp >> 32) & 0xFFFFFFFF);
+		pr_debug("%s: bytes_consumed:lsb = %d, msb = %d,"
+			"timestamp = %lld\n", __func__,
+			audio->bytes_consumed, stats.unused[0], timestamp);
 		if (copy_to_user((void *) arg, &stats, sizeof(stats)))
 				return -EFAULT;
 		return 0;
@@ -761,11 +765,21 @@ static long audio_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 			rc = -EFAULT;
 			goto fail;
 		} else {
+			struct asm_softpause_params param = {
+				.enable = SOFT_PAUSE_ENABLE,
+				.period = SOFT_PAUSE_PERIOD,
+				.step = SOFT_PAUSE_STEP,
+				.rampingcurve = SOFT_PAUSE_CURVE_LINEAR,
+			};
 			audio->out_enabled = 1;
 			audio->out_needed = 1;
 			rc = q6asm_set_volume(audio->ac, audio->volume);
 			if (rc < 0)
 				pr_err("%s: Send Volume command failed rc=%d\n",
+					__func__, rc);
+			rc = q6asm_set_softpause(audio->ac, &param);
+			if (rc < 0)
+				pr_err("%s: Send SoftPause Param failed rc=%d\n",
 					__func__, rc);
 			rc = q6asm_set_lrgain(audio->ac, 0x2000, 0x2000);
 			if (rc < 0)
@@ -1037,8 +1051,11 @@ static int audio_release(struct inode *inode, struct file *file)
 		(int)audio, audio->ac->session);
 
 	mutex_lock(&audio->lock);
+	audio->wflush = 1;
+	if (audio->out_enabled)
+		audlpa_async_flush(audio);
+	audio->wflush = 0;
 	audlpa_unmap_pmem_region(audio);
-	audlpa_async_flush(audio);
 	audio_disable(audio);
 	msm_clear_session_id(audio->ac->session);
 	auddev_unregister_evt_listner(AUDDEV_CLNT_DEC, audio->ac->session);

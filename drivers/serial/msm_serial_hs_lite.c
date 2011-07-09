@@ -44,15 +44,6 @@
 #include <asm/mach-types.h>
 #include "msm_serial_hs_hwreg.h"
 
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-enum msm_hsl_clk_states_e {
-	MSM_HSL_CLK_PORT_OFF,     /* uart port not in use */
-	MSM_HSL_CLK_OFF,          /* clock enabled */
-	MSM_HSL_CLK_REQUEST_OFF,  /* disable after TX flushed */
-	MSM_HSL_CLK_ON,           /* clock disabled */
-};
-#endif
-
 struct msm_hsl_port {
 	struct uart_port	uart;
 	char			name[16];
@@ -63,11 +54,6 @@ struct msm_hsl_port {
 	unsigned int            *gsbi_mapbase;
 	unsigned int            *mapped_gsbi;
 	unsigned int            old_snap_state;
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	enum msm_hsl_clk_states_e	clk_state;
-	struct hrtimer		clk_off_timer;
-	ktime_t			clk_off_delay;
-#endif
 };
 
 #define UART_TO_MSM(uart_port)	((struct msm_hsl_port *) uart_port)
@@ -428,57 +414,54 @@ static void msm_hsl_set_baud_rate(struct uart_port *port, unsigned int baud)
 {
 	unsigned int baud_code, rxstale, watermark;
 
-	/* Since requested clock rate is 4 times the clock
-	   rate assumed for CSR calculation, the CSR should
-	   programmed with 1/4th the requested baud rate */
 	switch (baud) {
 	case 300:
-		baud_code = UARTDM_CSR_75;
-		rxstale = 1;
-		break;
-	case 600:
-		baud_code = UARTDM_CSR_150;
-		rxstale = 1;
-		break;
-	case 1200:
 		baud_code = UARTDM_CSR_300;
 		rxstale = 1;
 		break;
-	case 2400:
+	case 600:
 		baud_code = UARTDM_CSR_600;
 		rxstale = 1;
 		break;
-	case 4800:
+	case 1200:
 		baud_code = UARTDM_CSR_1200;
 		rxstale = 1;
 		break;
-	case 9600:
+	case 2400:
 		baud_code = UARTDM_CSR_2400;
+		rxstale = 1;
+		break;
+	case 4800:
+		baud_code = UARTDM_CSR_4800;
+		rxstale = 1;
+		break;
+	case 9600:
+		baud_code = UARTDM_CSR_9600;
 		rxstale = 2;
 		break;
 	case 14400:
-		baud_code = UARTDM_CSR_3600;
+		baud_code = UARTDM_CSR_14400;
 		rxstale = 3;
 		break;
 	case 19200:
-		baud_code = UARTDM_CSR_4800;
+		baud_code = UARTDM_CSR_19200;
 		rxstale = 4;
 		break;
 	case 28800:
-		baud_code = UARTDM_CSR_7200;
+		baud_code = UARTDM_CSR_28800;
 		rxstale = 6;
 		break;
 	case 38400:
-		baud_code = UARTDM_CSR_9600;
+		baud_code = UARTDM_CSR_38400;
 		rxstale = 8;
 		break;
 	case 57600:
-		baud_code = UARTDM_CSR_14400;
+		baud_code = UARTDM_CSR_57600;
 		rxstale = 16;
 		break;
 	case 115200:
 	default:
-		baud_code = UARTDM_CSR_28800;
+		baud_code = UARTDM_CSR_115200;
 		rxstale = 31;
 		break;
 	}
@@ -509,28 +492,18 @@ static void msm_hsl_init_clock(struct uart_port *port)
     struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
 #endif
 	clk_en(port, 1);
-
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	msm_hsl_port->clk_state = MSM_HSL_CLK_ON;
-#endif
 }
 
 static void msm_hsl_deinit_clock(struct uart_port *port)
 {
-#ifdef CONFIG_SERIAL_MSM_CLOCK_CONTROL
-	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
-	if (msm_hsl_port->clk_state != MSM_HSL_CLK_OFF)
-		clk_en(port, 0);
-	msm_hsl_port->clk_state = MSM_HSL_CLK_PORT_OFF;
-#else
 	clk_en(port, 0);
-#endif
-
 }
 
 static int msm_hsl_startup(struct uart_port *port)
 {
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	struct platform_device *pdev = to_platform_device(port->dev);
+	struct msm_serial_hslite_platform_data *pdata = pdev->dev.platform_data;
 	unsigned int data, rfr_level;
 	int ret;
 	unsigned long flags;
@@ -538,6 +511,34 @@ static int msm_hsl_startup(struct uart_port *port)
 	snprintf(msm_hsl_port->name, sizeof(msm_hsl_port->name),
 		 "msm_serial_hsl%d", port->line);
 
+	if (!(is_console(port)) || (!port->cons) ||
+		(port->cons && (!(port->cons->flags & CON_ENABLED)))) {
+		if (msm_serial_hsl_has_gsbi())
+			if ((ioread32(msm_hsl_port->mapped_gsbi +
+				GSBI_CONTROL_ADDR) & GSBI_PROTOCOL_I2C_UART)
+					!= GSBI_PROTOCOL_I2C_UART)
+				iowrite32(GSBI_PROTOCOL_I2C_UART,
+					msm_hsl_port->mapped_gsbi +
+						GSBI_CONTROL_ADDR);
+
+		if (pdata && pdata->config_gpio) {
+			ret = gpio_request(pdata->uart_tx_gpio,
+							"UART_TX_GPIO");
+			if (unlikely(ret)) {
+				pr_err("%s: gpio request failed for:%d\n",
+						 __func__, pdata->uart_tx_gpio);
+				return ret;
+			}
+
+			ret = gpio_request(pdata->uart_rx_gpio, "UART_RX_GPIO");
+			if (unlikely(ret)) {
+				pr_err("%s: gpio request failed for:%d\n",
+						__func__, pdata->uart_rx_gpio);
+				gpio_free(pdata->uart_tx_gpio);
+				return ret;
+			}
+		}
+	}
 #ifndef CONFIG_PM_RUNTIME
 	msm_hsl_init_clock(port);
 #endif
@@ -602,6 +603,8 @@ static int msm_hsl_startup(struct uart_port *port)
 static void msm_hsl_shutdown(struct uart_port *port)
 {
 	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+	struct platform_device *pdev = to_platform_device(port->dev);
+	struct msm_serial_hslite_platform_data *pdata = pdev->dev.platform_data;
 
 	clk_en(port, 1);
 
@@ -616,6 +619,13 @@ static void msm_hsl_shutdown(struct uart_port *port)
 	msm_hsl_deinit_clock(port);
 #endif
 	pm_runtime_put_sync(port->dev);
+	if (!(is_console(port)) || (!port->cons) ||
+		(port->cons && (!(port->cons->flags & CON_ENABLED)))) {
+		if (pdata && pdata->config_gpio) {
+			gpio_free(pdata->uart_tx_gpio);
+			gpio_free(pdata->uart_rx_gpio);
+		}
+	}
 }
 
 static void msm_hsl_set_termios(struct uart_port *port,
@@ -807,18 +817,28 @@ static int msm_hsl_verify_port(struct uart_port *port,
 static void msm_hsl_power(struct uart_port *port, unsigned int state,
 			  unsigned int oldstate)
 {
-#ifndef CONFIG_SERIAL_MSM_HSL_CLOCK_CONTROL
+	int ret;
+	struct msm_hsl_port *msm_hsl_port = UART_TO_MSM(port);
+
 	switch (state) {
 	case 0:
+		ret = clk_set_rate(msm_hsl_port->clk, 1843200);
+		if (ret)
+			pr_err("%s(): Error setting UART clock rate\n",
+							__func__);
 		clk_en(port, 1);
 		break;
 	case 3:
 		clk_en(port, 0);
+		ret = clk_set_rate(msm_hsl_port->clk, 0);
+		if (ret)
+			pr_err("%s(): Error setting UART clock rate to zero.\n",
+							__func__);
 		break;
 	default:
-		printk(KERN_ERR "msm_serial_hsl: Unknown PM state %d\n", state);
+		pr_err("%s(): msm_serial_hsl: Unknown PM state %d\n",
+							__func__, state);
 	}
-#endif
 }
 
 static struct uart_ops msm_hsl_uart_pops = {
@@ -1013,7 +1033,6 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 	struct resource *uart_resource;
 	struct resource *gsbi_resource;
 	struct uart_port *port;
-	struct msm_serial_hslite_platform_data *pdata = pdev->dev.platform_data;
 	int ret;
 
 	if (unlikely(pdev->id < 0 || pdev->id >= UART_NR))
@@ -1024,23 +1043,6 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 	port = get_port_from_line(pdev->id);
 	port->dev = &pdev->dev;
 	msm_hsl_port = UART_TO_MSM(port);
-
-	if (pdata && pdata->config_gpio) {
-		ret = gpio_request(pdata->uart_tx_gpio, "UART_TX_GPIO");
-		if (unlikely(ret)) {
-			printk(KERN_ERR "%s: gpio request failed for:"
-					"%d\n", __func__, pdata->uart_tx_gpio);
-			return ret;
-		}
-
-		ret = gpio_request(pdata->uart_rx_gpio, "UART_RX_GPIO");
-		if (unlikely(ret)) {
-			printk(KERN_ERR "%s: gpio request failed for:"
-					"%d\n", __func__, pdata->uart_rx_gpio);
-			gpio_free(pdata->uart_tx_gpio);
-			return ret;
-		}
-	}
 
 	if (msm_serial_hsl_has_gsbi()) {
 		gsbi_resource =
@@ -1063,13 +1065,6 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 	if (unlikely(IS_ERR(msm_hsl_port->pclk))) {
 		printk(KERN_ERR "%s: Error getting pclk\n", __func__);
 		return PTR_ERR(msm_hsl_port->pclk);
-	}
-
-	/* Set up the MREG/NREG/DREG/MNDREG */
-	ret = clk_set_rate(msm_hsl_port->clk, 7372800);
-	if (ret) {
-		printk(KERN_WARNING "Error setting clock rate on UART\n");
-		return ret;
 	}
 
 	uart_resource = platform_get_resource_byname(pdev,
@@ -1098,12 +1093,6 @@ static int __devinit msm_serial_hsl_probe(struct platform_device *pdev)
 static int __devexit msm_serial_hsl_remove(struct platform_device *pdev)
 {
 	struct msm_hsl_port *msm_hsl_port = platform_get_drvdata(pdev);
-	struct msm_serial_hslite_platform_data *pdata = pdev->dev.platform_data;
-
-	if (pdata && pdata->config_gpio) {
-		gpio_free(pdata->uart_tx_gpio);
-		gpio_free(pdata->uart_rx_gpio);
-	}
 
 	pm_runtime_put_sync(&pdev->dev);
 	pm_runtime_disable(&pdev->dev);

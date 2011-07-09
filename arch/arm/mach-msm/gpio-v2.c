@@ -23,8 +23,8 @@
 #include <linux/irq.h>
 #include <linux/io.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
 #include <linux/spinlock.h>
+#include <linux/sysdev.h>
 #include <mach/msm_iomap.h>
 #include "gpiomux.h"
 #include "mpm.h"
@@ -166,12 +166,16 @@ static inline void clr_gpio_bits(unsigned n, void __iomem *reg)
 
 static int msm_gpio_get(struct gpio_chip *chip, unsigned offset)
 {
-	return readl(GPIO_IN_OUT(offset)) & BIT(GPIO_IN_BIT);
+	int rc;
+	rc = readl(GPIO_IN_OUT(offset)) & BIT(GPIO_IN_BIT);
+	dsb();
+	return rc;
 }
 
 static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int val)
 {
 	writel(val ? BIT(GPIO_OUT_BIT) : 0, GPIO_IN_OUT(offset));
+	dsb();
 }
 
 static int msm_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
@@ -180,6 +184,7 @@ static int msm_gpio_direction_input(struct gpio_chip *chip, unsigned offset)
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
 	clr_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(offset));
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
 }
@@ -193,6 +198,7 @@ static int msm_gpio_direction_output(struct gpio_chip *chip,
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
 	msm_gpio_set(chip, offset, val);
 	set_gpio_bits(BIT(GPIO_OE_BIT), GPIO_CONFIG(offset));
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
 }
@@ -266,6 +272,7 @@ static void msm_gpio_update_dual_edge_pos(unsigned gpio)
 		intstat = readl(GPIO_INTR_STATUS(gpio)) & BIT(INTR_STATUS_BIT);
 		if (intstat || val == val2) {
 			/* switch the configuration in the mpm as well*/
+#ifdef CONFIG_MSM_RPM
 			if (val)
 				msm_mpm_set_irq_type(msm_gpio_to_irq(
 						&msm_gpio.gpio_chip, gpio),
@@ -274,6 +281,7 @@ static void msm_gpio_update_dual_edge_pos(unsigned gpio)
 				msm_mpm_set_irq_type(msm_gpio_to_irq(
 						&msm_gpio.gpio_chip, gpio),
 						IRQF_TRIGGER_RISING);
+#endif
 			return;
 		}
 	} while (loop_limit-- > 0);
@@ -289,6 +297,13 @@ static void msm_gpio_irq_ack(unsigned int irq)
 	writel(BIT(INTR_STATUS_BIT), GPIO_INTR_STATUS(gpio));
 	if (test_bit(gpio, msm_gpio.dual_edge_irqs))
 		msm_gpio_update_dual_edge_pos(gpio);
+	dsb();
+}
+
+static void __msm_gpio_irq_mask(unsigned int gpio)
+{
+	__raw_writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(gpio));
+	clr_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
 }
 
 static void msm_gpio_irq_mask(unsigned int irq)
@@ -297,12 +312,20 @@ static void msm_gpio_irq_mask(unsigned int irq)
 	unsigned long irq_flags;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
-	writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(gpio));
-	clr_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+	__msm_gpio_irq_mask(gpio);
 	__clear_bit(gpio, msm_gpio.enabled_irqs);
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 
+#ifdef CONFIG_MSM_RPM
 	msm_mpm_enable_irq(irq, 0);
+#endif
+}
+
+static void __msm_gpio_irq_unmask(unsigned int gpio)
+{
+	set_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
+	__raw_writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
 }
 
 static void msm_gpio_irq_unmask(unsigned int irq)
@@ -312,16 +335,20 @@ static void msm_gpio_irq_unmask(unsigned int irq)
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
 	__set_bit(gpio, msm_gpio.enabled_irqs);
-	set_gpio_bits(INTR_RAW_STATUS_EN | INTR_ENABLE, GPIO_INTR_CFG(gpio));
-	writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(gpio));
+	__msm_gpio_irq_unmask(gpio);
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 
+#ifdef CONFIG_MSM_RPM
 	msm_mpm_enable_irq(irq, 1);
+#endif
 }
 
 static void msm_gpio_irq_disable(unsigned int irq)
 {
+#ifdef CONFIG_MSM_RPM
 	msm_mpm_enable_irq(irq, 0);
+#endif
 }
 
 static int msm_gpio_irq_set_type(unsigned int irq, unsigned int flow_type)
@@ -357,8 +384,11 @@ static int msm_gpio_irq_set_type(unsigned int irq, unsigned int flow_type)
 	if ((flow_type & IRQ_TYPE_EDGE_BOTH) == IRQ_TYPE_EDGE_BOTH)
 		msm_gpio_update_dual_edge_pos(gpio);
 
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
+#ifdef CONFIG_MSM_RPM
 	msm_mpm_set_irq_type(irq, flow_type);
+#endif
 
 	return 0;
 }
@@ -369,9 +399,10 @@ static int msm_gpio_irq_set_type(unsigned int irq, unsigned int flow_type)
  * which have been set as summary IRQ lines and which are triggered,
  * and to call their interrupt handlers.
  */
-static void msm_summary_irq_handler(unsigned int irq, struct irq_desc *desc)
+static irqreturn_t msm_summary_irq_handler(int irq, void *data)
 {
 	unsigned long i;
+	struct irq_desc *desc = irq_to_desc(irq);
 
 	for (i = find_first_bit(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
 	     i < NR_MSM_GPIOS;
@@ -380,7 +411,9 @@ static void msm_summary_irq_handler(unsigned int irq, struct irq_desc *desc)
 			generic_handle_irq(msm_gpio_to_irq(&msm_gpio.gpio_chip,
 							   i));
 	}
+
 	desc->chip->ack(irq);
+	return IRQ_HANDLED;
 }
 
 static int msm_gpio_irq_set_wake(unsigned int irq, unsigned int on)
@@ -389,15 +422,17 @@ static int msm_gpio_irq_set_wake(unsigned int irq, unsigned int on)
 
 	if (on) {
 		if (bitmap_empty(msm_gpio.wake_irqs, NR_MSM_GPIOS))
-			set_irq_wake(TLMM_SCSS_SUMMARY_IRQ, 1);
+			set_irq_wake(TLMM_MSM_SUMMARY_IRQ, 1);
 		set_bit(gpio, msm_gpio.wake_irqs);
 	} else {
 		clear_bit(gpio, msm_gpio.wake_irqs);
 		if (bitmap_empty(msm_gpio.wake_irqs, NR_MSM_GPIOS))
-			set_irq_wake(TLMM_SCSS_SUMMARY_IRQ, 0);
+			set_irq_wake(TLMM_MSM_SUMMARY_IRQ, 0);
 	}
 
+#ifdef CONFIG_MSM_RPM
 	msm_mpm_set_irq_wake(irq, on);
+#endif
 	return 0;
 }
 
@@ -411,7 +446,7 @@ static struct irq_chip msm_gpio_irq_chip = {
 	.disable	= msm_gpio_irq_disable,
 };
 
-static int __devinit msm_gpio_probe(struct platform_device *dev)
+static int __devinit msm_gpio_probe(struct sysdev_class *sysclass)
 {
 	int i, irq, ret;
 
@@ -419,7 +454,7 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 	bitmap_zero(msm_gpio.enabled_irqs, NR_MSM_GPIOS);
 	bitmap_zero(msm_gpio.wake_irqs, NR_MSM_GPIOS);
 	bitmap_zero(msm_gpio.dual_edge_irqs, NR_MSM_GPIOS);
-	msm_gpio.gpio_chip.label = dev->name;
+	msm_gpio.gpio_chip.label = sysclass->name;
 	ret = gpiochip_add(&msm_gpio.gpio_chip);
 	if (ret < 0)
 		return ret;
@@ -431,34 +466,42 @@ static int __devinit msm_gpio_probe(struct platform_device *dev)
 		set_irq_flags(irq, IRQF_VALID);
 	}
 
-	set_irq_chained_handler(TLMM_SCSS_SUMMARY_IRQ,
-				msm_summary_irq_handler);
+	ret = request_irq(TLMM_MSM_SUMMARY_IRQ, msm_summary_irq_handler,
+			IRQF_TRIGGER_HIGH, "msmgpio", NULL);
+	if (ret) {
+		pr_err("Request_irq failed for TLMM_MSM_SUMMARY_IRQ - %d\n",
+				ret);
+		return ret;
+	}
 	return 0;
 }
 
-static int __devexit msm_gpio_remove(struct platform_device *dev)
+static int __devexit msm_gpio_remove(struct sysdev_class *sysclass)
 {
 	int ret = gpiochip_remove(&msm_gpio.gpio_chip);
 
 	if (ret < 0)
 		return ret;
 
-	set_irq_handler(TLMM_SCSS_SUMMARY_IRQ, NULL);
+	set_irq_handler(TLMM_MSM_SUMMARY_IRQ, NULL);
 
 	return 0;
 }
 
 #ifdef CONFIG_PM
-static int msm_gpio_suspend_noirq(struct device *dev)
+static int msm_gpio_suspend(struct sys_device *sys_dev,
+					pm_message_t state)
 {
 	unsigned long irq_flags;
 	unsigned long i;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
-	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS) {
-		if (!test_bit(i, msm_gpio.wake_irqs))
-			writel(TARGET_PROC_NONE, GPIO_INTR_CFG_SU(i));
-	}
+	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS)
+			__msm_gpio_irq_mask(i);
+
+	for_each_set_bit(i, msm_gpio.wake_irqs, NR_MSM_GPIOS)
+		__msm_gpio_irq_unmask(i);
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
 }
@@ -480,61 +523,61 @@ void msm_gpio_show_resume_irq(void)
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 }
 
-static int msm_gpio_resume_noirq(struct device *dev)
+static int msm_gpio_resume(struct sys_device *sys_dev)
 {
 	unsigned long irq_flags;
 	unsigned long i;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
+	for_each_set_bit(i, msm_gpio.wake_irqs, NR_MSM_GPIOS)
+		__msm_gpio_irq_mask(i);
+
 	for_each_set_bit(i, msm_gpio.enabled_irqs, NR_MSM_GPIOS)
-		writel(TARGET_PROC_SCORPION, GPIO_INTR_CFG_SU(i));
+		__msm_gpio_irq_unmask(i);
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 	return 0;
 }
 #else
-#define msm_gpio_suspend_noirq NULL
-#define msm_gpio_resume_noirq NULL
+#define msm_gpio_suspend NULL
+#define msm_gpio_resume NULL
 #endif
 
-static const struct dev_pm_ops msm_gpio_dev_pm_ops = {
-	.suspend_noirq  = msm_gpio_suspend_noirq,
-	.resume_noirq   = msm_gpio_resume_noirq,
-	.freeze_noirq   = msm_gpio_suspend_noirq,
-	.thaw_noirq     = msm_gpio_resume_noirq,
-	.poweroff_noirq = msm_gpio_suspend_noirq,
-	.restore_noirq  = msm_gpio_resume_noirq,
-};
-
-static struct platform_driver msm_gpio_driver = {
-	.probe = msm_gpio_probe,
-	.remove = __devexit_p(msm_gpio_remove),
-	.driver = {
-		.name = "msmgpio",
-		.owner = THIS_MODULE,
-		.pm = &msm_gpio_dev_pm_ops,
-	},
-};
-
-static struct platform_device msm_device_gpio = {
+static struct sysdev_class msm_gpio_sysdev_class = {
 	.name = "msmgpio",
-	.id   = 0,
+	.suspend = msm_gpio_suspend,
+	.resume = msm_gpio_resume,
+};
+
+static struct sys_device msm_gpio_sys_device = {
+	.id = 0,
+	.cls = &msm_gpio_sysdev_class,
 };
 
 static int __init msm_gpio_init(void)
 {
 	int rc;
 
-	rc = platform_driver_register(&msm_gpio_driver);
-	if (rc == 0)
-		rc = platform_device_register(&msm_device_gpio);
+	rc = sysdev_class_register(&msm_gpio_sysdev_class);
+	if (!rc) {
+		rc = sysdev_register(&msm_gpio_sys_device);
+		if (!rc) {
+			rc = msm_gpio_probe(&msm_gpio_sysdev_class);
+			if (rc)
+				pr_err("msm_gpio_probe failed err = %d\n", rc);
+		} else
+			pr_err("sysdev_register failed for msm_gpio_sys_device \
+					error = %d\n", rc);
+	}
 
 	return rc;
 }
 
 static void __exit msm_gpio_exit(void)
 {
-	platform_device_unregister(&msm_device_gpio);
-	platform_driver_unregister(&msm_gpio_driver);
+	msm_gpio_remove(&msm_gpio_sysdev_class);
+	sysdev_unregister(&msm_gpio_sys_device);
+	sysdev_class_unregister(&msm_gpio_sysdev_class);
 }
 
 postcore_initcall(msm_gpio_init);
@@ -553,6 +596,7 @@ static void msm_tlmm_set_field(const struct tlmm_field_cfg *configs,
 	reg_val &= ~(mask << configs[id].off);
 	reg_val |= (val & mask) << configs[id].off;
 	writel(reg_val, reg);
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irqflags);
 }
 
@@ -581,6 +625,7 @@ int gpio_tlmm_config(unsigned config, unsigned disable)
 		((GPIO_FUNC(config) << 2) & (0xf << 2)) |
 		((GPIO_PULL(config) & 0x3));
 	writel(flags, GPIO_CONFIG(gpio));
+	dsb();
 
 	return 0;
 }
@@ -592,7 +637,7 @@ int msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 	unsigned long irq_flags;
 	uint32_t bits;
 
-	if (gpio >= NR_MSM_GPIOS || irq >= NR_TLMM_SCSS_DIR_CONN_IRQ)
+	if (gpio >= NR_MSM_GPIOS || irq >= NR_TLMM_MSM_DIR_CONN_IRQ)
 		return -EINVAL;
 
 	spin_lock_irqsave(&tlmm_lock, irq_flags);
@@ -610,6 +655,7 @@ int msm_gpio_install_direct_irq(unsigned gpio, unsigned irq,
 		bits |= DC_POLARITY_HI;
 	writel(bits, DIR_CONN_INTR_CFG_SU(irq));
 
+	dsb();
 	spin_unlock_irqrestore(&tlmm_lock, irq_flags);
 
 	return 0;
@@ -619,4 +665,4 @@ EXPORT_SYMBOL(msm_gpio_install_direct_irq);
 MODULE_AUTHOR("Gregory Bean <gbean@codeaurora.org>");
 MODULE_DESCRIPTION("Driver for Qualcomm MSM TLMMv2 SoC GPIOs");
 MODULE_LICENSE("GPL v2");
-MODULE_ALIAS("platform:msmgpio");
+MODULE_ALIAS("sysdev:msmgpio");

@@ -1,7 +1,7 @@
 /* arch/arm/mach-msm/smd_rpcrouter_device.c
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -45,6 +45,7 @@
 
 /* Next minor # available for a remote server */
 static int next_minor = 1;
+static DEFINE_SPINLOCK(server_cdev_lock);
 
 struct class *msm_rpcrouter_class;
 dev_t msm_rpcrouter_devno;
@@ -214,6 +215,28 @@ write_out_free:
 	return rc;
 }
 
+/* RPC VFS Poll Implementation
+ *
+ * POLLRDHUP - restart in progress
+ * POLLOUT - writes accepted (without blocking)
+ * POLLIN - data ready to read
+ *
+ * The restart state consists of several different phases including a client
+ * notification and a server restart.  If the server has been restarted, then
+ * reads and writes can be performed and the POLLOUT bit will be set.  If a
+ * restart is in progress, but the server hasn't been restarted, then only the
+ * POLLRDHUP is active and reads and writes will block.  See the table
+ * below for a summary.  POLLRDHUP is cleared once a call to msm_rpc_write_pkt
+ * or msm_rpc_read_pkt returns ENETRESET.
+ *
+ * POLLOUT	POLLRDHUP
+ *    1         0       Normal operation
+ *    0         1       Restart in progress and server hasn't restarted yet
+ *    1         1       Server has been restarted, but client has
+ *                      not been notified of a restart by a return code
+ *                      of ENETRESET from msm_rpc_write_pkt or
+ *                      msm_rpc_read_pkt.
+ */
 static unsigned int rpcrouter_poll(struct file *filp,
 				   struct poll_table_struct *wait)
 {
@@ -223,22 +246,15 @@ static unsigned int rpcrouter_poll(struct file *filp,
 
 	ept = (struct msm_rpc_endpoint *) file_info->ept;
 
-	/* If there's data already in the read queue, return POLLIN.
-	 * Else, wait for the requested amount of time, and check again.
-	 */
+	poll_wait(filp, &ept->wait_q, wait);
+	poll_wait(filp, &ept->restart_wait, wait);
 
 	if (!list_empty(&ept->read_q))
 		mask |= POLLIN;
+	if (!(ept->restart_state & RESTART_PEND_SVR))
+		mask |= POLLOUT;
 	if (ept->restart_state != 0)
-		mask |= POLLERR;
-
-	if (!mask) {
-		poll_wait(filp, &ept->wait_q, wait);
-		if (!list_empty(&ept->read_q))
-			mask |= POLLIN;
-		if (ept->restart_state != 0)
-			mask |= POLLERR;
-	}
+		mask |= POLLRDHUP;
 
 	return mask;
 }
@@ -329,8 +345,11 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
 {
 	int rc;
 	uint32_t dev_vers;
+	unsigned long flags;
 
+	spin_lock_irqsave(&server_cdev_lock, flags);
 	if (next_minor == RPCROUTER_MAX_REMOTE_SERVERS) {
+		spin_unlock_irqrestore(&server_cdev_lock, flags);
 		printk(KERN_ERR
 		       "rpcrouter: Minor numbers exhausted - Increase "
 		       "RPCROUTER_MAX_REMOTE_SERVERS\n");
@@ -350,6 +369,7 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
 
 	server->device_number =
 		MKDEV(MAJOR(msm_rpcrouter_devno), next_minor++);
+	spin_unlock_irqrestore(&server_cdev_lock, flags);
 
 	server->device =
 		device_create(msm_rpcrouter_class, rpcrouter_device,
@@ -381,8 +401,6 @@ int msm_rpcrouter_create_server_cdev(struct rr_server *server)
  */
 int msm_rpcrouter_create_server_pdev(struct rr_server *server)
 {
-	sprintf(server->pdev_name, "rs%.8x", server->prog);
-
 	server->p_device.base.id = (server->vers & RPC_VERSION_MODE_MASK) ?
 				   server->vers :
 				   (server->vers & RPC_VERSION_MAJOR_MASK);

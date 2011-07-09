@@ -106,7 +106,14 @@ struct apr_hdr {
 
 #define APR_NAME_MAX		0x40
 
+#define RESET_EVENTS		0xFFFFFFFF
+
+#define LPASS_RESTART_EVENT	0x1000
+#define LPASS_RESTART_READY	0x1001
+
 struct apr_client_data {
+	uint16_t reset_event;
+	uint16_t reset_proc;
 	uint16_t payload_size;
 	uint16_t hdr_len;
 	uint16_t msg_type;
@@ -128,6 +135,7 @@ struct apr_svc {
 	uint8_t rvd;
 	uint8_t port_cnt;
 	uint8_t svc_cnt;
+	uint8_t need_reset;
 	apr_fn port_fn[APR_MAX_PORTS];
 	void *port_priv[APR_MAX_PORTS];
 	apr_fn fn;
@@ -145,25 +153,6 @@ struct apr_client {
 	struct apr_svc svc[APR_SVC_MAX];
 };
 
-#define ADSP_GET_VERSION     0x00011152
-#define ADSP_GET_VERSION_RSP 0x00011153
-
-struct adsp_get_version {
-	uint32_t build_id;
-	uint32_t svc_cnt;
-};
-
-struct adsp_service_info {
-	uint32_t svc_id;
-	uint32_t svc_ver;
-};
-
-#define ADSP_CMD_SET_POWER_COLLAPSE_STATE 0x0001115C
-struct adsp_power_collapse {
-	struct apr_hdr hdr;
-	uint32_t power_collapse;
-};
-
 struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 					uint32_t src_port, void *priv);
 inline int apr_fill_hdr(void *handle, uint32_t *buf, uint16_t src_port,
@@ -174,5 +163,6 @@ int apr_send_pkt(void *handle, uint32_t *buf);
 int apr_deregister(void *handle);
 void change_q6_state(int state);
 void q6audio_dsp_not_responding(void);
-
+uint32_t core_get_adsp_version(void);
+void apr_reset(void *handle);
 #endif

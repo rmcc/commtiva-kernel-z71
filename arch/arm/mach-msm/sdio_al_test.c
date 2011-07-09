@@ -32,9 +32,25 @@
 #include <linux/random.h>
 #include <linux/platform_device.h>
 #include <mach/sdio_smem.h>
+#include <linux/wakelock.h>
 
-#include <mach/sdio_al.h>
+#include <sdio_al_private.h>
 #include <linux/debugfs.h>
+
+#include <linux/kthread.h>
+enum lpm_test_msg_type {
+	LPM_NO_MSG,
+	LPM_MSG_SEND,
+	LPM_MSG_REC,
+	LPM_SLEEP,
+	LPM_WAKEUP
+};
+
+#define LPM_NO_MSG_NAME "LPM No Event"
+#define LPM_MSG_SEND_NAME "LPM Send Msg Event"
+#define LPM_MSG_REC_NAME "LPM Receive Msg Event"
+#define LPM_SLEEP_NAME "LPM Sleep Event"
+#define LPM_WAKEUP_NAME "LPM Wakeup Event"
 
 /** Module name string */
 #define TEST_MODULE_NAME "sdio_al_test"
@@ -44,24 +60,69 @@
 
 #define MAX_XFER_SIZE (16*1024)
 #define SMEM_MAX_XFER_SIZE 0xBC000
-
-#define CHANNEL_NAME_SIZE 9
+#define A2_MIN_PACKET_SIZE 5
 
 #define TEST_DBG(x...) if (test_ctx->runtime_debug) pr_info(x)
 
+#define LPM_TEST_NUM_OF_PACKETS 100
+#define LPM_ARRAY_SIZE	(7*LPM_TEST_NUM_OF_PACKETS)
+#define SDIO_LPM_TEST "sdio_lpm_test_reading_task"
+#define LPM_TEST_CONFIG_SIGNATURE 0xDEADBABE
+
+enum sdio_test_case_type {
+	SDIO_TEST_LOOPBACK_HOST,
+	SDIO_TEST_LOOPBACK_CLIENT,
+	SDIO_TEST_LPM_HOST_WAKER,
+	SDIO_TEST_LPM_CLIENT_WAKER,
+	SDIO_TEST_LPM_RANDOM,
+	SDIO_TEST_HOST_SENDER_NO_LP,
+	SDIO_TEST_PERF, /* must be last since is not part of the 9k tests */
+};
+
+struct lpm_task {
+	struct task_struct *lpm_task;
+	const char *task_name;
+};
+
+struct lpm_entry_type {
+	enum lpm_test_msg_type msg_type;
+	u32 counter;
+	u32 current_ms;
+};
+
+static DEFINE_SPINLOCK(lpm_lock);
+unsigned long flags;
+
+struct lpm_msg {
+	u32 signature;
+	u32 counter;
+	u32 reserve1;
+	u32 reserve2;
+};
+
+struct lpm_test_struct {
+	u64 start_jiffies;
+	u64 end_jiffies;
+	unsigned int total_ms;
+	u32 next_avail_entry_in_array;
+	u32 next_index_in_sent_msg;
+	u32 last_index_in_rec_msg;
+	struct lpm_task lpm_test_task;
+	struct test_channel *test_ch;
+	struct lpm_entry_type lpm_arr[LPM_ARRAY_SIZE];
+};
+
 struct test_config_msg {
-  u32 signature;
-  u32 is_loopback_in_9k;
-  u32 is_lpm_test;
-  u32 packet_length;
-  u32 num_packets;
-  u32 sleep_interval;
-  u32 num_iterations;
+	u32 signature;
+	u32 test_case;
+	u32 test_param;
+	u32 num_packets;
+	u32 num_iterations;
 };
 
 struct test_result_msg {
-  u32 signature;
-  u32 is_successful;
+	u32 signature;
+	u32 is_successful;
 };
 
 struct test_work {
@@ -76,20 +137,20 @@ enum sdio_channels_ids {
 	SDIO_DIAG,
 	SDIO_DUN,
 	SDIO_SMEM,
+	SDIO_CIQ,
 	SDIO_MAX_CHANNELS
 };
-
-enum sdio_test_types {
-	LOOPBACK_TEST,
-	SENDER_TEST,
-	A2_TEST
-};
-
 
 enum sdio_test_results {
 	TEST_NO_RESULT,
 	TEST_FAILED,
 	TEST_PASSED
+};
+
+enum sdio_lpm_vote_state {
+	SDIO_NO_VOTE,
+	SDIO_VOTE_FOR_SLEEP,
+	SDIO_VOTE_AGAINST_SLEEP
 };
 
 struct test_channel {
@@ -111,6 +172,7 @@ struct test_channel {
 	atomic_t rx_notify_count;
 	atomic_t tx_notify_count;
 	atomic_t any_notify_count;
+	atomic_t wakeup_client;
 
 	int wait_counter;
 
@@ -122,6 +184,17 @@ struct test_channel {
 
 	int test_completed;
 	int test_result;
+	struct timer_list timer;
+	int timer_interval_ms;
+
+	struct timer_list timeout_timer;
+	int timeout_ms;
+	void *sdio_al_device;
+	int is_ok_to_sleep;
+	struct lpm_test_struct lpm_test_db;
+	unsigned int packet_length;
+
+	int random_packet_size;
 };
 
 struct sdio_al_test_debug {
@@ -161,7 +234,16 @@ struct test_context {
 	int test_completed;
 	int test_result;
 	struct sdio_al_test_debug debug;
+
+	struct wake_lock wake_lock;
 };
+
+/*
+ * Seed for pseudo random time sleeping in Random LPM test.
+ * If not set, current time in jiffies is used.
+ */
+static unsigned int seed;
+module_param(seed, int, 0);
 
 static struct test_context *test_ctx;
 
@@ -225,18 +307,26 @@ static int channel_name_to_id(char *name)
 	pr_info(TEST_MODULE_NAME "%s: channel name %s\n",
 		__func__, name);
 
-	if (!strcmp(name, "SDIO_RPC"))
+	if (!strncmp(name, "SDIO_RPC", strnlen("SDIO_RPC", CHANNEL_NAME_SIZE)))
 		return SDIO_RPC;
-	else if (!strcmp(name, "SDIO_QMI"))
+	else if (!strncmp(name, "SDIO_QMI",
+			  strnlen("SDIO_QMI", CHANNEL_NAME_SIZE)))
 		return SDIO_QMI;
-	else if (!strcmp(name, "SDIO_RMNT"))
+	else if (!strncmp(name, "SDIO_RMNT",
+			  strnlen("SDIO_RMNT", CHANNEL_NAME_SIZE)))
 		return SDIO_RMNT;
-	else if (!strcmp(name, "SDIO_DIAG"))
+	else if (!strncmp(name, "SDIO_DIAG",
+			  strnlen("SDIO_DIAG", CHANNEL_NAME_SIZE)))
 		return SDIO_DIAG;
-	else if (!strcmp(name, "SDIO_DUN"))
+	else if (!strncmp(name, "SDIO_DUN",
+			  strnlen("SDIO_DUN", CHANNEL_NAME_SIZE)))
 		return SDIO_DUN;
-	else if (!strcmp(name, "SDIO_SMEM"))
+	else if (!strncmp(name, "SDIO_SMEM",
+			  strnlen("SDIO_SMEM", CHANNEL_NAME_SIZE)))
 		return SDIO_SMEM;
+	else if (!strncmp(name, "SDIO_CIQ",
+			  strnlen("SDIO_CIQ", CHANNEL_NAME_SIZE)))
+		return SDIO_CIQ;
 	else
 		return SDIO_MAX_CHANNELS;
 
@@ -284,6 +374,9 @@ static void send_config_msg(struct test_channel *test_ch)
 	if (ret)
 		pr_err(TEST_MODULE_NAME ":%s sdio_write err=%d.\n",
 			__func__, -ret);
+	else
+		pr_info(TEST_MODULE_NAME ":%s sent config_msg successfully.\n",
+		       __func__);
 }
 
 /**
@@ -372,6 +465,493 @@ static void check_test_completion(void)
 	wake_up(&test_ctx->wait_q);
 }
 
+static int pseudo_random_seed(unsigned int *seed_number)
+{
+	if (!seed_number)
+		return 0;
+
+	*seed_number = (unsigned int)(((unsigned long)*seed_number *
+				(unsigned long)1103515367) + 35757);
+	return (int)(*seed_number / (64*1024) % 1000);
+}
+
+static void lpm_test_update_entry(struct test_channel *tch,
+				  enum lpm_test_msg_type msg_type,
+				  int counter)
+{
+	u32 index = 0;
+	static int print_full = 1;
+
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return;
+	}
+
+	if (tch->lpm_test_db.next_avail_entry_in_array >= LPM_ARRAY_SIZE) {
+		pr_err(TEST_MODULE_NAME ": %s - lpm array is full",
+			__func__);
+		if (print_full) {
+			print_hex_dump(KERN_INFO, TEST_MODULE_NAME ": lpm_arr:",
+				0, 32, 2,
+				(void *)tch->lpm_test_db.lpm_arr,
+				sizeof(tch->lpm_test_db.lpm_arr), false);
+			print_full = 0;
+		}
+		return;
+	}
+
+	index = tch->lpm_test_db.next_avail_entry_in_array;
+	if ((msg_type == LPM_MSG_SEND) || (msg_type == LPM_MSG_REC))
+		tch->lpm_test_db.lpm_arr[index].counter = counter;
+	else
+		tch->lpm_test_db.lpm_arr[index].counter = 0;
+	tch->lpm_test_db.lpm_arr[index].msg_type = msg_type;
+	tch->lpm_test_db.lpm_arr[index].current_ms =
+		jiffies_to_msecs(get_jiffies_64());
+
+	tch->lpm_test_db.next_avail_entry_in_array++;
+}
+
+static int wait_for_result_msg(struct test_channel *test_ch)
+{
+	u32 read_avail = 0;
+	int ret = 0;
+
+	pr_info(TEST_MODULE_NAME ": %s - START\n", __func__);
+
+	while (1) {
+		read_avail = sdio_read_avail(test_ch->ch);
+
+		if (read_avail == 0) {
+			pr_info(TEST_MODULE_NAME
+				": read_avail is 0 for chan %s\n",
+				test_ch->name);
+			wait_event(test_ch->wait_q,
+				   atomic_read(&test_ch->rx_notify_count));
+			atomic_dec(&test_ch->rx_notify_count);
+			continue;
+		}
+
+		memset(test_ch->buf, 0x00, test_ch->buf_size);
+
+		ret = sdio_read(test_ch->ch, test_ch->buf, read_avail);
+		if (ret) {
+			pr_info(TEST_MODULE_NAME ":  sdio_read for chan"
+				"%s failed, err=%d.\n",
+				test_ch->name, -ret);
+			goto exit_err;
+		}
+
+		if (test_ch->buf[0] != TEST_CONFIG_SIGNATURE) {
+			pr_info(TEST_MODULE_NAME ": Not a test_result "
+				"signature. expected 0x%x. received 0x%x "
+				"for chan %s\n",
+				TEST_CONFIG_SIGNATURE,
+				test_ch->buf[0],
+				test_ch->name);
+			continue;
+		} else {
+			pr_info(TEST_MODULE_NAME ": Signature is "
+				"TEST_CONFIG_SIGNATURE as expected\n");
+			break;
+		}
+	}
+
+	return test_ch->buf[1];
+
+exit_err:
+	return 0;
+}
+
+static int check_random_lpm_test_array(struct test_channel *test_ch)
+{
+	int i = 0, j = 0;
+	struct lpm_test_struct *lpm_db = &test_ch->lpm_test_db;
+	unsigned int delta_ms = 0;
+	int arr_ind = 0;
+
+	if (!test_ch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return -ENODEV;
+	}
+
+	print_hex_dump(KERN_INFO, TEST_MODULE_NAME ": lpm_arr:", 0, 32, 2,
+		       (void *)test_ch->lpm_test_db.lpm_arr,
+		       sizeof(test_ch->lpm_test_db.lpm_arr), false);
+
+	for (i = 0; i < lpm_db->next_avail_entry_in_array; i++) {
+		if ((lpm_db->lpm_arr[i].msg_type == LPM_MSG_SEND) ||
+		    (lpm_db->lpm_arr[i].msg_type == LPM_MSG_REC)) {
+			/* find the next message in the array */
+			arr_ind = lpm_db->next_avail_entry_in_array;
+			for (j = i+1; j < arr_ind; j++) {
+				if ((lpm_db->lpm_arr[j].msg_type ==
+				     LPM_MSG_SEND) ||
+				    (lpm_db->lpm_arr[j].msg_type ==
+				     LPM_MSG_REC))
+					break;
+			}
+			if (j == arr_ind) {
+				if (lpm_db->lpm_arr[i].counter ==
+				    test_ch->config_msg.num_packets - 1) {
+					/* i is last msg in the array */
+					return 1;
+				} else {
+					pr_err(TEST_MODULE_NAME "%s: invalid "
+						"last msg, i=%d, counter=%d",
+					       __func__, i,
+					       lpm_db->lpm_arr[i].counter);
+					return 0;
+				}
+			}
+			delta_ms = lpm_db->lpm_arr[j].current_ms -
+				lpm_db->lpm_arr[i].current_ms;
+			if (delta_ms < 30) {
+				if (j != i+1) {
+					pr_err(TEST_MODULE_NAME "%s: lpm "
+						"activity while delta is less "
+						"than 30, i=%d, j=%d",
+					       __func__, i, j);
+					return 0;
+				}
+			} else {
+				if (delta_ms > 90) {
+					if (j != i+3) {
+						pr_err(TEST_MODULE_NAME "%s: "
+							"lpm activity while "
+							"delta is less than "
+							"30, i=%d, j=%d",
+						       __func__, i, j);
+						return 0;
+					}
+					if (lpm_db->lpm_arr[i+1].msg_type !=
+					    LPM_SLEEP) {
+						pr_err(TEST_MODULE_NAME "%s: "
+							"no sleep when delta "
+							"is bigger than 90"
+							", i=%d, j=%d",
+						       __func__, i, j);
+						return 0;
+					}
+					if (lpm_db->lpm_arr[i+2].msg_type !=
+					    LPM_WAKEUP) {
+						pr_err(TEST_MODULE_NAME "%s: "
+							"no sleep when delta "
+							"is bigger than 90"
+							", i=%d, j=%d",
+						       __func__, i, j);
+						return 0;
+					}
+				}
+			}
+		}
+
+	}
+	return 1;
+}
+
+static int lpm_test_main_task(void *ptr)
+{
+	u32 read_avail = 0;
+	int last_msg_index = 0;
+	struct test_channel *test_ch = (struct test_channel *)ptr;
+	struct lpm_msg lpm_msg;
+	int ret = 0;
+	int modem_result = 0;
+	int host_result = 0;
+
+	pr_info(TEST_MODULE_NAME ": %s - STARTED\n", __func__);
+
+	if (!test_ch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return -ENODEV;
+	}
+
+	while (last_msg_index < test_ch->config_msg.num_packets - 1) {
+		TEST_DBG(TEST_MODULE_NAME ": %s - "
+			"IN LOOP last_msg_index=%d\n",
+		       __func__, last_msg_index);
+
+		read_avail = sdio_read_avail(test_ch->ch);
+		if (read_avail == 0) {
+			TEST_DBG(TEST_MODULE_NAME
+					":read_avail 0 for chan %s, "
+					"wait for event\n",
+					test_ch->name);
+			wait_event(test_ch->wait_q,
+				   atomic_read(&test_ch->rx_notify_count));
+			atomic_dec(&test_ch->rx_notify_count);
+
+			read_avail = sdio_read_avail(test_ch->ch);
+			if (read_avail == 0) {
+				pr_err(TEST_MODULE_NAME
+					":read_avail size %d for chan %s not as"
+					" expected\n",
+					read_avail, test_ch->name);
+				continue;
+			}
+		}
+
+		memset(test_ch->buf, 0x00, sizeof(test_ch->buf));
+
+		ret = sdio_read(test_ch->ch, test_ch->buf, read_avail);
+		if (ret) {
+			pr_info(TEST_MODULE_NAME ":sdio_read for chan %s"
+						 " err=%d.\n",
+				test_ch->name, -ret);
+			goto exit_err;
+		}
+
+		memcpy((void *)&lpm_msg, test_ch->buf, sizeof(lpm_msg));
+
+		if (lpm_msg.signature != LPM_TEST_CONFIG_SIGNATURE) {
+			pr_err(TEST_MODULE_NAME ": Not lpm test_result "
+				"signature. expected 0x%x. received 0x%x "
+				"for chan %s\n",
+				LPM_TEST_CONFIG_SIGNATURE,
+				lpm_msg.signature,
+				test_ch->name);
+			continue;
+		} else {
+			pr_debug(TEST_MODULE_NAME ": Signature is "
+				"LPM_TEST_CONFIG_SIGNATURE as expected\n");
+
+			spin_lock_irqsave(&lpm_lock, flags);
+			last_msg_index = lpm_msg.counter;
+			test_ch->lpm_test_db.last_index_in_rec_msg =
+				last_msg_index;
+			lpm_test_update_entry(test_ch, LPM_MSG_REC,
+					      last_msg_index);
+			spin_unlock_irqrestore(&lpm_lock, flags);
+			continue;
+		}
+	}
+
+	pr_info(TEST_MODULE_NAME ":%s: Finished to recieve all apckets from the"
+				 " modem, waiting for result_msg", __func__);
+
+	/* Wait for the resault message from the modem */
+	modem_result = wait_for_result_msg(test_ch);
+
+	pr_info(TEST_MODULE_NAME ": modem result was %d", modem_result);
+
+	/* Wait for all the packets to be sent to the modem */
+	while (1) {
+		spin_lock_irqsave(&lpm_lock, flags);
+		if (test_ch->lpm_test_db.next_index_in_sent_msg >=
+		    test_ch->config_msg.num_packets - 1) {
+			spin_unlock_irqrestore(&lpm_lock, flags);
+			break;
+		} else {
+			pr_info(TEST_MODULE_NAME ":%s: Didn't finished to send "
+				"all apckets, next_index_in_sent_msg = %d ",
+				__func__,
+				test_ch->lpm_test_db.next_index_in_sent_msg);
+		}
+		spin_unlock_irqrestore(&lpm_lock, flags);
+		msleep(60);
+	}
+
+	sdio_al_unregister_lpm_cb(test_ch->sdio_al_device);
+
+	host_result = check_random_lpm_test_array(test_ch);
+
+	test_ch->test_completed = 1;
+	if (modem_result && host_result) {
+		pr_info(TEST_MODULE_NAME ": Random LPM TEST_PASSED for ch %s",
+			test_ch->name);
+		test_ch->test_result = TEST_PASSED;
+	} else {
+		pr_info(TEST_MODULE_NAME ": Random LPM TEST_FAILED for ch %s",
+			test_ch->name);
+		test_ch->test_result = TEST_FAILED;
+	}
+
+	check_test_completion();
+
+	return 0;
+
+exit_err:
+	pr_info(TEST_MODULE_NAME ": TEST FAIL for chan %s.\n",
+		test_ch->name);
+	test_ch->test_completed = 1;
+	test_ch->test_result = TEST_FAILED;
+	check_test_completion();
+	return -ENODEV;
+}
+
+static int lpm_test_create_read_thread(struct test_channel *test_ch)
+{
+	pr_info(TEST_MODULE_NAME ": %s - STARTED\n", __func__);
+
+	if (!test_ch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return -ENODEV;
+	}
+
+	test_ch->lpm_test_db.lpm_test_task.task_name = SDIO_LPM_TEST;
+
+	test_ch->lpm_test_db.lpm_test_task.lpm_task =
+		kthread_create(lpm_test_main_task,
+			       (void *)(test_ch),
+			       test_ch->lpm_test_db.lpm_test_task.task_name);
+
+	if (IS_ERR(test_ch->lpm_test_db.lpm_test_task.lpm_task)) {
+		pr_err(TEST_MODULE_NAME ": %s - kthread_create() failed\n",
+			__func__);
+		return -ENOMEM;
+	}
+
+	wake_up_process(test_ch->lpm_test_db.lpm_test_task.lpm_task);
+
+	return 0;
+}
+
+static void lpm_continuous_rand_test(struct test_channel *test_ch)
+{
+	unsigned int local_ms = 0;
+	int ret = 0;
+	unsigned int write_avail = 0;
+
+	pr_info(MODULE_NAME ": %s - STARTED\n", __func__);
+
+	if (!test_ch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return;
+	}
+
+	/* initialize lpm_test_db */
+	test_ch->lpm_test_db.next_avail_entry_in_array = 0;
+	test_ch->lpm_test_db.next_index_in_sent_msg = 0;
+	 /* read the current time */
+	test_ch->lpm_test_db.start_jiffies = get_jiffies_64();
+
+	pr_err(TEST_MODULE_NAME ": %s - initializing the lpm_array", __func__);
+
+	memset(test_ch->lpm_test_db.lpm_arr, 0,
+	       sizeof(test_ch->lpm_test_db.lpm_arr));
+
+	ret = lpm_test_create_read_thread(test_ch);
+	if (ret != 0) {
+		pr_err(TEST_MODULE_NAME ": %s - failed to create lpm reading "
+		       "thread", __func__);
+	}
+
+	while (test_ch->lpm_test_db.next_index_in_sent_msg <=
+	      test_ch->config_msg.num_packets - 1) {
+		struct lpm_msg msg;
+		u32 ret = 0;
+
+		local_ms = pseudo_random_seed(&test_ch->config_msg.test_param);
+		TEST_DBG(TEST_MODULE_NAME ":%s: SLEEPING for %d ms",
+		       __func__, local_ms);
+		msleep(local_ms);
+
+		msg.counter = test_ch->lpm_test_db.next_index_in_sent_msg;
+		msg.signature = LPM_TEST_CONFIG_SIGNATURE;
+		msg.reserve1 = 0;
+		msg.reserve2 = 0;
+
+		/* wait for data ready event */
+		write_avail = sdio_write_avail(test_ch->ch);
+		pr_debug(TEST_MODULE_NAME ": %s: write_avail=%d\n",
+		       __func__, write_avail);
+		if (write_avail < sizeof(msg)) {
+			wait_event(test_ch->wait_q,
+				   atomic_read(&test_ch->tx_notify_count));
+			atomic_dec(&test_ch->tx_notify_count);
+		}
+
+		write_avail = sdio_write_avail(test_ch->ch);
+		if (write_avail < sizeof(msg)) {
+			pr_info(TEST_MODULE_NAME ": %s: not enough write "
+				"avail.\n", __func__);
+			break;
+		}
+
+		ret = sdio_write(test_ch->ch, (u32 *)&msg, sizeof(msg));
+		if (ret)
+			pr_err(TEST_MODULE_NAME ":%s: sdio_write err=%d.\n",
+				__func__, -ret);
+
+		TEST_DBG(TEST_MODULE_NAME ": %s: write, index=%d\n",
+		       __func__, test_ch->lpm_test_db.next_index_in_sent_msg);
+
+		spin_lock_irqsave(&lpm_lock, flags);
+		lpm_test_update_entry(test_ch, LPM_MSG_SEND,
+			test_ch->lpm_test_db.next_index_in_sent_msg);
+		test_ch->lpm_test_db.next_index_in_sent_msg++;
+		spin_unlock_irqrestore(&lpm_lock, flags);
+	}
+
+	pr_info(TEST_MODULE_NAME ": %s: Finished to send all packets to "
+			"the modem", __func__);
+
+	return;
+}
+
+static void lpm_test(struct test_channel *test_ch)
+{
+	int modem_result = 0;
+
+	pr_info(TEST_MODULE_NAME ": %s - START\n", __func__);
+
+	if (!test_ch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return;
+	}
+
+	modem_result = wait_for_result_msg(test_ch);
+	pr_debug(TEST_MODULE_NAME ": %s - delete the timeout timer\n",
+	       __func__);
+	del_timer_sync(&test_ch->timeout_timer);
+
+	if (modem_result == 0) {
+		pr_err(TEST_MODULE_NAME ": LPM TEST - Client didn't sleep. "
+		       "Result Msg - is_successful=%d\n", test_ch->buf[1]);
+		goto exit_err;
+	} else {
+		pr_info(TEST_MODULE_NAME ": %s -"
+			"LPM 9K WAS SLEEPING - PASS\n", __func__);
+		if (test_ch->test_result == TEST_PASSED) {
+			pr_info(TEST_MODULE_NAME ": LPM TEST_PASSED\n");
+			test_ch->test_completed = 1;
+			check_test_completion();
+		} else {
+			pr_err(TEST_MODULE_NAME ": LPM TEST - Host didn't "
+			       "sleep. Client slept\n");
+			goto exit_err;
+		}
+	}
+
+	return;
+
+exit_err:
+	pr_info(TEST_MODULE_NAME ": TEST FAIL for chan %s.\n",
+		test_ch->name);
+	test_ch->test_completed = 1;
+	test_ch->test_result = TEST_FAILED;
+	check_test_completion();
+	return;
+}
+
+
+/**
+ * LPM Test while the host wakes up the modem
+ */
+static void lpm_test_host_waker(struct test_channel *test_ch)
+{
+	pr_info(TEST_MODULE_NAME ": %s - START\n", __func__);
+	wait_event(test_ch->wait_q, atomic_read(&test_ch->wakeup_client));
+	atomic_set(&test_ch->wakeup_client, 0);
+
+	pr_info(TEST_MODULE_NAME ": %s - Sending the config_msg to wakeup "
+		" the client\n", __func__);
+	send_config_msg(test_ch);
+
+	lpm_test(test_ch);
+}
+
 /**
  * sender Test
  */
@@ -404,7 +984,7 @@ static void sender_test(struct test_channel *test_ch)
 		}
 
 		random_num = get_random_int();
-		size = (random_num % test_ch->config_msg.packet_length) + 1;
+		size = (random_num % test_ch->packet_length) + 1;
 
 		TEST_DBG(TEST_MODULE_NAME "SENDER WAIT FOR EVENT for chan %s\n",
 			test_ch->name);
@@ -523,13 +1103,14 @@ static void a2_performance_test(struct test_channel *test_ch)
 	int total_bytes = 0;
 	int max_packets = 10000;
 	u32 packet_size = test_ch->buf_size;
+	int rand_size = 0;
 
 	u64 start_jiffy, end_jiffy, delta_jiffies;
 	unsigned int time_msec = 0;
 	u32 throughput = 0;
 
 	max_packets = test_ch->config_msg.num_packets;
-	packet_size = test_ch->config_msg.packet_length;
+	packet_size = test_ch->packet_length;
 
 	for (i = 0; i < packet_size / 2; i++)
 		buf16[i] = (u16) (i & 0xFFFF);
@@ -544,6 +1125,13 @@ static void a2_performance_test(struct test_channel *test_ch)
 		if (test_ctx->exit_flag) {
 			pr_info(TEST_MODULE_NAME ":Exit Test.\n");
 			return;
+		}
+
+		if (test_ch->random_packet_size) {
+			rand_size = get_random_int();
+			packet_size = (rand_size % test_ch->packet_length) + 1;
+			if (packet_size < A2_MIN_PACKET_SIZE)
+				packet_size = A2_MIN_PACKET_SIZE;
 		}
 
 		/* wait for data ready event */
@@ -565,7 +1153,7 @@ static void a2_performance_test(struct test_channel *test_ch)
 			 test_ch->name, write_avail);
 		if (write_avail > 0) {
 			size = min(packet_size, write_avail) ;
-			pr_debug(TEST_MODULE_NAME ":tx size = %d for chan %s\n",
+			TEST_DBG(TEST_MODULE_NAME ":tx size = %d for chan %s\n",
 				 size, test_ch->name);
 			test_ch->buf[0] = tx_packet_count;
 			test_ch->buf[(size/4)-1] = tx_packet_count;
@@ -627,9 +1215,12 @@ static void a2_performance_test(struct test_channel *test_ch)
 				" for chan %s\n",
 		   total_bytes , (int) time_msec, test_ch->name);
 
-	throughput = (total_bytes / time_msec) * 8 / 1000;
-	pr_err(TEST_MODULE_NAME ":Performance = %d Mbit/sec for chan %s\n",
-	throughput, test_ch->name);
+	if (!test_ch->random_packet_size) {
+		throughput = (total_bytes / time_msec) * 8 / 1000;
+		pr_err(TEST_MODULE_NAME ":Performance = %d Mbit/sec for "
+					"chan %s\n",
+		       throughput, test_ch->name);
+	}
 
 #ifdef CONFIG_DEBUG_FS
 	switch (test_ch->ch_id) {
@@ -663,6 +1254,107 @@ exit_err:
 }
 
 /**
+ * sender No loopback Test
+ */
+static void sender_no_loopback_test(struct test_channel *test_ch)
+{
+	int ret = 0 ;
+	u32 write_avail = 0;
+	int packet_count = 0;
+	int size = 512;
+	u16 *buf16 = (u16 *) test_ch->buf;
+	int i;
+	int max_packet_count = 10000;
+	int random_num = 0;
+	int modem_result;
+
+	max_packet_count = test_ch->config_msg.num_packets;
+
+	for (i = 0 ; i < size / 2 ; i++)
+		buf16[i] = (u16) (i & 0xFFFF);
+
+	pr_info(TEST_MODULE_NAME
+		 ":SENDER NO LP TEST START for chan %s\n", test_ch->name);
+
+	while (packet_count < max_packet_count) {
+
+		if (test_ctx->exit_flag) {
+			pr_info(TEST_MODULE_NAME ":Exit Test.\n");
+			return;
+		}
+
+		random_num = get_random_int();
+		size = (random_num % test_ch->packet_length) + 1;
+
+		TEST_DBG(TEST_MODULE_NAME ":SENDER WAIT FOR EVENT "
+					  "for chan %s\n",
+			test_ch->name);
+
+		/* wait for data ready event */
+		write_avail = sdio_write_avail(test_ch->ch);
+		TEST_DBG(TEST_MODULE_NAME ":write_avail=%d\n", write_avail);
+		if (write_avail < size) {
+			wait_event(test_ch->wait_q,
+				   atomic_read(&test_ch->tx_notify_count));
+			atomic_dec(&test_ch->tx_notify_count);
+		}
+
+		write_avail = sdio_write_avail(test_ch->ch);
+		TEST_DBG(TEST_MODULE_NAME ":write_avail=%d\n", write_avail);
+		if (write_avail < size) {
+			pr_info(TEST_MODULE_NAME ":not enough write avail.\n");
+			continue;
+		}
+
+		test_ch->buf[0] = packet_count;
+
+		ret = sdio_write(test_ch->ch, test_ch->buf, size);
+		if (ret) {
+			pr_info(TEST_MODULE_NAME ":sender sdio_write err=%d.\n",
+				-ret);
+			goto exit_err;
+		}
+
+		test_ch->tx_bytes += size;
+		packet_count++;
+
+		TEST_DBG(TEST_MODULE_NAME
+			 ":sender total tx bytes = 0x%x , packet#=%d, size=%d"
+			 " for chan %s\n",
+			 test_ch->tx_bytes, packet_count, size, test_ch->name);
+
+	} /* end of while */
+
+	pr_info(TEST_MODULE_NAME
+		 ":SENDER TEST END: total tx bytes = 0x%x, "
+		 " for chan %s\n",
+		 test_ch->tx_bytes, test_ch->name);
+
+	modem_result = wait_for_result_msg(test_ch);
+
+	if (modem_result) {
+		pr_info(TEST_MODULE_NAME ": TEST PASS for chan %s.\n",
+			test_ch->name);
+		test_ch->test_result = TEST_PASSED;
+	} else {
+		pr_info(TEST_MODULE_NAME ": TEST FAILURE for chan %s.\n",
+			test_ch->name);
+		test_ch->test_result = TEST_FAILED;
+	}
+	test_ch->test_completed = 1;
+	check_test_completion();
+	return;
+
+exit_err:
+	pr_info(TEST_MODULE_NAME ": TEST FAIL for chan %s.\n",
+		test_ch->name);
+	test_ch->test_completed = 1;
+	test_ch->test_result = TEST_FAILED;
+	check_test_completion();
+	return;
+}
+
+/**
  * Worker thread to handle the tests types
  */
 static void worker(struct work_struct *work)
@@ -683,14 +1375,26 @@ static void worker(struct work_struct *work)
 	test_type = test_ch->test_type;
 
 	switch (test_type) {
-	case LOOPBACK_TEST:
+	case SDIO_TEST_LOOPBACK_HOST:
 		loopback_test(test_ch);
 		break;
-	case SENDER_TEST:
+	case SDIO_TEST_LOOPBACK_CLIENT:
 		sender_test(test_ch);
 		break;
-	case A2_TEST:
+	case SDIO_TEST_PERF:
 		a2_performance_test(test_ch);
+		break;
+	case SDIO_TEST_LPM_CLIENT_WAKER:
+		lpm_test(test_ch);
+		break;
+	case SDIO_TEST_LPM_HOST_WAKER:
+		lpm_test_host_waker(test_ch);
+		break;
+	case SDIO_TEST_HOST_SENDER_NO_LP:
+		sender_no_loopback_test(test_ch);
+		break;
+	case SDIO_TEST_LPM_RANDOM:
+		lpm_continuous_rand_test(test_ch);
 		break;
 	default:
 		pr_err(TEST_MODULE_NAME ":Bad Test type = %d.\n",
@@ -715,7 +1419,6 @@ static void notify(void *priv, unsigned channel_event)
 		pr_info(TEST_MODULE_NAME ":notify before ch ready.\n");
 		return;
 	}
-	BUG_ON(test_ctx->signature != TEST_SIGNATURE);
 
 	switch (channel_event) {
 	case SDIO_EVENT_DATA_READ_AVAIL:
@@ -810,6 +1513,88 @@ static void default_sdio_al_test_release(struct device *dev)
 	pr_info(MODULE_NAME ":platform device released.\n");
 }
 
+static void sdio_test_lpm_timeout_handler(unsigned long data)
+{
+	struct test_channel *tch = (struct test_channel *)data;
+
+	pr_info(TEST_MODULE_NAME ": %s - LPM TEST TIMEOUT Expired after "
+			    "%d ms\n", __func__, tch->timeout_ms);
+	tch->test_completed = 1;
+	pr_info(TEST_MODULE_NAME ": %s - tch->test_result = TEST_FAILED\n",
+		__func__);
+	tch->test_completed = 1;
+	tch->test_result = TEST_FAILED;
+	check_test_completion();
+	return;
+}
+
+static void sdio_test_lpm_timer_handler(unsigned long data)
+{
+	struct test_channel *tch = (struct test_channel *)data;
+
+	pr_info(TEST_MODULE_NAME ": %s - LPM TEST Timer Expired after "
+			    "%d ms\n", __func__, tch->timer_interval_ms);
+
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ": %s - LPM TEST FAILED. "
+		       "tch is NULL\n", __func__);
+		return;
+	}
+
+	if (!tch->ch) {
+		pr_err(TEST_MODULE_NAME ": %s - LPM TEST FAILED. tch->ch "
+		       "is NULL\n", __func__);
+		tch->test_result = TEST_FAILED;
+		return;
+	}
+
+	/* Verfiy that we voted for sleep */
+	if (tch->is_ok_to_sleep) {
+		tch->test_result = TEST_PASSED;
+		pr_info(TEST_MODULE_NAME ": %s - 8K voted for sleep\n",
+			__func__);
+	} else {
+		tch->test_result = TEST_FAILED;
+		pr_info(TEST_MODULE_NAME ": %s - 8K voted against sleep\n",
+			__func__);
+
+	}
+	sdio_al_unregister_lpm_cb(tch->sdio_al_device);
+
+	if (tch->test_type == SDIO_TEST_LPM_HOST_WAKER) {
+		atomic_set(&tch->wakeup_client, 1);
+		wake_up(&tch->wait_q);
+	}
+}
+
+int sdio_test_wakeup_callback(void *device_handle, int is_vote_for_sleep)
+{
+	int i = 0;
+
+	TEST_DBG(TEST_MODULE_NAME ": %s is_vote_for_sleep=%d!!!",
+		__func__, is_vote_for_sleep);
+
+	for (i = 0; i < SDIO_MAX_CHANNELS; i++) {
+		struct test_channel *tch = test_ctx->test_ch_arr[i];
+
+		if ((!tch) || (!tch->is_used) || (!tch->ch_ready))
+			continue;
+		if (tch->sdio_al_device == device_handle) {
+			tch->is_ok_to_sleep = is_vote_for_sleep;
+
+			spin_lock_irqsave(&lpm_lock, flags);
+			if (is_vote_for_sleep == 1)
+				lpm_test_update_entry(tch, LPM_SLEEP, 0);
+			else
+				lpm_test_update_entry(tch, LPM_WAKEUP, 0);
+			spin_unlock_irqrestore(&lpm_lock, flags);
+		}
+	}
+
+
+	return 0;
+}
+
 /**
  * Test Main
  */
@@ -838,11 +1623,14 @@ static int test_start(void)
 		atomic_set(&tch->tx_notify_count, 0);
 		atomic_set(&tch->rx_notify_count, 0);
 		atomic_set(&tch->any_notify_count, 0);
+		atomic_set(&tch->wakeup_client, 0);
 
 		memset(tch->buf, 0x00, tch->buf_size);
 		tch->test_result = TEST_NO_RESULT;
 
 		tch->test_completed = 0;
+
+		memset(&tch->lpm_test_db, 0, sizeof(tch->lpm_test_db));
 
 		if (!tch->ch_ready) {
 			pr_info(TEST_MODULE_NAME ":openning channel %s\n",
@@ -862,11 +1650,33 @@ static int test_start(void)
 					tch->name);
 					tch->ch_ready = false;
 				}
+
+				tch->sdio_al_device = tch->ch->sdio_al_dev;
 			}
 		}
 
 		if ((tch->ch_ready) && (tch->ch_id != SDIO_SMEM))
 			send_config_msg(tch);
+
+		if ((tch->test_type == SDIO_TEST_LPM_HOST_WAKER) ||
+		    (tch->test_type == SDIO_TEST_LPM_CLIENT_WAKER) ||
+		    (tch->test_type == SDIO_TEST_LPM_RANDOM)) {
+			sdio_al_register_lpm_cb(tch->sdio_al_device,
+					 sdio_test_wakeup_callback);
+
+			if (tch->timer_interval_ms > 0) {
+				pr_info(TEST_MODULE_NAME ": %s - init timer, "
+							 "ms=%d\n",
+					__func__, tch->timer_interval_ms);
+				init_timer(&tch->timer);
+				tch->timer.data = (unsigned long)tch;
+				tch->timer.function =
+					sdio_test_lpm_timer_handler;
+				tch->timer.expires = jiffies +
+				    msecs_to_jiffies(tch->timer_interval_ms);
+				add_timer(&tch->timer);
+			}
+		}
 	}
 
 	pr_debug(TEST_MODULE_NAME ":queue_work..\n");
@@ -910,17 +1720,16 @@ static int set_params_loopback_9k(struct test_channel *tch)
 		return -EINVAL;
 	}
 	tch->is_used = 1;
-	tch->test_type = SENDER_TEST;
+	tch->test_type = SDIO_TEST_LOOPBACK_CLIENT;
 	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
-	tch->config_msg.is_loopback_in_9k = 1;
-	tch->config_msg.is_lpm_test = 0;
-	tch->config_msg.packet_length = 512;
+	tch->config_msg.test_case = SDIO_TEST_LOOPBACK_CLIENT;
 	tch->config_msg.num_packets = 10000;
-	tch->config_msg.sleep_interval = 0;
 	tch->config_msg.num_iterations = 1;
 
+	tch->packet_length = 512;
 	if (tch->ch_id == SDIO_RPC)
-		tch->config_msg.packet_length = 128;
+		tch->packet_length = 128;
+	tch->timer_interval_ms = 0;
 
 	return 0;
 }
@@ -932,18 +1741,40 @@ static int set_params_a2_perf(struct test_channel *tch)
 		return -EINVAL;
 	}
 	tch->is_used = 1;
-	tch->test_type = A2_TEST;
+	tch->test_type = SDIO_TEST_PERF;
 	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
-	tch->config_msg.is_loopback_in_9k = 1;
-	tch->config_msg.is_lpm_test = 0;
+	tch->config_msg.test_case = SDIO_TEST_LOOPBACK_CLIENT;
 	if (tch->ch_id == SDIO_DIAG)
-		tch->config_msg.packet_length = 512;
+		tch->packet_length = 512;
 	else
-		tch->config_msg.packet_length = MAX_XFER_SIZE;
+		tch->packet_length = MAX_XFER_SIZE;
 
 	tch->config_msg.num_packets = 10000;
-	tch->config_msg.sleep_interval = 0;
 	tch->config_msg.num_iterations = 1;
+
+	tch->timer_interval_ms = 0;
+
+	return 0;
+}
+
+static int set_params_a2_small_pkts(struct test_channel *tch)
+{
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ":NULL channel\n");
+		return -EINVAL;
+	}
+	tch->is_used = 1;
+	tch->test_type = SDIO_TEST_PERF;
+	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
+	tch->config_msg.test_case = SDIO_TEST_LOOPBACK_CLIENT;
+	tch->packet_length = 128;
+
+	tch->config_msg.num_packets = 1000000;
+	tch->config_msg.num_iterations = 1;
+	tch->random_packet_size = 1;
+
+	tch->timer_interval_ms = 0;
+
 	return 0;
 }
 
@@ -954,6 +1785,83 @@ static int set_params_smem_test(struct test_channel *tch)
 		return -EINVAL;
 	}
 	tch->is_used = 1;
+	tch->timer_interval_ms = 0;
+
+	return 0;
+}
+
+static int set_params_lpm_test(struct test_channel *tch,
+				enum sdio_test_case_type test,
+				int timer_interval_ms)
+{
+	static int first_time = 1;
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ": %s - NULL channel\n", __func__);
+		return -EINVAL;
+	}
+	tch->is_used = 1;
+	tch->test_type = test;
+	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
+	tch->config_msg.test_case = test;
+	tch->config_msg.num_packets = 100;
+	tch->config_msg.num_iterations = 1;
+	if (seed != 0)
+		tch->config_msg.test_param = seed;
+	else
+		tch->config_msg.test_param =
+			(unsigned int)(get_jiffies_64() & 0xFFFF);
+	pr_info(TEST_MODULE_NAME ":%s: seed is %d",
+	       __func__, tch->config_msg.test_param);
+
+	tch->timer_interval_ms = timer_interval_ms;
+	tch->timeout_ms = 10000;
+
+	tch->packet_length = 0;
+	if (test != SDIO_TEST_LPM_RANDOM) {
+		init_timer(&tch->timeout_timer);
+		tch->timeout_timer.data = (unsigned long)tch;
+		tch->timeout_timer.function = sdio_test_lpm_timeout_handler;
+		tch->timeout_timer.expires = jiffies +
+			msecs_to_jiffies(tch->timeout_ms);
+		add_timer(&tch->timeout_timer);
+		pr_info(TEST_MODULE_NAME ": %s - Initiated LPM TIMEOUT TIMER."
+			"set to %d ms\n",
+			__func__, tch->timeout_ms);
+	}
+
+	if (first_time) {
+		pr_info(TEST_MODULE_NAME ": %s - wake_lock_init() called\n",
+		__func__);
+		wake_lock_init(&test_ctx->wake_lock,
+			       WAKE_LOCK_SUSPEND, TEST_MODULE_NAME);
+		first_time = 0;
+	}
+
+	pr_info(TEST_MODULE_NAME ": %s - wake_lock() for the TEST is "
+		"called. to prevent real sleeping\n", __func__);
+	wake_lock(&test_ctx->wake_lock);
+
+	return 0;
+}
+
+static int set_params_8k_sender_no_lp(struct test_channel *tch)
+{
+	if (!tch) {
+		pr_err(TEST_MODULE_NAME ":NULL channel\n");
+		return -EINVAL;
+	}
+	tch->is_used = 1;
+	tch->test_type = SDIO_TEST_HOST_SENDER_NO_LP;
+	tch->config_msg.signature = TEST_CONFIG_SIGNATURE;
+	tch->config_msg.test_case = SDIO_TEST_HOST_SENDER_NO_LP;
+	tch->config_msg.num_packets = 1000;
+	tch->config_msg.num_iterations = 1;
+
+	tch->packet_length = 512;
+	if (tch->ch_id == SDIO_RPC)
+		tch->packet_length = 128;
+	tch->timer_interval_ms = 0;
+
 	return 0;
 }
 
@@ -1038,7 +1946,53 @@ ssize_t test_write(struct file *filp, const char __user *buf, size_t size,
 		    set_params_loopback_9k(test_ctx->test_ch_arr[SDIO_DIAG]) ||
 		    set_params_a2_perf(test_ctx->test_ch_arr[SDIO_RMNT]) ||
 		    set_params_a2_perf(test_ctx->test_ch_arr[SDIO_DUN]) ||
-		    set_params_smem_test(test_ctx->test_ch_arr[SDIO_SMEM]))
+		    set_params_smem_test(test_ctx->test_ch_arr[SDIO_SMEM]) ||
+		    set_params_loopback_9k(test_ctx->test_ch_arr[SDIO_CIQ]))
+			return size;
+		break;
+	case 11:
+		pr_info(TEST_MODULE_NAME " --LPM Test For Device 0. Client "
+			"wakes the Host --.\n");
+		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RMNT],
+				    SDIO_TEST_LPM_CLIENT_WAKER, 90);
+		break;
+	case 12:
+		pr_info(TEST_MODULE_NAME " --LPM Test For Device 1. Client "
+			"wakes the Host --.\n");
+		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RPC],
+				    SDIO_TEST_LPM_CLIENT_WAKER, 90);
+		break;
+	case 13:
+		pr_info(TEST_MODULE_NAME " --LPM Test For Device 0. Host "
+			"wakes the Client --.\n");
+		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RMNT],
+				    SDIO_TEST_LPM_HOST_WAKER, 120);
+		break;
+	case 14:
+		pr_info(TEST_MODULE_NAME " --LPM Test For Device 1. Host "
+			"wakes the Client --.\n");
+		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RPC],
+				    SDIO_TEST_LPM_HOST_WAKER, 120);
+		break;
+	case 15:
+		pr_info(TEST_MODULE_NAME " --LPM Test RANDOM --.\n");
+		set_params_lpm_test(test_ctx->test_ch_arr[SDIO_RPC],
+				    SDIO_TEST_LPM_RANDOM, 0);
+		break;
+	case 16:
+		pr_info(TEST_MODULE_NAME " -- host sender no LP for Diag --");
+		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_DIAG]);
+		break;
+	case 17:
+		pr_info(TEST_MODULE_NAME " -- host sender no LP for Diag, RPC, "
+					 "CIQ  --");
+		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_DIAG]);
+		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_CIQ]);
+		set_params_8k_sender_no_lp(test_ctx->test_ch_arr[SDIO_RPC]);
+		break;
+	case 18:
+		pr_info(TEST_MODULE_NAME " -- rmnet small packets (5-128)  --");
+		if (set_params_a2_small_pkts(test_ctx->test_ch_arr[SDIO_RMNT]))
 			return size;
 		break;
 	case 98:

@@ -68,14 +68,6 @@ int platform_physical_low_power_pages(unsigned long, unsigned long);
 #if defined(CONFIG_ARCH_MSM_ARM11) || defined(CONFIG_ARCH_MSM_CORTEX_A5)
 void write_to_strongly_ordered_memory(void);
 void map_page_strongly_ordered(void);
-
-
-#include <asm/mach-types.h>
-
-#define arch_barrier_extra() do \
-	{ if (machine_is_msm7x27_surf() || machine_is_msm7x27_ffa())  \
-		write_to_strongly_ordered_memory(); \
-	} while (0)
 #endif
 
 #ifdef CONFIG_CACHE_L2X0
@@ -97,3 +89,7 @@ extern void l2x0_cache_sync(void);
 #define MEMORY_ACTIVE		2
 
 #define NPA_MEMORY_NODE_NAME	"/mem/apps/ddr_dpd"
+
+#ifndef CONFIG_ARCH_MSM7X27
+#define CONSISTENT_DMA_SIZE	(SZ_1M * 14)
+#endif

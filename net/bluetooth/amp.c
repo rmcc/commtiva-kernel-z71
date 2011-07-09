@@ -367,17 +367,24 @@ static inline int discover_req(struct amp_mgr *mgr, struct sk_buff *skb)
 {
 	struct a2mp_cmd_hdr *hdr = (struct a2mp_cmd_hdr *) skb->data;
 	struct a2mp_discover_req *req;
+	u16 *efm;
 	struct a2mp_discover_rsp rsp;
 
 	req = (struct a2mp_discover_req *) skb_pull(skb, sizeof(*hdr));
-	if (le16_to_cpu(hdr->len) != sizeof(*req))
-		return -EINVAL;
 	if (skb->len < sizeof(*req))
 		return -EINVAL;
-	skb_pull(skb, sizeof(*req));
+	efm = (u16 *) skb_pull(skb, sizeof(*req));
 
 	BT_DBG("mtu %d efm 0x%4.4x", le16_to_cpu(req->mtu),
 		le16_to_cpu(req->ext_feat));
+
+	while (le16_to_cpu(req->ext_feat) & 0x8000) {
+		if (skb->len < sizeof(*efm))
+			return -EINVAL;
+		req->ext_feat = *efm;
+		BT_DBG("efm 0x%4.4x", le16_to_cpu(req->ext_feat));
+		efm = (u16 *) skb_pull(skb, sizeof(*efm));
+	}
 
 	rsp.mtu = cpu_to_le16(670);
 	rsp.ext_feat = 0;
@@ -973,6 +980,18 @@ apl_finished:
 	return 1;
 }
 
+static void cancel_cpl_ctx(struct amp_ctx *ctx, u8 reason)
+{
+	struct hci_cp_disconn_phys_link dcp;
+
+	ctx->state = AMP_CPL_PL_CANCEL;
+	ctx->evt_type = AMP_HCI_EVENT;
+	ctx->evt_code = HCI_EV_DISCONN_PHYS_LINK_COMPLETE;
+	dcp.phy_handle = ctx->d.cpl.phy_handle;
+	dcp.reason = reason;
+	hci_send_cmd(ctx->hdev, HCI_OP_DISCONN_PHYS_LINK, sizeof(dcp), &dcp);
+}
+
 static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 {
 	struct amp_ctrl *ctrl;
@@ -982,13 +1001,13 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 	struct amp_ctx *cplctx;
 	struct a2mp_discover_req dreq;
 	struct a2mp_discover_rsp *drsp;
+	u16 *efm;
 	struct a2mp_getinfo_req greq;
 	struct a2mp_getinfo_rsp *grsp;
 	struct a2mp_cl *cl;
 	struct a2mp_getampassoc_req areq;
 	struct a2mp_getampassoc_rsp *arsp;
 	struct hci_cp_create_phys_link cp;
-	struct hci_cp_disconn_phys_link dcp;
 	struct hci_cp_write_remote_amp_assoc wcp;
 	struct hci_rp_write_remote_amp_assoc *wrp;
 	struct hci_ev_channel_selected *cev;
@@ -1014,13 +1033,7 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 			!(ctx->evt_type & AMP_HCI_EVENT)))
 			goto cpl_finished;
 
-		ctx->state = AMP_CPL_PL_CANCEL;
-		ctx->evt_type = AMP_HCI_EVENT;
-		ctx->evt_code = HCI_EV_DISCONN_PHYS_LINK_COMPLETE;
-		dcp.phy_handle = ctx->d.cpl.phy_handle;
-		dcp.reason = 0x16;
-		hci_send_cmd(ctx->hdev, HCI_OP_DISCONN_PHYS_LINK,
-				sizeof(dcp), &dcp);
+		cancel_cpl_ctx(ctx, 0x16);
 		return 0;
 	}
 
@@ -1042,10 +1055,26 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 		break;
 
 	case AMP_CPL_DISC_RSP:
-		if (skb->len < (sizeof(*hdr) + sizeof(*drsp)))
-			goto cpl_finished;
 		drsp = (struct a2mp_discover_rsp *) skb_pull(skb, sizeof(*hdr));
-		cl = (struct a2mp_cl *) skb_pull(skb, sizeof(*drsp));
+		if (skb->len < (sizeof(*drsp))) {
+			result = -EINVAL;
+			goto cpl_finished;
+		}
+
+		efm = (u16 *) skb_pull(skb, sizeof(*drsp));
+		BT_DBG("mtu %d efm 0x%4.4x", le16_to_cpu(drsp->mtu),
+						le16_to_cpu(drsp->ext_feat));
+
+		while (le16_to_cpu(drsp->ext_feat) & 0x8000) {
+			if (skb->len < sizeof(*efm)) {
+				result = -EINVAL;
+				goto cpl_finished;
+			}
+			drsp->ext_feat = *efm;
+			BT_DBG("efm 0x%4.4x", le16_to_cpu(drsp->ext_feat));
+			efm = (u16 *) skb_pull(skb, sizeof(*efm));
+		}
+		cl = (struct a2mp_cl *) efm;
 
 		/* find the first remote and local controller with the
 		 * same type
@@ -1280,12 +1309,12 @@ static u8 createphyslink_handler(struct amp_ctx *ctx, u8 evt_type, void *data)
 			if (skb->len < sizeof(*crsp))
 				goto cpl_finished;
 			crsp = (void *) skb_pull(skb, sizeof(*hdr));
-			if (crsp->local_id != ctx->d.cpl.remote_id)
-				goto cpl_finished;
-			if (crsp->remote_id != ctx->id)
-				goto cpl_finished;
-			if (crsp->status != 0)
-				goto cpl_finished;
+			if ((crsp->local_id != ctx->d.cpl.remote_id) ||
+				(crsp->remote_id != ctx->id) ||
+				(crsp->status != 0)) {
+				cancel_cpl_ctx(ctx, 0x13);
+				break;
+			}
 
 			/* notify Qualcomm PAL */
 			if (ctx->hdev->manufacturer == 0x001d)

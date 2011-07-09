@@ -32,7 +32,7 @@ struct urb *huburb;
 struct usb_device *
 phci_register_otg_device(struct isp1763_dev *dev)
 {
-	printk("OTG dev %x %d\n", hubdev, hubdev->devnum);
+	printk("OTG dev %x %d\n",(u32) hubdev, hubdev->devnum);
 	if (hubdev && hubdev->devnum >= 0x2) {
 		return hubdev;
 	}
@@ -168,6 +168,7 @@ pehci_Deinitialize(struct isp1763_dev *dev)
 			}
 		}
 	}
+return 0;
 }
 EXPORT_SYMBOL(pehci_Deinitialize);
 
@@ -181,7 +182,7 @@ pehci_Reinitialize(struct isp1763_dev *dev)
 			dev->driver->powerup(dev);
 		}
 	}
-
+return 0;
 }
 EXPORT_SYMBOL(pehci_Reinitialize);
 

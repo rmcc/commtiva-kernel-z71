@@ -31,63 +31,30 @@
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
+#include <linux/slab.h>
 #include <mach/peripheral-loader.h>
 #include <mach/msm_smd.h>
 #include <mach/qdsp6v2/apr.h>
-
+#include <mach/subsystem_notif.h>
+#include <mach/subsystem_restart.h>
 #include "apr_tal.h"
 #include "dsp_debug.h"
 
 struct apr_q6 q6;
 struct apr_client client[APR_DEST_MAX][APR_CLIENT_MAX];
+static atomic_t dsp_state;
+static atomic_t modem_state;
 
-inline int apr_fill_hdr(void *handle, uint32_t *buf, uint16_t src_port,
-			uint16_t msg_type, uint16_t dest_port,
-			uint32_t token, uint32_t opcode, uint16_t h_len)
-{
-	struct apr_svc *svc = handle;
-	struct apr_client *clnt;
-	struct apr_hdr *hdr;
-	uint16_t dest_id;
-	uint16_t client_id;
-	uint16_t type;
-	uint16_t hdr_len;
-	uint16_t ver;
+static wait_queue_head_t  dsp_wait;
+static wait_queue_head_t  modem_wait;
+/* Subsystem restart: QDSP6 data, functions */
+static struct workqueue_struct *apr_reset_workqueue;
+static void apr_reset_deregister(struct work_struct *work);
+struct apr_reset_work {
+	void *handle;
+	struct work_struct work;
+};
 
-	if (!handle || !buf || h_len < APR_HDR_SIZE) {
-		pr_err("APR: Wrong parameters\n");
-		return -EINVAL;
-	}
-	dest_id = svc->dest_id;
-	client_id = svc->client_id;
-	clnt = &client[dest_id][client_id];
-
-	if (!client[dest_id][client_id].handle) {
-		pr_err("APR: Still service is not yet opened\n");
-		return -EINVAL;
-	}
-
-	hdr = (struct apr_hdr *)buf;
-	hdr_len = h_len >> 2;
-	hdr->pkt_size = h_len;
-	hdr->src_domain = APR_DOMAIN_APPS;
-	hdr->src_svc = svc->id;
-	hdr->dest_svc = svc->id;
-	if (dest_id == APR_DEST_MODEM)
-		hdr->dest_domain = APR_DOMAIN_MODEM;
-	else if (dest_id == APR_DEST_QDSP6)
-		hdr->dest_domain = APR_DOMAIN_ADSP;
-
-	hdr->src_port = src_port;
-	hdr->dest_port = dest_port;
-	hdr->token = token;
-	hdr->opcode = opcode;
-	ver = APR_PKT_VER;
-	type = msg_type;
-	hdr->hdr_field = ((msg_type & 0x0003) << 0x8) |
-			((hdr_len & 0x000F) << 0x4) | (ver & 0x000F);
-	return 0;
-}
 
 int apr_send_pkt(void *handle, uint32_t *buf)
 {
@@ -103,6 +70,21 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 		pr_err("APR: Wrong parameters\n");
 		return -EINVAL;
 	}
+	if (svc->need_reset) {
+		pr_err("apr: send_pkt service need reset\n");
+		return -ENETRESET;
+	}
+
+	if ((svc->dest_id == APR_DEST_QDSP6) &&
+					(atomic_read(&dsp_state) == 0)) {
+		pr_err("apr: Still dsp is not Up\n");
+		return -ENETRESET;
+	} else if ((svc->dest_id == APR_DEST_MODEM) &&
+					(atomic_read(&modem_state) == 0)) {
+		pr_err("apr: Still Modem is not Up\n");
+		return -ENETRESET;
+	}
+
 
 	spin_lock_irqsave(&svc->w_lock, flags);
 	dest_id = svc->dest_id;
@@ -271,6 +253,7 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	int dest_id = 0;
 	int temp_port = 0;
 	struct apr_svc *svc = NULL;
+	int rc = 0;
 
 	if (!dest || !svc_name || !svc_fn)
 		return NULL;
@@ -282,6 +265,24 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 	} else {
 		pr_err("APR: wrong destination\n");
 		goto done;
+	}
+
+	if ((dest_id == APR_DEST_QDSP6) &&
+				(atomic_read(&dsp_state) == 0)) {
+		rc = wait_event_timeout(dsp_wait,
+				(atomic_read(&dsp_state) == 1), 5*HZ);
+		if (rc == 0) {
+			pr_err("apr: Still dsp is not Up\n");
+			return NULL;
+		}
+	} else if ((dest_id == APR_DEST_MODEM) &&
+					(atomic_read(&modem_state) == 0)) {
+		rc = wait_event_timeout(modem_wait,
+			(atomic_read(&modem_state) == 1), 5*HZ);
+		if (rc == 0) {
+			pr_err("apr: Still Modem is not Up\n");
+			return NULL;
+		}
 	}
 
 	if (!strcmp(svc_name, "AFE")) {
@@ -385,13 +386,18 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 		}
 	}
 	mutex_unlock(&client[dest_id][client_id].m_lock);
-	mutex_lock(&client[dest_id][client_id].svc[svc_idx].m_lock);
-	client[dest_id][client_id].id = client_id;
-	client[dest_id][client_id].svc[svc_idx].priv = priv;
-	client[dest_id][client_id].svc[svc_idx].id = svc_id;
-	client[dest_id][client_id].svc[svc_idx].dest_id = dest_id;
-	client[dest_id][client_id].svc[svc_idx].client_id = client_id;
 	svc = &client[dest_id][client_id].svc[svc_idx];
+	mutex_lock(&svc->m_lock);
+	client[dest_id][client_id].id = client_id;
+	if (svc->need_reset) {
+		mutex_unlock(&svc->m_lock);
+		pr_err("APR: Service needs reset\n");
+		goto done;
+	}
+	svc->priv = priv;
+	svc->id = svc_id;
+	svc->dest_id = dest_id;
+	svc->client_id = client_id;
 	if (src_port != 0xFFFFFFFF) {
 		temp_port = ((src_port >> 8) * 8) + (src_port & 0xFF);
 		pr_debug("port = %d t_port = %d\n", src_port, temp_port);
@@ -401,18 +407,31 @@ struct apr_svc *apr_register(char *dest, char *svc_name, apr_fn svc_fn,
 		svc->port_fn[temp_port] = svc_fn;
 		svc->port_priv[temp_port] = priv;
 	} else {
-		if (!client[dest_id][client_id].svc[svc_idx].fn) {
+		if (!svc->fn) {
 			if (!svc->port_cnt && !svc->svc_cnt)
 				client[dest_id][client_id].svc_cnt++;
-			client[dest_id][client_id].svc[svc_idx].fn = svc_fn;
+			svc->fn = svc_fn;
 			if (svc->port_cnt)
 				svc->svc_cnt++;
 		}
 	}
 
-	mutex_unlock(&client[dest_id][client_id].svc[svc_idx].m_lock);
+	mutex_unlock(&svc->m_lock);
 done:
 	return svc;
+}
+
+static void apr_reset_deregister(struct work_struct *work)
+{
+	struct apr_svc *handle = NULL;
+	struct apr_reset_work *apr_reset =
+			container_of(work, struct apr_reset_work, work);
+
+	handle = apr_reset->handle;
+	pr_debug("%s:handle[%p]\n", __func__, handle);
+	apr_deregister(handle);
+	kfree(apr_reset);
+	msleep(5);
 }
 
 int apr_deregister(void *handle)
@@ -435,10 +454,17 @@ int apr_deregister(void *handle)
 			svc->port_cnt--;
 		else if (svc->svc_cnt)
 			svc->svc_cnt--;
-		if (!svc->port_cnt && !svc->svc_cnt)
+		if (!svc->port_cnt && !svc->svc_cnt) {
 			client[dest_id][client_id].svc_cnt--;
-	} else if (client[dest_id][client_id].svc_cnt > 0)
+			svc->need_reset = 0x0;
+		}
+	} else if (client[dest_id][client_id].svc_cnt > 0) {
 		client[dest_id][client_id].svc_cnt--;
+		if (!client[dest_id][client_id].svc_cnt) {
+			svc->need_reset = 0x0;
+			pr_debug("%s: service is reset %p\n", __func__, svc);
+		}
+	}
 
 	if (!svc->port_cnt && !svc->svc_cnt) {
 		svc->priv = NULL;
@@ -446,6 +472,7 @@ int apr_deregister(void *handle)
 		svc->fn = NULL;
 		svc->dest_id = 0;
 		svc->client_id = 0;
+		svc->need_reset = 0x0;
 	}
 	if (client[dest_id][client_id].handle &&
 		!client[dest_id][client_id].svc_cnt) {
@@ -457,56 +484,29 @@ int apr_deregister(void *handle)
 	return 0;
 }
 
+void apr_reset(void *handle)
+{
+	struct apr_reset_work *apr_reset_worker = NULL;
+
+	if (!handle)
+		return;
+	pr_debug("%s: handle[%p]\n", __func__, handle);
+
+	apr_reset_worker = kzalloc(sizeof(struct apr_reset_work),
+					GFP_ATOMIC);
+	if (apr_reset_worker == NULL || apr_reset_workqueue == NULL) {
+		pr_err("%s: mem failure\n", __func__);
+		return;
+	}
+	apr_reset_worker->handle = handle;
+	INIT_WORK(&apr_reset_worker->work, apr_reset_deregister);
+	queue_work(apr_reset_workqueue, &apr_reset_worker->work);
+}
+
 void change_q6_state(int state)
 {
 	mutex_lock(&q6.lock);
 	q6.state = state;
-	mutex_unlock(&q6.lock);
-}
-
-void load_q6(void)
-{
-	static int client_id = APR_CLIENT_AUDIO;
-	static int dest_id = APR_DEST_QDSP6;
-	static int svc_idx;
-	int delay_cnt = 0;
-
-	mutex_lock(&q6.lock);
-	if (q6.state == APR_Q6_NOIMG) {
-		q6.pil = pil_get("q6");
-		if (!q6.pil) {
-			pr_info("APR: Unable to load q6 image\n");
-			goto q6_unlock;
-		}
-		q6.state = APR_Q6_LOADING;
-	}
-	pr_info("Q6 loading done: Waiting for apr_init\n");
-	mutex_lock(&client[dest_id][client_id].svc[svc_idx].m_lock);
-	do {
-		client[dest_id][client_id].handle = apr_tal_open(client_id,
-				dest_id, APR_DL_SMD, apr_cb_func, NULL);
-		if (!client[dest_id][client_id].handle) {
-			if (q6.state == APR_Q6_LOADED) {
-				pr_info("APR: Unable to open handle\n");
-				goto unlock;
-			}
-			udelay(5);
-			if (delay_cnt++ < 400000)
-				continue;
-		} else if (q6.state == APR_Q6_LOADING) {
-			q6.state = APR_Q6_LOADED;
-			pr_info("apr_init done\n");
-			msleep(50);
-			pr_info("Audio init done\n");
-		}
-		break;
-	} while (1);
-
-	if (delay_cnt >= 400000)
-		pr_info("Q6 Init not yet done in 2 secs\n");
-unlock:
-	mutex_unlock(&client[dest_id][client_id].svc[svc_idx].m_lock);
-q6_unlock:
 	mutex_unlock(&q6.lock);
 }
 
@@ -515,6 +515,125 @@ int adsp_state(int state)
 	pr_info("dsp state = %d\n", state);
 	return 0;
 }
+
+/* Dispatch the Reset events to Modem and audio clients */
+void dispatch_event(unsigned long code, unsigned short proc)
+{
+	struct apr_client *apr_client;
+	struct apr_client_data data;
+	struct apr_svc *svc;
+	uint16_t clnt;
+	int i, j;
+
+	data.opcode = RESET_EVENTS;
+	data.reset_event = code;
+	data.reset_proc = proc;
+
+	clnt = APR_CLIENT_AUDIO;
+	apr_client = &client[proc][clnt];
+	for (i = 0; i < APR_SVC_MAX; i++) {
+		mutex_lock(&apr_client->svc[i].m_lock);
+		if (apr_client->svc[i].fn) {
+			apr_client->svc[i].need_reset = 0x1;
+			apr_client->svc[i].fn(&data, apr_client->svc[i].priv);
+		}
+		if (apr_client->svc[i].port_cnt) {
+			svc = &(apr_client->svc[i]);
+			svc->need_reset = 0x1;
+			for (j = 0; j < APR_MAX_PORTS; j++)
+				if (svc->port_fn[j])
+					svc->port_fn[j](&data,
+						svc->port_priv[j]);
+		}
+		mutex_unlock(&apr_client->svc[i].m_lock);
+	}
+
+	clnt = APR_CLIENT_VOICE;
+	apr_client = &client[proc][clnt];
+	for (i = 0; i < APR_SVC_MAX; i++) {
+		mutex_lock(&apr_client->svc[i].m_lock);
+		if (apr_client->svc[i].fn) {
+			apr_client->svc[i].need_reset = 0x1;
+			apr_client->svc[i].fn(&data, apr_client->svc[i].priv);
+		}
+		if (apr_client->svc[i].port_cnt) {
+			svc = &(apr_client->svc[i]);
+			svc->need_reset = 0x1;
+			for (j = 0; j < APR_MAX_PORTS; j++)
+				if (svc->port_fn[j])
+					svc->port_fn[j](&data,
+						svc->port_priv[j]);
+		}
+		mutex_unlock(&apr_client->svc[i].m_lock);
+	}
+}
+
+static int modem_notifier_cb(struct notifier_block *this, unsigned long code,
+								void *_cmd)
+{
+	switch (code) {
+	case SUBSYS_BEFORE_SHUTDOWN:
+		pr_debug("M-Notify: Shutdown started\n");
+		atomic_set(&modem_state, 0);
+		dispatch_event(code, APR_DEST_MODEM);
+		break;
+	case SUBSYS_AFTER_SHUTDOWN:
+		pr_debug("M-Notify: Shutdown Completed\n");
+		break;
+	case SUBSYS_BEFORE_POWERUP:
+		pr_debug("M-notify: Bootup started\n");
+		break;
+	case SUBSYS_AFTER_POWERUP:
+		if (atomic_read(&modem_state) == 0) {
+			atomic_set(&modem_state, 1);
+			wake_up(&modem_wait);
+		}
+		pr_debug("M-Notify: Bootup Completed\n");
+		break;
+	default:
+		pr_err("M-Notify: General: %lu\n", code);
+		break;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block mnb = {
+	.notifier_call = modem_notifier_cb,
+};
+
+static int lpass_notifier_cb(struct notifier_block *this, unsigned long code,
+								void *_cmd)
+{
+	switch (code) {
+	case SUBSYS_BEFORE_SHUTDOWN:
+		pr_debug("L-Notify: Shutdown started\n");
+		atomic_set(&dsp_state, 0);
+		dispatch_event(code, APR_DEST_QDSP6);
+		break;
+	case SUBSYS_AFTER_SHUTDOWN:
+		pr_debug("L-Notify: Shutdown Completed\n");
+		break;
+	case SUBSYS_BEFORE_POWERUP:
+		pr_debug("L-notify: Bootup started\n");
+		break;
+	case SUBSYS_AFTER_POWERUP:
+		if (atomic_read(&dsp_state) == 0) {
+			atomic_set(&dsp_state, 1);
+			wake_up(&dsp_wait);
+		}
+		pr_debug("L-Notify: Bootup Completed\n");
+		break;
+	default:
+		pr_err("L-Notify: Generel: %lu\n", code);
+		break;
+	}
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block lnb = {
+	.notifier_call = lpass_notifier_cb,
+};
+
 
 static int __init apr_init(void)
 {
@@ -530,6 +649,26 @@ static int __init apr_init(void)
 		}
 	mutex_init(&q6.lock);
 	dsp_debug_register(adsp_state);
+	apr_reset_workqueue =
+		create_singlethread_workqueue("apr_driver");
+	if (!apr_reset_workqueue)
+		return -ENOMEM;
 	return 0;
 }
 device_initcall(apr_init);
+
+static int __init apr_late_init(void)
+{
+	void *ret;
+	init_waitqueue_head(&dsp_wait);
+	init_waitqueue_head(&modem_wait);
+	atomic_set(&dsp_state, 1);
+	atomic_set(&modem_state, 1);
+	ret = subsys_notif_register_notifier("modem", &mnb);
+	pr_debug("subsys_register_notifier: ret1 = %p\n", ret);
+	ret = subsys_notif_register_notifier("lpass", &lnb);
+	pr_debug("subsys_register_notifier: ret2 = %p\n", ret);
+
+	return 0;
+}
+late_initcall(apr_late_init);

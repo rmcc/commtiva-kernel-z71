@@ -442,10 +442,11 @@ static inline void l2cap_ertm_stop_ack_timer(struct l2cap_pinfo *pi)
 
 static inline void l2cap_ertm_start_ack_timer(struct l2cap_pinfo *pi)
 {
-	BT_DBG("pi %p", pi);
-	__cancel_delayed_work(&pi->ack_work);
-	queue_delayed_work(_l2cap_wq, &pi->ack_work,
-		msecs_to_jiffies(L2CAP_DEFAULT_ACK_TO));
+	BT_DBG("pi %p, pending %d", pi, delayed_work_pending(&pi->ack_work));
+	if (!delayed_work_pending(&pi->ack_work)) {
+		queue_delayed_work(_l2cap_wq, &pi->ack_work,
+				msecs_to_jiffies(L2CAP_DEFAULT_ACK_TO));
+	}
 }
 
 static inline void l2cap_ertm_stop_retrans_timer(struct l2cap_pinfo *pi)
@@ -457,7 +458,7 @@ static inline void l2cap_ertm_stop_retrans_timer(struct l2cap_pinfo *pi)
 static inline void l2cap_ertm_start_retrans_timer(struct l2cap_pinfo *pi)
 {
 	BT_DBG("pi %p", pi);
-	if (!delayed_work_pending(&pi->monitor_work)) {
+	if (!delayed_work_pending(&pi->monitor_work) && pi->retrans_timeout) {
 		__cancel_delayed_work(&pi->retrans_work);
 		queue_delayed_work(_l2cap_wq, &pi->retrans_work,
 			msecs_to_jiffies(pi->retrans_timeout));
@@ -475,8 +476,10 @@ static inline void l2cap_ertm_start_monitor_timer(struct l2cap_pinfo *pi)
 	BT_DBG("pi %p", pi);
 	l2cap_ertm_stop_retrans_timer(pi);
 	__cancel_delayed_work(&pi->monitor_work);
-	queue_delayed_work(_l2cap_wq, &pi->monitor_work,
-		msecs_to_jiffies(pi->monitor_timeout));
+	if (pi->monitor_timeout) {
+		queue_delayed_work(_l2cap_wq, &pi->monitor_work,
+				msecs_to_jiffies(pi->monitor_timeout));
+	}
 }
 
 static u16 l2cap_alloc_cid(struct l2cap_chan_list *l)
@@ -706,6 +709,7 @@ static inline void l2cap_send_cmd(struct l2cap_conn *conn, u8 ident, u8 code, u1
 	else
 		flags = ACL_START;
 
+	bt_cb(skb)->force_active = 1;
 	hci_send_acl(conn->hcon, NULL, skb, flags);
 }
 
@@ -1217,6 +1221,7 @@ static void l2cap_sock_init(struct sock *sk, struct sock *parent)
 		pi->role_switch = l2cap_pi(parent)->role_switch;
 		pi->force_reliable = l2cap_pi(parent)->force_reliable;
 		pi->flushable = l2cap_pi(parent)->flushable;
+		pi->force_active = l2cap_pi(parent)->force_active;
 		pi->amp_pref = l2cap_pi(parent)->amp_pref;
 	} else {
 		pi->imtu = L2CAP_DEFAULT_MTU;
@@ -1235,6 +1240,7 @@ static void l2cap_sock_init(struct sock *sk, struct sock *parent)
 		pi->role_switch = 0;
 		pi->force_reliable = 0;
 		pi->flushable = 0;
+		pi->force_active = 1;
 		pi->amp_pref = BT_AMP_POLICY_REQUIRE_BR_EDR;
 	}
 
@@ -1801,6 +1807,7 @@ static inline void l2cap_do_send(struct sock *sk, struct sk_buff *skb)
 			flags = ACL_START_NO_FLUSH;
 		else
 			flags = ACL_START;
+		bt_cb(skb)->force_active = pi->force_active;
 
 		hci_send_acl(pi->conn->hcon, NULL, skb, flags);
 	}
@@ -2127,6 +2134,7 @@ static struct sk_buff *l2cap_create_iframe_pdu(struct sock *sk,
 {
 	struct sk_buff *skb;
 	int err, count, hlen;
+	int reserve = 0;
 	struct l2cap_hdr *lh;
 	u8 fcs = l2cap_pi(sk)->fcs;
 
@@ -2146,19 +2154,31 @@ static struct sk_buff *l2cap_create_iframe_pdu(struct sock *sk,
 
 	count = min_t(unsigned int, (l2cap_pi(sk)->conn->mtu - hlen), len);
 
+	/* Allocate extra headroom for Qualcomm PAL.  This is only
+	 * necessary in two places (here and when creating sframes)
+	 * because only unfragmented iframes and sframes are sent
+	 * using AMP controllers.
+	 */
+	if (l2cap_pi(sk)->ampcon &&
+			l2cap_pi(sk)->ampcon->hdev->manufacturer == 0x001d)
+		reserve = BT_SKB_RESERVE_80211;
+
 	/* Don't use bt_skb_send_alloc() while resegmenting, since
 	 * it is not ok to block.
 	 */
 	if (reseg) {
-		skb = bt_skb_alloc(count + hlen, GFP_ATOMIC);
+		skb = bt_skb_alloc(count + hlen + reserve, GFP_ATOMIC);
 		if (skb)
 			skb_set_owner_w(skb, sk);
 	} else {
-		skb = bt_skb_send_alloc(sk, count + hlen,
+		skb = bt_skb_send_alloc(sk, count + hlen + reserve,
 					msg->msg_flags & MSG_DONTWAIT, &err);
 	}
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
+
+	if (reserve)
+		skb_reserve(skb, reserve);
 
 	bt_cb(skb)->control.fcs = fcs;
 
@@ -2226,6 +2246,7 @@ static struct sk_buff *l2cap_create_sframe_pdu(struct sock *sk, u32 control)
 {
 	struct sk_buff *skb;
 	int len;
+	int reserve = 0;
 	struct l2cap_hdr *lh;
 
 	if (l2cap_pi(sk)->extended_control)
@@ -2236,10 +2257,18 @@ static struct sk_buff *l2cap_create_sframe_pdu(struct sock *sk, u32 control)
 	if (l2cap_pi(sk)->fcs == L2CAP_FCS_CRC16)
 		len += L2CAP_FCS_SIZE;
 
-	skb = bt_skb_alloc(len, GFP_ATOMIC);
+	/* Allocate extra headroom for Qualcomm PAL */
+	if (l2cap_pi(sk)->ampcon &&
+			l2cap_pi(sk)->ampcon->hdev->manufacturer == 0x001d)
+		reserve = BT_SKB_RESERVE_80211;
+
+	skb = bt_skb_alloc(len + reserve, GFP_ATOMIC);
 
 	if (!skb)
 		return ERR_PTR(-ENOMEM);
+
+	if (reserve)
+		skb_reserve(skb, reserve);
 
 	lh = (struct l2cap_hdr *) skb_put(skb, L2CAP_HDR_SIZE);
 	lh->cid = cpu_to_le16(l2cap_pi(sk)->dcid);
@@ -2318,13 +2347,12 @@ static void l2cap_ertm_send_ack(struct sock *sk)
 	BT_DBG("last_acked_seq %d, buffer_seq %d", (int)pi->last_acked_seq,
 		(int)pi->buffer_seq);
 
-	l2cap_ertm_stop_ack_timer(pi);
-
 	memset(&control, 0, sizeof(control));
 	control.frame_type = 's';
 
 	if ((pi->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
 		pi->rx_state == L2CAP_ERTM_RX_STATE_RECV) {
+		l2cap_ertm_stop_ack_timer(pi);
 		control.super = L2CAP_SFRAME_RNR;
 		control.reqseq = pi->buffer_seq;
 		l2cap_ertm_send_sframe(sk, &control);
@@ -2347,6 +2375,7 @@ static void l2cap_ertm_send_ack(struct sock *sk)
 			threshold);
 
 		if (frames_to_ack >= threshold) {
+			l2cap_ertm_stop_ack_timer(pi);
 			control.super = L2CAP_SFRAME_RR;
 			control.reqseq = pi->buffer_seq;
 			l2cap_ertm_send_sframe(sk, &control);
@@ -2490,28 +2519,14 @@ static void l2cap_ertm_send_srej_list(struct sock *sk, u16 txseq)
 	} while (pi->srej_list.head != initial_head);
 }
 
-static void l2cap_ertm_srej_list_clear(struct sock *sk)
-{
-	while (l2cap_pi(sk)->srej_list.head != L2CAP_SEQ_LIST_CLEAR) {
-		struct sk_buff *skb;
-		u16 seq = l2cap_seq_list_pop(&l2cap_pi(sk)->srej_list);
-		skb = l2cap_ertm_seq_in_queue(SREJ_QUEUE(sk), seq);
-		if (skb) {
-			skb_unlink(skb, SREJ_QUEUE(sk));
-			kfree_skb(skb);
-		}
-	}
-}
-
 static void l2cap_ertm_abort_rx_srej_sent(struct sock *sk)
 {
 	struct l2cap_pinfo *pi = l2cap_pi(sk);
 	BT_DBG("sk %p", sk);
 
-	pi->buffer_seq = pi->buffer_seq_srej;
 	pi->expected_tx_seq = pi->buffer_seq;
+	l2cap_seq_list_clear(&l2cap_pi(sk)->srej_list);
 	skb_queue_purge(SREJ_QUEUE(sk));
-	l2cap_ertm_srej_list_clear(sk);
 	pi->rx_state = L2CAP_ERTM_RX_STATE_RECV;
 }
 
@@ -2544,6 +2559,9 @@ static int l2cap_ertm_tx_state_xmit(struct sock *sk,
 			 */
 			l2cap_ertm_abort_rx_srej_sent(sk);
 		}
+
+		l2cap_ertm_send_ack(sk);
+
 		break;
 	case L2CAP_ERTM_EVENT_LOCAL_BUSY_CLEAR:
 		BT_DBG("Exit LOCAL_BUSY");
@@ -2639,6 +2657,9 @@ static int l2cap_ertm_tx_state_wait_f(struct sock *sk,
 			 */
 			l2cap_ertm_abort_rx_srej_sent(sk);
 		}
+
+		l2cap_ertm_send_ack(sk);
+
 		break;
 	case L2CAP_ERTM_EVENT_LOCAL_BUSY_CLEAR:
 		BT_DBG("Exit LOCAL_BUSY");
@@ -3176,7 +3197,14 @@ static inline int l2cap_rmem_available(struct sock *sk)
 {
 	BT_DBG("sk_rmem_alloc %d, sk_rcvbuf %d",
 		atomic_read(&sk->sk_rmem_alloc), sk->sk_rcvbuf);
-	return atomic_read(&sk->sk_rmem_alloc) < (sk->sk_rcvbuf >> 1);
+	return atomic_read(&sk->sk_rmem_alloc) < sk->sk_rcvbuf / 3;
+}
+
+static inline int l2cap_rmem_full(struct sock *sk)
+{
+	BT_DBG("sk_rmem_alloc %d, sk_rcvbuf %d",
+		atomic_read(&sk->sk_rmem_alloc), sk->sk_rcvbuf);
+	return atomic_read(&sk->sk_rmem_alloc) > (2 * sk->sk_rcvbuf) / 3;
 }
 
 static int l2cap_sock_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg, size_t len, int flags)
@@ -3224,10 +3252,10 @@ static int l2cap_sock_recvmsg(struct kiocb *iocb, struct socket *sock, struct ms
 	lock_sock(sk);
 
 	/* Consume any queued incoming frames and update local busy status */
-	if (l2cap_ertm_rx_queued_iframes(sk))
+	if (l2cap_pi(sk)->rx_state == L2CAP_ERTM_RX_STATE_SREJ_SENT &&
+		l2cap_ertm_rx_queued_iframes(sk))
 		l2cap_send_disconn_req(l2cap_pi(sk)->conn, sk, ECONNRESET);
 	else if ((l2cap_pi(sk)->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
-		l2cap_pi(sk)->amp_move_state != L2CAP_AMP_STATE_WAIT_PREPARE &&
 		l2cap_rmem_available(sk))
 		l2cap_ertm_tx(sk, 0, 0, L2CAP_ERTM_EVENT_LOCAL_BUSY_CLEAR);
 
@@ -3249,17 +3277,10 @@ static void l2cap_amp_move_init(struct sock *sk)
 	if (l2cap_pi(sk)->amp_id == 0) {
 		if (l2cap_pi(sk)->amp_pref != BT_AMP_POLICY_PREFER_AMP)
 			return;
-
-		l2cap_ertm_tx(sk, 0, 0, L2CAP_ERTM_EVENT_LOCAL_BUSY_DETECTED);
-		l2cap_ertm_send_ack(sk);
-
 		l2cap_pi(sk)->amp_move_role = L2CAP_AMP_MOVE_INITIATOR;
 		l2cap_pi(sk)->amp_move_state = L2CAP_AMP_STATE_WAIT_PREPARE;
 		amp_create_physical(l2cap_pi(sk)->conn, sk);
 	} else {
-		l2cap_ertm_tx(sk, 0, 0, L2CAP_ERTM_EVENT_LOCAL_BUSY_DETECTED);
-		l2cap_ertm_send_ack(sk);
-
 		l2cap_pi(sk)->amp_move_role = L2CAP_AMP_MOVE_INITIATOR;
 		l2cap_pi(sk)->amp_move_state =
 					L2CAP_AMP_STATE_WAIT_MOVE_RSP_SUCCESS;
@@ -3362,6 +3383,7 @@ static int l2cap_sock_setsockopt(struct socket *sock, int level, int optname, ch
 {
 	struct sock *sk = sock->sk;
 	struct bt_security sec;
+	struct bt_power pwr;
 	int len, err = 0;
 	u32 opt;
 
@@ -3412,6 +3434,23 @@ static int l2cap_sock_setsockopt(struct socket *sock, int level, int optname, ch
 		}
 
 		bt_sk(sk)->defer_setup = opt;
+		break;
+    case BT_POWER:
+		if (sk->sk_type != SOCK_SEQPACKET && sk->sk_type != SOCK_STREAM
+			&& sk->sk_type != SOCK_RAW) {
+			err = -EINVAL;
+			break;
+		}
+
+		pwr.force_active = 1;
+
+		len = min_t(unsigned int, sizeof(pwr), optlen);
+		if (copy_from_user((char *) &pwr, optval, len)) {
+			err = -EFAULT;
+			break;
+		}
+		BT_DBG("BT_POWER setting %d", pwr.force_active);
+		l2cap_pi(sk)->force_active = pwr.force_active;
 		break;
 
 	case BT_AMP_POLICY:
@@ -3539,6 +3578,7 @@ static int l2cap_sock_getsockopt(struct socket *sock, int level, int optname, ch
 {
 	struct sock *sk = sock->sk;
 	struct bt_security sec;
+	struct bt_power pwr;
 	int len, err = 0;
 
 	BT_DBG("sk %p", sk);
@@ -3580,7 +3620,20 @@ static int l2cap_sock_getsockopt(struct socket *sock, int level, int optname, ch
 			err = -EFAULT;
 
 		break;
+	case BT_POWER:
+		if (sk->sk_type != SOCK_SEQPACKET && sk->sk_type != SOCK_STREAM
+				&& sk->sk_type != SOCK_RAW) {
+			err = -EINVAL;
+			break;
+		}
 
+		pwr.force_active = l2cap_pi(sk)->force_active;
+
+		len = min_t(unsigned int, len, sizeof(pwr));
+		if (copy_to_user(optval, (char *) &pwr, len))
+			err = -EFAULT;
+
+		break;
 	case BT_AMP_POLICY:
 
 		if (put_user(l2cap_pi(sk)->amp_pref, (u32 __user *) optval))
@@ -3713,12 +3766,13 @@ static struct sk_buff *l2cap_build_cmd(struct l2cap_conn *conn,
 	struct l2cap_cmd_hdr *cmd;
 	struct l2cap_hdr *lh;
 	int len, count;
+	unsigned int mtu = conn->hcon->hdev->acl_mtu;
 
 	BT_DBG("conn %p, code 0x%2.2x, ident 0x%2.2x, len %d",
 			conn, code, ident, dlen);
 
 	len = L2CAP_HDR_SIZE + L2CAP_CMD_HDR_SIZE + dlen;
-	count = min_t(unsigned int, conn->mtu, len);
+	count = min_t(unsigned int, mtu, len);
 
 	skb = bt_skb_alloc(count, GFP_ATOMIC);
 	if (!skb)
@@ -3744,7 +3798,7 @@ static struct sk_buff *l2cap_build_cmd(struct l2cap_conn *conn,
 	/* Continuation fragments (no L2CAP header) */
 	frag = &skb_shinfo(skb)->frag_list;
 	while (len) {
-		count = min_t(unsigned int, conn->mtu, len);
+		count = min_t(unsigned int, mtu, len);
 
 		*frag = bt_skb_alloc(count, GFP_ATOMIC);
 		if (!*frag)
@@ -3849,15 +3903,9 @@ static void l2cap_ertm_ack_timeout(struct work_struct *work)
 		return;
 	}
 
-	if (l2cap_pi(sk)->conn_state & L2CAP_CONN_LOCAL_BUSY) {
-		frames_to_ack = __delta_seq(l2cap_pi(sk)->expected_ack_seq,
-					l2cap_pi(sk)->last_acked_seq,
-					l2cap_pi(sk));
-	} else {
-		frames_to_ack = __delta_seq(l2cap_pi(sk)->buffer_seq,
-					l2cap_pi(sk)->last_acked_seq,
-					l2cap_pi(sk));
-	}
+	frames_to_ack = __delta_seq(l2cap_pi(sk)->buffer_seq,
+				    l2cap_pi(sk)->last_acked_seq,
+				    l2cap_pi(sk));
 
 	if (frames_to_ack)
 		l2cap_ertm_send_rr_or_rnr(sk, 0);
@@ -4033,8 +4081,8 @@ done:
 		else
 			rfc.txwin_size = pi->tx_win;
 		rfc.max_transmit    = pi->max_tx;
-		rfc.retrans_timeout = L2CAP_DEFAULT_RETRANS_TO;
-		rfc.monitor_timeout = L2CAP_DEFAULT_MONITOR_TO;
+		rfc.retrans_timeout = cpu_to_le16(L2CAP_DEFAULT_RETRANS_TO);
+		rfc.monitor_timeout = cpu_to_le16(L2CAP_DEFAULT_MONITOR_TO);
 		rfc.max_pdu_size    = cpu_to_le16(L2CAP_DEFAULT_MAX_PDU_SIZE);
 		if (L2CAP_DEFAULT_MAX_PDU_SIZE > pi->imtu)
 			rfc.max_pdu_size = cpu_to_le16(pi->imtu);
@@ -4121,11 +4169,15 @@ static int l2cap_build_amp_reconf_req(struct sock *sk, void *data)
 		rfc.txwin_size      = pi->tx_win;
 		rfc.max_transmit    = pi->max_tx;
 		if (pi->amp_move_id) {
-			rfc.retrans_timeout = (3 * be_flush_to) + 500;
-			rfc.monitor_timeout = (3 * be_flush_to) + 500;
+			rfc.retrans_timeout =
+					cpu_to_le16((3 * be_flush_to) + 500);
+			rfc.monitor_timeout =
+					cpu_to_le16((3 * be_flush_to) + 500);
 		} else {
-			rfc.retrans_timeout = 0;
-			rfc.monitor_timeout = 0;
+			rfc.retrans_timeout =
+					cpu_to_le16(L2CAP_DEFAULT_RETRANS_TO);
+			rfc.monitor_timeout =
+					cpu_to_le16(L2CAP_DEFAULT_MONITOR_TO);
 		}
 		rfc.max_pdu_size    = cpu_to_le16(L2CAP_DEFAULT_MAX_PDU_SIZE);
 		if (L2CAP_DEFAULT_MAX_PDU_SIZE > pi->imtu)
@@ -4282,9 +4334,9 @@ done:
 			pi->remote_mps = le16_to_cpu(rfc.max_pdu_size);
 
 			rfc.retrans_timeout =
-				le16_to_cpu(L2CAP_DEFAULT_RETRANS_TO);
+				cpu_to_le16(L2CAP_DEFAULT_RETRANS_TO);
 			rfc.monitor_timeout =
-				le16_to_cpu(L2CAP_DEFAULT_MONITOR_TO);
+				cpu_to_le16(L2CAP_DEFAULT_MONITOR_TO);
 
 			pi->conf_state |= L2CAP_CONF_MODE_DONE;
 
@@ -5374,8 +5426,9 @@ static inline int l2cap_move_channel_req(struct l2cap_conn *conn,
 		goto send_move_response;
 	}
 
-	if (pi->amp_move_state != L2CAP_AMP_STATE_STABLE ||
-		pi->amp_move_role != L2CAP_AMP_MOVE_NONE) {
+	if ((pi->amp_move_state != L2CAP_AMP_STATE_STABLE ||
+		pi->amp_move_role != L2CAP_AMP_MOVE_NONE) &&
+		bacmp(conn->src, conn->dst) > 0) {
 		result = L2CAP_MOVE_CHAN_REFUSED_COLLISION;
 		goto send_move_response;
 	}
@@ -5798,13 +5851,13 @@ void l2cap_amp_physical_complete(int result, u8 local_id, u8 remote_id,
 		pi->amp_move_role = L2CAP_AMP_MOVE_NONE;
 		pi->amp_move_state = L2CAP_AMP_STATE_STABLE;
 
-		if (l2cap_ertm_rx_queued_iframes(sk))
-			l2cap_send_disconn_req(l2cap_pi(sk)->conn, sk,
-						ECONNRESET);
-		else if ((l2cap_pi(sk)->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
+		if ((l2cap_pi(sk)->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
 			l2cap_rmem_available(sk))
 			l2cap_ertm_tx(sk, 0, 0,
 					L2CAP_ERTM_EVENT_LOCAL_BUSY_CLEAR);
+
+		/* Restart data transmission */
+		l2cap_ertm_send_txq(sk);
 	}
 
 	release_sock(sk);
@@ -6168,6 +6221,13 @@ static void l2cap_ertm_resend(struct sock *sk)
 		bt_cb(skb)->retries += 1;
 		control = bt_cb(skb)->control;
 
+		if ((pi->max_tx != 0) && (bt_cb(skb)->retries > pi->max_tx)) {
+			BT_DBG("Retry limit exceeded (%d)", (int) pi->max_tx);
+			l2cap_send_disconn_req(pi->conn, sk, ECONNRESET);
+			l2cap_seq_list_clear(&pi->retrans_list);
+			break;
+		}
+
 		control.reqseq = pi->buffer_seq;
 		if (pi->conn_state & L2CAP_CONN_SEND_FBIT) {
 			control.final = 1;
@@ -6395,8 +6455,7 @@ static int l2cap_ertm_rx_expected_iframe(struct sock *sk,
 	}
 
 	/* Update local busy state */
-	if (!(pi->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
-		!l2cap_rmem_available(sk))
+	if (!(pi->conn_state & L2CAP_CONN_LOCAL_BUSY) && l2cap_rmem_full(sk))
 		l2cap_ertm_tx(sk, 0, 0, L2CAP_ERTM_EVENT_LOCAL_BUSY_DETECTED);
 
 	return err;
@@ -6406,32 +6465,26 @@ static int l2cap_ertm_rx_queued_iframes(struct sock *sk)
 {
 	int err = 0;
 	/* Pass sequential frames to l2cap_ertm_rx_expected_iframe()
-	   until a gap is encountered.
-
-	   Leave buffer_seq unchanged so the sender does not issue any new
-	   iframes, and just catches up with srejs.
-	*/
+	 * until a gap is encountered.
+	 */
 
 	struct l2cap_pinfo *pi;
-	struct sk_buff *skb;
 
-	BT_DBG("sk %p", sk);\
+	BT_DBG("sk %p", sk);
 	pi = l2cap_pi(sk);
 
-	if (skb_queue_empty(SREJ_QUEUE(sk)))
-		return 0;
-
 	while (l2cap_rmem_available(sk)) {
-		skb = l2cap_ertm_seq_in_queue(SREJ_QUEUE(sk),
-						pi->buffer_seq_srej);
+		struct sk_buff *skb;
+		BT_DBG("Searching for skb with txseq %d (queue len %d)",
+			(int) pi->buffer_seq, skb_queue_len(SREJ_QUEUE(sk)));
+
+		skb = l2cap_ertm_seq_in_queue(SREJ_QUEUE(sk), pi->buffer_seq);
 
 		if (!skb)
 			break;
 
-		BT_DBG("Found skb with txseq %d", (int) pi->buffer_seq_srej);
-
 		skb_unlink(skb, SREJ_QUEUE(sk));
-		pi->buffer_seq_srej = __next_seq(pi->buffer_seq_srej, pi);
+		pi->buffer_seq = __next_seq(pi->buffer_seq, pi);
 		err = l2cap_ertm_rx_expected_iframe(sk,
 						&bt_cb(skb)->control, skb);
 		if (err)
@@ -6439,9 +6492,8 @@ static int l2cap_ertm_rx_queued_iframes(struct sock *sk)
 	}
 
 	if (skb_queue_empty(SREJ_QUEUE(sk))) {
-		BT_DBG("buffer_seq %d->%d", pi->buffer_seq,
-			pi->buffer_seq_srej);
-		pi->buffer_seq = pi->buffer_seq_srej;
+		pi->rx_state = L2CAP_ERTM_RX_STATE_RECV;
+		l2cap_ertm_send_ack(sk);
 	}
 
 	return err;
@@ -6472,7 +6524,7 @@ static void l2cap_ertm_handle_srej(struct sock *sk,
 		return;
 	}
 
-	if ((pi->max_tx != 0) && (bt_cb(skb)->retries > pi->max_tx)) {
+	if ((pi->max_tx != 0) && (bt_cb(skb)->retries >= pi->max_tx)) {
 		BT_DBG("Retry limit exceeded (%d)", (int) pi->max_tx);
 		l2cap_send_disconn_req(pi->conn, sk, ECONNRESET);
 		return;
@@ -6530,7 +6582,7 @@ static void l2cap_ertm_handle_rej(struct sock *sk,
 
 	skb = l2cap_ertm_seq_in_queue(TX_QUEUE(sk), control->reqseq);
 
-	if (pi->max_tx && skb && bt_cb(skb)->retries > pi->max_tx) {
+	if (pi->max_tx && skb && bt_cb(skb)->retries >= pi->max_tx) {
 		BT_DBG("Retry limit exceeded (%d)", (int) pi->max_tx);
 		l2cap_send_disconn_req(pi->conn, sk, ECONNRESET);
 		return;
@@ -6660,26 +6712,20 @@ static int l2cap_ertm_rx_state_recv(struct sock *sk,
 		switch (l2cap_ertm_classify_txseq(sk, control->txseq)) {
 		case L2CAP_ERTM_TXSEQ_EXPECTED:
 			l2cap_ertm_pass_to_tx(sk, control);
-			pi->expected_tx_seq = __next_seq(control->txseq, pi);
-			skb_in_use = 1;
 
 			if (pi->conn_state & L2CAP_CONN_LOCAL_BUSY) {
-				/* The frame can't be reassembled now,
-				 * so queue it for reassembly later.
-				 */
-				BT_DBG("Queuing %p", skb);
-				skb_queue_tail(SREJ_QUEUE(sk), skb);
-			} else {
-				BT_DBG("buffer_seq %d->%d", pi->buffer_seq,
-					__next_seq(pi->buffer_seq, pi));
-				pi->buffer_seq = __next_seq(pi->buffer_seq, pi);
-				pi->buffer_seq_srej = pi->buffer_seq;
-
-				err = l2cap_ertm_rx_expected_iframe(sk,
-								control, skb);
-				if (err)
-					break;
+				BT_DBG("Busy, discarding expected seq %d",
+					control->txseq);
+				break;
 			}
+
+			pi->expected_tx_seq = __next_seq(control->txseq, pi);
+			pi->buffer_seq = pi->expected_tx_seq;
+			skb_in_use = 1;
+
+			err = l2cap_ertm_rx_expected_iframe(sk, control, skb);
+			if (err)
+				break;
 
 			if (control->final) {
 				if (pi->conn_state & L2CAP_CONN_REJ_ACT)
@@ -6701,8 +6747,11 @@ static int l2cap_ertm_rx_state_recv(struct sock *sk,
 			 * Drop this frame, it will be seen as missing
 			 * when local busy is exited.
 			 */
-			if (pi->conn_state & L2CAP_CONN_LOCAL_BUSY)
+			if (pi->conn_state & L2CAP_CONN_LOCAL_BUSY) {
+				BT_DBG("Busy, discarding unexpected seq %d",
+					control->txseq);
 				break;
+			}
 
 			/* There was a gap in the sequence, so an SREJ
 			 * must be sent for each missing frame.  The
@@ -6710,6 +6759,8 @@ static int l2cap_ertm_rx_state_recv(struct sock *sk,
 			 */
 			skb_queue_tail(SREJ_QUEUE(sk), skb);
 			skb_in_use = 1;
+			BT_DBG("Queued %p (queue len %d)", skb,
+			       skb_queue_len(SREJ_QUEUE(sk)));
 
 			pi->conn_state &= ~L2CAP_CONN_SREJ_ACT;
 			l2cap_seq_list_clear(&pi->srej_list);
@@ -6801,6 +6852,8 @@ static int l2cap_ertm_rx_state_srej_sent(struct sock *sk,
 			l2cap_ertm_pass_to_tx(sk, control);
 			skb_queue_tail(SREJ_QUEUE(sk), skb);
 			skb_in_use = 1;
+			BT_DBG("Queued %p (queue len %d)", skb,
+			       skb_queue_len(SREJ_QUEUE(sk)));
 
 			pi->expected_tx_seq = __next_seq(txseq, pi);
 			break;
@@ -6810,15 +6863,13 @@ static int l2cap_ertm_rx_state_srej_sent(struct sock *sk,
 			l2cap_ertm_pass_to_tx(sk, control);
 			skb_queue_tail(SREJ_QUEUE(sk), skb);
 			skb_in_use = 1;
+			BT_DBG("Queued %p (queue len %d)", skb,
+			       skb_queue_len(SREJ_QUEUE(sk)));
 
 			err = l2cap_ertm_rx_queued_iframes(sk);
 			if (err)
 				break;
 
-			if (pi->srej_list.head == L2CAP_SEQ_LIST_CLEAR) {
-				pi->rx_state = L2CAP_ERTM_RX_STATE_RECV;
-				l2cap_ertm_send_ack(sk);
-			}
 			break;
 		case L2CAP_ERTM_TXSEQ_UNEXPECTED:
 			/* Got a frame that can't be reassembled yet.
@@ -6827,6 +6878,9 @@ static int l2cap_ertm_rx_state_srej_sent(struct sock *sk,
 			 */
 			skb_queue_tail(SREJ_QUEUE(sk), skb);
 			skb_in_use = 1;
+			BT_DBG("Queued %p (queue len %d)", skb,
+			       skb_queue_len(SREJ_QUEUE(sk)));
+
 			l2cap_ertm_pass_to_tx(sk, control);
 			l2cap_ertm_send_srej(sk, control->txseq);
 			break;
@@ -6838,6 +6892,9 @@ static int l2cap_ertm_rx_state_srej_sent(struct sock *sk,
 			 */
 			skb_queue_tail(SREJ_QUEUE(sk), skb);
 			skb_in_use = 1;
+			BT_DBG("Queued %p (queue len %d)", skb,
+			       skb_queue_len(SREJ_QUEUE(sk)));
+
 			l2cap_ertm_pass_to_tx(sk, control);
 			l2cap_ertm_send_srej_list(sk, control->txseq);
 			break;
@@ -6938,29 +6995,27 @@ static int l2cap_ertm_rx_state_amp_move(struct sock *sk,
 	case L2CAP_ERTM_EVENT_RECV_IFRAME:
 		if (l2cap_ertm_classify_txseq(sk, control->txseq) ==
 				L2CAP_ERTM_TXSEQ_EXPECTED) {
-			if (pi->conn_state & L2CAP_CONN_LOCAL_BUSY) {
-				l2cap_ertm_pass_to_tx(sk, control);
-				/* Frame dropped, because we are busy. */
-			} else {
-				pi->expected_tx_seq =
-					__next_seq(control->txseq, pi);
-				skb_in_use = 1;
-				BT_DBG("buffer_seq %d->%d", pi->buffer_seq,
-					__next_seq(pi->buffer_seq, pi));
-				pi->buffer_seq = __next_seq(pi->buffer_seq, pi);
-				pi->buffer_seq_srej = pi->buffer_seq;
-				err = l2cap_ertm_rx_expected_iframe(sk,
-								control, skb);
-				if (err)
-					break;
+			l2cap_ertm_pass_to_tx(sk, control);
 
-				if (control->final) {
-					if (pi->conn_state & L2CAP_CONN_REJ_ACT)
-						pi->conn_state &=
-							~L2CAP_CONN_REJ_ACT;
-					else
-						control->final = 0;
-				}
+			if (pi->conn_state & L2CAP_CONN_LOCAL_BUSY) {
+				BT_DBG("Busy, discarding expected seq %d",
+					control->txseq);
+				break;
+			}
+
+			pi->expected_tx_seq = __next_seq(control->txseq, pi);
+			pi->buffer_seq = pi->expected_tx_seq;
+			skb_in_use = 1;
+
+			err = l2cap_ertm_rx_expected_iframe(sk, control, skb);
+			if (err)
+				break;
+
+			if (control->final) {
+				if (pi->conn_state & L2CAP_CONN_REJ_ACT)
+					pi->conn_state &= ~L2CAP_CONN_REJ_ACT;
+				else
+					control->final = 0;
 			}
 		}
 		break;
@@ -7048,14 +7103,12 @@ static void l2cap_amp_move_setup(struct sock *sk)
 			break;
 	}
 
-	if (pi->srej_list.head != L2CAP_SEQ_LIST_CLEAR)
-		pi->buffer_seq = pi->buffer_seq_srej;
-
 	pi->expected_tx_seq = pi->buffer_seq;
 
 	pi->conn_state &= ~(L2CAP_CONN_REJ_ACT | L2CAP_CONN_SREJ_ACT);
 	l2cap_seq_list_clear(&pi->retrans_list);
-	l2cap_ertm_srej_list_clear(sk);
+	l2cap_seq_list_clear(&l2cap_pi(sk)->srej_list);
+	skb_queue_purge(SREJ_QUEUE(sk));
 
 	pi->tx_state = L2CAP_ERTM_TX_STATE_XMIT;
 	pi->rx_state = L2CAP_ERTM_RX_STATE_AMP_MOVE;
@@ -7064,12 +7117,6 @@ static void l2cap_amp_move_setup(struct sock *sk)
 		pi->rx_state);
 
 	pi->conn_state |= L2CAP_CONN_REMOTE_BUSY;
-
-	if (l2cap_ertm_rx_queued_iframes(sk))
-		l2cap_send_disconn_req(l2cap_pi(sk)->conn, sk, ECONNRESET);
-	else if ((pi->conn_state & L2CAP_CONN_LOCAL_BUSY) &&
-		l2cap_rmem_available(sk))
-		l2cap_ertm_tx(sk, 0, 0, L2CAP_ERTM_EVENT_LOCAL_BUSY_CLEAR);
 }
 
 static void l2cap_amp_move_revert(struct sock *sk)

@@ -41,6 +41,7 @@
 #include "timpani_profile_8x60.h"
 #include "snddev_hdmi.h"
 #include "snddev_mi2s.h"
+#include "snddev_virtual.h"
 
 #ifdef CONFIG_DEBUG_FS
 static struct dentry *debugfs_hsed_config;
@@ -55,6 +56,7 @@ static void snddev_hsed_config_restore_setting(void);
 #define SNDDEV_GPIO_CLASS_D1_EN 229
 
 #define SNDDEV_GPIO_MIC2_ANCR_SEL 294
+#define SNDDEV_GPIO_MIC1_ANCL_SEL 295
 
 static struct resource msm_cdcclk_ctl_resources[] = {
 	{
@@ -145,6 +147,53 @@ static struct platform_device msm_mi2s_device = {
 	.resource	= msm_mi2s_gpio_resources,
 };
 
+/* Must be same size as msm_icodec_gpio_resources */
+static int msm_icodec_gpio_defaults[] = {
+	0,
+	0,
+};
+
+static struct resource msm_icodec_gpio_resources[] = {
+	{
+		.name   = "msm_icodec_speaker_left",
+		.start  = SNDDEV_GPIO_CLASS_D0_EN,
+		.end    = SNDDEV_GPIO_CLASS_D0_EN,
+		.flags  = IORESOURCE_IO,
+	},
+	{
+		.name   = "msm_icodec_speaker_right",
+		.start  = SNDDEV_GPIO_CLASS_D1_EN,
+		.end    = SNDDEV_GPIO_CLASS_D1_EN,
+		.flags  = IORESOURCE_IO,
+	},
+};
+
+static struct platform_device msm_icodec_gpio_device = {
+	.name   = "msm_icodec_gpio",
+	.num_resources  = ARRAY_SIZE(msm_icodec_gpio_resources),
+	.resource       = msm_icodec_gpio_resources,
+	.dev = { .platform_data = &msm_icodec_gpio_defaults },
+};
+
+static int msm_qt_icodec_gpio_defaults[] = {
+	0,
+};
+
+static struct resource msm_qt_icodec_gpio_resources[] = {
+	{
+		.name   = "msm_icodec_speaker_gpio",
+		.start  = SNDDEV_GPIO_CLASS_D0_EN,
+		.end    = SNDDEV_GPIO_CLASS_D0_EN,
+		.flags  = IORESOURCE_IO,
+	},
+};
+
+static struct platform_device msm_qt_icodec_gpio_device = {
+	.name   = "msm_icodec_gpio",
+	.num_resources  = ARRAY_SIZE(msm_qt_icodec_gpio_resources),
+	.resource       = msm_qt_icodec_gpio_resources,
+	.dev = { .platform_data = &msm_qt_icodec_gpio_defaults },
+};
 
 static struct regulator *s3;
 static struct regulator *mvs;
@@ -353,10 +402,15 @@ static void msm_snddev_poweramp_off(void)
 static struct regulator *snddev_reg_ncp;
 static struct regulator *snddev_reg_l10;
 
+static atomic_t preg_ref_cnt;
+
 static int msm_snddev_voltage_on(void)
 {
 	int rc;
 	pr_debug("%s\n", __func__);
+
+	if (atomic_inc_return(&preg_ref_cnt) > 1)
+		return 0;
 
 	snddev_reg_l10 = regulator_get(NULL, "8058_l10");
 	if (IS_ERR(snddev_reg_l10)) {
@@ -410,14 +464,15 @@ static void msm_snddev_voltage_off(void)
 	if (!snddev_reg_ncp)
 		goto done;
 
-	rc = regulator_disable(snddev_reg_ncp);
-	if (rc < 0)
-		pr_err("%s: regulator_disable(ncp) failed (%d)\n",
-			__func__, rc);
+	if (atomic_dec_return(&preg_ref_cnt) == 0) {
+		rc = regulator_disable(snddev_reg_ncp);
+		if (rc < 0)
+			pr_err("%s: regulator_disable(ncp) failed (%d)\n",
+				__func__, rc);
+		regulator_put(snddev_reg_ncp);
 
-	regulator_put(snddev_reg_ncp);
-
-	snddev_reg_ncp = NULL;
+		snddev_reg_ncp = NULL;
+	}
 
 done:
 	if (!snddev_reg_l10)
@@ -453,6 +508,15 @@ static int msm_snddev_enable_amic_power(void)
 		}
 		gpio_direction_output(SNDDEV_GPIO_MIC2_ANCR_SEL, 0);
 
+		ret = gpio_request(SNDDEV_GPIO_MIC1_ANCL_SEL, "MIC1_ANCL_SEL");
+		if (ret) {
+			pr_err("%s: mic1 ancl gpio %d request failed\n",
+				__func__, SNDDEV_GPIO_MIC1_ANCL_SEL);
+			gpio_free(SNDDEV_GPIO_MIC2_ANCR_SEL);
+			return ret;
+		}
+		gpio_direction_output(SNDDEV_GPIO_MIC1_ANCL_SEL, 0);
+
 	} else {
 		ret = pm8058_micbias_enable(OTHC_MICBIAS_2,
 				OTHC_SIGNAL_ALWAYS_ON);
@@ -470,12 +534,70 @@ static void msm_snddev_disable_amic_power(void)
 	if (machine_is_msm8x60_fluid()) {
 		ret = pm8058_micbias_enable(OTHC_MICBIAS_0,
 				OTHC_SIGNAL_OFF);
+		gpio_free(SNDDEV_GPIO_MIC1_ANCL_SEL);
 		gpio_free(SNDDEV_GPIO_MIC2_ANCR_SEL);
 	} else
 		ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_OFF);
 
 	if (ret)
 		pr_err("%s: Disabling amic power failed\n", __func__);
+#endif
+}
+
+static int msm_snddev_enable_anc_power(void)
+{
+	int ret = 0;
+#ifdef CONFIG_PMIC8058_OTHC
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_2,
+		OTHC_SIGNAL_ALWAYS_ON);
+	if (ret)
+		pr_err("%s: Enabling anc micbias 2 failed\n", __func__);
+
+	if (machine_is_msm8x60_fluid()) {
+
+		ret = pm8058_micbias_enable(OTHC_MICBIAS_0,
+				OTHC_SIGNAL_ALWAYS_ON);
+		if (ret)
+			pr_err("%s: Enabling anc micbias 0 failed\n", __func__);
+
+		ret = gpio_request(SNDDEV_GPIO_MIC2_ANCR_SEL, "MIC2_ANCR_SEL");
+		if (ret) {
+			pr_err("%s: mic2 ancr gpio %d request failed\n",
+				__func__, SNDDEV_GPIO_MIC2_ANCR_SEL);
+			return ret;
+		}
+		gpio_direction_output(SNDDEV_GPIO_MIC2_ANCR_SEL, 1);
+
+		ret = gpio_request(SNDDEV_GPIO_MIC1_ANCL_SEL, "MIC1_ANCL_SEL");
+		if (ret) {
+			pr_err("%s: mic1 ancl gpio %d request failed\n",
+				__func__, SNDDEV_GPIO_MIC1_ANCL_SEL);
+			gpio_free(SNDDEV_GPIO_MIC2_ANCR_SEL);
+			return ret;
+		}
+		gpio_direction_output(SNDDEV_GPIO_MIC1_ANCL_SEL, 1);
+
+	}
+#endif
+	return ret;
+}
+
+static void msm_snddev_disable_anc_power(void)
+{
+#ifdef CONFIG_PMIC8058_OTHC
+	int ret;
+
+	ret = pm8058_micbias_enable(OTHC_MICBIAS_2, OTHC_SIGNAL_OFF);
+
+	if (machine_is_msm8x60_fluid()) {
+		ret |= pm8058_micbias_enable(OTHC_MICBIAS_0,
+				OTHC_SIGNAL_OFF);
+		gpio_free(SNDDEV_GPIO_MIC2_ANCR_SEL);
+		gpio_free(SNDDEV_GPIO_MIC1_ANCL_SEL);
+	}
+
+	if (ret)
+		pr_err("%s: Disabling anc power failed\n", __func__);
 #endif
 }
 
@@ -574,6 +696,23 @@ static struct platform_device msm_imic_device = {
 	.dev = { .platform_data = &snddev_imic_data },
 };
 
+static struct snddev_icodec_data snddev_fluid_ispkr_mic_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "speaker_mono_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &imic_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device msm_fluid_ispkr_mic_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &snddev_fluid_ispkr_mic_data },
+};
+
+
 static struct adie_codec_action_unit headset_ab_cpls_48KHz_osr256_actions[] =
 	HEADSET_AB_CPLS_48000_OSR_256;
 
@@ -633,8 +772,8 @@ static struct snddev_icodec_data snddev_anc_headset_data = {
 	.profile = &headset_anc_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
-	.pamp_on = msm_snddev_enable_amic_power,
-	.pamp_off = msm_snddev_disable_amic_power,
+	.pamp_on = msm_snddev_enable_anc_power,
+	.pamp_off = msm_snddev_disable_anc_power,
 	.voltage_on = msm_snddev_voltage_on,
 	.voltage_off = msm_snddev_voltage_off,
 };
@@ -1119,29 +1258,29 @@ static struct platform_device msm_linein_pri_device = {
 	.dev = { .platform_data = &snddev_linein_pri_data },
 };
 
-static struct adie_codec_action_unit auxpga_lb_lo_actions[] =
+static struct adie_codec_action_unit auxpga_lp_lo_actions[] =
 	LB_AUXPGA_LO_STEREO;
 
-static struct adie_codec_hwsetting_entry auxpga_lb_lo_settings[] = {
+static struct adie_codec_hwsetting_entry auxpga_lp_lo_settings[] = {
 	{
 		.freq_plan = 48000,
 		.osr = 256,
-		.actions = auxpga_lb_lo_actions,
-		.action_sz = ARRAY_SIZE(auxpga_lb_lo_actions),
+		.actions = auxpga_lp_lo_actions,
+		.action_sz = ARRAY_SIZE(auxpga_lp_lo_actions),
 	},
 };
 
-static struct adie_codec_dev_profile auxpga_lb_lo_profile = {
+static struct adie_codec_dev_profile auxpga_lp_lo_profile = {
 	.path_type = ADIE_CODEC_LB,
-	.settings = auxpga_lb_lo_settings,
-	.setting_sz = ARRAY_SIZE(auxpga_lb_lo_settings),
+	.settings = auxpga_lp_lo_settings,
+	.setting_sz = ARRAY_SIZE(auxpga_lp_lo_settings),
 };
 
-static struct snddev_icodec_data snddev_auxpga_lb_lo_data = {
+static struct snddev_icodec_data snddev_auxpga_lp_lo_data = {
 	.capability = SNDDEV_CAP_LB,
 	.name = "speaker_stereo_lb",
 	.copp_id = PRIMARY_I2S_RX,
-	.profile = &auxpga_lb_lo_profile,
+	.profile = &auxpga_lp_lo_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
 	.pamp_on = msm_snddev_poweramp_on,
@@ -1149,34 +1288,34 @@ static struct snddev_icodec_data snddev_auxpga_lb_lo_data = {
 	.dev_vol_type = SNDDEV_DEV_VOL_ANALOG,
 };
 
-static struct platform_device msm_auxpga_lb_lo_device = {
+static struct platform_device msm_auxpga_lp_lo_device = {
 	.name = "snddev_icodec",
-	.dev = { .platform_data = &snddev_auxpga_lb_lo_data },
+	.dev = { .platform_data = &snddev_auxpga_lp_lo_data },
 };
 
-static struct adie_codec_action_unit auxpga_lb_hs_actions[] =
+static struct adie_codec_action_unit auxpga_lp_hs_actions[] =
 	LB_AUXPGA_HPH_AB_CPLS_STEREO;
 
-static struct adie_codec_hwsetting_entry auxpga_lb_hs_settings[] = {
+static struct adie_codec_hwsetting_entry auxpga_lp_hs_settings[] = {
 	{
 		.freq_plan = 48000,
 		.osr = 256,
-		.actions = auxpga_lb_hs_actions,
-		.action_sz = ARRAY_SIZE(auxpga_lb_hs_actions),
+		.actions = auxpga_lp_hs_actions,
+		.action_sz = ARRAY_SIZE(auxpga_lp_hs_actions),
 	},
 };
 
-static struct adie_codec_dev_profile auxpga_lb_hs_profile = {
+static struct adie_codec_dev_profile auxpga_lp_hs_profile = {
 	.path_type = ADIE_CODEC_LB,
-	.settings = auxpga_lb_hs_settings,
-	.setting_sz = ARRAY_SIZE(auxpga_lb_hs_settings),
+	.settings = auxpga_lp_hs_settings,
+	.setting_sz = ARRAY_SIZE(auxpga_lp_hs_settings),
 };
 
-static struct snddev_icodec_data snddev_auxpga_lb_hs_data = {
+static struct snddev_icodec_data snddev_auxpga_lp_hs_data = {
 	.capability = SNDDEV_CAP_LB,
 	.name = "hs_stereo_lb",
 	.copp_id = PRIMARY_I2S_RX,
-	.profile = &auxpga_lb_hs_profile,
+	.profile = &auxpga_lp_hs_profile,
 	.channel_mode = 2,
 	.default_sample_rate = 48000,
 	.voltage_on = msm_snddev_voltage_on,
@@ -1184,10 +1323,988 @@ static struct snddev_icodec_data snddev_auxpga_lb_hs_data = {
 	.dev_vol_type = SNDDEV_DEV_VOL_ANALOG,
 };
 
-static struct platform_device msm_auxpga_lb_hs_device = {
+static struct platform_device msm_auxpga_lp_hs_device = {
 	.name = "snddev_icodec",
-	.dev = { .platform_data = &snddev_auxpga_lb_hs_data },
+	.dev = { .platform_data = &snddev_auxpga_lp_hs_data },
 };
+
+static struct adie_codec_action_unit ftm_headset_mono_rx_actions[] =
+	HEADSET_AB_CPLS_48000_OSR_256;
+
+static struct adie_codec_hwsetting_entry ftm_headset_mono_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_mono_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_mono_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_mono_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_mono_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_mono_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_mono_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_mono_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_mono_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_mono_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_mono_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_headset_mono_diff_rx_actions[] =
+	HEADSET_MONO_DIFF_RX;
+
+static struct adie_codec_hwsetting_entry ftm_headset_mono_diff_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_mono_diff_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_mono_diff_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_mono_diff_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_mono_diff_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_mono_diff_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_mono_diff_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_mono_diff_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_mono_diff_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_mono_diff_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_mono_diff_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_mono_rx_actions[] =
+	SPEAKER_PRI_STEREO_48000_OSR_256;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_mono_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_mono_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_mono_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_mono_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_mono_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_mono_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_mono_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spkr_mono_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_mono_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spkr_mono_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_mono_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_l_rx_actions[] =
+	FTM_SPKR_L_RX;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_l_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_l_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_l_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_l_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_l_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_l_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_l_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spkr_l_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_l_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spkr_l_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_l_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_r_rx_actions[] =
+	SPKR_R_RX;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_r_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_r_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_r_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_r_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_r_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_r_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_r_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spkr_r_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_r_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spkr_r_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_r_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_mono_diff_rx_actions[] =
+	SPKR_MONO_DIFF_RX;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_mono_diff_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_mono_diff_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_mono_diff_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_mono_diff_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_mono_diff_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_mono_diff_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_mono_diff_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spkr_mono_diff_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_mono_diff_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spkr_mono_diff_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_mono_diff_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_headset_mono_l_rx_actions[] =
+	HPH_PRI_AB_CPLS_MONO_LEFT;
+
+static struct adie_codec_hwsetting_entry ftm_headset_mono_l_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_mono_l_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_mono_l_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_mono_l_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_mono_l_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_mono_l_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_mono_l_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_mono_l_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_mono_l_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_mono_l_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_mono_l_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_headset_mono_r_rx_actions[] =
+	HPH_PRI_AB_CPLS_MONO_RIGHT;
+
+static struct adie_codec_hwsetting_entry ftm_headset_mono_r_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_mono_r_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_mono_r_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_mono_r_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_mono_r_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_mono_r_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_mono_r_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_mono_r_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_mono_r_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_mono_r_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_mono_r_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_linein_l_tx_actions[] =
+	LINEIN_MONO_L_TX;
+
+static struct adie_codec_hwsetting_entry ftm_linein_l_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_linein_l_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_linein_l_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_linein_l_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_linein_l_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_linein_l_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_linein_l_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_linein_l_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_linein_l_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+};
+
+static struct platform_device ftm_linein_l_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_linein_l_tx_data },
+};
+
+static struct adie_codec_action_unit ftm_linein_r_tx_actions[] =
+	LINEIN_MONO_R_TX;
+
+static struct adie_codec_hwsetting_entry ftm_linein_r_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_linein_r_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_linein_r_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_linein_r_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_linein_r_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_linein_r_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_linein_r_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_linein_r_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_linein_r_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+};
+
+static struct platform_device ftm_linein_r_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_linein_r_tx_data },
+};
+
+static struct adie_codec_action_unit ftm_aux_out_rx_actions[] =
+	AUX_OUT_RX;
+
+static struct adie_codec_hwsetting_entry ftm_aux_out_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_aux_out_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_aux_out_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_aux_out_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_aux_out_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_aux_out_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_aux_out_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_aux_out_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_aux_out_rx_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+};
+
+static struct platform_device ftm_aux_out_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_aux_out_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_dmic1_left_tx_actions[] =
+	DMIC1_LEFT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic1_left_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic1_left_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic1_left_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic1_left_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic1_left_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic1_left_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic1_left_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic1_left_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic1_left_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic1_left_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic1_left_tx_data},
+};
+
+static struct adie_codec_action_unit ftm_dmic1_right_tx_actions[] =
+	DMIC1_RIGHT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic1_right_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic1_right_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic1_right_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic1_right_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic1_right_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic1_right_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic1_right_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic1_right_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic1_right_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic1_right_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic1_right_tx_data},
+};
+
+static struct adie_codec_action_unit ftm_dmic1_l_and_r_tx_actions[] =
+	DMIC1_LEFT_AND_RIGHT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic1_l_and_r_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic1_l_and_r_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic1_l_and_r_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic1_l_and_r_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic1_l_and_r_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic1_l_and_r_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic1_l_and_r_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic1_l_and_r_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic1_l_and_r_tx_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic1_l_and_r_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic1_l_and_r_tx_data},
+};
+
+static struct adie_codec_action_unit ftm_dmic2_left_tx_actions[] =
+	DMIC2_LEFT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic2_left_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic2_left_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic2_left_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic2_left_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic2_left_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic2_left_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic2_left_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic2_left_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic2_left_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic2_left_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic2_left_tx_data },
+};
+
+static struct adie_codec_action_unit ftm_dmic2_right_tx_actions[] =
+	DMIC2_RIGHT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic2_right_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic2_right_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic2_right_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic2_right_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic2_right_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic2_right_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic2_right_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic2_right_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic2_right_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic2_right_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic2_right_tx_data },
+};
+
+static struct adie_codec_action_unit ftm_dmic2_l_and_r_tx_actions[] =
+	DMIC2_LEFT_AND_RIGHT_TX;
+
+static struct adie_codec_hwsetting_entry ftm_dmic2_l_and_r_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_dmic2_l_and_r_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_dmic2_l_and_r_tx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_dmic2_l_and_r_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_dmic2_l_and_r_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_dmic2_l_and_r_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_dmic2_l_and_r_tx_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_dmic2_l_and_r_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_dmic2_l_and_r_tx_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_dmic_power,
+	.pamp_off = msm_snddev_disable_dmic_power,
+};
+
+static struct platform_device ftm_dmic2_l_and_r_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_dmic2_l_and_r_tx_data},
+};
+
+static struct adie_codec_action_unit ftm_handset_mic1_aux_in_actions[] =
+	HANDSET_MIC1_AUX_IN;
+
+static struct adie_codec_hwsetting_entry ftm_handset_mic1_aux_in_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_handset_mic1_aux_in_actions,
+		.action_sz = ARRAY_SIZE(ftm_handset_mic1_aux_in_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_handset_mic1_aux_in_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_handset_mic1_aux_in_settings,
+	.setting_sz = ARRAY_SIZE(ftm_handset_mic1_aux_in_settings),
+};
+
+static struct snddev_icodec_data ftm_handset_mic1_aux_in_data = {
+	.capability = SNDDEV_CAP_TX,
+	.name = "ftm_handset_mic1_aux_in",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_handset_mic1_aux_in_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	/* Assumption is that inputs are not tied to analog mic, so
+	 * no need to enable mic bias.
+	 */
+};
+
+static struct platform_device ftm_handset_mic1_aux_in_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_handset_mic1_aux_in_data},
+};
+
+static struct snddev_mi2s_data snddev_mi2s_sd0_rx_data = {
+	.capability = SNDDEV_CAP_RX ,
+	.name = "mi2s_sd0_rx",
+	.copp_id = MI2S_RX,
+	.channel_mode = 2, /* stereo */
+	.sd_lines = MI2S_SD0, /* sd0 */
+	.sample_rate = 48000,
+};
+
+static struct platform_device ftm_mi2s_sd0_rx_device = {
+	.name = "snddev_mi2s",
+	.dev = { .platform_data = &snddev_mi2s_sd0_rx_data },
+};
+
+static struct snddev_mi2s_data snddev_mi2s_sd1_rx_data = {
+	.capability = SNDDEV_CAP_RX ,
+	.name = "mi2s_sd1_rx",
+	.copp_id = MI2S_RX,
+	.channel_mode = 2, /* stereo */
+	.sd_lines = MI2S_SD1, /* sd1 */
+	.sample_rate = 48000,
+};
+
+static struct platform_device ftm_mi2s_sd1_rx_device = {
+	.name = "snddev_mi2s",
+	.dev = { .platform_data = &snddev_mi2s_sd1_rx_data },
+};
+
+static struct snddev_mi2s_data snddev_mi2s_sd2_rx_data = {
+	.capability = SNDDEV_CAP_RX ,
+	.name = "mi2s_sd2_rx",
+	.copp_id = MI2S_RX,
+	.channel_mode = 2, /* stereo */
+	.sd_lines = MI2S_SD2, /* sd2 */
+	.sample_rate = 48000,
+};
+
+static struct platform_device ftm_mi2s_sd2_rx_device = {
+	.name = "snddev_mi2s",
+	.dev = { .platform_data = &snddev_mi2s_sd2_rx_data },
+};
+
+/* earpiece */
+static struct adie_codec_action_unit ftm_handset_adie_lp_rx_actions[] =
+	EAR_PRI_MONO_LB;
+
+static struct adie_codec_hwsetting_entry ftm_handset_adie_lp_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_handset_adie_lp_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_handset_adie_lp_rx_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ftm_handset_adie_lp_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_handset_adie_lp_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_handset_adie_lp_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_handset_adie_lp_rx_data = {
+	.capability = (SNDDEV_CAP_RX | SNDDEV_CAP_VOICE),
+	.name = "ftm_handset_adie_lp_rx",
+	.copp_id = 0,
+	.profile = &ftm_handset_adie_lp_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+};
+
+static struct platform_device ftm_handset_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_handset_adie_lp_rx_data },
+};
+
+static struct adie_codec_action_unit ftm_headset_l_adie_lp_rx_actions[] =
+	FTM_HPH_PRI_AB_CPLS_MONO_LB_LEFT;
+
+static struct adie_codec_hwsetting_entry ftm_headset_l_adie_lp_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_l_adie_lp_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_l_adie_lp_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_l_adie_lp_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_l_adie_lp_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_l_adie_lp_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_l_adie_lp_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_l_adie_lp_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_l_adie_lp_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_l_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_l_adie_lp_rx_data },
+};
+
+static struct adie_codec_action_unit ftm_headset_r_adie_lp_rx_actions[] =
+	FTM_HPH_PRI_AB_CPLS_MONO_LB_RIGHT;
+
+static struct adie_codec_hwsetting_entry ftm_headset_r_adie_lp_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_r_adie_lp_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_r_adie_lp_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_headset_r_adie_lp_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_headset_r_adie_lp_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_r_adie_lp_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_r_adie_lp_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_headset_r_adie_lp_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_headset_r_adie_lp_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.voltage_on = msm_snddev_voltage_on,
+	.voltage_off = msm_snddev_voltage_off,
+};
+
+static struct platform_device ftm_headset_r_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_r_adie_lp_rx_data },
+};
+
+static struct adie_codec_action_unit ftm_spkr_l_rx_lp_actions[] =
+	FTM_SPKR_L_RX;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_l_rx_lp_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_l_rx_lp_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_l_rx_lp_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_l_rx_lp_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_l_rx_lp_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_l_rx_lp_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_l_rx_lp_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spk_l_adie_lp_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_l_rx_lp_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spk_l_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_l_rx_lp_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_r_adie_lp_rx_actions[] =
+	FTM_SPKR_RX_LB;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_r_adie_lp_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_r_adie_lp_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_r_adie_lp_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_r_adie_lp_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_r_adie_lp_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_r_adie_lp_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_r_adie_lp_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spk_r_adie_lp_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_r_adie_lp_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spk_r_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_r_adie_lp_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_spkr_adie_lp_rx_actions[] =
+	FTM_SPKR_RX_LB;
+
+static struct adie_codec_hwsetting_entry ftm_spkr_adie_lp_rx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_spkr_adie_lp_rx_actions,
+		.action_sz = ARRAY_SIZE(ftm_spkr_adie_lp_rx_actions),
+	},
+};
+
+static struct adie_codec_dev_profile ftm_spkr_adie_lp_rx_profile = {
+	.path_type = ADIE_CODEC_RX,
+	.settings = ftm_spkr_adie_lp_rx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_spkr_adie_lp_rx_settings),
+};
+
+static struct snddev_icodec_data ftm_spkr_adie_lp_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "ftm_spk_adie_lp_rx",
+	.copp_id = PRIMARY_I2S_RX,
+	.profile = &ftm_spkr_adie_lp_rx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_poweramp_on,
+	.pamp_off = msm_snddev_poweramp_off,
+};
+
+static struct platform_device ftm_spk_adie_lp_rx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_spkr_adie_lp_rx_data},
+};
+
+static struct adie_codec_action_unit ftm_handset_dual_tx_lp_actions[] =
+	FTM_AMIC_DUAL_HANDSET_TX_LB;
+
+static struct adie_codec_hwsetting_entry ftm_handset_dual_tx_lp_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_handset_dual_tx_lp_actions,
+		.action_sz = ARRAY_SIZE(ftm_handset_dual_tx_lp_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ftm_handset_dual_tx_lp_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_handset_dual_tx_lp_settings,
+	.setting_sz = ARRAY_SIZE(ftm_handset_dual_tx_lp_settings),
+};
+
+static struct snddev_icodec_data ftm_handset_dual_tx_lp_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "handset_mic1_handset_mic2",
+	.copp_id = 1,
+	.profile = &ftm_handset_dual_tx_lp_profile,
+	.channel_mode = 2,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device ftm_handset_dual_tx_lp_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_handset_dual_tx_lp_data },
+};
+
+static struct adie_codec_action_unit ftm_handset_mic_adie_lp_tx_actions[] =
+	FTM_HANDSET_LB_TX;
+
+static struct adie_codec_hwsetting_entry
+	ftm_handset_mic_adie_lp_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_handset_mic_adie_lp_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_handset_mic_adie_lp_tx_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ftm_handset_mic_adie_lp_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_handset_mic_adie_lp_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_handset_mic_adie_lp_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_handset_mic_adie_lp_tx_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "ftm_handset_mic_adie_lp_tx",
+	.copp_id = 1,
+	.profile = &ftm_handset_mic_adie_lp_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+	.pamp_on = msm_snddev_enable_amic_power,
+	.pamp_off = msm_snddev_disable_amic_power,
+};
+
+static struct platform_device ftm_handset_mic_adie_lp_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_handset_mic_adie_lp_tx_data },
+};
+
+static struct adie_codec_action_unit ftm_headset_mic_adie_lp_tx_actions[] =
+	FTM_HEADSET_LB_TX;
+
+static struct adie_codec_hwsetting_entry
+			ftm_headset_mic_adie_lp_tx_settings[] = {
+	{
+		.freq_plan = 48000,
+		.osr = 256,
+		.actions = ftm_headset_mic_adie_lp_tx_actions,
+		.action_sz = ARRAY_SIZE(ftm_headset_mic_adie_lp_tx_actions),
+	}
+};
+
+static struct adie_codec_dev_profile ftm_headset_mic_adie_lp_tx_profile = {
+	.path_type = ADIE_CODEC_TX,
+	.settings = ftm_headset_mic_adie_lp_tx_settings,
+	.setting_sz = ARRAY_SIZE(ftm_headset_mic_adie_lp_tx_settings),
+};
+
+static struct snddev_icodec_data ftm_headset_mic_adie_lp_tx_data = {
+	.capability = (SNDDEV_CAP_TX | SNDDEV_CAP_VOICE),
+	.name = "ftm_headset_mic_adie_lp_tx",
+	.copp_id = PRIMARY_I2S_TX,
+	.profile = &ftm_headset_mic_adie_lp_tx_profile,
+	.channel_mode = 1,
+	.default_sample_rate = 48000,
+};
+
+static struct platform_device ftm_headset_mic_adie_lp_tx_device = {
+	.name = "snddev_icodec",
+	.dev = { .platform_data = &ftm_headset_mic_adie_lp_tx_data },
+};
+
+static struct snddev_virtual_data snddev_uplink_rx_data = {
+	.capability = SNDDEV_CAP_RX,
+	.name = "uplink_rx",
+	.copp_id = VOICE_PLAYBACK_TX,
+};
+
+static struct platform_device msm_uplink_rx_device = {
+	.name = "snddev_virtual",
+	.dev = { .platform_data = &snddev_uplink_rx_data },
+};
+
+static struct snddev_hdmi_data snddev_hdmi_non_linear_pcm_rx_data = {
+	.capability = SNDDEV_CAP_RX ,
+	.name = "hdmi_pass_through",
+	.default_sample_rate = 48000,
+	.on_apps = 1,
+};
+
+static struct platform_device msm_snddev_hdmi_non_linear_pcm_rx_device = {
+	.name = "snddev_hdmi",
+	.dev = { .platform_data = &snddev_hdmi_non_linear_pcm_rx_data },
+};
+
 
 #ifdef CONFIG_DEBUG_FS
 static struct adie_codec_action_unit
@@ -1328,9 +2445,11 @@ static struct platform_device *snd_devices_ffa[] __initdata = {
 	&msm_spkr_dual_mic_broadside_device,
 	&msm_ihs_stereo_speaker_stereo_rx_device,
 	&msm_anc_headset_device,
-	&msm_auxpga_lb_hs_device,
-	&msm_auxpga_lb_lo_device,
+	&msm_auxpga_lp_hs_device,
+	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
+	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_surf[] __initdata = {
@@ -1348,9 +2467,11 @@ static struct platform_device *snd_devices_surf[] __initdata = {
 	&msm_mi2s_fm_tx_device,
 	&msm_mi2s_fm_rx_device,
 	&msm_ihs_stereo_speaker_stereo_rx_device,
-	&msm_auxpga_lb_hs_device,
-	&msm_auxpga_lb_lo_device,
+	&msm_auxpga_lp_hs_device,
+	&msm_auxpga_lp_lo_device,
 	&msm_linein_pri_device,
+	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_fluid[] __initdata = {
@@ -1360,13 +2481,16 @@ static struct platform_device *snd_devices_fluid[] __initdata = {
 	&msm_snddev_hdmi_stereo_rx_device,
 	&msm_headset_stereo_device,
 	&msm_headset_mic_device,
+	&msm_fluid_ispkr_mic_device,
 	&msm_bt_sco_earpiece_device,
 	&msm_bt_sco_mic_device,
 	&msm_mi2s_fm_tx_device,
 	&msm_mi2s_fm_rx_device,
 	&msm_anc_headset_device,
-	&msm_auxpga_lb_hs_device,
-	&msm_auxpga_lb_lo_device,
+	&msm_auxpga_lp_hs_device,
+	&msm_auxpga_lp_lo_device,
+	&msm_icodec_gpio_device,
+	&msm_snddev_hdmi_non_linear_pcm_rx_device,
 };
 
 static struct platform_device *snd_devices_qt[] __initdata = {
@@ -1375,21 +2499,57 @@ static struct platform_device *snd_devices_qt[] __initdata = {
 	&msm_ispkr_stereo_device,
 	&msm_qt_dual_dmic_d0_device,
 	&msm_snddev_hdmi_stereo_rx_device,
+	&msm_qt_icodec_gpio_device,
 };
 
 static struct platform_device *snd_devices_common[] __initdata = {
 	&msm_aux_pcm_device,
 	&msm_cdcclk_ctl_device,
 	&msm_mi2s_device,
+	&msm_uplink_rx_device,
 };
+
+static struct platform_device *snd_devices_ftm[] __initdata = {
+	&ftm_headset_mono_rx_device,
+	&ftm_headset_mono_l_rx_device,
+	&ftm_headset_mono_r_rx_device,
+	&ftm_headset_mono_diff_rx_device,
+	&ftm_spkr_mono_rx_device,
+	&ftm_spkr_l_rx_device,
+	&ftm_spkr_r_rx_device,
+	&ftm_spkr_mono_diff_rx_device,
+	&ftm_linein_l_tx_device,
+	&ftm_linein_r_tx_device,
+	&ftm_aux_out_rx_device,
+	&ftm_dmic1_left_tx_device,
+	&ftm_dmic1_right_tx_device,
+	&ftm_dmic1_l_and_r_tx_device,
+	&ftm_dmic2_left_tx_device,
+	&ftm_dmic2_right_tx_device,
+	&ftm_dmic2_l_and_r_tx_device,
+	&ftm_handset_mic1_aux_in_device,
+	&ftm_mi2s_sd0_rx_device,
+	&ftm_mi2s_sd1_rx_device,
+	&ftm_mi2s_sd2_rx_device,
+	&ftm_handset_mic_adie_lp_tx_device,
+	&ftm_headset_mic_adie_lp_tx_device,
+	&ftm_handset_adie_lp_rx_device,
+	&ftm_headset_l_adie_lp_rx_device,
+	&ftm_headset_r_adie_lp_rx_device,
+	&ftm_spk_l_adie_lp_rx_device,
+	&ftm_spk_r_adie_lp_rx_device,
+	&ftm_spk_adie_lp_rx_device,
+	&ftm_handset_dual_tx_lp_device,
+};
+
 
 void __init msm_snddev_init(void)
 {
 	int i;
 	int dev_id;
-	int rc;
 
 	atomic_set(&pamp_ref_cnt, 0);
+	atomic_set(&preg_ref_cnt, 0);
 
 	for (i = 0, dev_id = 0; i < ARRAY_SIZE(snd_devices_common); i++)
 		snd_devices_common[i]->id = dev_id++;
@@ -1425,18 +2585,17 @@ void __init msm_snddev_init(void)
 		ARRAY_SIZE(snd_devices_qt));
 	}
 
+	if (machine_is_msm8x60_surf()) {
+		for (i = 0; i < ARRAY_SIZE(snd_devices_ftm); i++)
+			snd_devices_ftm[i]->id = dev_id++;
+
+		platform_add_devices(snd_devices_ftm,
+				ARRAY_SIZE(snd_devices_ftm));
+	}
+
 #ifdef CONFIG_DEBUG_FS
 	debugfs_hsed_config = debugfs_create_file("msm_hsed_config",
 				S_IFREG | S_IRUGO, NULL,
 		(void *) "msm_hsed_config", &snddev_hsed_config_debug_fops);
 #endif
-
-	rc = gpio_request(SNDDEV_GPIO_CLASS_D1_EN, "CLASSD1_EN");
-	if (rc) {
-		pr_err("%s: spkr pamp gpio %d request"
-			"failed\n", __func__, SNDDEV_GPIO_CLASS_D1_EN);
-	} else {
-		gpio_direction_output(SNDDEV_GPIO_CLASS_D1_EN, 0);
-		gpio_free(SNDDEV_GPIO_CLASS_D1_EN);
-	}
 }

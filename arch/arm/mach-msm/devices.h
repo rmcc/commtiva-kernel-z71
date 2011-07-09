@@ -34,7 +34,9 @@ extern struct platform_device msm_device_uart_gsbi9;
 
 extern struct platform_device msm8960_device_uart_gsbi2;
 extern struct platform_device msm8960_device_uart_gsbi5;
+extern struct platform_device msm8960_device_ssbi_pm8921;
 extern struct platform_device msm8960_device_qup_i2c_gsbi4;
+extern struct platform_device msm8960_device_qup_spi_gsbi1;
 
 extern struct platform_device msm_device_sdc1;
 extern struct platform_device msm_device_sdc2;
@@ -51,6 +53,7 @@ extern struct platform_device msm_device_otg;
 extern struct platform_device usb_diag_device;
 extern struct platform_device usb_diag_mdm_device;
 extern struct platform_device usb_gadget_fserial_device;
+extern struct platform_device usb_gadget_facm_device;
 
 extern struct platform_device msm_device_i2c;
 
@@ -67,6 +70,7 @@ extern struct platform_device msm_gsbi8_qup_i2c_device;
 extern struct platform_device msm_gsbi9_qup_i2c_device;
 extern struct platform_device msm_gsbi12_qup_i2c_device;
 
+extern struct platform_device msm_device_sps;
 extern struct platform_device msm_device_smd;
 extern struct platform_device msm_device_dmov;
 extern struct platform_device msm_device_dmov_adm0;
@@ -123,4 +127,5 @@ void __init msm_fb_register_device(char *name, void *data);
 void __init msm_camera_register_device(void *, uint32_t, void *);
 extern struct platform_device msm_device_touchscreen;
 
+extern struct pil_device peripheral_dsps;
 #endif

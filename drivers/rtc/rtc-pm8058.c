@@ -314,10 +314,34 @@ pm8058_rtc0_read_alarm(struct device *dev, struct rtc_wkalrm *alarm)
 	return 0;
 }
 
+
+static int
+pm8058_rtc0_alarm_irq_enable(struct device *dev, unsigned int enable)
+{
+	int rc;
+	struct pm8058_rtc *rtc_dd = dev_get_drvdata(dev);
+	u8 reg;
+
+	reg = rtc_dd->rtc_ctrl_reg;
+	reg = (enable) ? (reg | PM8058_RTC_ALARM_ENABLE) :
+				(reg & ~PM8058_RTC_ALARM_ENABLE);
+
+	rc = pm8058_write(rtc_dd->pm_chip, PM8058_RTC_CTRL, &reg, 1);
+	if (rc < 0) {
+		pr_err("%s: PM8058 write failed\n", __func__);
+		return rc;
+	}
+
+	rtc_dd->rtc_ctrl_reg = reg;
+
+	return rc;
+}
+
 static struct rtc_class_ops pm8058_rtc0_ops = {
 	.read_time	= pm8058_rtc0_read_time,
 	.set_alarm	= pm8058_rtc0_set_alarm,
 	.read_alarm	= pm8058_rtc0_read_alarm,
+	.alarm_irq_enable = pm8058_rtc0_alarm_irq_enable,
 };
 
 static irqreturn_t pm8058_alarm_trigger(int irq, void *dev_id)

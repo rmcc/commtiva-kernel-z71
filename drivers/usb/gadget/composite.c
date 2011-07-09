@@ -38,7 +38,7 @@
  */
 
 /* big enough to hold our biggest descriptor */
-#define USB_BUFSIZ	1024
+#define USB_BUFSIZ	4096
 
 static struct usb_composite_driver *composite;
 
@@ -87,10 +87,14 @@ static ssize_t enable_store(
 	struct usb_function *f = dev_get_drvdata(dev);
 	struct usb_composite_driver	*driver = f->config->cdev->driver;
 	int value;
+	int rc;
 
 	sscanf(buf, "%d", &value);
-	if (driver->enable_function)
-		driver->enable_function(f, value);
+	if (driver->enable_function) {
+		rc = driver->enable_function(f, value);
+		if (rc < 0)
+			return rc;
+	}
 	else
 		usb_function_set_enabled(f, value);
 
@@ -347,6 +351,13 @@ static int config_buf(struct usb_configuration *config,
 		dest = next;
 		while ((descriptor = *descriptors++) != NULL) {
 			intf = (struct usb_interface_descriptor *)dest;
+			if (intf->bDescriptorType ==
+					USB_DT_INTERFACE_ASSOCIATION) {
+				struct usb_interface_assoc_descriptor *iad =
+				  (struct usb_interface_assoc_descriptor *)dest;
+
+				iad->bFirstInterface = interfaceCount;
+			}
 			if (intf->bDescriptorType == USB_DT_INTERFACE) {
 				/* don't increment bInterfaceNumber for alternate settings */
 				if (intf->bAlternateSetting == 0)
@@ -808,7 +819,7 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 	u8				endp;
 	int tmp = intf;
 	int id = 0;
-	unsigned long                   flags;
+	unsigned long			flags;
 
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (!cdev->connected) {
@@ -1114,7 +1125,6 @@ composite_unbind(struct usb_gadget *gadget)
 		kfree(cdev->req->buf);
 		usb_ep_free_request(gadget->ep0, cdev->req);
 	}
-
 	switch_dev_unregister(&cdev->sw_connected);
 	switch_dev_unregister(&cdev->sw_config);
 	kfree(cdev);

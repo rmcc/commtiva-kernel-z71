@@ -126,9 +126,7 @@ struct hci_dev {
 	unsigned int	acl_pkts;
 	unsigned int	sco_pkts;
 
-	unsigned int	max_acl_len;
 	unsigned int	data_block_len;
-	unsigned int	num_blocks;
 
 	unsigned long	cmd_last_tx;
 	unsigned long	acl_last_tx;
@@ -455,7 +453,7 @@ int hci_conn_switch_role(struct hci_conn *conn, __u8 role);
 void hci_disconnect(struct hci_conn *conn, __u8 reason);
 void hci_disconnect_amp(struct hci_conn *conn, __u8 reason);
 
-void hci_conn_enter_active_mode(struct hci_conn *conn);
+void hci_conn_enter_active_mode(struct hci_conn *conn, __u8 force_active);
 void hci_conn_enter_sniff_mode(struct hci_conn *conn);
 
 void hci_conn_hold_device(struct hci_conn *conn);

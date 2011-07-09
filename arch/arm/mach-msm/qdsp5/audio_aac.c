@@ -132,6 +132,7 @@ struct audio {
 
 	int mfield; /* meta field embedded in data */
 	int rflush; /* Read  flush */
+	int eos_in_progress;
 	int wflush; /* Write flush */
 	int opened;
 	int enabled;
@@ -139,6 +140,7 @@ struct audio {
 	int stopped;	/* set when stopped, cleared on flush */
 	int pcm_feedback;
 	int buf_refresh;
+	int rmt_resource_released;
 	int teos; /* valid only if tunnel mode & no data left for decoder */
 	enum msm_aud_decoder_state dec_state;	/* Represents decoder state */
 	int reserved; /* A byte is being reserved */
@@ -180,8 +182,40 @@ static void audplay_send_data(struct audio *audio, unsigned needed);
 static void audplay_config_hostpcm(struct audio *audio);
 static void audplay_buffer_refresh(struct audio *audio);
 static void audio_dsp_event(void *private, unsigned id, uint16_t *msg);
+#ifdef CONFIG_HAS_EARLYSUSPEND
 static void audaac_post_event(struct audio *audio, int type,
 		union msm_audio_event_payload payload);
+#endif
+
+static int rmt_put_resource(struct audio *audio)
+{
+	struct aud_codec_config_cmd cmd;
+	unsigned short client_idx;
+
+	cmd.cmd_id = RM_CMD_AUD_CODEC_CFG;
+	cmd.client_id = RM_AUD_CLIENT_ID;
+	cmd.task_id = audio->dec_id;
+	cmd.enable = RMT_DISABLE;
+	cmd.dec_type = AUDDEC_DEC_AAC;
+	client_idx = ((cmd.client_id << 8) | cmd.task_id);
+
+	return put_adsp_resource(client_idx, &cmd, sizeof(cmd));
+}
+
+static int rmt_get_resource(struct audio *audio)
+{
+	struct aud_codec_config_cmd cmd;
+	unsigned short client_idx;
+
+	cmd.cmd_id = RM_CMD_AUD_CODEC_CFG;
+	cmd.client_id = RM_AUD_CLIENT_ID;
+	cmd.task_id = audio->dec_id;
+	cmd.enable = RMT_ENABLE;
+	cmd.dec_type = AUDDEC_DEC_AAC;
+	client_idx = ((cmd.client_id << 8) | cmd.task_id);
+
+	return get_adsp_resource(client_idx, &cmd, sizeof(cmd));
+}
 
 /* must be called with audio->lock held */
 static int audio_enable(struct audio *audio)
@@ -193,6 +227,17 @@ static int audio_enable(struct audio *audio)
 
 	if (audio->enabled)
 		return 0;
+
+	if (audio->rmt_resource_released == 1) {
+		audio->rmt_resource_released = 0;
+		rc = rmt_get_resource(audio);
+		if (rc) {
+			MM_ERR("ADSP resources are not available for AAC \
+				session 0x%08x on decoder: %d\n Ignoring \
+				error and going ahead with the playback\n",
+				(int)audio, audio->dec_id);
+		}
+	}
 
 	audio->dec_state = MSM_AUD_DECODER_STATE_NONE;
 	audio->out_tail = 0;
@@ -253,6 +298,8 @@ static int audio_disable(struct audio *audio)
 		if (audio->pcm_feedback == TUNNEL_MODE_PLAYBACK)
 			audmgr_disable(&audio->audmgr);
 		audio->out_needed = 0;
+		rmt_put_resource(audio);
+		audio->rmt_resource_released = 1;
 	}
 	return rc;
 }
@@ -561,36 +608,6 @@ static void audplay_config_hostpcm(struct audio *audio)
 
 }
 
-static int rmt_put_resource(struct audio *audio)
-{
-	struct aud_codec_config_cmd cmd;
-	unsigned short client_idx;
-
-	cmd.cmd_id = RM_CMD_AUD_CODEC_CFG;
-	cmd.client_id = RM_AUD_CLIENT_ID;
-	cmd.task_id = audio->dec_id;
-	cmd.enable = RMT_DISABLE;
-	cmd.dec_type = AUDDEC_DEC_AAC;
-	client_idx = ((cmd.client_id << 8) | cmd.task_id);
-
-	return put_adsp_resource(client_idx, &cmd, sizeof(cmd));
-}
-
-static int rmt_get_resource(struct audio *audio)
-{
-	struct aud_codec_config_cmd cmd;
-	unsigned short client_idx;
-
-	cmd.cmd_id = RM_CMD_AUD_CODEC_CFG;
-	cmd.client_id = RM_AUD_CLIENT_ID;
-	cmd.task_id = audio->dec_id;
-	cmd.enable = RMT_ENABLE;
-	cmd.dec_type = AUDDEC_DEC_AAC;
-	client_idx = ((cmd.client_id << 8) | cmd.task_id);
-
-	return get_adsp_resource(client_idx, &cmd, sizeof(cmd));
-}
-
 static void audplay_send_data(struct audio *audio, unsigned needed)
 {
 	struct buffer *frame;
@@ -614,7 +631,12 @@ static void audplay_send_data(struct audio *audio, unsigned needed)
 			frame->used = 0;
 			audio->out_tail ^= 1;
 			wake_up(&audio->write_wait);
+		} else if ((audio->out[0].used == 0) &&
+			 (audio->out[1].used == 0) &&
+			 (audio->eos_in_progress)) {
+			wake_up(&audio->write_wait);
 		}
+
 	}
 
 	if (audio->out_needed) {
@@ -1274,6 +1296,7 @@ static int audaac_process_eos(struct audio *audio,
 	struct buffer *frame;
 	char *buf_ptr;
 	int rc = 0;
+	unsigned long flags = 0;
 
 	MM_DBG("signal input EOS reserved=%d\n", audio->reserved);
 	if (audio->reserved) {
@@ -1302,12 +1325,20 @@ static int audaac_process_eos(struct audio *audio,
 		audio->out[0].used, audio->out[1].used, audio->out_needed);
 	frame = audio->out + audio->out_head;
 
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+	audio->eos_in_progress = 1;
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
+
 	rc = wait_event_interruptible(audio->write_wait,
 		(audio->out_needed &&
 		audio->out[0].used == 0 &&
 		audio->out[1].used == 0)
 		|| (audio->stopped)
 		|| (audio->wflush));
+
+	spin_lock_irqsave(&audio->dsp_lock, flags);
+	audio->eos_in_progress = 0;
+	spin_unlock_irqrestore(&audio->dsp_lock, flags);
 
 	if (rc < 0)
 		goto done;
@@ -1452,7 +1483,8 @@ static int audio_release(struct inode *inode, struct file *file)
 	MM_INFO("audio instance 0x%08x freeing\n", (int)audio);
 	mutex_lock(&audio->lock);
 	audio_disable(audio);
-	rmt_put_resource(audio);
+	if (audio->rmt_resource_released == 0)
+		rmt_put_resource(audio);
 	audio_flush(audio);
 	audio_flush_pcm_buf(audio);
 	msm_adsp_put(audio->audplay);
@@ -1476,6 +1508,7 @@ static int audio_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
+#ifdef CONFIG_HAS_EARLYSUSPEND
 static void audaac_post_event(struct audio *audio, int type,
 		union msm_audio_event_payload payload)
 {
@@ -1492,6 +1525,7 @@ static void audaac_post_event(struct audio *audio, int type,
 		e_node = kmalloc(sizeof(struct audaac_event), GFP_ATOMIC);
 		if (!e_node) {
 			MM_ERR("No mem to post event %d\n", type);
+			spin_unlock_irqrestore(&audio->event_queue_lock, flags);
 			return;
 		}
 	}
@@ -1504,7 +1538,6 @@ static void audaac_post_event(struct audio *audio, int type,
 	wake_up(&audio->event_wait);
 }
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
 static void audaac_suspend(struct early_suspend *h)
 {
 	struct audaac_suspend_ctl *ctl =

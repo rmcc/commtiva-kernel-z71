@@ -518,6 +518,14 @@ rmnet_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 			goto invalid;
 		else {
 			spin_lock(&dev->lock);
+			if (list_empty(&dev->qmi_resp_q)) {
+				INFO(cdev, "qmi resp empty "
+					" req%02x.%02x v%04x i%04x l%d\n",
+					ctrl->bRequestType, ctrl->bRequest,
+					w_value, w_index, w_length);
+				spin_unlock(&dev->lock);
+				goto invalid;
+			}
 			resp = list_first_entry(&dev->qmi_resp_q,
 					struct qmi_buf, list);
 			list_del(&resp->list);
@@ -547,9 +555,11 @@ rmnet_setup(struct usb_function *f, const struct usb_ctrlrequest *ctrl)
 		 * request will be sent with DTR being '1'.
 		 */
 		if (w_value & ACM_CTRL_DTR)
-			smd_tiocmset(dev->smd_ctl.ch, TIOCM_DTR, 0);
+			ret = smd_tiocmset(dev->smd_ctl.ch, TIOCM_DTR, 0);
 		else
-			smd_tiocmset(dev->smd_ctl.ch, 0, TIOCM_DTR);
+			ret = smd_tiocmset(dev->smd_ctl.ch, 0, TIOCM_DTR);
+
+		break;
 	default:
 
 invalid:

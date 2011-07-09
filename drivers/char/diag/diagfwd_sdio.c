@@ -60,6 +60,13 @@ void __diag_sdio_send_req(void)
 			else {
 				APPEND_DEBUG('i');
 				sdio_read(driver->sdio_ch, buf, r);
+				if (((!driver->usb_connected) && (driver->
+					logging_mode == USB_MODE)) || (driver->
+					logging_mode == NO_LOGGING_MODE)) {
+					/*Drop the diag payload */
+					driver->in_busy_sdio = 0;
+					return;
+				}
 				APPEND_DEBUG('j');
 				driver->write_ptr_mdm->length = r;
 				driver->in_busy_sdio = 1;
@@ -95,7 +102,8 @@ int diagfwd_connect_sdio(void)
 
 int diagfwd_disconnect_sdio(void)
 {
-	driver->in_busy_sdio = 1;
+	/* Clear variable to Flush remaining data from SDIO channel */
+	driver->in_busy_sdio = 0;
 	usb_diag_free_req(driver->mdm_ch);
 	return 0;
 }
@@ -157,6 +165,19 @@ static int diag_sdio_probe(struct platform_device *pdev)
 	return err;
 }
 
+static int diag_sdio_remove(struct platform_device *pdev)
+{
+	queue_work(driver->diag_sdio_wq, &(driver->diag_remove_sdio_work));
+	return 0;
+}
+
+static void diag_remove_sdio_work_fn(struct work_struct *work)
+{
+	pr_debug("\n diag: sdio remove called");
+	/*Disable SDIO channel to prevent further read/write */
+	driver->sdio_ch = NULL;
+}
+
 static int diagfwd_sdio_runtime_suspend(struct device *dev)
 {
 	dev_dbg(dev, "pm_runtime: suspending...\n");
@@ -176,6 +197,7 @@ static const struct dev_pm_ops diagfwd_sdio_dev_pm_ops = {
 
 static struct platform_driver msm_sdio_ch_driver = {
 	.probe = diag_sdio_probe,
+	.remove = diag_sdio_remove,
 	.driver = {
 		   .name = "SDIO_DIAG",
 		   .owner = THIS_MODULE,
@@ -217,6 +239,7 @@ void diagfwd_sdio_init(void)
 	INIT_WORK(&(driver->diag_read_mdm_work), diag_read_mdm_work_fn);
 #endif
 	INIT_WORK(&(driver->diag_read_sdio_work), diag_read_sdio_work_fn);
+	INIT_WORK(&(driver->diag_remove_sdio_work), diag_remove_sdio_work_fn);
 	ret = platform_driver_register(&msm_sdio_ch_driver);
 	if (ret)
 		printk(KERN_INFO "DIAG could not register SDIO device");

@@ -112,6 +112,8 @@ struct othc_n_switch_config {
 	uint32_t adc_channel;
 	struct othc_switch_info *switch_info;
 	u8 num_keys;
+	bool default_sw_en;
+	u8 default_sw_idx;
 };
 
 struct hsed_bias_config {
@@ -140,6 +142,7 @@ struct othc_hsed_config {
 	struct othc_accessory_info *accessories;
 	int othc_num_accessories;
 	int video_out_gpio;
+	int ir_gpio;
 };
 
 struct pmic8058_othc_config_pdata {

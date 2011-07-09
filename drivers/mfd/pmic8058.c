@@ -67,6 +67,8 @@
 /* PON CNTL 1 register */
 #define SSBI_REG_ADDR_PON_CNTL_1	0x01C
 
+#define PM8058_PON_PUP_MASK		0xF0
+
 #define PM8058_PON_WD_EN_MASK		0x08
 #define PM8058_PON_WD_EN_RESET		0x08
 #define PM8058_PON_WD_EN_PWR_OFF	0x00
@@ -88,6 +90,10 @@
 #define PM8058_SLEEP_SMPL_EN_MASK	0x04
 #define PM8058_SLEEP_SMPL_EN_RESET	0x04
 #define PM8058_SLEEP_SMPL_EN_PWR_OFF	0x00
+
+#define PM8058_SLEEP_SMPL_SEL_MASK	0x03
+#define PM8058_SLEEP_SMPL_SEL_MIN	0
+#define PM8058_SLEEP_SMPL_SEL_MAX	3
 
 #define	MAX_PM_IRQ		256
 #define	MAX_PM_BLOCKS		(MAX_PM_IRQ / 8 + 1)
@@ -164,6 +170,36 @@ ssbi_read(struct i2c_client *client, u16 addr, u8 *buf, size_t len)
 
 	rc = i2c_transfer(client->adapter, &msg, 1);
 	return (rc == 1) ? 0 : rc;
+}
+
+static int pm8058_masked_write(u16 addr, u8 val, u8 mask)
+{
+	int rc;
+	u8 reg;
+
+	if (pmic_chip == NULL)
+		return -ENODEV;
+
+	mutex_lock(&pmic_chip->pm_lock);
+
+	rc = ssbi_read(pmic_chip->dev, addr, &reg, 1);
+	if (rc) {
+		pr_err("%s: ssbi_read(0x%03X) failed: rc=%d\n", __func__, addr,
+			rc);
+		goto done;
+	}
+
+	reg &= ~mask;
+	reg |= val & mask;
+
+	rc = ssbi_write(pmic_chip->dev, addr, &reg, 1);
+	if (rc)
+		pr_err("%s: ssbi_write(0x%03X)=0x%02X failed: rc=%d\n",
+			__func__, addr, reg, rc);
+done:
+	mutex_unlock(&pmic_chip->pm_lock);
+
+	return rc;
 }
 
 /* External APIs */
@@ -271,6 +307,69 @@ get_out:
 }
 EXPORT_SYMBOL(pm8058_misc_control);
 
+/**
+ * pm8058_smpl_control - enables/disables SMPL detection
+ * @enable: 0 = shutdown PMIC on power loss, 1 = reset PMIC on power loss
+ *
+ * This function enables or disables the Sudden Momentary Power Loss detection
+ * module.  If SMPL detection is enabled, then when a sufficiently long power
+ * loss event occurs, the PMIC will automatically reset itself.  If SMPL
+ * detection is disabled, then the PMIC will shutdown when power loss occurs.
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8058_smpl_control(int enable)
+{
+	return pm8058_masked_write(SSBI_REG_ADDR_SLEEP_CNTL,
+				   (enable ? PM8058_SLEEP_SMPL_EN_RESET
+					   : PM8058_SLEEP_SMPL_EN_PWR_OFF),
+				   PM8058_SLEEP_SMPL_EN_MASK);
+}
+EXPORT_SYMBOL(pm8058_smpl_control);
+
+/**
+ * pm8058_smpl_set_delay - sets the SMPL detection time delay
+ * @delay: enum value corresponding to delay time
+ *
+ * This function sets the time delay of the SMPL detection module.  If power
+ * is reapplied within this interval, then the PMIC reset automatically.  The
+ * SMPL detection module must be enabled for this delay time to take effect.
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8058_smpl_set_delay(enum pm8058_smpl_delay delay)
+{
+	if (delay < PM8058_SLEEP_SMPL_SEL_MIN
+	    || delay > PM8058_SLEEP_SMPL_SEL_MAX) {
+		pr_err("%s: invalid delay specified: %d\n", __func__, delay);
+		return -EINVAL;
+	}
+
+	return pm8058_masked_write(SSBI_REG_ADDR_SLEEP_CNTL, delay,
+				   PM8058_SLEEP_SMPL_SEL_MASK);
+}
+EXPORT_SYMBOL(pm8058_smpl_set_delay);
+
+/**
+ * pm8058_watchdog_reset_control - enables/disables watchdog reset detection
+ * @enable: 0 = shutdown when PS_HOLD goes low, 1 = reset when PS_HOLD goes low
+ *
+ * This function enables or disables the PMIC watchdog reset detection feature.
+ * If watchdog reset detection is enabled, then the PMIC will reset itself
+ * when PS_HOLD goes low.  If it is not enabled, then the PMIC will shutdown
+ * when PS_HOLD goes low.
+ *
+ * RETURNS: an appropriate -ERRNO error value on error, or zero for success.
+ */
+int pm8058_watchdog_reset_control(int enable)
+{
+	return pm8058_masked_write(SSBI_REG_ADDR_PON_CNTL_1,
+				   (enable ? PM8058_PON_WD_EN_RESET
+					   : PM8058_PON_WD_EN_PWR_OFF),
+				   PM8058_PON_WD_EN_MASK);
+}
+EXPORT_SYMBOL(pm8058_watchdog_reset_control);
+
 int pm8058_reset_pwr_off(int reset)
 {
 	int		rc;
@@ -329,6 +428,9 @@ get_out2:
 
 	pon &= ~PM8058_PON_WD_EN_MASK;
 	pon |= reset ? PM8058_PON_WD_EN_RESET : PM8058_PON_WD_EN_PWR_OFF;
+
+	/* Enable all pullups */
+	pon |= PM8058_PON_PUP_MASK;
 
 	rc = ssbi_write(pmic_chip->dev, SSBI_REG_ADDR_PON_CNTL_1, &pon, 1);
 	if (rc) {

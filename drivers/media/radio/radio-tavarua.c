@@ -921,7 +921,7 @@ static void tavarua_handle_interrupts(struct tavarua_device *radio)
 			break;
 		case RDS_RT_0:
 			FMDBG("RT Header\n");
-			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, 4);
+			copy_from_xfr(radio, TAVARUA_BUF_RT_RDS, 5);
 			radio->xfr_bytes_left = radio->registers[XFRCTRL+1]
 									& 0x7F;
 			FMDBG("RT RDS Length: %d\n", radio->xfr_bytes_left);
@@ -1784,6 +1784,7 @@ static int tavarua_fops_open(struct file *file)
 	}
 
 	radio->handle_irq = 0;
+	radio->marimba->mod_id = SLAVE_ID_BAHAMA;
 	marimba_set_fm_status(radio->marimba, true);
 	return 0;
 
@@ -1899,7 +1900,7 @@ static int tavarua_fops_release(struct file *file)
 			return retval;
 		}
 	}
-
+	radio->marimba->mod_id = SLAVE_ID_BAHAMA;
 	bt_status = marimba_get_bt_status(radio->marimba);
 	/* Set the index based on the bt status*/
 	index = bt_status ?  1 : 0;
@@ -1939,6 +1940,7 @@ static int tavarua_fops_release(struct file *file)
 	radio->pdata->fm_shutdown(radio->pdata);
 	radio->handle_irq = 1;
 	radio->users = 0;
+	radio->marimba->mod_id = SLAVE_ID_BAHAMA;
 	marimba_set_fm_status(radio->marimba, false);
 	return 0;
 }
@@ -3406,10 +3408,32 @@ int tavarua_set_audio_path(int digital_on, int analog_on)
 		(rx_on ? 0 : 1),
 		AUDIOTX_OFFSET,
 		AUDIOTX_MASK);
-	SET_REG_FIELD(radio->registers[AUDIOCTRL],
+	/*
+
+	I2S Master/Slave configuration:
+	Setting the FM SoC as I2S Master/Slave
+		'false'		- FM SoC is I2S Slave
+		'true'		- FM SoC is I2S Master
+
+	We get this infomation from the respective target's board file :
+		MSM7x30         - FM SoC is I2S Slave
+		MSM8x60         - FM SoC is I2S Slave
+		MSM7x27A        - FM SoC is I2S Master
+	*/
+
+	if (!radio->pdata->is_fm_soc_i2s_master) {
+		FMDBG("FM SoC is I2S Slave\n");
+		SET_REG_FIELD(radio->registers[AUDIOCTRL],
 		(0),
 		I2SCTRL_OFFSET,
 		I2SCTRL_MASK);
+	} else {
+		FMDBG("FM SoC is I2S Master\n");
+		SET_REG_FIELD(radio->registers[AUDIOCTRL],
+		(1),
+		I2SCTRL_OFFSET,
+		I2SCTRL_MASK);
+	}
 	FMDBG("%s: %x\n", __func__, radio->registers[AUDIOCTRL]);
 	return tavarua_write_register(radio, AUDIOCTRL,
 					radio->registers[AUDIOCTRL]);

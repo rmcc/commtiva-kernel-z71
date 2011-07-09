@@ -1,7 +1,7 @@
 /** arch/arm/mach-msm/smd_rpcrouter.h
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
  * Author: San Mehat <san@android.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -39,7 +39,6 @@
 #define RPCROUTER_ROUTER_ADDRESS		0xfffffffe
 
 #define RPCROUTER_PID_LOCAL			1
-#define RPCROUTER_PID_REMOTE			0
 
 #define RPCROUTER_CTRL_CMD_DATA			1
 #define RPCROUTER_CTRL_CMD_HELLO		2
@@ -56,6 +55,22 @@
 #define RPCROUTER_XPRT_EVENT_DATA  1
 #define RPCROUTER_XPRT_EVENT_OPEN  2
 #define RPCROUTER_XPRT_EVENT_CLOSE 3
+
+/* Restart states for endpoint.
+ *
+ * Two different bits are specified here, one for
+ * the remote server notification (RESTART_PEND_SVR)
+ * and one for client notification (RESTART_PEND_NTFY).
+ * The client notification is used to ensure that
+ * the client gets notified by an ENETRESET return
+ * code at least once, even if they miss the actual
+ * reset event.  The server notification is used to
+ * properly handle the reset state of the endpoint.
+ */
+#define RESTART_NORMAL 0x0
+#define RESTART_PEND_SVR 0x1
+#define RESTART_PEND_NTFY 0x2
+#define RESTART_PEND_NTFY_SVR (RESTART_PEND_SVR | RESTART_PEND_NTFY)
 
 union rr_control_msg {
 	uint32_t cmd;
@@ -171,6 +186,12 @@ struct msm_rpc_endpoint {
 	int restart_state;
 	spinlock_t restart_lock;
 	wait_queue_head_t restart_wait;
+
+	/* modem restart notifications */
+	int do_setup_notif;
+	void *client_data;
+	void (*cb_restart_teardown)(void *client_data);
+	void (*cb_restart_setup)(void *client_data);
 
 	/* endpoint address */
 	uint32_t pid;

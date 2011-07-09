@@ -320,14 +320,14 @@ struct adm_get_copp_handles_command {
 struct adm_routings_session {
 	u16 id;
 	u16 num_copps;
-	u16 copp_id[ADM_MAX_COPPS];
-} __attribute__ ((packed));
+	u16 copp_id[ADM_MAX_COPPS+1]; /*Padding if numCopps is odd */
+} __packed;
 
 struct adm_routings_command {
 	struct apr_hdr hdr;
 	u32 path; /* 0 = Rx, 1 Tx */
 	u32 num_sessions;
-	struct adm_routings_session sessions[8];
+	struct adm_routings_session session[8];
 } __attribute__ ((packed));
 
 
@@ -445,6 +445,13 @@ struct asm_softvolume_params {
 	u32 rampingcurve;
 } __attribute__ ((packed));
 
+struct asm_softpause_params {
+	u32 enable;
+	u32 period;
+	u32 step;
+	u32 rampingcurve;
+} __packed;
+
 struct asm_pp_param_data_hdr {
 	u32 module_id;
 	u32 param_id;
@@ -466,6 +473,7 @@ struct asm_pp_params_command {
 #define MASTER_GAIN_PARAM_ID		0x00010bff
 #define L_R_CHANNEL_GAIN_PARAM_ID	0x00010c00
 #define MUTE_CONFIG_PARAM_ID 0x00010c01
+#define SOFT_PAUSE_PARAM_ID 0x00010D6A
 
 #define IIR_FILTER_ENABLE_PARAM_ID 0x00010c03
 #define IIR_FILTER_PREGAIN_PARAM_ID 0x00010c04
@@ -477,6 +485,8 @@ struct asm_pp_params_command {
 
 
 #define ADM_CMD_SET_PARAMS                               0x00010306
+#define ADM_CMD_GET_PARAMS                               0x0001030B
+#define ADM_CMDRSP_GET_PARAMS                            0x0001030C
 struct adm_set_params_command {
 	struct apr_hdr		hdr;
 	u32			payload;
@@ -605,8 +615,6 @@ struct asm_aac_cfg {
 	u16 section_data_resilience;
 	u16 scalefactor_data_resilience;
 	u16 spectral_data_resilience;
-	u16 sbr_on;
-	u16 sbr_ps_on;
 	u16 ch_cfg;
 	u16 reserved;
 	u32 sample_rate;
@@ -676,6 +684,10 @@ struct asm_sbc_bitrate {
 
 struct asm_immed_decode {
 	u32 mode;
+};
+
+struct asm_sbr_ps {
+	u32 enable;
 };
 
 struct asm_encode_cfg_blk {
@@ -764,6 +776,7 @@ struct asm_stream_cmd_open_read_write {
 #define ASM_STREAM_CMD_SET_ENCDEC_PARAM                  0x00010C10
 #define ASM_STREAM_CMD_GET_ENCDEC_PARAM                  0x00010C11
 #define ASM_ENCDEC_CFG_BLK_ID				 0x00010C2C
+#define ASM_ENABLE_SBR_PS				 0x00010C63
 struct asm_stream_cmd_encdec_cfg_blk{
 	struct apr_hdr              hdr;
 	u32                         param_id;
@@ -782,6 +795,13 @@ struct asm_stream_cmd_encdec_immed_decode{
 	u32            param_id;
 	u32            param_size;
 	struct asm_immed_decode dec;
+} __attribute__((packed));
+
+struct asm_stream_cmd_encdec_sbr{
+	struct apr_hdr hdr;
+	u32            param_id;
+	u32            param_size;
+	struct asm_sbr_ps sbr_ps;
 } __attribute__((packed));
 
 #define ASM_STREAM _CMD_ADJUST_SAMPLES                   0x00010C0A

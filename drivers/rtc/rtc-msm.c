@@ -142,6 +142,7 @@ struct rtc_tod_args {
 	struct rtc_time *tm;
 };
 
+#ifdef CONFIG_PM
 struct suspend_state_info {
 	atomic_t state;
 	int64_t tick_at_suspend;
@@ -149,17 +150,26 @@ struct suspend_state_info {
 
 static struct suspend_state_info suspend_state = {ATOMIC_INIT(0), 0};
 
-bool msmrtc_is_suspended(void)
+void msmrtc_updateatsuspend(struct timespec *ts)
 {
-	return atomic_read(&suspend_state.state) ? true : false;
-}
-EXPORT_SYMBOL(msmrtc_is_suspended);
+	int64_t now, sleep;
 
-int64_t msmrtc_get_tickatsuspend(void)
-{
-	return suspend_state.tick_at_suspend;
+	if (atomic_read(&suspend_state.state)) {
+		now = msm_timer_get_sclk_time(NULL);
+		if (now && suspend_state.tick_at_suspend) {
+			sleep = now - suspend_state.tick_at_suspend;
+			timespec_add_ns(ts, sleep);
+		} else
+			pr_err("%s: Invalid ticks from SCLK now=%lld"
+				"tick_at_suspend=%lld", __func__, now,
+				suspend_state.tick_at_suspend);
+	}
+
 }
-EXPORT_SYMBOL(msmrtc_get_tickatsuspend);
+#else
+void msmrtc_updateatsuspend(struct timespec *ts) { }
+#endif
+EXPORT_SYMBOL(msmrtc_updateatsuspend);
 
 static int msmrtc_tod_proc_args(struct msm_rpc_client *client, void *buff,
 							void *data)
@@ -439,20 +449,7 @@ static void process_cb_request(void *buffer)
 			rtc_cb->cb_info_data.tod_update.freq);
 
 		getnstimeofday(&ts);
-		if (atomic_read(&suspend_state.state)) {
-			int64_t now, sleep;
-			now = msm_timer_get_sclk_time(NULL);
-
-			if (now && suspend_state.tick_at_suspend) {
-				sleep = now -
-					suspend_state.tick_at_suspend;
-				timespec_add_ns(&ts, sleep);
-			} else
-				pr_err("%s: Invalid ticks from SCLK"
-					"now=%lld tick_at_suspend=%lld",
-					__func__, now,
-					suspend_state.tick_at_suspend);
-		}
+		msmrtc_updateatsuspend(&ts);
 		rtc_hctosys();
 		getnstimeofday(&tv);
 		/* Update the alarm information with the new time info. */

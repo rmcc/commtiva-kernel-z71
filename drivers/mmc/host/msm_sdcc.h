@@ -276,8 +276,24 @@ struct msmsdcc_host {
 
 	unsigned int sdcc_irq_disabled;
 	struct timer_list req_tout_timer;
+	bool sdio_gpio_lpm;
+	bool irq_wake_enabled;
 };
 
 int msmsdcc_set_pwrsave(struct mmc_host *mmc, int pwrsave);
+int msmsdcc_sdio_al_lpm(struct mmc_host *mmc, bool enable);
+
+#ifdef CONFIG_MSM_SDIO_AL
+
+static inline int msmsdcc_lpm_enable(struct mmc_host *mmc)
+{
+	return msmsdcc_sdio_al_lpm(mmc, true);
+}
+
+static inline int msmsdcc_lpm_disable(struct mmc_host *mmc)
+{
+	return msmsdcc_sdio_al_lpm(mmc, false);
+}
+#endif
 
 #endif

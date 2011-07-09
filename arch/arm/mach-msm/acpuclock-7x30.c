@@ -1,7 +1,7 @@
 /*
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2010, Code Aurora Forum. All rights reserved.
+ * Copyright (c) 2007-2011, Code Aurora Forum. All rights reserved.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -74,6 +74,7 @@ struct pll {
 };
 
 struct clkctl_acpu_speed {
+	unsigned int	use_for_scaling;
 	unsigned int	acpu_clk_khz;
 	int		src;
 	unsigned int	acpu_src_sel;
@@ -107,22 +108,22 @@ static struct pll pll2_tbl[] = {
  * know all the h/w requirements.
  */
 static struct clkctl_acpu_speed acpu_freq_tbl[] = {
-	{ 24576,  SRC_LPXO, 0, 0,  30720000,  900, VDD_RAW(900) },
-	{ 61440,  PLL_3,    5, 11, 61440000,  900, VDD_RAW(900) },
-	{ 122880, PLL_3,    5, 5,  61440000,  900, VDD_RAW(900) },
-	{ 184320, PLL_3,    5, 4,  61440000,  900, VDD_RAW(900) },
-	{ MAX_AXI_KHZ, SRC_AXI, 1, 0, 61440000, 900, VDD_RAW(900) },
-	{ 245760, PLL_3,    5, 2,  61440000,  900, VDD_RAW(900) },
-	{ 368640, PLL_3,    5, 1,  122800000, 900, VDD_RAW(900) },
+	{ 0, 24576,  SRC_LPXO, 0, 0,  30720000,  900, VDD_RAW(900) },
+	{ 0, 61440,  PLL_3,    5, 11, 61440000,  900, VDD_RAW(900) },
+	{ 1, 122880, PLL_3,    5, 5,  61440000,  900, VDD_RAW(900) },
+	{ 0, 184320, PLL_3,    5, 4,  61440000,  900, VDD_RAW(900) },
+	{ 0, MAX_AXI_KHZ, SRC_AXI, 1, 0, 61440000, 900, VDD_RAW(900) },
+	{ 1, 245760, PLL_3,    5, 2,  61440000,  900, VDD_RAW(900) },
+	{ 1, 368640, PLL_3,    5, 1,  122800000, 900, VDD_RAW(900) },
 	/* AXI has MSMC1 implications. See above. */
-	{ 768000, PLL_1,    2, 0,  153600000, 1050, VDD_RAW(1050) },
+	{ 1, 768000, PLL_1,    2, 0,  153600000, 1050, VDD_RAW(1050) },
 	/*
 	 * AXI has MSMC1 implications. See above.
 	 */
-	{ 806400, PLL_2,    3, 0,  UINT_MAX, 1100, VDD_RAW(1100), &pll2_tbl[0]},
-	{1024000, PLL_2,    3, 0,  UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[1]},
-	{1200000, PLL_2,    3, 0,  UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[2]},
-	{1401600, PLL_2,    3, 0,  UINT_MAX, 1250, VDD_RAW(1250), &pll2_tbl[3]},
+	{ 1, 806400,  PLL_2, 3, 0, UINT_MAX, 1100, VDD_RAW(1100), &pll2_tbl[0]},
+	{ 1, 1024000, PLL_2, 3, 0, UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[1]},
+	{ 1, 1200000, PLL_2, 3, 0, UINT_MAX, 1200, VDD_RAW(1200), &pll2_tbl[2]},
+	{ 1, 1401600, PLL_2, 3, 0, UINT_MAX, 1250, VDD_RAW(1250), &pll2_tbl[3]},
 	{ 0 }
 };
 
@@ -158,6 +159,9 @@ static void acpuclk_config_pll2(struct pll *pll)
 {
 	uint32_t config = readl(PLL2_CONFIG_ADDR);
 
+	/* Make sure write to disable PLL_2 has completed
+	 * before reconfiguring that PLL. */
+	mb();
 	writel(pll->l, PLL2_L_VAL_ADDR);
 	writel(pll->m, PLL2_M_VAL_ADDR);
 	writel(pll->n, PLL2_N_VAL_ADDR);
@@ -166,6 +170,8 @@ static void acpuclk_config_pll2(struct pll *pll)
 	else
 		config &= ~BIT(15);
 	writel(config, PLL2_CONFIG_ADDR);
+	/* Make sure PLL is programmed before returning. */
+	mb();
 }
 
 /* Set clock source and divider given a clock speed */
@@ -190,6 +196,9 @@ static void acpuclk_set_src(const struct clkctl_acpu_speed *s)
 
 	/* Program clock source selection. */
 	writel(reg_clksel, SCSS_CLK_SEL_ADDR);
+
+	/* Make sure switch to new source is complete. */
+	dsb();
 }
 
 int acpuclk_set_rate(int cpu, unsigned long rate, enum setrate_reason reason)
@@ -419,13 +428,15 @@ static struct cpufreq_frequency_table cpufreq_tbl[ARRAY_SIZE(acpu_freq_tbl)];
 
 static void setup_cpufreq_table(void)
 {
-	unsigned i;
+	unsigned i = 0;
 	const struct clkctl_acpu_speed *speed;
 
-	for (i = 0, speed = acpu_freq_tbl; speed->acpu_clk_khz; i++, speed++) {
-		cpufreq_tbl[i].index = i;
-		cpufreq_tbl[i].frequency = speed->acpu_clk_khz;
-	}
+	for (speed = acpu_freq_tbl; speed->acpu_clk_khz; speed++)
+		if (speed->use_for_scaling) {
+			cpufreq_tbl[i].index = i;
+			cpufreq_tbl[i].frequency = speed->acpu_clk_khz;
+			i++;
+		}
 	cpufreq_tbl[i].frequency = CPUFREQ_TABLE_END;
 
 	cpufreq_frequency_table_get_attr(cpufreq_tbl, smp_processor_id());
