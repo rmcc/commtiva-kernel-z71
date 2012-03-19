@@ -32,6 +32,7 @@ to earlysuspend */
 #include <asm/uaccess.h>
 //Added by Stanley for dump scheme--
 
+#include <linux/pm.h>
 
 /************************************************
  *  attribute marco
@@ -877,15 +878,14 @@ static struct miscdevice bi8232_misc_dev = {
 };
 
 #ifdef CONFIG_PM
-static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
+static int bi8232_suspend(struct device *client)
 {
     struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
-    struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
+    struct elan_i2c_platform_data *pdata = bi8232->client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret, ret_gpio = 0;  //Add for VREG_WLAN power in, 07/08
 
 	cancel_work_sync(&bi8232->wqueue);
-    /*printk(KERN_INFO "bi8232_suspend() disable IRQ: %d\n", client->irq);
-    disable_irq(client->irq);*/
+    disable_irq(bi8232->client->irq);
 
     //Add for VREG_WLAN power in++
     if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
@@ -921,11 +921,11 @@ static int bi8232_suspend(struct i2c_client *client, pm_message_t state)
 	return 0; //Remove to set power state by Stanley
 }
 
-static int bi8232_resume(struct i2c_client *client)
+static int bi8232_resume(struct device *client)
 {
     struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     struct elan_i2c_sensitivity sen;  //Added for modify sensitivity, 0729
-    struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
+    struct elan_i2c_platform_data *pdata = bi8232->client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret, i, ret_gpio = 0;  //Added for modify sensitivity, 0729
     //int retry = 20,			/* retry count of device detecting */	    
 		//pkt;				/* packet buffer */
@@ -1016,8 +1016,7 @@ static int bi8232_resume(struct i2c_client *client)
 	}
 	//Setting the configuration of GPIO 89--
 	//Modify the scheme for receive hello packet++
-	/*printk(KERN_INFO "bi8232_resume() enable IRQ: %d and GPIO89_PULL_UP\n", client->irq);
-	enable_irq(client->irq);*/
+	enable_irq(bi8232->client->irq);
 	//Modify the scheme for receive hello packet--
 	return 0;
 }
@@ -1028,21 +1027,21 @@ static int bi8232_resume(struct i2c_client *client)
 
 //Added for FST by Stanley (F0X_2.B-414)++
 #ifdef CONFIG_PM
-static int bi8232_fst_suspend(struct i2c_client *client, pm_message_t state)
+static int bi8232_fst_suspend(struct device *client)
 {
     struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
-    struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
+    struct elan_i2c_platform_data *pdata = bi8232->client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret = 0, ret_gpio = 0;  //Add for VREG_WLAN power in, 07/08
 
 	cancel_work_sync(&bi8232->wqueue);
-    printk(KERN_INFO "bi8232_fst_suspend() disable IRQ: %d\n", client->irq);
+    printk(KERN_INFO "bi8232_fst_suspend() disable IRQ: %d\n", bi8232->client->irq);
     if (!bPhoneCallState || (bPhoneCallState && bIsNeedSkipTouchEvent))
-        disable_irq(client->irq);
+        disable_irq(bi8232->client->irq);
     else
     {
-        disable_irq(client->irq);
-	    if (device_may_wakeup(&client->dev)) {
-	        enable_irq_wake(client->irq);
+        disable_irq(bi8232->client->irq);
+	    if (device_may_wakeup(&bi8232->client->dev)) {
+	        enable_irq_wake(bi8232->client->irq);
 	        printk(KERN_INFO "[%s]Enable irq_wake!\n", __func__);
 	    }
 	}
@@ -1100,11 +1099,11 @@ static int bi8232_fst_suspend(struct i2c_client *client, pm_message_t state)
 	return 0; //Remove to set power state by Stanley
 }
 
-static int bi8232_fst_resume(struct i2c_client *client)
+static int bi8232_fst_resume(struct device *client)
 {
     struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 07/08
     //struct elan_i2c_sensitivity sen;  //Added for modify sensitivity, 0729
-    struct elan_i2c_platform_data *pdata = client->dev.platform_data;  //Setting the configuration of GPIO 89
+    struct elan_i2c_platform_data *pdata = bi8232->client->dev.platform_data;  //Setting the configuration of GPIO 89
     int ret = 0, ret_gpio = 0;  //Added for modify sensitivity, 0729
     //int retry = 20,			/* retry count of device detecting */	    
 		//pkt;				/* packet buffer */
@@ -1148,14 +1147,14 @@ static int bi8232_fst_resume(struct i2c_client *client)
 	}
 	//Setting the configuration of GPIO 89--
 	//Modify the scheme for receive hello packet++
-	printk(KERN_INFO "bi8232_fst_resume() enable IRQ: %d and GPIO89_PULL_UP\n", client->irq);
+	printk(KERN_INFO "bi8232_fst_resume() enable IRQ: %d and GPIO89_PULL_UP\n", bi8232->client->irq);
     if (!bPhoneCallState || (bPhoneCallState && bIsNeedSkipTouchEvent))
-    	enable_irq(client->irq);
+    	enable_irq(bi8232->client->irq);
 	else
 	{
-        enable_irq(client->irq);
-	    if (device_may_wakeup(&client->dev)) {
-	        disable_irq_wake(client->irq);
+        enable_irq(bi8232->client->irq);
+	    if (device_may_wakeup(&bi8232->client->dev)) {
+	        disable_irq_wake(bi8232->client->irq);
 	        printk(KERN_INFO "[%s]Disable irq_wake!\n", __func__);
 	    }
 	}
@@ -1394,9 +1393,10 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	struct input_dev *input;
 	struct elan_i2c_platform_data *pdata;
 	struct elan_i2c_sensitivity sen;  //Added for modify sensitivity, 0729
+	struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 09/10	
 	int retry = 50,			/* retry count of device detecting */	    
 	    pkt;				/* packet buffer */
-	int i, iValue = 0;  //Added for software reset
+	int i, iValue = 0, ret;  //Added for software reset
 	char reset_cmd[4] = { 0x77, 0x77, 0x77, 0x77 };  //Added for software reset
 	char sensitivity_x = 0xF, sensitivity_y = 0xF;  //Added for modify sensitivity, 0817
 
@@ -1436,7 +1436,7 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 	bi8232->client = client;
 	dev_set_drvdata(&client->dev, bi8232);
 
-	//device_init_wakeup(&client->dev, 1);  //Added for FST by Stanley (F0X_2.B-414)
+	device_init_wakeup(&client->dev, 1);  //Added for FST by Stanley (F0X_2.B-414)
 
 	//Added for software reset++
 	for(i = 0 ; i < 10 ; i++)
@@ -1445,6 +1445,17 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 		{
 			bi8232_msg(INFO, "[TOUCH-CAP]Software reset failed!\n");
 			msleep(50);
+			//Added for check ELAN chip++
+			if(i == 9)
+			{
+				bi8232_msg(INFO, "%s: return -ENODEV!\r\n", __func__);
+				dev_set_drvdata(&client->dev, 0);
+				unregister_early_suspend(&bi8232->bi8232_early_suspend_desc);
+				kfree(bi8232);
+
+				return -ENODEV;
+			}
+			//Added for check ELAN chip--   			
 		}
 		else
 		{
@@ -1608,6 +1619,23 @@ static int bi8232_probe(struct i2c_client *client, const struct i2c_device_id *i
 		}
 	}
 	//Add for modify sensitivity, 0729--
+	
+	//Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend +++
+	if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
+	{
+		vreg_wlan = vreg_get(0, "wlan");
+
+		if (!vreg_wlan) {
+			printk(KERN_ERR "%s: init vreg WLAN get failed\n", __func__);
+	}
+
+		ret = vreg_enable(vreg_wlan);
+		if (ret) {
+			printk(KERN_ERR "%s: init vreg WLAN enable failed (%d)\n", __func__, ret);
+		}
+	}
+	//Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend ---
+
 	bi8232_msg(INFO, "[TOUCH-CAP]bi8232_probe init ok!\n");
 	//Added by Stanley for dump scheme++
 	msm_touch_proc_file = create_proc_entry("driver/cap_touch", 0666, NULL);
@@ -1661,58 +1689,42 @@ static const struct i2c_device_id bi8232_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, bi8232);
 
+//Added for new kernel suspend scheme (2010.08.25)++
+static struct dev_pm_ops bi8232_pm_ops = 
+{   .suspend = bi8232_suspend,
+    .resume  = bi8232_resume,
+};
+//Added for new kernel suspend scheme (2010.08.25)--
+
 static struct i2c_driver bi8232_i2c_driver = {
 	.driver = {
 		.name	= TOUCH_NAME,
 		.owner	= THIS_MODULE,
+//Added for new kernel suspend scheme (2010.08.25)++
+#ifdef CONFIG_PM
+		.pm = &bi8232_pm_ops,
+#endif
+//Added for new kernel suspend scheme (2010.08.25)--
 	},
 	.id_table   = bi8232_id,
 	.probe  	= bi8232_probe,
 	.remove 	= bi8232_remove,
-/* FIH, SimonSSChang, 2009/09/04 { */
-/* [FXX_CR], change CAP touch suspend/resume function
-to earlysuspend */
-#ifdef CONFIG_FIH_FXX
-	.suspend	= bi8232_suspend,
-    .resume		= bi8232_resume,
-#else
-	.suspend	= bi8232_suspend,
-    .resume		= bi8232_resume,
-#endif	
-/* } FIH, SimonSSChang, 2009/09/04 */
 };
 
 static int __init bi8232_init( void )
 {
-    struct vreg *vreg_wlan;  //Add for VREG_WLAN power in, 09/10
-    int ret;
-	
     //Dynamic to load RES or CAP touch driver++
     if(FIH_READ_HWID_FROM_SMEM() >= CMCS_CTP_PR1)
     {
-         //Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend +++
-         if((FIH_READ_HWID_FROM_SMEM() != CMCS_7627_PR1) && (FIH_READ_HWID_FROM_SMEM() != CMCS_F913_PR1))  //Don't apply VREG_WLAN power in on PR1++
-         {
-            vreg_wlan = vreg_get(0, "wlan");
-
-            if (!vreg_wlan) {
-	         printk(KERN_ERR "%s: init vreg WLAN get failed\n", __func__);
-            }
-
-            ret = vreg_enable(vreg_wlan);
-            if (ret) {
-	          printk(KERN_ERR "%s: init vreg WLAN enable failed (%d)\n", __func__, ret);
-            }
-            vreg_refcnt = vreg_refcnt + 1;  //Added for VREG sync by Stanley
-         }
-         //Neo: Add for increasing VREG_WLAN refcnt and let VREG_WLAN can be closed at first suspend ---
 
          //Added for FST by Stanley (F0X_2.B-414)++
          if((FIH_READ_ORIG_HWID_FROM_SMEM() >= CMCS_125_FST_PR1) && (FIH_READ_ORIG_HWID_FROM_SMEM() <= CMCS_128_FST_MP1))
          {
              bIsFST = 1;
-             bi8232_i2c_driver.suspend = bi8232_fst_suspend;
-             bi8232_i2c_driver.resume = bi8232_fst_resume;
+             //Added for new kernel suspend scheme (2010.08.25)++
+             bi8232_pm_ops.suspend = bi8232_fst_suspend;
+             bi8232_pm_ops.resume = bi8232_fst_resume;
+             //Added for new kernel suspend scheme (2010.08.25)--
              bi8232_msg(INFO, "[TOUCH-CAP]bi8232_init: FST device!\n"); 
          }
          else
