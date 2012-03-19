@@ -17,14 +17,20 @@
  */
 
 #include "msm_fb.h"
+extern void fih_lcdc_enter_sleep(void);
+extern void fih_lcdc_exit_sleep(void);
 
 static int lcdc_panel_on(struct platform_device *pdev)
 {
+	printk(KERN_INFO "lcm_innolux: lcdc_panel_on()\n");
+	fih_lcdc_exit_sleep();
 	return 0;
 }
 
 static int lcdc_panel_off(struct platform_device *pdev)
 {
+	printk(KERN_INFO "lcm_innolux: lcdc_panel_off()\n");
+	fih_lcdc_enter_sleep();
 	return 0;
 }
 
