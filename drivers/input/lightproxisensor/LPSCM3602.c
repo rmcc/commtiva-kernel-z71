@@ -370,7 +370,7 @@ static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len
 	return len;
 }
 
-static int __devinit sensor_probe(struct device *client)
+static int __devinit sensor_probe(struct device *pdev)
 {
 	int ret;	
 #ifndef DISABLE_PROXIMITY
@@ -387,13 +387,13 @@ static int __devinit sensor_probe(struct device *client)
 	return 0;
 }
 
-static int sensor_remove(struct device *client)
+static int sensor_remove(struct device *pdev)
 {
 	return 0;
 }
 
 #ifdef CONFIG_PM
-static int sensor_suspend(struct device *client)
+static int sensor_suspend(struct device *pdev)
 {
 #ifndef DISABLE_PROXIMITY
 	//FIH, HenryJuang 2009/11/11 ++
@@ -410,7 +410,7 @@ static int sensor_suspend(struct device *client)
 	return 0;
 }
 
-static int sensor_resume(struct device *client)
+static int sensor_resume(struct device *pdev)
 {
 #ifndef DISABLE_PROXIMITY
 	//FIH, HenryJuang 2009/11/11 ++
@@ -421,7 +421,7 @@ static int sensor_resume(struct device *client)
 		else
 			disable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));		
 		isCM3602Suspend=0;
-	}	
+	}
 	//FIH, HenryJuang 2009/11/11 --
 #endif
 	return 0;

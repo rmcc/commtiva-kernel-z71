@@ -40,10 +40,10 @@ static ssize_t cm3602_read_ps(struct file *file, char *buf, size_t count, loff_t
 static int cm3602_dev_open(struct inode *inode, struct file *file);
 static int cm3602_proc_open(struct inode *inode, struct file *file);
 static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off);
-static int sensor_probe(struct device *client);
-static int sensor_remove(struct device *client);
-static int sensor_suspend(struct device *client);
-static int sensor_resume(struct device *client);
+static int sensor_probe(struct device *pdev);
+static int sensor_remove(struct device *pdev);
+static int sensor_suspend(struct device *pdev);
+static int sensor_resume(struct device *pdev);
 static struct file_operations cm3602_fops = {
     .open    = cm3602_dev_open,
     .read    = cm3602_read_ps,
