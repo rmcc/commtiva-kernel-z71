@@ -30,6 +30,7 @@
 #include <linux/proc_fs.h>
 #endif
 /*} FIH_FTM, PinyCHWu, 2009/06/15*/
+#include <linux/pm.h>
 
 extern void Battery_power_supply_change(void);
 #define	GPIO_CHG_LED_EN	30
@@ -1118,7 +1119,7 @@ DEVICE_ATTR(jben, 0666, NULL, Jogball_enable_store);
 /*FIH, MichaelKao, 2009/07/07 {*/
 
 #ifdef CONFIG_PM
-static int tca6507_suspend(struct i2c_client *nLeds, pm_message_t mesg)
+static int tca6507_suspend(struct device *dev)
 {
 
 	//int ret;
@@ -1153,12 +1154,10 @@ static int tca6507_suspend(struct i2c_client *nLeds, pm_message_t mesg)
 		gpio_release();
 	}
 
-	dev_dbg(&nLeds->dev, "%s: ENTER SUSPEND MODE\n", __func__);
-
 	return 0;
 }
 
-static int tca6507_resume(struct i2c_client *nLeds)
+static int tca6507_resume(struct device *dev)
 {
 	//int ret;
 	tca6507_drvdata.is_suspend=false;
@@ -1175,10 +1174,14 @@ static int tca6507_resume(struct i2c_client *nLeds)
 	tca6507_notify_blink(tca6507_drvdata.is_notify_blink) ;
 	/*FIH, MichaelKao, 2009/06/25 {*/
 
-	dev_dbg(&nLeds->dev, "%s: LEAVE SUSPEND MODE\n", __func__);
-
 	return 0;
 }
+
+static struct dev_pm_ops tca6507_pm_ops = {
+       .suspend        = tca6507_suspend,
+       .resume         = tca6507_resume,
+};
+
 #else
 # define tca6507_suspend NULL
 # define tca6507_resume  NULL
@@ -1354,11 +1357,10 @@ static const struct i2c_device_id tca6507_idtable[] = {
 static struct i2c_driver tca6507_driver = {
 	.driver = {
 		.name	= "tca6507",
+		.pm = &tca6507_pm_ops,
 	},
 	.probe		= tca6507_probe,
 	.remove		= __devexit_p(tca6507_remove),
-	.suspend  	= tca6507_suspend,
-	.resume   	= tca6507_resume,
 	.id_table	= tca6507_idtable,
 };
 
