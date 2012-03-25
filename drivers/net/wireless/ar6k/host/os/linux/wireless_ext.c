@@ -2501,7 +2501,7 @@ ar6000_ioctl_siwscan(struct net_device *dev,
 #endif
 
     if (wmi_startscan_cmd(ar->arWmi, WMI_LONG_SCAN, FALSE, FALSE, \
-                          0, 100, 0, NULL) != A_OK) {
+                          0, 200, 0, NULL) != A_OK) {
         ret = -EIO;
     }
 

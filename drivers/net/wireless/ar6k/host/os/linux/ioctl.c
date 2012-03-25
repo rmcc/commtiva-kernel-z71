@@ -1142,11 +1142,89 @@ prof_count_rx(A_UINT32 addr, A_UINT32 count)
 }
 #endif /* CONFIG_TARGET_PROFILE_SUPPORT */
 
+
+int
+ar6000_ioctl_ap_setparam(AR_SOFTC_T *ar, int param, int value)
+{
+    int ret=0;
+
+    switch(param) {
+        case IEEE80211_PARAM_WPA:
+            switch (value) {
+                case WPA_MODE_WPA1:
+                    ar->arAuthMode = WPA_AUTH;
+                    break;
+                case WPA_MODE_WPA2:
+                    ar->arAuthMode = WPA2_AUTH;
+                    break;
+                case WPA_MODE_AUTO:
+                    ar->arAuthMode = WPA_AUTH | WPA2_AUTH;
+                    break;
+                case WPA_MODE_NONE:
+                    ar->arAuthMode = NONE_AUTH;
+                    break;
+            }
+            break;
+        case IEEE80211_PARAM_AUTHMODE:
+            if(value == IEEE80211_AUTH_WPA_PSK) {
+                if (WPA_AUTH == ar->arAuthMode) {
+                    ar->arAuthMode = WPA_PSK_AUTH;
+                } else if (WPA2_AUTH == ar->arAuthMode) {
+                    ar->arAuthMode = WPA2_PSK_AUTH;
+                } else if ((WPA_AUTH | WPA2_AUTH) == ar->arAuthMode) {
+                    ar->arAuthMode = WPA_PSK_AUTH | WPA2_PSK_AUTH;
+                } else {
+                    AR_DEBUG_PRINTF("Error -  Setting PSK "\
+                        "mode when WPA param was set to %d\n",
+                        ar->arAuthMode);
+                    ret = -EIO;
+                }
+            }
+            break;
+        case IEEE80211_PARAM_UCASTCIPHER:
+            ar->arPairwiseCrypto = 0;
+            if(value & (1<<IEEE80211_CIPHER_AES_CCM)) {
+                ar->arPairwiseCrypto |= AES_CRYPT;
+            }
+            if(value & (1<<IEEE80211_CIPHER_TKIP)) {
+                ar->arPairwiseCrypto |= TKIP_CRYPT;
+            }
+            if(!ar->arPairwiseCrypto) {
+                AR_DEBUG_PRINTF("Error - Invalid cipher in WPA \n");
+                ret = -EIO;
+            }
+            break;
+        case IEEE80211_PARAM_PRIVACY:
+            if(value == 0) {
+                ar->arDot11AuthMode      = OPEN_AUTH;
+                ar->arAuthMode           = NONE_AUTH;
+                ar->arPairwiseCrypto     = NONE_CRYPT;
+                ar->arPairwiseCryptoLen  = 0;
+                ar->arGroupCrypto        = NONE_CRYPT;
+                ar->arGroupCryptoLen     = 0;
+            }
+            break;
+    }
+    return ret;
+}
+
 int
 ar6000_ioctl_setparam(AR_SOFTC_T *ar, int param, int value)
 {
     A_BOOL profChanged = FALSE;
     int ret=0;
+
+    if(ar->arNextMode == AP_NETWORK) {
+        ar->ap_profile_flag = 1; /* There is a change in profile */
+        switch (param) {
+            case IEEE80211_PARAM_WPA:
+            case IEEE80211_PARAM_AUTHMODE:
+            case IEEE80211_PARAM_UCASTCIPHER:
+            case IEEE80211_PARAM_PRIVACY:
+                ret = ar6000_ioctl_ap_setparam(ar, param, value);
+                return ret;
+        }
+    }
 
     switch (param) {
         case IEEE80211_PARAM_WPA:

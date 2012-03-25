@@ -1249,10 +1249,12 @@ wmi_bssInfo_event_rx(struct wmi_t *wmip, A_UINT8 *datap, int len)
     if(ar6000_get_driver_cfg(wmip->wmi_devt,
                     AR6000_DRIVER_CFG_GET_WLANNODECACHING,
                     &nodeCachingAllowed) != A_OK) {
+        wmi_node_return(wmip, bss);
         return A_EINVAL;
     }
 
     if(!nodeCachingAllowed) {
+        wmi_node_return(wmip, bss);
         return A_OK;
     }
 
@@ -1267,8 +1269,10 @@ wmi_bssInfo_event_rx(struct wmi_t *wmip, A_UINT8 *datap, int len)
 
 #ifndef REXOS
 /* ATHENV V9 +++ */
-    if(wps_enable && (bih->frameType == PROBERESP_FTYPE) )
+    if(wps_enable && (bih->frameType == PROBERESP_FTYPE) ) {
+        wmi_node_return(wmip, bss);
         return A_OK;
+    }
 /* ATHENV V9 --- */
 #endif
     
@@ -1293,6 +1297,18 @@ wmi_bssInfo_event_rx(struct wmi_t *wmip, A_UINT8 *datap, int len)
                 memcpy(cached_ssid_buf, ie_ssid + 2, cached_ssid_len);
             }
         }
+
+        /* 
+         * Use the current average rssi of associated AP base on assumpiton 
+         * 1. Most os with GUI will update RSSI by wmi_get_stats_cmd() periodically
+         * 2. wmi_get_stats_cmd(..) will be called when calling wmi_startscan_cmd(...)
+         * The average value of RSSI give end-user better feeling for instance value of scan result
+         * It also sync up RSSI info in GUI between scan result and RSSI signal icon
+         */
+        if (bss && IEEE80211_ADDR_EQ(wmip->wmi_bssid, bih->bssid)) {
+            bih->rssi = bss->ni_rssi;
+            bih->snr  = bss->ni_snr;
+        } 
 
         wlan_node_reclaim(&wmip->wmi_scan_table, bss);
     }
@@ -1607,6 +1623,9 @@ wmi_scanComplete_rx(struct wmi_t *wmip, A_UINT8 *datap, int len)
     WMI_SCAN_COMPLETE_EVENT *ev;
 
     ev = (WMI_SCAN_COMPLETE_EVENT *)datap;
+    if ((A_STATUS)ev->status == A_OK) {
+        wlan_refresh_inactive_nodes(&wmip->wmi_scan_table);
+    }
     A_WMI_SCANCOMPLETE_EVENT(wmip->wmi_devt, (A_STATUS) ev->status);
 
     return A_OK;
