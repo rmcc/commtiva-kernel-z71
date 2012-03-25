@@ -29,13 +29,8 @@
 #include <linux/module.h>
 #include <mach/msm_iomap.h>
 #include <mach/msm_smd.h>
+#include <linux/pm.h>
 
-#ifdef CONFIG_HAS_EARLYSUSPEND
-#include <linux/earlysuspend.h>
-
-struct early_suspend stat_early_suspend;
-
-#endif
 
 #define DEBUG 0
 /* FIH; Tiger; 2009/6/10 { */
@@ -632,7 +627,7 @@ static int smb380_remove(struct i2c_client *client)
 	return 0;
 }
 
-static int smb380_suspend(struct i2c_client *client, pm_message_t mesg)
+static int smb380_suspend(struct device *dev)
 {
 /* FIH; Tiger; 2009/6/10 { */
 /* implement suspend/resume */
@@ -641,11 +636,9 @@ static int smb380_suspend(struct i2c_client *client, pm_message_t mesg)
 	/* always execute it to recover state error */
 	//if(fihsensor_ctx.bIsIdle == false)
 	{
-#ifndef CONFIG_HAS_EARLYSUSPEND
 		if(start_suspend()) {
 			printk(KERN_ERR "fihsensor: start_suspend() fail\n");
 		}
-#endif
 	}
 #endif
 /* } FIH; Tiger; 2009/6/10 */
@@ -653,7 +646,7 @@ static int smb380_suspend(struct i2c_client *client, pm_message_t mesg)
 	return 0;
 }
 
-static int smb380_resume(struct i2c_client *client)
+static int smb380_resume(struct device *dev)
 {
 /* FIH; Tiger; 2009/6/10 { */
 /* implement suspend/resume */
@@ -662,34 +655,24 @@ static int smb380_resume(struct i2c_client *client)
 	/* always execute it to recover state error */
 	if(fihsensor_ctx.activeSlave)
 	{
-#ifndef CONFIG_HAS_EARLYSUSPEND
 		if(start_resume()) {
 			printk(KERN_ERR "fihsensor: start_resume() fail\n");
 		}
-#endif
 	}
 #endif
 /* } FIH; Tiger; 2009/6/10 */
 
 	return 0;
 }
-#ifdef CONFIG_HAS_EARLYSUSPEND
-static void sensor_early_suspend(struct early_suspend *h)
-{
-	printk(KERN_INFO "Begin early suspension of sensors\n");
-        start_suspend();
-}
-
-static void sensor_late_resume(struct early_suspend *h)
-{
-	printk(KERN_INFO "Begin late resume of sensors\n");
-        start_resume();
-}
-#endif
 
 static const struct i2c_device_id smb380_id[] = {
 	{ "SMB380", 0 },
 	{ }
+};
+
+static struct dev_pm_ops smb380_pm_ops = {
+	.suspend        = smb380_suspend,
+	.resume         = smb380_resume,
 };
 
 static struct i2c_driver smb380_driver = {
@@ -699,8 +682,11 @@ static struct i2c_driver smb380_driver = {
 	.resume		= smb380_resume,
 	.id_table = smb380_id,
 	.driver = {
-		   .name = "SMB380",
-		   },
+		.name = "SMB380",
+#ifdef CONFIG_PM
+		.pm = &smb380_pm_ops,
+#endif
+	},
 };
 
 static int __init fihsensor_init(void)
@@ -730,13 +716,6 @@ static int __init fihsensor_init(void)
 	{
 		i2c_del_driver(&ms3c_driver);
 	}
-
-#ifdef CONFIG_HAS_EARLYSUSPEND
-	stat_early_suspend.level     = EARLY_SUSPEND_LEVEL_STOP_DRAWING;
-	stat_early_suspend.suspend   = sensor_early_suspend;
-	stat_early_suspend.resume    = sensor_late_resume;
-	register_early_suspend(&stat_early_suspend);
-#endif
 	
 	return ret;
 }
