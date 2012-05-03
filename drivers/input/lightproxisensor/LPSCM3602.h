@@ -1,6 +1,7 @@
 /*
  * **Function command codes for io_ctl.
  * */
+#include <linux/pm.h>
 #define CM3602_PS_OFF			0
 #define CM3602_PS_ON			1
 #define CM3602_ALS_ON				2
@@ -39,10 +40,10 @@ static ssize_t cm3602_read_ps(struct file *file, char *buf, size_t count, loff_t
 static int cm3602_dev_open(struct inode *inode, struct file *file);
 static int cm3602_proc_open(struct inode *inode, struct file *file);
 static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off);
-static int sensor_probe(struct platform_device *pdev);
-static int sensor_remove(struct platform_device *pdev);
-static int sensor_suspend(struct platform_device *pdev, pm_message_t state);
-static int sensor_resume(struct platform_device *pdev);
+static int sensor_probe(struct device *pdev);
+static int sensor_remove(struct device *pdev);
+static int sensor_suspend(struct device *pdev);
+static int sensor_resume(struct device *pdev);
 static struct file_operations cm3602_fops = {
     .open    = cm3602_dev_open,
     .read    = cm3602_read_ps,
@@ -63,13 +64,20 @@ static struct file_operations cm3602_proc_ops = {
 	.llseek  = seq_lseek,
 	.release = single_release,
 };
+
+static struct dev_pm_ops cm3602_alsps_pm_ops = {
+	.suspend        = sensor_suspend,
+	.resume         = sensor_resume,
+};
+
 static struct platform_driver ALSPS_driver = {
 	.probe		= sensor_probe,
 	.remove		= sensor_remove,
-	.suspend    = sensor_suspend,
-	.resume     = sensor_resume,
 	.driver		= {
 		.name = "cm3602_alsps",
+#ifdef CONFIG_PM
+		.pm = &cm3602_alsps_pm_ops,
+#endif
 	},
 };
 

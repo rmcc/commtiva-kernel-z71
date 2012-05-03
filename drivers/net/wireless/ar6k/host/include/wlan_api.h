@@ -66,6 +66,7 @@ typedef struct bss {
     int                          ni_scangen;
 
     A_UINT32                     ni_tstamp;
+    A_UINT32                     ni_actcnt;
 #ifdef OS_ROAM_MANAGEMENT
     A_UINT32                     ni_si_gen;
 #endif
@@ -95,6 +96,8 @@ A_UINT32 wlan_freq2ieee(A_UINT16 freq);
 
 void wlan_set_nodeage(struct ieee80211_node_table *nt, A_UINT32 nodeAge);
 
+void
+wlan_refresh_inactive_nodes (struct ieee80211_node_table *nt);
 
 bss_t *
 wlan_find_Ssidnode (struct ieee80211_node_table *nt, A_UCHAR *pSsid,

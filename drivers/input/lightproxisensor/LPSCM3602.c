@@ -15,7 +15,6 @@
 #include <linux/platform_device.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
-#include <linux/wakelock.h>
 
 /* FIH, Henry Juang, 2009/11/20 ++*/
 /* [FXX_CR], Add for proximity driver to turn on/off BL and TP. */
@@ -100,7 +99,6 @@ extern int Q7x27_kybd_proximity_irqsetup(void);
 struct workqueue_struct *proximity_wq;
 struct work_struct proximity_work;
 
-struct wake_lock resume_wakelock;
 
 static int touch_last_flag=1;
 
@@ -372,7 +370,7 @@ static ssize_t cm3602_proc_write(struct file *filp, const char *buff, size_t len
 	return len;
 }
 
-static int __devinit sensor_probe(struct platform_device *pdev)
+static int __devinit sensor_probe(struct device *pdev)
 {
 	int ret;	
 #ifndef DISABLE_PROXIMITY
@@ -385,18 +383,17 @@ static int __devinit sensor_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-	wake_lock_init(&resume_wakelock, WAKE_LOCK_SUSPEND, "proxi_resume");
 	
 	return 0;
 }
-static int sensor_remove(struct platform_device *pdev)
+
+static int sensor_remove(struct device *pdev)
 {
-	wake_lock_destroy(&resume_wakelock);
 	return 0;
 }
 
-
-static int sensor_suspend(struct platform_device *pdev, pm_message_t state)
+#ifdef CONFIG_PM
+static int sensor_suspend(struct device *pdev)
 {
 #ifndef DISABLE_PROXIMITY
 	//FIH, HenryJuang 2009/11/11 ++
@@ -412,7 +409,8 @@ static int sensor_suspend(struct platform_device *pdev, pm_message_t state)
 #endif
 	return 0;
 }
-static int sensor_resume(struct platform_device *pdev)
+
+static int sensor_resume(struct device *pdev)
 {
 #ifndef DISABLE_PROXIMITY
 	//FIH, HenryJuang 2009/11/11 ++
@@ -422,13 +420,17 @@ static int sensor_resume(struct platform_device *pdev)
 			disable_irq_wake(MSM_GPIO_TO_INT(CM3602_EVB1_PS_GPIO_OUT));
 		else
 			disable_irq_wake(MSM_GPIO_TO_INT(CM3602_PR1_PS_GPIO_OUT));		
-		isCM3602Suspend=0;		
-		wake_lock_timeout(&resume_wakelock, 1 * HZ);
-	}	
+		isCM3602Suspend=0;
+	}
 	//FIH, HenryJuang 2009/11/11 --
 #endif
 	return 0;
 }
+#else
+#define sensor_suspend	NULL
+#define sensor_resume	NULL
+#endif
+
 
 
 /* cm3602_init: init cm3602 driver

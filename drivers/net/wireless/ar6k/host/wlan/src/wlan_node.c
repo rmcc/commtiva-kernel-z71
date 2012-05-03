@@ -31,8 +31,6 @@
 #include <wmi_api.h>
 #include <ieee80211_node.h>
 
-static void wlan_node_timeout(A_ATH_TIMER arg);
-
 static bss_t * _ieee80211_find_node (struct ieee80211_node_table *nt,
                                      const A_UINT8 *macaddr);
 
@@ -98,7 +96,8 @@ wlan_setup_node(struct ieee80211_node_table *nt, bss_t *ni,
 
     timeoutValue = nt->nt_nodeAge;
 
-    ni->ni_tstamp = A_GET_MS (timeoutValue);
+    ni->ni_tstamp = A_GET_MS (0);
+    ni->ni_actcnt = WLAN_NODE_INACT_CNT;
 
     IEEE80211_NODE_LOCK_BH(nt);
 
@@ -122,11 +121,6 @@ wlan_setup_node(struct ieee80211_node_table *nt, bss_t *ni,
     }
     ni->ni_hash_prev = NULL;
     nt->nt_hash[hash] = ni;
-
-    if (!nt->isTimerArmed) {
-        A_TIMEOUT_MS(&nt->nt_inact_timer, timeoutValue, 0);
-        nt->isTimerArmed = TRUE;
-    }
 
     IEEE80211_NODE_UNLOCK_BH(nt);
 }
@@ -273,8 +267,6 @@ wlan_node_table_init(void *wmip, struct ieee80211_node_table *nt)
         nt->nt_hash[i] = NULL;
     }
 
-    A_INIT_TIMER(&nt->nt_inact_timer, wlan_node_timeout, nt);
-    nt->isTimerArmed = FALSE;
     nt->nt_wmip = wmip;
     nt->nt_nodeAge = WLAN_NODE_INACT_TIMEOUT_MSEC;
 
@@ -295,14 +287,13 @@ wlan_set_nodeage(struct ieee80211_node_table *nt, A_UINT32 nodeAge)
     nt->nt_nodeAge = nodeAge;
     return;
 }
-static void
-wlan_node_timeout (A_ATH_TIMER arg)
+void
+wlan_refresh_inactive_nodes (struct ieee80211_node_table *nt)
 {
-    struct ieee80211_node_table *nt = (struct ieee80211_node_table *)arg;
     bss_t *bss, *nextBss;
-    A_UINT8 myBssid[IEEE80211_ADDR_LEN], reArmTimer = FALSE;
+    A_UINT8 myBssid[IEEE80211_ADDR_LEN];
     A_UINT32 timeoutValue = 0;
-
+    A_UINT32 now = A_GET_MS(0);
     timeoutValue = nt->nt_nodeAge;
 
     wmi_get_current_bssid(nt->nt_wmip, myBssid);
@@ -314,36 +305,21 @@ wlan_node_timeout (A_ATH_TIMER arg)
         if (A_MEMCMP(myBssid, bss->ni_macaddr, sizeof(myBssid)) != 0)
         {
 
-            if (bss->ni_tstamp <= A_GET_MS(0))
+            if (((now - bss->ni_tstamp) > timeoutValue)  || --bss->ni_actcnt == 0)
             {
                /*
                 * free up all but the current bss - if set
                 */
                 wlan_node_reclaim(nt, bss);
             }
-            else
-            {
-                /*
-                 * Re-arm timer, only when we have a bss other than
-                 * current bss AND it is not aged-out.
-                 */
-                reArmTimer = TRUE;
-            }
         }
         bss = nextBss;
     }
-
-    if (reArmTimer)
-        A_TIMEOUT_MS (&nt->nt_inact_timer, timeoutValue, 0);
-
-    nt->isTimerArmed = reArmTimer;
 }
 
 void
 wlan_node_table_cleanup(struct ieee80211_node_table *nt)
 {
-    A_UNTIMEOUT(&nt->nt_inact_timer);
-    A_DELETE_TIMER(&nt->nt_inact_timer);
     wlan_free_allnodes(nt);
     IEEE80211_NODE_LOCK_DESTROY(nt);
 }
